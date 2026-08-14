@@ -55,4 +55,5 @@ jobs:
       - name: Run tests
         run: npm run test
       - name: Build
+        if: always()
         run: npm run build

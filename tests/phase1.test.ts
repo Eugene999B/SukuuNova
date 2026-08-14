@@ -25,6 +25,7 @@ describe("Phase 1 MVP security and workflow gates", () => {
   let studentId: string;
   let otherStudentId: string;
   let teacherId: string;
+  let subjectTeacherId: string;
   let parentId: string;
 
   beforeAll(async () => {
@@ -65,6 +66,14 @@ describe("Phase 1 MVP security and workflow gates", () => {
           passwordHash: "test-only"
         }
       })).id;
+      subjectTeacherId = (await tx.user.create({
+        data: {
+          schoolId: fixture.schoolId,
+          name: "Assigned Subject Teacher",
+          email: "subject-teacher-" + fixture.schoolId + "@test.invalid",
+          passwordHash: "test-only"
+        }
+      })).id;
       parentId = (await tx.user.create({
         data: {
           schoolId: fixture.schoolId,
@@ -75,7 +84,7 @@ describe("Phase 1 MVP security and workflow gates", () => {
         }
       })).id;
       for (const [userId, permission] of [
-        [teacherId, "scores:write:assigned"],
+        [subjectTeacherId, "scores:write:assigned"],
         [teacherId, "report_cards:submit"],
         [parentId, "parents:read_linked"]
       ] as const) {
@@ -143,7 +152,7 @@ describe("Phase 1 MVP security and workflow gates", () => {
           schoolId: fixture.schoolId,
           classId,
           subjectId: mathId,
-          teacherId
+          teacherId: subjectTeacherId
         }
       });
     });
@@ -206,7 +215,7 @@ describe("Phase 1 MVP security and workflow gates", () => {
       await expect(
         enterScore(tx, {
           schoolId: fixture.schoolId,
-          actorId: teacherId,
+          actorId: subjectTeacherId,
           studentId,
           assessmentId: assessment.id,
           value: 80
