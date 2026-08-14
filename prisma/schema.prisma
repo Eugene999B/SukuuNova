@@ -326,7 +326,7 @@ model Guardian {
   name      String
   phone     String
   school    School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user      User?             @relation("GuardianUser", fields: [userId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  user      User?             @relation("GuardianUser", fields: [userId, schoolId], references: [id, schoolId], onDelete: Restrict)
   students  StudentGuardian[]
 
   @@unique([id, schoolId])
@@ -357,7 +357,7 @@ model Class {
   level              String?
   classTeacherId     String?
   school             School                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  classTeacher       User?                 @relation("ClassTeacher", fields: [classTeacherId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  classTeacher       User?                 @relation("ClassTeacher", fields: [classTeacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
   students           Student[]
   subjectAssignments ClassSubjectTeacher[]
   assessments        Assessment[]

@@ -313,12 +313,12 @@ ALTER TABLE "CalendarEvent" ADD CONSTRAINT "CalendarEvent_academicYearId_schoolI
 ALTER TABLE "Term" ADD CONSTRAINT "Term_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "Term" ADD CONSTRAINT "Term_academicYearId_schoolId_fkey" FOREIGN KEY ("academicYearId", "schoolId") REFERENCES "AcademicYear"("id", "schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "Class" ADD CONSTRAINT "Class_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "Class" ADD CONSTRAINT "Class_classTeacherId_schoolId_fkey" FOREIGN KEY ("classTeacherId", "schoolId") REFERENCES "User"("id", "schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Class" ADD CONSTRAINT "Class_classTeacherId_schoolId_fkey" FOREIGN KEY ("classTeacherId", "schoolId") REFERENCES "User"("id", "schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "Subject" ADD CONSTRAINT "Subject_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "Student" ADD CONSTRAINT "Student_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "Student" ADD CONSTRAINT "Student_classId_schoolId_fkey" FOREIGN KEY ("classId", "schoolId") REFERENCES "Class"("id", "schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "Guardian" ADD CONSTRAINT "Guardian_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "Guardian" ADD CONSTRAINT "Guardian_userId_schoolId_fkey" FOREIGN KEY ("userId", "schoolId") REFERENCES "User"("id", "schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Guardian" ADD CONSTRAINT "Guardian_userId_schoolId_fkey" FOREIGN KEY ("userId", "schoolId") REFERENCES "User"("id", "schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "StudentGuardian" ADD CONSTRAINT "StudentGuardian_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "StudentGuardian" ADD CONSTRAINT "StudentGuardian_studentId_schoolId_fkey" FOREIGN KEY ("studentId", "schoolId") REFERENCES "Student"("id", "schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "StudentGuardian" ADD CONSTRAINT "StudentGuardian_guardianId_schoolId_fkey" FOREIGN KEY ("guardianId", "schoolId") REFERENCES "Guardian"("id", "schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
