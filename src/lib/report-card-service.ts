@@ -244,12 +244,13 @@ export async function getVisibleReportPdf(
       student: { include: { guardians: { include: { guardian: true } } } }
     }
   });
-  if (!report?.pdfData) throw new AppError("Report PDF not found.", 404, "NOT_FOUND");
+  const pdfData = report?.pdfData;
+  if (!report || !pdfData) throw new AppError("Report PDF not found.", 404, "NOT_FOUND");
   if (await hasPermission(tx, input.actorId, "report_cards:view")) {
     const isParent = await hasPermission(tx, input.actorId, "parents:read_linked");
-    if (!isParent) return report;
+    if (!isParent) return { ...report, pdfData };
     const linked = report.student.guardians.some((link) => link.guardian.userId === input.actorId);
-    if (linked && report.status === "sent") return report;
+    if (linked && report.status === "sent") return { ...report, pdfData };
   }
   throw new ForbiddenError("This report card is not visible to this account.");
 }
