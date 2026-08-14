@@ -15,10 +15,31 @@ const TENANT_MODELS = new Set([
   "UserRole",
   "UserPermissionOverride",
   "SchoolPasswordResetToken",
-  "AuditLogSchool"
+  "AuditLogSchool",
+  "AcademicYear",
+  "CalendarEvent",
+  "Term",
+  "Student",
+  "Guardian",
+  "StudentGuardian",
+  "Class",
+  "Subject",
+  "ClassSubjectTeacher",
+  "AttendanceEvent",
+  "Assessment",
+  "Score",
+  "ReportCard",
+  "FeeItem",
+  "Invoice",
+  "InvoiceLine",
+  "Payment",
+  "PaymentReversal",
+  "Message"
 ]);
 
 const AUDIT_MODELS = new Set(["AuditLogSchool", "AuditLogPlatform"]);
+const APPEND_ONLY_MODELS = new Set(["InvoiceLine", "Payment", "PaymentReversal"]);
+const DELETE_PROTECTED_MODELS = new Set(["Invoice"]);
 const READ_OPERATIONS = new Set([
   "findUnique",
   "findUniqueOrThrow",
@@ -128,6 +149,17 @@ export const db = basePrisma.$extends({
             operation === "upsert")
         ) {
           throw new TenantScopeError("Audit logs are append-only.");
+        }
+
+        if (
+          APPEND_ONLY_MODELS.has(model) &&
+          (UPDATE_OPERATIONS.has(operation) || DELETE_OPERATIONS.has(operation) || operation === "upsert")
+        ) {
+          throw new TenantScopeError("Financial ledger records are append-only.");
+        }
+
+        if (DELETE_PROTECTED_MODELS.has(model) && DELETE_OPERATIONS.has(operation)) {
+          throw new TenantScopeError("Invoices cannot be deleted.");
         }
 
         if (!TENANT_MODELS.has(model)) {
