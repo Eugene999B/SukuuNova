@@ -1,119 +1,116 @@
 # SukuuNova
 
-SukuuNova is a secure multi-tenant school management platform for Ghanaian schools. Phase 1 delivers the first usable school-operations MVP on top of the verified Phase 0 authentication, RBAC, audit, tenant-scoping, and PostgreSQL Row-Level Security foundation.
+SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. Phase 2 adds safety, staffing, payroll, messaging, and branded reporting differentiators to the verified Phase 0/1 foundation.
 
-The product name is **SukuuNova** throughout the codebase.
+The product name is **SukuuNova** throughout the repository.
 
-## Phase 1 status
+## Phase 2 status
 
-Implemented:
+Implemented on the **phase-2-differentiators** branch:
 
-- academic years, terms, and attendance-aware calendar events;
-- student registration, class assignment, guardians, and optional Parent login creation;
-- classes, subjects, class teachers, and subject-teacher assignments;
-- manual and signed short-lived QR attendance for students and staff;
-- school-configured resumption time, grace period, and timezone—no hardcoded attendance cutoff;
-- holiday/vacation/closure suppression of attendance and absence alerts;
-- configurable CA/exam weighting and assignment-scoped score entry;
-- fee items, immutable invoices, manual MoMo/cash/card reconciliation, and append-only reversals;
-- asynchronous SMS outbox for absence, staff-lateness, invoice, payment, and report-card alerts;
-- one PDF report-card template with attendance and remarks;
-- missing-score blocking unless the school explicitly enables partial reports;
-- maker-checker report flow: class teacher submits, Principal/Owner approves, then the report is sent;
-- Parent access restricted to linked children and sent report cards;
-- Platform Admin school-onboarding UI;
-- a signed-in Phase 1 operations console at **/mvp**.
+- minimal class timetable by weekday and period;
+- substitute-teacher suggestions based on attendance and free periods, with explicit confirmation and no auto-assignment;
+- student and staff face attendance using an AWS Rekognition adapter;
+- linked-guardian consent enforcement before a student face can be enrolled;
+- configurable face-match threshold and mandatory manual review below threshold;
+- encrypted provider face references using AES-256-GCM;
+- approved-guardian pickup lists, pending approval for unscheduled collectors, and maker-checker release;
+- immutable pickup events created only after preapproval or an authorized second-person decision;
+- a shared PostgreSQL SMS/WhatsApp outbox with atomic claims, exponential retries, and five-attempt failure handling;
+- approved Twilio WhatsApp template messages for absences, staff lateness, invoices, payments, and report cards;
+- three report-card presets with school logo, colours, and watermark;
+- salary structures, fixed/percentage deductions, payroll runs, immutable PDF payslips, and staff self-service;
+- Owner-only custom roles with a checkbox permission grid;
+- visitor sign-in/sign-out log;
+- filterable staff attendance dashboard;
+- a signed-in Phase 2 console at **/phase2** and Owner-only role builder at **/phase2/roles**.
 
-Explicitly deferred from this phase: face recognition, WhatsApp, payroll, bus tracking, custom role-builder UI, multiple report templates, online payment capture, and deployment.
+Still out of scope: bus tracking, feeding, CBT, library, fee waivers, recruitment, offline mode, platform billing/feature flags, emergency workflows, AI features, drag-and-drop report design, and a full constraint-solving timetable.
 
-## Technology
+## Architecture
 
 - Next.js 15 App Router, React 19, TypeScript, and Tailwind CSS
-- PostgreSQL and Prisma
-- bcrypt password hashing and separate school/platform JWT sessions
-- pdf-lib for server-side report-card PDF generation
-- PostgreSQL outbox worker for asynchronous SMS delivery
-- Vitest integration tests against a real non-superuser PostgreSQL role
+- PostgreSQL 16, Prisma, forced Row-Level Security, and composite tenant foreign keys
+- bcrypt password hashing and separate school/platform JWT universes
+- pdf-lib for report cards and payslips
+- AWS SDK adapter for Rekognition
+- Twilio Content API template delivery for WhatsApp
+- PostgreSQL durable outbox; no Redis or parallel queue is introduced
 
-The SMS queue uses the existing PostgreSQL service as a durable outbox. This avoids adding Redis cost and operations during the MVP while keeping provider calls outside web request transactions. The adapter boundary can be replaced with a dedicated queue later without changing the domain services.
+Every tenant-owned model carries **schoolId**. **withTenant** establishes transaction-local tenant context, the Prisma extension injects tenant predicates, and PostgreSQL forces RLS. Cross-school foreign keys repeat **schoolId**.
 
-## Security model
+Append-only database and application guards protect audit logs, financial ledgers, payslips, and pickup events. Report cards retain **draft → submitted → approved → sent** maker-checker transitions. Payroll retains **draft → processed → paid** transitions.
 
-Every tenant-owned Phase 1 model includes **schoolId** and is protected twice:
+## Face-recognition privacy and safety
 
-1. **withTenant(schoolId, work)** sets a validated transaction-local tenant context and the Prisma extension injects or checks **schoolId** for every read and write.
-2. PostgreSQL enables and forces RLS with a tenant policy on every tenant table.
+The browser captures a still frame only for the current request. SukuuNova validates it, sends it through the configured provider adapter, and does not save the raw image in PostgreSQL, object storage, logs, or audit metadata. AWS Rekognition collections store face vectors rather than face images. The returned FaceId is encrypted before storage with **FACE_EMBEDDING_ENCRYPTION_KEY**.
 
-Composite foreign keys repeat **schoolId**, preventing a class, student, guardian, assessment, score, payment, or message from referencing another school. School and Platform Admin authentication remain separate by table, route, cookie, secret, JWT issuer, and JWT audience.
+Student enrollment requires a guardian already linked to that student. A match below the school threshold creates a manual-review record and cannot record attendance until an authorized user confirms it. Schools remain responsible for notices, consent records, retention policy, access review, and applicable privacy law.
 
-Financial protections are also enforced in both layers:
+Vendor references:
 
-- Invoice lines, payments, and payment reversals are append-only.
-- Invoices cannot be deleted, and their identity and total cannot be changed.
-- Corrections are represented as new **PaymentReversal** rows.
-- Database triggers reject direct SQL mutations that bypass application services.
+- [AWS Rekognition collections](https://docs.aws.amazon.com/rekognition/latest/dg/collections.html)
+- [AWS Rekognition data encryption](https://docs.aws.amazon.com/rekognition/latest/dg/security-data-encryption.html)
+- [AWS Rekognition pricing](https://aws.amazon.com/rekognition/pricing/)
+- [AWS Rekognition FAQ](https://aws.amazon.com/rekognition/faqs/)
 
-Report-card transitions are likewise guarded by both service authorization and a database trigger. Only **draft → submitted → approved → sent** is accepted, and submitter and approver must differ.
+Rekognition is usage-priced for image operations and stored face vectors, with no application-side fixed queue infrastructure. Verify current AWS regional pricing before production.
 
-## Default Phase 1 access
+## WhatsApp choice and cost
 
-| Role | Phase 1 scope |
-| --- | --- |
-| Owner | Full school access |
-| Principal | Full school access, including report approval |
-| Vice Principal | Academic setup, attendance, gradebook, and report workflow |
-| Class Teacher | Assigned class students, attendance, scores, report generation/submission |
-| Subject Teacher | Assigned class/subject students and scores |
-| Accountant | Fee items, invoices, reconciliation, reversals, and finance reports |
-| HR Officer | Staff attendance and lateness alerts |
-| Front Desk/Gate Security | Student/staff attendance recording |
-| Parent | Linked children and their sent report cards only |
+WhatsApp uses Twilio approved Content templates. Each school configures a **ContentSid** for the five SukuuNova template keys. Business notifications outside WhatsApp’s customer-service window must use approved templates. Twilio charges its per-message fee in addition to applicable Meta template fees; verify current country/category pricing before launch.
 
-Permissions are database-driven and may be overridden per user. Record-level scoping still applies after a permission grant.
+- [Twilio approved WhatsApp templates](https://www.twilio.com/docs/whatsapp/tutorial/send-whatsapp-notification-messages-templates)
+- [Twilio WhatsApp pricing](https://www.twilio.com/en-us/whatsapp/pricing)
 
-## Main routes
+SMS and WhatsApp share the existing **Message** outbox. Web requests enqueue messages only; the worker performs external provider calls.
+
+## Phase 2 routes
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| GET/POST | /api/mvp/setup | Calendar, terms, classes, subjects, assignments, students |
-| GET/POST | /api/mvp/attendance | Manual/QR attendance, summaries, absence finalization |
-| GET/POST | /api/mvp/gradebook | Assigned assessments and score entry |
-| GET/POST | /api/mvp/finance | Fee items, invoices, payments, reversals |
-| GET/POST | /api/mvp/report-cards | Generate and advance report-card workflow |
-| GET | /api/mvp/report-cards/:id/pdf | Authorized PDF delivery |
-| GET/PATCH | /api/mvp/settings | Attendance, grading, report, and SMS settings |
-| GET/POST | /api/platform/schools | Platform Admin onboarding |
-| GET | /mvp | Signed-in school operations console |
-| GET | /platform/schools/new | Platform Admin onboarding screen |
+| GET/POST | /api/phase2/face | Enrollment, match, and manual review |
+| GET/POST | /api/phase2/pickups | Approved collectors, attempts, and review |
+| GET/POST | /api/phase2/timetable | Slots, suggestions, and confirmation |
+| GET/POST | /api/phase2/payroll | Salary structures, runs, and visible payslips |
+| GET | /api/phase2/payroll/payslips/:id/pdf | Authorized PDF delivery |
+| GET/POST | /api/phase2/roles | Owner-only custom roles |
+| GET/POST | /api/phase2/visitors | Visitor log |
+| GET/POST | /api/phase2/templates | Report preset and branding |
+| GET | /api/phase2/staff-attendance | Date/staff-filtered dashboard |
+| GET/POST | /api/phase2/settings | Thresholds and notification configuration |
+| GET | /phase2 | Phase 2 school operations console |
+| GET | /phase2/roles | Owner-only role builder |
 
-All Phase 0 authentication and password-reset routes remain available.
+All Phase 0/1 routes remain available.
 
 ## Environment
 
-Copy **.env.example** and configure:
+Copy **.env.example** and configure the core database and independent authentication secrets. The runtime PostgreSQL identity must be **NOSUPERUSER** and **NOBYPASSRLS**.
 
 ~~~bash
 DATABASE_URL=
 TEST_DATABASE_URL=
 SCHOOL_AUTH_SECRET=
 PLATFORM_AUTH_SECRET=
-NEXT_PUBLIC_APP_URL=
-~~~
+NEXT_PUBLIC_APP_URL=https://your-domain.example
 
-Use independent random authentication secrets of at least 32 characters. The application database role must be **NOSUPERUSER** and **NOBYPASSRLS**.
-
-For SMS delivery:
-
-~~~bash
 SMS_PROVIDER_URL=
 SMS_PROVIDER_TOKEN=
 SMS_SENDER_ID=
 SMS_WORKER_POLL_MS=2000
+
+AWS_REGION=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+FACE_EMBEDDING_ENCRYPTION_KEY=
+
+TWILIO_ACCOUNT_SID=
+TWILIO_AUTH_TOKEN=
+TWILIO_WHATSAPP_FROM=
 ~~~
 
-If the provider variables are absent, messages stay in or return to the durable outbox; web requests do not call the provider.
-
-Seed/onboarding credentials are documented in **.env.example** and intentionally have no defaults.
+Generate the face-reference key as 32 random bytes encoded in base64. Keep all provider credentials and keys in the deployment secret store, never Git.
 
 ## Setup and verification
 
@@ -126,60 +123,57 @@ npm run build
 npm run dev
 ~~~
 
-The test database must be disposable, migrated, and owned by a PostgreSQL identity without superuser or RLS-bypass privileges.
+The integration database must be disposable, migrated, and accessed through a non-superuser, non-RLS-bypass identity.
 
-The complete suite covers the Phase 0 tenant/RBAC/audit foundation plus:
+The Phase 2 suite explicitly proves:
 
-- late arrival after the configured grace period;
-- attendance and absences suppressed by an attendance-affecting holiday;
-- HTTP-403 semantics for a teacher outside their assigned subject;
-- class-teacher submission and distinct Principal/Owner approval;
-- Parent child-only visibility;
-- SMS enqueue without an in-request provider call;
-- RLS isolation for new SIS records.
+1. student face enrollment fails without linked guardian consent and provider references are encrypted;
+2. an unapproved pickup creates no pickup event until a different authorized user approves;
+3. staff lists and retrieves only their own payslips;
+4. custom role IDs cannot cross tenant boundaries;
+5. substitute suggestions write nothing until explicit confirmation.
 
-GitHub Actions is intentionally limited to one verification workflow on pushes to **phase-1-mvp** (or an explicit manual dispatch). It performs dependency installation, migrations, the full test suite, and a production build against PostgreSQL 16.
+The Phase 0/1 authentication, RBAC, audit, RLS, attendance, gradebook, finance, report workflow, parent scoping, and asynchronous messaging tests continue to run.
 
-## SMS worker
+GitHub Actions remains limited to one verification workflow on pushes to **phase-1-mvp** or **phase-2-differentiators**, plus explicit manual dispatch. It installs dependencies, applies migrations, runs the full suite, type-checks/builds, and uses PostgreSQL 16.
 
-Run the web application and SMS worker as separate processes:
+## Worker and Railway preparation
+
+Run the application and notification worker as separate processes:
 
 ~~~bash
 npm run start
-npm run worker:sms
+npm run worker:messages
 ~~~
 
-The worker claims queued messages, uses exponential retry delays, records the last provider error, and stops retrying after five attempts. Deploying the worker as a separate Railway service keeps SMS latency out of web requests.
+No Railway deployment is performed in Phase 2. When deployment is explicitly authorized:
 
-## Railway deployment preparation
-
-No Railway deployment is performed in Phase 1. When deployment is authorized:
-
-- Web service build command: **npm run build**
-- Web service start command: **npm run start**
-- Pre-deploy command: **npm run db:migrate**
-- Worker service start command: **npm run worker:sms**
-- Provide all required environment variables in Railway, never in Git
-- Use a non-superuser, non-BYPASSRLS PostgreSQL runtime identity
-- Run seed only as an explicit one-time administrative operation
-- Use Platform Admin onboarding for later schools
+- Web build: **npm run build**
+- Web start: **npm run start**
+- Pre-deploy: **npm run db:migrate**
+- Worker start: **npm run worker:messages**
+- Provide every secret through Railway variables
+- Use a non-superuser, non-BYPASSRLS PostgreSQL runtime role
+- Review AWS/Twilio regional availability, pricing, consent, and retention before enabling providers
 
 ## Manual acceptance path
 
-1. Sign in as a Platform Admin and create a school at **/platform/schools/new**.
-2. Sign in as its Owner and open **/mvp**.
-3. Configure resumption time, grace period, timezone, and CA/exam weights.
-4. Create an academic year, term, class, subject, teacher assignment, and student/guardian.
-5. Record an on-time and late arrival; add a holiday and verify attendance is blocked.
-6. Create assessments and verify an unassigned Subject Teacher receives 403.
-7. Create fee items and an invoice, reconcile a MoMo payment by reference, then reverse it.
-8. Generate a report with complete scores, submit as the class teacher, approve as Principal/Owner, and send.
-9. Sign in as the Parent and verify only the linked child and sent PDF are visible.
-10. Run the SMS worker with a test provider and verify queued alerts are delivered.
+1. Sign in as a school Owner and open **/phase2**.
+2. Configure attendance timing, face threshold, notification channels, and ContentSids.
+3. Use the camera flow to verify student enrollment requires a linked guardian.
+4. Scan below threshold and verify only a manual-review item appears.
+5. Attempt an unscheduled pickup and verify a different authorized user must approve release.
+6. Create timetable slots, request suggestions, and explicitly confirm a substitute.
+7. Configure salary structures, process a run, mark it paid, and open a staff member’s own payslip.
+8. Apply each of the three report presets with school branding and generate a report.
+9. Create a custom role as Owner; verify Principal cannot access the builder.
+10. Sign in/out a visitor and inspect staff attendance totals/trends.
+11. Start **worker:messages** with test providers and verify SMS/WhatsApp outbox delivery.
 
 ## Repository branches
 
 - **phase-0-foundation** — verified security/data foundation
-- **phase-1-mvp** — Phase 1 implementation and verification branch
+- **phase-1-mvp** — verified Phase 1 school operations
+- **phase-2-differentiators** — Phase 2 implementation and verification
 
-Railway hosting and any merge into the default branch are intentionally left for explicit authorization.
+Merging to the default branch and Railway deployment remain separate, explicit actions.

@@ -11,7 +11,7 @@ const schema = z.object({
   faceMatchThreshold: z.number().min(80).max(100),
   substituteLateMinutes: z.number().int().min(0).max(180),
   notificationChannels: z.array(z.enum(["sms", "whatsapp"])).min(1),
-  whatsappTemplateConfig: z.record(z.string().min(2)).optional()
+  whatsappTemplateConfig: z.record(z.string(), z.string().min(2)).optional()
 });
 
 export async function GET() {

@@ -27,8 +27,8 @@ export default async function DashboardPage() {
           ["Role", account.userRoles.map((row) => row.role.name).join(", ") || "No role assigned"]
         ]}
         universe="school"
-        href="/mvp"
-        cta="Open Phase 1 operations"
+        href="/phase2"
+        cta="Open Phase 2 operations"
       />
     );
   }
@@ -66,7 +66,7 @@ function DashboardShell({
       <section className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50 md:p-12">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-nova">SukuuNova Phase 1</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-nova">SukuuNova</p>
             <h1 className="mt-2 text-3xl font-bold">{title}</h1>
           </div>
           <LogoutButton universe={universe} />

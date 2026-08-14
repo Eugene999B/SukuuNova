@@ -165,6 +165,9 @@ describe("Phase 2 differentiator safety gates", () => {
         guardianId: unlinkedGuardianId
       });
       expect(attempted.status).toBe("approval_required");
+      if (attempted.status !== "approval_required") {
+        throw new Error("Expected unscheduled pickup approval request.");
+      }
       expect(await tx.pickupEvent.count({
         where: { studentId, collectedByGuardianId: unlinkedGuardianId }
       })).toBe(0);

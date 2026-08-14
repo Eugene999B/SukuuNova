@@ -64,10 +64,10 @@ function value(form: FormData, key: string) {
   return String(form.get(key) ?? "");
 }
 
-function Select({ name, rows, label }: { name: string; rows: Named[]; label: string }) {
+function Select({ name, rows, label, required = true }: { name: string; rows: Named[]; label: string; required?: boolean }) {
   return (
     <label className="block text-sm font-medium">{label}
-      <select name={name} required className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
+      <select name={name} required={required} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2">
         <option value="">Select…</option>
         {rows.map((row) => <option key={row.id} value={row.id}>{row.name}</option>)}
       </select>
@@ -95,6 +95,7 @@ export function Phase2Console({ name, canManageRoles }: { name: string; canManag
   const [visitors, setVisitors] = useState<VisitorData | null>(null);
   const [attendance, setAttendance] = useState<StaffTrend | null>(null);
   const [capture, setCapture] = useState("");
+  const [faceKind, setFaceKind] = useState<"student" | "staff">("student");
   const [logo, setLogo] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestedSlot, setSuggestedSlot] = useState("");
@@ -255,13 +256,11 @@ export function Phase2Console({ name, canManageRoles }: { name: string; canManag
       faceMatchThreshold: Number(value(form, "threshold")),
       substituteLateMinutes: Number(value(form, "lateMinutes")),
       notificationChannels: channels,
-      whatsappTemplateConfig: {
-        student_absence: value(form, "student_absence"),
-        staff_late: value(form, "staff_late"),
-        invoice_created: value(form, "invoice_created"),
-        payment_received: value(form, "payment_received"),
-        report_card_ready: value(form, "report_card_ready")
-      }
+      whatsappTemplateConfig: Object.fromEntries(
+        ["student_absence", "staff_late", "invoice_created", "payment_received", "report_card_ready"]
+          .map((key) => [key, value(form, key)] as const)
+          .filter(([, contentSid]) => contentSid.length > 0)
+      )
     });
   }
 
@@ -299,11 +298,14 @@ export function Phase2Console({ name, canManageRoles }: { name: string; canManag
             <CameraCapture onCapture={setCapture} />
             <form onSubmit={onFaceSubmit} className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm font-medium">Enrollment type
-                <select name="kind" className={inputClass}><option value="student">Student</option><option value="staff">Staff</option></select>
+                <select name="kind" value={faceKind} onChange={(event) => setFaceKind(event.target.value as "student" | "staff")} className={inputClass}>
+                  <option value="student">Student</option><option value="staff">Staff</option>
+                </select>
               </label>
-              <Select name="studentId" rows={context.students} label="Student (when applicable)" />
-              <Select name="guardianId" rows={context.guardians} label="Consenting linked guardian" />
-              <Select name="staffId" rows={context.staff} label="Staff (when applicable)" />
+              {faceKind === "student" ? <>
+                <Select name="studentId" rows={context.students} label="Student" />
+                <Select name="guardianId" rows={context.guardians} label="Consenting linked guardian" />
+              </> : <Select name="staffId" rows={context.staff} label="Staff" />}
               <button className={primaryButton}>Enroll captured face</button>
               <button type="button" onClick={() => {
                 if (!capture) { setNotice("Capture a camera frame first."); return; }
@@ -326,17 +328,21 @@ export function Phase2Console({ name, canManageRoles }: { name: string; canManag
 
         {can["attendance:record"] && (
           <Card title="Guardian pickup gate" note="Unapproved collectors create a pending request; they never create a pickup event.">
-            <form className="grid gap-3 sm:grid-cols-2">
+            <form onSubmit={(event) => void onPickup(event, "attempt")} className="grid gap-3 sm:grid-cols-2">
               <Select name="studentId" rows={context.students} label="Student" />
               <Select name="guardianId" rows={context.guardians} label="Collecting guardian" />
-              <button onClick={(event) => void onPickup(event.currentTarget.form ? { ...event, currentTarget: event.currentTarget.form } as unknown as FormEvent<HTMLFormElement> : event as unknown as FormEvent<HTMLFormElement>, "attempt")} type="button" className={primaryButton}>
-                Attempt pickup
-              </button>
+              <button className={primaryButton}>Attempt pickup</button>
               {can["attendance:pickup_approve"] && (
-                <button onClick={(event) => {
+                <button type="button" onClick={(event) => {
                   const form = event.currentTarget.form;
-                  if (form) void onPickup({ ...event, currentTarget: form } as unknown as FormEvent<HTMLFormElement>, "approveGuardian");
-                }} type="button" className={softButton}>Add to approved list</button>
+                  if (!form) return;
+                  const values = new FormData(form);
+                  void act("/api/phase2/pickups", {
+                    action: "approveGuardian",
+                    studentId: value(values, "studentId"),
+                    guardianId: value(values, "guardianId")
+                  });
+                }} className={softButton}>Add to approved list</button>
               )}
             </form>
             {pickups?.pending.map((row) => (

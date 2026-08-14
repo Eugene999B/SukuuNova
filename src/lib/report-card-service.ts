@@ -122,8 +122,10 @@ async function makePdf(data: Awaited<ReturnType<typeof reportData>>, remarks?: s
 
   if (data.school.logoUrl?.startsWith("data:image/")) {
     try {
-      const [header, encoded] = data.school.logoUrl.split(",", 2);
-      const bytes = Buffer.from(encoded, "base64");
+      const separator = data.school.logoUrl.indexOf(",");
+      if (separator < 1) throw new Error("Malformed school logo data URL.");
+      const header = data.school.logoUrl.slice(0, separator);
+      const bytes = Buffer.from(data.school.logoUrl.slice(separator + 1), "base64");
       const logo = header.includes("png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
       const scale = Math.min(60 / logo.width, 48 / logo.height);
       page.drawImage(logo, { x: 475, y: 772, width: logo.width * scale, height: logo.height * scale });
@@ -276,7 +278,7 @@ export async function sendReportCard(
   if (!report) throw new AppError("Report card not found.", 404, "NOT_FOUND");
   if (report.status !== "approved") throw new AppError("Only approved reports can be sent.", 409, "INVALID_STATE");
   const path = "/api/mvp/report-cards/" + report.id + "/pdf";
-  const url = (process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "") + path;
+  const url = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "") + path;
   for (const link of report.student.guardians) {
     await enqueueSms(tx, {
       schoolId: input.schoolId,
