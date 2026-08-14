@@ -32,7 +32,9 @@ const READ_OPERATIONS = new Set([
 const UPDATE_OPERATIONS = new Set(["update", "updateMany", "updateManyAndReturn"]);
 const DELETE_OPERATIONS = new Set(["delete", "deleteMany"]);
 
-// Prisma exposes heterogeneous per-model argument shapes in this dynamic extension.\n// eslint-disable-next-line @typescript-eslint/no-explicit-any\ntype MutableArgs = Record<string, any>;
+// Prisma exposes heterogeneous per-model argument shapes in this dynamic extension.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MutableArgs = Record<string, any>;
 
 function assertNoContradictoryWhere(
   model: string,
