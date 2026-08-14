@@ -34,11 +34,29 @@ const TENANT_MODELS = new Set([
   "InvoiceLine",
   "Payment",
   "PaymentReversal",
-  "Message"
+  "Message",
+  "TimetableSlot",
+  "SubstituteAssignment",
+  "FaceEnrollment",
+  "FaceMatchReview",
+  "ApprovedPickup",
+  "PickupApprovalRequest",
+  "PickupEvent",
+  "SalaryStructure",
+  "PayrollRun",
+  "Payslip",
+  "VisitorLog",
+  "ReportCardTemplate"
 ]);
 
 const AUDIT_MODELS = new Set(["AuditLogSchool", "AuditLogPlatform"]);
-const APPEND_ONLY_MODELS = new Set(["InvoiceLine", "Payment", "PaymentReversal"]);
+const APPEND_ONLY_MODELS = new Set([
+  "InvoiceLine",
+  "Payment",
+  "PaymentReversal",
+  "Payslip",
+  "PickupEvent"
+]);
 const DELETE_PROTECTED_MODELS = new Set(["Invoice"]);
 const READ_OPERATIONS = new Set([
   "findUnique",
@@ -86,9 +104,16 @@ function tenantWhere(
 ): MutableArgs {
   const original = where ?? {};
   assertNoContradictoryWhere(model, original, schoolId);
-  return model === "School"
-    ? { ...original, id: schoolId }
-    : { ...original, schoolId };
+  if (model === "School") return { ...original, id: schoolId };
+  if (model === "ReportCardTemplate") {
+    return {
+      AND: [
+        original,
+        { OR: [{ schoolId }, { schoolId: null }] }
+      ]
+    };
+  }
+  return { ...original, schoolId };
 }
 
 function tenantData(

@@ -17,6 +17,7 @@ export const DEFAULT_PERMISSIONS = [
   "classes:manage",
   "attendance:record",
   "attendance:view_own",
+  "attendance:pickup_approve",
   "scores:write:assigned",
   "scores:write:all",
   "invoices:create",
@@ -24,41 +25,54 @@ export const DEFAULT_PERMISSIONS = [
   "report_cards:submit",
   "report_cards:approve",
   "report_cards:view",
-  "parents:read_linked"
+  "parents:read_linked",
+  "roles:create_custom",
+  "visitors:log",
+  "templates:manage"
 ] as const;
 
 export type PermissionKey = (typeof DEFAULT_PERMISSIONS)[number];
 
+const PRINCIPAL_PERMISSIONS = DEFAULT_PERMISSIONS.filter(
+  (key) => key !== "roles:create_custom"
+);
+
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> = {
   Owner: DEFAULT_PERMISSIONS,
-  Principal: DEFAULT_PERMISSIONS,
+  Principal: PRINCIPAL_PERMISSIONS,
   "Vice Principal": [
     "students:read", "students:write", "calendar:manage", "classes:manage",
-    "attendance:record", "scores:write:all", "report_cards:submit",
-    "report_cards:approve", "report_cards:view", "settings:manage_school",
-    "reports:generate", "users:read"
+    "attendance:record", "attendance:view_own", "attendance:pickup_approve",
+    "scores:write:all", "report_cards:submit", "report_cards:approve",
+    "report_cards:view", "settings:manage_school", "reports:generate",
+    "users:read", "payroll:view_own", "visitors:log", "templates:manage"
   ],
   Accountant: [
     "students:read", "finance:read", "finance:write", "finance:approve",
-    "invoices:create", "payments:record", "reports:generate"
+    "invoices:create", "payments:record", "reports:generate", "payroll:view_own"
   ],
   "HR Officer": [
     "students:read", "attendance:record", "attendance:view_own",
     "payroll:view_own", "payroll:manage", "users:read", "users:write",
     "reports:generate"
   ],
-  "Admissions Officer": ["students:read", "students:write", "reports:generate"],
+  "Admissions Officer": [
+    "students:read", "students:write", "reports:generate", "payroll:view_own"
+  ],
   "Class Teacher": [
     "students:read", "attendance:record", "attendance:view_own",
     "scores:write:assigned", "report_cards:submit", "report_cards:view",
-    "reports:generate"
+    "reports:generate", "payroll:view_own"
   ],
   "Subject Teacher": [
     "students:read", "attendance:view_own", "scores:write:assigned",
-    "report_cards:view", "reports:generate"
+    "report_cards:view", "reports:generate", "payroll:view_own"
   ],
-  "Front Desk/Gate Security": ["students:read", "attendance:record"],
-  "Transport Officer": ["students:read"],
+  "Front Desk/Gate Security": [
+    "students:read", "attendance:record", "attendance:pickup_approve",
+    "visitors:log", "payroll:view_own"
+  ],
+  "Transport Officer": ["students:read", "payroll:view_own"],
   Parent: ["parents:read_linked", "report_cards:view"],
   Student: []
 };
