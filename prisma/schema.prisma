@@ -167,7 +167,7 @@ model User {
   pickupRequestsCreated     PickupApprovalRequest[] @relation("PickupRequestedBy")
   pickupRequestsApproved    PickupApprovalRequest[] @relation("PickupApprovedBy")
   pickupEventsApproved      PickupEvent[] @relation("PickupEventApprovedBy")
-  salaryStructure           SalaryStructure?
+  salaryStructures          SalaryStructure[]
   payslips                  Payslip[]
   hostedVisitors            VisitorLog[] @relation("VisitorHost")
 
