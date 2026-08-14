@@ -1,0 +1,94 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { requireSchoolSession } from "@/lib/auth";
+import { withTenant } from "@/lib/db";
+import { routeError } from "@/lib/errors";
+import { parseJson } from "@/lib/http";
+import { requirePermission } from "@/lib/rbac";
+import { enrollFace, matchFaceAttendance, reviewFaceMatch } from "@/lib/face-service";
+
+const schema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("enrollStudent"),
+    studentId: z.string(),
+    consentByGuardianId: z.string(),
+    image: z.string().min(100)
+  }),
+  z.object({
+    action: z.literal("enrollStaff"),
+    staffId: z.string(),
+    image: z.string().min(100)
+  }),
+  z.object({
+    action: z.literal("match"),
+    image: z.string().min(100),
+    deviceId: z.string().max(100).optional(),
+    type: z.enum(["in", "out"]),
+    timestamp: z.coerce.date().optional()
+  }),
+  z.object({
+    action: z.literal("review"),
+    reviewId: z.string(),
+    decision: z.enum(["confirmed", "rejected"]),
+    type: z.enum(["in", "out"]).optional()
+  })
+]);
+
+export async function GET() {
+  try {
+    const session = await requireSchoolSession();
+    const data = await withTenant(session.schoolId, async (tx) => {
+      await requirePermission(tx, session.userId, "attendance:record");
+      const [enrollments, reviews] = await Promise.all([
+        tx.faceEnrollment.findMany({
+          select: {
+            id: true, studentId: true, staffId: true, enrolledAt: true,
+            consentByGuardianId: true,
+            student: { select: { name: true } },
+            staff: { select: { name: true } }
+          },
+          orderBy: { enrolledAt: "desc" }
+        }),
+        tx.faceMatchReview.findMany({
+          include: {
+            candidateStudent: { select: { name: true } },
+            candidateStaff: { select: { name: true } }
+          },
+          orderBy: { createdAt: "desc" },
+          take: 50
+        })
+      ]);
+      return { enrollments, reviews };
+    });
+    return NextResponse.json(data);
+  } catch (error) { return routeError(error); }
+}
+
+export async function POST(request: Request) {
+  try {
+    const session = await requireSchoolSession();
+    const input = await parseJson(request, schema);
+    const result = await withTenant<unknown>(session.schoolId, (tx) => {
+      const common = { schoolId: session.schoolId, actorId: session.userId };
+      if (input.action === "enrollStudent") {
+        return enrollFace(tx, {
+          ...common,
+          target: { studentId: input.studentId, consentByGuardianId: input.consentByGuardianId },
+          image: input.image
+        });
+      }
+      if (input.action === "enrollStaff") {
+        return enrollFace(tx, {
+          ...common,
+          target: { staffId: input.staffId },
+          image: input.image
+        });
+      }
+      if (input.action === "match") {
+        return matchFaceAttendance(tx, { ...common, ...input });
+      }
+      return reviewFaceMatch(tx, { ...common, ...input });
+    });
+    return NextResponse.json({ ok: true, result });
+  } catch (error) { return routeError(error); }
+}
