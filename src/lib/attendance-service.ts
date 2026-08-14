@@ -58,7 +58,9 @@ export async function recordAttendance(
     actorId: string;
     target: AttendanceTarget;
     type: "in" | "out";
-    method: "manual" | "qr";
+    method: "manual" | "qr" | "face";
+    confidenceScore?: number;
+    deviceId?: string;
     timestamp?: Date;
   }
 ) {
@@ -115,6 +117,8 @@ export async function recordAttendance(
       timestamp,
       attendanceDate: day,
       isLate,
+      confidenceScore: input.confidenceScore,
+      deviceId: input.deviceId,
       recordedBy: input.actorId
     }
   });
