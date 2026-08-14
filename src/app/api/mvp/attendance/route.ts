@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
-    const result = await withTenant(session.schoolId, async (tx) => {
+    const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       if (input.action === "record") {
         return recordAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, target: input.target, type: input.type, method: "manual", timestamp: input.timestamp });
       }

@@ -13,7 +13,8 @@ export async function GET(
     const report = await withTenant(session.schoolId, (tx) =>
       getVisibleReportPdf(tx, { actorId: session.userId, reportCardId: id })
     );
-    return new Response(report.pdfData, {
+    const bytes = Uint8Array.from(report.pdfData);
+    return new Response(bytes.buffer, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'inline; filename="sukuunova-report-card.pdf"',

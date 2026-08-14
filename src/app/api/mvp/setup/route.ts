@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
     const common = { schoolId: session.schoolId, actorId: session.userId };
-    let result;
+    let result: unknown;
     switch (input.action) {
       case "academicYear": result = await createAcademicYear({ ...common, ...input }); break;
       case "term": result = await createTerm({ ...common, ...input }); break;

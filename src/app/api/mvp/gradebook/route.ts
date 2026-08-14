@@ -34,10 +34,10 @@ export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
-    const result = await withTenant(session.schoolId, (tx) =>
+    const result = await withTenant<unknown>(session.schoolId, async (tx) =>
       input.action === "assessment"
-        ? createAssessment(tx, { schoolId: session.schoolId, actorId: session.userId, ...input })
-        : enterScore(tx, { schoolId: session.schoolId, actorId: session.userId, ...input })
+        ? await createAssessment(tx, { schoolId: session.schoolId, actorId: session.userId, ...input })
+        : await enterScore(tx, { schoolId: session.schoolId, actorId: session.userId, ...input })
     );
     return NextResponse.json({ ok: true, result });
   } catch (error) { return routeError(error); }

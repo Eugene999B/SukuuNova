@@ -35,13 +35,13 @@ export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
-    const result = await withTenant(session.schoolId, (tx) => {
+    const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       const common = { schoolId: session.schoolId, actorId: session.userId };
       switch (input.action) {
-        case "feeItem": return createFeeItem(tx, { ...common, ...input });
-        case "invoice": return generateInvoice(tx, { ...common, ...input });
-        case "payment": return recordPayment(tx, { ...common, ...input });
-        case "reversal": return reversePayment(tx, { ...common, ...input });
+        case "feeItem": return await createFeeItem(tx, { ...common, ...input });
+        case "invoice": return await generateInvoice(tx, { ...common, ...input });
+        case "payment": return await recordPayment(tx, { ...common, ...input });
+        case "reversal": return await reversePayment(tx, { ...common, ...input });
       }
     });
     return NextResponse.json({ ok: true, result });

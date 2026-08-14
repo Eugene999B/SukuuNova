@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
+import { ForbiddenError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { hasPermission } from "@/lib/rbac";
 import { generateReportCard, submitReportCard, approveReportCard, sendReportCard } from "@/lib/report-card-service";
@@ -20,7 +20,6 @@ export async function GET() {
     const reports = await withTenant(session.schoolId, async (tx) => {
       const canView = await hasPermission(tx, session.userId, "report_cards:view");
       if (!canView) {
-        const { ForbiddenError } = await import("@/lib/errors");
         throw new ForbiddenError("Report-card access is not permitted.");
       }
       const parent = await hasPermission(tx, session.userId, "parents:read_linked");
@@ -41,13 +40,13 @@ export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
-    const result = await withTenant(session.schoolId, (tx) => {
+    const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       const common = { schoolId: session.schoolId, actorId: session.userId };
       switch (input.action) {
-        case "generate": return generateReportCard(tx, { ...common, ...input });
-        case "submit": return submitReportCard(tx, { ...common, ...input });
-        case "approve": return approveReportCard(tx, { ...common, ...input });
-        case "send": return sendReportCard(tx, { ...common, ...input });
+        case "generate": return await generateReportCard(tx, { ...common, ...input });
+        case "submit": return await submitReportCard(tx, { ...common, ...input });
+        case "approve": return await approveReportCard(tx, { ...common, ...input });
+        case "send": return await sendReportCard(tx, { ...common, ...input });
       }
     });
     return NextResponse.json({ ok: true, result });
