@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Platform universe: these records are never accepted as school-user identities.
+model PlatformAdmin {
+  id                  String                       @id @default(cuid())
+  name                String
+  email               String                       @unique
+  passwordHash        String
+  role                String
+  status              String                       @default("active")
+  createdAt           DateTime                     @default(now())
+  passwordResetTokens PlatformPasswordResetToken[]
+}
+
+model AuditLogPlatform {
+  id             String   @id @default(cuid())
+  actorId        String
+  action         String
+  targetSchoolId String?
+  targetEntity   String?
+  meta           Json?
+  createdAt      DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetSchoolId])
+  @@index([createdAt])
+}
+
+model SubscriptionPlan {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  price        Decimal
+  featureFlags Json
+  schools      School[]
+}
+
+// Minimal, non-sensitive directory used to resolve a tenant before RLS context exists.
+model SchoolLoginDirectory {
+  schoolId   String   @id
+  uniqueCode String   @unique
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model LoginRateLimit {
+  identityHash    String    @id
+  attemptCount    Int       @default(0)
+  windowStartedAt DateTime
+  blockedUntil    DateTime?
+  updatedAt       DateTime  @updatedAt
+}
+
+model PlatformPasswordResetToken {
+  id        String        @id @default(cuid())
+  adminId   String
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+  admin     PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, expiresAt])
+}
+
+// Tenant root. Its id is the tenant key used by the client extension and RLS.
+model School {
+  id                      String                         @id @default(cuid())
+  uniqueCode              String                         @unique
+  name                    String
+  logoUrl                 String?
+  brandColors             Json?
+  subscriptionPlanId      String?
+  status                  String                         @default("active")
+  createdAt               DateTime                       @default(now())
+  subscriptionPlan        SubscriptionPlan?              @relation(fields: [subscriptionPlanId], references: [id])
+  settings                SchoolSettings?
+  users                   User[]
+  roles                   Role[]
+  rolePermissions         RolePermission[]
+  userRoles               UserRole[]
+  permissionOverrides     UserPermissionOverride[]
+  passwordResetTokens     SchoolPasswordResetToken[]
+  auditLogs               AuditLogSchool[]
+}
+
+model SchoolSettings {
+  schoolId             String  @id
+  academicYearConfig   Json?
+  gradingScale         Json?
+  reportCardTemplateId String?
+  school               School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+}
+
+model User {
+  id                  String                       @id @default(cuid())
+  schoolId            String
+  name                String
+  email               String?
+  phone               String?
+  passwordHash        String
+  status              String                       @default("active")
+  createdAt           DateTime                     @default(now())
+  school              School                       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  userRoles           UserRole[]
+  permissionOverrides UserPermissionOverride[]
+  passwordResetTokens SchoolPasswordResetToken[]
+
+  @@unique([id, schoolId])
+  @@unique([schoolId, email])
+  @@unique([schoolId, phone])
+  @@index([schoolId])
+}
+
+model Role {
+  id              String           @id @default(cuid())
+  schoolId        String
+  name            String
+  key             String?
+  isSystem        Boolean          @default(false)
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([id, schoolId])
+  @@unique([schoolId, name])
+  @@index([schoolId])
+}
+
+model Permission {
+  id                 String                   @id @default(cuid())
+  key                String                   @unique
+  description        String?
+  rolePermissions    RolePermission[]
+  permissionOverrides UserPermissionOverride[]
+}
+
+model RolePermission {
+  schoolId    String
+  roleId      String
+  permissionId String
+  school      School     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  role        Role       @relation(fields: [roleId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  permission  Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([schoolId])
+  @@index([permissionId])
+}
+
+model UserRole {
+  schoolId String
+  userId   String
+  roleId   String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user     User   @relation(fields: [userId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  role     Role   @relation(fields: [roleId, schoolId], references: [id, schoolId], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([schoolId])
+  @@index([roleId])
+}
+
+model UserPermissionOverride {
+  schoolId    String
+  userId      String
+  permissionId String
+  granted     Boolean
+  school      School     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user        User       @relation(fields: [userId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  permission  Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionId])
+  @@index([schoolId])
+  @@index([permissionId])
+}
+
+model SchoolPasswordResetToken {
+  id        String   @id @default(cuid())
+  schoolId  String
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user      User     @relation(fields: [userId, schoolId], references: [id, schoolId], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@index([userId, expiresAt])
+}
+
+model AuditLogSchool {
+  id         String   @id @default(cuid())
+  schoolId   String
+  actorId    String
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now())
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+
+  @@index([schoolId])
+  @@index([schoolId, actorId])
+  @@index([schoolId, createdAt])
+}
