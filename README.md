@@ -1,199 +1,185 @@
 # SukuuNova
 
-SukuuNova is a multi-tenant school management platform for Ghanaian schools. This repository currently contains **Phase 0 only**: the security and data foundation that later product modules will depend on.
+SukuuNova is a secure multi-tenant school management platform for Ghanaian schools. Phase 1 delivers the first usable school-operations MVP on top of the verified Phase 0 authentication, RBAC, audit, tenant-scoping, and PostgreSQL Row-Level Security foundation.
 
-There is deliberately no student information system, attendance, finance, payroll, report-card, bus-tracking, calendar, or messaging feature in this phase.
+The product name is **SukuuNova** throughout the codebase.
 
-## Phase 0 contents
+## Phase 1 status
 
-- Next.js App Router, React, TypeScript, and Tailwind
-- PostgreSQL data model and Prisma migration
-- Two independent authentication universes:
-  - Platform Admin accounts in **PlatformAdmin**
-  - School User accounts in **User**
-- bcrypt password hashing and database-backed login throttling
-- Token-based password-reset storage with only SHA-256 token hashes persisted
-- Database-driven roles, permissions, role mappings, and per-user overrides
-- Prisma client extension that injects the verified tenant into every tenant query
-- forced PostgreSQL Row-Level Security on every tenant table
-- append-only school and platform audit logs at both application and database layers
-- integration tests for tenant isolation, RLS, RBAC, overrides, and audit immutability
-- minimal school/platform login screens and identity proof dashboard
+Implemented:
 
-## Security architecture
+- academic years, terms, and attendance-aware calendar events;
+- student registration, class assignment, guardians, and optional Parent login creation;
+- classes, subjects, class teachers, and subject-teacher assignments;
+- manual and signed short-lived QR attendance for students and staff;
+- school-configured resumption time, grace period, and timezone—no hardcoded attendance cutoff;
+- holiday/vacation/closure suppression of attendance and absence alerts;
+- configurable CA/exam weighting and assignment-scoped score entry;
+- fee items, immutable invoices, manual MoMo/cash/card reconciliation, and append-only reversals;
+- asynchronous SMS outbox for absence, staff-lateness, invoice, payment, and report-card alerts;
+- one PDF report-card template with attendance and remarks;
+- missing-score blocking unless the school explicitly enables partial reports;
+- maker-checker report flow: class teacher submits, Principal/Owner approves, then the report is sent;
+- Parent access restricted to linked children and sent report cards;
+- Platform Admin school-onboarding UI;
+- a signed-in Phase 1 operations console at **/mvp**.
 
-Every authenticated school operation must run through **withTenant(schoolId, work)** in **src/lib/db.ts**.
+Explicitly deferred from this phase: face recognition, WhatsApp, payroll, bus tracking, custom role-builder UI, multiple report templates, online payment capture, and deployment.
 
-That helper performs three linked steps:
+## Technology
 
-1. Rejects an empty tenant identifier. There is no fallback school ID.
-2. opens a database transaction and sets **app.current_school_id** with PostgreSQL **set_config(..., true)**, making the value transaction-local;
-3. executes through a Prisma query extension that scopes reads, creates, updates, upserts, and deletes.
+- Next.js 15 App Router, React 19, TypeScript, and Tailwind CSS
+- PostgreSQL and Prisma
+- bcrypt password hashing and separate school/platform JWT sessions
+- pdf-lib for server-side report-card PDF generation
+- PostgreSQL outbox worker for asynchronous SMS delivery
+- Vitest integration tests against a real non-superuser PostgreSQL role
 
-The migration separately enables and forces RLS. If a route bypasses the Prisma extension and executes raw SQL, PostgreSQL still hides or rejects rows whose **schoolId** differs from the transaction setting. The **School** root uses its **id** as the tenant key.
+The SMS queue uses the existing PostgreSQL service as a durable outbox. This avoids adding Redis cost and operations during the MVP while keeping provider calls outside web request transactions. The adapter boundary can be replaced with a dedicated queue later without changing the domain services.
 
-**SchoolLoginDirectory** is a deliberately minimal platform-level lookup containing only school ID, public login code, and status. It resolves a tenant before a school user can be queried through RLS. It contains no user or credential data.
+## Security model
 
-### Tenant-scoped tables
+Every tenant-owned Phase 1 model includes **schoolId** and is protected twice:
 
-- School
-- SchoolSettings
-- User
-- Role
-- RolePermission
-- UserRole
-- UserPermissionOverride
-- SchoolPasswordResetToken
-- AuditLogSchool
+1. **withTenant(schoolId, work)** sets a validated transaction-local tenant context and the Prisma extension injects or checks **schoolId** for every read and write.
+2. PostgreSQL enables and forces RLS with a tenant policy on every tenant table.
 
-Join tables repeat **schoolId** and use composite foreign keys, so a relationship cannot point at a user or role from another school.
+Composite foreign keys repeat **schoolId**, preventing a class, student, guardian, assessment, score, payment, or message from referencing another school. School and Platform Admin authentication remain separate by table, route, cookie, secret, JWT issuer, and JWT audience.
 
-### Authentication separation
+Financial protections are also enforced in both layers:
 
-School and platform sessions use all of the following independently:
+- Invoice lines, payments, and payment reversals are append-only.
+- Invoices cannot be deleted, and their identity and total cannot be changed.
+- Corrections are represented as new **PaymentReversal** rows.
+- Database triggers reject direct SQL mutations that bypass application services.
 
-- different database tables;
-- different login routes;
-- different cookie names;
-- different environment secrets;
-- different JWT issuers and audiences;
-- an explicit **kind** claim checked during verification.
+Report-card transitions are likewise guarded by both service authorization and a database trigger. Only **draft → submitted → approved → sent** is accepted, and submitter and approver must differ.
 
-A token issued for a School User cannot pass Platform Admin verification, and a successful login clears any cookie from the other universe.
+## Default Phase 1 access
 
-### Password resets
+| Role | Phase 1 scope |
+| --- | --- |
+| Owner | Full school access |
+| Principal | Full school access, including report approval |
+| Vice Principal | Academic setup, attendance, gradebook, and report workflow |
+| Class Teacher | Assigned class students, attendance, scores, report generation/submission |
+| Subject Teacher | Assigned class/subject students and scores |
+| Accountant | Fee items, invoices, reconciliation, reversals, and finance reports |
+| HR Officer | Staff attendance and lateness alerts |
+| Front Desk/Gate Security | Student/staff attendance recording |
+| Parent | Linked children and their sent report cards only |
 
-The request endpoints create a cryptographically random token, store only its hash, set a 30-minute expiry, and write an audit entry. Confirmation consumes the token once, changes the bcrypt hash, and writes another audit entry.
+Permissions are database-driven and may be overridden per user. Record-level scoping still applies after a permission grant.
 
-Actual email/SMS/WhatsApp delivery is explicitly outside Phase 0. **src/lib/reset-delivery.ts** is therefore a safe adapter boundary: it never logs or returns the raw token. Connect a secure delivery provider there in an authorized later phase before enabling reset requests in production.
-
-### Audit immutability
-
-The Prisma extension rejects update, upsert, and delete operations for either audit model. PostgreSQL triggers independently reject **UPDATE** and **DELETE**, including raw SQL. Accountable service functions write before/after records in the same transaction as the mutation.
-
-## Prerequisites
-
-- Node.js 20.19 or newer
-- PostgreSQL
-- a database role that is not **SUPERUSER** and does not have **BYPASSRLS**
-
-A superuser always bypasses PostgreSQL RLS, even when a table uses **FORCE ROW LEVEL SECURITY**; do not use one as the application or RLS-test identity.
-
-## Clean setup
-
-~~~bash
-cp .env.example .env
-npm install
-npm run db:migrate
-npm run db:seed
-npm run dev
-~~~
-
-Open http://localhost:3000.
-
-The seed command intentionally has no credential defaults. Set these values before running it:
-
-- SEED_SCHOOL_CODE
-- SEED_SCHOOL_NAME
-- SEED_OWNER_NAME
-- SEED_OWNER_EMAIL
-- SEED_OWNER_PASSWORD with at least 12 characters
-
-To seed a Platform Admin, also set **SEED_PLATFORM_ADMIN_EMAIL** and **SEED_PLATFORM_ADMIN_PASSWORD**; both are required together. No password or secret is committed to the repository.
-
-## Migrations and seed
-
-Production/clean database:
-
-~~~bash
-npm run db:migrate
-npm run db:seed
-~~~
-
-**db:migrate** uses **prisma migrate deploy**, so it applies the checked-in SQL without generating a new migration. The initial migration creates all constraints, RLS policies, and append-only triggers.
-
-The seed is idempotent for the configured school. It creates:
-
-- the Foundation subscription plan;
-- the baseline Permission rows;
-- Owner, Principal, Vice Principal, Accountant, HR Officer, Admissions Officer, Class Teacher, Subject Teacher, Front Desk/Gate Security, Transport Officer, Parent, and Student roles inside the school;
-- sensible role-permission mappings;
-- one environment-configured Owner user;
-- an optional environment-configured Platform Admin.
-
-Each school receives its own Role records. Shared nullable roles are avoided so RLS and custom-role evolution stay unambiguous.
-
-## Adding a permission
-
-1. Add the **resource:action** key to **DEFAULT_PERMISSIONS** in **src/lib/default-rbac.ts**.
-2. Add it to the appropriate role lists in **DEFAULT_ROLE_PERMISSIONS**.
-3. Run **npm run db:seed** for existing configured schools, or use the same provisioning logic when new schools are created.
-4. Protect the action with **requirePermission(tx, userId, "resource:action")**.
-5. Add denial, grant, and override tests.
-
-Never replace the permission check with a hardcoded role-name condition. Class-, subject-, or child-level record scoping belongs to a later feature phase; the Phase 0 key structure anticipates it without pretending that scoping already exists.
-
-## Auth and proof routes
+## Main routes
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| POST | /api/auth/school/login | School code + email/phone + password |
-| POST | /api/auth/school/logout | Clear only the school session |
-| POST | /api/auth/school/password-reset/request | Create audited school reset token |
-| POST | /api/auth/school/password-reset/confirm | Consume school reset token |
-| POST | /api/auth/platform/login | Platform Admin email + password |
-| POST | /api/auth/platform/logout | Clear only the platform session |
-| POST | /api/auth/platform/password-reset/request | Create audited platform reset token |
-| POST | /api/auth/platform/password-reset/confirm | Consume platform reset token |
-| GET | /api/protected/students-preview | Proves students:read; always returns an empty list |
+| GET/POST | /api/mvp/setup | Calendar, terms, classes, subjects, assignments, students |
+| GET/POST | /api/mvp/attendance | Manual/QR attendance, summaries, absence finalization |
+| GET/POST | /api/mvp/gradebook | Assigned assessments and score entry |
+| GET/POST | /api/mvp/finance | Fee items, invoices, payments, reversals |
+| GET/POST | /api/mvp/report-cards | Generate and advance report-card workflow |
+| GET | /api/mvp/report-cards/:id/pdf | Authorized PDF delivery |
+| GET/PATCH | /api/mvp/settings | Attendance, grading, report, and SMS settings |
+| GET/POST | /api/platform/schools | Platform Admin onboarding |
+| GET | /mvp | Signed-in school operations console |
+| GET | /platform/schools/new | Platform Admin onboarding screen |
 
-The preview route is not a student module. It exists only to prove that an authenticated user without **students:read** receives HTTP 403.
+All Phase 0 authentication and password-reset routes remain available.
 
-## Test suite
+## Environment
 
-Use a disposable PostgreSQL database and migrate it first:
+Copy **.env.example** and configure:
 
 ~~~bash
-DATABASE_URL="$TEST_DATABASE_URL" npm run db:migrate
-npm run test
+DATABASE_URL=
+TEST_DATABASE_URL=
+SCHOOL_AUTH_SECRET=
+PLATFORM_AUTH_SECRET=
+NEXT_PUBLIC_APP_URL=
 ~~~
 
-The suite refuses to run its RLS assertions when the database identity is a superuser or has **BYPASSRLS**.
+Use independent random authentication secrets of at least 32 characters. The application database role must be **NOSUPERUSER** and **NOBYPASSRLS**.
 
-Coverage includes:
+For SMS delivery:
 
-- no tenant context fails closed;
-- School A cannot read, create, update, or delete School B rows through guessed IDs for every tenant table;
-- raw SQL without the Prisma extension is still blocked by RLS;
-- a missing permission produces 403 semantics;
-- a granting override can add access and a denying override takes precedence over a role grant;
-- user creation, role-permission changes, and school-setting changes create audit rows;
-- audit rows cannot be updated or deleted through Prisma or raw SQL.
+~~~bash
+SMS_PROVIDER_URL=
+SMS_PROVIDER_TOKEN=
+SMS_SENDER_ID=
+SMS_WORKER_POLL_MS=2000
+~~~
 
-## Manual Phase 0 verification
+If the provider variables are absent, messages stay in or return to the durable outbox; web requests do not call the provider.
 
-After starting the app with two test schools:
+Seed/onboarding credentials are documented in **.env.example** and intentionally have no defaults.
 
-1. log in as a School A user;
-2. request a known School B ID through a tenant-scoped query and confirm 403/404 or no row;
-3. remove **students:read** from the user, call **/api/protected/students-preview**, and confirm HTTP 403;
-4. restore the permission and confirm the route returns an empty proof payload;
-5. change school settings or role permissions and inspect the matching before/after audit entry;
-6. attempt audit **UPDATE** and **DELETE** through both Prisma and SQL and confirm rejection;
-7. search the repository for password/secret literals and confirm only environment-variable reads and generated test values exist.
+## Setup and verification
 
-Do not begin Phase 1 until the automated suite and all manual checks pass in the deployment environment.
+~~~bash
+npm install
+npm run db:migrate
+npm run db:seed
+npm run test
+npm run build
+npm run dev
+~~~
 
-## Railway preparation
+The test database must be disposable, migrated, and owned by a PostgreSQL identity without superuser or RLS-bypass privileges.
 
-No deployment is performed in Phase 0. For the later Railway setup:
+The complete suite covers the Phase 0 tenant/RBAC/audit foundation plus:
 
-- provide DATABASE_URL, SCHOOL_AUTH_SECRET, and PLATFORM_AUTH_SECRET as Railway variables;
-- use **npm run build** for the build command and **npm run start** for the service command;
-- run **npm run db:migrate** as the pre-deploy migration command;
-- run the credential-requiring seed once as an explicit administrative operation, not on every deployment;
-- keep the runtime database role non-superuser and without BYPASSRLS.
+- late arrival after the configured grace period;
+- attendance and absences suppressed by an attendance-affecting holiday;
+- HTTP-403 semantics for a teacher outside their assigned subject;
+- class-teacher submission and distinct Principal/Owner approval;
+- Parent child-only visibility;
+- SMS enqueue without an in-request provider call;
+- RLS isolation for new SIS records.
 
-## Repository automation
+GitHub Actions is intentionally limited to one verification workflow on pushes to **phase-1-mvp** (or an explicit manual dispatch). It performs dependency installation, migrations, the full test suite, and a production build against PostgreSQL 16.
 
-No GitHub Actions workflow is included. This keeps GitHub Actions usage at zero for the Phase 0 commit. Run the documented tests against a disposable PostgreSQL database before review and before deployment.
+## SMS worker
+
+Run the web application and SMS worker as separate processes:
+
+~~~bash
+npm run start
+npm run worker:sms
+~~~
+
+The worker claims queued messages, uses exponential retry delays, records the last provider error, and stops retrying after five attempts. Deploying the worker as a separate Railway service keeps SMS latency out of web requests.
+
+## Railway deployment preparation
+
+No Railway deployment is performed in Phase 1. When deployment is authorized:
+
+- Web service build command: **npm run build**
+- Web service start command: **npm run start**
+- Pre-deploy command: **npm run db:migrate**
+- Worker service start command: **npm run worker:sms**
+- Provide all required environment variables in Railway, never in Git
+- Use a non-superuser, non-BYPASSRLS PostgreSQL runtime identity
+- Run seed only as an explicit one-time administrative operation
+- Use Platform Admin onboarding for later schools
+
+## Manual acceptance path
+
+1. Sign in as a Platform Admin and create a school at **/platform/schools/new**.
+2. Sign in as its Owner and open **/mvp**.
+3. Configure resumption time, grace period, timezone, and CA/exam weights.
+4. Create an academic year, term, class, subject, teacher assignment, and student/guardian.
+5. Record an on-time and late arrival; add a holiday and verify attendance is blocked.
+6. Create assessments and verify an unassigned Subject Teacher receives 403.
+7. Create fee items and an invoice, reconcile a MoMo payment by reference, then reverse it.
+8. Generate a report with complete scores, submit as the class teacher, approve as Principal/Owner, and send.
+9. Sign in as the Parent and verify only the linked child and sent PDF are visible.
+10. Run the SMS worker with a test provider and verify queued alerts are delivered.
+
+## Repository branches
+
+- **phase-0-foundation** — verified security/data foundation
+- **phase-1-mvp** — Phase 1 implementation and verification branch
+
+Railway hosting and any merge into the default branch are intentionally left for explicit authorization.

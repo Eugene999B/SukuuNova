@@ -154,7 +154,7 @@ export async function attendanceSummary(
   tx: TenantDb,
   input: { actorId: string; day: Date; classId?: string }
 ) {
-  await requirePermission(tx, input.actorId, "attendance:read");
+  await requirePermission(tx, input.actorId, "attendance:record");
   if (await isAttendanceBlocked(tx, input.day)) {
     return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
   }

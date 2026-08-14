@@ -133,12 +133,12 @@ export async function generateReportCard(
       termId: input.termId,
       pdfData,
       remarks: input.remarks,
-      generatedPdfUrl: "/api/report-cards/pending/pdf"
+      generatedPdfUrl: "/api/mvp/report-cards/pending/pdf"
     }
   });
   await tx.reportCard.update({
     where: { id: report.id },
-    data: { generatedPdfUrl: "/api/report-cards/" + report.id + "/pdf" }
+    data: { generatedPdfUrl: "/api/mvp/report-cards/" + report.id + "/pdf" }
   });
   await appendSchoolAudit(tx, {
     schoolId: input.schoolId,
@@ -148,7 +148,7 @@ export async function generateReportCard(
     entityId: report.id,
     after: { studentId: input.studentId, termId: input.termId }
   });
-  return { ...report, generatedPdfUrl: "/api/report-cards/" + report.id + "/pdf" };
+  return { ...report, generatedPdfUrl: "/api/mvp/report-cards/" + report.id + "/pdf" };
 }
 
 export async function submitReportCard(
@@ -218,10 +218,20 @@ export async function sendReportCard(
       body: "SukuuNova: " + report.student.name + "'s approved report card is now available."
     });
   }
-  return tx.reportCard.update({
+  const updated = await tx.reportCard.update({
     where: { id: report.id },
     data: { status: "sent", sentAt: new Date() }
   });
+  await appendSchoolAudit(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    action: "report_card.sent",
+    entityType: "ReportCard",
+    entityId: report.id,
+    before: { status: report.status },
+    after: { status: updated.status }
+  });
+  return updated;
 }
 
 export async function getVisibleReportPdf(

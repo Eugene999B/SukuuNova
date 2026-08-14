@@ -18,6 +18,11 @@ export async function GET() {
   try {
     const session = await requireSchoolSession();
     const reports = await withTenant(session.schoolId, async (tx) => {
+      const canView = await hasPermission(tx, session.userId, "report_cards:view");
+      if (!canView) {
+        const { ForbiddenError } = await import("@/lib/errors");
+        throw new ForbiddenError("Report-card access is not permitted.");
+      }
       const parent = await hasPermission(tx, session.userId, "parents:read_linked");
       return tx.reportCard.findMany({
         where: parent ? {

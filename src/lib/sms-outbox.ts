@@ -2,7 +2,7 @@ import type { TenantDb } from "./db";
 import { db, withTenant } from "./db";
 
 export async function enqueueSms(tx: TenantDb, input: {
-  schoolId: string; recipientType: "guardian" | "staff"; recipientId: string;
+  schoolId: string; recipientType: "guardian" | "staff" | "user"; recipientId: string;
   recipientPhone: string; body: string;
 }) {
   return tx.message.create({ data: {
@@ -36,9 +36,11 @@ export async function processSmsBatchOnce(sender: SmsSender = httpSmsSender, bat
       orderBy: { createdAt: "asc" }, take: batchSize - processed
     }));
     for (const job of jobs) {
-      await withTenant(directory.schoolId, (tx) => tx.message.update({
-        where: { id: job.id }, data: { status: "sending", attempts: { increment: 1 } }
+      const claimed = await withTenant(directory.schoolId, (tx) => tx.message.updateMany({
+        where: { id: job.id, status: "queued" },
+        data: { status: "sending", attempts: { increment: 1 } }
       }));
+      if (claimed.count === 0) continue;
       try {
         const senderId = await withTenant(directory.schoolId, async (tx) =>
           (await tx.schoolSettings.findUnique({ where: { schoolId: directory.schoolId } }))?.smsSenderId || undefined
