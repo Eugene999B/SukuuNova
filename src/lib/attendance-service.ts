@@ -10,13 +10,8 @@ type AttendanceTarget =
 
 function localParts(value: Date, timezone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23"
+    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
   }).formatToParts(value);
   const get = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? "";
@@ -39,73 +34,38 @@ function dayBounds(day: Date) {
 
 export async function isAttendanceBlocked(tx: TenantDb, day: Date) {
   const { start, end } = dayBounds(day);
-  return Boolean(
-    await tx.calendarEvent.findFirst({
-      where: {
-        affectsAttendance: true,
-        startDate: { lte: end },
-        endDate: { gte: start }
-      },
-      select: { id: true, name: true, type: true }
-    })
-  );
+  return Boolean(await tx.calendarEvent.findFirst({
+    where: { affectsAttendance: true, startDate: { lte: end }, endDate: { gte: start } },
+    select: { id: true, name: true, type: true }
+  }));
 }
 
 export async function recordAttendance(
   tx: TenantDb,
   input: {
-    schoolId: string;
-    actorId: string;
-    target: AttendanceTarget;
-    type: "in" | "out";
-    method: "manual" | "qr" | "face";
-    confidenceScore?: number;
-    deviceId?: string;
-    timestamp?: Date;
+    schoolId: string; actorId: string; target: AttendanceTarget; type: "in" | "out";
+    method: "manual" | "qr" | "face"; confidenceScore?: number; deviceId?: string; timestamp?: Date;
   }
 ) {
   await requirePermission(tx, input.actorId, "attendance:record");
-  const settings = await tx.schoolSettings.findUnique({
-    where: { schoolId: input.schoolId }
-  });
+  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
   if (!settings?.expectedResumptionTime) {
-    throw new AppError(
-      "Configure the expected resumption time before recording attendance.",
-      409,
-      "ATTENDANCE_NOT_CONFIGURED"
-    );
+    throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
   }
 
   const timestamp = input.timestamp ?? new Date();
   const day = attendanceDate(timestamp, settings.timezone);
   if (await isAttendanceBlocked(tx, day)) {
-    throw new AppError(
-      "Attendance is disabled for this calendar date.",
-      409,
-      "CALENDAR_BLOCKS_ATTENDANCE"
-    );
+    throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   }
 
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
-  if (
-    !Number.isInteger(hour) ||
-    !Number.isInteger(minute) ||
-    hour < 0 ||
-    hour > 23 ||
-    minute < 0 ||
-    minute > 59
-  ) {
-    throw new AppError(
-      "Expected resumption time must use HH:MM.",
-      409,
-      "INVALID_ATTENDANCE_CONFIGURATION"
-    );
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   }
-  const isLate =
-    input.type === "in"
-      ? localParts(timestamp, settings.timezone).minutes >
-        hour * 60 + minute + settings.attendanceGraceMinutes
-      : null;
+  const isLate = input.type === "in"
+    ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes
+    : null;
 
   const event = await tx.attendanceEvent.create({
     data: {
@@ -124,29 +84,27 @@ export async function recordAttendance(
   });
 
   await appendSchoolAudit(tx, {
-    schoolId: input.schoolId,
-    actorId: input.actorId,
-    action: "attendance.recorded",
-    entityType: "AttendanceEvent",
-    entityId: event.id,
-    after: event
+    schoolId: input.schoolId, actorId: input.actorId, action: "attendance.recorded",
+    entityType: "AttendanceEvent", entityId: event.id, after: event
   });
 
   if (input.target.staffId && isLate) {
-    const hrUsers = await tx.user.findMany({
-      where: {
-        phone: { not: null },
-        userRoles: { some: { role: { name: "HR Officer" } } }
-      },
-      select: { id: true, phone: true }
-    });
+    const [staff, hrUsers] = await Promise.all([
+      tx.user.findUnique({ where: { id: input.target.staffId }, select: { name: true } }),
+      tx.user.findMany({
+        where: { phone: { not: null }, userRoles: { some: { role: { name: "HR Officer" } } } },
+        select: { id: true, phone: true }
+      })
+    ]);
     for (const user of hrUsers) {
       await enqueueSms(tx, {
         schoolId: input.schoolId,
         recipientType: "user",
         recipientId: user.id,
         recipientPhone: user.phone!,
-        body: "SukuuNova alert: a staff member checked in late."
+        body: "SukuuNova alert: " + (staff?.name ?? "a staff member") + " checked in late.",
+        templateKey: "staff_late",
+        templateVariables: { "1": staff?.name ?? "Staff member", "2": timestamp.toISOString() }
       });
     }
   }
@@ -193,14 +151,8 @@ export async function finalizeStudentAttendance(
   const students = await tx.student.findMany({
     where: { status: "active", ...(input.classId ? { classId: input.classId } : {}) },
     include: {
-      attendanceEvents: {
-        where: { attendanceDate: input.day, type: "in" },
-        select: { id: true }
-      },
-      guardians: {
-        where: { isPrimary: true },
-        include: { guardian: true }
-      }
+      attendanceEvents: { where: { attendanceDate: input.day, type: "in" }, select: { id: true } },
+      guardians: { where: { isPrimary: true }, include: { guardian: true } }
     }
   });
   let queued = 0;
@@ -212,7 +164,9 @@ export async function finalizeStudentAttendance(
         recipientType: "guardian",
         recipientId: link.guardianId,
         recipientPhone: link.guardian.phone,
-        body: "SukuuNova absence alert: " + student.name + " has no check-in recorded today."
+        body: "SukuuNova absence alert: " + student.name + " has no check-in recorded today.",
+        templateKey: "student_absence",
+        templateVariables: { "1": student.name, "2": input.day.toISOString().slice(0, 10) }
       });
       queued++;
     }
