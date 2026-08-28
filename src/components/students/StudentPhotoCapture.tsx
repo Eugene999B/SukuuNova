@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
 function compressImage(source: HTMLCanvasElement, maxSize = 720): string {
   const ratio = Math.min(1, maxSize / Math.max(source.width, source.height));
@@ -67,7 +67,7 @@ export function StudentPhotoCapture() {
     stopCamera();
   }
 
-  function upload(event: React.ChangeEvent<HTMLInputElement>) {
+  function upload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
