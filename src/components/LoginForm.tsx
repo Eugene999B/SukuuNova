@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 type Props =
   | { universe: "school" }
@@ -18,66 +19,37 @@ export function LoginForm(props: Props) {
     setError("");
 
     const data = new FormData(event.currentTarget);
-    const body =
-      props.universe === "school"
-        ? {
-            uniqueCode: data.get("uniqueCode"),
-            identifier: data.get("identifier"),
-            password: data.get("password")
-          }
-        : {
-            email: data.get("email"),
-            password: data.get("password")
-          };
+    const body = props.universe === "school"
+      ? { uniqueCode: String(data.get("uniqueCode") ?? ""), identifier: String(data.get("identifier") ?? ""), password: String(data.get("password") ?? "") }
+      : { email: String(data.get("email") ?? ""), password: String(data.get("password") ?? "") };
 
     try {
-      const response = await fetch("/api/auth/" + props.universe + "/login", {
+      const response = await fetch(`/api/auth/${props.universe}/login`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body)
       });
       const result = await response.json();
       if (!response.ok) {
-        setError(result.message || "Login failed.");
+        setError(result.message || "Login failed. Please check your details and try again.");
         return;
       }
       router.push("/dashboard");
       router.refresh();
     } catch {
-      setError("Unable to reach SukuuNova. Please try again.");
+      setError("Unable to reach SukuuNova right now. Please try again.");
     } finally {
       setPending(false);
     }
   }
 
-  return (
-    <form className="login-form" onSubmit={submit}>
-      {props.universe === "school" ? (
-        <>
-          <label className="login-field">
-            <span>School code</span>
-            <input name="uniqueCode" autoComplete="organization" required />
-          </label>
-          <label className="login-field">
-            <span>Email or phone</span>
-            <input name="identifier" autoComplete="username" required />
-          </label>
-        </>
-      ) : (
-        <label className="login-field">
-          <span>Admin email</span>
-          <input name="email" type="email" autoComplete="username" required />
-        </label>
-      )}
-      <label className="login-field">
-        <span>Password</span>
-        <input name="password" type="password" autoComplete="current-password" required />
-      </label>
-      {error ? <p className="login-error" role="alert">{error}</p> : null}
-      <button className="login-submit" disabled={pending} type="submit">
-        {pending ? "Signing in…" : "Sign in"}
-        {!pending ? <span>→</span> : null}
-      </button>
-    </form>
-  );
+  return <form className="auth-form" onSubmit={submit}>
+    {props.universe === "school" ? <>
+      <div className="auth-field"><label htmlFor="uniqueCode">School code</label><input id="uniqueCode" name="uniqueCode" autoComplete="organization" placeholder="e.g. GREENHILL" required /></div>
+      <div className="auth-field"><label htmlFor="identifier">Email or phone</label><input id="identifier" name="identifier" autoComplete="username" placeholder="name@school.com" required /></div>
+    </> : <div className="auth-field"><label htmlFor="email">Administrator email</label><input id="email" name="email" type="email" autoComplete="username" placeholder="admin@company.com" required /></div>}
+    <div className="auth-field"><label htmlFor="password"><span>Password</span><Link className="auth-forgot" href={props.universe === "school" ? "/login/school/password-reset" : "/login/platform/password-reset"}>Forgot password?</Link></label><input id="password" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" required /></div>
+    {error ? <p className="auth-error" role="alert">{error}</p> : null}
+    <button className="auth-submit" disabled={pending} type="submit">{pending ? "Signing you in…" : props.universe === "school" ? "Enter school workspace" : "Enter platform control"}{!pending ? <span>→</span> : null}</button>
+  </form>;
 }
