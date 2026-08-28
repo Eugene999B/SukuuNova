@@ -31,7 +31,10 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     `;
     const user = userRows[0];
     if (!user || !(await compare(input.password, user.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
-    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name };
+    const roles = await tx.userRole.findMany({ where: { userId: user.id }, select: { role: { select: { name: true } } } });
+    const roleNames = roles.map((r) => r.role.name);
+    const portal = roleNames.some((role) => /teacher|academic lead|head of department/i.test(role)) ? "teacher" : "school";
+    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleNames };
   });
 }
 
