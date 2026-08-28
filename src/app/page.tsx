@@ -1,80 +1,91 @@
 import Link from "next/link";
 import "./home.css";
 
-const highlights = [
-  ["School operations", "One place for academics, attendance, fees, staff, transport and more."],
-  ["Family visibility", "Give parents clear access to the information that matters about their children."],
-  ["Built for Ghana", "A practical school platform shaped around local workflows and real school needs."],
+const modules = [
+  ["Students", "Admissions, records, guardians and learner journeys", "01"],
+  ["Academics", "Classes, subjects, timetable, homework and results", "02"],
+  ["Attendance", "Daily registers, lateness, absence and alerts", "03"],
+  ["Fees & finance", "Invoices, receipts, balances and collections", "04"],
+  ["Communication", "Parents, announcements, SMS, WhatsApp and events", "05"],
+  ["People & HR", "Teachers, staff, roles, leave and payroll", "06"],
 ];
 
 export default function HomePage() {
   return (
     <main className="home-shell">
+      <div className="home-glow home-glow-a" />
+      <div className="home-glow home-glow-b" />
       <div className="home-wrap">
         <header className="topbar">
-          <div className="brand">
-            <div className="brand-mark">S</div>
-            <span>SukuuNova</span>
+          <Link href="/" className="brand" aria-label="SukuuNova home">
+            <span className="brand-mark"><span>S</span></span>
+            <span className="brand-copy"><strong>SukuuNova</strong><small>School operating system</small></span>
+          </Link>
+          <nav className="topnav" aria-label="Primary navigation">
+            <a href="#platform">Platform</a>
+            <a href="#modules">What it manages</a>
+            <a href="#schools">For schools</a>
+          </nav>
+          <div className="top-actions">
+            <Link className="top-link" href="/login/platform">Platform</Link>
+            <Link className="top-button" href="/login/school">School sign in <span>↗</span></Link>
           </div>
-          <div className="top-note">School management, built to grow with your school.</div>
         </header>
 
-        <section className="hero">
-          <div>
-            <div className="eyebrow"><span className="eyebrow-dot" /> Smart school operations</div>
-            <h1>Run your school with <span>clarity.</span></h1>
-            <p className="hero-copy">
-              SukuuNova brings the everyday work of a modern school into one secure platform — from the office and classroom to parents, transport and finance.
-            </p>
-
-            <div className="actions">
-              <Link className="entry" href="/login/school">
-                <span className="entry-label">School login</span>
-                <span className="entry-copy">For owners, principals, teachers, staff and other school users.</span>
-                <span className="entry-arrow">Continue →</span>
-              </Link>
-              <Link className="entry" href="/login/platform">
-                <span className="entry-label">Platform admin</span>
-                <span className="entry-copy">For SukuuNova platform operators and support administrators.</span>
-                <span className="entry-arrow">Open console →</span>
-              </Link>
+        <section className="hero" id="platform">
+          <div className="hero-copy-wrap">
+            <div className="eyebrow"><span className="eyebrow-dot" /> Built for modern African schools</div>
+            <h1>One beautiful system for <span>the whole school.</span></h1>
+            <p className="hero-copy">SukuuNova brings the work of administrators, teachers, finance teams, students and families into one calm, connected workspace.</p>
+            <div className="hero-actions">
+              <Link className="primary-cta" href="/login/school">Enter your school <span>→</span></Link>
+              <Link className="secondary-cta" href="#modules">Explore the platform <span>↓</span></Link>
+            </div>
+            <div className="hero-proof">
+              <span className="proof-avatar">S</span>
+              <div><strong>One workspace.</strong><span>Admissions · Academics · Attendance · Finance · Communication</span></div>
             </div>
           </div>
 
-          <div className="visual" aria-hidden="true">
-            <div className="panel main-card">
-              <div className="card-title">SukuuNova overview</div>
-              <div className="card-big">Everything in one place.</div>
-              <div className="mini-grid">
-                <div className="mini"><span>Daily operations</span><strong>Connected</strong></div>
-                <div className="mini"><span>Family access</span><strong>Clear</strong></div>
-                <div className="mini"><span>Security</span><strong>Tenant-safe</strong></div>
-                <div className="mini"><span>Growth</span><strong>Ready</strong></div>
+          <div className="hero-product" aria-hidden="true">
+            <div className="dashboard-window">
+              <div className="window-top"><div className="window-dots"><i /><i /><i /></div><span>SukuuNova / Overview</span><b>Term 1 · 2026/27</b></div>
+              <div className="window-body">
+                <aside className="window-side">
+                  <div className="side-logo">S</div>
+                  <span className="side-active">⌂</span><span>♟</span><span>▣</span><span>✓</span><span>₵</span><span>✉</span><span>⚙</span>
+                </aside>
+                <div className="window-main">
+                  <div className="window-heading"><div><small>Tuesday, 28 August</small><h3>Good morning, School Team</h3></div><span className="live-dot">● Live</span></div>
+                  <div className="window-kpis"><div><small>Students</small><strong>1,247</strong><span>+12 this term</span></div><div><small>Attendance</small><strong>94.5%</strong><span>+2.1% today</span></div><div><small>Fees collected</small><strong>GH₵125k</strong><span>+8% this month</span></div></div>
+                  <div className="window-content-row"><div className="fake-chart"><div className="fake-head"><strong>School performance</strong><span>Last 6 months</span></div><div className="fake-bars">{[42,55,49,68,61,82,72,88].map((h,i)=><i key={i} style={{height:`${h}%`}} />)}</div></div><div className="fake-list"><div className="fake-head"><strong>Today</strong><span>View all</span></div><div><b>Fee balance review</b><small>12 families need follow-up</small></div><div><b>Admissions</b><small>7 applications awaiting approval</small></div><div><b>Attendance</b><small>3 classes incomplete</small></div></div></div>
+                </div>
               </div>
             </div>
-            <div className="panel float-card">
-              <div className="float-head">For school teams</div>
-              <div className="float-main">Less chasing.</div>
-              <div className="float-sub">Keep records, people and decisions moving in one system.</div>
-            </div>
-            <div className="panel float-card bottom">
-              <div className="float-head">For parents</div>
-              <div className="float-main">More visibility.</div>
-              <div className="float-sub">Important updates without the usual back-and-forth.</div>
-            </div>
+            <div className="hero-float float-one"><span className="float-icon">₵</span><div><small>Fees collected</small><strong>GH₵125,430</strong></div><em>+8.2%</em></div>
+            <div className="hero-float float-two"><span className="float-icon">✓</span><div><small>Attendance today</small><strong>94.5%</strong></div><em>Excellent</em></div>
           </div>
         </section>
 
-        <section className="trust">
-          {highlights.map(([title, copy]) => (
-            <div className="trust-item" key={title}>
-              <strong>{title}</strong>
-              {copy}
-            </div>
-          ))}
+        <section className="stats-strip" id="schools">
+          <div><strong>Every school function</strong><span>designed as one connected workflow</span></div>
+          <div><strong>GHS-ready finance</strong><span>fees, receipts, balances and collections</span></div>
+          <div><strong>Family-first communication</strong><span>clear updates without the usual chasing</span></div>
+          <div><strong>Role-based access</strong><span>the right tools for every school user</span></div>
         </section>
 
-        <footer className="footer">Secure multi-tenant school software for Ghanaian schools.</footer>
+        <section className="modules" id="modules">
+          <div className="section-kicker">THE SCHOOL, IN ONE PLACE</div>
+          <div className="section-head"><h2>Everything your school actually manages.</h2><p>Stop thinking in software “phases”. SukuuNova is organised around the real work happening every day.</p></div>
+          <div className="module-grid">{modules.map(([title,copy,num])=><article className="module-card" key={title}><span className="module-num">{num}</span><h3>{title}</h3><p>{copy}</p><span className="module-arrow">→</span></article>)}</div>
+        </section>
+
+        <section className="closing-cta">
+          <div><span className="section-kicker">READY FOR THE SCHOOL DAY</span><h2>Less chasing. More control.</h2><p>A school platform should feel like a command centre, not a collection of disconnected screens.</p></div>
+          <Link className="primary-cta" href="/login/school">Open SukuuNova <span>→</span></Link>
+        </section>
+
+        <footer className="footer"><span>© 2026 SukuuNova</span><span>Secure school software · Ghana and beyond</span><span><Link href="/login/school">School login</Link> · <Link href="/login/platform">Platform access</Link></span></footer>
       </div>
     </main>
   );
