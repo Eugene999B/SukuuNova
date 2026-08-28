@@ -8,15 +8,15 @@ type NavGroup = { label: string; items: NavItem[] };
 type Props = { universe: Universe; title: string; subtitle: string; active?: string; schoolName?: string; schoolCode?: string; userName?: string; role?: string; children: React.ReactNode };
 
 const schoolGroups: NavGroup[] = [
-  { label: "Workspace", items: [["▦", "Overview", "/dashboard"], ["⌕", "Search", "/school/search"]] },
-  { label: "People", items: [["♟", "People Hub", "/school/people"], ["♟", "Students", "/school/students"], ["♧", "Guardians", "/school/guardians"], ["♙", "Staff & Teachers", "/school/staff"]] },
+  { label: "Workspace", items: [["▦", "Overview", "/dashboard"], ["♟", "People Hub", "/school/people"], ["⌕", "Search", "/school/search"]] },
+  { label: "People", items: [["♟", "Students", "/school/students"], ["♧", "Guardians", "/school/guardians"], ["♙", "Staff & Teachers", "/school/staff"]] },
   { label: "Admissions", items: [["✎", "Enquiries", "/school/admissions/enquiries"], ["☷", "Applications", "/school/admissions/applications"], ["✓", "Enrolment", "/school/admissions/enrolment"], ["⌂", "Classes & Houses", "/school/classes"]] },
   { label: "Academics", items: [["▤", "Subjects", "/school/subjects"], ["◷", "Timetable", "/school/timetable"], ["▧", "Lessons & Planning", "/school/lessons"], ["✦", "Homework & Exercises", "/school/homework"], ["▥", "Gradebook", "/school/gradebook"], ["◇", "Exams & Assessments", "/school/exams"], ["▤", "Report Cards", "/school/report-cards"]] },
   { label: "Attendance", items: [["◉", "Student Attendance", "/school/attendance"], ["◌", "Staff Attendance", "/school/staff-attendance"], ["!", "Late / Absence", "/school/attendance/exceptions"], ["⌁", "Guardian Alerts", "/school/communications/alerts"]] },
   { label: "Finance", items: [["₵", "School Fees", "/school/fees"], ["▣", "Invoices", "/school/fees/invoices"], ["↙", "Payments", "/school/fees/payments"], ["◒", "Arrears & Balances", "/school/fees/arrears"], ["◔", "Finance Reports", "/school/fees/reports"]] },
   { label: "School Life", items: [["▦", "Library", "/school/library"], ["⌁", "Transport", "/school/transport"], ["☕", "Feeding", "/school/feeding"], ["▧", "Assets & Inventory", "/school/inventory"], ["♙", "Recruitment", "/school/hr/recruitment"]] },
   { label: "Communication", items: [["✉", "Messages", "/school/communications/messages"], ["◈", "Announcements", "/school/communications/announcements"], ["◫", "SMS / WhatsApp", "/school/communications/broadcasts"], ["◷", "Events", "/school/events"]] },
-  { label: "Reports & Admin", items: [["▥", "School Analytics", "/school/reports/analytics"], ["▤", "Reports", "/school/reports"], ["♚", "Roles & Permissions", "/school/settings/roles"], ["⚙", "School Settings", "/school/settings"]] }
+  { label: "Reports & Admin", items: [["▥", "School Analytics", "/school/reports/analytics"], ["▤", "Reports", "/school/reports"], ["♚", "Roles & Permissions", "/school/settings/roles"], ["⚙", "School Settings", "/school/settings"] }
 ];
 
 const platformGroups: NavGroup[] = [
