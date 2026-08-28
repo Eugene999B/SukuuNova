@@ -1,7 +1,7 @@
 "use client";
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import "../login.css";
+import "../../login.css";
 
 export default function SchoolPasswordResetPage(){
  const [message,setMessage]=useState(""); const [pending,setPending]=useState(false);
