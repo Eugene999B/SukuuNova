@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
 import { AppError, ForbiddenError } from "../src/lib/errors";
 import {
@@ -11,7 +11,7 @@ import {
   submitReportCard
 } from "../src/lib/report-card-service";
 import { visibleStudents } from "../src/lib/sis-service";
-import { enqueueSms, processSmsBatchOnce } from "../src/lib/sms-outbox";
+import { enqueueSms } from "../src/lib/sms-outbox";
 import { createTenantFixture, type Fixture } from "./helpers";
 
 describe("Phase 1 MVP security and workflow gates", () => {
@@ -275,23 +275,18 @@ describe("Phase 1 MVP security and workflow gates", () => {
     });
   });
 
-  it("queues SMS without calling a provider in the request transaction", async () => {
-    const sender = vi.fn(async () => undefined);
+  it("sends SMS synchronously without requiring a worker", async () => {
+    const sender = async () => undefined;
     await withTenant(fixture.schoolId, async (tx) => {
-      await enqueueSms(tx, {
+      const messages = await enqueueSms(tx, {
         schoolId: fixture.schoolId,
         recipientType: "guardian",
         recipientId: parentId,
         recipientPhone: "+233200000001",
-        body: "Phase 1 asynchronous SMS proof"
-      });
-      expect(sender).not.toHaveBeenCalled();
+        body: "Phase 1 synchronous SMS proof"
+      }, { sms: sender });
+      expect(messages[0].status).toBe("sent");
     });
-    await processSmsBatchOnce(sender, 50);
-    expect(sender).toHaveBeenCalledWith(expect.objectContaining({
-      phone: "+233200000001",
-      body: "Phase 1 asynchronous SMS proof"
-    }));
   });
 
   it("keeps new SIS records isolated by tenant RLS", async () => {
