@@ -1,0 +1,1 @@
+SukuuNova deployment marker. The application source is unchanged; this commit exists to trigger a clean Railway production verification after deployment configuration stabilization.
