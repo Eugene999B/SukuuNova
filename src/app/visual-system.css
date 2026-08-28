@@ -18,8 +18,16 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;bac
 .app-card,.module-card,.module-metrics article,.module-table-wrap,.module-register-empty,.module-dropzone{box-shadow:0 22px 70px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.025);backdrop-filter:blur(10px)}
 .app-card:hover,.module-card:hover{border-color:rgba(98,246,231,.13);box-shadow:0 26px 80px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.035)}
 .app-kpi-value,.module-metrics strong{background:linear-gradient(135deg,#f4fffc,#9fece2 62%,#9da5ff);-webkit-background-clip:text;background-clip:text;color:transparent}
-input,textarea,select{background:rgba(255,255,255,.035)!important;border-color:rgba(255,255,255,.085)!important;color:#e9f5f3!important;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+input,textarea,select{background:rgba(255,255,255,.035)!important;border-color:rgba(255,255,255,.085)!important;color:#e9f5f3!important;caret-color:var(--vs-accent);color-scheme:dark;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}
+select{appearance:auto!important;-webkit-appearance:auto!important}
+select option,select optgroup{background:#0c1b26!important;color:#eef8f6!important}
+select option:checked,select option:hover{background:#163443!important;color:#ffffff!important}
+input::placeholder,textarea::placeholder{color:#789196!important;opacity:1}
 input:focus,textarea:focus,select:focus{border-color:rgba(98,246,231,.38)!important;box-shadow:0 0 0 3px rgba(98,246,231,.07),0 10px 30px rgba(0,0,0,.12);background:rgba(255,255,255,.05)!important}
+input:disabled,textarea:disabled,select:disabled{color:#6b7f83!important;background:rgba(255,255,255,.018)!important}
+label{color:#b8cbc8}
+[role="dialog"],dialog,.modal,.dialog{color:var(--vs-text)}
+[role="dialog"] input,[role="dialog"] textarea,[role="dialog"] select,dialog input,dialog textarea,dialog select,.modal input,.modal textarea,.modal select,.dialog input,.dialog textarea,.dialog select{background:rgba(255,255,255,.045)!important;color:#eff9f7!important;color-scheme:dark}
 button{transition:transform .16s ease,box-shadow .16s ease,filter .16s ease}button:hover:not(:disabled){filter:brightness(1.06)}button:active:not(:disabled){transform:translateY(1px)}
 .app-list-row,.module-workflow-step,.module-setup-list a,.module-command-flow>div,.module-exception-list>div,.module-queue>div,.module-readiness div,.module-health-list div,.module-delivery div{transition:background .18s ease,border-color .18s ease,transform .18s ease}.app-list-row:hover,.module-workflow-step:hover,.module-setup-list a:hover,.module-command-flow>div:hover{background:rgba(98,246,231,.04);border-color:rgba(98,246,231,.10);transform:translateX(2px)}
 .module-pipeline>div{background:linear-gradient(160deg,rgba(18,39,53,.88),rgba(7,19,28,.96));box-shadow:inset 0 1px 0 rgba(255,255,255,.025)}
