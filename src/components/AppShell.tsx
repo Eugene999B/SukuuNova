@@ -21,9 +21,9 @@ const schoolGroups: NavGroup[] = [
 
 const platformGroups: NavGroup[] = [
   { label: "Control Center", items: [["▦", "Overview", "/platform"], ["⌕", "Global Search", "/platform/search"], ["◉", "System Health", "/platform/health"]] },
-  { label: "SukuuNova Network", items: [["⌂", "Schools", "/platform/schools"], ["◈", "Subscriptions", "/platform/billing"], ["₵", "Platform Billing", "/platform/billing"]] },
-  { label: "Operations", items: [["♟", "Support", "/platform/support"], ["⌁", "Audited Access", "/platform/audit"], ["▤", "Platform Reports", "/platform/reports"]] },
-  { label: "Security", items: [["♙", "Administrators", "/platform/admins"], ["◇", "Audit Log", "/platform/audit-log"], ["⚙", "Platform Settings", "/platform/settings"]] }
+  { label: "Schools & Plans", items: [["⌂", "Schools", "/platform/schools"], ["◇", "Plans & Entitlements", "/platform/plans"], ["₵", "Platform Billing", "/platform/billing"], ["▥", "Network Analytics", "/platform/analytics"]] },
+  { label: "Operations", items: [["♟", "Support", "/platform/support"], ["⌁", "Audited Access", "/platform/support"], ["▤", "Platform Reports", "/platform/reports"]] },
+  { label: "Security & Control", items: [["♙", "Workers & Permissions", "/platform/admins"], ["◇", "Audit Log", "/platform/audit"], ["⚙", "Platform Settings", "/platform/settings"] }
 ];
 
 function initials(value: string) {
