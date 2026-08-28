@@ -7,6 +7,9 @@ on:
       - phase-3-operations
       - phase-4-platform-ai
       - phase-4-final-ready
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 permissions:
   contents: read
