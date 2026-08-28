@@ -6,6 +6,7 @@ on:
       - phase-2-differentiators
       - phase-3-operations
       - phase-4-platform-ai
+      - phase-4-final-ready
   workflow_dispatch:
 permissions:
   contents: read

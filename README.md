@@ -10,7 +10,7 @@ The product name is **SukuuNova** throughout the repository.
 - **Phase 1 — MVP school operations:** complete and verified.
 - **Phase 2 — differentiators:** complete and verified at commit `d80d1234826561017490999054f7ec9b72fdb8af`.
 - **Phase 3 — operations:** implemented and merged into `main` at merge commit `29ac66f9cddfb168107e579e3dc23623540f69e2`.
-- **Phase 4 — platform maturity & AI:** implementation branch `phase-4-platform-ai`; integration is gated by the full cross-phase suite and Phase 4 definition-of-done checks.
+- **Phase 4 — platform maturity & AI:** complete implementation prepared on `phase-4-final-ready`, pending its final CI result and merge into `main`.
 - **Railway deployment:** intentionally not performed yet.
 - **Phase 4 is the final scoped product phase; Phase 5 is outside this project brief.**
 
@@ -55,7 +55,7 @@ Existing Phase 0-3 routes remain available, with the Phase 2/3 premium-module fe
 
 ## AI provider and prompt/data boundaries
 
-Phase 4 uses **OpenAI's Responses API** for lesson-note and report-card remark drafting. The model is configured through `OPENAI_MODEL`, defaulting to `gpt-5.6-luna`, with `OPENAI_RESPONSES_URL` configurable separately. The Responses API is OpenAI's current API surface for this style of model integration.
+Phase 4 uses **OpenAI's Responses API** for lesson-note and report-card remark drafting. The model is configured through `OPENAI_MODEL`, defaulting to `gpt-5.6-luna`, with `OPENAI_RESPONSES_URL` configurable separately. The Responses API is the application integration surface used for this controlled drafting flow.
 
 AI generation does not send the entire school database to the provider. The server constructs a narrow context for each draft. Report-card prompts contain aggregate score percentages, attendance counts, class name, term identifier, and the student's display name; lesson-note prompts contain only the supplied subject/topic/objectives/class context plus an optional target score identifier. The model is instructed to produce draft text only and never to perform or request real-record mutations.
 
@@ -121,6 +121,6 @@ Phase 4 deliberately does **not** include automated subscription dunning/retry l
 - **phase-2-differentiators** — verified Phase 2 implementation
 - **phase-3-operations** — completed Phase 3 implementation branch
 - **main** — current integrated product state through Phase 3
-- **phase-4-platform-ai** — final Phase 4 implementation branch
+- **phase-4-final-ready** — final Phase 4 implementation pending CI/merge
 
 Railway deployment remains a separate, explicit action.
