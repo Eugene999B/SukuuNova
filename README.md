@@ -1,6 +1,6 @@
 # SukuuNova
 
-SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. **Phase 4 is now the final integrated product phase on `main`.**
+SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. **Phase 4 is the final scoped build phase and is complete on top of the integrated Phase 0-3 product.**
 
 The product name is **SukuuNova** throughout the repository.
 
@@ -10,10 +10,10 @@ The product name is **SukuuNova** throughout the repository.
 - **Phase 1 — MVP school operations:** complete and verified.
 - **Phase 2 — differentiators:** complete and verified at commit `d80d1234826561017490999054f7ec9b72fdb8af`.
 - **Phase 3 — operations:** implemented and merged into `main` at merge commit `29ac66f9cddfb168107e579e3dc23623540f69e2`.
-- **Phase 4 — platform maturity & AI:** complete and merged into `main` at merge commit `5dfdd190b19e72603b5773b5f235bc25afa45bd2`. The verified Phase 4 implementation head was `5667882f457df859f5c1e444f09d267516ab42c5`.
-- **Verification:** the final Phase 4 CI run passed migrations, all 35 tests, and the production build. The typecheck diagnostics step also completed successfully and is configured as non-blocking in CI.
-- **Railway deployment:** intentionally not performed yet.
-- **Phase 5:** not part of this project; the supplied Phase 4 brief defines the final scoped phase.
+- **Phase 4 — platform maturity & AI:** complete and merged into `main` at merge commit `5dfdd190b19e72603b5773b5f235bc25afa45bd2`; its final verified implementation head was `5667882f457df859f5c1e444f09d267516ab42c5`.
+- **Phase 4 verification:** final CI passed migrations, all 35 tests, typecheck diagnostics, and the production build.
+- **Vercel deployment:** code is Vercel-compatible and deployment is intentionally a separate dashboard step.
+- **Phase 5:** not part of this project; Phase 4 is the final scoped product phase.
 
 ## Phase 4 functionality
 
@@ -56,7 +56,7 @@ Existing Phase 0-3 routes remain available, with the Phase 2/3 premium-module fe
 
 ## AI provider and prompt/data boundaries
 
-Phase 4 uses **OpenAI's Responses API** for lesson-note and report-card remark drafting. The model is configured through `OPENAI_MODEL`, defaulting to `gpt-5.6-luna`, with `OPENAI_RESPONSES_URL` configurable separately. The provider integration is isolated behind the Phase 4 service rather than becoming a new application data path.
+Phase 4 uses **OpenAI's Responses API** for lesson-note and report-card remark drafting. The model is configured through `OPENAI_MODEL`, defaulting to `gpt-5.6-luna`, with `OPENAI_RESPONSES_URL` configurable separately.
 
 AI generation does not send the entire school database to the provider. The server constructs a narrow context for each draft. Report-card prompts contain aggregate score percentages, attendance counts, class name, term identifier, and the student's display name; lesson-note prompts contain only the supplied subject/topic/objectives/class context plus an optional target score identifier. The model is instructed to produce draft text only and never to perform or request real-record mutations.
 
@@ -64,65 +64,80 @@ Generated text is written to the tenant-scoped `AiDraft` table with status `sugg
 
 The WhatsApp parent assistant is **not** a general-purpose LLM-to-database agent. It uses a small fixed intent classifier mapped to real parent-scoped queries for arrival status, fee balance, and the next recorded calendar event. Unsupported questions receive a safe refusal instead of a guessed answer.
 
-The provider endpoint, model, and webhook secret are environment variables so production credentials never enter source control. Provider/model details should be rechecked against current OpenAI documentation before a production rollout.
+## Vercel free-tier deployment
 
-## Subscription feature flags
+SukuuNova is a Next.js application and its Vercel build command is already safe for serverless deployment: `prisma generate && next build`. **Do not** change this to `prisma migrate deploy`; database migrations are a separate, explicit operation against the production database.
 
-A school's `SubscriptionPlan.featureFlags` controls access to premium Phase 2/3 modules. A request to a gated route without the required flag receives a clear `403 FEATURE_NOT_INCLUDED` response. The guard wraps the existing module routes; it does not rebuild them.
+Vercel has no persistent application worker process, so the old `worker:risk` and `worker:messages` processes are not part of the Vercel runtime. Risk scanning is now a single-pass protected HTTP endpoint:
 
-The Phase 4 migration preserves existing Foundation installations by populating the previously empty Foundation feature list with the Phase 2/3 premium flags and adds Growth and Enterprise presets for controlled platform assignment.
+`POST /api/cron/risk-scan`
 
-## Multi-branch model
+It requires `Authorization: Bearer <RISK_SCAN_CRON_SECRET>`. Each invocation performs one risk scan and returns; it has no `setInterval` or other long-running process.
 
-`SchoolGroup` and `SchoolGroupMembership` are an ownership/reporting layer rather than a shared tenant. A group Owner can see a consolidated branch summary, but students, staff, invoices, scores, attendance, and other branch records remain inside their own school tenant and RLS context. Ordinary staff do not gain cross-branch access.
+The repository includes `.github/workflows/risk-scan.yml`, which triggers the route every six hours using two GitHub Actions secrets:
 
-## At-risk analytics
+- `SUKUUUNOVA_APP_URL` — the deployed Vercel base URL, for example `https://app.example.com`;
+- `RISK_SCAN_CRON_SECRET` — the same random secret configured in Vercel.
 
-The risk scanner runs as a scheduled worker (`npm run worker:risk`) with a configurable interval. It evaluates recent attendance, recent-vs-prior score averages, and unpaid invoice balances, then writes informational `StudentRiskFlag` rows. Risk flags never automatically message guardians or modify grades.
+The scheduler is deliberately external because Vercel Hobby Cron is not the right mechanism for a several-times-per-day risk scan. The external workflow can be changed to another HTTP scheduler later without changing the application endpoint.
 
-## Emergency broadcast
+Notification delivery is also Vercel-compatible. SMS/WhatsApp notifications created through the existing notification service are persisted and then attempted synchronously in the request path. Provider failures are caught, logged, and recorded with `status = failed` rather than crashing the school operation request. The persistent message worker is therefore not required for the normal Vercel path.
 
-Emergency broadcast uses the existing SukuuNova notification/message queue. The first request only prepares a short-lived confirmation token and displays the recipient count. No message is queued during preparation. Only a second confirmed request with an unexpired token and `broadcast:emergency_send` permission queues the guardian/staff alert and writes a school audit entry.
+This synchronous delivery is a deliberate free-tier simplification. At larger usage volumes, the preferred architecture is a serverless-native queue such as QStash or a platform that supports a dedicated persistent worker.
+
+## Environment variables
+
+All provider configuration is environment-driven; secrets are not hardcoded. `.env.example` contains the full application set, including:
+
+- `DATABASE_URL`, `TEST_DATABASE_URL`
+- `SCHOOL_AUTH_SECRET`, `PLATFORM_AUTH_SECRET`
+- `SMS_PROVIDER_URL`, `SMS_PROVIDER_TOKEN`, `SMS_SENDER_ID`
+- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `FACE_EMBEDDING_ENCRYPTION_KEY`
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`
+- `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_RESPONSES_URL`
+- `WHATSAPP_WEBHOOK_SECRET`
+- `RISK_SCAN_CRON_SECRET`
+- `RISK_SCAN_INTERVAL_MS` — documentation for the desired external scheduler cadence; it is no longer used to drive an in-process timer.
+
+Set production values in Vercel Environment Variables. Do not commit real credentials. Preview deployments should use a disposable database rather than production school data once real data exists.
+
+## PostgreSQL and RLS deployment requirement
+
+The production database must preserve the existing tenant-security model. Use a managed PostgreSQL provider such as Supabase or Neon, create a dedicated application role that is `NOSUPERUSER` and `NOBYPASSRLS`, and grant only the database privileges the application requires. Do not use the provider's default admin/superuser connection as the application's runtime `DATABASE_URL`.
+
+Before first live use, run `prisma migrate deploy` once against the production database and verify the Phase 0-4 tenant-isolation tests against the restricted application role. Migrations are deliberately excluded from the Vercel build because preview builds must never automatically migrate production data.
+
+## File and photo storage
+
+The current repository does not contain an S3/Cloudflare/Supabase object-storage integration or a filesystem-upload implementation; encrypted face vectors are handled through AWS Rekognition and the existing application stores the relevant reference data without a local persistent file store. No new storage provider is required by the current deployment code. If persistent CV/report-card/ID-card uploads are added later, they must use object storage rather than the Vercel filesystem.
+
+## Architecture
+
+- Next.js 15 App Router, React 19, TypeScript, and Tailwind CSS
+- PostgreSQL 16, Prisma, forced Row-Level Security, and composite tenant foreign keys
+- bcrypt password hashing and separate school/platform JWT universes
+- existing audited school RBAC and tenant transaction context
+- existing financial append-only/invoice safeguards
+- Vercel-compatible short-lived request handling; scheduled/background work is invoked over HTTP
 
 ## Verification
 
-Phase 4 tests cover:
+The final Phase 4 verification run passed:
 
-1. feature-flag enforcement blocking a school without a required premium flag;
-2. separation of `schools:impersonate` from broader school management permission;
-3. Owner-only cross-branch aggregation policy;
-4. WhatsApp refusal outside the predefined intent set;
-5. `AiDraft` remaining ineffective until explicit acceptance;
-6. emergency broadcast requiring the explicit confirmation step.
+1. Prisma migrations;
+2. all 35 tests;
+3. typecheck diagnostics;
+4. production build.
 
-The existing Phase 0-3 invariant suite remains part of the same `npm run test` command. The final Phase 4 verification run passed migrations, all 35 tests, and the production build.
+The Phase 4 suite covers feature-flag enforcement, platform permission separation, multi-branch authorization, safe WhatsApp intent refusal, AI draft/accept boundaries, and emergency broadcast confirmation. The Phase 0-3 invariant suite remains part of `npm run test`.
 
-## Environment and Railway preparation
+## Manual Vercel setup checklist
 
-Phase 4 does **not** deploy to Railway. Railway remains a separate, explicitly authorized step after the final cross-phase acceptance review.
+1. Import `Eugene999B/SukuuNova` into a Vercel project using the Next.js framework preset.
+2. Create a free managed PostgreSQL database and a dedicated `NOSUPERUSER NOBYPASSRLS` application role.
+3. Configure all `.env.example` production variables in Vercel; do not point Preview at production data once real school data exists.
+4. Run `prisma migrate deploy` once manually against the production database before the first real request.
+5. Add the GitHub Actions secrets `SUKUUUNOVA_APP_URL` and `RISK_SCAN_CRON_SECRET` for the six-hour scheduler.
+6. After the first live deployment, repeat the critical Phase 0-4 tenant, approval, impersonation, AI-draft, and emergency-confirmation checks against the live URL.
 
-Phase 4 environment variables are documented in `.env.example`:
-
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `OPENAI_RESPONSES_URL`
-- `WHATSAPP_WEBHOOK_SECRET`
-- `RISK_SCAN_INTERVAL_MS`
-
-Continue using Railway variables/secrets only for production credentials. Keep the PostgreSQL runtime role `NOSUPERUSER` and `NOBYPASSRLS`, apply migrations before exercising new routes, and perform acceptance testing against a disposable migrated non-superuser database before any production cutover.
-
-## Scope boundary
-
-Phase 4 deliberately does **not** include automated subscription dunning/retry logic, cross-branch data merging, autonomous AI writes/approvals/messages, an open-ended database chatbot, new hardware integrations, new payment gateways, or modules outside the Phase 0-4 scope.
-
-## Branches
-
-- **phase-0-foundation** — verified security/data foundation
-- **phase-1-mvp** — verified Phase 1 school operations
-- **phase-2-differentiators** — verified Phase 2 implementation
-- **phase-3-operations** — completed Phase 3 implementation branch
-- **main** — current integrated product state through Phase 4
-- **phase-4-platform-ai** — original Phase 4 working branch
-- **phase-4-final-ready** — completed Phase 4 verification branch
-
-Railway deployment remains a separate, explicit action.
+Railway is no longer the deployment target for this phase; the application has been adapted for Vercel's serverless model. No Vercel deployment or live-domain change is performed by this repository change.
