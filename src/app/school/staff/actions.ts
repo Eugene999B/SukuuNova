@@ -14,10 +14,11 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
   const phone = String(formData.get("phone") ?? "").trim() || null;
   const roleName = String(formData.get("role") ?? "").trim();
   const staffType = String(formData.get("staffType") ?? "").trim();
+  const staffCategory = String(formData.get("staffCategory") ?? "").trim();
   const primaryClassId = String(formData.get("primaryClassId") ?? "").trim();
   const subjectId = String(formData.get("subjectId") ?? "").trim();
 
-  if (!name || !roleName || !staffType) return { ok: false, message: "Name, staff category and role are required." };
+  if (!name || !roleName || !staffType || !staffCategory) return { ok: false, message: "Name, workforce category, role and login type are required." };
   if (!email && !phone) return { ok: false, message: "Provide an email address or phone number for school login." };
   if (roleName.toLowerCase() === "owner") return { ok: false, message: "The Owner account is reserved for the school's primary owner." };
 
@@ -27,6 +28,7 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
     const actorIsAdmin = actorRoles.some((r) => r.role.name.toLowerCase() === "administrator" || r.role.name.toLowerCase() === "admin");
     const canManage = actorIsOwner || actorIsAdmin || await hasPermission(tx, session.userId, "classes:manage");
     if (!canManage) return { ok: false, message: "You do not have permission to create staff accounts." };
+    if (roleName.toLowerCase() === "administrator" && !actorIsOwner) return { ok: false, message: "Only the school Owner can create an Administrator account." };
 
     if (email) {
       const existing = await tx.user.findFirst({ where: { email } });
@@ -82,7 +84,7 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
       });
     }
 
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, role: roleName, primaryClassId: primaryClassId || null, subjectId: subjectId || null } } });
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, staffCategory, role: roleName, primaryClassId: primaryClassId || null, subjectId: subjectId || null } } });
     return { ok: true, name: user.name, username: user.email ?? user.phone ?? "School login", temporaryPassword };
   });
 }
