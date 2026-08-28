@@ -51,15 +51,17 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
         email,
         phone,
         passwordHash: await hash(temporaryPassword, 12),
-        status: "active",
-        userRoles: {
-          create: {
-            school: { connect: { id: session.schoolId } },
-            role: { connect: { id_schoolId: { id: role.id, schoolId: session.schoolId } } }
-          }
-        }
+        status: "active"
       },
       select: { id: true, name: true, email: true, phone: true }
+    });
+
+    await tx.userRole.create({
+      data: {
+        schoolId: session.schoolId,
+        userId: user.id,
+        roleId: role.id
+      }
     });
 
     if (primaryClassId && /teacher/i.test(roleName)) {
