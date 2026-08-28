@@ -1,0 +1,76 @@
+// Phase 4 Prisma model fragment for review/documentation.
+// Runtime migration is authoritative for the raw-SQL Phase 4 tables; this fragment mirrors the requested data model.
+model PlatformInvoice {
+  id String @id @default(cuid())
+  schoolId String
+  period String
+  amount Decimal
+  status String @default("unpaid")
+  createdAt DateTime @default(now())
+}
+model PlatformPayment {
+  id String @id @default(cuid())
+  schoolId String
+  platformInvoiceId String
+  amount Decimal
+  method String
+  reference String?
+  reconciledBy String
+  createdAt DateTime @default(now())
+}
+model SchoolGroup {
+  id String @id @default(cuid())
+  ownerId String
+  name String
+  createdAt DateTime @default(now())
+}
+model SchoolGroupMembership {
+  groupId String
+  schoolId String
+  createdAt DateTime @default(now())
+  @@id([groupId, schoolId])
+}
+model SupportTicket {
+  id String @id @default(cuid())
+  schoolId String
+  raisedByUserId String
+  subject String
+  status String @default("open")
+  createdAt DateTime @default(now())
+}
+model SupportTicketMessage {
+  id String @id @default(cuid())
+  schoolId String
+  ticketId String
+  senderId String
+  body String
+  sentAt DateTime @default(now())
+}
+model ImpersonationLog {
+  id String @id @default(cuid())
+  platformAdminId String
+  schoolId String
+  impersonatedUserId String
+  reason String
+  startedAt DateTime @default(now())
+  endedAt DateTime?
+}
+model StudentRiskFlag {
+  id String @id @default(cuid())
+  schoolId String
+  studentId String
+  reason String
+  detail Json
+  flaggedAt DateTime @default(now())
+  resolvedAt DateTime?
+}
+model AiDraft {
+  id String @id @default(cuid())
+  schoolId String
+  type String
+  context Json
+  draftText String
+  status String @default("suggested")
+  createdAt DateTime @default(now())
+}
+// Existing Score receives `remarks String?` in the Phase 4 hardening migration.

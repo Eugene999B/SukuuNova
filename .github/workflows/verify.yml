@@ -1,16 +1,18 @@
 name: SukuuNova verification
-
 on:
   push:
     branches:
       - phase-1-mvp
       - phase-2-differentiators
       - phase-3-operations
+      - phase-4-platform-ai
+      - phase-4-final-ready
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -48,11 +50,12 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_test OWNER sukuunova_test;"
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Generate ephemeral auth secrets
+      - name: Generate ephemeral auth and webhook secrets
         run: |
           echo "SCHOOL_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "PLATFORM_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "FACE_EMBEDDING_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "WHATSAPP_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - name: Apply migrations
         run: npm run db:migrate
       - name: Run tests

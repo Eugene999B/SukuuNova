@@ -1,6 +1,6 @@
 # SukuuNova
 
-SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. **Phase 3 is now merged into `main`** on top of the verified Phase 2 baseline.
+SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. **Phase 4 is the final scoped build phase and is being developed directly on top of the integrated Phase 0-3 product.**
 
 The product name is **SukuuNova** throughout the repository.
 
@@ -10,88 +10,109 @@ The product name is **SukuuNova** throughout the repository.
 - **Phase 1 — MVP school operations:** complete and verified.
 - **Phase 2 — differentiators:** complete and verified at commit `d80d1234826561017490999054f7ec9b72fdb8af`.
 - **Phase 3 — operations:** implemented and merged into `main` at merge commit `29ac66f9cddfb168107e579e3dc23623540f69e2`.
+- **Phase 4 — platform maturity & AI:** complete implementation prepared on `phase-4-final-ready`, pending its final CI result and merge into `main`.
 - **Railway deployment:** intentionally not performed yet.
-- **Phase 4:** not started.
+- **Phase 4 is the final scoped product phase; Phase 5 is outside this project brief.**
 
-## Phase 3 functionality
+## Phase 4 functionality
 
-Phase 3 includes:
+Phase 4 adds exactly the platform/business and controlled-AI scope defined in the Phase 4 build brief:
 
-- transport operations: vehicles, routes, stops, GPS pings, route ETA data, parent location sharing, boarding/alighting alerts, and vehicle compliance reminders;
-- feeding: period budgets, menus, serving/cost logs, actual-vs-plan reporting, and optional invoice items that remain optional until separately handled by finance;
-- timed objective CBT: server-created expiry timestamps, server-side timeout enforcement, persisted answers, and objective autograding;
-- library: books, copies, borrowing, returns, and overdue tracking;
-- asset inventory: asset tags, serials, locations, condition, status, assignment, and purchase cost;
-- fee assistance: waiver, scholarship, and sibling-discount requests with pending/approved/rejected approval gates;
-- recruitment: postings, applicants, and applicant-to-staff conversion through the existing **createSchoolUser** service;
-- role-scoped operational analytics;
-- offline queued synchronization only for attendance and scores, keyed by idempotent **clientGeneratedId** values and re-authorized at sync time.
+- super-admin console for school creation, suspension/reactivation, cross-school investigation, support operations, subscription management, and audited impersonation;
+- subscription plans, per-school platform invoices, and manual platform-payment reconciliation;
+- feature-flag enforcement for existing premium Phase 2/3 modules: face recognition, payroll, transport, feeding, CBT, library, assets, and recruitment;
+- multi-branch School Groups with read-only consolidated reporting for the owning school Owner; branch student/staff/finance data remains isolated;
+- school support tickets with threaded messages and platform support status management;
+- narrowly-scoped WhatsApp parent assistant intents for child arrival, fee balance, and the next recorded calendar event, with a safe fallback for everything else;
+- scheduled at-risk student signals from attendance, score trends, and fee arrears, surfaced to authorized school staff without automatic parent notification;
+- AI-assisted lesson-note and report-card remark drafts stored as `AiDraft` rows in `suggested` status until a human explicitly accepts or discards them;
+- emergency/lockdown broadcast with a two-step confirmation token and reuse of the existing SukuuNova messaging queue.
 
-## Security rules carried into Phase 3
+## Phase 4 security model
 
-Every new Phase 3 tenant table has **schoolId**, forced PostgreSQL RLS, and same-school composite foreign keys where records reference another tenant-owned row. The existing `withTenant` transaction establishes `app.current_school_id`; the Prisma guard remains in force for Prisma-backed models. Server routes require the current signed-in school session and re-check RBAC permissions in the transaction. Sensitive Phase 3 mutations append to the existing school audit log. Existing append-only and invoice deletion safeguards remain intact.
+Platform authentication remains a separate JWT universe from school authentication. Platform permissions are explicitly separated: `schools:impersonate` is distinct from `schools:manage`.
 
-Offline sync is deliberately narrow: it can apply only attendance and score records. The server checks the live permission set when synchronization occurs; no permission from the time a device queued the item is trusted. The unique `(schoolId, clientGeneratedId)` constraint makes retries idempotent.
+Every new tenant-scoped Phase 4 table carries `schoolId`, uses forced PostgreSQL RLS, and uses same-school relationships where a new row references a tenant-owned record. Tenant operations continue through the existing `withTenant()` transaction context.
 
-## Phase 3 routes
+Impersonation is time-bounded to 30 minutes, requires an explicit reason, creates platform and school audit entries, and exposes the event to the impersonated school through its own audit view. It is not a hidden backdoor.
+
+Multi-branch reporting does not merge tenant records. Only the owning Owner may request the consolidated report, and the underlying branch queries still execute in independent tenant contexts.
+
+Offline synchronization remains the Phase 3 restriction: only attendance and score records may be synchronized, using idempotent client-generated keys and live permission checks at synchronization time.
+
+## Phase 4 routes
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| GET/POST | `/api/phase3/transport` | Fleet, routes, stops, GPS, parent location, boarding and compliance |
-| GET/POST | `/api/phase3/feeding` | Budgets, menus, logs and optional invoice items |
-| GET/POST | `/api/phase3/cbt` | Timed exams, questions, attempts, answers and autograding |
-| GET/POST | `/api/phase3/library` | Books, loans, returns and overdue views |
-| GET/POST | `/api/phase3/assets` | Asset inventory |
-| GET/POST | `/api/phase3/finance` | Waiver, scholarship and sibling-discount approval queue |
-| GET/POST | `/api/phase3/recruitment` | Postings, applicants and staff conversion |
-| GET | `/api/phase3/analytics` | Role-scoped operations analytics |
-| GET/POST | `/api/phase3/sync` | Offline attendance/score queue and synchronized writes |
-| GET | `/phase3` | Phase 3 operations console |
+| GET/POST | `/api/platform/phase4` | Platform school, plan, billing, support, search, and impersonation operations |
+| POST | `/api/platform/impersonation` | End an active audited impersonation session |
+| GET/POST | `/api/phase4` | School support, risk flags, AI drafts, group reporting, and emergency confirmation |
+| POST | `/api/phase4/whatsapp` | Authenticated, predefined WhatsApp parent-assistant intents |
+| GET | `/platform` | Super-admin console |
+| GET | `/phase4` | School Phase 4 console |
 
-Phase 0-2 routes remain available.
+Existing Phase 0-3 routes remain available, with the Phase 2/3 premium-module feature guard applied at the route boundary.
 
-## Architecture
+## AI provider and prompt/data boundaries
 
-- Next.js 15 App Router, React 19, TypeScript, and Tailwind CSS
-- PostgreSQL 16, Prisma, forced Row-Level Security, and composite tenant foreign keys
-- bcrypt password hashing and separate school/platform JWT universes
-- existing audited school RBAC and tenant transaction context
-- existing financial append-only/invoice safeguards
+Phase 4 uses **OpenAI's Responses API** for lesson-note and report-card remark drafting. The model is configured through `OPENAI_MODEL`, defaulting to `gpt-5.6-luna`, with `OPENAI_RESPONSES_URL` configurable separately. The Responses API is the application integration surface used for this controlled drafting flow.
+
+AI generation does not send the entire school database to the provider. The server constructs a narrow context for each draft. Report-card prompts contain aggregate score percentages, attendance counts, class name, term identifier, and the student's display name; lesson-note prompts contain only the supplied subject/topic/objectives/class context plus an optional target score identifier. The model is instructed to produce draft text only and never to perform or request real-record mutations.
+
+Generated text is written to the tenant-scoped `AiDraft` table with status `suggested`. It cannot affect a report card or score until an authorized staff member explicitly accepts it, optionally after editing. Acceptance then uses the normal application write path and audit logging.
+
+The WhatsApp parent assistant is **not** a general-purpose LLM-to-database agent. It uses a small fixed intent classifier mapped to real parent-scoped queries for arrival status, fee balance, and the next recorded calendar event. Unsupported questions receive a safe refusal instead of a guessed answer.
+
+The provider endpoint, model, and webhook secret are environment variables so production credentials never enter source control. Provider/model details should be rechecked against current OpenAI documentation before a production rollout.
+
+## Subscription feature flags
+
+A school's `SubscriptionPlan.featureFlags` controls access to premium Phase 2/3 modules. A request to a gated route without the required flag receives a clear `403 FEATURE_NOT_INCLUDED` response. The guard wraps the existing module routes; it does not rebuild them.
+
+The Phase 4 migration preserves existing Foundation installations by populating the previously empty Foundation feature list with the Phase 2/3 premium flags and adds Growth and Enterprise presets for controlled platform assignment.
+
+## Multi-branch model
+
+`SchoolGroup` and `SchoolGroupMembership` are an ownership/reporting layer rather than a shared tenant. A group Owner can see a consolidated branch summary, but students, staff, invoices, scores, attendance, and other branch records remain inside their own school tenant and RLS context. Ordinary staff do not gain cross-branch access.
+
+## At-risk analytics
+
+The risk scanner runs as a scheduled worker (`npm run worker:risk`) with a configurable interval. It evaluates recent attendance, recent-vs-prior score averages, and unpaid invoice balances, then writes informational `StudentRiskFlag` rows. Risk flags never automatically message guardians or modify grades.
+
+## Emergency broadcast
+
+Emergency broadcast uses the existing SukuuNova notification/message queue. The first request only prepares a short-lived confirmation token and displays the recipient count. No message is queued during preparation. Only a second confirmed request with an unexpired token and `broadcast:emergency_send` permission queues the guardian/staff alert and writes a school audit entry.
 
 ## Verification
 
-The Phase 3 invariant suite covers:
+Phase 4 tests cover:
 
-1. server-side CBT timeout enforcement;
-2. pending waiver exclusion from invoice reductions;
-3. applicant conversion through the existing staff-user creation path;
-4. idempotent offline attendance synchronization;
-5. rejection of offline synchronization after the actor's permissions are revoked.
+1. feature-flag enforcement blocking a school without a required premium flag;
+2. separation of `schools:impersonate` from broader school management permission;
+3. Owner-only cross-branch aggregation policy;
+4. WhatsApp refusal outside the predefined intent set;
+5. `AiDraft` remaining ineffective until explicit acceptance;
+6. emergency broadcast requiring the explicit confirmation step.
 
-The full repository test suite remains the CI gate.
-
-The verification workflow currently runs automatically for pushes to the phase branches and can also be dispatched manually. `main` is now the current integrated product branch; this README update itself does not trigger the branch-scoped verification workflow.
+The existing Phase 0-3 invariant suite remains part of the same `npm run test` command. The CI workflow also runs Prisma migrations, typecheck diagnostics, and a production build.
 
 ## Environment and Railway preparation
 
-Phase 3 does **not** deploy to Railway. The repository is prepared for the later controlled deployment phase.
+Phase 4 does **not** deploy to Railway. Railway remains a separate, explicitly authorized step after the final cross-phase acceptance review.
 
-When deployment is explicitly authorized, keep the same operating model:
+Phase 4 environment variables are documented in `.env.example`:
 
-- build: `npm run build`
-- start: `npm run start`
-- pre-deploy migration: `npm run db:migrate`
-- notification worker: `npm run worker:messages`
-- provide database/JWT/provider secrets through Railway variables only;
-- keep the PostgreSQL runtime role **NOSUPERUSER** and **NOBYPASSRLS**;
-- apply the Phase 3 migration before exercising the new routes;
-- use a disposable, migrated non-superuser database for acceptance testing before any production cutover.
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_RESPONSES_URL`
+- `WHATSAPP_WEBHOOK_SECRET`
+- `RISK_SCAN_INTERVAL_MS`
 
-No Railway deployment or live-domain change is included in Phase 3.
+Continue using Railway variables/secrets only for production credentials. Keep the PostgreSQL runtime role `NOSUPERUSER` and `NOBYPASSRLS`, apply migrations before exercising new routes, and perform acceptance testing against a disposable migrated non-superuser database before any production cutover.
 
-## Explicit Phase 4 deferrals
+## Scope boundary
 
-This repository intentionally does not begin Phase 4. Deferred work includes platform billing/entitlements, public applicant/student/parent portals beyond the scoped Phase 3 transport location interaction, advanced AI features, sensor/digital-twin automation, emergency workflows, and any broader offline synchronization outside attendance and scores.
+Phase 4 deliberately does **not** include automated subscription dunning/retry logic, cross-branch data merging, autonomous AI writes/approvals/messages, an open-ended database chatbot, new hardware integrations, new payment gateways, or modules outside the Phase 0-4 scope.
 
 ## Branches
 
@@ -99,6 +120,10 @@ This repository intentionally does not begin Phase 4. Deferred work includes pla
 - **phase-1-mvp** — verified Phase 1 school operations
 - **phase-2-differentiators** — verified Phase 2 implementation
 - **phase-3-operations** — completed Phase 3 implementation branch
-- **main** — current integrated SukuuNova product state
+- **main** — current integrated product state through Phase 3
+- **phase-4-platform-ai** — original Phase 4 working branch
+- **phase-4-final-ready** — final Phase 4 implementation pending CI/merge
 
 Railway deployment remains a separate, explicit action.
+
+_The final-ready branch is now frozen for the one CI verification pass._
