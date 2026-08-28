@@ -107,7 +107,7 @@ export function Phase3Console({ name }: { name: string }) {
         {Array.isArray(data("recruitment").applicants) && table(data("recruitment").applicants as unknown[], ["id","name","email","status","staffUserId"])}
       </Card>}
 
-      {caps["analytics:view"] && <Card title="Role-scoped analytics" note="Only analytics permitted to the signed-in school role are returned.">{moduleData.analytics && <pre className="overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-white">{JSON.stringify(moduleData.analytics,null,2)}</pre>}</Card>}
+      {caps["analytics:view"] && <Card title="Role-scoped analytics" note="Only analytics permitted to the signed-in school role are returned.">{moduleData.analytics !== undefined && <pre className="overflow-auto rounded-lg bg-slate-950 p-4 text-xs text-white">{JSON.stringify(moduleData.analytics,null,2)}</pre>}</Card>}
 
       {caps["offline:sync"] && <Card title="Offline sync" note="Only attendance and scores are accepted. The server re-checks permissions at sync time and de-duplicates clientGeneratedId.">
         <form onSubmit={e=>submit(e,"sync","batch")} className="space-y-3"><label className="block text-sm font-medium">Batch JSON<textarea name="items" rows={8} placeholder='[{"clientGeneratedId":"...","entityType":"attendance","studentId":"...","type":"in","timestamp":"..."}]' required className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"/></label><button className={button}>Synchronize queued records</button></form>
