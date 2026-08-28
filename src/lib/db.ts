@@ -162,6 +162,10 @@ if (process.env.NODE_ENV !== "production") {
   globalForPrisma.sukuunovaPrisma = basePrisma;
 }
 
+// Unextended client for authentication/bootstrap operations that must establish
+// the PostgreSQL tenant GUC explicitly before touching FORCE RLS tables.
+export const rawDb = basePrisma;
+
 export const db = basePrisma.$extends({
   name: "sukuunova-tenant-and-audit-guard",
   query: {
