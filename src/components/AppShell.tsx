@@ -53,7 +53,7 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
   return <div className={`app-shell app-shell-${universe}`}>
     <aside className="app-sidebar">
       <Link href="/" className="app-brand"><span className="app-brand-mark">S</span><span><strong>SukuuNova</strong><small>{universe === "school" ? "School Workspace" : "Platform Control"}</small></span></Link>
-      <div className="app-school-chip"><span className="app-chip-avatar">{universe === "school" ? avatar : "SN"}</span><span><b>{universe === "school" ? schoolName : "SukuuNova Network"}</b><small>{universe === "school" ? `${schoolCode}${schoolCode ? " · " : ""}School account` : "All schools"}</small></span><span className="app-chevron">⌄</span></div>
+      <div className="app-school-chip"><span className="app-chip-avatar">{universe === "school" ? avatar : "SN"}</span><span><b>{universe === "school" ? schoolName : "SukuuNova Network"}</b><small>{universe === "school" ? `${schoolCode}${schoolCode ? " · " : ""}School account` : "All schools"}</small></span></div>
       <nav className="app-nav" aria-label="Primary navigation">{groups.map((group) => <div className="app-nav-group" key={group.label}><div className="app-nav-label">{group.label}</div>{group.items.map(([icon, label, href]) => <Link key={label} href={href} className={`app-nav-item ${active === label ? "is-active" : ""}`}><span className="app-nav-icon">{icon}</span><span>{label}</span>{active === label ? <span className="app-nav-active-dot" /> : null}</Link>)}</div>)}</nav>
       <div className="app-sidebar-bottom">
         <Link href={universe === "school" ? "/school/help" : "/platform/support"} className="app-help">? <span>Help & Support</span></Link>
