@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { db } from "./db";
+import { rawDb } from "./db";
 import { RateLimitError } from "./errors";
 
 const WINDOW_MS = 15 * 60 * 1000;
@@ -20,7 +20,7 @@ export async function recordLoginAttempt(
   const identityHash = bucketKey(scope, identity, ip);
   const now = new Date();
 
-  const retryAfterSeconds = await db.$transaction(async (tx) => {
+  const retryAfterSeconds = await rawDb.$transaction(async (tx) => {
     const existing = await tx.loginRateLimit.findUnique({
       where: { identityHash }
     });
@@ -64,7 +64,7 @@ export async function recordLoginAttempt(
 }
 
 export async function clearLoginAttempts(identityHash: string): Promise<void> {
-  await db.loginRateLimit.deleteMany({ where: { identityHash } });
+  await rawDb.loginRateLimit.deleteMany({ where: { identityHash } });
 }
 
 export function requestIp(headers: Headers): string {
