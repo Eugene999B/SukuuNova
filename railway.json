@@ -5,8 +5,10 @@
   },
   "deploy": {
     "startCommand": "npm start",
-    "preDeployCommand": "npx prisma migrate deploy",
-    "healthcheckPath": "/",
-    "healthcheckTimeout": 120
+    "preDeployCommand": ["npx prisma migrate deploy"],
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 120,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
   }
 }
