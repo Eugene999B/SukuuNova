@@ -16,7 +16,7 @@ const schoolGroups: NavGroup[] = [
   { label: "Finance", items: [["₵", "School Fees", "/school/fees"], ["▣", "Invoices", "/school/fees/invoices"], ["↙", "Payments", "/school/fees/payments"], ["◒", "Arrears & Balances", "/school/fees/arrears"], ["◔", "Finance Reports", "/school/fees/reports"]] },
   { label: "School Life", items: [["▦", "Library", "/school/library"], ["⌁", "Transport", "/school/transport"], ["☕", "Feeding", "/school/feeding"], ["▧", "Assets & Inventory", "/school/inventory"], ["♙", "Recruitment", "/school/hr/recruitment"]] },
   { label: "Communication", items: [["✉", "Messages", "/school/communications/messages"], ["◈", "Announcements", "/school/communications/announcements"], ["◫", "SMS / WhatsApp", "/school/communications/broadcasts"], ["◷", "Events", "/school/events"]] },
-  { label: "Reports & Admin", items: [["▥", "School Analytics", "/school/reports/analytics"], ["▤", "Reports", "/school/reports"], ["♚", "Roles & Permissions", "/school/settings/roles"], ["⚙", "School Settings", "/school/settings"] }
+  { label: "Reports & Admin", items: [["▥", "School Analytics", "/school/reports/analytics"], ["▤", "Reports", "/school/reports"], ["♚", "Roles & Permissions", "/school/settings/roles"], ["⚙", "School Settings", "/school/settings"]] }
 ];
 
 const platformGroups: NavGroup[] = [
