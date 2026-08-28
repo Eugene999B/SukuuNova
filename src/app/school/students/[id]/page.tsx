@@ -6,6 +6,8 @@ import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import "../students-workspace.css";
 
+type ProgressStyle = React.CSSProperties & { "--progress"?: string };
+
 export default async function StudentProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSchoolSession();
   const { id } = await params;
@@ -14,12 +16,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
     const student = await tx.student.findUnique({
       where: { id },
       select: {
-        id: true,
-        name: true,
-        admissionNo: true,
-        dob: true,
-        status: true,
-        photoUrl: true,
+        id: true, name: true, admissionNo: true, dob: true, status: true, photoUrl: true,
         class: { select: { id: true, name: true, level: true, classTeacher: { select: { name: true } } } },
         guardians: { select: { relationship: true, isPrimary: true, guardian: { select: { name: true, phone: true } } } },
         _count: { select: { reportCards: true, invoices: true, attendanceEvents: true } }
@@ -40,6 +37,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
   const billed = Number(data.invoiceStats._sum.totalAmount ?? 0);
   const paid = Number(data.invoiceStats._sum.amountPaid ?? 0);
   const balance = Math.max(0, billed - paid);
+  const progressStyle: ProgressStyle = { "--progress": average ? `${Math.max(0, Math.min(100, Number(average)))}%` : "0%" };
 
   return (
     <AppShell universe="school" title={data.student.name} subtitle="One connected learner record across identity, class, family, attendance, academics and finance." active="Students" schoolName="School Workspace" schoolCode="" userName={session.name}>
@@ -66,7 +64,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
 
           <section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Family</div><h3>Parents & guardians</h3></div><Link href="/school/guardians">Manage family →</Link></div>{data.student.guardians.length ? <div className="family-list">{data.student.guardians.map((link) => <div className="family-row" key={`${link.guardian.name}-${link.guardian.phone}`}><span className="family-avatar">{link.guardian.name.slice(0,2).toUpperCase()}</span><div><b>{link.guardian.name}</b><small>{link.relationship}{link.isPrimary ? " · Primary" : ""} · {link.guardian.phone}</small></div></div>)}</div> : <div className="mini-empty"><strong>No guardian linked</strong><p>Add the primary family contact so attendance alerts, receipts and school messages reach the right person.</p><Link href="/school/guardians">Add guardian →</Link></div>}</section>
 
-          <section className="profile-card profile-wide"><div className="profile-card-head"><div><div className="eyebrow">Academic snapshot</div><h3>Performance at a glance</h3><p>As scores are entered, this panel becomes the learner's longitudinal academic view.</p></div><Link href="/school/gradebook">Open gradebook →</Link></div><div className="progress-visual"><div className="progress-ring" style={{"--progress": average ? `${Math.max(0, Math.min(100, Number(average)))}%` : "0%"} as React.CSSProperties}><span>{average ?? "—"}</span></div><div><strong>{average ? "Current average" : "Waiting for first score"}</strong><p>Subject-level marks, assessment history, class position where configured, teacher comments and report-card outcomes will connect here.</p><div className="profile-link-row"><Link href="/school/exams">Assessments</Link><Link href="/school/report-cards">Report cards</Link><Link href="/school/homework">Homework</Link></div></div></div></section>
+          <section className="profile-card profile-wide"><div className="profile-card-head"><div><div className="eyebrow">Academic snapshot</div><h3>Performance at a glance</h3><p>As scores are entered, this panel becomes the learner's longitudinal academic view.</p></div><Link href="/school/gradebook">Open gradebook →</Link></div><div className="progress-visual"><div className="progress-ring" style={progressStyle}><span>{average ?? "—"}</span></div><div><strong>{average ? "Current average" : "Waiting for first score"}</strong><p>Subject-level marks, assessment history, class position where configured, teacher comments and report-card outcomes will connect here.</p><div className="profile-link-row"><Link href="/school/exams">Assessments</Link><Link href="/school/report-cards">Report cards</Link><Link href="/school/homework">Homework</Link></div></div></div></section>
 
           <section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Attendance</div><h3>Attendance summary</h3></div><Link href="/school/attendance">Open attendance →</Link></div><div className="attendance-bars"><div><span>Present</span><b>{attendance.present ?? 0}</b></div><div><span>Late</span><b>{attendance.late ?? 0}</b></div><div><span>Absent</span><b>{attendance.absent ?? 0}</b></div></div></section>
 
