@@ -1,12 +1,19 @@
 # SukuuNova
 
-SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. The repository preserves the verified Phase 0-2 foundation and now adds the Phase 3 operations block.
+SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. **Phase 3 is now merged into `main`** on top of the verified Phase 2 baseline.
 
 The product name is **SukuuNova** throughout the repository.
 
-## Phase 3 status
+## Current status
 
-The **phase-3-operations** branch contains the Phase 3 implementation on top of the Phase 2 green baseline.
+- **Phase 0 — foundation:** complete and verified.
+- **Phase 1 — MVP school operations:** complete and verified.
+- **Phase 2 — differentiators:** complete and verified at commit `d80d1234826561017490999054f7ec9b72fdb8af`.
+- **Phase 3 — operations:** implemented and merged into `main` at merge commit `29ac66f9cddfb168107e579e3dc23623540f69e2`.
+- **Railway deployment:** intentionally not performed yet.
+- **Phase 4:** not started.
+
+## Phase 3 functionality
 
 Phase 3 includes:
 
@@ -22,7 +29,7 @@ Phase 3 includes:
 
 ## Security rules carried into Phase 3
 
-Every new Phase 3 tenant table has **schoolId**, forced PostgreSQL RLS, and same-school composite foreign keys where records reference another tenant-owned row. The existing `withTenant` transaction establishes `app.current_school_id`; the Prisma guard remains in force for Prisma-backed models. Server routes require the current signed-in school session and re-check RBAC permissions in the transaction. Sensitive Phase 3 mutations append to the existing school audit log. Existing append-only and invoice deletion safeguards are untouched.
+Every new Phase 3 tenant table has **schoolId**, forced PostgreSQL RLS, and same-school composite foreign keys where records reference another tenant-owned row. The existing `withTenant` transaction establishes `app.current_school_id`; the Prisma guard remains in force for Prisma-backed models. Server routes require the current signed-in school session and re-check RBAC permissions in the transaction. Sensitive Phase 3 mutations append to the existing school audit log. Existing append-only and invoice deletion safeguards remain intact.
 
 Offline sync is deliberately narrow: it can apply only attendance and score records. The server checks the live permission set when synchronization occurs; no permission from the time a device queued the item is trusted. The unique `(schoolId, clientGeneratedId)` constraint makes retries idempotent.
 
@@ -53,11 +60,21 @@ Phase 0-2 routes remain available.
 
 ## Verification
 
-The Phase 3 invariant suite checks server-side CBT timeout enforcement, pending-waiver exclusion from invoice reductions, offline idempotency, and the restricted offline entity/permission surface. The full repository test suite remains the CI gate.
+The Phase 3 invariant suite covers:
+
+1. server-side CBT timeout enforcement;
+2. pending waiver exclusion from invoice reductions;
+3. applicant conversion through the existing staff-user creation path;
+4. idempotent offline attendance synchronization;
+5. rejection of offline synchronization after the actor's permissions are revoked.
+
+The full repository test suite remains the CI gate.
+
+The verification workflow currently runs automatically for pushes to the phase branches and can also be dispatched manually. `main` is now the current integrated product branch; this README update itself does not trigger the branch-scoped verification workflow.
 
 ## Environment and Railway preparation
 
-Phase 3 does **not** deploy to Railway. The branch is prepared for the later controlled deployment phase.
+Phase 3 does **not** deploy to Railway. The repository is prepared for the later controlled deployment phase.
 
 When deployment is explicitly authorized, keep the same operating model:
 
@@ -74,13 +91,14 @@ No Railway deployment or live-domain change is included in Phase 3.
 
 ## Explicit Phase 4 deferrals
 
-This branch intentionally does not begin Phase 4. Deferred work includes platform billing/entitlements, public applicant/student/parent portals beyond the scoped Phase 3 transport location interaction, advanced AI features, sensor/digital-twin automation, emergency workflows, and any broader offline synchronization outside attendance and scores.
+This repository intentionally does not begin Phase 4. Deferred work includes platform billing/entitlements, public applicant/student/parent portals beyond the scoped Phase 3 transport location interaction, advanced AI features, sensor/digital-twin automation, emergency workflows, and any broader offline synchronization outside attendance and scores.
 
 ## Branches
 
 - **phase-0-foundation** — verified security/data foundation
 - **phase-1-mvp** — verified Phase 1 school operations
 - **phase-2-differentiators** — verified Phase 2 implementation
-- **phase-3-operations** — Phase 3 implementation and verification
+- **phase-3-operations** — completed Phase 3 implementation branch
+- **main** — current integrated SukuuNova product state
 
-Merging to the default branch and Railway deployment remain separate, explicit actions.
+Railway deployment remains a separate, explicit action.
