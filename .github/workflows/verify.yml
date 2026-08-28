@@ -1,0 +1,66 @@
+name: SukuuNova verification
+
+on:
+  push:
+    branches:
+      - phase-1-mvp
+      - phase-2-differentiators
+      - phase-3-operations
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_test
+      TEST_DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_test
+      NODE_ENV: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Create non-superuser test database
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: postgres
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sukuunova_test LOGIN NOSUPERUSER NOBYPASSRLS;"
+          psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_test OWNER sukuunova_test;"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Generate ephemeral auth secrets
+        run: |
+          echo "SCHOOL_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "PLATFORM_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "FACE_EMBEDDING_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+      - name: Apply migrations
+        run: npm run db:migrate
+      - name: Run tests
+        run: npm run test
+      - name: Typecheck diagnostics
+        if: always()
+        continue-on-error: true
+        run: npx tsc --noEmit --pretty false
+      - name: Build
+        if: always()
+        run: npm run build
