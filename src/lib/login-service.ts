@@ -14,9 +14,7 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
   if (!directory || directory.status !== "active") throw new UnauthorizedError(LOGIN_FAILURE);
   return authDb.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
-    const schoolRows = await tx.$queryRaw<{ id: string; name: string; status: string }[]>`
-      SELECT "id", "name", "status" FROM "School" WHERE "id" = ${directory.schoolId} LIMIT 1
-    `;
+    const schoolRows = await tx.$queryRaw<{ id: string; name: string; status: string }[]>`SELECT "id", "name", "status" FROM "School" WHERE "id" = ${directory.schoolId} LIMIT 1`;
     const school = schoolRows[0];
     if (!school || school.status !== "active") throw new UnauthorizedError(LOGIN_FAILURE);
     const identifier = normalizedIdentifier(input.identifier);
@@ -27,14 +25,13 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
         AND u."status" = 'active'
         AND (u."email" = ${identifier} OR u."phone" = ${identifier})
         AND NOT EXISTS (SELECT 1 FROM "Guardian" g WHERE g."userId" = u."id" AND g."schoolId" = u."schoolId")
-      LIMIT 1
-    `;
+      LIMIT 1`;
     const user = userRows[0];
     if (!user || !(await compare(input.password, user.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
     const roles = await tx.userRole.findMany({ where: { userId: user.id }, select: { role: { select: { name: true } } } });
     const roleNames = roles.map((r) => r.role.name);
     const portal = roleNames.some((role) => /teacher|academic lead|head of department/i.test(role)) ? "teacher" : "school";
-    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleNames };
+    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleNames, needsPasswordChange: input.password === "12345" };
   });
 }
 
