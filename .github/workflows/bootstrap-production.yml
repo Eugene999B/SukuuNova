@@ -44,12 +44,27 @@ jobs:
         id: validate
         shell: bash
         run: |
-          set -euo pipefail
-          for name in SUKUUNOVA_DATABASE_URL SEED_SCHOOL_CODE SEED_SCHOOL_NAME SEED_OWNER_NAME SEED_OWNER_EMAIL SEED_OWNER_PASSWORD SEED_PLATFORM_ADMIN_EMAIL SEED_PLATFORM_ADMIN_PASSWORD SEED_PLATFORM_ADMIN_NAME; do
-            test -n "${!name:-}" || { echo "$name is missing" >&2; exit 1; }
+          set -uo pipefail
+          missing=()
+          for name in SUKUUNOVA_DATABASE_URL SEED_SCHOOL_CODE SEED_SCHOOL_NAME SEED_OWNER_NAME SEED_OWNER_EMAIL SEED_OWNER_PASSWORD SEED_PLATFORM_ADMIN_EMAIL SEED_PLATFORM_ADMIN_PASSWORD; do
+            if [ -z "${!name:-}" ]; then missing+=("$name"); fi
           done
-          test "${#SEED_OWNER_PASSWORD}" -ge 12 || { echo "SEED_OWNER_PASSWORD must be at least 12 characters" >&2; exit 1; }
-          test "${#SEED_PLATFORM_ADMIN_PASSWORD}" -ge 12 || { echo "SEED_PLATFORM_ADMIN_PASSWORD must be at least 12 characters" >&2; exit 1; }
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "missing=${missing[*]}" >> "$GITHUB_OUTPUT"
+            echo "Missing bootstrap secret(s): ${missing[*]}" >&2
+            exit 1
+          fi
+          if [ "${#SEED_OWNER_PASSWORD}" -lt 12 ]; then
+            echo "missing=SEED_OWNER_PASSWORD(length)" >> "$GITHUB_OUTPUT"
+            echo "SEED_OWNER_PASSWORD must contain at least 12 characters" >&2
+            exit 1
+          fi
+          if [ "${#SEED_PLATFORM_ADMIN_PASSWORD}" -lt 12 ]; then
+            echo "missing=SEED_PLATFORM_ADMIN_PASSWORD(length)" >> "$GITHUB_OUTPUT"
+            echo "SEED_PLATFORM_ADMIN_PASSWORD must contain at least 12 characters" >&2
+            exit 1
+          fi
+          echo "missing=" >> "$GITHUB_OUTPUT"
 
       - name: Apply database migrations
         id: migrate
@@ -69,6 +84,7 @@ jobs:
           VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
           MIGRATE_OUTCOME: ${{ steps.migrate.outcome }}
           SEED_OUTCOME: ${{ steps.seed.outcome }}
+          MISSING_SECRETS: ${{ steps.validate.outputs.missing }}
         run: |
           set -euo pipefail
           if [ "$SETUP_NODE_OUTCOME" = "success" ] && \
@@ -80,7 +96,10 @@ jobs:
             DESCRIPTION="SukuuNova production database migration and seed completed"
           else
             STATE=failure
-            DESCRIPTION="SukuuNova production bootstrap failed; inspect the workflow log"
+            DESCRIPTION="SukuuNova production bootstrap failed"
+            if [ -n "$MISSING_SECRETS" ]; then
+              DESCRIPTION="SukuuNova production bootstrap validation failed: $MISSING_SECRETS"
+            fi
           fi
           curl --fail-with-body --silent --show-error \
             -X POST \
