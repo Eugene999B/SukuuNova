@@ -2,18 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: light;
-}
-
-body {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at top right, rgba(15, 118, 110, 0.12), transparent 35%),
-    #f8fafc;
-  color: #111827;
-}
-
-input {
-  color: #111827;
-}
+:root{color-scheme:dark;--nova:#35dfab;--nova-2:#6f7dff;--bg:#07121b;--panel:#0d1d28;--muted:#789095}
+*{box-sizing:border-box}
+html{min-height:100%;background:var(--bg)}
+body{min-height:100vh;margin:0;background:var(--bg);color:#ecf7f4;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit}
+input,textarea,select{outline:none}
+a{color:inherit}
