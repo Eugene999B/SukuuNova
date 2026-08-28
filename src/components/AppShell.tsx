@@ -25,7 +25,7 @@ const platformGroups: NavGroup[] = [
   { label: "Control Center", items: [["▦", "Overview", "/platform"], ["⌕", "Global Search", "/platform/search"], ["◉", "System Health", "/platform/health"]] },
   { label: "SukuuNova Network", items: [["⌂", "Schools", "/platform/schools"], ["◈", "Subscriptions", "/platform/billing"], ["₵", "Platform Billing", "/platform/billing"]] },
   { label: "Operations", items: [["♟", "Support", "/platform/support"], ["⌁", "Audited Access", "/platform/audit"], ["▤", "Platform Reports", "/platform/reports"]] },
-  { label: "Security", items: [["♙", "Administrators", "/platform/admins"], ["◇", "Audit Log", "/platform/audit-log"], ["⚙", "Platform Settings", "/platform/settings"] }
+  { label: "Security", items: [["♙", "Administrators", "/platform/admins"], ["◇", "Audit Log", "/platform/audit-log"], ["⚙", "Platform Settings", "/platform/settings"]] }
 ];
 
 function initials(value: string) {
