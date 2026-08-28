@@ -4,6 +4,7 @@ import { hash } from "bcryptjs";
 import { withTenant } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { hasPermission } from "@/lib/rbac";
+import { staffRolePermissionKeys } from "@/lib/staff-role-presets";
 
 export type StaffCreateResult = { ok: true; name: string; username: string; temporaryPassword: string } | { ok: false; message: string };
 
@@ -45,26 +46,15 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
       create: { schoolId: session.schoolId, name: roleName, key: roleName.toLowerCase().replace(/[^a-z0-9]+/g, "-"), isSystem: false }
     });
 
-    const temporaryPassword = "12345";
-    const user = await tx.user.create({
-      data: {
-        schoolId: session.schoolId,
-        name,
-        email,
-        phone,
-        passwordHash: await hash(temporaryPassword, 12),
-        status: "active"
-      },
-      select: { id: true, name: true, email: true, phone: true }
-    });
+    const permissionKeys = staffRolePermissionKeys(roleName);
+    const permissions = await tx.permission.findMany({ where: { key: { in: permissionKeys as string[] } }, select: { id: true } });
+    if (permissions.length !== permissionKeys.length) return { ok: false, message: "This role's permission preset is not fully installed. Update the school permission catalogue before creating this account." };
+    await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
+    await tx.rolePermission.createMany({ data: permissions.map((permission) => ({ schoolId: session.schoolId, roleId: role.id, permissionId: permission.id })) });
 
-    await tx.userRole.create({
-      data: {
-        schoolId: session.schoolId,
-        userId: user.id,
-        roleId: role.id
-      }
-    });
+    const temporaryPassword = "12345";
+    const user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: await hash(temporaryPassword, 12), status: "active" }, select: { id: true, name: true, email: true, phone: true } });
+    await tx.userRole.create({ data: { schoolId: session.schoolId, userId: user.id, roleId: role.id } });
 
     if (primaryClassId && /teacher/i.test(roleName)) {
       const schoolClass = await tx.class.findFirst({ where: { id: primaryClassId }, select: { id: true } });
@@ -77,14 +67,10 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
         tx.subject.findFirst({ where: { id: subjectId }, select: { id: true } })
       ]);
       if (!schoolClass || !subject) return { ok: false, message: "Selected class or subject does not belong to this school." };
-      await tx.classSubjectTeacher.upsert({
-        where: { classId_subjectId_teacherId: { classId: primaryClassId, subjectId, teacherId: user.id } },
-        update: {},
-        create: { schoolId: session.schoolId, classId: primaryClassId, subjectId, teacherId: user.id }
-      });
+      await tx.classSubjectTeacher.upsert({ where: { classId_subjectId_teacherId: { classId: primaryClassId, subjectId, teacherId: user.id } }, update: {}, create: { schoolId: session.schoolId, classId: primaryClassId, subjectId, teacherId: user.id } });
     }
 
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, staffCategory, role: roleName, primaryClassId: primaryClassId || null, subjectId: subjectId || null } } });
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, staffCategory, role: roleName, permissionCount: permissions.length, primaryClassId: primaryClassId || null, subjectId: subjectId || null } } });
     return { ok: true, name: user.name, username: user.email ?? user.phone ?? "School login", temporaryPassword };
   });
 }
