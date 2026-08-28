@@ -1,0 +1,86 @@
+import Link from "next/link";
+import { AppShell } from "@/components/AppShell";
+import { requireSchoolSession } from "@/lib/school-auth";
+import { withTenant } from "@/lib/db";
+import { requirePermission } from "@/lib/rbac";
+import "../module-workspace.css";
+
+export default async function PeoplePage() {
+  const session = await requireSchoolSession();
+  const data = await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "students:read");
+    const [school, students, guardians, users, classes, unassigned] = await Promise.all([
+      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
+      tx.student.findMany({ orderBy: { createdAt: "desc" }, take: 8, select: { id: true, name: true, admissionNo: true, status: true, class: { select: { name: true, level: true } } } }),
+      tx.guardian.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, phone: true, userId: true, students: { select: { student: { select: { id: true, name: true } } } } } }),
+      tx.user.findMany({ where: { status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, phone: true, userRoles: { select: { role: { select: { name: true } } } }, guardianProfiles: { select: { id: true } } } }),
+      tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], take: 12, select: { id: true, name: true, level: true, classTeacher: { select: { name: true } }, _count: { select: { students: true, subjectAssignments: true } } } }),
+      tx.student.count({ where: { classId: null, status: "active" } })
+    ]);
+    return { school, students, guardians, users, classes, unassigned };
+  });
+
+  const staff = data.users.filter((user) => user.guardianProfiles.length === 0);
+  const teachers = staff.filter((user) => user.userRoles.some((role) => ["Class Teacher", "Subject Teacher"].includes(role.role.name)));
+  const portalEnabled = data.guardians.filter((guardian) => Boolean(guardian.userId)).length;
+  const placed = data.classes.reduce((sum, schoolClass) => sum + schoolClass._count.students, 0);
+
+  return (
+    <AppShell universe="school" title="People Hub" subtitle="One operational view for learners, families, staff and the class structure connecting them." active="Overview" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+      <div className="module-workspace">
+        <section className="module-setup-card module-card">
+          <div>
+            <span className="module-overline">People foundation</span>
+            <h3>Build the school around real relationships.</h3>
+            <p>Students are the learner records, Guardians are the family relationship, Staff are the workforce accounts, and Classes provide the academic operating context. Everything downstream can reference these records instead of duplicating them.</p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+              <Link className="module-hero-button" href="/school/students">Open student register →</Link>
+              <Link className="module-hero-button" href="/school/guardians">Manage guardians →</Link>
+              <Link className="module-hero-button" href="/school/staff">Open staff →</Link>
+            </div>
+          </div>
+          <div className="module-setup-list">
+            <Link href="/school/classes"><span>1</span>Structure classes <b>{data.classes.length} groups</b></Link>
+            <Link href="/school/students"><span>2</span>Place learners <b>{data.unassigned} need placement</b></Link>
+            <Link href="/school/guardians"><span>3</span>Connect families <b>{portalEnabled} portals enabled</b></Link>
+            <Link href="/school/subjects"><span>4</span>Assign teaching <b>Subjects → teachers → classes</b></Link>
+          </div>
+        </section>
+
+        <div className="module-metrics">
+          <article><span>Students</span><strong>{data.students.length + (data.unassigned > 0 ? data.unassigned : 0)}</strong><small>Latest live register records</small></article>
+          <article><span>Guardians</span><strong>{data.guardians.length}</strong><small>{portalEnabled} with portal access</small></article>
+          <article><span>Staff accounts</span><strong>{staff.length}</strong><small>{teachers.length} teaching-role accounts</small></article>
+          <article className={data.unassigned ? "attention" : "ok"}><span>Placement queue</span><strong>{data.unassigned}</strong><small>{data.unassigned ? "Resolve before class-based workflows" : "All active learners placed"}</small></article>
+        </div>
+
+        <div className="module-split">
+          <section className="module-card">
+            <div className="module-section-title"><div><span>Learner flow</span><h3>Recent students</h3><p>Jump directly into Student 360, class placement and downstream records.</p></div><Link href="/school/students">View all →</Link></div>
+            <div className="module-table-wrap"><table><thead><tr><th>Student</th><th>Placement</th><th>Status</th></tr></thead><tbody>{data.students.length ? data.students.map((student) => <tr key={student.id}><td style={{ padding: 12 }}><Link href={`/school/students/${student.id}`}><strong>{student.name}</strong></Link><div style={{ color: "#60787d", fontSize: 8 }}>{student.admissionNo}</div></td><td style={{ padding: 12 }}>{student.class ? `${student.class.level ?? ""}${student.class.level ? " · " : ""}${student.class.name}` : "Needs placement"}</td><td style={{ padding: 12 }}>{student.status}</td></tr>) : <tr><td colSpan={3}><div className="module-empty"><div className="module-empty-mark">◎</div><strong>No student activity yet</strong><p>The register is empty. Start by creating the first learner.</p></div></td></tr>}</tbody></table></div>
+          </section>
+
+          <section className="module-card">
+            <div className="module-section-title"><div><span>Family network</span><h3>Guardian coverage</h3><p>Family records should always map to explicit child relationships.</p></div><Link href="/school/guardians">Open directory →</Link></div>
+            <div className="module-workflow">{data.guardians.slice(0, 6).map((guardian) => <div className="module-workflow-step" key={guardian.id}><span>{guardian.students.length}</span><div><strong>{guardian.name}</strong><small>{guardian.students.length ? guardian.students.map((item) => item.student.name).join(", ") : "No children linked"}{guardian.userId ? " · Portal enabled" : " · Portal not provisioned"}</small></div></div>)}{!data.guardians.length ? <div className="module-empty"><div className="module-empty-mark">◌</div><strong>No guardians yet</strong><p>Create guardian profiles from the family directory.</p></div> : null}</div>
+          </section>
+        </div>
+
+        <section className="module-card">
+          <div className="module-section-title"><div><span>School structure</span><h3>Classes are the connecting unit</h3><p>Every class can become the shared context for attendance, subjects, timetable, gradebook and reporting.</p></div><Link href="/school/classes">Manage classes →</Link></div>
+          <div className="module-workflow">{data.classes.map((schoolClass) => <div className="module-workflow-step" key={schoolClass.id}><span>{schoolClass._count.students}</span><div><strong>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</strong><small>{schoolClass.classTeacher?.name ?? "No class teacher"} · {schoolClass._count.subjectAssignments} subject assignments · <Link href={`/school/classes?class=${schoolClass.id}`}>open group</Link></small></div></div>)}{!data.classes.length ? <div className="module-empty"><div className="module-empty-mark">⌂</div><strong>No class groups yet</strong><p>Create the academic structure before building class-based workflows.</p><Link href="/school/classes?action=create" className="module-hero-button">Create first class →</Link></div> : null}</div>
+        </section>
+
+        <section className="module-card">
+          <div className="module-section-title"><div><span>Next stage</span><h3>From people to teaching operations</h3><p>Once the people and structure are reliable, the school can safely layer curriculum, teaching assignments, attendance and assessments on top.</p></div></div>
+          <div className="module-setup-list" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+            <Link href="/school/subjects"><span>01</span>Subject catalogue <b>Create & assign subjects</b></Link>
+            <Link href="/school/timetable"><span>02</span>Timetable <b>Teachers, classes & rooms</b></Link>
+            <Link href="/school/attendance"><span>03</span>Attendance <b>Registers & exception handling</b></Link>
+            <Link href="/school/gradebook"><span>04</span>Assessment <b>Scores, moderation & reports</b></Link>
+          </div>
+        </section>
+      </div>
+    </AppShell>
+  );
+}
