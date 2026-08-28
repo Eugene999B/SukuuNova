@@ -1,18 +1,25 @@
 import Link from "next/link";
 import { LoginForm } from "@/components/LoginForm";
+import "../login.css";
 
 export default function PlatformLoginPage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-md items-center px-6 py-12">
-      <section className="w-full rounded-3xl border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200/50">
-        <Link className="text-sm text-slate-500 hover:text-nova" href="/">
-          ← SukuuNova
-        </Link>
-        <h1 className="mt-6 text-3xl font-bold">Platform admin login</h1>
-        <p className="mt-2 text-slate-600">
-          This identity is separate from every school account.
-        </p>
+    <main className="login-shell">
+      <div className="login-glow login-glow-one" />
+      <div className="login-glow login-glow-two" />
+      <section className="login-card">
+        <div className="login-top">
+          <Link href="/" className="login-brand"><span>S</span>SukuuNova</Link>
+          <span className="login-pill login-pill-dark">Platform</span>
+        </div>
+        <div className="login-heading">
+          <p>Administrator access</p>
+          <h1>Welcome to your console.</h1>
+          <span>Sign in to manage SukuuNova schools, support and platform operations.</span>
+        </div>
         <LoginForm universe="platform" />
+        <div className="login-note"><span>●</span> Protected platform access</div>
+        <Link href="/" className="login-back">← Back to SukuuNova</Link>
       </section>
     </main>
   );
