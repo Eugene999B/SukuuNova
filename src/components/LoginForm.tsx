@@ -24,17 +24,14 @@ export function LoginForm(props: Props) {
       : { email: String(data.get("email") ?? ""), password: String(data.get("password") ?? "") };
 
     try {
-      const response = await fetch(`/api/auth/${props.universe}/login`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body)
-      });
+      const response = await fetch(`/api/auth/${props.universe}/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json();
       if (!response.ok) {
         setError(result.message || "Login failed. Please check your details and try again.");
         return;
       }
-      router.push("/dashboard");
+      if (props.universe === "school" && result.user?.portal === "teacher") router.push("/teacher");
+      else router.push(props.universe === "platform" ? "/platform" : "/dashboard");
       router.refresh();
     } catch {
       setError("Unable to reach SukuuNova right now. Please try again.");
