@@ -31,15 +31,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
+        id: setup_node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        id: install
+        run: npm install --no-audit --no-fund
 
       - name: Validate bootstrap secrets
+        id: validate
         shell: bash
         run: |
           set -euo pipefail
@@ -50,9 +52,11 @@ jobs:
           test "${#SEED_PLATFORM_ADMIN_PASSWORD}" -ge 12 || { echo "SEED_PLATFORM_ADMIN_PASSWORD must be at least 12 characters" >&2; exit 1; }
 
       - name: Apply database migrations
+        id: migrate
         run: npx prisma migrate deploy
 
       - name: Seed initial school and platform administrator
+        id: seed
         run: npx prisma db seed
 
       - name: Report bootstrap result
@@ -60,10 +64,18 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          BOOTSTRAP_STATUS: ${{ job.status }}
+          SETUP_NODE_OUTCOME: ${{ steps.setup_node.outcome }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          VALIDATE_OUTCOME: ${{ steps.validate.outcome }}
+          MIGRATE_OUTCOME: ${{ steps.migrate.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
         run: |
           set -euo pipefail
-          if [ "$BOOTSTRAP_STATUS" = "success" ]; then
+          if [ "$SETUP_NODE_OUTCOME" = "success" ] && \
+             [ "$INSTALL_OUTCOME" = "success" ] && \
+             [ "$VALIDATE_OUTCOME" = "success" ] && \
+             [ "$MIGRATE_OUTCOME" = "success" ] && \
+             [ "$SEED_OUTCOME" = "success" ]; then
             STATE=success
             DESCRIPTION="SukuuNova production database migration and seed completed"
           else
