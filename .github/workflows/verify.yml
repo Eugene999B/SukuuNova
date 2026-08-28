@@ -5,6 +5,7 @@ on:
     branches:
       - phase-1-mvp
       - phase-2-differentiators
+      - phase-3-operations
   workflow_dispatch:
 
 permissions:
