@@ -11,6 +11,8 @@ type NotificationInput={
   templateKey?:NotificationTemplateKey; templateVariables?:Record<string,string>; mediaUrl?:string;
 };
 
+type NotificationSenders={sms?:SmsSender;whatsapp?:WhatsAppSender};
+
 function configuredChannels(value:Prisma.JsonValue|null|undefined):Channel[]{
   if(!Array.isArray(value))return["sms"];
   const channels=value.filter((item):item is Channel=>item==="sms"||item==="whatsapp");
@@ -56,7 +58,7 @@ async function deliverCreatedMessage(
   tx:TenantDb,
   message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null},
   settings:{smsSenderId?:string|null;whatsappTemplateConfig?:Prisma.JsonValue|null}|null|undefined,
-  senders:{sms?:SmsSender;whatsapp?:WhatsAppSender}={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}
+  senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}
 ){
   try{
     if(message.channel==="sms"){
@@ -73,25 +75,25 @@ async function deliverCreatedMessage(
   }catch(error){
     const lastError=error instanceof Error?error.message.slice(0,500):"Unknown message error";
     console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.schoolId,lastError});
-    return tx.message.update({where:{id:message.id},data:{status:"failed",lastError,nextAttemptAt:null}});
+    return tx.message.update({where:{id:message.id},data:{status:"failed",lastError}});
   }
 }
 
-export async function enqueueNotification(tx:TenantDb,input:NotificationInput){
+export async function enqueueNotification(tx:TenantDb,input:NotificationInput,senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}){
   const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}});
   const channels=configuredChannels(settings?.notificationChannels);
   const messages=[];
   for(const channel of channels){
     if(channel==="whatsapp"&&!input.templateKey)continue;
     const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"sending",attempts:1}});
-    messages.push(await deliverCreatedMessage(tx,message,settings));
+    messages.push(await deliverCreatedMessage(tx,message,settings,senders));
   }
   return messages;
 }
 
 export const enqueueSms=enqueueNotification;
 
-export async function processMessageBatchOnce(senders:{sms?:SmsSender;whatsapp?:WhatsAppSender}={sms:httpSmsSender,whatsapp:twilioWhatsAppSender},batchSize=20){
+export async function processMessageBatchOnce(senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender},batchSize=20){
   const directories=await db.schoolLoginDirectory.findMany({where:{status:"active"}});let processed=0;
   for(const directory of directories){
     if(processed>=batchSize)break;
