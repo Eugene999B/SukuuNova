@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoutButton } from "./LogoutButton";
 import "./app-shell.css";
 
 type Universe = "school" | "platform";
@@ -32,7 +33,6 @@ function initials(value: string) {
 export function AppShell({ universe, title, subtitle, active = "Overview", schoolName = "School Workspace", schoolCode = "", userName = universe === "school" ? "School Administrator" : "Platform Administrator", role = universe === "school" ? "Administrator" : "Super Admin", children }: Props) {
   const groups = universe === "school" ? schoolGroups : platformGroups;
   const avatar = initials(userName);
-  const signOutHref = universe === "school" ? "/api/auth/school/logout" : "/api/auth/platform/logout";
 
   return <div className={`app-shell app-shell-${universe}`}>
     <aside className="app-sidebar">
@@ -42,7 +42,7 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
       <div className="app-sidebar-bottom">
         <Link href={universe === "school" ? "/school/help" : "/platform/support"} className="app-help">? <span>Help & Support</span></Link>
         <div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div>
-        <div className="app-account-actions"><Link href="/account/security" className="app-account-link">⚙ Account security</Link><Link href={signOutHref} className="app-signout">↪ Sign out</Link></div>
+        <div className="app-account-actions"><Link href="/account/security" className="app-account-link">⚙ Account security</Link><LogoutButton universe={universe} /></div>
       </div>
     </aside>
     <main className="app-main">
