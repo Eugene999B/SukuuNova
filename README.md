@@ -121,6 +121,9 @@ Phase 4 deliberately does **not** include automated subscription dunning/retry l
 - **phase-2-differentiators** — verified Phase 2 implementation
 - **phase-3-operations** — completed Phase 3 implementation branch
 - **main** — current integrated product state through Phase 3
+- **phase-4-platform-ai** — original Phase 4 working branch
 - **phase-4-final-ready** — final Phase 4 implementation pending CI/merge
 
 Railway deployment remains a separate, explicit action.
+
+_The final-ready branch is now frozen for the one CI verification pass._
