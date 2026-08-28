@@ -36,7 +36,9 @@ export async function POST(request: Request) {
       ok: true,
       user: {
         name: account.name,
-        schoolName: account.schoolName
+        schoolName: account.schoolName,
+        portal: account.portal,
+        roles: account.roles
       }
     });
     response.cookies.set(
