@@ -45,7 +45,20 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
 
     const temporaryPassword = "12345";
     const user = await tx.user.create({
-      data: { schoolId: session.schoolId, name, email, phone, passwordHash: await hash(temporaryPassword, 12), status: "active", userRoles: { create: { schoolId: session.schoolId, roleId: role.id } } },
+      data: {
+        schoolId: session.schoolId,
+        name,
+        email,
+        phone,
+        passwordHash: await hash(temporaryPassword, 12),
+        status: "active",
+        userRoles: {
+          create: {
+            school: { connect: { id: session.schoolId } },
+            role: { connect: { id_schoolId: { id: role.id, schoolId: session.schoolId } } }
+          }
+        }
+      },
       select: { id: true, name: true, email: true, phone: true }
     });
 
