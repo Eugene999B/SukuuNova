@@ -54,7 +54,7 @@ function variables(value:Prisma.JsonValue|null){
 
 async function deliverCreatedMessage(
   tx:TenantDb,
-  message:{id:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null;attempts:number},
+  message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null},
   settings:{smsSenderId?:string|null;whatsappTemplateConfig?:Prisma.JsonValue|null}|null|undefined,
   senders:{sms?:SmsSender;whatsapp?:WhatsAppSender}={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}
 ){
@@ -72,7 +72,7 @@ async function deliverCreatedMessage(
     return tx.message.update({where:{id:message.id},data:{status:"sent",sentAt:new Date(),lastError:null}});
   }catch(error){
     const lastError=error instanceof Error?error.message.slice(0,500):"Unknown message error";
-    console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.id,lastError});
+    console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.schoolId,lastError});
     return tx.message.update({where:{id:message.id},data:{status:"failed",lastError,nextAttemptAt:null}});
   }
 }
@@ -100,7 +100,7 @@ export async function processMessageBatchOnce(senders:{sms?:SmsSender;whatsapp?:
       const claimed=await withTenant(directory.schoolId,tx=>tx.message.updateMany({where:{id:job.id,status:"queued"},data:{status:"sending",attempts:{increment:1}}}));
       if(claimed.count===0)continue;
       const settings=await withTenant(directory.schoolId,tx=>tx.schoolSettings.findUnique({where:{schoolId:directory.schoolId}}));
-      await withTenant(directory.schoolId,tx=>deliverCreatedMessage(tx,job,settings,senders));
+      await withTenant(directory.schoolId,tx=>deliverCreatedMessage(tx,{...job,schoolId:directory.schoolId},settings,senders));
       processed++;
     }
   }
