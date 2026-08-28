@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { CSSProperties } from "react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import "../students-workspace.css";
 
-type ProgressStyle = React.CSSProperties & { "--progress"?: string };
+type ProgressStyle = CSSProperties & { "--progress"?: string };
 
 export default async function StudentProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSchoolSession();
