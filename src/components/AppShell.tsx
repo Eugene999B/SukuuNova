@@ -9,7 +9,7 @@ type Props = { universe: Universe; title: string; subtitle: string; active?: str
 
 const schoolGroups: NavGroup[] = [
   { label: "Workspace", items: [["▦", "Overview", "/dashboard"], ["⌕", "Search", "/school/search"]] },
-  { label: "People", items: [["♟", "Students", "/school/students"], ["♧", "Guardians", "/school/guardians"], ["♙", "Staff & Teachers", "/school/staff"]] },
+  { label: "People", items: [["♟", "People Hub", "/school/people"], ["♟", "Students", "/school/students"], ["♧", "Guardians", "/school/guardians"], ["♙", "Staff & Teachers", "/school/staff"]] },
   { label: "Admissions", items: [["✎", "Enquiries", "/school/admissions/enquiries"], ["☷", "Applications", "/school/admissions/applications"], ["✓", "Enrolment", "/school/admissions/enrolment"], ["⌂", "Classes & Houses", "/school/classes"]] },
   { label: "Academics", items: [["▤", "Subjects", "/school/subjects"], ["◷", "Timetable", "/school/timetable"], ["▧", "Lessons & Planning", "/school/lessons"], ["✦", "Homework & Exercises", "/school/homework"], ["▥", "Gradebook", "/school/gradebook"], ["◇", "Exams & Assessments", "/school/exams"], ["▤", "Report Cards", "/school/report-cards"]] },
   { label: "Attendance", items: [["◉", "Student Attendance", "/school/attendance"], ["◌", "Staff Attendance", "/school/staff-attendance"], ["!", "Late / Absence", "/school/attendance/exceptions"], ["⌁", "Guardian Alerts", "/school/communications/alerts"]] },
@@ -23,7 +23,7 @@ const platformGroups: NavGroup[] = [
   { label: "Control Center", items: [["▦", "Overview", "/platform"], ["⌕", "Global Search", "/platform/search"], ["◉", "System Health", "/platform/health"]] },
   { label: "SukuuNova Network", items: [["⌂", "Schools", "/platform/schools"], ["◈", "Subscriptions", "/platform/billing"], ["₵", "Platform Billing", "/platform/billing"]] },
   { label: "Operations", items: [["♟", "Support", "/platform/support"], ["⌁", "Audited Access", "/platform/audit"], ["▤", "Platform Reports", "/platform/reports"]] },
-  { label: "Security", items: [["♙", "Administrators", "/platform/admins"], ["◇", "Audit Log", "/platform/audit-log"], ["⚙", "Platform Settings", "/platform/settings"]] }
+  { label: "Security", items: [["♙", "Administrators", "/platform/admins"], ["◇", "Audit Log", "/platform/audit-log"], ["⚙", "Platform Settings", "/platform/settings"] }
 ];
 
 function initials(value: string) {
