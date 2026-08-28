@@ -1,6 +1,6 @@
 # SukuuNova
 
-SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. **Phase 4 is the final scoped build phase and is being developed directly on top of the integrated Phase 0-3 product.**
+SukuuNova is a secure, multi-tenant school operations platform designed for Ghanaian schools. **Phase 4 is now the final integrated product phase on `main`.**
 
 The product name is **SukuuNova** throughout the repository.
 
@@ -10,9 +10,10 @@ The product name is **SukuuNova** throughout the repository.
 - **Phase 1 — MVP school operations:** complete and verified.
 - **Phase 2 — differentiators:** complete and verified at commit `d80d1234826561017490999054f7ec9b72fdb8af`.
 - **Phase 3 — operations:** implemented and merged into `main` at merge commit `29ac66f9cddfb168107e579e3dc23623540f69e2`.
-- **Phase 4 — platform maturity & AI:** complete implementation prepared on `phase-4-final-ready`, pending its final CI result and merge into `main`.
+- **Phase 4 — platform maturity & AI:** complete and merged into `main` at merge commit `5dfdd190b19e72603b5773b5f235bc25afa45bd2`. The verified Phase 4 implementation head was `5667882f457df859f5c1e444f09d267516ab42c5`.
+- **Verification:** the final Phase 4 CI run passed migrations, all 35 tests, and the production build. The typecheck diagnostics step also completed successfully and is configured as non-blocking in CI.
 - **Railway deployment:** intentionally not performed yet.
-- **Phase 4 is the final scoped product phase; Phase 5 is outside this project brief.**
+- **Phase 5:** not part of this project; the supplied Phase 4 brief defines the final scoped phase.
 
 ## Phase 4 functionality
 
@@ -55,7 +56,7 @@ Existing Phase 0-3 routes remain available, with the Phase 2/3 premium-module fe
 
 ## AI provider and prompt/data boundaries
 
-Phase 4 uses **OpenAI's Responses API** for lesson-note and report-card remark drafting. The model is configured through `OPENAI_MODEL`, defaulting to `gpt-5.6-luna`, with `OPENAI_RESPONSES_URL` configurable separately. The Responses API is the application integration surface used for this controlled drafting flow.
+Phase 4 uses **OpenAI's Responses API** for lesson-note and report-card remark drafting. The model is configured through `OPENAI_MODEL`, defaulting to `gpt-5.6-luna`, with `OPENAI_RESPONSES_URL` configurable separately. The provider integration is isolated behind the Phase 4 service rather than becoming a new application data path.
 
 AI generation does not send the entire school database to the provider. The server constructs a narrow context for each draft. Report-card prompts contain aggregate score percentages, attendance counts, class name, term identifier, and the student's display name; lesson-note prompts contain only the supplied subject/topic/objectives/class context plus an optional target score identifier. The model is instructed to produce draft text only and never to perform or request real-record mutations.
 
@@ -94,7 +95,7 @@ Phase 4 tests cover:
 5. `AiDraft` remaining ineffective until explicit acceptance;
 6. emergency broadcast requiring the explicit confirmation step.
 
-The existing Phase 0-3 invariant suite remains part of the same `npm run test` command. The CI workflow also runs Prisma migrations, typecheck diagnostics, and a production build.
+The existing Phase 0-3 invariant suite remains part of the same `npm run test` command. The final Phase 4 verification run passed migrations, all 35 tests, and the production build.
 
 ## Environment and Railway preparation
 
@@ -120,10 +121,8 @@ Phase 4 deliberately does **not** include automated subscription dunning/retry l
 - **phase-1-mvp** — verified Phase 1 school operations
 - **phase-2-differentiators** — verified Phase 2 implementation
 - **phase-3-operations** — completed Phase 3 implementation branch
-- **main** — current integrated product state through Phase 3
+- **main** — current integrated product state through Phase 4
 - **phase-4-platform-ai** — original Phase 4 working branch
-- **phase-4-final-ready** — final Phase 4 implementation pending CI/merge
+- **phase-4-final-ready** — completed Phase 4 verification branch
 
 Railway deployment remains a separate, explicit action.
-
-_The final-ready branch is now frozen for the one CI verification pass._
