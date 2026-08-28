@@ -4,7 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import { compare, hash } from "bcryptjs";
 import Link from "next/link";
 import { GUARDIAN_COOKIE, getGuardianSession, createGuardianSessionToken } from "@/lib/guardian-auth";
-import { getPlatformSession, getSchoolSession, createSchoolSessionToken, createPlatformSessionToken, PLATFORM_COOKIE, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { getPlatformSession, getSchoolSession, createPlatformSessionToken, PLATFORM_COOKIE, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 
 const db = new PrismaClient();
@@ -16,20 +16,19 @@ async function changePassword(formData: FormData) {
   const confirm = String(formData.get("confirmPassword") ?? "");
   if (next.length < 8) throw new Error("New password must contain at least 8 characters.");
   if (next !== confirm) throw new Error("New passwords do not match.");
+
   const guardian = await getGuardianSession();
   if (guardian) {
-    const result = await withTenant(guardian.schoolId, async (tx) => {
+    await withTenant(guardian.schoolId, async (tx) => {
       const user = await tx.user.findUnique({ where: { id: guardian.userId }, select: { passwordHash: true } });
       if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
-      const passwordHash = await hash(next, 12);
-      await tx.user.update({ where: { id: guardian.userId }, data: { passwordHash } });
-      return passwordHash;
+      await tx.user.update({ where: { id: guardian.userId }, data: { passwordHash: await hash(next, 12) } });
     });
     const responseCookies = await cookies();
     responseCookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ ...guardian, needsPasswordChange: false }), sessionCookieOptions());
-    void result;
     redirect("/guardian");
   }
+
   const school = await getSchoolSession();
   if (school) {
     await withTenant(school.schoolId, async (tx) => {
@@ -39,6 +38,7 @@ async function changePassword(formData: FormData) {
     });
     redirect("/dashboard");
   }
+
   const platform = await getPlatformSession();
   if (platform) {
     const admin = await db.platformAdmin.findUnique({ where: { id: platform.adminId }, select: { passwordHash: true } });
