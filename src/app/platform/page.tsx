@@ -1,2 +1,2 @@
-import PlatformConsole from "@/components/PlatformConsole";
-export default function PlatformPage(){return <PlatformConsole/>;}
+import PlatformAdminWorkspace from "@/components/PlatformAdminWorkspace";
+export default function PlatformPage(){return <PlatformAdminWorkspace section="overview"/>;}
