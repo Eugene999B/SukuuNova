@@ -4,28 +4,11 @@ import { withTenant } from "@/lib/db";
 import { AppError, routeError } from "@/lib/errors";
 import { enforceParentStudentScope } from "@/lib/phase3-security";
 import { listPhase3, mutatePhase3, type Phase3Module } from "@/lib/phase3-service";
+import { requireSchoolFeatureInTransaction } from "@/lib/feature-flags";
 
-const MODULES = new Set<Phase3Module>(["transport","feeding","cbt","library","assets","finance","recruitment","analytics","sync"]);
-function parseModule(value: string): Phase3Module { if (!MODULES.has(value as Phase3Module)) throw new AppError("Unknown Phase 3 module.",404,"NOT_FOUND"); return value as Phase3Module; }
-async function parentScopeCheck(schoolId:string, actorId:string, module:Phase3Module, body:Record<string,unknown>) {
-  if (module !== "cbt" && module !== "library") return;
-  let studentId = body.studentId ? String(body.studentId) : "";
-  if (module === "cbt" && !studentId && (body.action === "answer" || body.action === "submit")) {
-    const attemptId = typeof body.attemptId === "string" ? body.attemptId : "";
-    if (!attemptId) return;
-    await withTenant(schoolId, async (tx) => {
-      const rows = await tx.$queryRawUnsafe<Array<{studentId:string}>>(`SELECT "studentId" FROM "P3ExamAttempt" WHERE "id"=$1 AND "schoolId"=$2`, attemptId, schoolId);
-      studentId = rows[0]?.studentId ?? "";
-    });
-  }
-  if (studentId) await withTenant(schoolId, (tx) => enforceParentStudentScope(tx, actorId, studentId));
-}
-
-export async function GET(_request: Request, context: { params: Promise<{ module: string }> }) {
-  try { const session=await requireSchoolSession(); const module=parseModule((await context.params).module); const result=await withTenant(session.schoolId,tx=>listPhase3(tx,session.userId,module)); return NextResponse.json({ok:true,module,result}); }
-  catch(error){return routeError(error);}
-}
-export async function POST(request: Request, context: { params: Promise<{ module: string }> }) {
-  try { const session=await requireSchoolSession(); const module=parseModule((await context.params).module); const body=await request.json(); if(!body||typeof body!=="object"||Array.isArray(body))throw new AppError("Request body must be an object.",400,"INVALID_INPUT"); await parentScopeCheck(session.schoolId,session.userId,module,body as Record<string,unknown>); const result=await withTenant(session.schoolId,tx=>mutatePhase3(tx,session.schoolId,session.userId,module,body as Record<string,unknown>)); return NextResponse.json({ok:true,module,result}); }
-  catch(error){return routeError(error);}
-}
+const MODULES=new Set<Phase3Module>(["transport","feeding","cbt","library","assets","finance","recruitment","analytics","sync"]);
+const FEATURE:Partial<Record<Phase3Module,string>>={transport:"transport",feeding:"feeding",cbt:"cbt",library:"library",assets:"assets",recruitment:"recruitment"};
+function parseModule(value:string):Phase3Module{if(!MODULES.has(value as Phase3Module))throw new AppError("Unknown Phase 3 module.",404,"NOT_FOUND");return value as Phase3Module;}
+async function parentScopeCheck(schoolId:string,actorId:string,module:Phase3Module,body:Record<string,unknown>){if(module!=="cbt"&&module!=="library")return;let studentId=body.studentId?String(body.studentId):"";if(module==="cbt"&&!studentId&&(body.action==="answer"||body.action==="submit")){const attemptId=typeof body.attemptId==="string"?body.attemptId:"";if(!attemptId)return;await withTenant(schoolId,async(tx)=>{const rows=await tx.$queryRawUnsafe<Array<{studentId:string}>>(`SELECT "studentId" FROM "P3ExamAttempt" WHERE "id"=$1 AND "schoolId"=$2`,attemptId,schoolId);studentId=rows[0]?.studentId??"";});}if(studentId)await withTenant(schoolId,tx=>enforceParentStudentScope(tx,actorId,studentId));}
+export async function GET(_request:Request,context:{params:Promise<{module:string}>}){try{const session=await requireSchoolSession();const module=parseModule((await context.params).module);const result=await withTenant(session.schoolId,async(tx)=>{const flag=FEATURE[module];if(flag)await requireSchoolFeatureInTransaction(tx,session.schoolId,flag);return listPhase3(tx,session.userId,module);});return NextResponse.json({ok:true,module,result});}catch(error){return routeError(error);}}
+export async function POST(request:Request,context:{params:Promise<{module:string}>}){try{const session=await requireSchoolSession();const module=parseModule((await context.params).module);const body=await request.json();if(!body||typeof body!=="object"||Array.isArray(body))throw new AppError("Request body must be an object.",400,"INVALID_INPUT");const flag=FEATURE[module];await withTenant(session.schoolId,async(tx)=>{if(flag)await requireSchoolFeatureInTransaction(tx,session.schoolId,flag);});await parentScopeCheck(session.schoolId,session.userId,module,body as Record<string,unknown>);const result=await withTenant(session.schoolId,tx=>mutatePhase3(tx,session.schoolId,session.userId,module,body as Record<string,unknown>));return NextResponse.json({ok:true,module,result});}catch(error){return routeError(error);}}
