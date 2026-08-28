@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       NODE_ENV: production
     steps:
@@ -24,11 +24,17 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
-        run: npm install
+      - name: Resolve deterministic dependency graph
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Install dependencies from lockfile
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Generate Prisma client
         run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build application
         run: npm run build
