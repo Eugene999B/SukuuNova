@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { StudentPhotoCapture } from "@/components/students/StudentPhotoCapture";
 
@@ -52,8 +53,7 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
     };
   }, [open]);
 
-  function openDialog(event?: React.MouseEvent<HTMLAnchorElement>) {
-    event?.preventDefault();
+  function openDialog() {
     setStep(0);
     setOpen(true);
     window.history.replaceState(null, "", "/school/students?action=create");
@@ -67,17 +67,29 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
 
   return (
     <>
-      <a href="/school/students?action=create" className="button primary" onClick={openDialog}>{triggerLabel}</a>
+      <button type="button" className="button primary" onClick={openDialog}>{triggerLabel}</button>
+      <noscript>
+        <Link href="/school/students/create" className="button primary">{triggerLabel}</Link>
+      </noscript>
       {open ? (
         <div className="student-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}>
           <section className="student-dialog" role="dialog" aria-modal="true" aria-labelledby="add-student-title">
             <header className="student-dialog-header">
-              <div><div className="eyebrow">Student admission</div><h2 id="add-student-title">Create a new learner</h2><p>Complete the learner record in a calm guided flow. SukuuNova generates the Index Number automatically.</p></div>
+              <div>
+                <div className="eyebrow">Student admission</div>
+                <h2 id="add-student-title">Create a new learner</h2>
+                <p>Complete the learner record in a calm guided flow. SukuuNova generates the Index Number automatically.</p>
+              </div>
               <button type="button" className="dialog-close" onClick={closeDialog} aria-label="Close">×</button>
             </header>
 
             <div className="student-dialog-progress" aria-label="Student creation steps">
-              {steps.map((item, index) => <div key={item.key} className={`dialog-step ${index === step ? "active" : ""} ${index < step ? "complete" : ""}`}><span>{index < step ? "✓" : index + 1}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></div>)}
+              {steps.map((item, index) => (
+                <div key={item.key} className={`dialog-step ${index === step ? "active" : ""} ${index < step ? "complete" : ""}`}>
+                  <span>{index < step ? "✓" : index + 1}</span>
+                  <div><strong>{item.title}</strong><small>{item.hint}</small></div>
+                </div>
+              ))}
             </div>
 
             <form action={action} className="student-dialog-form">
@@ -102,11 +114,28 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
 
                 <div className="dialog-panel" hidden={step !== 3} aria-hidden={step !== 3}>
                   <div className="dialog-panel-heading"><div><span className="eyebrow">Step 4</span><h3>Take the portrait and review</h3><p>Use the laptop/phone camera or upload a clear portrait before the final save.</p></div><span className="panel-badge">Final</span></div>
-                  <div className="photo-review-layout"><StudentPhotoCapture /><div className="review-summary"><div className="review-title">Creation summary</div><div className="review-row"><span>Learner</span><b>Identity information</b></div><div className="review-row"><span>Index</span><b>Generated automatically</b></div><div className="review-row"><span>Class</span><b>Selected placement</b></div><div className="review-row"><span>Family</span><b>Primary guardian</b></div><div className="review-row"><span>Portrait</span><b>List + profile</b></div><div className="review-security"><strong>Real school data only</strong><span>No sample learner is created. The new record belongs only to this school.</span></div></div></div>
+                  <div className="photo-review-layout">
+                    <StudentPhotoCapture />
+                    <div className="review-summary">
+                      <div className="review-title">Creation summary</div>
+                      <div className="review-row"><span>Learner</span><b>Identity information</b></div>
+                      <div className="review-row"><span>Index</span><b>Generated automatically</b></div>
+                      <div className="review-row"><span>Class</span><b>Selected placement</b></div>
+                      <div className="review-row"><span>Family</span><b>Primary guardian</b></div>
+                      <div className="review-row"><span>Portrait</span><b>List + profile</b></div>
+                      <div className="review-security"><strong>Real school data only</strong><span>No sample learner is created. The new record belongs only to this school.</span></div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <footer className="student-dialog-footer"><div className="dialog-footer-note"><span className="secure-dot" />Secure school record</div><div className="dialog-footer-actions"><button type="button" className="button secondary" onClick={step === 0 ? closeDialog : () => setStep((value) => value - 1)}>{step === 0 ? "Cancel" : "Back"}</button>{step < steps.length - 1 ? <button type="button" className="button primary" onClick={() => setStep((value) => value + 1)}>Continue <span>→</span></button> : <button type="submit" className="button primary">Create student & generate index <span>→</span></button>}</div></footer>
+              <footer className="student-dialog-footer">
+                <div className="dialog-footer-note"><span className="secure-dot" />Secure school record</div>
+                <div className="dialog-footer-actions">
+                  <button type="button" className="button secondary" onClick={() => step === 0 ? closeDialog() : setStep((value) => value - 1)}>{step === 0 ? "Cancel" : "Back"}</button>
+                  {step < steps.length - 1 ? <button type="button" className="button primary" onClick={() => setStep((value) => value + 1)}>Continue <span>→</span></button> : <button type="submit" className="button primary">Create student & generate index <span>→</span></button>}
+                </div>
+              </footer>
             </form>
           </section>
         </div>
