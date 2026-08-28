@@ -9,15 +9,17 @@ export default async function PeoplePage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:read");
-    const [school, students, guardians, users, classes, unassigned] = await Promise.all([
+    const [school, studentCount, activeStudentCount, guardians, users, classes, unassigned] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.student.findMany({ orderBy: { createdAt: "desc" }, take: 8, select: { id: true, name: true, admissionNo: true, status: true, class: { select: { name: true, level: true } } } }),
+      tx.student.count(),
+      tx.student.count({ where: { status: "active" } }),
       tx.guardian.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, phone: true, userId: true, students: { select: { student: { select: { id: true, name: true } } } } } }),
       tx.user.findMany({ where: { status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, phone: true, userRoles: { select: { role: { select: { name: true } } } }, guardianProfiles: { select: { id: true } } } }),
       tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], take: 12, select: { id: true, name: true, level: true, classTeacher: { select: { name: true } }, _count: { select: { students: true, subjectAssignments: true } } } }),
       tx.student.count({ where: { classId: null, status: "active" } })
     ]);
-    return { school, students, guardians, users, classes, unassigned };
+    const recentStudents = await tx.student.findMany({ orderBy: { createdAt: "desc" }, take: 8, select: { id: true, name: true, admissionNo: true, status: true, class: { select: { name: true, level: true } } } });
+    return { school, studentCount, activeStudentCount, recentStudents, guardians, users, classes, unassigned };
   });
 
   const staff = data.users.filter((user) => user.guardianProfiles.length === 0);
@@ -26,7 +28,7 @@ export default async function PeoplePage() {
   const placed = data.classes.reduce((sum, schoolClass) => sum + schoolClass._count.students, 0);
 
   return (
-    <AppShell universe="school" title="People Hub" subtitle="One operational view for learners, families, staff and the class structure connecting them." active="Overview" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+    <AppShell universe="school" title="People Hub" subtitle="One operational view for learners, families, staff and the class structure connecting them." active="People" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
       <div className="module-workspace">
         <section className="module-setup-card module-card">
           <div>
@@ -48,16 +50,17 @@ export default async function PeoplePage() {
         </section>
 
         <div className="module-metrics">
-          <article><span>Students</span><strong>{data.students.length + (data.unassigned > 0 ? data.unassigned : 0)}</strong><small>Latest live register records</small></article>
+          <article><span>Students</span><strong>{data.studentCount}</strong><small>{data.activeStudentCount} active learners</small></article>
           <article><span>Guardians</span><strong>{data.guardians.length}</strong><small>{portalEnabled} with portal access</small></article>
           <article><span>Staff accounts</span><strong>{staff.length}</strong><small>{teachers.length} teaching-role accounts</small></article>
           <article className={data.unassigned ? "attention" : "ok"}><span>Placement queue</span><strong>{data.unassigned}</strong><small>{data.unassigned ? "Resolve before class-based workflows" : "All active learners placed"}</small></article>
+          <article><span>Placed learners</span><strong>{placed}</strong><small>Across the visible class groups</small></article>
         </div>
 
         <div className="module-split">
           <section className="module-card">
             <div className="module-section-title"><div><span>Learner flow</span><h3>Recent students</h3><p>Jump directly into Student 360, class placement and downstream records.</p></div><Link href="/school/students">View all →</Link></div>
-            <div className="module-table-wrap"><table><thead><tr><th>Student</th><th>Placement</th><th>Status</th></tr></thead><tbody>{data.students.length ? data.students.map((student) => <tr key={student.id}><td style={{ padding: 12 }}><Link href={`/school/students/${student.id}`}><strong>{student.name}</strong></Link><div style={{ color: "#60787d", fontSize: 8 }}>{student.admissionNo}</div></td><td style={{ padding: 12 }}>{student.class ? `${student.class.level ?? ""}${student.class.level ? " · " : ""}${student.class.name}` : "Needs placement"}</td><td style={{ padding: 12 }}>{student.status}</td></tr>) : <tr><td colSpan={3}><div className="module-empty"><div className="module-empty-mark">◎</div><strong>No student activity yet</strong><p>The register is empty. Start by creating the first learner.</p></div></td></tr>}</tbody></table></div>
+            <div className="module-table-wrap"><table><thead><tr><th>Student</th><th>Placement</th><th>Status</th></tr></thead><tbody>{data.recentStudents.length ? data.recentStudents.map((student) => <tr key={student.id}><td style={{ padding: 12 }}><Link href={`/school/students/${student.id}`}><strong>{student.name}</strong></Link><div style={{ color: "#60787d", fontSize: 8 }}>{student.admissionNo}</div></td><td style={{ padding: 12 }}>{student.class ? `${student.class.level ?? ""}${student.class.level ? " · " : ""}${student.class.name}` : "Needs placement"}</td><td style={{ padding: 12 }}>{student.status}</td></tr>) : <tr><td colSpan={3}><div className="module-empty"><div className="module-empty-mark">◎</div><strong>No student activity yet</strong><p>The register is empty. Start by creating the first learner.</p></div></td></tr>}</tbody></table></div>
           </section>
 
           <section className="module-card">
