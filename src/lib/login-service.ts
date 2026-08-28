@@ -1,8 +1,23 @@
+import { PrismaClient } from "@prisma/client";
 import { compare } from "bcryptjs";
-import { db, withTenant } from "./db";
+import { db } from "./db";
 import { UnauthorizedError } from "./errors";
 
 const LOGIN_FAILURE = "Invalid credentials or inactive account.";
+
+const globalForAuthPrisma = globalThis as unknown as {
+  sukuunovaAuthPrisma?: PrismaClient;
+};
+
+const authDb =
+  globalForAuthPrisma.sukuunovaAuthPrisma ??
+  new PrismaClient({
+    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"]
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForAuthPrisma.sukuunovaAuthPrisma = authDb;
+}
 
 function normalizedIdentifier(value: string): string {
   const trimmed = value.trim();
@@ -22,7 +37,14 @@ export async function authenticateSchoolUser(input: {
     throw new UnauthorizedError(LOGIN_FAILURE);
   }
 
-  return withTenant(directory.schoolId, async (tx) => {
+  return authDb.$transaction(async (tx) => {
+    // Authentication establishes the tenant explicitly on the same database
+    // transaction/connection before querying FORCE RLS protected tables.
+    await tx.$executeRawUnsafe(
+      "SELECT set_config('app.current_school_id', $1, true)",
+      directory.schoolId
+    );
+
     const school = await tx.school.findUnique({
       where: { id: directory.schoolId },
       select: { id: true, name: true, status: true }
@@ -34,6 +56,7 @@ export async function authenticateSchoolUser(input: {
     const identifier = normalizedIdentifier(input.identifier);
     const user = await tx.user.findFirst({
       where: {
+        schoolId: directory.schoolId,
         status: "active",
         OR: [{ email: identifier }, { phone: identifier }]
       },
@@ -62,7 +85,7 @@ export async function authenticatePlatformAdmin(input: {
   email: string;
   password: string;
 }) {
-  const admin = await db.platformAdmin.findUnique({
+  const admin = await authDb.platformAdmin.findUnique({
     where: { email: input.email.trim().toLowerCase() }
   });
 
