@@ -12,6 +12,7 @@ jobs:
   lockfile:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,10 +22,10 @@ jobs:
           node-version: 20
       - name: Generate lockfile
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Commit lockfile
+      - name: Commit lockfile when needed
         run: |
-          if git diff --quiet -- package-lock.json; then
-            echo 'package-lock.json is already up to date.'
+          if [ -f package-lock.json ] && git diff --quiet -- package-lock.json && git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
+            echo 'package-lock.json is already tracked and up to date.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
