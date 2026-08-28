@@ -1,0 +1,37 @@
+name: SukuuNova risk scan
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sukuunova-risk-scan
+  cancel-in-progress: false
+
+jobs:
+  risk-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger risk scan
+        env:
+          APP_URL: ${{ secrets.SUKUUNOVA_APP_URL }}
+          CRON_SECRET: ${{ secrets.RISK_SCAN_CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$APP_URL" || { echo "SUKUUUNOVA_APP_URL secret is missing" >&2; exit 1; }
+          test -n "$CRON_SECRET" || { echo "RISK_SCAN_CRON_SECRET secret is missing" >&2; exit 1; }
+          APP_URL="${APP_URL%/}"
+          status="$(curl -sS -o /tmp/risk-scan-response.json -w "%{http_code}" \
+            -X POST "$APP_URL/api/cron/risk-scan" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json")"
+          cat /tmp/risk-scan-response.json
+          case "$status" in
+            2*) ;;
+            *) echo "Risk scan endpoint returned HTTP $status" >&2; exit 1 ;;
+          esac
