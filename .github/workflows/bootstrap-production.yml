@@ -2,12 +2,18 @@ name: SukuuNova production bootstrap
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/bootstrap-production.yml
 
 permissions:
   contents: read
+  statuses: write
 
 jobs:
   bootstrap:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, 'bootstrap probe')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -48,3 +54,25 @@ jobs:
 
       - name: Seed initial school and platform administrator
         run: npx prisma db seed
+
+      - name: Report bootstrap result
+        if: always()
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BOOTSTRAP_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "$BOOTSTRAP_STATUS" = "success" ]; then
+            STATE=success
+            DESCRIPTION="SukuuNova production database migration and seed completed"
+          else
+            STATE=failure
+            DESCRIPTION="SukuuNova production bootstrap failed; inspect the workflow log"
+          fi
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            -d "{\"state\":\"${STATE}\",\"context\":\"SukuuNova production bootstrap\",\"description\":\"${DESCRIPTION}\"}" >/dev/null
