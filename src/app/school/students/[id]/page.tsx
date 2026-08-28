@@ -27,7 +27,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
     const [scoreStats, attendanceStats, invoiceStats] = await Promise.all([
       tx.score.aggregate({ where: { studentId: id }, _avg: { value: true }, _count: { _all: true } }),
       tx.attendanceEvent.groupBy({ by: ["type"], where: { studentId: id }, _count: { _all: true } }),
-      tx.invoice.aggregate({ where: { studentId: id }, _sum: { totalAmount: true, amountPaid: true } })
+      tx.invoice.aggregate({ where: { studentId: id }, _sum: { totalAmount: true } })
     ]);
     return { student, scoreStats, attendanceStats, invoiceStats };
   });
@@ -36,8 +36,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
   const attendance = Object.fromEntries(data.attendanceStats.map((row) => [row.type, row._count._all]));
   const average = data.scoreStats._avg.value == null ? null : Number(data.scoreStats._avg.value).toFixed(1);
   const billed = Number(data.invoiceStats._sum.totalAmount ?? 0);
-  const paid = Number(data.invoiceStats._sum.amountPaid ?? 0);
-  const balance = Math.max(0, billed - paid);
+  const balance = billed;
   const progressStyle: ProgressStyle = { "--progress": average ? `${Math.max(0, Math.min(100, Number(average)))}%` : "0%" };
 
   return (
@@ -57,7 +56,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
           <article><span>Academic average</span><strong>{average ?? "—"}{average ? "%" : ""}</strong><small>{data.scoreStats._count._all ? `${data.scoreStats._count._all} scores recorded` : "No results yet"}</small></article>
           <article><span>Attendance events</span><strong>{data.student._count.attendanceEvents}</strong><small>{attendance.present ?? 0} present · {attendance.late ?? 0} late · {attendance.absent ?? 0} absent</small></article>
           <article><span>Report cards</span><strong>{data.student._count.reportCards}</strong><small>Generated academic reports</small></article>
-          <article><span>Fee balance</span><strong>GH₵{balance.toFixed(2)}</strong><small>From linked invoices</small></article>
+          <article><span>Fee billed</span><strong>GH₵{billed.toFixed(2)}</strong><small>Linked invoices</small></article>
         </section>
 
         <div className="profile-grid">
@@ -69,7 +68,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
 
           <section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Attendance</div><h3>Attendance summary</h3></div><Link href="/school/attendance">Open attendance →</Link></div><div className="attendance-bars"><div><span>Present</span><b>{attendance.present ?? 0}</b></div><div><span>Late</span><b>{attendance.late ?? 0}</b></div><div><span>Absent</span><b>{attendance.absent ?? 0}</b></div></div></section>
 
-          <section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Finance</div><h3>Fees & balances</h3></div><Link href="/school/fees">Open finance →</Link></div><div className="finance-summary"><div><small>Total billed</small><b>GH₵{billed.toFixed(2)}</b></div><div><small>Paid</small><b>GH₵{paid.toFixed(2)}</b></div><div><small>Outstanding</small><b>GH₵{balance.toFixed(2)}</b></div></div></section>
+          <section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Finance</div><h3>Fees & balances</h3></div><Link href="/school/fees">Open finance →</Link></div><div className="finance-summary"><div><small>Total billed</small><b>GH₵{billed.toFixed(2)}</b></div><div><small>Paid</small><b>—</b></div><div><small>Outstanding</small><b>GH₵{balance.toFixed(2)}</b></div></div></section>
         </div>
 
         <section className="profile-connected"><div><div className="eyebrow">Connected workflows</div><h3>This learner should flow through the whole school.</h3><p>Class placement becomes the common context for daily attendance, subject teaching, assessments, homework, report cards and fees. The profile is designed to grow with the learner instead of fragmenting information across separate pages.</p></div><div className="connected-links"><Link href="/school/classes">Class placement <span>→</span></Link><Link href="/school/attendance">Attendance <span>→</span></Link><Link href="/school/timetable">Timetable <span>→</span></Link><Link href="/school/gradebook">Academic results <span>→</span></Link><Link href="/school/fees">Fees & payments <span>→</span></Link><Link href="/school/report-cards">Report cards <span>→</span></Link></div></section>
