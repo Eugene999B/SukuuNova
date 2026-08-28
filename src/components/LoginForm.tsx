@@ -51,61 +51,32 @@ export function LoginForm(props: Props) {
   }
 
   return (
-    <form className="mt-8 space-y-5" onSubmit={submit}>
+    <form className="login-form" onSubmit={submit}>
       {props.universe === "school" ? (
         <>
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">School code</span>
-            <input
-              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-nova focus:ring-2 focus:ring-teal-100"
-              name="uniqueCode"
-              autoComplete="organization"
-              required
-            />
+          <label className="login-field">
+            <span>School code</span>
+            <input name="uniqueCode" autoComplete="organization" required />
           </label>
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Email or phone</span>
-            <input
-              className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-nova focus:ring-2 focus:ring-teal-100"
-              name="identifier"
-              autoComplete="username"
-              required
-            />
+          <label className="login-field">
+            <span>Email or phone</span>
+            <input name="identifier" autoComplete="username" required />
           </label>
         </>
       ) : (
-        <label className="block">
-          <span className="text-sm font-medium text-slate-700">Admin email</span>
-          <input
-            className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-nova focus:ring-2 focus:ring-teal-100"
-            name="email"
-            type="email"
-            autoComplete="username"
-            required
-          />
+        <label className="login-field">
+          <span>Admin email</span>
+          <input name="email" type="email" autoComplete="username" required />
         </label>
       )}
-      <label className="block">
-        <span className="text-sm font-medium text-slate-700">Password</span>
-        <input
-          className="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-nova focus:ring-2 focus:ring-teal-100"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-        />
+      <label className="login-field">
+        <span>Password</span>
+        <input name="password" type="password" autoComplete="current-password" required />
       </label>
-      {error ? (
-        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-          {error}
-        </p>
-      ) : null}
-      <button
-        className="w-full rounded-xl bg-nova px-5 py-3 font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:opacity-60"
-        disabled={pending}
-        type="submit"
-      >
+      {error ? <p className="login-error" role="alert">{error}</p> : null}
+      <button className="login-submit" disabled={pending} type="submit">
         {pending ? "Signing in…" : "Sign in"}
+        {!pending ? <span>→</span> : null}
       </button>
     </form>
   );
