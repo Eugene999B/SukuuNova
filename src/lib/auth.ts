@@ -24,6 +24,7 @@ export type PlatformSession = {
   adminId: string;
   name: string;
   role: string;
+  authorizationVersion: string;
 };
 
 function secret(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET"): Uint8Array {
@@ -46,6 +47,14 @@ export type SchoolAuthorizationState = {
   permissionOverrides: Array<{ permissionId: string; granted: boolean }>;
 };
 
+export type PlatformAuthorizationState = {
+  id: string;
+  name: string;
+  role: string;
+  status: string;
+  passwordHash: string;
+};
+
 export function authorizationVersion(state: SchoolAuthorizationState): string {
   const normalized = {
     id: state.id,
@@ -65,6 +74,16 @@ export function authorizationVersion(state: SchoolAuthorizationState): string {
       .sort((a, b) => a.permissionId.localeCompare(b.permissionId))
   };
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
+
+export function platformAuthorizationVersion(state: PlatformAuthorizationState): string {
+  return createHash("sha256").update(JSON.stringify({
+    id: state.id,
+    name: state.name,
+    role: state.role,
+    status: state.status,
+    passwordHash: state.passwordHash
+  })).digest("hex");
 }
 
 export async function getSchoolAuthorizationState(userId: string, schoolId: string): Promise<SchoolAuthorizationState | null> {
@@ -96,6 +115,13 @@ export async function getSchoolAuthorizationState(userId: string, schoolId: stri
   });
 }
 
+export async function getPlatformAuthorizationState(adminId: string): Promise<PlatformAuthorizationState | null> {
+  return rawDb.platformAdmin.findUnique({
+    where: { id: adminId },
+    select: { id: true, name: true, role: true, status: true, passwordHash: true }
+  });
+}
+
 export async function createSchoolSessionToken(session: Omit<SchoolSession, "authorizationVersion"> | SchoolSession, expiresInSeconds = SESSION_SECONDS): Promise<string> {
   const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) {
@@ -113,8 +139,18 @@ export async function createSchoolSessionToken(session: Omit<SchoolSession, "aut
   return new SignJWT(payload).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(session.userId).setIssuer("sukuunova-school").setAudience("sukuunova-school").setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds).sign(secret("SCHOOL_AUTH_SECRET"));
 }
 
-export async function createPlatformSessionToken(session: PlatformSession): Promise<string> {
-  return new SignJWT({ kind: "platform", name: session.name, role: session.role }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(session.adminId).setIssuer("sukuunova-platform").setAudience("sukuunova-platform").setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + SESSION_SECONDS).sign(secret("PLATFORM_AUTH_SECRET"));
+export async function createPlatformSessionToken(session: Omit<PlatformSession, "authorizationVersion"> | PlatformSession): Promise<string> {
+  const state = await getPlatformAuthorizationState(session.adminId);
+  if (!state || state.status !== "active") throw new UnauthorizedError("This platform account is no longer active.");
+  const currentAuthorizationVersion = platformAuthorizationVersion(state);
+  return new SignJWT({ kind: "platform", name: state.name, role: state.role, authorizationVersion: currentAuthorizationVersion })
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(session.adminId)
+    .setIssuer("sukuunova-platform")
+    .setAudience("sukuunova-platform")
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + SESSION_SECONDS)
+    .sign(secret("PLATFORM_AUTH_SECRET"));
 }
 
 export async function verifySchoolSessionToken(token: string): Promise<SchoolSession> {
@@ -139,8 +175,8 @@ export async function verifySchoolSessionToken(token: string): Promise<SchoolSes
 
 export async function verifyPlatformSessionToken(token: string): Promise<PlatformSession> {
   const { payload } = await jwtVerify(token, secret("PLATFORM_AUTH_SECRET"), { issuer: "sukuunova-platform", audience: "sukuunova-platform" });
-  if (payload.kind !== "platform" || typeof payload.sub !== "string" || typeof payload.name !== "string" || typeof payload.role !== "string") throw new UnauthorizedError("Invalid platform session.");
-  return { kind: "platform", adminId: payload.sub, name: payload.name, role: payload.role };
+  if (payload.kind !== "platform" || typeof payload.sub !== "string" || typeof payload.name !== "string" || typeof payload.role !== "string" || typeof payload.authorizationVersion !== "string") throw new UnauthorizedError("Invalid platform session.");
+  return { kind: "platform", adminId: payload.sub, name: payload.name, role: payload.role, authorizationVersion: payload.authorizationVersion };
 }
 
 export async function getSchoolSession() {
@@ -158,22 +194,21 @@ export async function getPlatformSession() {
 export async function requireSchoolSession() {
   const session = await getSchoolSession();
   if (!session) throw new UnauthorizedError();
-
   const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) {
     throw new UnauthorizedError("This school account is no longer active.");
   }
-
-  const currentAuthorizationVersion = authorizationVersion(state);
-  if (currentAuthorizationVersion !== session.authorizationVersion) {
+  if (authorizationVersion(state) !== session.authorizationVersion) {
     throw new UnauthorizedError("Your school access has changed. Please sign in again.");
   }
-
   return { ...session, name: state.name };
 }
 
 export async function requirePlatformSession() {
   const session = await getPlatformSession();
   if (!session) throw new UnauthorizedError();
-  return session;
+  const state = await getPlatformAuthorizationState(session.adminId);
+  if (!state || state.status !== "active") throw new UnauthorizedError("This platform account is no longer active.");
+  if (platformAuthorizationVersion(state) !== session.authorizationVersion) throw new UnauthorizedError("Your platform access has changed. Please sign in again.");
+  return { ...session, name: state.name, role: state.role };
 }
