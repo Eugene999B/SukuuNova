@@ -6,17 +6,7 @@ import "./app-shell.css";
 type Universe = "school" | "platform";
 type NavItem = [icon: string, label: string, href: string];
 type NavGroup = { label: string; items: NavItem[] };
-type Props = {
-  universe: Universe;
-  title: string;
-  subtitle: string;
-  active?: string;
-  schoolName?: string;
-  schoolCode?: string;
-  userName?: string;
-  role?: string;
-  children: React.ReactNode;
-};
+type Props = { universe: Universe; title: string; subtitle: string; active?: string; schoolName?: string; schoolCode?: string; userName?: string; role?: string; children: React.ReactNode };
 
 const schoolGroups: NavGroup[] = [
   { label: "Workspace", items: [["▦", "Overview", "/dashboard"], ["♟", "People Hub", "/school/people"], ["⌕", "Search", "/school/search"]] },
@@ -35,8 +25,7 @@ const platformGroups: NavGroup[] = [
   { label: "Control Center", items: [["▦", "Overview", "/platform"], ["⌕", "Global Search", "/platform/search"], ["◉", "System Health", "/platform/health"]] },
   { label: "Schools & Plans", items: [["⌂", "Schools", "/platform/schools"], ["◇", "Plans & Entitlements", "/platform/plans"], ["₵", "Platform Billing", "/platform/billing"], ["▥", "Network Analytics", "/platform/analytics"]] },
   { label: "Operations", items: [["♟", "Support", "/platform/support"], ["⌁", "Audited Access", "/platform/support"], ["✉", "Visitor Inbox", "/platform/inbox"], ["▤", "Platform Reports", "/platform/reports"]] },
-  { label: "Security & Control", items: [["♙", "Workers & Permissions", "/platform/admins"], ["⌁", "Worker School Scope", "/platform/admins/access"], ["◇", "Audit Log", "/platform/audit"], ["⚙", "Platform Settings", "/platform/settings"] },
-];
+  { label: "Security & Control", items: [["♙", "Workers & Permissions", "/platform/admins"], ["⌁", "Worker School Scope", "/platform/admins/access"], ["◇", "Audit Log", "/platform/audit"], ["⚙", "Platform Settings", "/platform/settings"] }],
 
 function initials(value: string) { return value.trim().split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "S"; }
 
