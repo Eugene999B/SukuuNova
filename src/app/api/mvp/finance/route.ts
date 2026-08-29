@@ -19,13 +19,16 @@ export async function GET() {
     const session = await requireSchoolSession();
     const data = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "finance:read");
-      const [feeItems, invoices, payments, reversals] = await Promise.all([
-        tx.feeItem.findMany({ include: { term: true, class: true } }),
-        tx.invoice.findMany({ include: { student: true, term: true, lines: true } }),
-        tx.payment.findMany(),
-        tx.paymentReversal.findMany()
+      const [feeItems, invoices, payments, reversals, terms, classes, students] = await Promise.all([
+        tx.feeItem.findMany({ include: { term: true, class: true }, orderBy: { name: "asc" } }),
+        tx.invoice.findMany({ include: { student: { select: { name: true, admissionNo: true } }, term: true, lines: true }, orderBy: { createdAt: "desc" }, take: 1000 }),
+        tx.payment.findMany({ orderBy: { createdAt: "desc" }, take: 2000 }),
+        tx.paymentReversal.findMany({ orderBy: { createdAt: "desc" }, take: 2000 }),
+        tx.term.findMany({ include: { academicYear: { select: { name: true } } }, orderBy: { startDate: "desc" }, take: 50 }),
+        tx.class.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+        tx.student.findMany({ where: { status: "active" }, select: { id: true, name: true, admissionNo: true, class: { select: { name: true } } }, orderBy: { name: "asc" }, take: 2000 })
       ]);
-      return { feeItems, invoices, payments, reversals };
+      return { feeItems, invoices, payments, reversals, terms, classes, students };
     });
     return NextResponse.json(data);
   } catch (error) { return routeError(error); }
