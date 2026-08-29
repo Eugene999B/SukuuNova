@@ -1,12 +1,13 @@
 "use server";
 
 import { hash } from "bcryptjs";
+import { randomUUID } from "crypto";
 import { withTenant } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { hasPermission } from "@/lib/rbac";
 import { staffRolePermissionKeys } from "@/lib/staff-role-presets";
 
-export type StaffCreateResult = { ok: true; name: string; username: string; temporaryPassword: string } | { ok: false; message: string };
+export type StaffCreateResult = { ok: true; name: string; status: "pending"; message: string } | { ok: false; message: string };
 
 export async function createStaff(formData: FormData): Promise<StaffCreateResult> {
   const session = await requireSchoolSession();
@@ -26,7 +27,6 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
   if (!name) return { ok: false, message: "Enter the staff member's full name." };
   if (!staffCategory) return { ok: false, message: "Select a workforce area." };
   if (!roleName) return { ok: false, message: "Select a staff role." };
-  if (!email && !phone) return { ok: false, message: "Provide an email address or phone number for the school account." };
   if (roleName.toLowerCase() === "owner") return { ok: false, message: "The Owner account is reserved for the school's primary owner." };
 
   return withTenant(session.schoolId, async (tx) => {
@@ -34,7 +34,7 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
     const actorIsOwner = actorRoles.some((r) => r.role.name.toLowerCase() === "owner");
     const actorIsAdmin = actorRoles.some((r) => r.role.name.toLowerCase() === "administrator" || r.role.name.toLowerCase() === "admin");
     const canManage = actorIsOwner || actorIsAdmin || await hasPermission(tx, session.userId, "classes:manage");
-    if (!canManage) return { ok: false, message: "You do not have permission to create staff accounts." };
+    if (!canManage) return { ok: false, message: "You do not have permission to create staff records." };
     if (roleName.toLowerCase() === "administrator" && !actorIsOwner) return { ok: false, message: "Only the school Owner can create an Administrator account." };
 
     if (email) {
@@ -54,12 +54,14 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
 
     const permissionKeys = staffRolePermissionKeys(roleName);
     const permissions = await tx.permission.findMany({ where: { key: { in: permissionKeys as string[] } }, select: { id: true } });
-    if (permissions.length !== permissionKeys.length) return { ok: false, message: "This role's permission preset is not fully installed. Update the school permission catalogue before creating this account." };
+    if (permissions.length !== permissionKeys.length) return { ok: false, message: "This role's permission preset is not fully installed. Update the school permission catalogue before creating this staff record." };
     await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
     await tx.rolePermission.createMany({ data: permissions.map((permission) => ({ schoolId: session.schoolId, roleId: role.id, permissionId: permission.id })) });
 
-    const temporaryPassword = "12345";
-    const user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: await hash(temporaryPassword, 12), status: "active" }, select: { id: true, name: true, email: true, phone: true } });
+    // A staff profile is not a login account. The random hash is intentionally unusable as a credential
+    // because school authentication only admits status=active users.
+    const placeholderPasswordHash = await hash(randomUUID() + randomUUID(), 12);
+    const user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: placeholderPasswordHash, status: "pending" }, select: { id: true, name: true, email: true, phone: true, status: true } });
     await tx.userRole.create({ data: { schoolId: session.schoolId, userId: user.id, roleId: role.id } });
 
     if (primaryClassId && /teacher/i.test(roleName)) {
@@ -76,7 +78,7 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
       await tx.classSubjectTeacher.upsert({ where: { classId_subjectId_teacherId: { classId: primaryClassId, subjectId, teacherId: user.id } }, update: {}, create: { schoolId: session.schoolId, classId: primaryClassId, subjectId, teacherId: user.id } });
     }
 
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, staffCategory, role: roleName, permissionCount: permissions.length, primaryClassId: primaryClassId || null, subjectId: subjectId || null } } });
-    return { ok: true, name: user.name, username: user.email ?? user.phone ?? "School login", temporaryPassword };
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created_pending", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, staffCategory, role: roleName, permissionCount: permissions.length, primaryClassId: primaryClassId || null, subjectId: subjectId || null, loginCreated: false } } });
+    return { ok: true, name: user.name, status: "pending", message: `${user.name} was added as staff. No login account was created. Open Sub-accounts & Access to activate a login later.` };
   });
 }
