@@ -7,10 +7,11 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -18,23 +19,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - name: Resolve deterministic dependency graph
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-
       - name: Install dependencies from lockfile
         run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
-
       - name: Generate Prisma client
         run: npx prisma generate
-
       - name: Lint
         run: npm run lint
-
       - name: Build application
         run: npm run build
+      - name: Release to Railway
+        run: |
+          printf 'verified %s\n' "$GITHUB_SHA" > .railway-deploy-trigger
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .railway-deploy-trigger
+          git commit -m "chore: deploy verified build to Railway" || exit 0
+          git push
