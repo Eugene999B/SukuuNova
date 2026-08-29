@@ -6,6 +6,12 @@ export async function hasPermission(
   userId: string,
   permissionKey: string
 ): Promise<boolean> {
+  const user = await tx.user.findUnique({
+    where: { id: userId },
+    select: { status: true }
+  });
+  if (!user || user.status !== "active") return false;
+
   const permission = await tx.permission.findUnique({
     where: { key: permissionKey },
     select: { id: true }
@@ -22,9 +28,7 @@ export async function hasPermission(
     select: { granted: true }
   });
 
-  if (override) {
-    return override.granted;
-  }
+  if (override) return override.granted;
 
   const inherited = await tx.userRole.findFirst({
     where: {
