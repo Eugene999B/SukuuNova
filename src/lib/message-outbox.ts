@@ -14,8 +14,9 @@ type NotificationInput={
 type NotificationSenders={sms?:SmsSender;whatsapp?:WhatsAppSender};
 
 function configuredChannels(value:Prisma.JsonValue|null|undefined):Channel[]{
-  if(!Array.isArray(value))return["sms"];
-  const channels=value.filter((item):item is Channel=>item==="sms"||item==="whatsapp");
+  const candidate = !Array.isArray(value) && value && typeof value === "object" ? (value as Record<string,Prisma.JsonValue>).channels : value;
+  if(!Array.isArray(candidate))return["sms"];
+  const channels=candidate.filter((item):item is Channel=>item==="sms"||item==="whatsapp");
   return channels.length?[...new Set(channels)]:["sms"];
 }
 
@@ -30,6 +31,16 @@ function contentSid(value:Prisma.JsonValue|null|undefined,key:string){
   return undefined;
 }
 
+function mediaVariableKey(value:Prisma.JsonValue|null|undefined,key:string){
+  if(!value||Array.isArray(value)||typeof value!=="object")return "mediaUrl";
+  const candidate=(value as Record<string,Prisma.JsonValue>)[key];
+  if(candidate&&!Array.isArray(candidate)&&typeof candidate==="object"){
+    const mediaKey=(candidate as Record<string,Prisma.JsonValue>).mediaVariableKey;
+    if(typeof mediaKey==="string"&&mediaKey.trim())return mediaKey;
+  }
+  return "mediaUrl";
+}
+
 export type SmsSender=(input:{phone:string;body:string;senderId?:string})=>Promise<void>;
 export type WhatsAppSender=(input:{phone:string;contentSid:string;variables:Record<string,string>;mediaUrl?:string})=>Promise<void>;
 
@@ -40,11 +51,10 @@ export const httpSmsSender:SmsSender=async({phone,body,senderId})=>{
   if(!response.ok)throw new Error("SMS provider returned HTTP "+response.status);
 };
 
-export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,variables,mediaUrl})=>{
+export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,variables})=>{
   const accountSid=process.env.TWILIO_ACCOUNT_SID,authToken=process.env.TWILIO_AUTH_TOKEN,from=process.env.TWILIO_WHATSAPP_FROM;
   if(!accountSid||!authToken||!from)throw new Error("Twilio WhatsApp is not configured.");
   const form=new URLSearchParams({To:phone.startsWith("whatsapp:")?phone:"whatsapp:"+phone,From:from.startsWith("whatsapp:")?from:"whatsapp:"+from,ContentSid:sid,ContentVariables:JSON.stringify(variables)});
-  if(mediaUrl)form.set("MediaUrl",mediaUrl);
   const response=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+encodeURIComponent(accountSid)+"/Messages.json",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded",authorization:"Basic "+Buffer.from(accountSid+":"+authToken).toString("base64")},body:form});
   if(!response.ok)throw new Error("Twilio WhatsApp returned HTTP "+response.status);
 };
@@ -69,7 +79,11 @@ async function deliverCreatedMessage(
       if(!message.templateKey)throw new Error("WhatsApp job has no approved template key.");
       const sid=contentSid(settings?.whatsappTemplateConfig,message.templateKey);
       if(!sid)throw new Error("No Twilio ContentSid is configured for "+message.templateKey+".");
-      await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:variables(message.templateVariables),mediaUrl:message.mediaUrl||undefined});
+      const messageVariables=variables(message.templateVariables);
+      if(message.mediaUrl){
+        messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig,message.templateKey)]=message.mediaUrl;
+      }
+      await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:messageVariables});
     }else throw new Error("Unsupported message channel: "+message.channel);
     return tx.message.update({where:{id:message.id},data:{status:"sent",sentAt:new Date(),lastError:null}});
   }catch(error){
@@ -85,7 +99,7 @@ export async function enqueueNotification(tx:TenantDb,input:NotificationInput,se
   const messages=[];
   for(const channel of channels){
     if(channel==="whatsapp"&&!input.templateKey)continue;
-    const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"sending",attempts:1}});
+    const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"sending",attempts:1,nextAttemptAt:new Date()}});
     messages.push(await deliverCreatedMessage(tx,message,settings,senders));
   }
   return messages;
