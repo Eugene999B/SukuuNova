@@ -1,15 +1,30 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type Props = { universe: "school" } | { universe: "platform" };
 type SchoolStage = "school" | "role" | "credentials";
 type SchoolRole = "staff" | "guardian";
 
+function safeNext(value: string | null) {
+  return value && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
+
+function isFinanceRole(roles: unknown[]) {
+  const normalized = roles.map((role) => String(role).toLowerCase());
+  return normalized.some((role) => role.includes("accountant") || role.includes("bursar") || role === "finance officer" || role === "cashier" || role === "finance clerk");
+}
+
+function isPayrollRole(roles: unknown[]) {
+  const normalized = roles.map((role) => String(role).toLowerCase());
+  return normalized.some((role) => role.includes("payroll officer") || role.includes("hr manager") || role.includes("hr officer"));
+}
+
 export function LoginForm(props: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [schoolStage, setSchoolStage] = useState<SchoolStage>(props.universe === "school" ? "school" : "credentials");
   const [schoolCode, setSchoolCode] = useState("");
   const [schoolRole, setSchoolRole] = useState<SchoolRole | null>(null);
@@ -33,10 +48,17 @@ export function LoginForm(props: Props) {
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json();
       if (!response.ok) { setError(result.message || "Login failed. Please check your details and try again."); return; }
-      if (props.universe === "school" && schoolRole === "guardian") router.push("/guardian");
-      else if (props.universe === "school" && result.user?.needsPasswordChange) router.push("/account/security?required=1");
-      else if (props.universe === "school" && result.user?.portal === "teacher") router.push("/teacher");
-      else router.push(props.universe === "platform" ? "/platform" : "/dashboard");
+      if (props.universe === "school" && schoolRole === "guardian") {
+        router.push(safeNext(searchParams.get("next")) ?? "/guardian");
+      } else if (props.universe === "school" && result.user?.needsPasswordChange) {
+        router.push("/account/security?required=1");
+      } else if (props.universe === "school" && result.user?.portal === "teacher") {
+        router.push(safeNext(searchParams.get("next")) ?? "/teacher");
+      } else {
+        const roles = Array.isArray(result.user?.roles) ? result.user.roles : [];
+        const defaultDestination = isFinanceRole(roles) ? "/school/fees" : isPayrollRole(roles) ? "/school/fees/payroll" : "/dashboard";
+        router.push(safeNext(searchParams.get("next")) ?? (props.universe === "platform" ? "/platform" : defaultDestination));
+      }
       router.refresh();
     } catch {
       setError("Unable to reach SukuuNova right now. Please try again.");
