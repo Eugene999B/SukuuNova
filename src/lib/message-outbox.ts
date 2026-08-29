@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
 import { db, withTenant } from "./db";
 
-export type NotificationTemplateKey="student_absence"|"staff_late"|"invoice_created"|"payment_received"|"report_card_ready"|"transport_boarding"|"emergency_broadcast";
+export type NotificationTemplateKey="student_absence"|"staff_late"|"invoice_created"|"payment_received"|"report_card_ready"|"transport_boarding"|"emergency_broadcast"|"school_announcement";
 type RecipientType="guardian"|"staff"|"user";
 type Channel="sms"|"whatsapp";
 
@@ -123,4 +123,4 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
   return processed;
 }
 
-export async function processSmsBatchOnce(sender:SmsSender=httpSmsSender,batchSize=20){return processMessageBatchOnce({sms:sender},batchSize);}
+export async function processSmsBatchOnce(sender:SmsSender=httpSmsSender,batchSize=20){return processMessageBatchOnce({sms:sender},batchSize);} 
