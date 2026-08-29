@@ -1,2 +1,3 @@
-source commits: 5d0ae465a382b4bd509be27ff4152f144a78ef83, 64f8f6556ff6ca36f4af0053c86dd4c33695b45c, c7900649f3f9fa5d3be8588b6aad7e5d96121754
-release: professional term-aware enrolment workflow
+source commits: finance workspace, payroll, session and navigation fixes
+release: finance control centre and secure 8-hour school sessions
+trigger: 2026-08-29-finance-final
