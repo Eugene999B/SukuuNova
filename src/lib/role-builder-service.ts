@@ -3,6 +3,7 @@ import { appendSchoolAudit } from "./audit";
 import { AppError } from "./errors";
 import { requirePermission } from "./rbac";
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } from "./default-rbac";
+import { roleKeyForName } from "./authorization";
 
 export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
   const permissionIds = new Map<string,string>();
@@ -11,7 +12,11 @@ export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
     permissionIds.set(key, row.id);
   }
   for (const roleName of DEFAULT_ROLE_NAMES) {
-    const role = await tx.role.upsert({ where: { schoolId_name: { schoolId, name: roleName } }, update: { isSystem: true }, create: { schoolId, name: roleName, key: roleName.toLowerCase().replace(/[^a-z0-9]+/g, "_"), isSystem: true } });
+    const role = await tx.role.upsert({
+      where: { schoolId_name: { schoolId, name: roleName } },
+      update: { isSystem: true, key: roleKeyForName(roleName) },
+      create: { schoolId, name: roleName, key: roleKeyForName(roleName), isSystem: true }
+    });
     for (const permissionKey of DEFAULT_ROLE_PERMISSIONS[roleName]) {
       const permissionId = permissionIds.get(permissionKey);
       if (!permissionId) continue;
