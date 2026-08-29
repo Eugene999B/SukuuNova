@@ -1,0 +1,2 @@
+ALTER TABLE "ReportCard" ADD COLUMN IF NOT EXISTS "calculationSnapshot" JSONB;
+ALTER TABLE "ReportCard" ADD COLUMN IF NOT EXISTS "calculationVersion" INTEGER NOT NULL DEFAULT 1;
