@@ -12,16 +12,25 @@ export function SidebarNav({ groups, active }: { groups: NavGroup[]; active: str
 
   useEffect(() => {
     const nav = navRef.current;
-    if (!nav) return;
+    const sidebar = nav?.parentElement;
+    if (!sidebar) return;
+
     const saved = Number(sessionStorage.getItem(storageKey) ?? 0);
-    if (Number.isFinite(saved)) nav.scrollTop = saved;
-    const save = () => sessionStorage.setItem(storageKey, String(nav.scrollTop));
-    nav.addEventListener("scroll", save, { passive: true });
-    return () => nav.removeEventListener("scroll", save);
+    if (Number.isFinite(saved)) {
+      requestAnimationFrame(() => {
+        sidebar.scrollTop = saved;
+      });
+    }
+
+    const save = () => sessionStorage.setItem(storageKey, String(sidebar.scrollTop));
+    sidebar.addEventListener("scroll", save, { passive: true });
+
+    return () => sidebar.removeEventListener("scroll", save);
   }, []);
 
   const rememberPosition = () => {
-    if (navRef.current) sessionStorage.setItem(storageKey, String(navRef.current.scrollTop));
+    const sidebar = navRef.current?.parentElement;
+    if (sidebar) sessionStorage.setItem(storageKey, String(sidebar.scrollTop));
   };
 
   return (
@@ -30,7 +39,12 @@ export function SidebarNav({ groups, active }: { groups: NavGroup[]; active: str
         <div className="app-nav-group" key={group.label}>
           <div className="app-nav-label">{group.label}</div>
           {group.items.map(([icon, label, href]) => (
-            <Link key={label} href={href} onClick={rememberPosition} className={`app-nav-item ${active === label ? "is-active" : ""}`}>
+            <Link
+              key={label}
+              href={href}
+              onClick={rememberPosition}
+              className={`app-nav-item ${active === label ? "is-active" : ""}`}
+            >
               <span className="app-nav-icon">{icon}</span>
               <span>{label}</span>
               {active === label ? <span className="app-nav-active-dot" /> : null}
