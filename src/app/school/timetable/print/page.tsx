@@ -5,86 +5,60 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import "./print.css";
 
-const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-type Slot = { id: string; classId: string; subjectId: string; teacherId: string; dayOfWeek: number; period: number; class: { name: string; level: string | null }; subject: { name: string }; teacher: { name: string } };
-type Data = { slots: Slot[]; classes: { id: string; name: string; level: string | null }[]; subjects: { id: string; name: string }[]; teachers: { id: string; name: string }[]; school: { name: string; uniqueCode: string; logoUrl?: string | null } | null };
+const DAY_FALLBACK=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+type Day={dayOfWeek:number;name:string;enabled:boolean;start:string;end:string};
+type Config={days:Day[];periodMinutes:number;breaks:{name:string;start:string;end:string}[];periodsPerDay:number;published:boolean};
+type Slot={id:string;classId:string;subjectId:string;teacherId:string;dayOfWeek:number;period:number;class:{id:string;name:string;level:string|null};subject:{id:string;name:string};teacher:{id:string;name:string}};
+type Data={school:{name:string;uniqueCode:string;logoUrl?:string|null}|null;classes:{id:string;name:string;level:string|null}[];subjects:{id:string;name:string}[];teachers:{id:string;name:string}[];slots:Slot[];timetableConfig:Config};
+type Column={kind:"lesson"|"break";period?:number;name?:string;start:string;end:string};
+type Design="editorial"|"classic"|"minimal"|"landscape";
 
-type ApiError = { error?: string; message?: string };
+function mins(v:string){const [h,m]=v.split(":").map(Number);return h*60+m;}
+function clock(v:number){const h=Math.floor(v/60)%24,m=v%60;return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;}
+function timeline(day:Day,config:Config):Column[]{
+  const start=mins(day.start), end=mins(day.end); const breaks=[...config.breaks].map(b=>({...b,startMin:mins(b.start),endMin:mins(b.end)})).filter(b=>b.endMin>start&&b.startMin<end).sort((a,b)=>a.startMin-b.startMin);
+  const out:Column[]=[]; let cursor=start;
+  for(let p=1;p<=config.periodsPerDay;p++){
+    const next=cursor+config.periodMinutes;
+    const br=breaks.find(b=>b.startMin<=next&&b.endMin>=cursor);
+    if(br&&br.startMin<=cursor){out.push({kind:"break",name:br.name,start:clock(Math.max(cursor,br.startMin)),end:clock(Math.min(end,br.endMin))});cursor=Math.min(end,br.endMin);p--;if(cursor>=end)break;continue;}
+    if(cursor<end){out.push({kind:"lesson",period:p,start:clock(cursor),end:clock(Math.min(next,end))});cursor=next;}
+    const exact=breaks.find(b=>b.startMin===cursor);
+    if(exact){out.push({kind:"break",name:exact.name,start:exact.start,end:exact.end});cursor=exact.end;}
+    if(cursor>=end)break;
+  }
+  return out;
+}
+function escHtml(v:string){return v.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");}
+function safeName(v:string){return v.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").toLowerCase()||"timetable";}
 
-function esc(value: string) { return value.replace(/\\/g, "\\\\").replace(/[{}]/g, "\\$&").replace(/\\r?\\n/g, "\\par "); }
-function safeName(value: string) { return value.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "timetable"; }
-function download(name: string, content: string, type: string) { const blob = new Blob([content], { type }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000); }
+export default function TimetablePrintPage(){
+  const [data,setData]=useState<Data|null>(null); const [error,setError]=useState(""); const [loading,setLoading]=useState(true);
+  const [view,setView]=useState<"class"|"teacher"|"master">("class"); const [selectedId,setSelectedId]=useState(""); const [design,setDesign]=useState<Design>("editorial");
+  useEffect(()=>{let mounted=true;(async()=>{try{const r=await fetch("/api/phase2/timetable",{cache:"no-store"});if(!r.ok)throw new Error("Timetable data could not be loaded.");const json=await r.json();if(!json||!Array.isArray(json.slots)||!Array.isArray(json.classes)||!json.timetableConfig)throw new Error("The timetable service returned incomplete data.");if(mounted)setData(json);}catch(e){if(mounted)setError(e instanceof Error?e.message:"Could not load the timetable.");}finally{if(mounted)setLoading(false);}})();return()=>{mounted=false;};},[]);
+  const options=view==="class"?data?.classes??[]:view==="teacher"?data?.teachers??[]:[];
+  useEffect(()=>{if(view!=="master"&&options.length>0&&!options.some((x)=>x.id===selectedId))setSelectedId(options[0].id);if(view==="master")setSelectedId("");},[view,options,selectedId]);
+  const days=useMemo(()=>data?.timetableConfig.days.filter(d=>d.enabled&&d.dayOfWeek>=1&&d.dayOfWeek<=6)??[],[data]);
+  const columns=useMemo(()=>{const d=days[0]??{dayOfWeek:1,name:"Monday",enabled:true,start:"08:00",end:"15:00"};return data?timeline(d,data.timetableConfig):[];},[data,days]);
+  const filtered=useMemo(()=>{const slots=data?.slots??[];if(view==="class")return slots.filter(s=>s.classId===selectedId);if(view==="teacher")return slots.filter(s=>s.teacherId===selectedId);return slots;},[data,view,selectedId]);
+  const title=view==="class"?(data?.classes.find(x=>x.id===selectedId)?.name??"Class timetable"):view==="teacher"?(data?.teachers.find(x=>x.id===selectedId)?.name??"Teacher timetable"):"Master timetable";
+  const cell=(day:Day,column:Column)=>{if(column.kind==="break")return null;const dayColumns=timeline(day,data!.timetableConfig);const exact=dayColumns.find(x=>x.kind==="lesson"&&x.period===column.period);return exact?.period?filtered.find(s=>s.dayOfWeek===day.dayOfWeek&&s.period===exact.period)??null:null;};
 
-export default function TimetablePrintPage() {
-  const [data, setData] = useState<Data | null>(null);
-  const [view, setView] = useState<"class" | "teacher" | "master">("class");
-  const [selectedId, setSelectedId] = useState("");
-  const [template, setTemplate] = useState<"classic" | "modern" | "compact">("modern");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const response = await fetch("/api/phase2/timetable", { cache: "no-store" });
-        const json = await response.json() as Data & ApiError;
-        if (!response.ok) throw new Error(json.error || json.message || "Unable to load timetable data.");
-        if (!Array.isArray(json.slots) || !Array.isArray(json.classes) || !Array.isArray(json.subjects) || !Array.isArray(json.teachers)) {
-          throw new Error("Timetable data is incomplete. Please refresh the page.");
-        }
-        if (mounted) setData(json);
-      } catch (err) {
-        if (mounted) setError(err instanceof Error ? err.message : "Unable to load timetable data.");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, []);
-
-  const options = useMemo(() => view === "class" ? data?.classes ?? [] : view === "teacher" ? data?.teachers ?? [] : [], [data, view]);
-
-  useEffect(() => {
-    if (view === "master") { setSelectedId(""); return; }
-    const stillValid = options.some((item) => item.id === selectedId);
-    if (!stillValid) setSelectedId(options[0]?.id ?? "");
-  }, [options, selectedId, view]);
-
-  const filtered = useMemo(() => {
-    const slots = data?.slots ?? [];
-    if (view === "class") return selectedId ? slots.filter((s) => s.classId === selectedId) : [];
-    if (view === "teacher") return selectedId ? slots.filter((s) => s.teacherId === selectedId) : [];
-    return slots;
-  }, [data, view, selectedId]);
-
-  const title = view === "class" ? (data?.classes.find((x) => x.id === selectedId)?.name ?? "Class timetable") : view === "teacher" ? (data?.teachers.find((x) => x.id === selectedId)?.name ?? "Teacher timetable") : "Master timetable";
-  const baseFile = `sukuunova-timetable-${safeName(title)}`;
-
-  const csv = () => {
-    const rows = [["Day", "Period", "Class", "Subject", "Teacher"], ...filtered.map((s) => [DAYS[s.dayOfWeek - 1] ?? `Day ${s.dayOfWeek}`, String(s.period), s.class.name, s.subject.name, s.teacher.name])];
-    download(`${baseFile}.csv`, rows.map((r) => r.map((x) => `"${x.replace(/"/g, '""')}"`).join(",")).join("\n"), "text/csv;charset=utf-8");
-  };
-
-  const rtf = () => {
-    const body = ["SukuuNova Timetable", data?.school?.name ?? "School", title, "", "Day\\tab Period\\tab Class\\tab Subject\\tab Teacher\\par", ...filtered.map((s) => `${DAYS[s.dayOfWeek - 1] ?? `Day ${s.dayOfWeek}`}\\tab ${s.period}\\tab ${s.class.name}\\tab ${s.subject.name}\\tab ${s.teacher.name}\\par`)].join("\\par ");
-    download(`${baseFile}.rtf`, `{\\rtf1\\ansi\\deff0 ${esc(body)} }`, "application/rtf");
-  };
-
-  const html = () => {
-    const cells = Array.from({ length: 10 }, (_, i) => i + 1).map((p) => `<tr><th>Period ${p}</th>${DAYS.map((_, d) => { const s = filtered.find((x) => x.dayOfWeek === d + 1 && x.period === p); return `<td>${s ? `<b>${s.subject.name}</b><br><span>${s.teacher.name}</span><br><small>${s.class.name}</small>` : ""}</td>`; }).join("")}</tr>`).join("");
-    download(`${baseFile}.html`, `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>body{font-family:Arial;padding:30px;color:#173b42}table{border-collapse:collapse;width:100%}th,td{border:1px solid #aab8b9;padding:9px;text-align:center}th{background:#173b42;color:#fff}td{height:50px}small,span{color:#61777b}</style></head><body><h1>${data?.school?.name ?? "School"}</h1><h2>${title}</h2><table><thead><tr><th>Period</th>${DAYS.map(d => `<th>${d}</th>`).join("")}</tr></thead><tbody>${cells}</tbody></table></body></html>`, "text/html;charset=utf-8");
-  };
-
-  if (loading) return <AppShell universe="school" title="Timetable exports" subtitle="Prepare a timetable for printing or download." active="Timetable"><div className="export-loading">Loading timetable…</div></AppShell>;
-  if (error || !data) return <AppShell universe="school" title="Timetable exports" subtitle="Prepare a timetable for printing or download." active="Timetable"><main className="export-page"><section className="export-error"><span className="export-eyebrow">TIMETABLE STUDIO</span><h1>We couldn't load the timetable.</h1><p>{error || "Timetable data is unavailable."}</p><div><button className="primary-action" type="button" onClick={() => window.location.reload()}>Reload timetable</button><Link href="/school/timetable" className="back-link">Back to timetable</Link></div></section></main></AppShell>;
-
-  return <AppShell universe="school" title="Timetable exports" subtitle="Choose who the timetable is for, select a design, then print or download it." active="Timetable" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""}>
-    <main className="export-page">
-      <section className="export-hero"><div><span className="export-eyebrow">TIMETABLE STUDIO</span><h1>Make the timetable ready for anyone.</h1><p>Choose the audience, pick a presentation style, preview it, then print or download the exact view.</p></div><Link href="/school/timetable" className="back-link">← Back to timetable</Link></section>
-      <section className="export-controls"><div className="control-group"><label>View</label><div className="segmented"><button type="button" className={view === "class" ? "active" : ""} onClick={() => setView("class")}>Class</button><button type="button" className={view === "teacher" ? "active" : ""} onClick={() => setView("teacher")}>Teacher</button><button type="button" className={view === "master" ? "active" : ""} onClick={() => setView("master")}>Master</button></div></div>{view !== "master" && <div className="control-group"><label>{view === "class" ? "Class" : "Teacher"}</label><select value={selectedId} onChange={(e) => setSelectedId(e.target.value)}><option value="">Choose {view}</option>{options.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>}<div className="control-group"><label>Design</label><div className="template-picker"><button type="button" className={template === "modern" ? "selected" : ""} onClick={() => setTemplate("modern")}><b>Modern</b><span>Clean accent</span></button><button type="button" className={template === "classic" ? "selected" : ""} onClick={() => setTemplate("classic")}><b>Classic</b><span>Traditional school</span></button><button type="button" className={template === "compact" ? "selected" : ""} onClick={() => setTemplate("compact")}><b>Compact</b><span>More on one page</span></button></div></div></section>
-      <section className={`preview-paper ${template}`} id="print-area"><header><div>{data.school?.logoUrl ? <img src={data.school.logoUrl} alt="School logo"/> : <div className="logo-placeholder">S</div>}</div><div><span>WEEKLY TIMETABLE</span><h2>{data.school?.name ?? "SukuuNova"}</h2><strong>{title}</strong><small>{data.school?.uniqueCode ?? ""}</small></div></header><div className="preview-meta"><span>{filtered.length} lessons</span><span>{template === "compact" ? "Compact layout" : template === "classic" ? "Classic layout" : "Modern layout"}</span></div><table><thead><tr><th>Period</th>{DAYS.map(d => <th key={d}>{d}</th>)}</tr></thead><tbody>{Array.from({ length: 10 }, (_, i) => i + 1).map((p) => <tr key={p}><th>{p}</th>{DAYS.map((_, d) => { const s = filtered.find((x) => x.dayOfWeek === d + 1 && x.period === p); return <td key={d}>{s ? <><b>{s.subject.name}</b><span>{s.teacher.name}</span>{view === "master" && <small>{s.class.name}</small>}</> : <em>—</em>}</td>; })}</tr>)}</tbody></table><footer><span>{title}</span><span>Generated by SukuuNova</span></footer></section>
-      <section className="export-actions"><div><h3>Download or print</h3><p>Use PDF for distribution and paper, Word for editing, CSV for Excel/spreadsheets, or HTML for sharing and archiving.</p></div><div className="action-buttons"><button type="button" onClick={() => window.print()}>Print / Save PDF</button><button type="button" onClick={rtf}>Word (.rtf)</button><button type="button" onClick={csv}>Excel / CSV</button><button type="button" onClick={html}>HTML</button></div></section>
+  const csv=()=>{const rows=[["Day","Time","Class","Subject","Teacher"],...filtered.map(s=>{const day=days.find(d=>d.dayOfWeek===s.dayOfWeek);const c=columns.find(x=>x.kind==="lesson"&&x.period===s.period);return [day?.name??DAY_FALLBACK[s.dayOfWeek-1]??"Day",`${c?.start??""} - ${c?.end??""}`,s.class.name,s.subject.name,s.teacher.name];})];const body=rows.map(r=>r.map(x=>`"${String(x).replaceAll('"','""')}"`).join(",")).join("\n");download(`sukuunova-${safeName(title)}.csv`,body,"text/csv;charset=utf-8");};
+  const rtf=()=>{const lines=filtered.map(s=>{const d=days.find(x=>x.dayOfWeek===s.dayOfWeek);const c=columns.find(x=>x.kind==="lesson"&&x.period===s.period);return `${d?.name??"Day"}\\tab ${c?.start??""} - ${c?.end??""}\\tab ${s.class.name}\\tab ${s.subject.name}\\tab ${s.teacher.name}\\par`;}).join("");const r=`{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Aptos;}}\\fs28\\b ${escRtf(data?.school?.name??"SukuuNova")}\\b0\\par\\fs24 ${escRtf(title)}\\par\\fs20\\par Day\\tab Time\\tab Class\\tab Subject\\tab Teacher\\par ${lines}}`;download(`sukuunova-${safeName(title)}.rtf`,r,"application/rtf");};
+  const html=()=>{const body=`<!doctype html><html><head><meta charset="utf-8"><title>${escHtml(title)}</title><style>${printCss(design)}</style></head><body><div class="paper"><header><b>${escHtml(data?.school?.name??"SukuuNova")}</b><span>${escHtml(title)}</span></header><table><thead><tr><th>Day</th>${columns.map(c=>`<th class="${c.kind}">${escHtml(c.kind==="break"?c.name??"Break":`${c.start}–${c.end}`)}</th>`).join("")}</tr></thead><tbody>${days.map(day=>`<tr><th>${escHtml(day.name)}</th>${columns.map(c=>{if(c.kind==="break")return `<td class="break"><span>${escHtml(c.name??"Break")}</span></td>`;const s=cell(day,c);return `<td>${s?`<b>${escHtml(s.subject.name)}</b><small>${escHtml(s.teacher.name)}</small>${view==="master"?`<small>${escHtml(s.class.name)}</small>`:""}`:""}</td>`;}).join("")}</tr>`).join("")}</tbody></table></div></body></html>`;download(`sukuunova-${safeName(title)}.html`,html,"text/html;charset=utf-8");};
+  const download=(name:string,content:string,type:string)=>{const blob=new Blob([content],{type});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+  const escRtf=(v:string)=>v.replaceAll("\\","\\\\").replace(/[{}]/g,"\\$&").replace(/\r?\n/g,"\\par ");
+  if(loading)return <AppShell universe="school" title="Timetable print studio" subtitle="Prepare a schedule for printing or download."><main className="export-page"><div className="export-status">Loading timetable…</div></main></AppShell>;
+  if(error||!data)return <AppShell universe="school" title="Timetable print studio" subtitle="Prepare a schedule for printing or download."><main className="export-page"><div className="export-error"><strong>Timetable could not be loaded.</strong><span>{error||"No timetable data is available."}</span><Link href="/school/timetable" className="back-link">Return to timetable</Link></div></main></AppShell>;
+  return <AppShell universe="school" title="Timetable print studio" subtitle="Choose the audience and presentation style, preview it, then print or download." active="Timetable" schoolName={data.school?.name??"School Workspace"} schoolCode={data.school?.uniqueCode??""}>
+    <main className={`export-page ${design}`}>
+      <section className="export-hero"><div><span className="export-eyebrow">TIMETABLE PRINT STUDIO</span><h1>A timetable people can actually read.</h1><p>Days sit on the left, real teaching times run across the page, and breaks stay visible as vertical bands.</p></div><Link href="/school/timetable" className="back-link">← Back to editor</Link></section>
+      <section className="export-controls"><div className="control-group"><label>Audience</label><div className="segmented"><button className={view==="class"?"active":""} onClick={()=>setView("class")}>Class</button><button className={view==="teacher"?"active":""} onClick={()=>setView("teacher")}>Teacher</button><button className={view==="master"?"active":""} onClick={()=>setView("master")}>Master</button></div></div>{view!=="master"?<div className="control-group"><label>{view==="class"?"Class":"Teacher"}</label><select value={selectedId} onChange={e=>setSelectedId(e.target.value)}>{options.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></div>:null}<div className="control-group wide"><label>Paper design</label><div className="designs"><button className={design==="editorial"?"selected":""} onClick={()=>setDesign("editorial")}><b>Editorial</b><span>Clean & modern</span></button><button className={design==="classic"?"selected":""} onClick={()=>setDesign("classic")}><b>Classic</b><span>Traditional school</span></button><button className={design==="minimal"?"selected":""} onClick={()=>setDesign("minimal")}><b>Minimal</b><span>Ink-friendly</span></button><button className={design==="landscape"?"selected":""} onClick={()=>setDesign("landscape")}><b>Landscape</b><span>Wide master view</span></button></div></div></section>
+      <section className="preview-paper" id="print-area"><header><div className="paper-brand">{data.school?.logoUrl?<img src={data.school.logoUrl} alt=""/>:<span>S</span>}</div><div><small>WEEKLY TIMETABLE</small><h2>{data.school?.name??"SukuuNova"}</h2><b>{title}</b></div></header><div className="paper-meta"><span>{filtered.length} lesson{filtered.length===1?"":"s"}</span><span>{design} design</span></div><div className="paper-scroll"><table><thead><tr><th>Day</th>{columns.map((c,i)=><th key={`${c.kind}-${i}`} className={c.kind}>{c.kind==="break"?<span>{c.name}</span>:<><b>{c.start}</b><small>{c.end}</small></>}</th>)}</tr></thead><tbody>{days.map(day=><tr key={day.dayOfWeek}><th><b>{day.name.slice(0,3).toUpperCase()}</b><span>{day.name}</span></th>{columns.map((c,i)=>{if(c.kind==="break")return <td key={i} className="break"><span>{c.name}</span></td>;const s=cell(day,c);return <td key={i}>{s?<><b>{s.subject.name}</b><span>{s.teacher.name}</span>{view==="master"?<small>{s.class.name}</small>:null}</>:null}</td>})}</tr>)}</tbody></table></div><footer><span>{data.school?.uniqueCode??""}</span><span>Generated by SukuuNova</span></footer></section>
+      <section className="export-actions"><div><h3>Download this design</h3><p>PDF uses your browser's print dialog; Word, CSV and HTML use the same selected audience and timetable data.</p></div><div className="action-buttons"><button onClick={()=>window.print()}>Print / Save PDF</button><button onClick={rtf}>Word</button><button onClick={csv}>CSV / Excel</button><button onClick={html}>HTML</button></div></section>
     </main>
   </AppShell>;
 }
+
+function printCss(design:Design){const base=`body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#17383d}.paper{max-width:1300px;margin:auto}.paper header{display:flex;justify-content:space-between;align-items:end;padding-bottom:16px;margin-bottom:16px;border-bottom:3px solid #17383d}.paper header b{font-size:22px}.paper header span{font-size:18px;font-weight:700}table{border-collapse:collapse;width:100%;table-layout:fixed}th,td{border:1px solid #b9c8c7;padding:9px;text-align:center;height:48px}thead th{background:#edf2f0;color:#17383d}tbody th{background:#f7f9f8;text-align:left}td b{display:block;font-size:12px}td small{display:block;margin-top:3px;color:#667b7e}th.break,td.break{background:#eee2db}th.break span,td.break span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:800;font-size:9px;letter-spacing:.12em;text-transform:uppercase} `;if(design==="classic")return base+`thead th{background:#17383d;color:#fff}tbody th{font-family:Georgia,serif}td{font-family:Georgia,serif}td b{font-size:13px}`;if(design==="minimal")return base+`body{color:#111}.paper header{border-bottom:1px solid #111}th,td{border-color:#999}thead th{background:#fff}.break{background:#f4f4f4!important}`;return base+`@page{size:landscape}table{font-size:11px}th,td{padding:7px;height:42px}thead th{background:#203f44;color:#fff}`;}
