@@ -7,6 +7,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import "./students-workspace.css";
+import "./students-light-theme.css";
 import "@/components/students/add-student-dialog.css";
 
 function createIndexNumber() {
