@@ -28,9 +28,13 @@ export async function GET() {
     const session = await requireSchoolSession();
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "recruitment:manage");
-      return tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT * FROM "P3RecruitmentPosting" WHERE "schoolId"=$1 ORDER BY "createdAt" DESC`, session.schoolId);
+      const [postings, applicants] = await Promise.all([
+        tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT * FROM "P3RecruitmentPosting" WHERE "schoolId"=$1 ORDER BY "createdAt" DESC`, session.schoolId),
+        tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT * FROM "P3Applicant" WHERE "schoolId"=$1 ORDER BY "createdAt" DESC LIMIT 1000`, session.schoolId),
+      ]);
+      return { postings, applicants };
     });
-    return NextResponse.json({ ok: true, postings: result });
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) { return routeError(error); }
 }
 
