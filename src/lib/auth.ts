@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { rawDb } from "./db";
@@ -13,6 +14,7 @@ export type SchoolSession = {
   userId: string;
   schoolId: string;
   name: string;
+  authorizationVersion: string;
   impersonationId?: string;
   impersonatedByAdminId?: string;
 };
@@ -34,8 +36,78 @@ export function sessionCookieOptions(maxAge = SESSION_SECONDS) {
   return { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge };
 }
 
-export async function createSchoolSessionToken(session: SchoolSession, expiresInSeconds = SESSION_SECONDS): Promise<string> {
-  const payload: Record<string, string> = { kind: "school", schoolId: session.schoolId, name: session.name };
+type SchoolAuthorizationState = {
+  id: string;
+  schoolId: string;
+  name: string;
+  status: string;
+  passwordHash: string;
+  userRoles: Array<{ role: { id: string; name: string; key: string | null; rolePermissions: Array<{ permissionId: string }> } }>;
+  permissionOverrides: Array<{ permissionId: string; granted: boolean }>;
+};
+
+function authorizationVersion(state: SchoolAuthorizationState): string {
+  const normalized = {
+    id: state.id,
+    schoolId: state.schoolId,
+    status: state.status,
+    passwordHash: state.passwordHash,
+    roles: state.userRoles
+      .map(({ role }) => ({
+        id: role.id,
+        name: role.name,
+        key: role.key,
+        permissions: role.rolePermissions.map((permission) => permission.permissionId).sort()
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id)),
+    overrides: state.permissionOverrides
+      .map((override) => ({ permissionId: override.permissionId, granted: override.granted }))
+      .sort((a, b) => a.permissionId.localeCompare(b.permissionId))
+  };
+  return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
+}
+
+async function getSchoolAuthorizationState(userId: string, schoolId: string): Promise<SchoolAuthorizationState | null> {
+  return rawDb.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", schoolId);
+    return tx.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        schoolId: true,
+        name: true,
+        status: true,
+        passwordHash: true,
+        userRoles: {
+          select: {
+            role: {
+              select: {
+                id: true,
+                name: true,
+                key: true,
+                rolePermissions: { select: { permissionId: true } }
+              }
+            }
+          }
+        },
+        permissionOverrides: { select: { permissionId: true, granted: true } }
+      }
+    });
+  });
+}
+
+export async function createSchoolSessionToken(session: Omit<SchoolSession, "authorizationVersion"> | SchoolSession, expiresInSeconds = SESSION_SECONDS): Promise<string> {
+  const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
+  if (!state || state.status !== "active" || state.schoolId !== session.schoolId) {
+    throw new UnauthorizedError("This school account is no longer active.");
+  }
+  const currentAuthorizationVersion = authorizationVersion(state);
+  const payload: Record<string, string> = {
+    kind: "school",
+    schoolId: session.schoolId,
+    name: state.name,
+    authorizationVersion: currentAuthorizationVersion
+  };
   if (session.impersonationId) payload.impersonationId = session.impersonationId;
   if (session.impersonatedByAdminId) payload.impersonatedByAdminId = session.impersonatedByAdminId;
   return new SignJWT(payload).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(session.userId).setIssuer("sukuunova-school").setAudience("sukuunova-school").setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds).sign(secret("SCHOOL_AUTH_SECRET"));
@@ -47,8 +119,22 @@ export async function createPlatformSessionToken(session: PlatformSession): Prom
 
 export async function verifySchoolSessionToken(token: string): Promise<SchoolSession> {
   const { payload } = await jwtVerify(token, secret("SCHOOL_AUTH_SECRET"), { issuer: "sukuunova-school", audience: "sukuunova-school" });
-  if (payload.kind !== "school" || typeof payload.sub !== "string" || typeof payload.schoolId !== "string" || typeof payload.name !== "string") throw new UnauthorizedError("Invalid school session.");
-  return { kind: "school", userId: payload.sub, schoolId: payload.schoolId, name: payload.name, impersonationId: typeof payload.impersonationId === "string" ? payload.impersonationId : undefined, impersonatedByAdminId: typeof payload.impersonatedByAdminId === "string" ? payload.impersonatedByAdminId : undefined };
+  if (
+    payload.kind !== "school" ||
+    typeof payload.sub !== "string" ||
+    typeof payload.schoolId !== "string" ||
+    typeof payload.name !== "string" ||
+    typeof payload.authorizationVersion !== "string"
+  ) throw new UnauthorizedError("Invalid school session.");
+  return {
+    kind: "school",
+    userId: payload.sub,
+    schoolId: payload.schoolId,
+    name: payload.name,
+    authorizationVersion: payload.authorizationVersion,
+    impersonationId: typeof payload.impersonationId === "string" ? payload.impersonationId : undefined,
+    impersonatedByAdminId: typeof payload.impersonatedByAdminId === "string" ? payload.impersonatedByAdminId : undefined
+  };
 }
 
 export async function verifyPlatformSessionToken(token: string): Promise<PlatformSession> {
@@ -73,19 +159,17 @@ export async function requireSchoolSession() {
   const session = await getSchoolSession();
   if (!session) throw new UnauthorizedError();
 
-  const verified = await rawDb.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", session.schoolId);
-    const rows = await tx.$queryRaw<{ id: string; schoolId: string; name: string; status: string }[]>`
-      SELECT "id", "schoolId", "name", "status"
-      FROM "User"
-      WHERE "id" = ${session.userId} AND "schoolId" = ${session.schoolId}
-      LIMIT 1
-    `;
-    return rows[0] ?? null;
-  });
+  const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
+  if (!state || state.status !== "active" || state.schoolId !== session.schoolId) {
+    throw new UnauthorizedError("This school account is no longer active.");
+  }
 
-  if (!verified || verified.status !== "active") throw new UnauthorizedError("This school account is no longer active.");
-  return { ...session, name: verified.name };
+  const currentAuthorizationVersion = authorizationVersion(state);
+  if (currentAuthorizationVersion !== session.authorizationVersion) {
+    throw new UnauthorizedError("Your school access has changed. Please sign in again.");
+  }
+
+  return { ...session, name: state.name };
 }
 
 export async function requirePlatformSession() {
