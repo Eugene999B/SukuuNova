@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
+import StaffAttendanceDesk from "../StaffAttendanceDesk";
 
 type ModuleConfig = { title:string; subtitle:string; action:string; tabs:string[] };
 
@@ -53,21 +54,13 @@ export default async function SchoolModulePage({params}:{params:Promise<{module?
  if(!config) notFound();
  const school=await withTenant(session.schoolId,tx=>tx.school.findUnique({where:{id:session.schoolId},select:{name:true,uniqueCode:true}}));
  if(!school) notFound();
+ if(key==="staff-attendance") return <AppShell universe="school" title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><StaffAttendanceDesk /></AppShell>;
  const base=`/school/${key}`;
  return <AppShell universe="school" title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}>
-   <div className="module-shell">
-     <section className="module-hero">
-       <div><span className="eyebrow">{school.name}</span><h2>{config.title}</h2><p>{config.subtitle}</p></div>
-       <div className="module-actions"><Link className="button secondary" href={key==="settings"?"/school/terms":"/school/reports/analytics"}>Open analytics</Link><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div>
-     </section>
-     <nav className="module-tabs" aria-label={`${config.title} views`}>{config.tabs.map(tab=><Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-tab">{tab}</Link>)}</nav>
-     <section className="module-layout">
-       <div className="module-panel">
-         <div className="module-toolbar"><form className="module-search" action={base}><input name="q" placeholder={`Search ${config.title.toLowerCase()}…`} /><button className="button secondary" type="submit">Search</button></form><Link className="button secondary" href="/school/terms">Term context</Link></div>
-         <div className="module-table-wrap"><table className="module-table"><thead><tr><th>Record</th><th>Status</th><th>Last activity</th><th /></tr></thead><tbody><tr><td colSpan={4}><div className="module-empty"><strong>No records in this view</strong><span>Use the action above to create or open work.</span><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div></td></tr></tbody></table></div>
-       </div>
-       <aside className="module-side-card"><div className="module-side-card-head"><h3>Work queue</h3><span>{session.name}</span></div><div className="module-list">{config.tabs.slice(0,4).map((tab,index)=><Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-list-item"><span className="module-list-index">{index+1}</span><span>{tab}</span><span>→</span></Link>)}</div></aside>
-     </section>
-   </div>
+  <div className="module-shell">
+   <section className="module-hero"><div><span className="eyebrow">{school.name}</span><h2>{config.title}</h2><p>{config.subtitle}</p></div><div className="module-actions"><Link className="button secondary" href="/school/reports/analytics">Analytics</Link><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div></section>
+   <nav className="module-tabs" aria-label={`${config.title} views`}>{config.tabs.map(tab=><Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-tab">{tab}</Link>)}</nav>
+   <section className="module-layout"><div className="module-panel"><div className="module-toolbar"><form className="module-search" action={base}><input name="q" placeholder={`Search ${config.title.toLowerCase()}…`} /><button className="button secondary" type="submit">Search</button></form><Link className="button secondary" href="/school/terms">Term context</Link></div><div className="module-table-wrap"><table className="module-table"><thead><tr><th>Record</th><th>Status</th><th>Last activity</th><th /></tr></thead><tbody><tr><td colSpan={4}><div className="module-empty"><strong>No records in this view</strong><span>Use the action above to create or open work.</span><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div></td></tr></tbody></table></div></div><aside className="module-side-card"><div className="module-side-card-head"><h3>Work queue</h3><span>{session.name}</span></div><div className="module-list">{config.tabs.slice(0,4).map((tab,index)=><Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-list-item"><span className="module-list-index">{index+1}</span><span>{tab}</span><span>→</span></Link>)}</div></aside></section>
+  </div>
  </AppShell>;
 }
