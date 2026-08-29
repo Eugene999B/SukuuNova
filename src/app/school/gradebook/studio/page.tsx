@@ -5,7 +5,7 @@ import { withTenant } from "@/lib/db";
 import { requirePermission, hasPermission } from "@/lib/rbac";
 import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/academic-engine";
 import GradebookEntryGrid from "@/components/GradebookEntryGrid";
-import "../module-workspace.css";
+import "../../module-workspace.css";
 
 export default async function GradebookStudioPage({ searchParams }: { searchParams: Promise<{ class?: string; subject?: string; term?: string }> }) {
   const session = await requireSchoolSession();
@@ -27,7 +27,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
   const assignments = data.config.assignments.filter((item) => data.canWriteAll || item.teacherId === session.userId);
   const selected = data.assignment;
   return (
-    <AppShell universe="school" title="Gradebook Studio" subtitle="Enter marks quickly, catch errors early, and let SukuuNova calculate the weighted result for you." active="Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+    <AppShell universe="school" title="Gradebook Studio" subtitle="Enter marks quickly, catch errors early, and let SukuuNova calculate the weighted result for you." active="Gradebook Studio" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
       <div className="module-workspace">
         <section className="module-setup-card module-card">
           <div><span className="module-overline">Mark entry & results</span><h3>A faster way to finish your marks.</h3><p>Choose a teaching assignment, enter the marks directly in the sheet, and move through the class without leaving the page. The school’s weighting rules remain visible and the server still checks every save.</p></div>
