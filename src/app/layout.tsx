@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import "./student-theme.css";
 import "./visual-system.css";
+import "./sukuunova-bright.css";
 
 export const metadata: Metadata = {
   title: "SukuuNova | School Operations",
