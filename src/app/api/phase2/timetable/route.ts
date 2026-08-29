@@ -36,10 +36,27 @@ export async function GET() {
     const session = await requireSchoolSession();
     const data = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "classes:manage");
-      const [slots, assignments] = await Promise.all([
+      const [school, classes, subjects, teachers, slots, assignments] = await Promise.all([
+        tx.school.findUnique({
+          where: { id: session.schoolId },
+          select: { name: true, uniqueCode: true, logoUrl: true }
+        }),
+        tx.class.findMany({
+          orderBy: [{ level: "asc" }, { name: "asc" }],
+          select: { id: true, name: true, level: true }
+        }),
+        tx.subject.findMany({
+          orderBy: { name: "asc" },
+          select: { id: true, name: true }
+        }),
+        tx.user.findMany({
+          where: { schoolId: session.schoolId, status: "active" },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true }
+        }),
         tx.timetableSlot.findMany({
           include: {
-            class: { select: { name: true } },
+            class: { select: { name: true, level: true } },
             subject: { select: { name: true } },
             teacher: { select: { name: true } }
           },
@@ -54,7 +71,7 @@ export async function GET() {
           take: 50
         })
       ]);
-      return { slots, assignments };
+      return { school, classes, subjects, teachers, slots, assignments };
     });
     return NextResponse.json(data);
   } catch (error) { return routeError(error); }
