@@ -4,7 +4,7 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
-import { attendanceSummary, finalizeStudentAttendance, recordAttendance } from "@/lib/attendance-service";
+import { attendanceSummary, authorizeStaffAttendance, authorizeStudentAttendance, finalizeStudentAttendance, recordAttendance } from "@/lib/attendance-service";
 import { createAttendanceQr, verifyAttendanceQr } from "@/lib/qr-attendance";
 import { requirePermission } from "@/lib/rbac";
 
@@ -44,6 +44,11 @@ export async function POST(request: Request) {
       }
       if (input.action === "qrToken") {
         await requirePermission(tx, session.userId, "attendance:record");
+        if (input.kind === "staff") {
+          await authorizeStaffAttendance(tx, session.userId);
+        } else {
+          await authorizeStudentAttendance(tx, session.userId, input.id);
+        }
         return { token: await createAttendanceQr(session.schoolId, { kind: input.kind, id: input.id }) };
       }
       const verified = await verifyAttendanceQr(input.token, session.schoolId);
