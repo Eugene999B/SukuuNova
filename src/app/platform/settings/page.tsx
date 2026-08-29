@@ -1,2 +1,4 @@
 import PlatformAdminWorkspace from "@/components/PlatformAdminWorkspace";
-export default function SettingsPage(){return <PlatformAdminWorkspace section="settings"/>;}
+import { PublicPresenceConsole } from "@/components/PublicPresenceConsole";
+
+export default function SettingsPage(){return <PlatformAdminWorkspace section="settings"><PublicPresenceConsole /></PlatformAdminWorkspace>;}
