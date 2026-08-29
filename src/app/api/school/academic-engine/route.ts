@@ -12,4 +12,17 @@ const assessment=z.object({categories:z.array(z.object({name:z.string().min(1).m
 const report=z.object({includePosition:z.boolean(),includeSubjectPosition:z.boolean(),includeAttendance:z.boolean(),includeTeacherRemark:z.boolean(),includeHeadRemark:z.boolean(),includeSignatures:z.boolean(),includeSchoolContacts:z.boolean(),rankMethod:z.enum(["total_average","weighted_total"]),showGrades:z.boolean(),showClassAverage:z.boolean()});
 const schema=z.discriminatedUnion("action",[z.object({action:z.literal("save"),timetable:timetable.optional(),assessment:assessment.optional(),reportCard:report.optional()}),z.object({action:z.literal("generate"),replaceExisting:z.boolean().default(false),classIds:z.array(z.string()).max(100).optional()})]);
 export async function GET(){try{const session=await requireSchoolSession();return NextResponse.json(await withTenant(session.schoolId,tx=>getAcademicEngineConfig(tx)));}catch(e){return routeError(e);}}
-export async function POST(request:Request){try{const session=await requireSchoolSession();const input=schema.parse(await request.json());return NextResponse.json(await withTenant(session.schoolId,tx=>input.action==="save"?saveAcademicEngineConfig(tx,{schoolId:session.schoolId,actorId:session.userId,timetable:input.timetable,assessment:input.assessment,reportCard:input.reportCard}):generateBalancedTimetable(tx,{schoolId:session.schoolId,actorId:session.userId,replaceExisting:input.replaceExisting,classIds:input.classIds})));}catch(e){return routeError(e);}}
+export async function POST(request:Request){
+  try {
+    const session=await requireSchoolSession();
+    const input=schema.parse(await request.json());
+    return await withTenant(session.schoolId,async tx=>{
+      if(input.action==="save") {
+        const result=await saveAcademicEngineConfig(tx,{schoolId:session.schoolId,actorId:session.userId,timetable:input.timetable,assessment:input.assessment,reportCard:input.reportCard});
+        return NextResponse.json(result);
+      }
+      const result=await generateBalancedTimetable(tx,{schoolId:session.schoolId,actorId:session.userId,replaceExisting:input.replaceExisting,classIds:input.classIds});
+      return NextResponse.json(result);
+    });
+  } catch(e) { return routeError(e); }
+}
