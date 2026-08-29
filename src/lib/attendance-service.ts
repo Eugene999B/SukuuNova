@@ -1,7 +1,7 @@
-import { AppError } from "./errors";
+import { AppError, ForbiddenError } from "./errors";
 import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
-import { requirePermission } from "./rbac";
+import { hasPermission, requirePermission } from "./rbac";
 import { enqueueSms } from "./sms-outbox";
 
 type AttendanceTarget =
@@ -40,6 +40,22 @@ export async function isAttendanceBlocked(tx: TenantDb, day: Date) {
   }));
 }
 
+async function authorizeStudentAttendance(tx: TenantDb, actorId: string, studentId: string) {
+  if (await hasPermission(tx, actorId, "attendance:record_all")) return;
+  if (!(await hasPermission(tx, actorId, "attendance:record_assigned"))) {
+    throw new ForbiddenError("You are not permitted to record this student's attendance.");
+  }
+  const assigned = await tx.student.findFirst({
+    where: { id: studentId, class: { classTeacherId: actorId } },
+    select: { id: true }
+  });
+  if (!assigned) throw new ForbiddenError("Teachers may record attendance only for their assigned class.");
+}
+
+async function authorizeStaffAttendance(tx: TenantDb, actorId: string) {
+  await requirePermission(tx, actorId, "attendance:record_staff");
+}
+
 export async function recordAttendance(
   tx: TenantDb,
   input: {
@@ -48,6 +64,9 @@ export async function recordAttendance(
   }
 ) {
   await requirePermission(tx, input.actorId, "attendance:record");
+  if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);
+  else await authorizeStaffAttendance(tx, input.actorId);
+
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
   if (!settings?.expectedResumptionTime) {
     throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
@@ -92,7 +111,7 @@ export async function recordAttendance(
     const [staff, hrUsers] = await Promise.all([
       tx.user.findUnique({ where: { id: input.target.staffId }, select: { name: true } }),
       tx.user.findMany({
-        where: { phone: { not: null }, userRoles: { some: { role: { name: "HR Officer" } } } },
+        where: { phone: { not: null }, userRoles: { some: { role: { key: "hr_officer" } } } },
         select: { id: true, phone: true }
       })
     ]);
