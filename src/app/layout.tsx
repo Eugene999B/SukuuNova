@@ -5,6 +5,7 @@ import "./visual-system.css";
 import "./sukuunova-bright.css";
 import "./typography.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { PublicThemeGate } from "@/components/PublicThemeGate";
 
 export const metadata: Metadata = {
   title: "SukuuNova | School Operations",
@@ -16,5 +17,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body><ThemeProvider>{children}</ThemeProvider></body></html>;
+  return <html lang="en"><body><ThemeProvider><PublicThemeGate />{children}</ThemeProvider></body></html>;
 }
