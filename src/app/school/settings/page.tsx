@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import SchoolSettingsWorkspace from "./SchoolSettingsWorkspace";
+import ThemePreferences from "./ThemePreferences";
 import "./settings.css";
 
 type WorkspaceSettings = { expectedResumptionTime:string; attendanceGraceMinutes:number; timezone:string; gradeCaWeight:number; gradeExamWeight:number; allowPartialReportCards:boolean; smsSenderId:string|null };
@@ -27,5 +28,5 @@ export default async function SchoolSettingsPage(){
   academicYears:data.academicYears.map(year=>({id:year.id,name:year.name,startDate:year.startDate.toISOString(),endDate:year.endDate.toISOString()})),
   terms:data.terms.map(term=>({id:term.id,name:term.name,startDate:term.startDate.toISOString(),endDate:term.endDate.toISOString(),status:term.status,academicYear:{id:term.academicYear.id,name:term.academicYear.name,startDate:term.academicYear.startDate.toISOString(),endDate:term.academicYear.endDate.toISOString()}}))
  };
- return <AppShell universe="school" title="School Settings" subtitle="Configure the school, academic rules and the timeline that powers every term-aware workflow." active="School Settings" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}><SchoolSettingsWorkspace initial={workspaceData} dataSession={{name:session.name}}/></AppShell>;
+ return <AppShell universe="school" title="School Settings" subtitle="Configure the school, academic rules and the timeline that powers every term-aware workflow." active="School Settings" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}><div className="settings-page-stack"><ThemePreferences/><SchoolSettingsWorkspace initial={workspaceData} dataSession={{name:session.name}}/></div></AppShell>;
 }
