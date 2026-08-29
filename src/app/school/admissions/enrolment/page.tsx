@@ -1,0 +1,156 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createId } from "@paralleldrive/cuid2";
+import { randomInt } from "node:crypto";
+import { AppShell } from "@/components/AppShell";
+import { requireSchoolSession } from "@/lib/school-auth";
+import { requirePermission } from "@/lib/rbac";
+import { withTenant } from "@/lib/db";
+import { appendSchoolAudit } from "@/lib/audit";
+import "./enrolment.css";
+
+const statuses = ["draft", "ready", "confirmed", "withdrawn"] as const;
+const entryTypes = ["new", "returning", "transfer"] as const;
+
+function dateInput(value: FormDataEntryValue | null) { return typeof value === "string" && value ? new Date(value) : null; }
+function statusLabel(value: string) { return value.replaceAll("_", " ").replace(/\b\w/g, (c) => c.toUpperCase()); }
+
+async function createEnrollment(formData: FormData) {
+  "use server";
+  const session = await requireSchoolSession();
+  const studentId = String(formData.get("studentId") ?? "");
+  const yearId = String(formData.get("academicYearId") ?? "");
+  const termId = String(formData.get("termId") ?? "");
+  const classId = String(formData.get("classId") ?? "");
+  const entryType = String(formData.get("entryType") ?? "new");
+  const startDate = dateInput(formData.get("startDate"));
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const guardianVerified = formData.get("guardianVerified") === "on";
+  const documentsReady = formData.get("documentsReady") === "on";
+  const feeReady = formData.get("feeReady") === "on";
+  if (!studentId || !yearId || !termId || !classId) throw new Error("Learner, academic year, term and class are required.");
+  if (!entryTypes.includes(entryType as (typeof entryTypes)[number])) throw new Error("Invalid entry type.");
+
+  await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "students:write");
+    const term = await tx.term.findFirst({ where: { id: termId, schoolId: session.schoolId, academicYearId: yearId }, select: { id: true } });
+    if (!term) throw new Error("The selected term does not belong to the selected academic year.");
+    const schoolClass = await tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } });
+    if (!schoolClass) throw new Error("The selected class does not belong to this school.");
+    const student = await tx.student.findFirst({ where: { id: studentId, schoolId: session.schoolId }, select: { id: true, classId: true } });
+    if (!student) throw new Error("Learner not found.");
+    const duplicate = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "Enrollment" WHERE "schoolId"=${session.schoolId} AND "studentId"=${studentId} AND "academicYearId"=${yearId} AND "termId"=${termId} LIMIT 1`;
+    if (duplicate.length) throw new Error("This learner is already enrolled for the selected term.");
+    const id = createId();
+    const status = guardianVerified && documentsReady ? "ready" : "draft";
+    await tx.$executeRaw`INSERT INTO "Enrollment" ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","startDate","guardianVerified","documentsReady","feeReady","notes","createdBy") VALUES (${id},${session.schoolId},${studentId},${yearId},${termId},${classId},${status},${entryType},${startDate},${guardianVerified},${documentsReady},${feeReady},${notes},${session.userId})`;
+    if (status === "ready" || status === "confirmed") {
+      await tx.student.update({ where: { id: studentId }, data: { classId } });
+    }
+    await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "enrollment.created", entityType: "Enrollment", entityId: id, after: { studentId, yearId, termId, classId, status, entryType, guardianVerified, documentsReady, feeReady } });
+  });
+  redirect("/school/admissions/enrolment");
+}
+
+async function updateEnrollment(formData: FormData) {
+  "use server";
+  const session = await requireSchoolSession();
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "draft");
+  const guardianVerified = formData.get("guardianVerified") === "on";
+  const documentsReady = formData.get("documentsReady") === "on";
+  const feeReady = formData.get("feeReady") === "on";
+  if (!statuses.includes(status as (typeof statuses)[number])) throw new Error("Invalid enrolment status.");
+  await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "students:write");
+    const rows = await tx.$queryRaw<Array<{ studentId:string; classId:string }>>`SELECT "studentId","classId" FROM "Enrollment" WHERE "id"=${id} AND "schoolId"=${session.schoolId} LIMIT 1`;
+    const row = rows[0];
+    if (!row) throw new Error("Enrollment not found.");
+    await tx.$executeRaw`UPDATE "Enrollment" SET "status"=${status},"guardianVerified"=${guardianVerified},"documentsReady"=${documentsReady},"feeReady"=${feeReady},"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "schoolId"=${session.schoolId}`;
+    if (status === "confirmed") await tx.student.update({ where: { id: row.studentId }, data: { classId: row.classId, status: "active" } });
+    await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "enrollment.updated", entityType: "Enrollment", entityId: id, after: { status, guardianVerified, documentsReady, feeReady } });
+  });
+  redirect("/school/admissions/enrolment");
+}
+
+async function convertEnquiryToEnrollment(formData: FormData) {
+  "use server";
+  const session = await requireSchoolSession();
+  const enquiryId = String(formData.get("enquiryId") ?? "");
+  const yearId = String(formData.get("academicYearId") ?? "");
+  const termId = String(formData.get("termId") ?? "");
+  const classId = String(formData.get("classId") ?? "");
+  await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "students:write");
+    const enquiries = await tx.$queryRaw<Array<{id:string;studentName:string;guardianName:string|null;phone:string|null;email:string|null;convertedStudentId:string|null}>>`SELECT "id","studentName","guardianName","phone","email","convertedStudentId" FROM "AdmissionEnquiry" WHERE "id"=${enquiryId} AND "schoolId"=${session.schoolId} LIMIT 1`;
+    const enquiry = enquiries[0];
+    if (!enquiry || enquiry.convertedStudentId) throw new Error("This enquiry is already linked to a learner or no longer exists.");
+    if (!yearId || !termId || !classId) throw new Error("Academic year, term and class are required.");
+    let admissionNo = `ADM-${new Date().getFullYear()}-${randomInt(1000, 9999)}`;
+    for (let i = 0; i < 8; i += 1) {
+      const hit = await tx.student.findFirst({ where: { schoolId: session.schoolId, admissionNo }, select: { id: true } });
+      if (!hit) break;
+      admissionNo = `ADM-${new Date().getFullYear()}-${randomInt(1000, 9999)}`;
+    }
+    const student = await tx.student.create({ data: { schoolId: session.schoolId, name: enquiry.studentName, admissionNo, classId, status: "active" } });
+    if (enquiry.guardianName && enquiry.phone) {
+      const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: enquiry.phone } }, update: { name: enquiry.guardianName }, create: { schoolId: session.schoolId, name: enquiry.guardianName, phone: enquiry.phone } });
+      await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: "Parent/Guardian", isPrimary: true } }).catch(() => undefined);
+    }
+    const enrollmentId = createId();
+    await tx.$executeRaw`INSERT INTO "Enrollment" ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","guardianVerified","documentsReady","feeReady","notes","createdBy") VALUES (${enrollmentId},${session.schoolId},${student.id},${yearId},${termId},${classId},'ready','new',true,false,false,${`Converted from ${enquiryId}`},${session.userId})`;
+    await tx.$executeRaw`UPDATE "AdmissionEnquiry" SET "stage"='converted',"convertedStudentId"=${student.id},"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${enquiryId} AND "schoolId"=${session.schoolId}`;
+    await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "admission_enquiry.enrolled", entityType: "Enrollment", entityId: enrollmentId, after: { enquiryId, studentId: student.id, admissionNo, yearId, termId, classId } });
+  });
+  redirect("/school/admissions/enrolment");
+}
+
+export default async function EnrolmentPage() {
+  const session = await requireSchoolSession();
+  const data = await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "students:read");
+    const [school, terms, classes, students, enrollments, candidates] = await Promise.all([
+      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
+      tx.term.findMany({ where: { schoolId: session.schoolId }, include: { academicYear: true }, orderBy: { startDate: "desc" } }),
+      tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
+      tx.student.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, select: { id:true,name:true,admissionNo:true,class:{select:{name:true,level:true}} }, take: 250 }),
+      tx.$queryRaw<Array<{id:string;studentId:string;studentName:string;admissionNo:string;academicYearId:string;academicYearName:string;termId:string;termName:string;classId:string;className:string;status:string;entryType:string;startDate:Date|null;guardianVerified:boolean;documentsReady:boolean;feeReady:boolean;createdAt:Date}>>`SELECT e."id",e."studentId",s."name" AS "studentName",s."admissionNo",e."academicYearId",ay."name" AS "academicYearName",e."termId",t."name" AS "termName",e."classId",c."name" AS "className",e."status",e."entryType",e."startDate",e."guardianVerified",e."documentsReady",e."feeReady",e."createdAt" FROM "Enrollment" e JOIN "Student" s ON s."id"=e."studentId" AND s."schoolId"=e."schoolId" JOIN "AcademicYear" ay ON ay."id"=e."academicYearId" AND ay."schoolId"=e."schoolId" JOIN "Term" t ON t."id"=e."termId" AND t."schoolId"=e."schoolId" JOIN "Class" c ON c."id"=e."classId" AND c."schoolId"=e."schoolId" WHERE e."schoolId"=${session.schoolId} ORDER BY e."createdAt" DESC LIMIT 250`,
+      tx.$queryRaw<Array<{id:string;reference:string;studentName:string;guardianName:string|null;phone:string|null;intendedClass:string|null;stage:string}>>`SELECT "id","reference","studentName","guardianName","phone","intendedClass","stage" FROM "AdmissionEnquiry" WHERE "schoolId"=${session.schoolId} AND "convertedStudentId" IS NULL AND "stage" IN ('accepted','approved','applied') ORDER BY "createdAt" DESC LIMIT 100`,
+    ]);
+    return { school, terms, classes, students, enrollments, candidates };
+  });
+
+  const currentTerm = data.terms[0];
+  const confirmed = data.enrollments.filter((e) => e.status === "confirmed").length;
+  const ready = data.enrollments.filter((e) => e.status === "ready").length;
+  const draft = data.enrollments.filter((e) => e.status === "draft").length;
+  const incomplete = data.enrollments.filter((e) => !(e.guardianVerified && e.documentsReady && e.feeReady)).length;
+  const enrolledStudentIds = new Set(data.enrollments.filter((e) => currentTerm && e.termId === currentTerm.id && e.status !== "withdrawn").map((e) => e.studentId));
+  const unplaced = data.students.filter((s) => !enrolledStudentIds.has(s.id));
+
+  return <AppShell universe="school" title="Enrolment" subtitle="Turn accepted applicants and existing learners into confirmed term rosters without re-entering their records." active="Enrolment" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+    <div className="enrolment-page">
+      <section className="enrolment-hero">
+        <div><span className="eyebrow">Admissions · Roster confirmation</span><h2>Make the next term roster official.</h2><p>Enrollment is the handoff between admissions and the live school register: choose the academic year, term and class, complete checks, then confirm the learner.</p><div className="enrolment-context">{currentTerm ? <span><b>{currentTerm.academicYear.name}</b> · {currentTerm.name}</span> : <span>No term configured yet</span>}<Link href="/school/terms">Manage terms →</Link></div></div>
+        <div className="enrolment-hero-actions"><Link href="/school/admissions/applications" className="button secondary">Applications</Link><a href="#new-enrollment" className="button primary">+ Enrol learner</a></div>
+      </section>
+
+      <section className="enrolment-stats"><article><span>Confirmed</span><strong>{confirmed}</strong><small>Official roster entries</small></article><article><span>Ready</span><strong>{ready}</strong><small>Waiting for confirmation</small></article><article><span>Draft</span><strong>{draft}</strong><small>Still being completed</small></article><article className={incomplete ? "attention" : "good"}><span>Checks outstanding</span><strong>{incomplete}</strong><small>{incomplete ? "Guardian, documents or fees" : "All checks complete"}</small></article></section>
+
+      <section className="enrolment-flow"><div className="section-heading"><div><span className="eyebrow">Enrollment flow</span><h3>Four things make an enrollment complete.</h3></div></div><div className="flow-grid"><div><b>01</b><strong>Choose period</strong><span>Academic year + term</span></div><div><b>02</b><strong>Place learner</strong><span>Class / stream</span></div><div><b>03</b><strong>Complete checks</strong><span>Guardian · documents · fees</span></div><div><b>04</b><strong>Confirm</strong><span>Student becomes part of roster</span></div></div></section>
+
+      <section className="enrolment-grid">
+        <div className="enrolment-register">
+          <div className="section-heading"><div><span className="eyebrow">Enrollment register</span><h3>Roster confirmations</h3><p>Every term keeps its own history; confirming a new term does not erase previous terms.</p></div><div className="register-actions"><Link href="/school/students">Students</Link><Link href="/school/classes">Classes</Link></div></div>
+          {data.enrollments.length ? <div className="enrolment-table-wrap"><table className="enrolment-table"><thead><tr><th>Learner</th><th>Period</th><th>Class</th><th>Checks</th><th>Status</th><th /></tr></thead><tbody>{data.enrollments.map((e)=><tr key={e.id}><td><div className="learner-cell"><span className="avatar">{e.studentName.slice(0,2).toUpperCase()}</span><div><strong>{e.studentName}</strong><small>{e.admissionNo} · {statusLabel(e.entryType)}</small></div></div></td><td><strong>{e.academicYearName}</strong><small>{e.termName}</small></td><td>{e.className}</td><td><div className="check-list"><span className={e.guardianVerified?"done":"todo"}>Guardian</span><span className={e.documentsReady?"done":"todo"}>Docs</span><span className={e.feeReady?"done":"todo"}>Fees</span></div></td><td><span className={`status ${e.status}`}>{statusLabel(e.status)}</span></td><td><form action={updateEnrollment} className="row-update"><input type="hidden" name="id" value={e.id}/><select name="status" defaultValue={e.status}>{statuses.map((s)=><option value={s} key={s}>{statusLabel(s)}</option>)}</select><label title="Guardian verified"><input type="checkbox" name="guardianVerified" defaultChecked={e.guardianVerified}/>G</label><label title="Documents ready"><input type="checkbox" name="documentsReady" defaultChecked={e.documentsReady}/>D</label><label title="Fees ready"><input type="checkbox" name="feeReady" defaultChecked={e.feeReady}/>F</label><button className="mini-save" type="submit">Save</button></form></td></tr>)}</tbody></table></div> : <div className="empty-state"><span>◎</span><strong>No enrollments yet</strong><p>Create the first term roster entry using the panel on the right.</p></div>}
+        </div>
+
+        <aside className="enrolment-side">
+          <section className="enrolment-form-card" id="new-enrollment"><div className="section-heading"><div><span className="eyebrow">Manual enrollment</span><h3>Enroll a learner</h3><p>Use this for an existing student record.</p></div></div><form action={createEnrollment} className="enrolment-form"><label>Learner<select name="studentId" required defaultValue=""><option value="" disabled>Select learner</option>{unplaced.map((s)=><option value={s.id} key={s.id}>{s.name} · {s.admissionNo}</option>)}</select></label><div className="form-row"><label>Academic year<select name="academicYearId" required defaultValue={currentTerm?.academicYearId ?? ""}>{Array.from(new Map(data.terms.map((t)=>[t.academicYearId,t.academicYear])).values()).map((y)=><option value={y.id} key={y.id}>{y.name}</option>)}</select></label><label>Term<select name="termId" required defaultValue={currentTerm?.id ?? ""}>{data.terms.map((t)=><option value={t.id} key={t.id}>{t.academicYear.name} · {t.name}</option>)}</select></label></div><label>Class<select name="classId" required defaultValue=""><option value="" disabled>Select class</option>{data.classes.map((c)=><option value={c.id} key={c.id}>{c.level ? `${c.level} · ` : ""}{c.name}</option>)}</select></label><div className="form-row"><label>Entry type<select name="entryType" defaultValue="new">{entryTypes.map((t)=><option value={t} key={t}>{statusLabel(t)}</option>)}</select></label><label>Start date<input type="date" name="startDate" /></label></div><div className="checks"><label><input type="checkbox" name="guardianVerified"/> Guardian verified</label><label><input type="checkbox" name="documentsReady"/> Required documents ready</label><label><input type="checkbox" name="feeReady"/> Fee setup ready</label></div><label>Note <span className="optional">Optional</span><textarea name="notes" rows={3} placeholder="Internal enrollment note" /></label><button className="button primary" type="submit">Create enrollment →</button></form></section>
+
+          <section className="candidate-card"><div className="section-heading"><div><span className="eyebrow">Accepted applicants</span><h3>Ready to move in</h3><p>These enquiries can become learners without retyping the family details.</p></div></div>{data.candidates.length ? <div className="candidate-list">{data.candidates.map((c)=><div className="candidate-item" key={c.id}><div><strong>{c.studentName}</strong><span>{c.reference} · {c.guardianName ?? "Guardian not recorded"}</span></div><form action={convertEnquiryToEnrollment}><input type="hidden" name="enquiryId" value={c.id}/><select name="academicYearId" required defaultValue={currentTerm?.academicYearId ?? ""}><option value="" disabled>Year</option>{Array.from(new Map(data.terms.map((t)=>[t.academicYearId,t.academicYear])).values()).map((y)=><option key={y.id} value={y.id}>{y.name}</option>)}</select><select name="termId" required defaultValue={currentTerm?.id ?? ""}><option value="" disabled>Term</option>{data.terms.map((t)=><option key={t.id} value={t.id}>{t.name}</option>)}</select><select name="classId" required defaultValue=""><option value="" disabled>Class</option>{data.classes.map((cl)=><option key={cl.id} value={cl.id}>{cl.name}</option>)}</select><button className="mini-enrol" type="submit">Enrol →</button></form></div>)}</div> : <div className="candidate-empty"><strong>No accepted applicants waiting.</strong><span>Accepted applications will surface here.</span></div>}</section>
+        </aside>
+      </section>
+    </div>
+  </AppShell>;
+}
