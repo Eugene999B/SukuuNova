@@ -85,8 +85,23 @@ export async function recordPayment(tx: TenantDb, input: {
   if (input.method === "momo" && !input.reference?.trim()) {
     throw new AppError("A MoMo reference is required for manual reconciliation.", 400, "REFERENCE_REQUIRED");
   }
+
+  const current = await refreshInvoiceStatus(tx, input.invoiceId);
+  if (current.status === "paid") {
+    throw new AppError("This invoice is already fully paid. Record an approved overpayment or credit separately instead.", 409, "INVOICE_ALREADY_PAID");
+  }
+  const outstanding = current.invoice.totalAmount.minus(current.paid);
+  const amount = new Prisma.Decimal(input.amount);
+  if (amount.greaterThan(outstanding)) {
+    throw new AppError(
+      "This payment is greater than the invoice balance. Handle the extra amount as an approved credit/refund rather than silently overpaying the invoice.",
+      409,
+      "OVERPAYMENT_REQUIRES_REVIEW"
+    );
+  }
+
   const payment = await tx.payment.create({ data: {
-    schoolId: input.schoolId, invoiceId: input.invoiceId, amount: new Prisma.Decimal(input.amount),
+    schoolId: input.schoolId, invoiceId: input.invoiceId, amount,
     method: input.method, reference: input.reference?.trim(), reconciledBy: input.actorId
   } });
   const result = await refreshInvoiceStatus(tx, input.invoiceId);
