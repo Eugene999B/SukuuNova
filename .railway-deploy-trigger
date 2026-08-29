@@ -1,2 +1,2 @@
-release: warm SukuuNova visual reset
-source commit: adf7ac392cf1125630f1aed757e161883f2ac5b4
+source commit: 05682ca7af6db1fb90a2c527ad635fc0323fe53d
+release: overview statistics and persistent sidebar navigation
