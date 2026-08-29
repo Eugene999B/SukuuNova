@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -31,7 +32,7 @@ export default async function TimetablePrintPage({ searchParams }: { searchParam
   let cursor = minutes(start); let period = 1;
   while (cursor + timetable.periodMinutes <= end && rows.length < timetable.periodsPerDay * 2) { const crossing = timetable.breaks.find((b) => cursor < minutes(b.end) && cursor + timetable.periodMinutes > minutes(b.start)); if (crossing) { cursor = minutes(crossing.end); continue; } rows.push(period); period += 1; cursor += timetable.periodMinutes; }
   return <AppShell universe="school" title="Printable timetable" subtitle="A school-ready weekly grid with breaks and lunch built into the day." active="Timetable" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
-    <div className="print-page-actions"><a href="#print">Print / save as PDF</a><a href="/school/timetable">Back to timetable</a></div>
+    <div className="print-page-actions"><a href="#print">Print / save as PDF</a><Link href="/school/timetable">Back to timetable</Link></div>
     <section id="print" className="school-paper timetable-paper">
       <header className="paper-header"><div className="school-logo-box">{data.school?.logoUrl ? <img src={data.school.logoUrl} alt="School logo" /> : <span>LOGO</span>}</div><div className="school-heading"><div className="school-kicker">TIMETABLE</div><h2>{data.school?.name ?? "School"}</h2><p>{data.school?.uniqueCode ?? ""}</p><strong>{selectedClass?.name ?? "Weekly timetable"}</strong>{selectedClass?.classTeacher?.name && <span>Class Teacher: {selectedClass.classTeacher.name}</span>}</div></header>
       <div className="paper-meta"><span>Weekly schedule</span><span>{breakRows.length ? breakRows.join(" · ") : "Breaks not configured"}</span></div>
