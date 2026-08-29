@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import { requirePermission, hasPermission } from "@/lib/rbac";
+import { hasPermission } from "@/lib/rbac";
 import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/academic-engine";
 import GradebookEntryGrid from "@/components/GradebookEntryGrid";
 import "../../module-workspace.css";
