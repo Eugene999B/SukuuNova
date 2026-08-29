@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
+import { rawDb } from "./db";
 import { UnauthorizedError } from "./errors";
 
 export const SCHOOL_COOKIE = "sukuunova_school_session";
@@ -28,17 +29,67 @@ function secret(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET"): Uint8Array
   if (!value || value.length < 32) throw new Error(name + " must be configured with at least 32 characters.");
   return new TextEncoder().encode(value);
 }
-export function sessionCookieOptions(maxAge = SESSION_SECONDS) { return { httpOnly:true,sameSite:"lax" as const,secure:process.env.NODE_ENV === "production",path:"/",maxAge }; }
-export async function createSchoolSessionToken(session:SchoolSession, expiresInSeconds=SESSION_SECONDS):Promise<string>{
-  const payload:Record<string,string>={kind:"school",schoolId:session.schoolId,name:session.name};
-  if(session.impersonationId)payload.impersonationId=session.impersonationId;
-  if(session.impersonatedByAdminId)payload.impersonatedByAdminId=session.impersonatedByAdminId;
-  return new SignJWT(payload).setProtectedHeader({alg:"HS256",typ:"JWT"}).setSubject(session.userId).setIssuer("sukuunova-school").setAudience("sukuunova-school").setIssuedAt().setExpirationTime(Math.floor(Date.now()/1000)+expiresInSeconds).sign(secret("SCHOOL_AUTH_SECRET"));
+
+export function sessionCookieOptions(maxAge = SESSION_SECONDS) {
+  return { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge };
 }
-export async function createPlatformSessionToken(session:PlatformSession):Promise<string>{return new SignJWT({kind:"platform",name:session.name,role:session.role}).setProtectedHeader({alg:"HS256",typ:"JWT"}).setSubject(session.adminId).setIssuer("sukuunova-platform").setAudience("sukuunova-platform").setIssuedAt().setExpirationTime(Math.floor(Date.now()/1000)+SESSION_SECONDS).sign(secret("PLATFORM_AUTH_SECRET"));}
-export async function verifySchoolSessionToken(token:string):Promise<SchoolSession>{const {payload}=await jwtVerify(token,secret("SCHOOL_AUTH_SECRET"),{issuer:"sukuunova-school",audience:"sukuunova-school"});if(payload.kind!=="school"||typeof payload.sub!=="string"||typeof payload.schoolId!=="string"||typeof payload.name!=="string")throw new UnauthorizedError("Invalid school session.");return{kind:"school",userId:payload.sub,schoolId:payload.schoolId,name:payload.name,impersonationId:typeof payload.impersonationId==="string"?payload.impersonationId:undefined,impersonatedByAdminId:typeof payload.impersonatedByAdminId==="string"?payload.impersonatedByAdminId:undefined};}
-export async function verifyPlatformSessionToken(token:string):Promise<PlatformSession>{const {payload}=await jwtVerify(token,secret("PLATFORM_AUTH_SECRET"),{issuer:"sukuunova-platform",audience:"sukuunova-platform"});if(payload.kind!=="platform"||typeof payload.sub!=="string"||typeof payload.name!=="string"||typeof payload.role!=="string")throw new UnauthorizedError("Invalid platform session.");return{kind:"platform",adminId:payload.sub,name:payload.name,role:payload.role};}
-export async function getSchoolSession(){const token=(await cookies()).get(SCHOOL_COOKIE)?.value;if(!token)return null;try{return await verifySchoolSessionToken(token);}catch{return null;}}
-export async function getPlatformSession(){const token=(await cookies()).get(PLATFORM_COOKIE)?.value;if(!token)return null;try{return await verifyPlatformSessionToken(token);}catch{return null;}}
-export async function requireSchoolSession(){const session=await getSchoolSession();if(!session)throw new UnauthorizedError();return session;}
-export async function requirePlatformSession(){const session=await getPlatformSession();if(!session)throw new UnauthorizedError();return session;}
+
+export async function createSchoolSessionToken(session: SchoolSession, expiresInSeconds = SESSION_SECONDS): Promise<string> {
+  const payload: Record<string, string> = { kind: "school", schoolId: session.schoolId, name: session.name };
+  if (session.impersonationId) payload.impersonationId = session.impersonationId;
+  if (session.impersonatedByAdminId) payload.impersonatedByAdminId = session.impersonatedByAdminId;
+  return new SignJWT(payload).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(session.userId).setIssuer("sukuunova-school").setAudience("sukuunova-school").setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds).sign(secret("SCHOOL_AUTH_SECRET"));
+}
+
+export async function createPlatformSessionToken(session: PlatformSession): Promise<string> {
+  return new SignJWT({ kind: "platform", name: session.name, role: session.role }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(session.adminId).setIssuer("sukuunova-platform").setAudience("sukuunova-platform").setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + SESSION_SECONDS).sign(secret("PLATFORM_AUTH_SECRET"));
+}
+
+export async function verifySchoolSessionToken(token: string): Promise<SchoolSession> {
+  const { payload } = await jwtVerify(token, secret("SCHOOL_AUTH_SECRET"), { issuer: "sukuunova-school", audience: "sukuunova-school" });
+  if (payload.kind !== "school" || typeof payload.sub !== "string" || typeof payload.schoolId !== "string" || typeof payload.name !== "string") throw new UnauthorizedError("Invalid school session.");
+  return { kind: "school", userId: payload.sub, schoolId: payload.schoolId, name: payload.name, impersonationId: typeof payload.impersonationId === "string" ? payload.impersonationId : undefined, impersonatedByAdminId: typeof payload.impersonatedByAdminId === "string" ? payload.impersonatedByAdminId : undefined };
+}
+
+export async function verifyPlatformSessionToken(token: string): Promise<PlatformSession> {
+  const { payload } = await jwtVerify(token, secret("PLATFORM_AUTH_SECRET"), { issuer: "sukuunova-platform", audience: "sukuunova-platform" });
+  if (payload.kind !== "platform" || typeof payload.sub !== "string" || typeof payload.name !== "string" || typeof payload.role !== "string") throw new UnauthorizedError("Invalid platform session.");
+  return { kind: "platform", adminId: payload.sub, name: payload.name, role: payload.role };
+}
+
+export async function getSchoolSession() {
+  const token = (await cookies()).get(SCHOOL_COOKIE)?.value;
+  if (!token) return null;
+  try { return await verifySchoolSessionToken(token); } catch { return null; }
+}
+
+export async function getPlatformSession() {
+  const token = (await cookies()).get(PLATFORM_COOKIE)?.value;
+  if (!token) return null;
+  try { return await verifyPlatformSessionToken(token); } catch { return null; }
+}
+
+export async function requireSchoolSession() {
+  const session = await getSchoolSession();
+  if (!session) throw new UnauthorizedError();
+
+  const verified = await rawDb.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", session.schoolId);
+    const rows = await tx.$queryRaw<{ id: string; schoolId: string; name: string; status: string }[]>`
+      SELECT "id", "schoolId", "name", "status"
+      FROM "User"
+      WHERE "id" = ${session.userId} AND "schoolId" = ${session.schoolId}
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
+  });
+
+  if (!verified || verified.status !== "active") throw new UnauthorizedError("This school account is no longer active.");
+  return { ...session, name: verified.name };
+}
+
+export async function requirePlatformSession() {
+  const session = await getPlatformSession();
+  if (!session) throw new UnauthorizedError();
+  return session;
+}
