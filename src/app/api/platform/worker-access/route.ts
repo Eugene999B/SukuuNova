@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getPlatformSession } from "@/lib/auth";
+import { requirePlatformSession } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { routeError, UnauthorizedError, ForbiddenError, AppError } from "@/lib/errors";
+import { routeError, ForbiddenError, AppError } from "@/lib/errors";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
 
 const schema = z.object({ adminId: z.string().min(1), schoolIds: z.array(z.string().min(1)).max(200) });
@@ -18,8 +18,7 @@ async function load(adminId: string) {
 
 export async function GET() {
   try {
-    const session = await getPlatformSession();
-    if (!session) throw new UnauthorizedError();
+    const session = await requirePlatformSession();
     await requirePlatformPermission(session, "admins.view");
     const [workers, schools] = await Promise.all([
       db.$queryRawUnsafe<Array<{ id: string; name: string; email: string; role: string; status: string }>>(`SELECT "id","name","email","role","status" FROM "PlatformAdmin" ORDER BY "name" ASC`),
@@ -32,8 +31,7 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const session = await getPlatformSession();
-    if (!session) throw new UnauthorizedError();
+    const session = await requirePlatformSession();
     await requirePlatformPermission(session, "admins.manage");
     if (session.role !== "super_admin") throw new ForbiddenError("Only Super Admin can change worker school scope.");
     const input = schema.parse(await request.json());
