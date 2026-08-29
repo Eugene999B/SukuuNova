@@ -22,29 +22,35 @@ export default async function ApplicationsPage() {
   const data = await withTenant(session.schoolId, async (tx) => {
     const [school, enquiries, students, classes] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.admissionEnquiry.findMany({ orderBy: { createdAt: "desc" }, take: 100, select: { id: true, reference: true, prospectiveStudentName: true, guardianName: true, applyingForClass: true, stage: true, createdAt: true, updatedAt: true } }),
-      tx.student.count({ where: { status: "active" } }),
-      tx.class.count(),
+      tx.$queryRaw<Array<{ id:string; reference:string; studentName:string; guardianName:string|null; intendedClass:string|null; stage:string; createdAt:Date; updatedAt:Date }>>`
+        SELECT "id","reference","studentName","guardianName","intendedClass","stage","createdAt","updatedAt"
+        FROM "AdmissionEnquiry"
+        WHERE "schoolId"=${session.schoolId}
+          AND "stage" IN ('applied','accepted','rejected')
+        ORDER BY "createdAt" DESC
+        LIMIT 100
+      `,
+      tx.student.count({ where: { schoolId: session.schoolId, status: "active" } }),
+      tx.class.count({ where: { schoolId: session.schoolId } }),
     ]);
-    const applicationRows: Application[] = enquiries
-      .filter((item) => ["applied", "accepted", "rejected"].includes(item.stage))
-      .map((item) => ({
-        id: item.id,
-        reference: item.reference,
-        applicant: item.prospectiveStudentName,
-        guardian: item.guardianName,
-        className: item.applyingForClass ?? "Not selected",
-        submittedAt: item.updatedAt,
-        status: item.stage === "applied" ? "Submitted" : item.stage === "accepted" ? "Accepted" : "Rejected",
-        completeness: item.stage === "accepted" ? 100 : item.stage === "rejected" ? 100 : 70,
-      }));
+
+    const applicationRows: Application[] = enquiries.map((item) => ({
+      id: item.id,
+      reference: item.reference,
+      applicant: item.studentName,
+      guardian: item.guardianName ?? "Not recorded",
+      className: item.intendedClass ?? "Not selected",
+      submittedAt: item.updatedAt,
+      status: item.stage === "applied" ? "Submitted" : item.stage === "accepted" ? "Accepted" : "Rejected",
+      completeness: item.stage === "accepted" || item.stage === "rejected" ? 100 : 70,
+    }));
     return { school, applications: applicationRows, enquiries: enquiries.length, students, classes };
   });
 
   const counts = {
     draft: data.applications.filter((a) => a.status === "Draft").length,
     submitted: data.applications.filter((a) => a.status === "Submitted").length,
-    review: data.applications.filter((a) => a.status === "Submitted" || a.status === "Accepted").length,
+    review: data.applications.filter((a) => a.status === "Submitted").length,
     accepted: data.applications.filter((a) => a.status === "Accepted").length,
     rejected: data.applications.filter((a) => a.status === "Rejected").length,
   };
@@ -91,7 +97,7 @@ export default async function ApplicationsPage() {
 
           <aside className="application-side">
             <div className="application-side-card priority"><span className="applications-eyebrow">Admissions health</span><h3>Keep decisions moving.</h3><div className="side-stat"><strong>{counts.submitted}</strong><span>submitted applications awaiting review</span></div><div className="side-stat"><strong>{counts.accepted}</strong><span>accepted applicants ready for enrolment</span></div><Link href="/school/admissions/applications?view=Submitted" className="side-action">Start reviewing →</Link></div>
-            <div className="application-side-card"><span className="applications-eyebrow">Connected records</span><div className="connected-stat"><strong>{data.enquiries}</strong><span>total admission enquiries</span></div><div className="connected-stat"><strong>{data.students}</strong><span>active learners already enrolled</span></div><div className="connected-stat"><strong>{data.classes}</strong><span>classes available for placement</span></div></div>
+            <div className="application-side-card"><span className="applications-eyebrow">Connected records</span><div className="connected-stat"><strong>{data.enquiries}</strong><span>current application enquiries</span></div><div className="connected-stat"><strong>{data.students}</strong><span>active learners already enrolled</span></div><div className="connected-stat"><strong>{data.classes}</strong><span>classes available for placement</span></div></div>
           </aside>
         </section>
       </div>
