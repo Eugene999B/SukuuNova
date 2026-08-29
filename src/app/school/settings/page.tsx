@@ -46,7 +46,7 @@ export default async function SchoolSettingsPage(){
  const workspaceData: WorkspaceData = {
    school: data.school,
    settings: data.settings ? {
-     expectedResumptionTime: data.settings.expectedResumptionTime,
+     expectedResumptionTime: data.settings.expectedResumptionTime ?? "07:30",
      attendanceGraceMinutes: data.settings.attendanceGraceMinutes,
      timezone: data.settings.timezone,
      gradeCaWeight: Number(data.settings.gradeCaWeight),
