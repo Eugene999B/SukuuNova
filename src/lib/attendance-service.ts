@@ -56,6 +56,22 @@ async function authorizeStaffAttendance(tx: TenantDb, actorId: string) {
   await requirePermission(tx, actorId, "attendance:record_staff");
 }
 
+async function authorizedSummaryClassFilter(tx: TenantDb, actorId: string, requestedClassId?: string) {
+  if (await hasPermission(tx, actorId, "attendance:review") || await hasPermission(tx, actorId, "attendance:record_all")) {
+    return requestedClassId ? { classId: requestedClassId } : {};
+  }
+  if (!(await hasPermission(tx, actorId, "attendance:record_assigned"))) {
+    throw new ForbiddenError("You are not permitted to view attendance summaries.");
+  }
+  const assignedClasses = await tx.class.findMany({ where: { classTeacherId: actorId }, select: { id: true } });
+  const assignedIds = assignedClasses.map((row) => row.id);
+  if (requestedClassId && !assignedIds.includes(requestedClassId)) {
+    throw new ForbiddenError("You may view attendance only for your assigned class.");
+  }
+  if (!assignedIds.length) throw new ForbiddenError("No class is assigned to this teacher.");
+  return requestedClassId ? { classId: requestedClassId } : { classId: { in: assignedIds } };
+}
+
 export async function recordAttendance(
   tx: TenantDb,
   input: {
@@ -136,6 +152,7 @@ export async function attendanceSummary(
   input: { actorId: string; day: Date; classId?: string }
 ) {
   await requirePermission(tx, input.actorId, "attendance:record");
+  const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
   if (await isAttendanceBlocked(tx, input.day)) {
     return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
   }
@@ -143,12 +160,12 @@ export async function attendanceSummary(
     where: {
       attendanceDate: input.day,
       type: "in",
-      ...(input.classId ? { student: { classId: input.classId } } : {})
+      student: classFilter
     },
     select: { studentId: true, isLate: true }
   });
   const total = await tx.student.count({
-    where: { status: "active", ...(input.classId ? { classId: input.classId } : {}) }
+    where: { status: "active", ...classFilter }
   });
   const presentIds = new Set(events.flatMap((event) => event.studentId ? [event.studentId] : []));
   return {
@@ -164,11 +181,12 @@ export async function finalizeStudentAttendance(
   input: { schoolId: string; actorId: string; day: Date; classId?: string }
 ) {
   await requirePermission(tx, input.actorId, "attendance:record");
+  const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
   if (await isAttendanceBlocked(tx, input.day)) {
     return { queued: 0, calendarBlocked: true };
   }
   const students = await tx.student.findMany({
-    where: { status: "active", ...(input.classId ? { classId: input.classId } : {}) },
+    where: { status: "active", ...classFilter },
     include: {
       attendanceEvents: { where: { attendanceDate: input.day, type: "in" }, select: { id: true } },
       guardians: { where: { isPrimary: true }, include: { guardian: true } }
