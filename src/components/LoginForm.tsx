@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type Props = { universe: "school" } | { universe: "platform" };
@@ -10,6 +10,11 @@ type SchoolRole = "staff" | "guardian";
 
 function safeNext(value: string | null) {
   return value && value.startsWith("/") && !value.startsWith("//") ? value : null;
+}
+
+function getNextPath() {
+  if (typeof window === "undefined") return null;
+  return safeNext(new URLSearchParams(window.location.search).get("next"));
 }
 
 function isFinanceRole(roles: unknown[]) {
@@ -24,7 +29,6 @@ function isPayrollRole(roles: unknown[]) {
 
 export function LoginForm(props: Props) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [schoolStage, setSchoolStage] = useState<SchoolStage>(props.universe === "school" ? "school" : "credentials");
   const [schoolCode, setSchoolCode] = useState("");
   const [schoolRole, setSchoolRole] = useState<SchoolRole | null>(null);
@@ -40,29 +44,22 @@ export function LoginForm(props: Props) {
     const platformEmail = String(data.get("email") ?? "").trim();
     try {
       const endpoint = props.universe === "school" && schoolRole === "guardian" ? "/api/auth/guardian/login" : `/api/auth/${props.universe}/login`;
-      const body = props.universe === "school"
-        ? schoolRole === "guardian"
-          ? { schoolCode, identifier, password }
-          : { uniqueCode: schoolCode, identifier, password }
-        : { email: platformEmail, password };
+      const body = props.universe === "school" ? (schoolRole === "guardian" ? { schoolCode, identifier, password } : { uniqueCode: schoolCode, identifier, password }) : { email: platformEmail, password };
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json();
       if (!response.ok) { setError(result.message || "Login failed. Please check your details and try again."); return; }
-      if (props.universe === "school" && schoolRole === "guardian") {
-        router.push(safeNext(searchParams.get("next")) ?? "/guardian");
-      } else if (props.universe === "school" && result.user?.needsPasswordChange) {
-        router.push("/account/security?required=1");
-      } else if (props.universe === "school" && result.user?.portal === "teacher") {
-        router.push(safeNext(searchParams.get("next")) ?? "/teacher");
-      } else {
+      const nextPath = getNextPath();
+      if (props.universe === "school" && schoolRole === "guardian") router.push(nextPath ?? "/guardian");
+      else if (props.universe === "school" && result.user?.needsPasswordChange) router.push("/account/security?required=1");
+      else if (props.universe === "school" && result.user?.portal === "teacher") router.push(nextPath ?? "/teacher");
+      else {
         const roles = Array.isArray(result.user?.roles) ? result.user.roles : [];
         const defaultDestination = isFinanceRole(roles) ? "/school/fees" : isPayrollRole(roles) ? "/school/fees/payroll" : "/dashboard";
-        router.push(safeNext(searchParams.get("next")) ?? (props.universe === "platform" ? "/platform" : defaultDestination));
+        router.push(nextPath ?? (props.universe === "platform" ? "/platform" : defaultDestination));
       }
       router.refresh();
-    } catch {
-      setError("Unable to reach SukuuNova right now. Please try again.");
-    } finally { setPending(false); }
+    } catch { setError("Unable to reach SukuuNova right now. Please try again."); }
+    finally { setPending(false); }
   }
 
   if (props.universe === "school") {
@@ -73,7 +70,6 @@ export function LoginForm(props: Props) {
       {error ? <p className="auth-error" role="alert">{error}</p> : null}
       <button className="auth-submit" type="submit">Continue <span>→</span></button>
     </form>;
-
     if (schoolStage === "role") return <div className="auth-form">
       <div className="auth-stepper"><span className="is-complete">✓</span><i className="is-complete" /><span className="is-active">2</span><i /><span>3</span></div>
       <div className="auth-school-chip"><span>School</span><strong>{schoolCode}</strong><button type="button" onClick={() => setSchoolStage("school")} aria-label="Change school code">Change</button></div>
@@ -84,7 +80,6 @@ export function LoginForm(props: Props) {
       </div>
       {error ? <p className="auth-error" role="alert">{error}</p> : null}
     </div>;
-
     return <form className="auth-form" onSubmit={submit}>
       <div className="auth-stepper"><span className="is-complete">✓</span><i className="is-complete" /><span className="is-complete">✓</span><i className="is-complete" /><span className="is-active">3</span></div>
       <div className="auth-school-chip"><span>{schoolRole === "guardian" ? "Guardian" : "Staff"}</span><strong>{schoolCode}</strong><button type="button" onClick={() => setSchoolStage("role")} aria-label="Change access type">Change</button></div>
@@ -95,7 +90,6 @@ export function LoginForm(props: Props) {
       <Link href="/login/school/password-reset" className="auth-safety-link">Need help resetting access?</Link>
     </form>;
   }
-
   return <form className="auth-form" onSubmit={submit}>
     <div className="auth-field"><label htmlFor="email">Administrator email</label><input id="email" name="email" type="email" autoComplete="username" placeholder="admin@company.com" required /></div>
     <div className="auth-field"><label htmlFor="password"><span>Password</span><Link className="auth-forgot" href="/login/platform/password-reset">Forgot password?</Link></label><input id="password" name="password" type="password" autoComplete="current-password" placeholder="Enter your password" required /></div>
