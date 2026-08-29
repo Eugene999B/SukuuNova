@@ -1,3 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { AcademicSetupConsole } from "@/components/AcademicSetupConsole";
-export default function AcademicSetupPage(){return <AppShell universe="school" title="Academic setup" subtitle="Set the rules once. SukuuNova uses them to build timetables, calculate grades and prepare report cards consistently." active="School Settings"><AcademicSetupConsole /></AppShell>;}
+import "./academic-setup.css";
+
+export default function AcademicSetupPage(){
+  return <AppShell universe="school" title="Academic Setup" subtitle="Configure the school calendar, teaching hours, bell schedule, grading rules and report-card behaviour from one academic control centre." active="Academic Setup"><AcademicSetupConsole /></AppShell>;
+}
