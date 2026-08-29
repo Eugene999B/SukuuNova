@@ -4,6 +4,7 @@ import { withTenant } from "@/lib/db";
 import SchoolSettingsWorkspace from "./SchoolSettingsWorkspace";
 import ThemePreferences from "./ThemePreferences";
 import "./settings.css";
+import "./settings-dark.css";
 
 type WorkspaceSettings = { expectedResumptionTime:string; attendanceGraceMinutes:number; timezone:string; gradeCaWeight:number; gradeExamWeight:number; allowPartialReportCards:boolean; smsSenderId:string|null };
 type WorkspaceTerm = { id:string; name:string; startDate:string; endDate:string; status:"upcoming"|"current"|"completed"; academicYear:{id:string;name:string;startDate:string;endDate:string} };
