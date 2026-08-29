@@ -36,3 +36,68 @@ button{transition:transform .16s ease,box-shadow .16s ease,filter .16s ease}butt
 .app-pill{border-color:rgba(98,246,231,.12)!important;background:rgba(98,246,231,.06)!important;color:#9cefe3!important}
 @media(max-width:900px){body:before{background-size:32px 32px;opacity:.11}.app-topbar{backdrop-filter:blur(14px)}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+/* SukuuNova luminous workspace refresh: dark navigation, bright operating canvas. */
+:root{--nova-canvas:#f4f8fb;--nova-surface:#ffffff;--nova-surface-2:#f8fbfd;--nova-ink:#102434;--nova-ink-2:#2b4354;--nova-muted:#6d8290;--nova-line:#dbe6ec;--nova-mint:#1cc7a0;--nova-blue:#4169ff;--nova-soft-mint:#e8fbf5;--nova-soft-blue:#edf1ff;--nova-shadow:0 18px 50px rgba(19,42,58,.08)}
+html{background:linear-gradient(180deg,#f8fbfd 0%,#eef4f8 100%) fixed!important;background-color:#eef4f8!important}
+body{background:transparent!important;color:var(--nova-ink)!important}
+body:before{background-image:radial-gradient(circle at 84% 0%,rgba(65,105,255,.09),transparent 28%),radial-gradient(circle at 18% 8%,rgba(28,199,160,.10),transparent 25%);opacity:.9;mask-image:none}
+.app-main{background:linear-gradient(180deg,rgba(248,251,253,.96),rgba(242,247,250,.98))!important}
+.app-main:before{background:radial-gradient(circle at 82% 0%,rgba(65,105,255,.055),transparent 30%),radial-gradient(circle at 20% 7%,rgba(28,199,160,.05),transparent 24%)}
+.app-topbar{background:rgba(255,255,255,.88)!important;border-bottom:1px solid #dfe8ee!important;backdrop-filter:blur(18px);color:var(--nova-ink)!important}
+.app-search{background:#f5f8fa!important;border:1px solid #dfe8ee!important;color:#36505f!important}
+.app-search::placeholder{color:#8296a3!important}
+.app-card,.module-card,.module-metrics article,.module-table-wrap,.module-register-empty,.module-dropzone{background:var(--nova-surface)!important;border:1px solid var(--nova-line)!important;box-shadow:var(--nova-shadow)!important;backdrop-filter:none!important;color:var(--nova-ink)!important}
+.app-card:hover,.module-card:hover{border-color:#c8dde8!important;box-shadow:0 22px 55px rgba(19,42,58,.11)!important}
+.app-card h1,.app-card h2,.app-card h3,.app-card h4,.module-topline h2,.module-section-title h3,.module-card h3{color:var(--nova-ink)!important}
+.app-card p,.module-topline p,.module-section-title p,.module-card p,.module-overline,.module-section-title>div>span{color:var(--nova-muted)!important}
+.app-kpi-value,.module-metrics strong{background:linear-gradient(135deg,#102d43,#236b68 58%,#4a61e7)!important;-webkit-background-clip:text!important;background-clip:text!important;color:transparent!important}
+input,textarea,select{background:#fff!important;border-color:#cedde6!important;color:#173041!important;color-scheme:light!important;box-shadow:none!important}
+select option,select optgroup{background:#fff!important;color:#173041!important}
+input::placeholder,textarea::placeholder{color:#8ca0ac!important}
+input:focus,textarea:focus,select:focus{border-color:rgba(28,199,160,.58)!important;box-shadow:0 0 0 3px rgba(28,199,160,.10)!important;background:#fff!important}
+label{color:#36505f!important}
+button{color:var(--nova-ink)}
+.app-list-row,.module-workflow-step,.module-setup-list a,.module-command-flow>div,.module-exception-list>div,.module-queue>div,.module-readiness div,.module-health-list div,.module-delivery div{border-color:#e5edf2!important;color:var(--nova-ink)!important}
+.app-list-row:hover,.module-workflow-step:hover,.module-setup-list a:hover,.module-command-flow>div:hover{background:var(--nova-soft-mint)!important;border-color:#c9eee3!important;transform:none!important}
+.app-pill{background:var(--nova-soft-mint)!important;border-color:#c6eee3!important;color:#13745f!important}
+
+/* Bright, compact module grammar for academic and operational workspaces. */
+.module-workspace,.module-shell{max-width:1500px!important;margin:0 auto!important;padding:6px 0 28px!important}
+.module-topline,.module-hero{margin-bottom:14px!important}
+.module-topline h2,.module-hero h2{font-size:32px!important;letter-spacing:-.045em!important}
+.module-topline p,.module-hero p{font-size:12px!important;max-width:860px!important}
+.module-action-rail{min-width:360px!important}
+.module-action-primary,.module-hero-button,.module-actions .button.primary{background:linear-gradient(135deg,#1dc9a1,#24b9ed)!important;color:#062c2a!important;box-shadow:0 10px 24px rgba(28,199,160,.20)!important;border:0!important}
+.module-action-secondary,.module-secondary-button,.module-actions .button.secondary{background:#fff!important;color:#274456!important;border:1px solid #d8e5eb!important}
+.module-tabbar,.module-tabs{background:#fff!important;border:1px solid #dce7ed!important;border-radius:14px!important;box-shadow:0 8px 24px rgba(31,56,72,.04)!important}
+.module-tabbar a,.module-tab{color:#718694!important}
+.module-tabbar a.is-active,.module-tab.active{color:#173447!important;background:linear-gradient(90deg,var(--nova-soft-mint),var(--nova-soft-blue))!important}
+.module-metrics{gap:10px!important}
+.module-metrics article{padding:14px 16px!important;border-radius:14px!important;box-shadow:0 10px 26px rgba(31,56,72,.05)!important}
+.module-metrics span{color:#738996!important}
+.module-metrics small{color:#8b9da7!important}
+.module-table-wrap{overflow:auto!important;border-radius:14px!important}
+.module-table-wrap th{background:#f7fafc!important;color:#6e8390!important;border-bottom:1px solid #dfe9ef!important}
+.module-table-wrap td{color:#294353!important;border-bottom:1px solid #edf2f5!important}
+.module-table-wrap tr:hover td{background:#f5fbf9!important}
+.module-empty{color:#738794!important}
+.module-empty strong{color:#274456!important}
+.module-filter-row input,.module-register-controls button{background:#fff!important;color:#284657!important;border:1px solid #d8e5eb!important}
+.module-linked-grid a,.module-feature-actions a,.module-admin-actions a,.module-setup-list a{background:#f9fbfc!important;border-color:#dde8ee!important;color:#304b5c!important}
+.module-exception-list>div,.module-queue>div,.module-readiness div,.module-health-list div,.module-delivery div{border-bottom:1px solid #e6eef2!important}
+.module-finance-chart,.module-compose-preview{background:linear-gradient(135deg,#f8fcfb,#f4f6ff)!important;border-color:#dce7ed!important}
+
+/* Academic setup: turn long instructional panels into working control surfaces. */
+.app-dashboard-grid{gap:14px!important}
+.app-dashboard-grid .app-panel{border-radius:18px!important;padding:18px!important}
+.app-dashboard-grid .app-card-head{padding-bottom:12px!important;margin-bottom:8px!important;border-bottom:1px solid #e8eff3!important}
+.app-dashboard-grid .app-card-head h2{font-size:19px!important;line-height:1.2!important}
+.app-dashboard-grid .app-list{gap:2px!important}
+.app-dashboard-grid .app-list-row{background:#fbfdfe!important;border-radius:11px!important;padding:10px 11px!important}
+.app-dashboard-grid .app-banner{background:linear-gradient(135deg,#f0fbf7,#f0f3ff)!important;border:1px solid #d9e9eb!important;color:#274456!important;border-radius:13px!important}
+.app-primary-action{background:linear-gradient(135deg,#1dc9a1,#4169ff)!important;color:#fff!important;border:0!important;box-shadow:0 10px 26px rgba(65,105,255,.20)!important}
+.app-action{background:#fff!important;border:1px solid #d6e4ea!important;color:#244253!important;box-shadow:0 8px 22px rgba(31,56,72,.05)!important}
+
+@media(max-width:1120px){.module-action-rail{min-width:0!important;width:100%;max-width:620px}.module-topline h2,.module-hero h2{font-size:27px!important}}
+@media(max-width:760px){.module-topline h2,.module-hero h2{font-size:23px!important}.module-card,.app-card{border-radius:15px!important}.module-action-rail{grid-template-columns:1fr!important}}
