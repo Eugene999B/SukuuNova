@@ -3,11 +3,11 @@ import { redirect } from "next/navigation";
 import { AddStudentDialog } from "@/components/students/AddStudentDialog";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
-import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
+import { withTenant } from "@/lib/db";
 import "@/app/school/students/students-workspace.css";
 import "@/components/students/add-student-dialog.css";
-import "@/app/school/students/dark-students-theme.css";
+import "@/app/school/students/students-light-overrides.css";
 
 function createIndexNumber() {
   const year = new Date().getFullYear();
@@ -32,13 +32,13 @@ async function createStudent(formData: FormData) {
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:write");
     if (classId) {
-      const schoolClass = await tx.class.findUnique({ where: { id: classId }, select: { id: true } });
+      const schoolClass = await tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } });
       if (!schoolClass) throw new Error("The selected class does not belong to this school.");
     }
 
     let indexNumber = createIndexNumber();
     for (let attempt = 0; attempt < 8; attempt += 1) {
-      const exists = await tx.student.findUnique({ where: { schoolId_admissionNo: { schoolId: session.schoolId, admissionNo: indexNumber } }, select: { id: true } });
+      const exists = await tx.student.findFirst({ where: { schoolId: session.schoolId, admissionNo: indexNumber }, select: { id: true } });
       if (!exists) break;
       indexNumber = createIndexNumber();
     }
@@ -50,7 +50,11 @@ async function createStudent(formData: FormData) {
       await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } }).catch(() => undefined);
     }
 
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
+    const leastFilledHouse = await tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT h."id",h."name" FROM "House" h LEFT JOIN "Student" s ON s."houseId"=h."id" AND s."schoolId"=h."schoolId" AND s."status"='active' WHERE h."schoolId"=${session.schoolId} AND h."isActive"=true GROUP BY h."id",h."name" ORDER BY COUNT(s."id") ASC,h."name" ASC LIMIT 1`;
+    const house = leastFilledHouse[0] ?? null;
+    if (house) await tx.$executeRaw`UPDATE "Student" SET "houseId"=${house.id} WHERE "id"=${student.id} AND "schoolId"=${session.schoolId}`;
+
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, houseId: house?.id ?? null, houseName: house?.name ?? null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
   });
   redirect("/school/students");
 }
@@ -61,7 +65,7 @@ export default async function CreateStudentPage() {
     await requirePermission(tx, session.userId, "students:read");
     const [school, classes] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
+      tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
     ]);
     return { school, classes };
   });
