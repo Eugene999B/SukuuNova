@@ -3,7 +3,7 @@ import { LogoutButton } from "./LogoutButton";
 import { SidebarNav } from "./SidebarNav";
 import "./app-shell.css";
 
-type Universe = "school" | "platform";
+type Universe = "school" | "platform" | "teacher";
 type NavItem = [icon: string, label: string, href: string];
 type NavGroup = { label: string; items: NavItem[] };
 type Props = { universe: Universe; title: string; subtitle: string; active?: string; schoolName?: string; schoolCode?: string; userName?: string; role?: string; children: React.ReactNode };
@@ -21,6 +21,14 @@ const schoolGroups: NavGroup[] = [
   { label: "Support", items: [["?", "Help & Support", "/school/help"]] },
 ];
 
+const teacherGroups: NavGroup[] = [
+  { label: "My Workspace", items: [["▦", "Teacher Home", "/teacher"], ["♙", "My Students", "/teacher/students"], ["◷", "My Timetable", "/school/timetable"]] },
+  { label: "Teaching", items: [["▧", "My Lessons & Planning", "/school/lessons"], ["✦", "My Homework", "/school/homework"], ["▥", "My Gradebook", "/school/gradebook"], ["◇", "My Assessments", "/school/exams"]] },
+  { label: "Classroom", items: [["◉", "My Attendance", "/school/attendance"], ["▣", "My Classes", "/school/classes"]] },
+  { label: "Communication", items: [["✉", "My Messages", "/school/communications/messages"], ["◈", "Class Announcements", "/school/communications/announcements"]] },
+  { label: "Account", items: [["⚙", "Account Security", "/account/security"], ["?", "Help & Support", "/school/help"]] },
+];
+
 const platformGroups: NavGroup[] = [
   { label: "Control Center", items: [["▦", "Overview", "/platform"], ["⌕", "Global Search", "/platform/search"], ["◉", "System Health", "/platform/health"]] },
   { label: "Schools & Plans", items: [["⌂", "Schools", "/platform/schools"], ["◇", "Plans & Entitlements", "/platform/plans"], ["₵", "Platform Billing", "/platform/billing"], ["▥", "Network Analytics", "/platform/analytics"]] },
@@ -30,16 +38,17 @@ const platformGroups: NavGroup[] = [
 
 function initials(value: string) { return value.trim().split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "S"; }
 
-export function AppShell({ universe, title, subtitle, active = "Overview", schoolName = "School Workspace", schoolCode = "", userName = universe === "school" ? "School Administrator" : "Platform Administrator", role = universe === "school" ? "Administrator" : "Super Admin", children }: Props) {
-  const groups = universe === "school" ? schoolGroups : platformGroups;
+export function AppShell({ universe, title, subtitle, active = "Overview", schoolName = "School Workspace", schoolCode = "", userName = universe === "platform" ? "Platform Administrator" : "School Administrator", role = universe === "platform" ? "Super Admin" : universe === "teacher" ? "Teacher" : "Administrator", children }: Props) {
+  const groups = universe === "platform" ? platformGroups : universe === "teacher" ? teacherGroups : schoolGroups;
   const avatar = initials(userName);
+  const isTeacher = universe === "teacher";
   return <div className={`app-shell app-shell-${universe}`}>
     <aside className="app-sidebar">
-      <Link href="/" className="app-brand"><span className="app-brand-mark">S</span><span><strong>SukuuNova</strong><small>{universe === "school" ? "School Workspace" : "Platform Control"}</small></span></Link>
-      <div className="app-school-chip"><span className="app-chip-avatar">{universe === "school" ? avatar : "SN"}</span><span><b>{universe === "school" ? schoolName : "SukuuNova Network"}</b><small>{universe === "school" ? `${schoolCode}${schoolCode ? " · " : ""}School account` : "All schools"}</small></span></div>
+      <Link href="/" className="app-brand"><span className="app-brand-mark">S</span><span><strong>SukuuNova</strong><small>{universe === "platform" ? "Platform Control" : isTeacher ? "Teacher Workspace" : "School Workspace"}</small></span></Link>
+      <div className="app-school-chip"><span className="app-chip-avatar">{avatar}</span><span><b>{universe === "platform" ? "SukuuNova Network" : schoolName}</b><small>{universe === "platform" ? "All schools" : `${schoolCode}${schoolCode ? " · " : ""}School account`}</small></span></div>
       <SidebarNav groups={groups} active={active} />
-      <div className="app-sidebar-bottom"><div className="app-help"><Link href={universe === "school" ? "/school/help" : "/platform/support"}>? <span>Help & Support</span></Link></div><div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div><div className="app-account-actions"><Link href="/account/security" className="app-account-link">⚙ Account security</Link><LogoutButton universe={universe} /></div></div>
+      <div className="app-sidebar-bottom"><div className="app-help"><Link href={universe === "platform" ? "/platform/support" : "/school/help"}>? <span>Help & Support</span></Link></div><div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div><div className="app-account-actions"><Link href="/account/security" className="app-account-link">⚙ Account security</Link><LogoutButton universe={universe === "platform" ? "platform" : "school"} /></div></div>
     </aside>
-    <main className="app-main"><header className="app-topbar"><div><div className="app-breadcrumb">SukuuNova <span>›</span> {universe === "school" ? schoolName : "Platform Control"}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="app-top-actions"><Link className="app-search" href={universe === "school" ? "/school/search" : "/platform/search"}><span>⌕</span> Search anything <kbd>⌘ K</kbd></Link><Link className="app-icon-button" href={universe === "school" ? "/school/communications/alerts" : "/platform/inbox"} aria-label="Notifications">◌<i /></Link></div></header><div className="app-content">{children}</div></main>
+    <main className="app-main"><header className="app-topbar"><div><div className="app-breadcrumb">SukuuNova <span>›</span> {universe === "platform" ? "Platform Control" : schoolName}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="app-top-actions"><Link className="app-search" href={universe === "platform" ? "/platform/search" : isTeacher ? "/teacher" : "/school/search"}><span>⌕</span> Search anything <kbd>⌘ K</kbd></Link><Link className="app-icon-button" href={universe === "platform" ? "/platform/inbox" : isTeacher ? "/school/communications/messages" : "/school/communications/alerts"} aria-label="Notifications">◌<i /></Link></div></header><div className="app-content">{children}</div></main>
   </div>;
 }
