@@ -13,39 +13,35 @@ export async function createAssessment(
     classId: string;
     subjectId: string;
     name: string;
-    type: "ca" | "exam";
+    type: string;
     weight: number;
     maxScore: number;
   }
 ) {
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   if (!canWriteAll) {
-    const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
-    if (!canWriteAssigned) throw new ForbiddenError("Assessment creation is not permitted.");
+    if (!(await hasPermission(tx, input.actorId, "scores:write:assigned"))) {
+      throw new ForbiddenError("Assessment creation is not permitted.");
+    }
     const [assignment, classTeacher] = await Promise.all([
-      tx.classSubjectTeacher.findFirst({
-        where: { classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId },
-        select: { teacherId: true }
-      }),
+      tx.classSubjectTeacher.findFirst({ where: { classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId }, select: { teacherId: true } }),
       tx.class.findFirst({ where: { id: input.classId, classTeacherId: input.actorId }, select: { id: true } })
     ]);
     if (!assignment && !classTeacher) {
-      throw new ForbiddenError("Teachers may create assessments only for classes and subjects they are assigned to.");
+      throw new ForbiddenError("Teachers may create assessments only for their assigned classes and subjects.");
     }
   }
 
-  if (input.weight <= 0 || input.maxScore <= 0) {
-    throw new AppError("Assessment weight and maximum score must be positive.", 400, "INVALID_ASSESSMENT");
+  if (!input.name.trim()) throw new AppError("Assessment name is required.", 400, "INVALID_ASSESSMENT");
+  if (!Number.isFinite(input.weight) || input.weight <= 0 || input.weight > 100 || !Number.isFinite(input.maxScore) || input.maxScore <= 0) {
+    throw new AppError("Assessment weight and maximum score must be valid positive values.", 400, "INVALID_ASSESSMENT");
   }
-
   const [term, schoolClass, subject] = await Promise.all([
-    tx.term.findUnique({ where: { id: input.termId }, select: { id: true } }),
-    tx.class.findUnique({ where: { id: input.classId }, select: { id: true } }),
-    tx.subject.findUnique({ where: { id: input.subjectId }, select: { id: true } })
+    tx.term.findFirst({ where: { id: input.termId }, select: { id: true } }),
+    tx.class.findFirst({ where: { id: input.classId }, select: { id: true, name: true } }),
+    tx.subject.findFirst({ where: { id: input.subjectId }, select: { id: true, name: true } })
   ]);
-  if (!term || !schoolClass || !subject) {
-    throw new AppError("The selected term, class or subject could not be found in this school.", 404, "ACADEMIC_CONTEXT_NOT_FOUND");
-  }
+  if (!term || !schoolClass || !subject) throw new AppError("The selected term, class or subject does not belong to this school.", 400, "INVALID_CONTEXT");
 
   const assessment = await tx.assessment.create({
     data: {
@@ -54,7 +50,7 @@ export async function createAssessment(
       classId: input.classId,
       subjectId: input.subjectId,
       name: input.name.trim(),
-      type: input.type,
+      type: input.type.trim(),
       weight: new Prisma.Decimal(input.weight),
       maxScore: new Prisma.Decimal(input.maxScore)
     }
@@ -119,7 +115,7 @@ export async function enterScore(
   if (!student || student.classId !== assessment.classId) {
     throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
   }
-  if (input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) {
+  if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) {
     throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
   }
 
