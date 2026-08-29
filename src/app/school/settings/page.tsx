@@ -1,19 +1,23 @@
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
+import { withTenant } from "@/lib/db";
 import SchoolSettingsWorkspace from "./SchoolSettingsWorkspace";
 import "./settings.css";
 
 export default async function SchoolSettingsPage(){
  const session=await requireSchoolSession();
- return <AppShell universe="school" title="School Settings" subtitle="Configure the school, academic rules and the timeline that powers every term-aware workflow." active="School Settings" schoolName={session.name} schoolCode=""><SettingsLoader sessionName={session.name}/></AppShell>;
-}
-
-async function SettingsLoader({sessionName}:{sessionName:string}){
- const origin=process.env.NEXT_PUBLIC_APP_URL||"http://localhost:3000";
- const cookie=(await import("next/headers")).cookies;
- const cookieHeader=(await cookie()).toString();
- const response=await fetch(`${origin}/api/school/settings`,{headers:{cookie:cookieHeader},cache:"no-store"});
- const data=await response.json();
- if(!response.ok) throw new Error(data.error??"Unable to load school settings.");
- return <SchoolSettingsWorkspace initial={data} dataSession={{name:sessionName}}/>;
+ const data=await withTenant(session.schoolId,async(tx)=>{
+   const [school,settings,academicYears,terms]=await Promise.all([
+     tx.school.findUnique({where:{id:session.schoolId},select:{id:true,name:true,uniqueCode:true,status:true}}),
+     tx.schoolSettings.findUnique({where:{schoolId:session.schoolId}}),
+     tx.academicYear.findMany({where:{schoolId:session.schoolId},orderBy:{startDate:"desc"}}),
+     tx.term.findMany({where:{schoolId:session.schoolId},include:{academicYear:{select:{id:true,name:true,startDate:true,endDate:true}}},orderBy:[{startDate:"desc"},{name:"asc"}]})
+   ]);
+   if(!school) throw new Error("School not found.");
+   const now=new Date();
+   return {school,settings,academicYears,terms:terms.map(term=>({...term,status:now<term.startDate?"upcoming":now>term.endDate?"completed":"current"}))};
+ });
+ return <AppShell universe="school" title="School Settings" subtitle="Configure the school, academic rules and the timeline that powers every term-aware workflow." active="School Settings" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+   <SchoolSettingsWorkspace initial={data as any} dataSession={{name:session.name}}/>
+ </AppShell>;
 }
