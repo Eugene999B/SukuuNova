@@ -84,3 +84,45 @@ export async function requireSchoolRole(tx: TenantDb, userId: string, ...roleKey
   }
   return access;
 }
+
+export async function requireCanGrantPermissions(tx: TenantDb, actorId: string, permissionKeys: string[]) {
+  const access = await getSchoolAuthorization(tx, actorId);
+  if (access.isOwner) return access;
+  const uniqueKeys = [...new Set(permissionKeys.map((key) => key.trim()).filter(Boolean))];
+  for (const permissionKey of uniqueKeys) {
+    if (!(await access.can(permissionKey))) {
+      throw new ForbiddenError("You cannot grant a permission your account does not have: " + permissionKey);
+    }
+  }
+  return access;
+}
+
+export async function requireCanAssignRoles(
+  tx: TenantDb,
+  actorId: string,
+  targetUserId: string,
+  roleIds: string[]
+) {
+  const access = await getSchoolAuthorization(tx, actorId);
+  const target = await tx.user.findUnique({
+    where: { id: targetUserId },
+    select: { userRoles: { select: { role: { select: { key: true, name: true } } } } }
+  });
+  if (!target) throw new ForbiddenError("The target account could not be found.");
+
+  const selectedRoles = await tx.role.findMany({
+    where: { id: { in: [...new Set(roleIds)] } },
+    select: { id: true, name: true, key: true, rolePermissions: { select: { permission: { select: { key: true } } } } }
+  });
+  if (selectedRoles.length !== new Set(roleIds).size) throw new ForbiddenError("One or more selected roles are not available.");
+
+  if (!access.isOwner) {
+    const managesOwner = target.userRoles.some(({ role }) => role.key === "owner") || selectedRoles.some((role) => (role.key?.trim() || roleKeyForName(role.name)) === "owner");
+    if (managesOwner) throw new ForbiddenError("Only the school Owner can assign or modify the Owner role.");
+
+    const permissionKeys = [...new Set(selectedRoles.flatMap((role) => role.rolePermissions.map(({ permission }) => permission.key)))];
+    await requireCanGrantPermissions(tx, actorId, permissionKeys);
+  }
+
+  return access;
+}
