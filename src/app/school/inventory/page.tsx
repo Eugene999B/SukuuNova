@@ -3,6 +3,7 @@ import SchoolLifeStudio from "@/components/SchoolLifeStudio";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { notFound } from "next/navigation";
+import "../school-life-light.css";
 
 export default async function InventoryPage() {
   const session = await requireSchoolSession();
