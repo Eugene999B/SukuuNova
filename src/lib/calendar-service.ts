@@ -51,7 +51,7 @@ export async function createCalendarEvent(input: {
   name: string; startDate: Date; endDate: Date; affectsAttendance?: boolean;
 }) {
   orderedDates(input.startDate, input.endDate);
-  const allowed = new Set(["holiday", "vacation", "exam_week", "closure"]);
+  const allowed = new Set(["holiday", "vacation", "exam_week", "closure", "academic", "parent", "operational", "sports", "trip", "meeting", "other"]);
   if (!allowed.has(input.type)) throw new AppError("Invalid calendar event type.", 400, "INVALID_EVENT_TYPE");
   return withTenant(input.schoolId, async (tx) => {
     await requirePermission(tx, input.actorId, "calendar:manage");
