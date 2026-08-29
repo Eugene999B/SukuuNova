@@ -3,6 +3,7 @@ import "./globals.css";
 import "./student-theme.css";
 import "./visual-system.css";
 import "./sukuunova-bright.css";
+import "./typography.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
