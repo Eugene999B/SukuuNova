@@ -30,6 +30,8 @@ export async function generateInvoice(tx: TenantDb, input: {
     include: { guardians: { where: { isPrimary: true }, include: { guardian: true } } }
   });
   if (!student) throw new AppError("Student not found.", 404, "NOT_FOUND");
+  const existing = await tx.invoice.findUnique({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } } });
+  if (existing) throw new AppError("This student already has an invoice for the selected term.", 409, "INVOICE_EXISTS");
   const items = await tx.feeItem.findMany({
     where: { termId: input.termId, OR: [{ classId: null }, { classId: student.classId ?? "__none__" }] }
   });
@@ -78,26 +80,22 @@ async function refreshInvoiceStatus(tx: TenantDb, invoiceId: string) {
 
 export async function recordPayment(tx: TenantDb, input: {
   schoolId: string; actorId: string; invoiceId: string; amount: number;
-  method: "momo" | "cash" | "card"; reference?: string;
+  method: "momo" | "cash" | "card" | "bank" | "cheque"; reference?: string;
 }) {
   await requirePermission(tx, input.actorId, "payments:record");
   if (input.amount <= 0) throw new AppError("Payment amount must be positive.", 400, "INVALID_AMOUNT");
-  if (input.method === "momo" && !input.reference?.trim()) {
-    throw new AppError("A MoMo reference is required for manual reconciliation.", 400, "REFERENCE_REQUIRED");
+  if ((input.method === "momo" || input.method === "bank" || input.method === "cheque") && !input.reference?.trim()) {
+    throw new AppError("A transaction/reference number is required for this payment method.", 400, "REFERENCE_REQUIRED");
   }
 
   const current = await refreshInvoiceStatus(tx, input.invoiceId);
   if (current.status === "paid") {
-    throw new AppError("This invoice is already fully paid. Record an approved overpayment or credit separately instead.", 409, "INVOICE_ALREADY_PAID");
+    throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
   }
   const outstanding = current.invoice.totalAmount.minus(current.paid);
   const amount = new Prisma.Decimal(input.amount);
   if (amount.greaterThan(outstanding)) {
-    throw new AppError(
-      "This payment is greater than the invoice balance. Handle the extra amount as an approved credit/refund rather than silently overpaying the invoice.",
-      409,
-      "OVERPAYMENT_REQUIRES_REVIEW"
-    );
+    throw new AppError("Payment exceeds the outstanding invoice balance. Handle the extra amount as an approved credit or refund.", 409, "OVERPAYMENT_REQUIRES_REVIEW");
   }
 
   const payment = await tx.payment.create({ data: {
