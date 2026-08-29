@@ -8,5 +8,5 @@ export default async function RecruitmentPage() {
   const session = await requireSchoolSession();
   const school = await withTenant(session.schoolId, tx => tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }));
   if (!school) notFound();
-  return <AppShell universe="school" title="Talent & Recruitment" subtitle="Vacancies, applicants, screening, interviews and offers." active="Recruitment" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><SchoolLifeStudio module="recruitment" schoolName={school.name} userName={session.name} schoolId={session.schoolId} /></AppShell>;
+  return <AppShell universe="school" title="Talent & Recruitment" subtitle="Vacancies, applicants, screening, interviews and offers." active="Recruitment" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><div className="school-life-surface"><SchoolLifeStudio module="recruitment" schoolName={school.name} userName={session.name} schoolId={session.schoolId} /></div></AppShell>;
 }
