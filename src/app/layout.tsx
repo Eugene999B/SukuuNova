@@ -4,6 +4,7 @@ import "./student-theme.css";
 import "./visual-system.css";
 import "./sukuunova-bright.css";
 import "./typography.css";
+import "./public-theme.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PublicThemeGate } from "@/components/PublicThemeGate";
 
