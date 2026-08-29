@@ -42,6 +42,7 @@ const platformGroups: NavGroup[] = [
     items: [
       ["♟", "Support", "/platform/support"],
       ["⌁", "Audited Access", "/platform/support"],
+      ["✉", "Visitor Inbox", "/platform/inbox"],
       ["▤", "Platform Reports", "/platform/reports"],
     ],
   },
@@ -75,7 +76,7 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
       </div>
     </aside>
     <main className="app-main">
-      <header className="app-topbar"><div><div className="app-breadcrumb">SukuuNova <span>›</span> {universe === "school" ? schoolName : "Platform Control"}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="app-top-actions"><Link className="app-search" href={universe === "school" ? "/school/search" : "/platform/search"}><span>⌕</span> Search anything <kbd>⌘ K</kbd></Link><Link className="app-icon-button" href={universe === "school" ? "/school/communications/alerts" : "/platform/notifications"} aria-label="Notifications">◌<i /></Link></div></header>
+      <header className="app-topbar"><div><div className="app-breadcrumb">SukuuNova <span>›</span> {universe === "school" ? schoolName : "Platform Control"}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="app-top-actions"><Link className="app-search" href={universe === "school" ? "/school/search" : "/platform/search"}><span>⌕</span> Search anything <kbd>⌘ K</kbd></Link><Link className="app-icon-button" href={universe === "school" ? "/school/communications/alerts" : "/platform/inbox"} aria-label="Notifications">◌<i /></Link></div></header>
       <div className="app-content">{children}</div>
     </main>
   </div>;
