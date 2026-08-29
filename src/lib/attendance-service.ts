@@ -40,7 +40,7 @@ export async function isAttendanceBlocked(tx: TenantDb, day: Date) {
   }));
 }
 
-async function authorizeStudentAttendance(tx: TenantDb, actorId: string, studentId: string) {
+export async function authorizeStudentAttendance(tx: TenantDb, actorId: string, studentId: string) {
   if (await hasPermission(tx, actorId, "attendance:record_all")) return;
   if (!(await hasPermission(tx, actorId, "attendance:record_assigned"))) {
     throw new ForbiddenError("You are not permitted to record this student's attendance.");
@@ -52,7 +52,7 @@ async function authorizeStudentAttendance(tx: TenantDb, actorId: string, student
   if (!assigned) throw new ForbiddenError("Teachers may record attendance only for their assigned class.");
 }
 
-async function authorizeStaffAttendance(tx: TenantDb, actorId: string) {
+export async function authorizeStaffAttendance(tx: TenantDb, actorId: string) {
   await requirePermission(tx, actorId, "attendance:record_staff");
 }
 
