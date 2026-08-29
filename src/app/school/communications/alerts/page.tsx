@@ -30,17 +30,18 @@ export default async function GuardianAlertsPage() {
   const data = await withTenant(session.schoolId, async tx => {
     await requirePermission(tx, session.userId, "guardian_alerts:view");
     const [school, students, messages] = await Promise.all([
-      tx.school.findUnique({where:{id:session.schoolId},select:{name:true,uniqueCode:true,smsSenderId:true}}).catch(()=>null),
+      tx.school.findUnique({where:{id:session.schoolId},select:{name:true,uniqueCode:true}}),
       tx.student.findMany({where:{status:"active"},orderBy:{name:"asc"},select:{id:true,name:true,admissionNo:true,class:{select:{name:true}},guardians:{where:{isPrimary:true},select:{guardian:{select:{id:true,name:true,phone:true}}}}},take:500}),
       tx.message.findMany({where:{schoolId:session.schoolId,recipientType:"guardian"},orderBy:{createdAt:"desc"},take:100,select:{id:true,channel:true,recipientPhone:true,body:true,status:true,createdAt:true,sentAt:true,lastError:true}})
     ]);
     return {school,students,messages};
   });
+  if (!data.school) throw new Error("School not found.");
   const manage = await withTenant(session.schoolId, tx => hasPermission(tx, session.userId, "guardian_alerts:manage"));
   const sent = data.messages.filter(m=>m.status === "sent").length;
   const queued = data.messages.filter(m=>m.status === "queued").length;
   const failed = data.messages.filter(m=>m.status === "failed").length;
-  return <AppShell universe="school" title="Guardian Alerts" subtitle="Turn confirmed attendance exceptions into clear, trackable family notifications without changing the attendance record." active="Guardian Alerts" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+  return <AppShell universe="school" title="Guardian Alerts" subtitle="Turn confirmed attendance exceptions into clear, trackable family notifications without changing the attendance record." active="Guardian Alerts" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
     <div className="module-shell">
       <section className="module-hero"><div><span className="module-kicker">Family communication</span><h2>Guardian alert centre</h2><p>Alerts are a communication workflow: review the attendance event, select the correct learner and queue a message. Delivery status is tracked independently.</p></div><div className="module-actions"><Link className="module-button secondary" href="/school/attendance/exceptions">Attendance exceptions</Link><Link className="module-button secondary" href="/school/communications/messages">All messages</Link></div></section>
       <section className="module-stats"><div className="module-stat"><small>Queued</small><strong>{queued}</strong><span>Waiting for delivery</span></div><div className="module-stat"><small>Sent</small><strong>{sent}</strong><span>Delivered to the provider queue</span></div><div className="module-stat"><small>Failed</small><strong>{failed}</strong><span>Needs delivery follow-up</span></div><div className="module-stat"><small>Guardian-linked learners</small><strong>{data.students.filter(s=>s.guardians.length).length}</strong><span>Active learners with a primary guardian</span></div></section>
