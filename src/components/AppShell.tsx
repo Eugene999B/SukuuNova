@@ -16,7 +16,7 @@ const schoolGroups: NavGroup[] = [
   { label: "Attendance", items: [["◉", "Student Attendance", "/school/attendance"], ["◌", "Staff Attendance", "/school/staff-attendance"], ["!", "Late / Absence", "/school/attendance/exceptions"], ["⌁", "Guardian Alerts", "/school/communications/alerts"]] },
   { label: "Finance", items: [["₵", "School Fees", "/school/fees"], ["▣", "Invoices", "/school/fees/invoices"], ["↙", "Payments", "/school/fees/payments"], ["◒", "Arrears & Balances", "/school/fees/arrears"], ["◔", "Finance Reports", "/school/fees/reports"], ["▤", "Payroll", "/school/fees/payroll"]] },
   { label: "School Life", items: [["▦", "Library", "/school/library"], ["⌁", "Transport", "/school/transport"], ["☕", "Feeding", "/school/feeding"], ["▧", "Assets & Inventory", "/school/inventory"], ["♙", "Recruitment", "/school/hr/recruitment"]] },
-  { label: "Communication", items: [["✉", "Messages", "/school/communications/messages"], ["◈", "Announcements", "/school/communications/announcements"], ["◫", "SMS / WhatsApp", "/school/communications/broadcasts"], ["◷", "Events", "/school/events"]] },
+  { label: "Communication", items: [["✉", "Messages", "/school/communications/messages"], ["◈", "Announcements", "/school/communications/announcements"], ["◫", "SMS / WhatsApp", "/school/communications/broadcasts"], ["◷", "Events", "/school/events"], ["⚙", "Communication Settings", "/school/communications/settings"]] },
   { label: "Reports & Admin", items: [["▥", "School Analytics", "/school/reports/analytics"], ["▤", "Reports", "/school/reports"], ["⇩", "Downloads & Exports", "/school/downloads"], ["♚", "Roles & Permissions", "/school/settings/roles"], ["♟", "Sub-accounts & Access", "/school/settings/access"], ["⚙", "School Settings", "/school/settings"]] },
 ];
 
@@ -24,7 +24,7 @@ const platformGroups: NavGroup[] = [
   { label: "Control Center", items: [["▦", "Overview", "/platform"], ["⌕", "Global Search", "/platform/search"], ["◉", "System Health", "/platform/health"]] },
   { label: "Schools & Plans", items: [["⌂", "Schools", "/platform/schools"], ["◇", "Plans & Entitlements", "/platform/plans"], ["₵", "Platform Billing", "/platform/billing"], ["▥", "Network Analytics", "/platform/analytics"]] },
   { label: "Operations", items: [["♟", "Support", "/platform/support"], ["⌁", "Audited Access", "/platform/support"], ["✉", "Visitor Inbox", "/platform/inbox"], ["▤", "Platform Reports", "/platform/reports"]] },
-  { label: "Security & Control", items: [["♙", "Workers & Permissions", "/platform/admins"], ["⌁", "Worker School Scope", "/platform/admins/access"], ["◇", "Audit Log", "/platform/audit"], ["⚙", "Platform Settings", "/platform/settings"]] },
+  { label: "Security & Control", items: [["♙", "Workers & Permissions", "/platform/admins"], ["⌁", "Worker School Scope", "/platform/admins/access"], ["◇", "Audit Log", "/platform/audit"], ["⚙", "Platform Settings", "/platform/settings"] },
 ];
 
 function initials(value: string) { return value.trim().split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "S"; }
