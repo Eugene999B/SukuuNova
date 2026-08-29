@@ -1,5 +1,5 @@
-import FinanceEvidenceCentre from "@/components/FinanceEvidenceCentre";
+import FinanceEvidencePrint from "@/components/FinanceEvidencePrint";
 
 export default function Page() {
-  return <FinanceEvidenceCentre />;
+  return <FinanceEvidencePrint />;
 }
