@@ -1,2 +1,2 @@
-source commit: 05682ca7af6db1fb90a2c527ad635fc0323fe53d
-release: overview statistics and persistent sidebar navigation
+source commit: f242e2eccf5d5150a52e34d26e51d91b0fb96bed
+release: fix overview statistics and sidebar scroll container
