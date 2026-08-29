@@ -8,5 +8,5 @@ export default async function FeedingPage() {
   const session = await requireSchoolSession();
   const school = await withTenant(session.schoolId, tx => tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }));
   if (!school) notFound();
-  return <AppShell universe="school" title="Feeding & Catering" subtitle="Menus, service, budgets, costs and meal communication." active="Feeding" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><SchoolOperationsStudio module="feeding" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name} schoolId={session.schoolId} /></AppShell>;
+  return <AppShell universe="school" title="Feeding & Catering" subtitle="Menus, service, budgets, costs and meal communication." active="Feeding" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><SchoolOperationsStudio module="feeding" schoolName={school.name} userName={session.name} schoolId={session.schoolId} /></AppShell>;
 }
