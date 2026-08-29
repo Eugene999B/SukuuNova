@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type Staff = { id:string; name:string };
@@ -39,7 +40,7 @@ export default function StaffAttendanceDesk(){
  return <div className="module-shell">
   <section className="module-hero">
    <div><span className="eyebrow">People · Attendance</span><h2>Staff Attendance</h2><p>Record visibility for the selected period. Filter staff, inspect trends and follow exceptions.</p></div>
-   <div className="module-actions"><a className="button secondary" href="/school/staff">Staff directory</a><a className="button primary" href="/school/staff-attendance?action=create">Open register</a></div>
+   <div className="module-actions"><Link className="button secondary" href="/school/staff">Staff directory</Link><Link className="button primary" href="/school/staff-attendance?action=create">Open register</Link></div>
   </section>
   <section className="module-stats">
    <div className="module-stat"><span>Present</span><strong>{loading?"—":data?.totals.present??0}</strong></div>
@@ -66,8 +67,8 @@ export default function StaffAttendanceDesk(){
      <div className="module-list-item"><span>Present</span><strong>{latest?.present??0}</strong></div>
      <div className="module-list-item"><span>Late</span><strong>{latest?.late??0}</strong></div>
      <div className="module-list-item"><span>Absent</span><strong>{latest?.absent??0}</strong></div>
-     <a className="module-list-item" href="/school/attendance/exceptions"><span>Attendance exceptions</span><span>→</span></a>
-     <a className="module-list-item" href="/school/staff"><span>Open staff records</span><span>→</span></a>
+     <Link className="module-list-item" href="/school/attendance/exceptions"><span>Attendance exceptions</span><span>→</span></Link>
+     <Link className="module-list-item" href="/school/staff"><span>Open staff records</span><span>→</span></Link>
     </div>
    </aside>
   </section>
