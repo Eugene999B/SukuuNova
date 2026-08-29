@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
-import { hasPermission, requirePermission } from "./rbac";
+import { hasPermission } from "./rbac";
 
 export async function createAssessment(
   tx: TenantDb,
@@ -23,12 +23,12 @@ export async function createAssessment(
     if (!(await hasPermission(tx, input.actorId, "scores:write:assigned"))) {
       throw new ForbiddenError("Assessment creation is not permitted.");
     }
-    const [assignment, classTeacher] = await Promise.all([
-      tx.classSubjectTeacher.findFirst({ where: { classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId }, select: { teacherId: true } }),
-      tx.class.findFirst({ where: { id: input.classId, classTeacherId: input.actorId }, select: { id: true } })
-    ]);
-    if (!assignment && !classTeacher) {
-      throw new ForbiddenError("Teachers may create assessments only for their assigned classes and subjects.");
+    const assignment = await tx.classSubjectTeacher.findFirst({
+      where: { classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId },
+      select: { teacherId: true }
+    });
+    if (!assignment) {
+      throw new ForbiddenError("Teachers may create assessments only for subjects they are assigned to teach.");
     }
   }
 
