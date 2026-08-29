@@ -42,9 +42,16 @@ const configs:Record<string,ModuleConfig> = {
  reports:{title:"Reports",subtitle:"Run operational, academic, attendance and finance reports.",action:"Create report",tabs:["Recent","Scheduled","Academic","Attendance","Finance","Management"]},
  "settings/roles":{title:"Roles & Permissions",subtitle:"Manage roles, permissions and assignments.",action:"Create role",tabs:["Roles","Permissions","Assignments","Audit"]},
  settings:{title:"School Settings",subtitle:"Manage school identity, operating rules and academic calendar.",action:"Save settings",tabs:["General","Academic","Terms"]},
- search:{title:"Global Search",subtitle:"Find authorised school records quickly.",action:"Search",tabs:["All","People","Academics","Finance","Communication"]},
+ search:{title:"Search",subtitle:"Find a student, guardian, staff member, subject, invoice or message.",action:"Search",tabs:[]},
  help:{title:"Help & Support",subtitle:"Find guides and manage support requests.",action:"Contact support",tabs:["Guides","Requests","Updates"]}
 };
+
+const searchCategories = [
+  { icon:"♟", title:"People", text:"Students, guardians, staff and teachers", links:[["Students","/school/students"],["Guardians","/school/guardians"],["Staff & Teachers","/school/staff"]] },
+  { icon:"▤", title:"Academics", text:"Classes, subjects, timetable and results", links:[["Classes","/school/classes"],["Subjects","/school/subjects"],["Gradebook","/school/gradebook"],["Report Cards","/school/report-cards"]] },
+  { icon:"₵", title:"Finance", text:"Fees, invoices, payments and balances", links:[["School Fees","/school/fees"],["Invoices","/school/fees/invoices"],["Payments","/school/fees/payments"],["Arrears","/school/fees/arrears"]] },
+  { icon:"✉", title:"Communication", text:"Messages, announcements, broadcasts and events", links:[["Messages","/school/communications/messages"],["Announcements","/school/communications/announcements"],["Events","/school/events"]] },
+] as const;
 
 export default async function SchoolModulePage({params}:{params:Promise<{module?:string[]}>}){
  const session=await requireSchoolSession();
@@ -55,12 +62,24 @@ export default async function SchoolModulePage({params}:{params:Promise<{module?
  const school=await withTenant(session.schoolId,tx=>tx.school.findUnique({where:{id:session.schoolId},select:{name:true,uniqueCode:true}}));
  if(!school) notFound();
  if(key==="staff-attendance") return <AppShell universe="school" title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><StaffAttendanceDesk /></AppShell>;
+ if(key==="search") return <SearchCentre schoolName={school.name} sessionName={session.name} />;
  const base=`/school/${key}`;
  return <AppShell universe="school" title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}>
   <div className="module-shell">
    <section className="module-hero"><div><span className="eyebrow">{school.name}</span><h2>{config.title}</h2><p>{config.subtitle}</p></div><div className="module-actions"><Link className="button secondary" href="/school/reports/analytics">Analytics</Link><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div></section>
    <nav className="module-tabs" aria-label={`${config.title} views`}>{config.tabs.map(tab=><Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-tab">{tab}</Link>)}</nav>
    <section className="module-layout"><div className="module-panel"><div className="module-toolbar"><form className="module-search" action={base}><input name="q" placeholder={`Search ${config.title.toLowerCase()}…`} /><button className="button secondary" type="submit">Search</button></form><Link className="button secondary" href="/school/terms">Term context</Link></div><div className="module-table-wrap"><table className="module-table"><thead><tr><th>Record</th><th>Status</th><th>Last activity</th><th /></tr></thead><tbody><tr><td colSpan={4}><div className="module-empty"><strong>No records in this view</strong><span>Use the action above to create or open work.</span><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div></td></tr></tbody></table></div></div><aside className="module-side-card"><div className="module-side-card-head"><h3>Work queue</h3><span>{session.name}</span></div><div className="module-list">{config.tabs.slice(0,4).map((tab,index)=><Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-list-item"><span className="module-list-index">{index+1}</span><span>{tab}</span><span>→</span></Link>)}</div></aside></section>
+  </div>
+ </AppShell>;
+}
+
+function SearchCentre({schoolName,sessionName}:{schoolName:string;sessionName:string}) {
+ return <AppShell universe="school" title="Search" subtitle="Find anything you need in this school workspace." active="Search" schoolName={schoolName} userName={sessionName}>
+  <div className="module-shell search-centre">
+   <section className="search-hero"><div><span className="eyebrow">{schoolName}</span><h2>Find something fast.</h2><p>Search by name, admission number, staff name, subject, invoice or message.</p></div></section>
+   <form className="search-main-form" action="/school/search" method="get"><span className="search-main-icon">⌕</span><input name="q" placeholder="Search the school…" aria-label="Search the school"/><button className="button primary" type="submit">Search</button></form>
+   <div className="search-category-grid">{searchCategories.map((category)=><section className="search-category" key={category.title}><div className="search-category-icon">{category.icon}</div><div className="search-category-head"><h3>{category.title}</h3><p>{category.text}</p></div><div className="search-category-links">{category.links.map(([label,href])=><Link href={href} key={label}>{label}<span>→</span></Link>)}</div></section>)}</div>
+   <section className="search-tip"><span>⌕</span><div><strong>Search first, then open the record.</strong><p>Results stay inside your school account and respect your role permissions.</p></div></section>
   </div>
  </AppShell>;
 }
