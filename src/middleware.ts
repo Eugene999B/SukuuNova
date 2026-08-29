@@ -8,7 +8,9 @@ function hasLiveSession(cookieValue: string | undefined) {
   try {
     const parts = cookieValue.split(".");
     if (parts.length !== 3) return false;
-    const payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, "+").replace(/_/g, "/"), "base64url").toString("utf8")) as { exp?: unknown };
+    const payloadText = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = payloadText + "=".repeat((4 - (payloadText.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
     return typeof payload.exp === "number" && payload.exp > Math.floor(Date.now() / 1000);
   } catch {
     return false;
