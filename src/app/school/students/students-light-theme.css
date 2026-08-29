@@ -1,0 +1,36 @@
+:root{color-scheme:light}
+.students-workspace{color:#1f2933}
+.students-hero,.class-structure-card,.student-register-card,.student-actions-strip,.student-metrics article{background:#fff!important;color:#17212b!important;border:1px solid #e7e1da!important;box-shadow:0 18px 45px rgba(57,42,33,.08)!important}
+.students-hero{background:linear-gradient(135deg,#fffaf5 0%,#fff 58%,#f7efe8 100%)!important}
+.students-hero h2,.section-head h3,.student-register-card h3,.class-structure-card h3,.grade-title h4,.student-card h4,.student-actions-strip h3{color:#18212a!important}
+.students-hero p,.section-head p,.student-actions-strip p{color:#5f6872!important}
+.hero-statline span{background:#f8f3ee!important;border:1px solid #eadfd5!important;color:#59636d!important}
+.hero-statline b{color:#9b4f3a!important}
+.student-metrics article{background:#fff!important}
+.student-metrics span,.grade-kicker,.student-index{color:#69737d!important}
+.student-metrics strong{color:#1d2a33!important}
+.student-metrics small,.grade-total,.section-main small,.student-card p,.student-card small{color:#69737d!important}
+.student-metrics .attention{background:#fff8ed!important;border-color:#f0d6ae!important}
+.student-metrics .ok{background:#f2faf6!important;border-color:#cfe6d9!important}
+.grade-card{background:#faf8f5!important;border:1px solid #e8e0d8!important}
+.grade-title{border-bottom:1px solid #e9e1d9!important}
+.section-row,.student-card{background:#fff!important;border:1px solid #e8e2dc!important;color:#202a31!important}
+.section-row:hover,.student-card:hover{border-color:#d9b8aa!important;box-shadow:0 10px 24px rgba(57,42,33,.08)!important;transform:translateY(-2px)}
+.section-badge,.empty-icon{background:#f6e8e1!important;color:#a7523e!important}
+.section-count{color:#28343d!important}
+.chevron,.student-card-arrow{color:#a36b5a!important}
+.student-toolbar{background:#f8f5f2!important;border:1px solid #e8e1d9!important;padding:10px!important;border-radius:14px!important}
+.student-toolbar input,.student-toolbar select{background:#fff!important;color:#27323a!important;border:1px solid #dcd4cc!important}
+.student-toolbar input::placeholder{color:#8a9197!important}
+.head-actions a{background:#f7f1ec!important;color:#7e4637!important;border:1px solid #eadbd2!important;padding:9px 11px!important;border-radius:10px!important;text-decoration:none!important;font-weight:750!important}
+.pill.success{background:#e6f5ed!important;color:#26704f!important}.pill.muted{background:#f0eeeb!important;color:#66707a!important}
+.student-card-photo{background:#f4ece6!important;color:#9c5844!important}
+.student-card-main small{color:#7a838b!important}
+.student-actions-strip{display:grid;grid-template-columns:minmax(220px,.7fr) minmax(0,1.8fr);gap:18px;align-items:center;padding:20px 22px!important;background:linear-gradient(135deg,#fff8f2,#f8f1eb)!important}
+.student-actions-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.student-actions-grid a{padding:13px 14px;background:#fff!important;border:1px solid #e7ddd5!important;border-radius:12px;text-decoration:none;color:#29333a!important;display:grid;gap:3px}
+.student-actions-grid a:hover{border-color:#d7a99a!important;box-shadow:0 8px 20px rgba(91,58,45,.08)}
+.student-actions-grid strong{font-size:12px;color:#9a4e3b!important}.student-actions-grid span{font-size:10px;color:#6d747a!important}
+.button.primary{background:linear-gradient(135deg,#b7543e,#d06c52)!important;color:#fff!important;border:0!important;box-shadow:0 10px 20px rgba(183,84,62,.2)!important}.button.secondary{background:#fff!important;color:#4a3a33!important;border:1px solid #dcd0c8!important}
+@media(max-width:900px){.student-actions-strip{grid-template-columns:1fr!important}.student-actions-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:620px){.student-card-grid,.grade-grid{grid-template-columns:1fr!important}.student-actions-grid{grid-template-columns:1fr!important}.students-hero{padding:22px!important}.students-hero h2{font-size:28px!important}}
