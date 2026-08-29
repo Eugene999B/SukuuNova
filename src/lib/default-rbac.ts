@@ -1,15 +1,26 @@
 export const DEFAULT_PERMISSIONS = [
   "students:read","students:write","students:delete","finance:read","finance:write","finance:approve","payroll:view_own","payroll:manage","settings:manage_roles","settings:manage_school","reports:generate","users:read","users:write","audit:read","calendar:manage","classes:manage","attendance:record","attendance:view_own","attendance:pickup_approve","scores:write:assigned","scores:write:all","invoices:create","payments:record","report_cards:submit","report_cards:approve","report_cards:view","parents:read_linked","roles:create_custom","visitors:log","templates:manage","transport:manage","transport:view","feeding:manage","exams:manage","exams:take","library:manage","library:borrow","assets:manage","fees:adjust","fees:approve","recruitment:manage","analytics:view","offline:sync","broadcast:emergency_send","risk_flags:view","ai_drafts:accept","lesson_plans:manage","lesson_plans:review","homework:manage_assigned","homework:review","academic_readiness:view"] as const;
 export type PermissionKey=(typeof DEFAULT_PERMISSIONS)[number];
-const PRINCIPAL_PERMISSIONS=DEFAULT_PERMISSIONS.filter((key)=>key!=="roles:create_custom");
-const ACADEMIC_OVERSIGHT=["lesson_plans:review","homework:review","academic_readiness:view"] as const;
+const LEADERSHIP_PERMISSIONS:readonly PermissionKey[]=[
+  "students:read","finance:read","payroll:view_own","settings:manage_school","reports:generate","users:read","audit:read",
+  "calendar:manage","classes:manage","scores:write:all","report_cards:submit","report_cards:approve","report_cards:view",
+  "exams:manage","library:manage","transport:view","feeding:manage","analytics:view","risk_flags:view",
+  "lesson_plans:review","homework:review","academic_readiness:view"
+];
+const ACADEMIC_COORDINATOR_PERMISSIONS:readonly PermissionKey[]=[
+  "students:read","users:read","reports:generate","calendar:manage","classes:manage","scores:write:all","report_cards:submit",
+  "report_cards:approve","report_cards:view","exams:manage","analytics:view","risk_flags:view","lesson_plans:review","homework:review","academic_readiness:view"
+];
+const DEPARTMENT_HEAD_PERMISSIONS:readonly PermissionKey[]=[
+  "students:read","reports:generate","scores:write:all","report_cards:submit","report_cards:view","exams:manage","analytics:view","risk_flags:view","lesson_plans:review","homework:review","academic_readiness:view"
+];
 const TEACHING_CORE=["lesson_plans:manage","homework:manage_assigned","scores:write:assigned","attendance:view_own","report_cards:view","exams:manage","exams:take","offline:sync","ai_drafts:accept"] as const;
 export const DEFAULT_ROLE_PERMISSIONS:Record<string,readonly PermissionKey[]>= {
   Owner: DEFAULT_PERMISSIONS,
-  Principal: PRINCIPAL_PERMISSIONS,
-  "Vice Principal": [...PRINCIPAL_PERMISSIONS, ...ACADEMIC_OVERSIGHT],
-  "Academic Coordinator": [...ACADEMIC_OVERSIGHT,"scores:write:all","report_cards:submit","report_cards:approve","report_cards:view","exams:manage","analytics:view","reports:generate","classes:manage","calendar:manage"],
-  "Department Head": [...ACADEMIC_OVERSIGHT,"scores:write:all","report_cards:submit","report_cards:view","exams:manage","reports:generate","analytics:view"],
+  Principal: LEADERSHIP_PERMISSIONS,
+  "Vice Principal": LEADERSHIP_PERMISSIONS,
+  "Academic Coordinator": ACADEMIC_COORDINATOR_PERMISSIONS,
+  "Department Head": DEPARTMENT_HEAD_PERMISSIONS,
   Accountant: ["students:read","finance:read","finance:write","finance:approve","invoices:create","payments:record","reports:generate","payroll:view_own","feeding:manage","fees:adjust","fees:approve","analytics:view"],
   "HR Officer": ["students:read","attendance:record","attendance:view_own","payroll:view_own","payroll:manage","users:read","users:write","reports:generate","recruitment:manage","analytics:view"],
   "Admissions Officer": ["students:read","students:write","reports:generate","payroll:view_own"],
