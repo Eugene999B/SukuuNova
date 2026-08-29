@@ -36,7 +36,7 @@ export function sessionCookieOptions(maxAge = SESSION_SECONDS) {
   return { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge };
 }
 
-type SchoolAuthorizationState = {
+export type SchoolAuthorizationState = {
   id: string;
   schoolId: string;
   name: string;
@@ -46,7 +46,7 @@ type SchoolAuthorizationState = {
   permissionOverrides: Array<{ permissionId: string; granted: boolean }>;
 };
 
-function authorizationVersion(state: SchoolAuthorizationState): string {
+export function authorizationVersion(state: SchoolAuthorizationState): string {
   const normalized = {
     id: state.id,
     schoolId: state.schoolId,
@@ -67,7 +67,7 @@ function authorizationVersion(state: SchoolAuthorizationState): string {
   return createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
 }
 
-async function getSchoolAuthorizationState(userId: string, schoolId: string): Promise<SchoolAuthorizationState | null> {
+export async function getSchoolAuthorizationState(userId: string, schoolId: string): Promise<SchoolAuthorizationState | null> {
   return rawDb.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", schoolId);
     return tx.user.findUnique({
