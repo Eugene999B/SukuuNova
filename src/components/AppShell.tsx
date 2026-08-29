@@ -16,14 +16,14 @@ const schoolGroups: NavGroup[] = [
   { label: "Finance", items: [["₵", "School Fees", "/school/fees"], ["▣", "Invoices", "/school/fees/invoices"], ["↙", "Payments", "/school/fees/payments"], ["◒", "Arrears & Balances", "/school/fees/arrears"], ["◔", "Finance Reports", "/school/fees/reports"]] },
   { label: "School Life", items: [["▦", "Library", "/school/library"], ["⌁", "Transport", "/school/transport"], ["☕", "Feeding", "/school/feeding"], ["▧", "Assets & Inventory", "/school/inventory"], ["♙", "Recruitment", "/school/hr/recruitment"]] },
   { label: "Communication", items: [["✉", "Messages", "/school/communications/messages"], ["◈", "Announcements", "/school/communications/announcements"], ["◫", "SMS / WhatsApp", "/school/communications/broadcasts"], ["◷", "Events", "/school/events"]] },
-  { label: "Reports & Admin", items: [["▥", "School Analytics", "/school/reports/analytics"], ["▤", "Reports", "/school/reports"], ["⇩", "Downloads & Exports", "/school/downloads"], ["♚", "Roles & Permissions", "/school/settings/roles"], ["♟", "Sub-accounts & Access", "/school/settings/access"], ["⚙", "School Settings", "/school/settings"]] }
+  { label: "Reports & Admin", items: [["▥", "School Analytics", "/school/reports/analytics"], ["▤", "Reports", "/school/reports"], ["⇩", "Downloads & Exports", "/school/downloads"], ["♚", "Roles & Permissions", "/school/settings/roles"], ["♟", "Sub-accounts & Access", "/school/settings/access"], ["⚙", "School Settings", "/school/settings"]] },
 ];
 
 const platformGroups: NavGroup[] = [
   { label: "Control Center", items: [["▦", "Overview", "/platform"], ["⌕", "Global Search", "/platform/search"], ["◉", "System Health", "/platform/health"]] },
   { label: "Schools & Plans", items: [["⌂", "Schools", "/platform/schools"], ["◇", "Plans & Entitlements", "/platform/plans"], ["₵", "Platform Billing", "/platform/billing"], ["▥", "Network Analytics", "/platform/analytics"]] },
   { label: "Operations", items: [["♟", "Support", "/platform/support"], ["⌁", "Audited Access", "/platform/support"], ["✉", "Visitor Inbox", "/platform/inbox"], ["▤", "Platform Reports", "/platform/reports"]] },
-  { label: "Security & Control", items: [["♙", "Workers & Permissions", "/platform/admins"], ["⌁", "Worker School Scope", "/platform/admins/access"], ["◇", "Audit Log", "/platform/audit"], ["⚙", "Platform Settings", "/platform/settings"] }
+  { label: "Security & Control", items: [["♙", "Workers & Permissions", "/platform/admins"], ["⌁", "Worker School Scope", "/platform/admins/access"], ["◇", "Audit Log", "/platform/audit"], ["⚙", "Platform Settings", "/platform/settings"] },
 ];
 
 function initials(value: string) { return value.trim().split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "S"; }
