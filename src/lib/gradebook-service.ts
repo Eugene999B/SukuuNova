@@ -18,10 +18,35 @@ export async function createAssessment(
     maxScore: number;
   }
 ) {
-  await requirePermission(tx, input.actorId, "scores:write:all");
+  const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
+  if (!canWriteAll) {
+    const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
+    if (!canWriteAssigned) throw new ForbiddenError("Assessment creation is not permitted.");
+    const [assignment, classTeacher] = await Promise.all([
+      tx.classSubjectTeacher.findFirst({
+        where: { classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId },
+        select: { teacherId: true }
+      }),
+      tx.class.findFirst({ where: { id: input.classId, classTeacherId: input.actorId }, select: { id: true } })
+    ]);
+    if (!assignment && !classTeacher) {
+      throw new ForbiddenError("Teachers may create assessments only for classes and subjects they are assigned to.");
+    }
+  }
+
   if (input.weight <= 0 || input.maxScore <= 0) {
     throw new AppError("Assessment weight and maximum score must be positive.", 400, "INVALID_ASSESSMENT");
   }
+
+  const [term, schoolClass, subject] = await Promise.all([
+    tx.term.findUnique({ where: { id: input.termId }, select: { id: true } }),
+    tx.class.findUnique({ where: { id: input.classId }, select: { id: true } }),
+    tx.subject.findUnique({ where: { id: input.subjectId }, select: { id: true } })
+  ]);
+  if (!term || !schoolClass || !subject) {
+    throw new AppError("The selected term, class or subject could not be found in this school.", 404, "ACADEMIC_CONTEXT_NOT_FOUND");
+  }
+
   const assessment = await tx.assessment.create({
     data: {
       schoolId: input.schoolId,
