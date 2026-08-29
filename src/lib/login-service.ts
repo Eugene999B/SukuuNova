@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { compare } from "bcryptjs";
 import { UnauthorizedError } from "./errors";
+import { roleKeyForName } from "./authorization";
 
 const LOGIN_FAILURE = "Invalid credentials or inactive account.";
 const globalForAuthPrisma = globalThis as unknown as { sukuunovaAuthPrisma?: PrismaClient };
@@ -28,12 +29,30 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
       LIMIT 1`;
     const user = userRows[0];
     if (!user || !(await compare(input.password, user.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
-    const roles = await tx.userRole.findMany({ where: { userId: user.id }, select: { role: { select: { name: true } } } });
-    const roleNames = roles.map((r) => r.role.name);
-    const elevatedSchoolRole = roleNames.some((role) => /owner|administrator|principal|vice principal/i.test(role));
-    const teachingRole = roleNames.some((role) => /teacher|academic lead|head of department/i.test(role));
-    const portal = elevatedSchoolRole ? "school" : teachingRole ? "teacher" : "school";
-    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleNames, needsPasswordChange: input.password === "12345" };
+    const roles = await tx.userRole.findMany({ where: { userId: user.id }, select: { role: { select: { name: true, key: true } } } });
+    const roleEntries = roles.map(({ role }) => ({ name: role.name, key: role.key?.trim() || roleKeyForName(role.name) }));
+    const roleKeys = roleEntries.map((role) => role.key);
+
+    // A user with leadership authority belongs in the School workspace even when
+    // they also carry a teaching assignment. Pure teaching roles use Teacher.
+    const schoolWorkspaceRoles = new Set([
+      "owner",
+      "administrator",
+      "principal",
+      "vice_principal",
+      "academic_coordinator",
+      "department_head",
+      "accountant",
+      "hr_officer",
+      "admissions_officer",
+      "front_desk_security",
+      "transport_officer"
+    ]);
+    const teacherWorkspaceRoles = new Set(["teacher", "class_teacher", "subject_teacher"]);
+    const hasSchoolWorkspaceRole = roleKeys.some((key) => schoolWorkspaceRoles.has(key));
+    const hasTeacherWorkspaceRole = roleKeys.some((key) => teacherWorkspaceRoles.has(key));
+    const portal = hasSchoolWorkspaceRole ? "school" : hasTeacherWorkspaceRole ? "teacher" : "school";
+    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleEntries.map((role) => role.name), roleKeys, needsPasswordChange: input.password === "12345" };
   });
 }
 
