@@ -25,7 +25,13 @@ export default function SchoolOperationsStudio({ module, schoolName, userName, s
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const endpoint = module === "library" ? "/api/school/operations/library" : module === "recruitment" ? "/api/school/operations/recruitment" : `/api/phase3/${module}`;
+  const endpoint = module === "library"
+    ? "/api/school/operations/library"
+    : module === "recruitment"
+      ? "/api/school/operations/recruitment"
+      : module === "inventory"
+        ? "/api/phase3/assets"
+        : `/api/phase3/${module}`;
 
   async function load() {
     try {
@@ -40,9 +46,11 @@ export default function SchoolOperationsStudio({ module, schoolName, userName, s
 
   useEffect(() => { void load(); }, [endpoint]);
 
-  const records = useMemo(() => {
+  const records = useMemo<Row[]>(() => {
     const key = module === "library" ? "books" : module === "transport" ? "vehicles" : module === "feeding" ? "menus" : module === "inventory" ? "assets" : "postings";
-    const source = Array.isArray(data[key]) ? data[key] as unknown[] : [];
+    const source: Row[] = Array.isArray(data[key])
+      ? data[key].filter((item): item is Row => Boolean(item) && typeof item === "object")
+      : [];
     const term = query.trim().toLowerCase();
     return source.filter(item => !term || JSON.stringify(item).toLowerCase().includes(term));
   }, [data, module, query]);
