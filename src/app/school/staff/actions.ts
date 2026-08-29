@@ -13,17 +13,19 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
   const phone = String(formData.get("phone") ?? "").trim() || null;
-  const roleName = String(formData.get("role") ?? "").trim();
-  const staffCategory = String(formData.get("staffCategory") ?? "").trim();
+  const staffCategory = String(formData.get("staffCategory") ?? formData.get("staffCategorySelect") ?? "").trim();
+  const requestedRole = String(formData.get("role") ?? "").trim();
+  const customRole = String(formData.get("customRole") ?? "").trim();
+  const roleName = requestedRole || customRole;
   const primaryClassId = String(formData.get("primaryClassId") ?? "").trim();
   const subjectId = String(formData.get("subjectId") ?? "").trim();
 
-  // The UI collects an email or phone as the login identifier. Infer the
-  // workforce type instead of requiring a separate hidden "login type" field.
   const requestedStaffType = String(formData.get("staffType") ?? "").trim().toLowerCase();
   const staffType = requestedStaffType || (/teacher|assistant/i.test(roleName) ? "teaching" : "non-teaching");
 
-  if (!name || !roleName || !staffCategory) return { ok: false, message: "Enter the staff member's name, workforce area and role." };
+  if (!name) return { ok: false, message: "Enter the staff member's full name." };
+  if (!staffCategory) return { ok: false, message: "Select a workforce area." };
+  if (!roleName) return { ok: false, message: "Select a staff role." };
   if (!email && !phone) return { ok: false, message: "Provide an email address or phone number for the school account." };
   if (roleName.toLowerCase() === "owner") return { ok: false, message: "The Owner account is reserved for the school's primary owner." };
 
