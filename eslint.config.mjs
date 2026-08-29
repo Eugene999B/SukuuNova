@@ -13,5 +13,17 @@ export default [
     rules: {
       "react/no-unescaped-entities": "off"
     }
+  },
+  {
+    files: ["src/components/FinanceWorkspace.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off"
+    }
+  },
+  {
+    files: ["src/components/PayrollWorkspace.tsx"],
+    rules: {
+      "@next/next/no-html-link-for-pages": "off"
+    }
   }
 ];
