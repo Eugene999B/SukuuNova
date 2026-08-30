@@ -1,33 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
+import { jwtVerify } from "jose";
 
 const SCHOOL_COOKIE = "sukuunova_school_session";
 const PLATFORM_COOKIE = "sukuunova_platform_session";
+const GUARDIAN_COOKIE = "sukuunova_guardian_session";
 
-function hasLiveSession(cookieValue: string | undefined) {
+type SessionKind = "school" | "platform" | "guardian";
+
+function authSecret(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET") {
+  const value = process.env[name];
+  if (!value || value.length < 32) return null;
+  return new TextEncoder().encode(value);
+}
+
+async function hasLiveSession(cookieValue: string | undefined, kind: SessionKind) {
   if (!cookieValue) return false;
+  const config = kind === "platform"
+    ? { secret: authSecret("PLATFORM_AUTH_SECRET"), issuer: "sukuunova-platform", audience: "sukuunova-platform" }
+    : kind === "guardian"
+      ? { secret: authSecret("SCHOOL_AUTH_SECRET"), issuer: "sukuunova-guardian", audience: "sukuunova-guardian" }
+      : { secret: authSecret("SCHOOL_AUTH_SECRET"), issuer: "sukuunova-school", audience: "sukuunova-school" };
+  if (!config.secret) return false;
   try {
-    const parts = cookieValue.split(".");
-    if (parts.length !== 3) return false;
-    const payloadText = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const padded = payloadText + "=".repeat((4 - (payloadText.length % 4)) % 4);
-    const payload = JSON.parse(atob(padded)) as { exp?: unknown };
-    return typeof payload.exp === "number" && payload.exp > Math.floor(Date.now() / 1000);
+    const { payload } = await jwtVerify(cookieValue, config.secret, { issuer: config.issuer, audience: config.audience });
+    return payload.kind === kind && typeof payload.sub === "string" && typeof payload.exp === "number" && payload.exp > Math.floor(Date.now() / 1000);
   } catch {
     return false;
   }
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const protectedSchool = pathname.startsWith("/school");
   const protectedPlatform = pathname.startsWith("/platform");
+  const protectedTeacher = pathname.startsWith("/teacher");
+  const protectedGuardian = pathname.startsWith("/guardian");
 
-  if (!protectedSchool && !protectedPlatform) return NextResponse.next();
+  if (!protectedSchool && !protectedPlatform && !protectedTeacher && !protectedGuardian) return NextResponse.next();
 
-  const cookieName = protectedSchool ? SCHOOL_COOKIE : PLATFORM_COOKIE;
-  if (hasLiveSession(request.cookies.get(cookieName)?.value)) return NextResponse.next();
+  const kind: SessionKind = protectedPlatform ? "platform" : protectedGuardian ? "guardian" : "school";
+  const cookieName = protectedPlatform ? PLATFORM_COOKIE : protectedGuardian ? GUARDIAN_COOKIE : SCHOOL_COOKIE;
+  if (await hasLiveSession(request.cookies.get(cookieName)?.value, kind)) return NextResponse.next();
 
-  const loginPath = protectedSchool ? "/login/school" : "/login/platform";
+  const loginPath = protectedPlatform ? "/login/platform" : protectedGuardian ? "/login/guardian" : "/login/school";
   const loginUrl = new URL(loginPath, request.url);
   loginUrl.searchParams.set("next", `${pathname}${search}`);
   loginUrl.searchParams.set("expired", "1");
@@ -35,5 +50,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/school/:path*", "/platform/:path*"],
+  matcher: ["/school/:path*", "/platform/:path*", "/teacher/:path*", "/guardian/:path*"],
 };
