@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-const requirePermission = vi.fn();
+const { requirePermission } = vi.hoisted(() => ({ requirePermission: vi.fn() }));
 
 vi.mock("../src/lib/rbac", () => ({ requirePermission, hasPermission: vi.fn().mockResolvedValue(true) }));
 vi.mock("../src/lib/audit", () => ({ appendSchoolAudit: vi.fn().mockResolvedValue(undefined) }));
