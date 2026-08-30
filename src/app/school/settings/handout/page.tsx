@@ -1,35 +1,121 @@
-import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import HandoutPrintStudio, { type HandoutModule } from "./HandoutPrintStudio";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
+import { getSchoolDocumentIdentity } from "@/lib/school-document-identity";
 import "./handout.css";
+
+const MODULES: Record<string, HandoutModule> = {
+  face_recognition: {
+    key: "face_recognition",
+    label: "Smart gate & face attendance",
+    description: "Face-assisted identity checks and attendance workflows for configured school entry points.",
+  },
+  payroll: {
+    key: "payroll",
+    label: "Staff payroll",
+    description: "Staff salary structures, payroll runs and individual payslip access.",
+  },
+  transport: {
+    key: "transport",
+    label: "Transport tracking",
+    description: "School transport routes, boarding events and guardian journey updates.",
+  },
+  feeding: {
+    key: "feeding",
+    label: "School feeding",
+    description: "Track school feeding operations alongside your wider school workspace.",
+  },
+  cbt: {
+    key: "cbt",
+    label: "Online exams",
+    description: "Computer-based assessment workflows for online examinations.",
+  },
+  library: {
+    key: "library",
+    label: "Library",
+    description: "Library records and the school resources your team manages for learners.",
+  },
+  assets: {
+    key: "assets",
+    label: "Assets",
+    description: "Operational asset records for the school and its day-to-day resources.",
+  },
+  recruitment: {
+    key: "recruitment",
+    label: "Recruitment",
+    description: "Staff recruitment and hiring workflows for the school team.",
+  },
+};
+
+function enabledFlags(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((flag): flag is string => typeof flag === "string");
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .filter(([, enabled]) => enabled === true)
+      .map(([flag]) => flag);
+  }
+  return [];
+}
+
+function supportContact() {
+  const phone = process.env.SUKUUNOVA_SUPPORT_PHONE?.trim();
+  const whatsapp = process.env.SUKUUNOVA_SUPPORT_WHATSAPP?.trim();
+  const email = process.env.SUKUUNOVA_SUPPORT_EMAIL?.trim();
+  const values = [
+    phone && `phone ${phone}`,
+    whatsapp && `WhatsApp ${whatsapp}`,
+    email && `email ${email}`,
+  ].filter(Boolean) as string[];
+  return values.length ? values.join(" · ") : "SukuuNova Help & Support in your school workspace";
+}
 
 export default async function SettingsHandoutPage() {
   const session = await requireSchoolSession();
   const school = await withTenant(session.schoolId, (tx) => tx.school.findUnique({
     where: { id: session.schoolId },
-    select: { name: true, uniqueCode: true, logoUrl: true },
+    select: {
+      name: true,
+      uniqueCode: true,
+      logoUrl: true,
+      brandColors: true,
+      subscriptionPlan: { select: { name: true, featureFlags: true } },
+      settings: { select: { reportCardWatermark: true } },
+    },
   }));
+
   if (!school) return null;
 
+  const identity = getSchoolDocumentIdentity(school);
+  const planName = school.subscriptionPlan?.name ?? "Plan not assigned";
+  const flags = enabledFlags(school.subscriptionPlan?.featureFlags);
+  const modules = flags
+    .map((flag) => MODULES[flag])
+    .filter((module): module is HandoutModule => Boolean(module));
+  const generatedDate = new Intl.DateTimeFormat("en-GH", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "Africa/Accra",
+  }).format(new Date());
+
   return (
-    <AppShell universe="school" title="SukuuNova Handout" subtitle="A clean, printable reference for your school workspace." active="School Settings" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}>
-      <div className="sn-handout">
-        <section className="sn-handout-sheet">
-          <div className="sn-handout-brand">{school.logoUrl ? <img src={school.logoUrl} alt="" /> : <span>{school.name.slice(0, 1).toUpperCase()}</span>}<div><small>SUKUUNOVA</small><strong>{school.name}</strong><em>{school.uniqueCode}</em></div></div>
-          <div className="sn-handout-head"><span>School workspace reference</span><h1>How your SukuuNova school is organised</h1><p>Use the control centre to keep your school identity, academic calendar, people, reporting and communication aligned.</p></div>
-          <div className="sn-handout-grid">
-            <article><b>School identity</b><span>Profile, branding, official document identity and school settings.</span></article>
-            <article><b>Academics</b><span>Academic years, terms, classes, subjects, timetable, gradebook and report cards.</span></article>
-            <article><b>People & access</b><span>Students, guardians, staff accounts, roles and delegated access.</span></article>
-            <article><b>Finance</b><span>Fees, invoices, payments, arrears, payroll and financial records.</span></article>
-            <article><b>Communication</b><span>Messages, announcements and school-to-family communication.</span></article>
-            <article><b>Reports & downloads</b><span>Operational reports and school-branded official documents.</span></article>
-          </div>
-          <footer>Generated from the SukuuNova school workspace · {school.name}</footer>
-        </section>
-        <div className="sn-handout-actions"><button onClick={() => window.print()}>Print / Save PDF</button><Link href="/school/settings">Back to School Settings</Link></div>
-      </div>
+    <AppShell
+      universe="school"
+      title="SukuuNova Handout"
+      subtitle="A printable guide to your system, ready to share with your staff."
+      active="School Settings"
+      schoolName={school.name}
+      schoolCode={school.uniqueCode}
+      userName={session.name}
+    >
+      <HandoutPrintStudio
+        identity={getSchoolDocumentIdentity({ ...school, watermark: school.settings?.reportCardWatermark })}
+        generatedDate={generatedDate}
+        planName={planName}
+        modules={modules}
+        supportContact={supportContact()}
+      />
     </AppShell>
   );
 }
