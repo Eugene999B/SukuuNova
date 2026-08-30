@@ -5,7 +5,7 @@ import { compare, hash } from "bcryptjs";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { GUARDIAN_COOKIE, getGuardianSession, createGuardianSessionToken } from "@/lib/guardian-auth";
-import { getPlatformSession, getSchoolSession, createPlatformSessionToken, PLATFORM_COOKIE, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { getPlatformSession, getSchoolSession, createPlatformSessionToken, createSchoolSessionToken, PLATFORM_COOKIE, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import "./security.css";
 
@@ -38,6 +38,15 @@ async function changePassword(formData: FormData) {
       if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
       await tx.user.update({ where: { id: school.userId }, data: { passwordHash: await hash(next, 12) } });
     });
+    const responseCookies = await cookies();
+    const token = await createSchoolSessionToken({
+      userId: school.userId,
+      schoolId: school.schoolId,
+      name: school.name,
+      impersonationId: school.impersonationId,
+      impersonatedByAdminId: school.impersonatedByAdminId
+    });
+    responseCookies.set(SCHOOL_COOKIE, token, sessionCookieOptions());
     redirect("/dashboard");
   }
 
