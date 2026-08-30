@@ -6,7 +6,7 @@ import { withTenant } from "@/lib/db";
 import type { TenantDb } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { hasPermission } from "@/lib/rbac";
-import { roleKeyForName } from "@/lib/authorization";
+import { roleKeyForName, isTeachingRoleKey } from "@/lib/authorization";
 import { staffRolePermissionKeys } from "@/lib/staff-role-presets";
 
 export type StaffCreateResult = { ok: true; name: string; status: "pending"; message: string } | { ok: false; message: string };
@@ -57,9 +57,9 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
   const subjectId = String(formData.get("subjectId") ?? "").trim();
 
   const requestedStaffType = String(formData.get("staffType") ?? "").trim().toLowerCase();
-  const staffType = requestedStaffType || (/teacher|assistant/i.test(roleName) ? "teaching" : "non-teaching");
+  const staffType = requestedStaffType === "teaching" || requestedStaffType === "non-teaching" ? requestedStaffType : "non-teaching";
   const roleKey = roleKeyForName(roleName);
-  const isTeachingRole = ["teacher", "class_teacher", "subject_teacher"].includes(roleKey) || /teacher|assistant/i.test(roleName);
+  const isTeachingRole = staffType === "teaching" || isTeachingRoleKey(roleKey);
 
   if (!name) return { ok: false, message: "Enter the staff member's full name." };
   if (!staffCategory) return { ok: false, message: "Select a workforce area." };
