@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
       const canViewAll = await hasPermission(tx, session.userId, "scores:write:all") || await hasPermission(tx, session.userId, "reports:generate");
       if (!canViewAll) {
-        const assigned = await tx.classSubjectTeacher.findFirst({ where: { teacherId: session.userId, classId: input.classId, subjectId: input.subjectId }, select: { id: true } });
+        const assigned = await tx.classSubjectTeacher.findFirst({ where: { teacherId: session.userId, classId: input.classId, subjectId: input.subjectId } });
         if (!assigned && access.isTeacher) throw new ForbiddenError("You can only view performance for classes and subjects assigned to you.");
       }
 
