@@ -4,6 +4,13 @@ import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
 import { hasPermission } from "./rbac";
 
+async function assertTermOpen(tx: TenantDb, termId: string) {
+  const term = await tx.term.findFirst({ where: { id: termId }, select: { id: true, isLocked: true, name: true } });
+  if (!term) throw new AppError("The selected term does not belong to this school.", 400, "INVALID_TERM");
+  if (term.isLocked) throw new AppError(`Term \"${term.name}\" is locked. Academic records can no longer be changed.`, 409, "TERM_LOCKED");
+  return term;
+}
+
 export async function createAssessment(
   tx: TenantDb,
   input: {
@@ -18,6 +25,7 @@ export async function createAssessment(
     maxScore: number;
   }
 ) {
+  await assertTermOpen(tx, input.termId);
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   if (!canWriteAll) {
     if (!(await hasPermission(tx, input.actorId, "scores:write:assigned"))) {
@@ -55,14 +63,7 @@ export async function createAssessment(
       maxScore: new Prisma.Decimal(input.maxScore)
     }
   });
-  await appendSchoolAudit(tx, {
-    schoolId: input.schoolId,
-    actorId: input.actorId,
-    action: "assessment.created",
-    entityType: "Assessment",
-    entityId: assessment.id,
-    after: assessment
-  });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "assessment.created", entityType: "Assessment", entityId: assessment.id, after: assessment });
   return assessment;
 }
 
@@ -76,76 +77,29 @@ export async function enterScore(
     value: number;
   }
 ) {
-  const assessment = await tx.assessment.findUnique({
-    where: { id: input.assessmentId },
-    select: {
-      id: true,
-      classId: true,
-      subjectId: true,
-      maxScore: true
-    }
-  });
+  const assessment = await tx.assessment.findUnique({ where: { id: input.assessmentId }, select: { id: true, classId: true, subjectId: true, termId: true, maxScore: true } });
   if (!assessment) throw new AppError("Assessment not found.", 404, "NOT_FOUND");
+  await assertTermOpen(tx, assessment.termId);
 
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
   if (!canWriteAll) {
     if (!canWriteAssigned) throw new ForbiddenError("Score entry is not permitted.");
-    const assignment = await tx.classSubjectTeacher.findFirst({
-      where: {
-        classId: assessment.classId,
-        subjectId: assessment.subjectId,
-        teacherId: input.actorId
-      },
-      select: { teacherId: true }
-    });
-    const classTeacher = await tx.class.findFirst({
-      where: { id: assessment.classId, classTeacherId: input.actorId },
-      select: { id: true }
-    });
-    if (!assignment && !classTeacher) {
-      throw new ForbiddenError("Teachers may enter scores only for assigned classes and subjects.");
-    }
+    const assignment = await tx.classSubjectTeacher.findFirst({ where: { classId: assessment.classId, subjectId: assessment.subjectId, teacherId: input.actorId }, select: { teacherId: true } });
+    const classTeacher = await tx.class.findFirst({ where: { id: assessment.classId, classTeacherId: input.actorId }, select: { id: true } });
+    if (!assignment && !classTeacher) throw new ForbiddenError("Teachers may enter scores only for assigned classes and subjects.");
   }
 
-  const student = await tx.student.findUnique({
-    where: { id: input.studentId },
-    select: { id: true, classId: true }
-  });
-  if (!student || student.classId !== assessment.classId) {
-    throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
-  }
-  if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) {
-    throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
-  }
+  const student = await tx.student.findUnique({ where: { id: input.studentId }, select: { id: true, classId: true } });
+  if (!student || student.classId !== assessment.classId) throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
+  if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
 
-  const previous = await tx.score.findUnique({
-    where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } }
-  });
+  const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
   const score = await tx.score.upsert({
     where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } },
-    update: {
-      value: new Prisma.Decimal(input.value),
-      enteredBy: input.actorId,
-      enteredAt: new Date()
-    },
-    create: {
-      schoolId: input.schoolId,
-      studentId: input.studentId,
-      subjectId: assessment.subjectId,
-      assessmentId: assessment.id,
-      value: new Prisma.Decimal(input.value),
-      enteredBy: input.actorId
-    }
+    update: { value: new Prisma.Decimal(input.value), enteredBy: input.actorId, enteredAt: new Date() },
+    create: { schoolId: input.schoolId, studentId: input.studentId, subjectId: assessment.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(input.value), enteredBy: input.actorId }
   });
-  await appendSchoolAudit(tx, {
-    schoolId: input.schoolId,
-    actorId: input.actorId,
-    action: previous ? "score.updated" : "score.created",
-    entityType: "Score",
-    entityId: score.id,
-    before: previous,
-    after: score
-  });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: previous ? "score.updated" : "score.created", entityType: "Score", entityId: score.id, before: previous, after: score });
   return score;
 }
