@@ -3,6 +3,7 @@
 import { hash } from "bcryptjs";
 import { randomUUID } from "crypto";
 import { withTenant } from "@/lib/db";
+import type { TenantDb } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { hasPermission } from "@/lib/rbac";
 import { staffRolePermissionKeys } from "@/lib/staff-role-presets";
@@ -10,7 +11,9 @@ import { staffRolePermissionKeys } from "@/lib/staff-role-presets";
 export type StaffCreateResult = { ok: true; name: string; status: "pending"; message: string } | { ok: false; message: string };
 export type StaffDetailsValidation = { ok: true } | { ok: false; message: string };
 
-async function assertCanManageStaff(session: Awaited<ReturnType<typeof requireSchoolSession>>, tx: Parameters<Parameters<typeof withTenant>[1]>[0]) {
+type StaffSession = { userId: string; schoolId: string };
+
+async function assertCanManageStaff(session: StaffSession, tx: TenantDb) {
   const actorRoles = await tx.userRole.findMany({ where: { userId: session.userId }, select: { role: { select: { name: true } } } });
   const actorIsOwner = actorRoles.some((r) => r.role.name.toLowerCase() === "owner");
   const actorIsAdmin = actorRoles.some((r) => r.role.name.toLowerCase() === "administrator" || r.role.name.toLowerCase() === "admin");
@@ -26,7 +29,7 @@ export async function validateStaffDetails(input: { name: string; email?: string
   if (!name) return { ok: false, message: "Enter the staff member's full name before continuing." };
 
   return withTenant(session.schoolId, async (tx) => {
-    const { canManage } = await assertCanManageStaff(session, tx);
+    const { canManage } = await assertCanManageStaff({ userId: session.userId, schoolId: session.schoolId }, tx);
     if (!canManage) return { ok: false, message: "You do not have permission to create staff records." };
     if (email) {
       const existing = await tx.user.findFirst({ where: { email }, select: { id: true } });
@@ -61,7 +64,7 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
   if (roleName.toLowerCase() === "owner") return { ok: false, message: "The Owner account is reserved for the school's primary owner." };
 
   return withTenant(session.schoolId, async (tx) => {
-    const { actorIsOwner, canManage } = await assertCanManageStaff(session, tx);
+    const { actorIsOwner, canManage } = await assertCanManageStaff({ userId: session.userId, schoolId: session.schoolId }, tx);
     if (!canManage) return { ok: false, message: "You do not have permission to create staff records." };
     if (roleName.toLowerCase() === "administrator" && !actorIsOwner) return { ok: false, message: "Only the school Owner can create an Administrator account." };
 
