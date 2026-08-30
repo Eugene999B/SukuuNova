@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
     const key = await recordLoginAttempt("guardian-login:" + input.schoolCode.toLowerCase(), input.identifier, requestIp(request.headers));
+    if (input.password.length < 12) throw new UnauthorizedError("This password is no longer accepted. Use the password reset flow to secure the account.");
     const school = await db.school.findUnique({ where: { uniqueCode: input.schoolCode.toLowerCase() }, select: { id: true, name: true, status: true } });
     if (!school || school.status !== "active") throw new UnauthorizedError("Invalid school or guardian credentials.");
     const guardian = await db.guardian.findFirst({
@@ -23,9 +24,8 @@ export async function POST(request: Request) {
     });
     if (!guardian?.user || !(await compare(input.password, guardian.user.passwordHash))) throw new UnauthorizedError("Invalid school or guardian credentials.");
     await clearLoginAttempts(key);
-    const needsPasswordChange = await compare("12345", guardian.user.passwordHash);
     const response = NextResponse.json({ ok: true, guardian: { name: guardian.name, schoolName: school.name } });
-    response.cookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ kind: "guardian", userId: guardian.user.id, guardianId: guardian.id, schoolId: school.id, name: guardian.name, schoolName: school.name, needsPasswordChange }), sessionCookieOptions());
+    response.cookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ kind: "guardian", userId: guardian.user.id, guardianId: guardian.id, schoolId: school.id, name: guardian.name, schoolName: school.name, needsPasswordChange: false }), sessionCookieOptions());
     response.cookies.delete("sukuunova_school_session");
     return response;
   } catch (error) {
