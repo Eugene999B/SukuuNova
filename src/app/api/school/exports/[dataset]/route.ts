@@ -4,6 +4,14 @@ import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { AppError, routeError } from "@/lib/errors";
 
+const EXPORT_PERMISSIONS: Record<string,string> = {
+  students: "exports:students",
+  staff: "exports:staff",
+  attendance: "exports:attendance",
+  fees: "exports:finance",
+  gradebook: "exports:gradebook"
+};
+
 function csvCell(value: unknown) {
   const text = value == null ? "" : String(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -22,9 +30,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
   try {
     const session = await requireSchoolSession();
     const { dataset } = await params;
+    const requiredPermission = EXPORT_PERMISSIONS[dataset];
+    if (!requiredPermission) throw new AppError("That export is not available.", 404, "EXPORT_NOT_FOUND");
     const url = new URL(request.url);
     const result = await withTenant(session.schoolId, async (tx) => {
-      await requirePermission(tx, session.userId, "reports:generate");
+      await requirePermission(tx, session.userId, requiredPermission);
       const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } });
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
 
