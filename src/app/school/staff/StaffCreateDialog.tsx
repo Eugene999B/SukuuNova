@@ -65,6 +65,10 @@ export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subj
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (step === 1) {
+      goToRoleStep();
+      return;
+    }
     setResult(null);
     if (!name.trim()) return setResult({ ok: false, message: "Enter the staff member's full name." });
     if (!category.label.trim()) return setResult({ ok: false, message: "Select a workforce area." });
