@@ -6,18 +6,18 @@ const WINDOW_MS = 15 * 60 * 1000;
 const BLOCK_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
 
-function bucketKey(scope: string, identity: string, ip: string): string {
+function bucketKey(scope: string, identity: string): string {
   return createHash("sha256")
-    .update(scope + "|" + identity.trim().toLowerCase() + "|" + ip)
+    .update(scope + "|" + identity.trim().toLowerCase())
     .digest("hex");
 }
 
 export async function recordLoginAttempt(
   scope: string,
   identity: string,
-  ip: string
+  _ip?: string
 ): Promise<string> {
-  const identityHash = bucketKey(scope, identity, ip);
+  const identityHash = bucketKey(scope, identity);
   const now = new Date();
 
   const retryAfterSeconds = await rawDb.$transaction(async (tx) => {
@@ -67,7 +67,11 @@ export async function clearLoginAttempts(identityHash: string): Promise<void> {
   await rawDb.loginRateLimit.deleteMany({ where: { identityHash } });
 }
 
+/**
+ * Returns a best-effort client IP for logging/telemetry only.
+ * It must not be used as the security key unless the platform guarantees
+ * that the forwarding header is injected by a trusted proxy.
+ */
 export function requestIp(headers: Headers): string {
-  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || headers.get("x-real-ip") || "unknown";
+  return headers.get("x-real-ip") || "unknown";
 }
