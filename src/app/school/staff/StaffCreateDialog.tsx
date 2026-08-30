@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { createStaff } from "./actions";
+import { createStaff, validateStaffDetails } from "./actions";
 import { STAFF_CATEGORIES } from "./staff-taxonomy";
 
 type Item = { id: string; name: string; level?: string | null };
 
+type ValidationState = null | { ok: boolean; message?: string };
+
 export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subjects: Item[] }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [validating, setValidating] = useState(false);
   const [result, setResult] = useState<null | { ok: boolean; message: string }>(null);
+  const [validation, setValidation] = useState<ValidationState>(null);
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -41,6 +45,8 @@ export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subj
   function reset() {
     setStep(1);
     setResult(null);
+    setValidation(null);
+    setValidating(false);
     setName("");
     setEmail("");
     setPhone("");
@@ -54,22 +60,43 @@ export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subj
     setCategoryId(next);
     setRole(nextCategory.roles[0]?.name ?? "Custom Role");
     setCustomRole("");
+    setValidation(null);
+    setResult(null);
   }
 
-  function goToRoleStep() {
+  function handleDetailChange(setter: (value: string) => void, value: string) {
+    setter(value);
+    setValidation(null);
+    setResult(null);
+  }
+
+  async function goToRoleStep() {
     if (!name.trim()) return setResult({ ok: false, message: "Enter the staff member's full name before continuing." });
     if (!category.label.trim()) return setResult({ ok: false, message: "Select a workforce area before continuing." });
     setResult(null);
+    setValidating(true);
+    const response = await validateStaffDetails({ name: name.trim(), email: email.trim(), phone: phone.trim() });
+    setValidating(false);
+    setValidation(response);
+    if (!response.ok) {
+      setResult({ ok: false, message: response.message });
+      return;
+    }
     setStep(2);
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (step === 1) {
-      goToRoleStep();
+      void goToRoleStep();
       return;
     }
     setResult(null);
+    if (!validation?.ok) {
+      setStep(1);
+      void goToRoleStep();
+      return;
+    }
     if (!name.trim()) return setResult({ ok: false, message: "Enter the staff member's full name." });
     if (!category.label.trim()) return setResult({ ok: false, message: "Select a workforce area." });
     const finalRole = isCustom ? customRole.trim() : role.trim();
@@ -106,9 +133,9 @@ export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subj
         {!result || !result.ok ? <><div className="staff-stepper" aria-label="Staff creation steps"><div className={step === 1 ? "is-active" : "is-done"}><strong>1</strong><span>Basic details</span></div><i /><div className={step === 2 ? "is-active" : ""}><strong>2</strong><span>Role & assignment</span></div></div>
           <form onSubmit={submit}>
             {step === 1 ? <div className="staff-form-grid">
-              <label>Full name<input className="staff-dialog-field" style={fieldStyle} name="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ama Mensah" autoComplete="name" /></label>
-              <label>Email address<input className="staff-dialog-field" style={fieldStyle} name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@school.com" autoComplete="email" /></label>
-              <label>Phone number<input className="staff-dialog-field" style={fieldStyle} name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" placeholder="024 xxx xxxx" /></label>
+              <label>Full name<input className="staff-dialog-field" style={fieldStyle} name="name" required value={name} onChange={(e) => handleDetailChange(setName, e.target.value)} placeholder="e.g. Ama Mensah" autoComplete="name" /></label>
+              <label>Email address<input className="staff-dialog-field" style={fieldStyle} name="email" type="email" value={email} onChange={(e) => handleDetailChange(setEmail, e.target.value)} placeholder="name@school.com" autoComplete="email" /></label>
+              <label>Phone number<input className="staff-dialog-field" style={fieldStyle} name="phone" value={phone} onChange={(e) => handleDetailChange(setPhone, e.target.value)} autoComplete="tel" placeholder="024 xxx xxxx" /></label>
               <label>Workforce area<select className="staff-dialog-field" style={fieldStyle} name="staffCategorySelect" value={categoryId} onChange={(e) => changeCategory(e.target.value)}>{STAFF_CATEGORIES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
               {result && !result.ok ? <div className="staff-form-note wide" role="alert"><strong>Check the form</strong><span>{result.message}</span></div> : null}
               <div className="staff-form-note wide"><strong>Login is separate</strong><span>These details create the staff profile only. The person cannot sign in until an authorised administrator activates a login from Sub-accounts & Access.</span></div>
@@ -124,7 +151,7 @@ export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subj
               <div className="staff-form-note wide"><strong>Next step</strong><span>No login or password is created here. After saving the staff profile, an authorised school administrator can select this person in Sub-accounts & Access and activate their login.</span></div>
               {result && !result.ok ? <div className="staff-form-note wide" role="alert"><strong>Check the form</strong><span>{result.message}</span></div> : null}
             </div>}
-            <div className="staff-modal-actions"><button className="staff-secondary-button" type="button" onClick={() => step === 1 ? setOpen(false) : setStep(1)}>{step === 1 ? "Cancel" : "Back"}</button>{step === 1 ? <button className="staff-primary-button" type="button" onClick={goToRoleStep}>Continue →</button> : <button className="staff-primary-button" disabled={pending || (isCustom && !customRole.trim())} type="submit">{pending ? "Adding staff…" : "Add staff profile"}</button>}</div>
+            <div className="staff-modal-actions"><button className="staff-secondary-button" type="button" onClick={() => step === 1 ? setOpen(false) : setStep(1)}>{step === 1 ? "Cancel" : "Back"}</button>{step === 1 ? <button className="staff-primary-button" type="button" disabled={validating} onClick={() => void goToRoleStep}>{validating ? "Checking details…" : "Continue →"}</button> : <button className="staff-primary-button" disabled={pending || validating || (isCustom && !customRole.trim())} type="submit">{pending ? "Adding staff…" : "Add staff profile"}</button>}</div>
           </form>
         </> : null}
       </section>
