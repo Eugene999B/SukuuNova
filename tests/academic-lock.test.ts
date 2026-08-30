@@ -7,11 +7,13 @@ vi.mock("../src/lib/audit", () => ({ appendSchoolAudit: vi.fn().mockResolvedValu
 
 import { createAssessment, enterScore } from "../src/lib/gradebook-service";
 
+type AcademicLockTx = Parameters<typeof createAssessment>[0] & Parameters<typeof enterScore>[0];
+
 describe("academic term locking", () => {
   it("rejects assessment creation when the term is locked", async () => {
     const tx = {
       term: { findFirst: vi.fn().mockResolvedValue({ id: "term-1", isLocked: true, name: "Term 1" }) },
-    } as any;
+    } as unknown as AcademicLockTx;
 
     await expect(createAssessment(tx, {
       schoolId: "school-1", actorId: "teacher-1", termId: "term-1", classId: "class-1", subjectId: "subject-1",
@@ -24,7 +26,7 @@ describe("academic term locking", () => {
     const tx = {
       assessment: { findUnique: vi.fn().mockResolvedValue({ id: "assessment-1", classId: "class-1", subjectId: "subject-1", termId: "term-1", maxScore: 100 }) },
       term: { findFirst: vi.fn().mockResolvedValue({ id: "term-1", isLocked: true, name: "Term 1" }) },
-    } as any;
+    } as unknown as AcademicLockTx;
 
     await expect(enterScore(tx, {
       schoolId: "school-1", actorId: "teacher-1", studentId: "student-1", assessmentId: "assessment-1", value: 70,
