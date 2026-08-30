@@ -7,19 +7,20 @@ import { ForbiddenError, routeError } from "@/lib/errors";
 import { appendSchoolAudit } from "@/lib/audit";
 import { enqueueNotification } from "@/lib/message-outbox";
 import { createCalendarEvent } from "@/lib/calendar-service";
+import { getSchoolAuthorization } from "@/lib/authorization";
 
 type Recipient = { id: string; name: string; phone: string | null };
 type JsonRecord = Record<string, unknown>;
-const privileged = new Set(["owner", "principal / headteacher", "vice principal / deputy head", "assistant headteacher", "administrator", "communications officer", "community / parent liaison officer"]);
 const sendSchema = z.object({ action: z.literal("send"), title: z.string().trim().min(2).max(160), body: z.string().trim().min(2).max(5000), audience: z.enum(["guardians", "teachers", "staff", "individual"]), channel: z.enum(["in_app", "sms", "whatsapp"]), userId: z.string().optional(), mediaUrl: z.string().url().optional() });
 const broadcastSchema = z.object({ action: z.literal("broadcast"), title: z.string().trim().min(2).max(160), body: z.string().trim().min(2).max(5000), audience: z.enum(["guardians", "teachers", "staff", "all"]), channel: z.enum(["sms", "whatsapp"]), scheduleAt: z.string().optional(), mediaUrl: z.string().url().optional() });
 const eventSchema = z.object({ action: z.literal("create_event"), name: z.string().trim().min(2).max(180), type: z.string().trim().min(2).max(40), startDate: z.string().min(1), endDate: z.string().min(1), location: z.string().optional(), description: z.string().max(5000).optional(), notifyGuardians: z.string().optional(), notifyStaff: z.string().optional() });
 function asRecord(value: unknown): JsonRecord { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {}; }
-async function canCommunicate(schoolId: string, userId: string) { return withTenant(schoolId, async (tx) => { const user = await tx.user.findUnique({ where: { id: userId }, select: { userRoles: { select: { role: { select: { name: true } } } } } }); return Boolean(user?.userRoles.some((x) => privileged.has(x.role.name.toLowerCase()))); }); }
+async function canCommunicate(schoolId: string, userId: string) { return withTenant(schoolId, async (tx) => { const access = await getSchoolAuthorization(tx, userId); return access.isOwner || (await access.can("templates:manage")); }); }
 
 export async function GET() {
   try {
     const session = await requireSchoolSession();
+    if (!(await canCommunicate(session.schoolId, session.userId))) throw new ForbiddenError("Your account is not authorised to view school communications.");
     return withTenant(session.schoolId, async (tx) => {
       const [messages, recipients, settings, events] = await Promise.all([
         tx.message.findMany({ where: { schoolId: session.schoolId }, orderBy: { createdAt: "desc" }, take: 80, select: { id: true, channel: true, recipientType: true, recipientId: true, body: true, status: true, createdAt: true, sentAt: true, lastError: true } }),
@@ -44,7 +45,8 @@ export async function POST(request: Request) {
         let recipients: Recipient[] = [];
         if (value.audience === "individual") { const user = await tx.user.findFirst({ where: { id: value.userId, status: "active" }, select: { id: true, name: true, phone: true } }); if (user) recipients = [user]; }
         else if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
-        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { name: { contains: "teacher", mode: "insensitive" } } } } }, select: { id: true, name: true, phone: true } });
+        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true } });
+        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
         else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });
         if (!recipients.length) return NextResponse.json({ ok: true, message: "No recipients matched that audience." });
         if (value.channel === "in_app") await tx.message.createMany({ data: recipients.map((r) => ({ schoolId: session.schoolId, channel: "in_app", recipientType: "user", recipientId: r.id, recipientPhone: r.phone || "", body: `${value.title}\n\n${value.body}`, templateKey: "direct_message", templateVariables: { title: value.title }, mediaUrl: value.mediaUrl || null, status: "delivered", attempts: 1, sentAt: new Date(), nextAttemptAt: new Date() })) });
@@ -59,7 +61,8 @@ export async function POST(request: Request) {
       return withTenant(session.schoolId, async (tx) => {
         let recipients: Recipient[] = [];
         if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
-        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { name: { contains: "teacher", mode: "insensitive" } } } } }, select: { id: true, name: true, phone: true } });
+        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true } });
+        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
         else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });
         let queued = 0;
         for (const recipient of recipients) { if (!recipient.phone) continue; if (value.channel === "sms" && !process.env.SMS_PROVIDER_URL) break; if (value.channel === "whatsapp" && !process.env.TWILIO_ACCOUNT_SID) break; await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl }); queued++; }
