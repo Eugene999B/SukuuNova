@@ -104,19 +104,20 @@ model School {
   invoiceLines        InvoiceLine[]
   payments            Payment[]
   paymentReversals    PaymentReversal[]
-  messages                 Message[]
-  timetableSlots           TimetableSlot[]
-  substituteAssignments    SubstituteAssignment[]
-  faceEnrollments          FaceEnrollment[]
-  faceMatchReviews         FaceMatchReview[]
-  approvedPickups          ApprovedPickup[]
-  pickupEvents             PickupEvent[]
-  pickupApprovalRequests   PickupApprovalRequest[]
-  salaryStructures         SalaryStructure[]
-  payrollRuns              PayrollRun[]
-  payslips                 Payslip[]
-  visitorLogs              VisitorLog[]
-  reportCardTemplates      ReportCardTemplate[]
+  messages            Message[]
+  timetableSlots      TimetableSlot[]
+  substituteAssignments SubstituteAssignment[]
+  faceEnrollments     FaceEnrollment[]
+  faceMatchReviews    FaceMatchReview[]
+  approvedPickups     ApprovedPickup[]
+  pickupEvents        PickupEvent[]
+  pickupApprovalRequests PickupApprovalRequest[]
+  salaryStructures    SalaryStructure[]
+  payrollRuns         PayrollRun[]
+  payslips            Payslip[]
+  visitorLogs         VisitorLog[]
+  reportCardTemplates ReportCardTemplate[]
+  houses              House[]
 }
 
 model SchoolSettings {
@@ -160,19 +161,19 @@ model User {
   subjectAssignments  ClassSubjectTeacher[] @relation("AssignedTeacher")
   staffAttendance     AttendanceEvent[] @relation("AttendanceStaff")
   attendanceRecorded  AttendanceEvent[] @relation("AttendanceRecorder")
-  scoresEntered             Score[] @relation("ScoreEnteredBy")
-  timetableSlots            TimetableSlot[] @relation("TimetableTeacher")
-  substituteAssignments     SubstituteAssignment[] @relation("SubstituteTeacher")
-  substitutesAssigned       SubstituteAssignment[] @relation("SubstituteAssigner")
-  faceEnrollments           FaceEnrollment[] @relation("FaceStaff")
-  faceMatchCandidates       FaceMatchReview[] @relation("FaceReviewStaff")
-  faceReviewsCompleted      FaceMatchReview[] @relation("FaceReviewedBy")
-  pickupRequestsCreated     PickupApprovalRequest[] @relation("PickupRequestedBy")
-  pickupRequestsApproved    PickupApprovalRequest[] @relation("PickupApprovedBy")
-  pickupEventsApproved      PickupEvent[] @relation("PickupEventApprovedBy")
-  salaryStructures          SalaryStructure[]
-  payslips                  Payslip[]
-  hostedVisitors            VisitorLog[] @relation("VisitorHost")
+  scoresEntered       Score[] @relation("ScoreEnteredBy")
+  timetableSlots      TimetableSlot[] @relation("TimetableTeacher")
+  substituteAssignments SubstituteAssignment[] @relation("SubstituteTeacher")
+  substitutesAssigned SubstituteAssignment[] @relation("SubstituteAssigner")
+  faceEnrollments     FaceEnrollment[] @relation("FaceStaff")
+  faceMatchCandidates FaceMatchReview[] @relation("FaceReviewStaff")
+  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")
+  pickupRequestsCreated PickupApprovalRequest[] @relation("PickupRequestedBy")
+  pickupRequestsApproved PickupApprovalRequest[] @relation("PickupApprovedBy")
+  pickupEventsApproved PickupEvent[] @relation("PickupEventApprovedBy")
+  salaryStructures    SalaryStructure[]
+  payslips            Payslip[]
+  hostedVisitors      VisitorLog[] @relation("VisitorHost")
 
   @@unique([id, schoolId])
   @@unique([schoolId, email])
@@ -262,7 +263,7 @@ model AuditLogSchool {
   id         String   @id @default(cuid())
   schoolId   String
   actorId    String
-  action     String
+  action      String
   entityType String
   entityId   String
   before     Json?
@@ -315,6 +316,7 @@ model Term {
   name           String
   startDate      DateTime
   endDate        DateTime
+  isLocked       Boolean      @default(false)
   school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   academicYear   AcademicYear @relation(fields: [academicYearId, schoolId], references: [id, schoolId], onDelete: Cascade)
   assessments    Assessment[]
@@ -327,6 +329,24 @@ model Term {
   @@index([schoolId])
 }
 
+model House {
+  id         String    @id @default(cuid())
+  schoolId   String
+  name       String
+  code       String
+  color      String?
+  description String?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  students   Student[]
+
+  @@unique([schoolId, name])
+  @@unique([schoolId, code])
+  @@index([schoolId])
+}
+
 model Student {
   id               String            @id @default(cuid())
   schoolId         String
@@ -334,11 +354,13 @@ model Student {
   name             String
   dob              DateTime?
   classId          String?
+  houseId          String?
   status           String            @default("active")
   photoUrl         String?
   createdAt        DateTime          @default(now())
   school           School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   class            Class?            @relation(fields: [classId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  house            House?            @relation(fields: [houseId, schoolId], references: [id, schoolId], onDelete: SetNull)
   guardians        StudentGuardian[]
   attendanceEvents AttendanceEvent[]
   scores           Score[]
@@ -354,6 +376,7 @@ model Student {
   @@unique([schoolId, admissionNo])
   @@index([schoolId])
   @@index([schoolId, classId])
+  @@index([schoolId, houseId])
 }
 
 model Guardian {
@@ -364,11 +387,11 @@ model Guardian {
   phone     String
   school    School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   user      User?             @relation("GuardianUser", fields: [userId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  students          StudentGuardian[]
-  faceConsents       FaceEnrollment[] @relation("FaceConsentGuardian")
-  approvedPickups    ApprovedPickup[]
-  pickupEvents       PickupEvent[]
-  pickupRequests     PickupApprovalRequest[]
+  students  StudentGuardian[]
+  faceConsents FaceEnrollment[] @relation("FaceConsentGuardian")
+  approvedPickups ApprovedPickup[]
+  pickupEvents PickupEvent[]
+  pickupRequests PickupApprovalRequest[]
 
   @@unique([id, schoolId])
   @@unique([schoolId, phone])
@@ -528,7 +551,7 @@ model ReportCard {
   createdAt       DateTime @default(now())
   school          School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   student         Student  @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  term            Term     @relation(fields: [termId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  term            Term     @relation(fields: [termId, schoolId], references: [id, schoolId], onDelete: Cascade)
   template        ReportCardTemplate? @relation(fields: [templateId], references: [id], onDelete: Restrict)
 
   @@unique([id, schoolId])
@@ -710,7 +733,7 @@ model FaceMatchReview {
   status             String   @default("pending")
   reviewedBy         String?
   reviewedAt         DateTime?
-  createdAt          DateTime @default(now())
+  createdAt           DateTime @default(now())
   school             School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   candidateStudent   Student? @relation(fields: [candidateStudentId, schoolId], references: [id, schoolId], onDelete: Restrict)
   candidateStaff     User?    @relation("FaceReviewStaff", fields: [candidateStaffId, schoolId], references: [id, schoolId], onDelete: Restrict)
@@ -739,18 +762,18 @@ model ApprovedPickup {
 model PickupApprovalRequest {
   id                           String   @id @default(cuid())
   schoolId                     String
-  studentId                    String
-  collectedByGuardianId        String
-  requestedByUserId            String
-  status                       String   @default("pending")
-  approvedByUserId             String?
-  reviewedAt                   DateTime?
-  createdAt                    DateTime @default(now())
-  school                       School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  student                      Student  @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  collectingGuardian           Guardian @relation(fields: [collectedByGuardianId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  requester                    User     @relation("PickupRequestedBy", fields: [requestedByUserId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  approver                     User?    @relation("PickupApprovedBy", fields: [approvedByUserId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  studentId                   String
+  collectedByGuardianId       String
+  requestedByUserId           String
+  status                      String   @default("pending")
+  approvedByUserId            String?
+  reviewedAt                  DateTime?
+  createdAt                   DateTime @default(now())
+  school                      School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  student                     Student  @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  collectingGuardian          Guardian @relation(fields: [collectedByGuardianId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  requester                   User     @relation("PickupRequestedBy", fields: [requestedByUserId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  approver                    User?    @relation("PickupApprovedBy", fields: [approvedByUserId, schoolId], references: [id, schoolId], onDelete: Restrict)
 
   @@unique([id, schoolId])
   @@index([schoolId])
@@ -759,16 +782,16 @@ model PickupApprovalRequest {
 
 model PickupEvent {
   id                          String   @id @default(cuid())
-  schoolId                    String
-  studentId                   String
-  collectedByGuardianId       String
-  wasPreApproved              Boolean
-  approvedByUserId            String?
-  timestamp                   DateTime @default(now())
-  school                      School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  student                     Student  @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  collectingGuardian          Guardian @relation(fields: [collectedByGuardianId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  approver                    User?    @relation("PickupEventApprovedBy", fields: [approvedByUserId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  schoolId                   String
+  studentId                  String
+  collectedByGuardianId      String
+  wasPreApproved             Boolean
+  approvedByUserId           String?
+  timestamp                  DateTime @default(now())
+  school                     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  student                    Student  @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  collectingGuardian         Guardian @relation(fields: [collectedByGuardianId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  approver                   User?    @relation(fields: [approvedByUserId, schoolId], references: [id, schoolId], onDelete: Restrict)
 
   @@unique([id, schoolId])
   @@index([schoolId])
