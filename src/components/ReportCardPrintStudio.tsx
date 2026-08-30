@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 
 type GradeBand = { grade?: string; min?: number; max?: number; remark?: string; label?: string };
@@ -89,7 +90,7 @@ export default function ReportCardPrintStudio({ data }: { data: Data }) {
         <div className="studio-controls">
           <button type="button" onClick={print} className="primary">Print / Save PDF</button>
           <button type="button" onClick={downloadHtml}>Export HTML</button>
-          <a href="/school/report-cards" style={{ display: "inline-flex", alignItems: "center", padding: "9px 11px", borderRadius: 10, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", textDecoration: "none", color: "#aac0bd", fontSize: 8, fontWeight: 850 }}>← Report cards</a>
+          <Link href="/school/report-cards" style={{ display: "inline-flex", alignItems: "center", padding: "9px 11px", borderRadius: 10, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", textDecoration: "none", color: "#aac0bd", fontSize: 8, fontWeight: 850 }}>← Report cards</Link>
         </div>
       </section>
 
