@@ -14,9 +14,22 @@ jobs:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://sukuunova:ci-only@localhost:5432/sukuunova?schema=public
+      NODE_ENV: test
+      DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_test
+      TEST_DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,6 +40,15 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Create non-superuser test database
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGDATABASE: postgres
+        run: |
+          psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sukuunova_test LOGIN NOSUPERUSER NOBYPASSRLS;"
+          psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_test OWNER sukuunova_test;"
+
       - name: Install dependencies from lockfile
         run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
 
@@ -35,6 +57,9 @@ jobs:
 
       - name: Validate Prisma schema
         run: npx prisma validate
+
+      - name: Apply migrations
+        run: npm run db:migrate
 
       - name: Typecheck
         run: npx tsc --noEmit --pretty false
@@ -46,9 +71,13 @@ jobs:
         run: npm run test
 
       - name: Build application
+        env:
+          NODE_ENV: production
         run: npm run build
 
       - name: Release to Railway
+        env:
+          NODE_ENV: production
         run: |
           printf 'verified %s\n' "$GITHUB_SHA" > .railway-deploy-trigger
           git config user.name 'github-actions[bot]'
