@@ -4,7 +4,7 @@ import { hash } from "bcryptjs";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import { requireCanAssignRoles, requireCanGrantPermissions, getSchoolAuthorization } from "@/lib/authorization";
+import { requireCanAssignRoles, requireCanGrantPermissions, getSchoolAuthorization, isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
 import { appendSchoolAudit } from "@/lib/audit";
 import { routeError, ForbiddenError, AppError } from "@/lib/errors";
 import { syncDefaultRbac } from "@/lib/role-builder-service";
@@ -14,8 +14,8 @@ const updateSchema = z.object({ userId:z.string().min(1), status:z.enum(["active
 async function canManage(tx:Parameters<typeof requirePermission>[0],userId:string){try{await requirePermission(tx,userId,"users:write");return true}catch{return false}}
 async function canControlRoles(tx:Parameters<typeof requirePermission>[0],userId:string){try{await requirePermission(tx,userId,"roles:create_custom");return true}catch{return false}}
 async function roleIdsForNames(tx:Parameters<typeof requirePermission>[0],schoolId:string,names:string[]){const unique=[...new Set(names.map((n)=>n.trim()).filter(Boolean))];const roles=await tx.role.findMany({where:{schoolId,name:{in:unique}}});if(roles.length!==unique.length)throw new ForbiddenError("One or more selected roles are not available in this school.");return roles;}
-function isTeachingRole(name:string){return /teacher|class teacher|subject teacher/i.test(name)}
-function validateRoleBundle(roleNames:string[]){const normalized=roleNames.map((name)=>name.trim().toLowerCase());if(normalized.includes("owner")&&normalized.some((name)=>/teacher|class teacher|subject teacher/i.test(name)))throw new ForbiddenError("A teacher cannot be assigned the Owner role. Keep school ownership separate from teaching access.");}
+function isTeachingRole(name:string){return isTeachingRoleKey(roleKeyForName(name))}
+function validateRoleBundle(roleNames:string[]){const roleKeys=roleNames.map((name)=>roleKeyForName(name));if(roleKeys.includes("owner")&&roleKeys.some(isTeachingRoleKey))throw new ForbiddenError("A teacher cannot be assigned the Owner role. Keep school ownership separate from teaching access.");}
 
 export async function GET(){try{const session=await requireSchoolSession();return NextResponse.json(await withTenant(session.schoolId,async tx=>{await syncDefaultRbac(tx,session.schoolId);const users=await tx.user.findMany({orderBy:{name:"asc"},select:{id:true,name:true,email:true,phone:true,status:true,createdAt:true,userRoles:{select:{role:{select:{id:true,name:true,key:true,isSystem:true}}}},permissionOverrides:{select:{granted:true,permission:{select:{key:true,description:true}}}}}});const roles=await tx.role.findMany({where:{schoolId:session.schoolId},orderBy:[{isSystem:"desc"},{name:"asc"}],select:{id:true,name:true,key:true,isSystem:true,rolePermissions:{select:{permission:{select:{key:true}}}}}});const permissions=await tx.permission.findMany({orderBy:{key:"asc"},select:{id:true,key:true,description:true}});return{users,roles,permissions,me:session.userId,canManage:await canManage(tx,session.userId),canControlRoles:await canControlRoles(tx,session.userId)};}))}catch(error){return routeError(error)}}
 
@@ -23,7 +23,7 @@ export async function POST(request:Request){try{const session=await requireSchoo
 
 export async function PATCH(request:Request){try{const session=await requireSchoolSession();const input=updateSchema.parse(await request.json());return NextResponse.json(await withTenant(session.schoolId,async tx=>{if(!(await canManage(tx,session.userId)))throw new ForbiddenError("You do not have permission to manage sub-accounts.");await syncDefaultRbac(tx,session.schoolId);if(input.userId===session.userId&&input.status==="suspended")throw new ForbiddenError("You cannot suspend your own account.");const target=await tx.user.findUnique({where:{id:input.userId},select:{id:true,name:true,status:true,email:true,phone:true,passwordHash:true,userRoles:{select:{role:{select:{key:true,name:true}}}}}});if(!target)throw new ForbiddenError("Account not found.");
  const actorAccess = await getSchoolAuthorization(tx, session.userId);
- const targetIsOwner = target.userRoles.some(({ role }) => (role.key?.trim() || role.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")) === "owner" || role.name === "Owner");
+ const targetIsOwner = target.userRoles.some(({ role }) => (role.key?.trim() || roleKeyForName(role.name)) === "owner");
  if (targetIsOwner && !actorAccess.isOwner) throw new ForbiddenError("Only the school Owner can modify the Owner account.");
  const activatingPending = target.status === "pending" && input.status === "active";
  if(activatingPending&&!input.password)throw new AppError("Set a login password before activating this staff member.",400,"PASSWORD_REQUIRED");
