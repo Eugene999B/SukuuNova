@@ -1,0 +1,36 @@
+name: One-time enrollment integrity repair
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch enrollment invariants
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/app/school/admissions/enrolment/page.tsx')
+          s=p.read_text()
+          old='const status: EnrollmentStatus = guardianVerified && documentsReady ? "ready" : "draft";'
+          new='const status: EnrollmentStatus = guardianVerified && documentsReady && feeReady ? "ready" : "draft";'
+          if old not in s:
+            raise SystemExit('create status pattern not found')
+          s=s.replace(old,new,1)
+          old2='const status = statusValue as EnrollmentStatus; await withTenant(session.schoolId, async (tx) => { await requirePermission(tx, session.userId, "students:write");'
+          new2='const status = statusValue as EnrollmentStatus; if ((status === "ready" || status === "confirmed") && !(guardianVerified && documentsReady && feeReady)) throw new Error("Guardian, documents and fee checks must all be complete before this enrollment can be made ready or confirmed."); await withTenant(session.schoolId, async (tx) => { await requirePermission(tx, session.userId, "students:write");'
+          if old2 not in s:
+            raise SystemExit('update invariant pattern not found')
+          s=s.replace(old2,new2,1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app/school/admissions/enrolment/page.tsx
+          git commit -m 'fix: enforce enrollment completion checks'
+          git push
