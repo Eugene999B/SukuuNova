@@ -33,7 +33,7 @@ const schoolGroups: NavGroup[] = [
 
 const teacherModule = (label: string) => `/teacher/module?view=${encodeURIComponent(label)}`;
 const teacherGroups: NavGroup[] = [
-  { label: "My Workspace", items: [["▦", "Teacher Home", "/teacher"], ["♙", "My Students", "/teacher/students"], ["◷", "My Timetable", teacherModule("My Timetable")] ] },
+  { label: "My Workspace", items: [["▦", "Teacher Home", "/teacher"], ["♙", "My Students", "/teacher/students"], ["◷", "My Timetable", teacherModule("My Timetable")]] },
   { label: "Teaching", items: [["▧", "My Lessons & Planning", teacherModule("My Lessons & Planning")], ["✦", "My Homework", teacherModule("My Homework")], ["▥", "My Gradebook", teacherModule("My Gradebook")], ["◇", "My Assessments", teacherModule("My Assessments")]] },
   { label: "Classroom", items: [["◉", "My Attendance", teacherModule("My Attendance")], ["▣", "My Classes", teacherModule("My Classes")]] },
   { label: "Communication", items: [["✉", "My Messages", teacherModule("My Messages")], ["◈", "Class Announcements", teacherModule("Class Announcements")]] },
@@ -41,10 +41,41 @@ const teacherGroups: NavGroup[] = [
 ];
 
 const platformGroups: NavGroup[] = [
-  { label: "Control Center", items: [["▦", "Overview", "/platform"], ["⌕", "Global Search", "/platform/search"], ["◉", "System Health", "/platform/health"]] },
-  { label: "Schools & Plans", items: [["⌂", "Schools", "/platform/schools"], ["◇", "Plans & Entitlements", "/platform/plans"], ["₵", "Platform Billing", "/platform/billing"], ["▥", "Network Analytics", "/platform/analytics"]] },
-  { label: "Operations", items: [["♟", "Support", "/platform/support"], ["⌁", "Audited Access", "/platform/support"], ["✉", "Visitor Inbox", "/platform/inbox"], ["▤", "Platform Reports", "/platform/reports"]] },
-  { label: "Security & Control", items: [["♙", "Workers & Permissions", "/platform/admins"], ["⌁", "Worker School Scope", "/platform/admins/access"], ["◇", "Audit Log", "/platform/audit"], ["⚙", "Platform Settings", "/platform/settings"] },
+  {
+    label: "Control Center",
+    items: [
+      ["▦", "Overview", "/platform"],
+      ["⌕", "Global Search", "/platform/search"],
+      ["◉", "System Health", "/platform/health"],
+    ],
+  },
+  {
+    label: "Schools & Plans",
+    items: [
+      ["⌂", "Schools", "/platform/schools"],
+      ["◇", "Plans & Entitlements", "/platform/plans"],
+      ["₵", "Platform Billing", "/platform/billing"],
+      ["▥", "Network Analytics", "/platform/analytics"],
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      ["♟", "Support", "/platform/support"],
+      ["⌁", "Audited Access", "/platform/support"],
+      ["✉", "Visitor Inbox", "/platform/inbox"],
+      ["▤", "Platform Reports", "/platform/reports"],
+    ],
+  },
+  {
+    label: "Security & Control",
+    items: [
+      ["♙", "Workers & Permissions", "/platform/admins"],
+      ["⌁", "Worker School Scope", "/platform/admins/access"],
+      ["◇", "Audit Log", "/platform/audit"],
+      ["⚙", "Platform Settings", "/platform/settings"],
+    ],
+  },
 ];
 
 function initials(value: string) {
