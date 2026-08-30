@@ -32,6 +32,10 @@ async function permissionRows(tx: TenantDb, keys: string[]) {
   return rows;
 }
 
+function customRoleKey(name: string) {
+  return "custom_" + name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
+}
+
 export async function customRoleBuilderData(tx: TenantDb, actorId: string) {
   await requirePermission(tx, actorId, "roles:create_custom");
   const actor = await tx.user.findUnique({ where: { id: actorId }, select: { schoolId: true } });
@@ -50,9 +54,9 @@ export async function createCustomRole(tx: TenantDb, input: { schoolId: string; 
   await syncDefaultRbac(tx, input.schoolId);
   const permissions = await permissionRows(tx, input.permissionKeys);
   if (!access.isOwner) await requireCanGrantPermissions(tx, input.actorId, input.permissionKeys);
-  const role = await tx.role.create({ data: { schoolId: input.schoolId, name: input.name.trim(), key: "custom_" + input.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"), isSystem: false } });
+  const role = await tx.role.create({ data: { schoolId: input.schoolId, name: input.name.trim(), key: customRoleKey(input.name), isSystem: false } });
   await tx.rolePermission.createMany({ data: permissions.map((permission) => ({ schoolId: input.schoolId, roleId: role.id, permissionId: permission.id })) });
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "custom_role.created", entityType: "Role", entityId: role.id, after: { name: role.name, permissionKeys: input.permissionKeys } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "custom_role.created", entityType: "Role", entityId: role.id, after: { name: role.name, key: role.key, permissionKeys: input.permissionKeys } });
   return role;
 }
 
@@ -67,8 +71,10 @@ export async function updateCustomRole(tx: TenantDb, input: { schoolId: string; 
   if (!access.isOwner) await requireCanGrantPermissions(tx, input.actorId, input.permissionKeys);
   await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
   await tx.rolePermission.createMany({ data: permissions.map((permission) => ({ schoolId: input.schoolId, roleId: role.id, permissionId: permission.id })) });
-  const updated = await tx.role.update({ where: { id: role.id }, data: { name: input.name.trim() } });
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "custom_role.updated", entityType: "Role", entityId: role.id, before: { name: role.name }, after: { name: updated.name, permissionKeys: input.permissionKeys } });
+  const nextName = input.name.trim();
+  const nextKey = customRoleKey(nextName);
+  const updated = await tx.role.update({ where: { id: role.id }, data: { name: nextName, key: nextKey } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "custom_role.updated", entityType: "Role", entityId: role.id, before: { name: role.name, key: role.key }, after: { name: updated.name, key: updated.key, permissionKeys: input.permissionKeys } });
   return updated;
 }
 
@@ -78,5 +84,5 @@ export async function deleteCustomRole(tx: TenantDb, input: { schoolId: string; 
   if (!role) throw new AppError("Custom role not found.", 404, "NOT_FOUND");
   if (role.isSystem) throw new AppError("System roles cannot be deleted.", 403, "SYSTEM_ROLE_PROTECTED");
   await tx.role.delete({ where: { id: role.id } });
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "custom_role.deleted", entityType: "Role", entityId: role.id, before: { name: role.name } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "custom_role.deleted", entityType: "Role", entityId: role.id, before: { name: role.name, key: role.key } });
 }
