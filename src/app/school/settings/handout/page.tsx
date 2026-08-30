@@ -86,7 +86,6 @@ export default async function SettingsHandoutPage() {
 
   if (!school) return null;
 
-  const identity = getSchoolDocumentIdentity(school);
   const planName = school.subscriptionPlan?.name ?? "Plan not assigned";
   const flags = enabledFlags(school.subscriptionPlan?.featureFlags);
   const modules = flags
