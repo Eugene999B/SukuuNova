@@ -101,7 +101,7 @@ export default async function DashboardPage() {
   redirect("/");
 }
 
-type AnnouncementPreview = { id: string; body: string; createdAt: Date }[];
+type AnnouncementPreview = { id: string; body: string; createdAt: Date };
 type SchoolStats = {
   students: number; guardians: number; staff: number; classes: number; subjects: number; feeItems: number;
   invoices: number; payments: number; attendance: number; events: number; announcements: AnnouncementPreview[];
