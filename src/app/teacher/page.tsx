@@ -10,11 +10,9 @@ import "../school/staff/staff-workspace.css";
 export default async function TeacherPortalPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
-    const [access, messageCount] = await Promise.all([
+    const [access, messageCount, user] = await Promise.all([
       getSchoolAuthorization(tx, session.userId),
       tx.message.count({ where: { schoolId: session.schoolId } }),
-    ]);
-    const [user] = await Promise.all([
       tx.user.findUnique({
         where: { id: session.userId },
         select: {
@@ -29,7 +27,7 @@ export default async function TeacherPortalPage() {
     return user ? { ...user, messageCount, access } : null;
   });
   if (!data) redirect("/login/school");
-  if (!data.access.isTeacher || data.access.isElevated) redirect("/dashboard");
+  if (data.access.workspace !== "teacher") redirect("/dashboard");
 
   const assignments = data.subjectAssignments;
   const led = data.classTeacherFor;
