@@ -7,7 +7,7 @@ import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
-const teacherRoleKeys = ["teacher", "class-teacher", "subject-teacher", "assistant-teacher", "teaching-assistant"];
+const teacherRoleKeys = ["teacher", "class_teacher", "subject_teacher", "assistant_teacher", "teaching_assistant"];
 const HOUSE_COLORS = ["#d36b4b", "#267a66", "#c18a2c", "#6f5ab8", "#2d7d8a", "#b84f74"];
 
 export async function createClass(input: { level: string; name: string; classTeacherId?: string }): Promise<ActionResult> {
