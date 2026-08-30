@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
-import { AppError, ForbiddenError } from "../src/lib/errors";
 import { decryptEmbeddingRef } from "../src/lib/face-crypto";
 import { enrollFace } from "../src/lib/face-service";
 import type { FaceProvider } from "../src/lib/face-provider";
