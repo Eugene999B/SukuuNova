@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 25
     env:
       NODE_ENV: production
+      DATABASE_URL: postgresql://sukuunova:ci-only@localhost:5432/sukuunova?schema=public
     steps:
       - name: Checkout
         uses: actions/checkout@v4
