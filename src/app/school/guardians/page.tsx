@@ -42,7 +42,7 @@ async function createGuardian(formData: FormData) {
 
     if (email) {
       const emailOwner = await tx.user.findFirst({ where: { schoolId: session.schoolId, email }, select: { id: true } });
-      if (emailOwner) throw new Error("That email address is already used by another school account.");
+      if (emailOwner && emailOwner.id !== guardian.userId) throw new Error("That email address is already used by another school account.");
     }
 
     if (!guardian.userId) {
@@ -66,10 +66,14 @@ async function createGuardian(formData: FormData) {
     for (const studentId of studentIds) {
       const student = await tx.student.findFirst({ where: { id: studentId }, select: { id: true } });
       if (!student) continue;
+      const existingPrimary = await tx.studentGuardian.findFirst({
+        where: { studentId, isPrimary: true },
+        select: { guardianId: true }
+      });
       await tx.studentGuardian.upsert({
         where: { studentId_guardianId: { studentId, guardianId: guardian.id } },
-        update: { relationship, isPrimary: true },
-        create: { schoolId: session.schoolId, studentId, guardianId: guardian.id, relationship, isPrimary: true }
+        update: { relationship, isPrimary: existingPrimary?.guardianId === guardian.id },
+        create: { schoolId: session.schoolId, studentId, guardianId: guardian.id, relationship, isPrimary: !existingPrimary }
       });
     }
 
