@@ -1,0 +1,41 @@
+name: One-time Prisma relation repair
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair relation names
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('prisma/schema.prisma')
+          s = p.read_text()
+          s = s.replace(
+              'candidateStaff User? @relation(fields: [candidateStaffId, schoolId], references: [id, schoolId], onDelete: Restrict)',
+              'candidateStaff User? @relation("FaceReviewStaff", fields: [candidateStaffId, schoolId], references: [id, schoolId], onDelete: Restrict)'
+          )
+          s = s.replace(
+              'reviewer User? @relation(fields: [reviewedBy, schoolId], references: [id, schoolId], onDelete: Restrict)',
+              'reviewer User? @relation("FaceReviewedBy", fields: [reviewedBy, schoolId], references: [id, schoolId], onDelete: Restrict)'
+          )
+          p.write_text(s)
+          PY
+          if git diff --quiet -- prisma/schema.prisma; then
+            echo 'No Prisma relation repair needed.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add prisma/schema.prisma
+          git commit -m 'fix: disambiguate face review prisma relations'
+          git push
