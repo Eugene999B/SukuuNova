@@ -1,0 +1,1 @@
+This migration adds the explicit Term.isLocked academic control. The migration itself lives in migration.sql in this directory and is applied automatically by the production deployment migration step.
