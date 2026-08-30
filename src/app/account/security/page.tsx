@@ -40,9 +40,11 @@ async function changePassword(formData: FormData) {
     });
     const responseCookies = await cookies();
     const token = await createSchoolSessionToken({
+      kind: "school",
       userId: school.userId,
       schoolId: school.schoolId,
       name: school.name,
+      authorizationVersion: school.authorizationVersion,
       impersonationId: school.impersonationId,
       impersonatedByAdminId: school.impersonatedByAdminId
     });
