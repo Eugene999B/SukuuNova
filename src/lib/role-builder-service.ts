@@ -3,8 +3,7 @@ import { appendSchoolAudit } from "./audit";
 import { AppError } from "./errors";
 import { requirePermission } from "./rbac";
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } from "./default-rbac";
-import { roleKeyForName } from "./authorization";
-import { requireCanGrantPermissions } from "./authorization";
+import { roleKeyForName, requireCanGrantPermissions, getSchoolAuthorization } from "./authorization";
 
 export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
   const permissionIds = new Map<string,string>();
@@ -46,7 +45,8 @@ export async function customRoleBuilderData(tx: TenantDb, actorId: string) {
 }
 
 export async function createCustomRole(tx: TenantDb, input: { schoolId: string; actorId: string; name: string; permissionKeys: string[] }) {
-  const access = await requirePermission(tx, input.actorId, "roles:create_custom");
+  await requirePermission(tx, input.actorId, "roles:create_custom");
+  const access = await getSchoolAuthorization(tx, input.actorId);
   await syncDefaultRbac(tx, input.schoolId);
   const permissions = await permissionRows(tx, input.permissionKeys);
   if (!access.isOwner) await requireCanGrantPermissions(tx, input.actorId, input.permissionKeys);
@@ -57,7 +57,8 @@ export async function createCustomRole(tx: TenantDb, input: { schoolId: string; 
 }
 
 export async function updateCustomRole(tx: TenantDb, input: { schoolId: string; actorId: string; roleId: string; name: string; permissionKeys: string[] }) {
-  const access = await requirePermission(tx, input.actorId, "roles:create_custom");
+  await requirePermission(tx, input.actorId, "roles:create_custom");
+  const access = await getSchoolAuthorization(tx, input.actorId);
   await syncDefaultRbac(tx, input.schoolId);
   const role = await tx.role.findUnique({ where: { id: input.roleId } });
   if (!role) throw new AppError("Custom role not found.", 404, "NOT_FOUND");
