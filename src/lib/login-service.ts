@@ -4,7 +4,7 @@ import { UnauthorizedError } from "./errors";
 import { roleKeyForName } from "./authorization";
 
 const LOGIN_FAILURE = "Invalid credentials or inactive account.";
-const LEGACY_WEAK_PASSWORD = "12345";
+const MIN_PASSWORD_LENGTH = 12;
 const globalForAuthPrisma = globalThis as unknown as { sukuunovaAuthPrisma?: PrismaClient };
 const authDb = globalForAuthPrisma.sukuunovaAuthPrisma ?? new PrismaClient({ log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"] });
 if (process.env.NODE_ENV !== "production") globalForAuthPrisma.sukuunovaAuthPrisma = authDb;
@@ -14,7 +14,7 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
   const uniqueCode = input.uniqueCode.trim().toLowerCase();
   const directory = await authDb.schoolLoginDirectory.findUnique({ where: { uniqueCode }, select: { schoolId: true, status: true } });
   if (!directory || directory.status !== "active") throw new UnauthorizedError(LOGIN_FAILURE);
-  if (input.password === LEGACY_WEAK_PASSWORD) throw new UnauthorizedError("This password is no longer accepted. Use the password reset flow to secure the account.");
+  if (input.password.length < MIN_PASSWORD_LENGTH) throw new UnauthorizedError("This password is too short. Use the password reset flow to secure the account.");
   return authDb.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
     const schoolRows = await tx.$queryRaw<{ id: string; name: string; status: string }[]>`SELECT "id", "name", "status" FROM "School" WHERE "id" = ${directory.schoolId} LIMIT 1`;
