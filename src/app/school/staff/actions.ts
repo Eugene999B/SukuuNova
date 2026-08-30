@@ -6,6 +6,7 @@ import { withTenant } from "@/lib/db";
 import type { TenantDb } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { hasPermission } from "@/lib/rbac";
+import { roleKeyForName } from "@/lib/authorization";
 import { staffRolePermissionKeys } from "@/lib/staff-role-presets";
 
 export type StaffCreateResult = { ok: true; name: string; status: "pending"; message: string } | { ok: false; message: string };
@@ -14,10 +15,10 @@ export type StaffDetailsValidation = { ok: true } | { ok: false; message: string
 type StaffSession = { userId: string; schoolId: string };
 
 async function assertCanManageStaff(session: StaffSession, tx: TenantDb) {
-  const actorRoles = await tx.userRole.findMany({ where: { userId: session.userId }, select: { role: { select: { name: true } } } });
-  const actorIsOwner = actorRoles.some((r) => r.role.name.toLowerCase() === "owner");
-  const actorIsAdmin = actorRoles.some((r) => r.role.name.toLowerCase() === "administrator" || r.role.name.toLowerCase() === "admin");
-  const canManage = actorIsOwner || actorIsAdmin || await hasPermission(tx, session.userId, "classes:manage");
+  const actorRoles = await tx.userRole.findMany({ where: { userId: session.userId }, select: { role: { select: { key: true, name: true } } } });
+  const actorRoleKeys = actorRoles.map((r) => r.role.key?.trim() || roleKeyForName(r.role.name));
+  const actorIsOwner = actorRoleKeys.includes("owner");
+  const canManage = actorIsOwner || await hasPermission(tx, session.userId, "users:write");
   return { actorIsOwner, canManage };
 }
 
@@ -57,16 +58,19 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
 
   const requestedStaffType = String(formData.get("staffType") ?? "").trim().toLowerCase();
   const staffType = requestedStaffType || (/teacher|assistant/i.test(roleName) ? "teaching" : "non-teaching");
+  const roleKey = roleKeyForName(roleName);
+  const isTeachingRole = ["teacher", "class_teacher", "subject_teacher"].includes(roleKey) || /teacher|assistant/i.test(roleName);
 
   if (!name) return { ok: false, message: "Enter the staff member's full name." };
   if (!staffCategory) return { ok: false, message: "Select a workforce area." };
   if (!roleName) return { ok: false, message: "Select a staff role." };
-  if (roleName.toLowerCase() === "owner") return { ok: false, message: "The Owner account is reserved for the school's primary owner." };
+  if (roleKey === "owner") return { ok: false, message: "The Owner account is reserved for the school's primary owner." };
+  if (isTeachingRole && (primaryClassId || subjectId)) return { ok: false, message: "Teaching assignments can be added after the staff account is activated." };
 
   return withTenant(session.schoolId, async (tx) => {
     const { actorIsOwner, canManage } = await assertCanManageStaff({ userId: session.userId, schoolId: session.schoolId }, tx);
     if (!canManage) return { ok: false, message: "You do not have permission to create staff records." };
-    if (roleName.toLowerCase() === "administrator" && !actorIsOwner) return { ok: false, message: "Only the school Owner can create an Administrator account." };
+    if (roleKey === "administrator" && !actorIsOwner) return { ok: false, message: "Only the school Owner can create an Administrator account." };
 
     if (email) {
       const existing = await tx.user.findFirst({ where: { email } });
@@ -79,8 +83,8 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
 
     const role = await tx.role.upsert({
       where: { schoolId_name: { schoolId: session.schoolId, name: roleName } },
-      update: {},
-      create: { schoolId: session.schoolId, name: roleName, key: roleName.toLowerCase().replace(/[^a-z0-9]+/g, "-"), isSystem: false }
+      update: { key: roleKey },
+      create: { schoolId: session.schoolId, name: roleName, key: roleKey, isSystem: false }
     });
 
     const permissionKeys = staffRolePermissionKeys(roleName);
@@ -93,21 +97,7 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
     const user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: placeholderPasswordHash, status: "pending" }, select: { id: true, name: true, email: true, phone: true, status: true } });
     await tx.userRole.create({ data: { schoolId: session.schoolId, userId: user.id, roleId: role.id } });
 
-    if (primaryClassId && /teacher/i.test(roleName)) {
-      const schoolClass = await tx.class.findFirst({ where: { id: primaryClassId }, select: { id: true } });
-      if (!schoolClass) return { ok: false, message: "Selected class does not belong to this school." };
-      await tx.class.update({ where: { id: primaryClassId }, data: { classTeacherId: user.id } });
-    }
-    if (primaryClassId && subjectId && /teacher|assistant/i.test(roleName)) {
-      const [schoolClass, subject] = await Promise.all([
-        tx.class.findFirst({ where: { id: primaryClassId }, select: { id: true } }),
-        tx.subject.findFirst({ where: { id: subjectId }, select: { id: true } })
-      ]);
-      if (!schoolClass || !subject) return { ok: false, message: "Selected class or subject does not belong to this school." };
-      await tx.classSubjectTeacher.upsert({ where: { classId_subjectId_teacherId: { classId: primaryClassId, subjectId, teacherId: user.id } }, update: {}, create: { schoolId: session.schoolId, classId: primaryClassId, subjectId, teacherId: user.id } });
-    }
-
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created_pending", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, staffCategory, role: roleName, permissionCount: permissions.length, primaryClassId: primaryClassId || null, subjectId: subjectId || null, loginCreated: false } } });
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created_pending", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, staffCategory, role: roleName, roleKey, permissionCount: permissions.length, primaryClassId: null, subjectId: null, loginCreated: false } } });
     return { ok: true, name: user.name, status: "pending", message: `${user.name} was added as staff. No login account was created. Open Sub-accounts & Access to activate a login later.` };
   });
 }
