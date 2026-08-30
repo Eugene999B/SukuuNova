@@ -8,6 +8,37 @@ import { hasPermission } from "@/lib/rbac";
 import { staffRolePermissionKeys } from "@/lib/staff-role-presets";
 
 export type StaffCreateResult = { ok: true; name: string; status: "pending"; message: string } | { ok: false; message: string };
+export type StaffDetailsValidation = { ok: true } | { ok: false; message: string };
+
+async function assertCanManageStaff(session: Awaited<ReturnType<typeof requireSchoolSession>>, tx: Parameters<Parameters<typeof withTenant>[1]>[0]) {
+  const actorRoles = await tx.userRole.findMany({ where: { userId: session.userId }, select: { role: { select: { name: true } } } });
+  const actorIsOwner = actorRoles.some((r) => r.role.name.toLowerCase() === "owner");
+  const actorIsAdmin = actorRoles.some((r) => r.role.name.toLowerCase() === "administrator" || r.role.name.toLowerCase() === "admin");
+  const canManage = actorIsOwner || actorIsAdmin || await hasPermission(tx, session.userId, "classes:manage");
+  return { actorIsOwner, canManage };
+}
+
+export async function validateStaffDetails(input: { name: string; email?: string; phone?: string }): Promise<StaffDetailsValidation> {
+  const session = await requireSchoolSession();
+  const name = input.name.trim();
+  const email = input.email?.trim().toLowerCase() || null;
+  const phone = input.phone?.trim() || null;
+  if (!name) return { ok: false, message: "Enter the staff member's full name before continuing." };
+
+  return withTenant(session.schoolId, async (tx) => {
+    const { canManage } = await assertCanManageStaff(session, tx);
+    if (!canManage) return { ok: false, message: "You do not have permission to create staff records." };
+    if (email) {
+      const existing = await tx.user.findFirst({ where: { email }, select: { id: true } });
+      if (existing) return { ok: false, message: "That email is already used by a school account." };
+    }
+    if (phone) {
+      const existing = await tx.user.findFirst({ where: { phone }, select: { id: true } });
+      if (existing) return { ok: false, message: "That phone number is already used by a school account." };
+    }
+    return { ok: true };
+  });
+}
 
 export async function createStaff(formData: FormData): Promise<StaffCreateResult> {
   const session = await requireSchoolSession();
@@ -30,10 +61,7 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
   if (roleName.toLowerCase() === "owner") return { ok: false, message: "The Owner account is reserved for the school's primary owner." };
 
   return withTenant(session.schoolId, async (tx) => {
-    const actorRoles = await tx.userRole.findMany({ where: { userId: session.userId }, select: { role: { select: { name: true } } } });
-    const actorIsOwner = actorRoles.some((r) => r.role.name.toLowerCase() === "owner");
-    const actorIsAdmin = actorRoles.some((r) => r.role.name.toLowerCase() === "administrator" || r.role.name.toLowerCase() === "admin");
-    const canManage = actorIsOwner || actorIsAdmin || await hasPermission(tx, session.userId, "classes:manage");
+    const { actorIsOwner, canManage } = await assertCanManageStaff(session, tx);
     if (!canManage) return { ok: false, message: "You do not have permission to create staff records." };
     if (roleName.toLowerCase() === "administrator" && !actorIsOwner) return { ok: false, message: "Only the school Owner can create an Administrator account." };
 
@@ -58,8 +86,6 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
     await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
     await tx.rolePermission.createMany({ data: permissions.map((permission) => ({ schoolId: session.schoolId, roleId: role.id, permissionId: permission.id })) });
 
-    // A staff profile is not a login account. The random hash is intentionally unusable as a credential
-    // because school authentication only admits status=active users.
     const placeholderPasswordHash = await hash(randomUUID() + randomUUID(), 12);
     const user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: placeholderPasswordHash, status: "pending" }, select: { id: true, name: true, email: true, phone: true, status: true } });
     await tx.userRole.create({ data: { schoolId: session.schoolId, userId: user.id, roleId: role.id } });
