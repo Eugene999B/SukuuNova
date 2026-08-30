@@ -4,6 +4,7 @@ import { hasPermission } from "./rbac";
 
 export const SYSTEM_ROLE_KEYS = {
   Owner: "owner",
+  Administrator: "administrator",
   Principal: "principal",
   "Vice Principal": "vice_principal",
   "Academic Coordinator": "academic_coordinator",
@@ -13,13 +14,43 @@ export const SYSTEM_ROLE_KEYS = {
   "Admissions Officer": "admissions_officer",
   "Class Teacher": "class_teacher",
   "Subject Teacher": "subject_teacher",
+  Teacher: "teacher",
   "Front Desk/Gate Security": "front_desk_security",
   "Transport Officer": "transport_officer",
-  Parent: "parent",
+  "Parent": "parent",
+  Guardian: "guardian",
   Student: "student",
 } as const;
 
 export type SystemRoleKey = (typeof SYSTEM_ROLE_KEYS)[keyof typeof SYSTEM_ROLE_KEYS];
+
+export const SCHOOL_WORKSPACE_ROLE_KEYS = new Set<string>([
+  "owner",
+  "administrator",
+  "principal",
+  "vice_principal",
+  "academic_coordinator",
+  "department_head",
+  "accountant",
+  "hr_officer",
+  "admissions_officer",
+  "front_desk_security",
+  "transport_officer",
+]);
+
+export const TEACHER_WORKSPACE_ROLE_KEYS = new Set<string>([
+  "teacher",
+  "class_teacher",
+  "subject_teacher",
+]);
+
+export const TEACHING_ROLE_KEYS = new Set<string>([
+  ...TEACHER_WORKSPACE_ROLE_KEYS,
+  "academic_coordinator",
+  "department_head",
+]);
+
+export type SchoolWorkspace = "school" | "teacher";
 
 function normalizeRoleKey(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -27,6 +58,17 @@ function normalizeRoleKey(name: string): string {
 
 export function roleKeyForName(name: string): string {
   return SYSTEM_ROLE_KEYS[name as keyof typeof SYSTEM_ROLE_KEYS] ?? normalizeRoleKey(name);
+}
+
+export function resolveSchoolWorkspace(roleKeys: string[]): SchoolWorkspace {
+  const normalized = roleKeys.map((key) => key.trim()).filter(Boolean);
+  if (normalized.some((key) => SCHOOL_WORKSPACE_ROLE_KEYS.has(key))) return "school";
+  if (normalized.some((key) => TEACHER_WORKSPACE_ROLE_KEYS.has(key))) return "teacher";
+  return "school";
+}
+
+export function isTeachingRoleKey(roleKey: string): boolean {
+  return TEACHING_ROLE_KEYS.has(roleKey.trim());
 }
 
 export async function getSchoolAuthorization(tx: TenantDb, userId: string) {
@@ -55,16 +97,19 @@ export async function getSchoolAuthorization(tx: TenantDb, userId: string) {
     ...role,
     key: role.key?.trim() || roleKeyForName(role.name)
   }));
+  const roleKeys = roles.map((role) => role.key);
 
   return {
     user,
     roles,
-    roleKeys: roles.map((role) => role.key),
+    roleKeys,
+    workspace: resolveSchoolWorkspace(roleKeys),
     hasRole: (key: string) => roles.some((role) => role.key === key),
     hasAnyRole: (...keys: string[]) => roles.some((role) => keys.includes(role.key)),
     isOwner: roles.some((role) => role.key === "owner"),
-    isElevated: roles.some((role) => ["owner", "principal", "vice_principal"].includes(role.key)),
-    isTeacher: roles.some((role) => ["class_teacher", "subject_teacher", "teacher", "academic_coordinator", "department_head"].includes(role.key)),
+    isElevated: roles.some((role) => ["owner", "administrator", "principal", "vice_principal"].includes(role.key)),
+    isTeacher: roles.some((role) => isTeachingRoleKey(role.key)),
+    isPureTeacher: !roles.some((role) => SCHOOL_WORKSPACE_ROLE_KEYS.has(role.key)) && roles.some((role) => TEACHER_WORKSPACE_ROLE_KEYS.has(role.key)),
     can: (permissionKey: string) => hasPermission(tx, userId, permissionKey)
   };
 }
@@ -117,7 +162,7 @@ export async function requireCanAssignRoles(
   if (selectedRoles.length !== new Set(roleIds).size) throw new ForbiddenError("One or more selected roles are not available.");
 
   if (!access.isOwner) {
-    const managesOwner = target.userRoles.some(({ role }) => role.key === "owner") || selectedRoles.some((role) => (role.key?.trim() || roleKeyForName(role.name)) === "owner");
+    const managesOwner = target.userRoles.some(({ role }) => (role.key?.trim() || roleKeyForName(role.name)) === "owner") || selectedRoles.some((role) => (role.key?.trim() || roleKeyForName(role.name)) === "owner");
     if (managesOwner) throw new ForbiddenError("Only the school Owner can assign or modify the Owner role.");
 
     const permissionKeys = [...new Set(selectedRoles.flatMap((role) => role.rolePermissions.map(({ permission }) => permission.key)))];
