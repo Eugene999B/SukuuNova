@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getPlatformSession, getSchoolSession } from "@/lib/auth";
+import { getSchoolAuthorization } from "@/lib/authorization";
 import { withTenant } from "@/lib/db";
 import { LogoutButton } from "@/components/LogoutButton";
 import { AppShell } from "@/components/AppShell";
@@ -9,15 +10,16 @@ export default async function DashboardPage() {
   const schoolSession = await getSchoolSession();
   if (schoolSession) {
     const overview = await withTenant(schoolSession.schoolId, async (tx) => {
-      const account = await tx.user.findUnique({ where: { id: schoolSession.userId }, select: { name: true, school: { select: { name: true, uniqueCode: true } }, userRoles: { include: { role: { select: { name: true } } } } } });
-      return { account };
+      const [account, access] = await Promise.all([
+        tx.user.findUnique({ where: { id: schoolSession.userId }, select: { name: true, school: { select: { name: true, uniqueCode: true } } } }),
+        getSchoolAuthorization(tx, schoolSession.userId)
+      ]);
+      return { account, access };
     });
 
     if (!overview.account) redirect("/login/school");
-    const roleNames = overview.account.userRoles.map((entry) => entry.role.name);
-    const teachingRole = roleNames.some((role) => /teacher|academic lead|head of department/i.test(role));
-    const elevatedSchoolRole = roleNames.some((role) => /owner|administrator|principal|vice principal/i.test(role));
-    if (teachingRole && !elevatedSchoolRole) redirect("/teacher");
+    if (overview.access.isTeacher && !overview.access.isElevated) redirect("/teacher");
+    const roleNames = overview.access.roles.map((role) => role.name);
 
     const schoolOverview = await withTenant(schoolSession.schoolId, async (tx) => {
       const [students, guardians, staff, classes, subjects, feeItems, invoices, payments, attendance, events, announcements] = await Promise.all([
