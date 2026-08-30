@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
+import { getSchoolAuthorization } from "@/lib/authorization";
 import { withTenant } from "@/lib/db";
 import StaffAttendanceDesk from "../StaffAttendanceDesk";
 
@@ -77,29 +78,26 @@ export default async function SchoolModulePage({params}:{params:Promise<{module?
   if (!config) notFound();
 
   const school = await withTenant(session.schoolId, async (tx) => {
-    const [schoolRecord, user] = await Promise.all([
+    const [schoolRecord, access] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.user.findUnique({ where: { id: session.userId }, select: { userRoles: { select: { role: { select: { name: true } } } } } }),
+      getSchoolAuthorization(tx, session.userId),
     ]);
-    return { school: schoolRecord, roleNames: user?.userRoles.map((entry) => entry.role.name) ?? [] };
+    return { school: schoolRecord, access };
   });
   if (!school.school) notFound();
 
-  const roleNames = school.roleNames;
-  const isTeacher = roleNames.some((role) => /teacher|class teacher|subject teacher|academic lead|head of department/i.test(role));
-  const hasElevatedSchoolRole = roleNames.some((role) => /owner|administrator|principal|vice principal/i.test(role));
-
-  if (isTeacher && !hasElevatedSchoolRole && !teacherAllowedModules.has(key)) redirect("/teacher");
+  const isTeacher = school.access.workspace === "teacher";
+  if (isTeacher && !teacherAllowedModules.has(key)) redirect("/teacher");
 
   if (key === "staff-attendance") {
-    return <AppShell universe={isTeacher && !hasElevatedSchoolRole ? "teacher" : "school"} title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.school.name} schoolCode={school.school.uniqueCode} userName={session.name}>
+    return <AppShell universe={isTeacher ? "teacher" : "school"} title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.school.name} schoolCode={school.school.uniqueCode} userName={session.name}>
       <StaffAttendanceDesk />
     </AppShell>;
   }
-  if (key === "search") return <SearchCentre schoolName={school.school.name} sessionName={session.name} teacherMode={isTeacher && !hasElevatedSchoolRole} />;
+  if (key === "search") return <SearchCentre schoolName={school.school.name} sessionName={session.name} teacherMode={isTeacher} />;
 
   const base = `/school/${key}`;
-  return <AppShell universe={isTeacher && !hasElevatedSchoolRole ? "teacher" : "school"} title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.school.name} schoolCode={school.school.uniqueCode} userName={session.name}>
+  return <AppShell universe={isTeacher ? "teacher" : "school"} title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.school.name} schoolCode={school.school.uniqueCode} userName={session.name}>
     <div className="module-shell">
       <section className="module-hero"><div><span className="eyebrow">{school.school.name}</span><h2>{config.title}</h2><p>{config.subtitle}</p></div><div className="module-actions"><Link className="button secondary" href="/school/reports/analytics">Analytics</Link><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div></section>
       <nav className="module-tabs" aria-label={`${config.title} views`}>{config.tabs.map((tab) => <Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-tab">{tab}</Link>)}</nav>
