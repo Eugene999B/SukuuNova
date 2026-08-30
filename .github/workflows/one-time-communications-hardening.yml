@@ -1,0 +1,42 @@
+name: One-time communications hardening
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Harden communications API
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/api/school/communications/route.ts')
+          s = p.read_text()
+          s = s.replace('import { createCalendarEvent } from "@/lib/calendar-service";','import { createCalendarEvent } from "@/lib/calendar-service";\nimport { getSchoolAuthorization } from "@/lib/authorization";')
+          old = 'const privileged = new Set(["owner", "principal / headteacher", "vice principal / deputy head", "assistant headteacher", "administrator", "communications officer", "community / parent liaison officer"]);\n'
+          s = s.replace(old, '')
+          old = 'async function canCommunicate(schoolId: string, userId: string) { return withTenant(schoolId, async (tx) => { const user = await tx.user.findUnique({ where: { id: userId }, select: { userRoles: { select: { role: { select: { name: true } } } } } }); return Boolean(user?.userRoles.some((x) => privileged.has(x.role.name.toLowerCase()))); }); }'
+          new = 'async function canCommunicate(schoolId: string, userId: string) { return withTenant(schoolId, async (tx) => { const access = await getSchoolAuthorization(tx, userId); return access.isOwner || (await access.can("templates:manage")); }); }'
+          if old not in s: raise SystemExit('canCommunicate pattern not found')
+          s = s.replace(old, new)
+          s = s.replace('    const session = await requireSchoolSession();\n    return withTenant(session.schoolId, async (tx) => {','    const session = await requireSchoolSession();\n    if (!(await canCommunicate(session.schoolId, session.userId))) throw new ForbiddenError("Your account is not authorised to view school communications.");\n    return withTenant(session.schoolId, async (tx) => {',1)
+          old = 'else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { name: { contains: "teacher", mode: "insensitive" } } } } }, select: { id: true, name: true, phone: true } });\n        else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });'
+          new = 'else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true } });\n        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });\n        else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });'
+          if old not in s: raise SystemExit('send audience pattern not found')
+          s = s.replace(old, new, 1)
+          old = 'else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { name: { contains: "teacher", mode: "insensitive" } } } } }, select: { id: true, name: true, phone: true } });\n        else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });'
+          new = 'else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true } });\n        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });\n        else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });'
+          if old not in s: raise SystemExit('broadcast audience pattern not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app/api/school/communications/route.ts
+          git commit -m 'fix: secure school communications access and audiences'
+          git push
