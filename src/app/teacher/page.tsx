@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
+import { getSchoolAuthorization } from "@/lib/authorization";
 import { withTenant } from "@/lib/db";
 import "@/app/globals.css";
 import "../school/staff/staff-workspace.css";
@@ -9,37 +10,37 @@ import "../school/staff/staff-workspace.css";
 export default async function TeacherPortalPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
-    const [user, messageCount] = await Promise.all([
+    const [access, messageCount] = await Promise.all([
+      getSchoolAuthorization(tx, session.userId),
+      tx.message.count({ where: { schoolId: session.schoolId } }),
+    ]);
+    const [user] = await Promise.all([
       tx.user.findUnique({
         where: { id: session.userId },
         select: {
           name: true,
           email: true,
           phone: true,
-          userRoles: { select: { role: { select: { name: true } } } },
           classTeacherFor: { select: { id: true, name: true, level: true, _count: { select: { students: true } } } },
           subjectAssignments: { select: { class: { select: { id: true, name: true, level: true, _count: { select: { students: true } } } }, subject: { select: { id: true, name: true } } } },
         }
-      }),
-      tx.message.count({ where: { schoolId: session.schoolId } }),
+      })
     ]);
-    return user ? { ...user, messageCount } : null;
+    return user ? { ...user, messageCount, access } : null;
   });
   if (!data) redirect("/login/school");
+  if (!data.access.isTeacher || data.access.isElevated) redirect("/dashboard");
 
-  const roles = data.userRoles.map((r) => r.role.name);
   const assignments = data.subjectAssignments;
   const led = data.classTeacherFor;
   const classIds = new Set([...led.map((c) => c.id), ...assignments.map((a) => a.class.id)]);
   const scopedStudentCount = [...new Map([...led.map((c) => [c.id, c._count.students] as const), ...assignments.map((a) => [a.class.id, a.class._count.students] as const)]).values()].reduce((n, v) => n + v, 0);
+  const roleLabel = data.access.roles.map((role) => role.name).join(" · ") || "Teacher";
 
-  const canUseTeacherPortal = roles.some((role) => /teacher|class teacher|subject teacher|academic lead|head of department/i.test(role));
-  if (!canUseTeacherPortal) redirect("/dashboard");
-
-  return <AppShell universe="teacher" title="Teacher workspace" subtitle="Your classes, subjects, attendance, marks, homework, planning and school conversations." active="Teacher Home" userName={data.name} schoolName="School Workspace" schoolCode="" role={roles[0] ?? "Teacher"}>
+  return <AppShell universe="teacher" title="Teacher workspace" subtitle="Your classes, subjects, attendance, marks, homework, planning and school conversations." active="Teacher Home" userName={data.name} schoolName="School Workspace" schoolCode="" role={roleLabel}>
     <div className="staff-workspace">
       <section className="staff-hero">
-        <div><span className="staff-eyebrow">TEACHER PORTAL · {roles.join(" · ") || "Teacher"}</span><h2>Good morning, {data.name.split(/\s+/)[0]}.</h2><p>This workspace is separate from school administration. Your teaching scope comes from the classes and subjects assigned to your staff profile.</p><div className="staff-hero-points"><span>✓ {classIds.size} classes in scope</span><span>✓ {assignments.length} subject assignments</span><span>✓ Mark attendance</span><span>✓ Enter marks</span></div></div>
+        <div><span className="staff-eyebrow">TEACHER PORTAL · {roleLabel}</span><h2>Good morning, {data.name.split(/\s+/)[0]}.</h2><p>This workspace is separate from school administration. Your teaching scope comes from the classes and subjects assigned to your staff profile.</p><div className="staff-hero-points"><span>✓ {classIds.size} classes in scope</span><span>✓ {assignments.length} subject assignments</span><span>✓ Mark attendance</span><span>✓ Enter marks</span></div></div>
         <Link className="staff-primary-cta" href="/school/homework">＋ Create homework</Link>
       </section>
       <section className="staff-metrics"><article><span>Classes</span><strong>{classIds.size}</strong><small>Only your assigned groups</small></article><article><span>Subjects</span><strong>{new Set(assignments.map((a) => a.subject.id)).size}</strong><small>Teaching areas</small></article><article><span>Students in scope</span><strong>{scopedStudentCount}</strong><small>Across assigned groups</small></article><article><span>School messages</span><strong>{data.messageCount}</strong><small>School conversations</small></article></section>
