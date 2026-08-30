@@ -1,0 +1,33 @@
+name: Fix Report Card Link
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace internal anchor with Next Link
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/components/ReportCardPrintStudio.tsx')
+          s=p.read_text()
+          s=s.replace('import { useMemo, useState } from "react";','import Link from "next/link";\nimport { useMemo, useState } from "react";',1)
+          old='<a href="/school/report-cards" style={{ display: "inline-flex", alignItems: "center", padding: "9px 11px", borderRadius: 10, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", textDecoration: "none", color: "#aac0bd", fontSize: 8, fontWeight: 850 }}>← Report cards</a>'
+          new='<Link href="/school/report-cards" style={{ display: "inline-flex", alignItems: "center", padding: "9px 11px", borderRadius: 10, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", textDecoration: "none", color: "#aac0bd", fontSize: 8, fontWeight: 850 }}>← Report cards</Link>'
+          if old not in s:
+              raise SystemExit('expected report-card back link not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+      - name: Commit and remove repair workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/ReportCardPrintStudio.tsx .github/workflows/fix-report-card-link.yml
+          git commit -m "fix: use Next Link in report card studio"
+          git push origin HEAD:main
