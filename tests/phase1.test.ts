@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
-import { AppError, ForbiddenError } from "../src/lib/errors";
 import {
   attendanceSummary,
   recordAttendance
