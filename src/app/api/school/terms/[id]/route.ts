@@ -9,11 +9,16 @@ import { appendSchoolAudit } from "@/lib/audit";
 
 const patchSchema = z.object({ name: z.string().trim().min(2).max(80), startDate: z.coerce.date(), endDate: z.coerce.date() });
 
+function termStatus(startDate: Date, endDate: Date, now = new Date()) {
+  return now < startDate ? "upcoming" : now > endDate ? "completed" : "current";
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
     const session = await requireSchoolSession();
     const { id } = await context.params;
     const input = await parseJson(request, patchSchema);
+    if (Number.isNaN(input.startDate.getTime()) || Number.isNaN(input.endDate.getTime())) throw new AppError("Term dates are invalid.", 400, "INVALID_TERM_DATE");
     if (input.endDate <= input.startDate) throw new AppError("Term end date must be after its start.", 400, "INVALID_TERM_RANGE");
     const term = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
@@ -26,7 +31,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "academic.term_updated", entityType: "Term", entityId: id, before, after: updated });
       return updated;
     });
-    return NextResponse.json({ ok: true, term });
+    return NextResponse.json({ ok: true, term, status: termStatus(term.startDate, term.endDate) });
   } catch (error) { return routeError(error); }
 }
 
@@ -35,6 +40,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const session = await requireSchoolSession();
     const { id } = await context.params;
     const result = await withTenant(session.schoolId, async (tx) => {
+      // Term summaries include finance and academic results, so require an explicit reporting capability rather than any authenticated school session.
+      await requirePermission(tx, session.userId, "reports:generate");
       const term = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!term) throw new AppError("Term not found.", 404, "NOT_FOUND");
       const [students, assessments, scores, reportCards, attendance, invoices, payments] = await Promise.all([
@@ -52,7 +59,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       const absent = attendance.filter((a) => a.type === "absence" || a.type === "absent").length;
       const invoiced = invoices.reduce((sum, i) => sum + Number(i.totalAmount), 0);
       const collected = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-      return { term, status: new Date() < term.startDate ? "upcoming" : new Date() > term.endDate ? "completed" : "current", students, assessments, scores: scores.length, scorePct, reportCards, attendance: { records: attendance.length, present, late, absent }, finance: { invoiceCount: invoices.length, invoiced, collected, outstanding: Math.max(invoiced - collected, 0) } };
+      return { term, status: termStatus(term.startDate, term.endDate), students, assessments, scores: scores.length, scorePct, reportCards, attendance: { records: attendance.length, present, late, absent }, finance: { invoiceCount: invoices.length, invoiced, collected, outstanding: Math.max(invoiced - collected, 0) } };
     });
     return NextResponse.json(result);
   } catch (error) { return routeError(error); }
