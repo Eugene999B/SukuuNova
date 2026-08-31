@@ -160,116 +160,36 @@ describe("Phase 1 MVP security and workflow gates", () => {
   it("marks post-grace arrival late and suppresses attendance on a holiday", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-02-02T08:11:00.000Z"));
-
     try {
       await withTenant(fixture.schoolId, async (tx) => {
         const event = await recordAttendance(tx, {
-          schoolId: fixture.schoolId,
-          actorId: fixture.ownerId,
-          target: { studentId },
-          type: "in",
-          method: "manual",
-          timestamp: new Date("2000-01-01T00:00:00.000Z")
+          schoolId: fixture.schoolId, actorId: fixture.ownerId, target: { studentId }, type: "in", method: "manual", timestamp: new Date("2000-01-01T00:00:00.000Z")
         });
         expect(event.isLate).toBe(true);
-
         const holiday = new Date("2026-02-03T00:00:00.000Z");
-        await tx.calendarEvent.create({
-          data: {
-            schoolId: fixture.schoolId,
-            academicYearId,
-            type: "holiday",
-            name: "Test holiday",
-            startDate: holiday,
-            endDate: holiday,
-            affectsAttendance: true
-          }
-        });
-
+        await tx.calendarEvent.create({ data: { schoolId: fixture.schoolId, academicYearId, type: "holiday", name: "Test holiday", startDate: holiday, endDate: holiday, affectsAttendance: true } });
         vi.setSystemTime(new Date("2026-02-03T08:30:00.000Z"));
-        await expect(
-          recordAttendance(tx, {
-            schoolId: fixture.schoolId,
-            actorId: fixture.ownerId,
-            target: { studentId },
-            type: "in",
-            method: "manual",
-            timestamp: new Date("1999-01-01T00:00:00.000Z")
-          })
-        ).rejects.toMatchObject({ code: "CALENDAR_BLOCKS_ATTENDANCE" });
-        await expect(
-          attendanceSummary(tx, { actorId: fixture.ownerId, day: holiday, classId })
-        ).resolves.toEqual({ calendarBlocked: true, present: 0, late: 0, absent: 0 });
+        await expect(recordAttendance(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, target: { studentId }, type: "in", method: "manual", timestamp: new Date("1999-01-01T00:00:00.000Z") })).rejects.toMatchObject({ code: "CALENDAR_BLOCKS_ATTENDANCE" });
+        await expect(attendanceSummary(tx, { actorId: fixture.ownerId, day: holiday, classId })).resolves.toEqual({ calendarBlocked: true, present: 0, late: 0, absent: 0 });
       });
-    } finally {
-      vi.useRealTimers();
-    }
+    } finally { vi.useRealTimers(); }
   });
 
   it("returns 403 when a teacher writes outside an assigned subject", async () => {
     await withTenant(fixture.schoolId, async (tx) => {
-      const assessment = await tx.assessment.create({
-        data: {
-          schoolId: fixture.schoolId,
-          termId,
-          classId,
-          subjectId: scienceId,
-          name: "Unassigned Science Test",
-          type: "ca",
-          weight: 100,
-          maxScore: 100
-        }
-      });
-      await expect(
-        enterScore(tx, {
-          schoolId: fixture.schoolId,
-          actorId: subjectTeacherId,
-          studentId,
-          assessmentId: assessment.id,
-          value: 80
-        })
-      ).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
+      const assessment = await tx.assessment.create({ data: { schoolId: fixture.schoolId, termId, classId, subjectId: scienceId, name: "Unassigned Science Test", type: "ca", weight: 100, maxScore: 100 } });
+      await expect(enterScore(tx, { schoolId: fixture.schoolId, actorId: subjectTeacherId, studentId, assessmentId: assessment.id, value: 80 })).rejects.toMatchObject({ status: 403, code: "FORBIDDEN" });
     });
   });
 
   it("enforces class-teacher submission and a distinct approver", async () => {
     await withTenant(fixture.schoolId, async (tx) => {
-      const report = await tx.reportCard.create({
-        data: {
-          schoolId: fixture.schoolId,
-          studentId,
-          termId,
-          pdfData: Buffer.from("phase-1-test-pdf")
-        }
-      });
-      await expect(
-        submitReportCard(tx, {
-          schoolId: fixture.schoolId,
-          actorId: fixture.ownerId,
-          reportCardId: report.id
-        })
-      ).rejects.toMatchObject({ status: 403 });
-
-      const submitted = await submitReportCard(tx, {
-        schoolId: fixture.schoolId,
-        actorId: teacherId,
-        reportCardId: report.id
-      });
+      const report = await tx.reportCard.create({ data: { schoolId: fixture.schoolId, studentId, termId, pdfData: Buffer.from("phase-1-test-pdf") } });
+      await expect(submitReportCard(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, reportCardId: report.id })).rejects.toMatchObject({ status: 403 });
+      const submitted = await submitReportCard(tx, { schoolId: fixture.schoolId, actorId: teacherId, reportCardId: report.id });
       expect(submitted.status).toBe("submitted");
-
-      await expect(
-        approveReportCard(tx, {
-          schoolId: fixture.schoolId,
-          actorId: teacherId,
-          reportCardId: report.id
-        })
-      ).rejects.toMatchObject({ status: 403 });
-
-      const approved = await approveReportCard(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        reportCardId: report.id
-      });
+      await expect(approveReportCard(tx, { schoolId: fixture.schoolId, actorId: teacherId, reportCardId: report.id })).rejects.toMatchObject({ status: 403 });
+      const approved = await approveReportCard(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, reportCardId: report.id });
       expect(approved.status).toBe("approved");
       expect(approved.approvedBy).toBe(fixture.ownerId);
     });
@@ -286,16 +206,9 @@ describe("Phase 1 MVP security and workflow gates", () => {
   it("queues SMS for worker delivery", async () => {
     const sender = async () => undefined;
     await withTenant(fixture.schoolId, async (tx) => {
-      const messages = await enqueueSms(tx, {
-        schoolId: fixture.schoolId,
-        recipientType: "guardian",
-        recipientId: parentId,
-        recipientPhone: "+233200000001",
-        body: "Phase 1 queued SMS proof",
-        templateKey: "school_announcement"
-      });
+      const messages = await enqueueSms(tx, { schoolId: fixture.schoolId, recipientType: "guardian", recipientId: parentId, recipientPhone: "+233200000001", body: "Phase 1 queued SMS proof", templateKey: "school_announcement" });
       expect(messages[0].status).toBe("queued");
-      expect(await processMessageBatchOnce({ sms: sender }, 1)).toBe(1);
+      expect(await processMessageBatchOnce({ sms: sender }, 1, fixture.schoolId)).toBe(1);
       const sent = await tx.message.findUnique({ where: { id: messages[0].id } });
       expect(sent?.status).toBe("sent");
     });
@@ -305,9 +218,7 @@ describe("Phase 1 MVP security and workflow gates", () => {
     const other = await createTenantFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       expect(await tx.student.findUnique({ where: { id: otherStudentId } })).not.toBeNull();
-      expect(
-        await tx.student.findFirst({ where: { admissionNo: "missing-from-this-tenant" } })
-      ).toBeNull();
+      expect(await tx.student.findFirst({ where: { admissionNo: "missing-from-this-tenant" } })).toBeNull();
     });
     await withTenant(other.schoolId, async (tx) => {
       expect(await tx.student.findUnique({ where: { id: studentId } })).toBeNull();
