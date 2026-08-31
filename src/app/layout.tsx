@@ -6,8 +6,6 @@ import "./student-theme.css";
 import "./visual-system.css";
 import "./typography.css";
 import "./public-theme.css";
-import "../components/app-shell.css";
-import "./login/login.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PublicThemeGate } from "@/components/PublicThemeGate";
 
