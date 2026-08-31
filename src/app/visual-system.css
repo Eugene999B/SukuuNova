@@ -38,7 +38,7 @@ button{transition:transform .16s ease,box-shadow .16s ease,filter .16s ease}butt
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
 /* SukuuNova luminous workspace refresh: dark navigation, bright operating canvas. */
-:root{--nova-canvas:#f4f8fb;--nova-surface:#ffffff;--nova-surface-2:#f8fbfd;--nova-ink:#102434;--nova-ink-2:#2b4354;--nova-muted:#6d8290;--nova-line:#dbe6ec;--nova-mint:#1cc7a0;--nova-blue:#4169ff;--nova-soft-mint:#e8fbf5;--nova-soft-blue:#edf1ff;--nova-shadow:0 18px 50px rgba(19,42,58,.08)}
+:root{--nova-canvas:var(--sn-canvas);--nova-surface:var(--sn-surface);--nova-surface-2:var(--sn-surface-2);--nova-ink:var(--sn-ink);--nova-ink-2:var(--sn-ink-2);--nova-muted:var(--sn-muted);--nova-line:var(--sn-line);--nova-mint:var(--sn-accent);--nova-blue:var(--sn-platform-accent);--nova-soft-mint:var(--sn-guardian-tint);--nova-soft-blue:var(--sn-platform-tint);--nova-shadow:var(--sn-shadow-md)}
 html{background:linear-gradient(180deg,var(--sn-surface-2) 0%,var(--sn-canvas) 100%) fixed!important;background-color:var(--sn-canvas)!important}
 body{background:transparent!important;color:var(--sn-ink)!important}
 body:before{background-image:radial-gradient(circle at 84% 0%,color-mix(in srgb,var(--sn-platform-accent) 9%,transparent),transparent 28%),radial-gradient(circle at 18% 8%,color-mix(in srgb,var(--sn-accent) 9%,transparent),transparent 25%);opacity:.7;mask-image:none}
