@@ -140,6 +140,10 @@ if 'deviceAuthenticated?: boolean' not in s:
     replace_once(p, '  await requirePermission(tx, input.actorId, "attendance:record");\n  const [settings, match] = await Promise.all([', '  if (!input.deviceAuthenticated) {\n    if (!input.actorId) throw new AppError("A staff actor is required for face attendance.", 401, "ACTOR_REQUIRED");\n    await requirePermission(tx, input.actorId, "attendance:record");\n  } else if (!input.deviceId) {\n    throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");\n  }\n  const [settings, match] = await Promise.all([')
     replace_once(p, '    timestamp: input.timestamp,\n', '')
 
-p='src/app/api/phase2/face/route.ts'; s=read(p); new_s,n=re.subn(r',?timestamp:z\.coerce\.date\(\)\.optional\(\)','',s,count=1)
-if n!=1: raise SystemExit('phase2 face timestamp field not found')
-write(p,new_s)
+p='src/app/api/phase2/face/route.ts'; s=read(p)
+pattern = r',?timestamp:z\.coerce\.date\(\)\.optional\(\)'
+if re.search(pattern, s):
+    new_s, n = re.subn(pattern, '', s, count=1)
+    if n != 1:
+        raise SystemExit('phase2 face timestamp replacement failed')
+    write(p, new_s)
