@@ -1,0 +1,21 @@
+:root[data-theme="dark"] .home-shell{background:#071321!important;color:#f6f8fb!important}
+:root[data-theme="dark"] .topbar{border-color:#293d54!important}
+:root[data-theme="dark"] .topnav a,:root[data-theme="dark"] .top-link{color:#b7c4d1!important}
+:root[data-theme="dark"] .brand-wordmark,:root[data-theme="dark"] .hero h1,:root[data-theme="dark"] .home-preview-heading h3,:root[data-theme="dark"] .home-preview-area,:root[data-theme="dark"] .home-preview-detail strong,:root[data-theme="dark"] .intent-card h2,:root[data-theme="dark"] .module-card h3{color:#f6f8fb!important}
+:root[data-theme="dark"] .hero-copy,:root[data-theme="dark"] .home-preview-heading p,:root[data-theme="dark"] .home-preview-area-copy small,:root[data-theme="dark"] .home-preview-detail p,:root[data-theme="dark"] .intent-card p,:root[data-theme="dark"] .module-card p{color:#aebccc!important}
+:root[data-theme="dark"] .home-preview-window,:root[data-theme="dark"] .intent-card,:root[data-theme="dark"] .module-card{background:#0e1b2b!important;border-color:#293d54!important;box-shadow:none!important}
+:root[data-theme="dark"] .home-preview-area{background:#13243a!important;border-color:#334a63!important}
+:root[data-theme="dark"] .home-preview-area.is-active{background:#1a3048!important;border-color:#6284a7!important}
+:root[data-theme="dark"] .home-preview-area-icon,:root[data-theme="dark"] .home-preview-detail-icon,:root[data-theme="dark"] .intent-icon,:root[data-theme="dark"] .module-icon{background:#20344c!important;color:#bcdcff!important}
+:root[data-theme="dark"] .home-preview-area.is-active .home-preview-area-icon{background:#8eb8e8!important;color:#071321!important}
+:root[data-theme="dark"] .home-preview-detail{background:#13243a!important;border-color:#334a63!important}
+:root[data-theme="dark"] .home-preview-note{border-color:#293d54!important}
+:root[data-theme="dark"] .home-preview-note span,:root[data-theme="dark"] .home-preview-detail-link,:root[data-theme="dark"] .intent-link{color:#9dc2e7!important}
+:root[data-theme="dark"] .secondary-cta,:root[data-theme="dark"] .top-button{background:#0e1b2b!important;border-color:#334a63!important;color:#e7eef6!important}
+:root[data-theme="dark"] .eyebrow{background:#17304a!important;color:#bcdcff!important}
+:root[data-theme="dark"] .closing-cta{background:#0e1b2b!important;border:1px solid #334a63!important}
+:root[data-accent="amber"] .home-shell{background:#faf6ee!important}
+:root[data-accent="amber"] .home-preview-window,:root[data-accent="amber"] .intent-card,:root[data-accent="amber"] .module-card{background:#fffdf8!important}
+:root[data-accent="amber"] .hero h1 span,:root[data-accent="amber"] .topnav a:hover,:root[data-accent="amber"] .top-link:hover{color:#8b5a08!important}
+:root[data-theme="dark"][data-accent="amber"] .home-shell{background:#17140d!important}
+:root[data-theme="dark"][data-accent="amber"] .home-preview-window,:root[data-theme="dark"][data-accent="amber"] .intent-card,:root[data-theme="dark"][data-accent="amber"] .module-card{background:#201b12!important;border-color:#403622!important}
