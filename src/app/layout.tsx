@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./design-tokens.css";
+import "./ui-system.css";
 import "./student-theme.css";
 import "./visual-system.css";
 import "./sukuunova-bright.css";
