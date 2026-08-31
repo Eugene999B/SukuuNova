@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
 import { AppShell } from "@/components/AppShell";
@@ -48,7 +49,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
         <section className="student-profile-hero">
           <Link href="/school/students" className="back-link">← Students</Link>
           <div className="profile-identity">
-            <div className="profile-photo-wrap">{data.student.photoUrl ? <img src={data.student.photoUrl} alt={`${data.student.name} portrait`} className="profile-photo" /> : <div className="profile-photo-empty">{data.student.name.slice(0, 2).toUpperCase()}</div>}</div>
+            <div className="profile-photo-wrap">{data.student.photoUrl ? <Image src={data.student.photoUrl} alt={`${data.student.name} portrait`} width={88} height={88} unoptimized className="profile-photo" /> : <div className="profile-photo-empty">{data.student.name.slice(0, 2).toUpperCase()}</div>}</div>
             <div><div className="eyebrow">Learner profile</div><h2>{data.student.name}</h2><p>{data.student.class?.level ?? "No grade"} · {data.student.class?.name ?? "Awaiting class placement"} · <b>Index {data.student.admissionNo}</b></p></div>
             <span className={`profile-status ${data.student.status === "active" ? "active" : "muted"}`}>{data.student.status}</span>
           </div>
