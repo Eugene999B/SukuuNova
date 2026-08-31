@@ -39,9 +39,9 @@ def add_or_keep(block, marker, insertion):
         raise SystemExit(f"Schema marker not found: {marker[:100]!r}")
     return block.replace(marker, insertion, 1)
 
-update_model(schema, 'School', lambda b: add_or_keep(b, '  houses              House[]\n}', '  houses              House[]\n  devices             Device[]\n  deviceIdentities    DeviceIdentity[]\n  deviceAttendanceReceipts DeviceAttendanceReceipt[]\n}'))
-update_model(schema, 'User', lambda b: add_or_keep(b, '  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")\n', '  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")\n  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStaff")\n'))
-update_model(schema, 'Student', lambda b: add_or_keep(b, '  faceEnrollments  FaceEnrollment[]\n', '  faceEnrollments  FaceEnrollment[]\n  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStudent")\n'))
+update_model(schema, 'School', lambda b: b if re.search(r'\bdevices\s+Device\[\]', b) else add_or_keep(b, '  houses              House[]\n}', '  houses              House[]\n  devices             Device[]\n  deviceIdentities    DeviceIdentity[]\n  deviceAttendanceReceipts DeviceAttendanceReceipt[]\n}'))
+update_model(schema, 'User', lambda b: b if re.search(r'\bdeviceIdentities\s+DeviceIdentity\[\]', b) else add_or_keep(b, '  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")\n', '  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")\n  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStaff")\n'))
+update_model(schema, 'Student', lambda b: b if re.search(r'\bdeviceIdentities\s+DeviceIdentity\[\]', b) else add_or_keep(b, '\n}', '  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStudent")\n}'))
 
 def update_attendance(block):
     if '  device           Device?' in block:
@@ -118,7 +118,7 @@ write(schema, content)
 
 if '"Device"' not in read('src/lib/db.ts'):
     replace_once('src/lib/db.ts', '  "ReportCardTemplate"\n]);', '  "ReportCardTemplate",\n  "Device",\n  "DeviceIdentity",\n  "DeviceAttendanceReceipt"\n]);')
-if 'student_attendance' not in read('src/lib/message-outbox.ts'):
+if '"student_attendance"' not in read('src/lib/message-outbox.ts'):
     replace_once('src/lib/message-outbox.ts', '"student_absence"|"staff_late"', '"student_absence"|"student_attendance"|"staff_late"')
 
 p='src/lib/attendance-service.ts'; s=read(p)
