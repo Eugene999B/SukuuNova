@@ -121,15 +121,20 @@ export async function matchFaceAttendance(
   tx: TenantDb,
   input: {
     schoolId: string;
-    actorId: string;
+    actorId?: string;
     image: string;
     deviceId?: string;
     type: "in" | "out";
-    timestamp?: Date;
+    deviceAuthenticated?: boolean;
   },
   provider: FaceProvider = awsFaceProvider
 ) {
-  await requirePermission(tx, input.actorId, "attendance:record");
+  if (!input.deviceAuthenticated) {
+    if (!input.actorId) throw new AppError("A staff actor is required for face attendance.", 401, "ACTOR_REQUIRED");
+    await requirePermission(tx, input.actorId, "attendance:record");
+  } else if (!input.deviceId) {
+    throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");
+  }
   const [settings, match] = await Promise.all([
     tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } }),
     provider.searchFace({
@@ -180,7 +185,6 @@ export async function matchFaceAttendance(
       : { staffId: enrollment.staffId! },
     type: input.type,
     method: "face",
-    timestamp: input.timestamp,
     confidenceScore: confidence,
     deviceId: input.deviceId
   });

@@ -109,7 +109,7 @@ export async function POST(request: Request) {
         }
       }
 
-      let recorded: { status: "recorded"; event: { id: string } };
+      let recorded: Awaited<ReturnType<typeof matchFaceAttendance>>;
       if (input.kind === "face") {
         if (!input.image) throw new AppError("Face device events require image data.", 400, "INVALID_INPUT");
         recorded = await matchFaceAttendance(tx, {
@@ -138,6 +138,8 @@ export async function POST(request: Request) {
           type: input.type
         });
       }
+
+      if (recorded.status !== "recorded") return recorded;
 
       const receipt = await tx.deviceAttendanceReceipt.findFirstOrThrow({
         where: { deviceId: device.id, idempotencyKey: input.idempotencyKey },

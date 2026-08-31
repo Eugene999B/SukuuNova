@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
 import { db, withTenant } from "./db";
 
-export type NotificationTemplateKey="student_absence"|"staff_late"|"invoice_created"|"payment_received"|"report_card_ready"|"transport_boarding"|"emergency_broadcast"|"school_announcement";
+export type NotificationTemplateKey="student_absence"|"student_attendance"|"staff_late"|"invoice_created"|"payment_received"|"report_card_ready"|"transport_boarding"|"emergency_broadcast"|"school_announcement";
 type RecipientType="guardian"|"staff"|"user";
 type Channel="sms"|"whatsapp";
 

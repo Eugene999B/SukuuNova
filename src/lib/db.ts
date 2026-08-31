@@ -46,7 +46,10 @@ const TENANT_MODELS = new Set([
   "PayrollRun",
   "Payslip",
   "VisitorLog",
-  "ReportCardTemplate"
+  "ReportCardTemplate",
+  "Device",
+  "DeviceIdentity",
+  "DeviceAttendanceReceipt"
 ]);
 
 const AUDIT_MODELS = new Set(["AuditLogSchool", "AuditLogPlatform"]);

@@ -116,6 +116,9 @@ model School {
   visitorLogs         VisitorLog[]
   reportCardTemplates ReportCardTemplate[]
   houses              House[]
+  devices             Device[]
+  deviceIdentities    DeviceIdentity[]
+  deviceAttendanceReceipts DeviceAttendanceReceipt[]
 }
 
 model SchoolSettings {
@@ -167,6 +170,7 @@ model User {
   faceEnrollments     FaceEnrollment[] @relation("FaceStaff")
   faceMatchCandidates FaceMatchReview[] @relation("FaceReviewStaff")
   faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")
+  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStaff")
   pickupRequestsCreated PickupApprovalRequest[] @relation("PickupRequestedBy")
   pickupRequestsApproved PickupApprovalRequest[] @relation("PickupApprovedBy")
   pickupEventsApproved PickupEvent[] @relation("PickupEventApprovedBy")
@@ -357,6 +361,7 @@ model Student {
   reportCards      ReportCard[]
   invoices         Invoice[]
   faceEnrollments  FaceEnrollment[]
+  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStudent")
   faceMatchReviews FaceMatchReview[]
   approvedPickups  ApprovedPickup[]
   pickupEvents     PickupEvent[]
@@ -460,11 +465,12 @@ model AttendanceEvent {
   isLate           Boolean?
   confidenceScore  Decimal?
   deviceId         String?
-  recordedBy       String
+  recordedBy       String?
   school           School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   student          Student? @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
   staff            User?    @relation("AttendanceStaff", fields: [staffId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  recorder         User     @relation("AttendanceRecorder", fields: [recordedBy, schoolId], references: [id, schoolId], onDelete: Restrict)
+  recorder         User?    @relation("AttendanceRecorder", fields: [recordedBy, schoolId], references: [id, schoolId], onDelete: Restrict)
+  device           Device?  @relation(fields: [deviceId, schoolId], references: [id, schoolId], onDelete: Restrict)
   @@unique([id, schoolId])
   @@index([schoolId])
   @@index([schoolId, attendanceDate])
@@ -838,4 +844,59 @@ model ReportCardTemplate {
   reportCards ReportCard[]
   @@unique([id, schoolId])
   @@index([schoolId])
+}
+
+
+model Device {
+  id              String   @id @default(cuid())
+  schoolId        String
+  deviceSerial    String
+  kind            String
+  label           String
+  apiKeyHash      String
+  status          String   @default("active")
+  lastSeenAt      DateTime?
+  createdAt       DateTime @default(now())
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  attendanceEvents AttendanceEvent[]
+  attendanceReceipts DeviceAttendanceReceipt[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, deviceSerial])
+  @@index([schoolId])
+}
+
+model DeviceIdentity {
+  id         String   @id @default(cuid())
+  schoolId   String
+  deviceKind String
+  externalId String
+  studentId  String?
+  staffId    String?
+  createdAt  DateTime @default(now())
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  student    Student? @relation("DeviceIdentityStudent", fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  staff      User?    @relation("DeviceIdentityStaff", fields: [staffId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  @@unique([id, schoolId])
+  @@unique([schoolId, deviceKind, externalId])
+  @@unique([schoolId, deviceKind, studentId])
+  @@unique([schoolId, deviceKind, staffId])
+  @@index([schoolId])
+}
+
+model DeviceAttendanceReceipt {
+  id             String   @id @default(cuid())
+  schoolId       String
+  deviceId       String
+  idempotencyKey String
+  nonce          String
+  capturedAt     DateTime?
+  createdAt      DateTime @default(now())
+  processedAt    DateTime?
+  school         School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  device         Device   @relation(fields: [deviceId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  @@unique([id, schoolId])
+  @@unique([schoolId, deviceId, idempotencyKey])
+  @@unique([schoolId, deviceId, nonce])
+  @@index([schoolId])
+  @@index([schoolId, deviceId, createdAt])
 }

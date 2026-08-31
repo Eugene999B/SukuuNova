@@ -75,20 +75,25 @@ async function authorizedSummaryClassFilter(tx: TenantDb, actorId: string, reque
 export async function recordAttendance(
   tx: TenantDb,
   input: {
-    schoolId: string; actorId: string; target: AttendanceTarget; type: "in" | "out";
-    method: "manual" | "qr" | "face"; confidenceScore?: number; deviceId?: string; timestamp?: Date;
+    schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out";
+    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; timestamp?: Date; deviceAuthenticated?: boolean;
   }
 ) {
-  await requirePermission(tx, input.actorId, "attendance:record");
-  if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);
-  else await authorizeStaffAttendance(tx, input.actorId);
+  if (input.deviceAuthenticated) {
+    if (!input.deviceId) throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");
+  } else {
+    if (!input.actorId) throw new ForbiddenError("A staff actor is required for attendance.");
+    await requirePermission(tx, input.actorId, "attendance:record");
+    if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);
+    else await authorizeStaffAttendance(tx, input.actorId);
+  }
 
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
   if (!settings?.expectedResumptionTime) {
     throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
   }
 
-  const timestamp = input.timestamp ?? new Date();
+  const timestamp = new Date();
   const day = attendanceDate(timestamp, settings.timezone);
   if (await isAttendanceBlocked(tx, day)) {
     throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
@@ -114,14 +119,24 @@ export async function recordAttendance(
       isLate,
       confidenceScore: input.confidenceScore,
       deviceId: input.deviceId,
-      recordedBy: input.actorId
+      recordedBy: input.actorId ?? null
     }
   });
 
   await appendSchoolAudit(tx, {
-    schoolId: input.schoolId, actorId: input.actorId, action: "attendance.recorded",
+    schoolId: input.schoolId, actorId: input.actorId ?? ("device:" + input.deviceId), action: "attendance.recorded",
     entityType: "AttendanceEvent", entityId: event.id, after: event
   });
+
+  if (input.target.studentId) {
+    const student = await tx.student.findUnique({ where: { id: input.target.studentId }, select: { name: true } });
+    const guardians = await tx.studentGuardian.findMany({ where: { studentId: input.target.studentId, isPrimary: true }, include: { guardian: { select: { id: true, phone: true } } } });
+    const attendanceLabel = input.type === "out" ? "checked out" : (isLate ? "checked in late" : "checked in on time");
+    for (const link of guardians) {
+      if (!link.guardian.phone) continue;
+      await enqueueSms(tx, { schoolId: input.schoolId, recipientType: "guardian", recipientId: link.guardian.id, recipientPhone: link.guardian.phone, body: "SukuuNova attendance alert: " + (student?.name ?? "Your child") + " " + attendanceLabel + ".", templateKey: "student_attendance", templateVariables: { "1": student?.name ?? "Student", "2": attendanceLabel } });
+    }
+  }
 
   if (input.target.staffId && isLate) {
     const [staff, hrUsers] = await Promise.all([
