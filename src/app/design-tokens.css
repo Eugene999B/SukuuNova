@@ -1,27 +1,31 @@
 :root{
-  /* SukuuNova application design-system foundation */
-  --sn-primary:#4169ff;
-  --sn-accent:#1cc7a0;
-  --sn-canvas:#eef4f8;
-  --sn-surface:#ffffff;
-  --sn-surface-2:#f7fafc;
-  --sn-ink:#102434;
-  --sn-ink-2:#2b4354;
-  --sn-muted:#6d8290;
-  --sn-line:#dbe6ec;
-  --sn-success:#16866f;
-  --sn-warning:#b56a14;
-  --sn-danger:#b53b4b;
-  --sn-info:#2e6fd8;
+  /* SukuuNova canonical warm palette */
+  --sn-primary:#e7654f;
+  --sn-primary-deep:#b94c39;
+  --sn-primary-soft:#f9ded8;
+  --sn-accent:#147e85;
+  --sn-canvas:#f4f1ec;
+  --sn-surface:#fffdfa;
+  --sn-surface-2:#f7f3ed;
+  --sn-surface-3:#eee9e2;
+  --sn-ink:#1e1b18;
+  --sn-ink-2:#47413b;
+  --sn-muted:#756d64;
+  --sn-line:#dcd5cc;
+  --sn-success:#16856b;
+  --sn-warning:#b96f10;
+  --sn-danger:#c74848;
+  --sn-info:#5967d9;
 
-  --sn-school-accent:#4169ff;
-  --sn-teacher-accent:#d9824b;
-  --sn-guardian-accent:#16a085;
-  --sn-platform-accent:#5967d9;
-  --sn-school-tint:#eef3ff;
-  --sn-teacher-tint:#fff4eb;
-  --sn-guardian-tint:#ecfaf6;
-  --sn-platform-tint:#f0f1ff;
+  /* Portal accents: each surface stays inside the same warm system. */
+  --sn-school-accent:#e7654f;
+  --sn-teacher-accent:#b96f10;
+  --sn-guardian-accent:#16856b;
+  --sn-platform-accent:#7351bf;
+  --sn-school-tint:#f9ded8;
+  --sn-teacher-tint:#faebd2;
+  --sn-guardian-tint:#d8eee7;
+  --sn-platform-tint:#e8e0f8;
 
   --sn-font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --sn-font-xs:.75rem;
@@ -45,25 +49,41 @@
   --sn-radius-lg:16px;
   --sn-radius-xl:20px;
 
-  --sn-shadow-sm:0 4px 14px rgba(19,42,58,.05);
-  --sn-shadow-md:0 12px 30px rgba(19,42,58,.08);
-  --sn-shadow-lg:0 24px 60px rgba(19,42,58,.12);
+  --sn-shadow-sm:0 4px 14px rgba(55,46,38,.06);
+  --sn-shadow-md:0 12px 30px rgba(55,46,38,.09);
+  --sn-shadow-lg:0 24px 60px rgba(55,46,38,.12);
+
+  /* Compatibility aliases for older component selectors. */
+  --sn-bg:var(--sn-canvas);
+  --sn-bg-2:#ebe7e0;
+  --sn-primary-deep:var(--sn-primary-deep);
 }
 :root[data-theme="dark"]{
-  --sn-canvas:#07141c;
-  --sn-surface:#0d1d27;
-  --sn-surface-2:#102632;
-  --sn-ink:#edf7f5;
-  --sn-ink-2:#c1d3d0;
-  --sn-muted:#81979a;
-  --sn-line:#233942;
-  --sn-primary:#6c8cff;
-  --sn-accent:#42d8b8;
-  --sn-info:#6ca8ff;
-  --sn-school-tint:#13213a;
-  --sn-teacher-tint:#36271f;
-  --sn-guardian-tint:#123129;
-  --sn-platform-tint:#20213e;
+  --sn-canvas:#211c19;
+  --sn-surface:#2b2522;
+  --sn-surface-2:#322a27;
+  --sn-surface-3:#3a312d;
+  --sn-ink:#fbf2ea;
+  --sn-ink-2:#e1d4ca;
+  --sn-muted:#ab9d92;
+  --sn-line:#4e4039;
+  --sn-primary:#e7654f;
+  --sn-primary-deep:#d85a45;
+  --sn-primary-soft:color-mix(in srgb,var(--sn-primary) 16%,transparent);
+  --sn-accent:#42b8aa;
+  --sn-info:#a99af0;
+  --sn-school-tint:#432821;
+  --sn-teacher-tint:#3b2e20;
+  --sn-guardian-tint:#17362f;
+  --sn-platform-tint:#2c2440;
+  --sn-bg:var(--sn-canvas);
+  --sn-bg-2:#191513;
 }
+:root[data-accent="coral"]{--sn-primary:#e7654f;--sn-primary-deep:#b94c39;--sn-primary-soft:#f9ded8}
+:root[data-accent="emerald"]{--sn-primary:#16856b;--sn-primary-deep:#0f674f;--sn-primary-soft:#d8eee7}
+:root[data-accent="violet"]{--sn-primary:#7351bf;--sn-primary-deep:#593d9c;--sn-primary-soft:#e8e0f8}
+:root[data-accent="amber"]{--sn-primary:#b96f10;--sn-primary-deep:#8e5207;--sn-primary-soft:#faebd2}
+:root[data-accent="rose"]{--sn-primary:#c14e76;--sn-primary-deep:#963658;--sn-primary-soft:#f5dce6}
+:root[data-accent="teal"]{--sn-primary:#147e85;--sn-primary-deep:#0d6268;--sn-primary-soft:#d8edef}
 .app-card,.module-card,.module-table-wrap,.module-metrics article{border-radius:var(--sn-radius-lg)}
 input,textarea,select{border-radius:var(--sn-radius-sm)}
