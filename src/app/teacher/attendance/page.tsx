@@ -12,7 +12,7 @@ async function saveAttendance(formData: FormData) {
   const session = await requireSchoolSession();
   const studentId = String(formData.get("studentId") || "").trim();
   const attendanceDate = String(formData.get("attendanceDate") || "").trim();
-  const type = String(formData.get("type") || "in").trim();
+  const rawType = String(formData.get("type") || "in").trim();\n  const type: "in" | "out" = rawType === "out" ? "out" : "in";
   if (!studentId || !/^\d{4}-\d{2}-\d{2}$/.test(attendanceDate) || !["in","out"].includes(type)) throw new Error("Invalid attendance input.");
   await withTenant(session.schoolId, async tx => {
     const access = await getSchoolAuthorization(tx, session.userId);
@@ -21,7 +21,7 @@ async function saveAttendance(formData: FormData) {
     if (!student?.classId) throw new Error("Student is not assigned to a class.");
     const assigned = await tx.class.findFirst({ where: { id: student.classId, OR: [{ classTeacherId: session.userId }, { subjectAssignments: { some: { teacherId: session.userId } } }] }, select: { id: true } });
     if (!assigned) throw new Error("That student is outside your teaching scope.");
-    await recordAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, target: { studentId }, type, method: "teacher_register", timestamp: new Date(`${attendanceDate}T08:00:00.000Z`) });
+    await recordAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, target: { studentId }, type, method: "manual", timestamp: new Date(`${attendanceDate}T08:00:00.000Z`) });
   });
   redirect(`/teacher/attendance?date=${attendanceDate}`);
 }
