@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import { UsersRound, CircleCheckBig, GraduationCap, WalletCards, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { withTenant } from "@/lib/db";
 import { requireGuardianSession } from "@/lib/guardian-auth";
@@ -61,10 +62,10 @@ export default async function GuardianPortalPage() {
       </section>
 
       <div className="app-grid kpis">
-        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Children</span><span className="app-kpi-icon"><UsersRoundIcon /></span></div><div className="app-kpi-value">{children.length}</div><div className="app-kpi-meta">School-linked only</div></div>
-        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Attendance activity</span><span className="app-kpi-icon"><AttendanceIcon /></span></div><div className="app-kpi-value">{attendance}</div><div className="app-kpi-meta">Across your children</div></div>
-        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Results published</span><span className="app-kpi-icon"><AcademicIcon /></span></div><div className="app-kpi-value">{results}</div><div className="app-kpi-meta">Approved school records</div></div>
-        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Outstanding</span><span className="app-kpi-icon"><FeesIcon /></span></div><div className="app-kpi-value">GH₵{balance.toFixed(2)}</div><div className="app-kpi-meta">Live invoice balances</div></div>
+        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Children</span><span className="app-kpi-icon"><UsersRound size={15} aria-hidden="true" /></span></div><div className="app-kpi-value">{children.length}</div><div className="app-kpi-meta">School-linked only</div></div>
+        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Attendance activity</span><span className="app-kpi-icon"><CircleCheckBig size={15} aria-hidden="true" /></span></div><div className="app-kpi-value">{attendance}</div><div className="app-kpi-meta">Across your children</div></div>
+        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Results published</span><span className="app-kpi-icon"><GraduationCap size={15} aria-hidden="true" /></span></div><div className="app-kpi-value">{results}</div><div className="app-kpi-meta">Approved school records</div></div>
+        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Outstanding</span><span className="app-kpi-icon"><WalletCards size={15} aria-hidden="true" /></span></div><div className="app-kpi-value">GH₵{balance.toFixed(2)}</div><div className="app-kpi-meta">Live invoice balances</div></div>
       </div>
 
       <section className="app-card" style={{ padding: 18, marginTop: 16 }}>
@@ -83,11 +84,11 @@ export default async function GuardianPortalPage() {
                   <div><h3 style={{ margin: 0 }}>{student.name}</h3><p style={{ margin: "4px 0 0", color: "var(--sn-muted)", fontSize: 10 }}>{student.admissionNo} · {student.class?.level ? `${student.class.level} · ` : ""}{student.class?.name ?? "Unassigned"}</p></div>
                 </div>
                 <div className="app-list" style={{ marginTop: 12 }}>
-                  <div className="app-list-row"><span className="app-list-icon"><AcademicIcon /></span><div><b>Latest result</b><span>{latest ? `${latest.subject.name} · ${latest.value}` : "No published result"}</span></div></div>
-                  <div className="app-list-row"><span className="app-list-icon"><AttendanceIcon /></span><div><b>Attendance</b><span>{student.attendanceEvents.length} recorded event{student.attendanceEvents.length === 1 ? "" : "s"}</span></div></div>
-                  <div className="app-list-row"><span className="app-list-icon"><FeesIcon /></span><div><b>Fees</b><span>GH₵{childBalance.toFixed(2)} outstanding</span></div></div>
+                  <div className="app-list-row"><span className="app-list-icon"><GraduationCap size={15} aria-hidden="true" /></span><div><b>Latest result</b><span>{latest ? `${latest.subject.name} · ${latest.value}` : "No published result"}</span></div></div>
+                  <div className="app-list-row"><span className="app-list-icon"><CircleCheckBig size={15} aria-hidden="true" /></span><div><b>Attendance</b><span>{student.attendanceEvents.length} recorded event{student.attendanceEvents.length === 1 ? "" : "s"}</span></div></div>
+                  <div className="app-list-row"><span className="app-list-icon"><WalletCards size={15} aria-hidden="true" /></span><div><b>Fees</b><span>GH₵{childBalance.toFixed(2)} outstanding</span></div></div>
                 </div>
-                <Link href={`/guardian/children/${student.id}`} className="module-hero-button" style={{ display: "inline-flex", marginTop: 14 }}>Open learner →</Link>
+                <Link href={`/guardian/children/${student.id}`} className="module-hero-button" style={{ display: "inline-flex", alignItems: "center", gap: 7, marginTop: 14 }}>Open learner <ArrowRight size={15} aria-hidden="true" /></Link>
               </article>
             );
           })}
@@ -96,8 +97,3 @@ export default async function GuardianPortalPage() {
     </AppShell>
   );
 }
-
-function UsersRoundIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="8" r="3"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5.8M16.5 14.5a5.1 5.1 0 0 1 4 5.5"/></svg>; }
-function AttendanceIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12 2.3 2.3 4.7-5"/></svg>; }
-function AcademicIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3.5 9.5 12 5l8.5 4.5L12 14 3.5 9.5Z"/><path d="M6.5 11.2V16c2.7 2 10.3 2 13 0v-4.8"/></svg>; }
-function FeesIcon() { return <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M3.5 10h17M8 14h3"/></svg>; }
