@@ -15,7 +15,7 @@ export function classifyOperationsIntent(message: string): OperationsIntent {
   const s = message.trim().toLowerCase();
   if (/today.*attendance|attendance.*today|who.*present|who.*absent/.test(s)) return "TODAY_ATTENDANCE";
   if (/missing.*score|scores.*missing|not entered.*score/.test(s)) return "MISSING_SCORES";
-  if (/overdue.*invoice|outstanding.*invoice|fee arrears|overdue fees/.test(s)) return "OVERDUE_INVOICES";
+  if (/overdue.*invoice|invoice.*overdue|outstanding.*invoice|fee arrears|overdue fees/.test(s)) return "OVERDUE_INVOICES";
   if (/pending.*report|report.*pending|reports.*awaiting/.test(s)) return "PENDING_REPORTS";
   if (/failed.*message|message.*failed|sms.*failed|whatsapp.*failed/.test(s)) return "FAILED_MESSAGES";
   if (/unresolved.*pickup|pickup.*pending|pickup.*awaiting/.test(s)) return "UNRESOLVED_PICKUPS";
@@ -38,8 +38,7 @@ export async function runOperationsAssistant(tx: TenantDb, input: { actorId: str
       const rows = await tx.attendanceEvent.findMany({
         where: { attendanceDate: new Date(new Date().toISOString().slice(0, 10)), type: "in", studentId: { not: null } },
         select: { studentId: true, isLate: true, student: { select: { name: true, admissionNo: true } } },
-        orderBy: { timestamp: "asc" },
-        take: 500
+        orderBy: { timestamp: "asc" }, take: 500
       });
       return { intent, answer: `Recorded check-ins today: ${rows.length}.`, records: rows };
     }
@@ -47,8 +46,7 @@ export async function runOperationsAssistant(tx: TenantDb, input: { actorId: str
       const rows = await tx.assessment.findMany({
         where: { scores: { none: {} } },
         select: { id: true, name: true, type: true, class: { select: { name: true } }, subject: { select: { name: true } } },
-        orderBy: [{ subject: { name: "asc" } }, { name: "asc" }],
-        take: 300
+        orderBy: [{ subject: { name: "asc" } }, { name: "asc" }], take: 300
       });
       return { intent, answer: `Assessments with no recorded scores: ${rows.length}.`, records: rows };
     }
@@ -56,8 +54,7 @@ export async function runOperationsAssistant(tx: TenantDb, input: { actorId: str
       const rows = await tx.invoice.findMany({
         where: { status: { not: "paid" } },
         select: { id: true, totalAmount: true, status: true, student: { select: { name: true, admissionNo: true } } },
-        orderBy: { createdAt: "asc" },
-        take: 300
+        orderBy: { createdAt: "asc" }, take: 300
       });
       return { intent, answer: `Unpaid invoices recorded: ${rows.length}.`, records: rows };
     }
@@ -65,8 +62,7 @@ export async function runOperationsAssistant(tx: TenantDb, input: { actorId: str
       const rows = await tx.reportCard.findMany({
         where: { status: { in: ["draft", "submitted"] } },
         select: { id: true, status: true, student: { select: { name: true, admissionNo: true } }, term: { select: { name: true } } },
-        orderBy: { createdAt: "asc" },
-        take: 300
+        orderBy: { createdAt: "asc" }, take: 300
       });
       return { intent, answer: `Reports awaiting completion or approval: ${rows.length}.`, records: rows };
     }
@@ -74,8 +70,7 @@ export async function runOperationsAssistant(tx: TenantDb, input: { actorId: str
       const rows = await tx.message.findMany({
         where: { status: "failed" },
         select: { id: true, channel: true, recipientPhone: true, lastError: true, createdAt: true },
-        orderBy: { createdAt: "desc" },
-        take: 300
+        orderBy: { createdAt: "desc" }, take: 300
       });
       return { intent, answer: `Failed messages: ${rows.length}.`, records: rows };
     }
@@ -83,8 +78,7 @@ export async function runOperationsAssistant(tx: TenantDb, input: { actorId: str
       const rows = await tx.pickupApprovalRequest.findMany({
         where: { status: "pending" },
         select: { id: true, status: true, createdAt: true, student: { select: { name: true, admissionNo: true } }, collectingGuardian: { select: { name: true, phone: true } } },
-        orderBy: { createdAt: "asc" },
-        take: 300
+        orderBy: { createdAt: "asc" }, take: 300
       });
       return { intent, answer: `Unresolved pickup requests: ${rows.length}.`, records: rows };
     }
