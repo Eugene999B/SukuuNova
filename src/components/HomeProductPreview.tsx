@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import {
-  ArrowRight, Bell, BookOpen, CheckCircle2, ClipboardList, GraduationCap,
+  ArrowRight, Bell, CheckCircle2, ClipboardList, GraduationCap,
   LayoutDashboard, School, Users, WalletCards
 } from "lucide-react";
 
