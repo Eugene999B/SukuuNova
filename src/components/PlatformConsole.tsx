@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ClipboardList, Cog, Diamond, Search, School, Settings, ShieldCheck, Ticket, Wrench } from "lucide-react";
+import { AlertCircle, ClipboardList, Cog, Diamond, Search, School, ShieldCheck, Ticket, Wrench } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 
 type SchoolRecord={id?:string;schoolId?:string;name?:string;uniqueCode?:string;status?:string;subscriptionPlan?:{name?:string}};
