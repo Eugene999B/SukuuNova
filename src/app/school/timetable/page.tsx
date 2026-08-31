@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, CalendarPlus, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
