@@ -48,7 +48,33 @@ select option,select optgroup{background:#fff!important;color:#172b3c!important}
 .module-table-wrap td{color:#294353!important}
 .module-table-wrap tr:hover td{background:#f5fbf9!important}
 
+/* School command centre: make the existing operational dashboard feel like a premium control surface. */
+.admin-command-center{max-width:1500px!important;gap:16px!important;padding:4px 0 36px!important}
+.admin-command-hero,.admin-readiness-card,.admin-attention-card,.admin-panel-card,.admin-section-block{background:#fff!important;border:1px solid var(--nova-line)!important;border-radius:22px!important;box-shadow:0 12px 32px rgba(9,26,49,.055)!important}
+.admin-command-hero{padding:30px!important;align-items:flex-end!important;background:linear-gradient(135deg,#fff 0%,#f8fbfe 66%,#f1f7fc 100%)!important}
+.admin-command-hero h1{font-size:clamp(30px,3.7vw,48px)!important;line-height:1.03!important;letter-spacing:-.055em!important;color:#071321!important;max-width:840px!important}
+.admin-command-hero p,.admin-section-head p{font-size:12px!important;line-height:1.7!important;color:#6a7888!important}
+.admin-eyebrow{color:#58708a!important;letter-spacing:.16em!important}
+.admin-primary-action,.admin-secondary-action{border-radius:999px!important;padding:12px 16px!important}
+.admin-primary-action{background:linear-gradient(135deg,#0b3f75,#145990)!important;color:#fff!important;box-shadow:0 10px 22px rgba(11,63,117,.16)!important}
+.admin-primary-action:hover{transform:translateY(-1px);box-shadow:0 14px 28px rgba(11,63,117,.20)!important}
+.admin-secondary-action{background:#fff!important;color:#243c52!important;border:1px solid #d8e2ea!important}
+.admin-readiness-card,.admin-attention-card,.admin-panel-card{padding:22px!important}
+.admin-section-head h2{font-size:20px!important;letter-spacing:-.03em!important;color:#071321!important}
+.admin-progress-track{height:8px!important;background:#edf2f6!important;border-radius:999px!important}.admin-progress-track span{background:linear-gradient(90deg,#0b3f75,#2b7aa6)!important;border-radius:999px!important}
+.admin-progress-value{color:#0b3f75!important;font-size:28px!important;letter-spacing:-.04em!important}
+.admin-setup-list,.admin-attention-list,.admin-metric-list,.admin-message-list{gap:3px!important}
+.admin-setup-row,.admin-attention-row,.admin-metric-row,.admin-message-row{border-radius:12px!important;transition:background .16s ease,transform .16s ease!important}
+.admin-setup-row:hover,.admin-attention-row:hover,.admin-metric-row:hover,.admin-message-row:hover{background:#f6f9fc!important;transform:translateX(2px)!important}
+.admin-setup-row b,.admin-attention-row b{color:#0b3f75!important}
+.admin-stat-grid{gap:12px!important}.admin-stat-card{background:#fbfdfe!important;border:1px solid #e4ebf0!important;border-radius:16px!important;box-shadow:none!important;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease!important}.admin-stat-card:hover{transform:translateY(-3px)!important;border-color:#cbdce9!important;box-shadow:0 16px 34px rgba(9,26,49,.07)!important}.admin-stat-card span{color:#718293!important;font-size:10px!important}.admin-stat-card strong{color:#092f57!important;font-size:34px!important;letter-spacing:-.045em!important}.admin-stat-card small{color:#58708a!important}
+.admin-action-grid{gap:10px!important}.admin-action-grid>a{border:1px solid #e1e9ef!important;background:#fbfdfe!important;border-radius:15px!important;box-shadow:none!important;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease!important}.admin-action-grid>a:hover{transform:translateY(-2px)!important;border-color:#cbdce9!important;box-shadow:0 12px 28px rgba(9,26,49,.06)!important}.admin-action-grid strong{color:#183a56!important}.admin-action-grid strong svg{color:#0b3f75!important}.admin-action-grid span{color:#78899a!important}
+.admin-clear-state,.admin-empty-state{background:#f8fbfd!important;border:1px dashed #d9e4eb!important;border-radius:14px!important;color:#5f7282!important}
+.admin-clear-state strong,.admin-empty-state strong{color:#29465c!important}
+
 button{font-family:inherit}
 button:hover:not(:disabled){filter:none!important}
 
+@media(max-width:1120px){.admin-command-grid,.admin-lower-grid{grid-template-columns:1fr!important}.admin-command-hero{align-items:flex-start!important;flex-direction:column!important}}
+@media(max-width:760px){.admin-command-hero{padding:22px!important}.admin-command-hero h1{font-size:32px!important}.admin-hero-actions{justify-content:flex-start!important}.admin-readiness-card,.admin-attention-card,.admin-panel-card{padding:18px!important}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
