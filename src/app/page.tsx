@@ -3,22 +3,23 @@ import Image from "next/image";
 import { ArrowRight, Building2, GraduationCap, LogIn, ShieldCheck, Users, WalletCards } from "lucide-react";
 import "./home.css";
 import "./home-redesign.css";
+import "./home-premium.css";
 import { HomeLeadChat } from "@/components/HomeLeadChat";
 import { HomePresence } from "@/components/HomePresence";
 import { HomeProductPreview } from "@/components/HomeProductPreview";
 
 const modules = [
-  ["Students & families", "Admissions, learner records, guardians and day-to-day people operations", Users, "/school/students"],
-  ["Academics", "Classes, subjects, timetable, homework, assessments and report cards", GraduationCap, "/school/classes"],
-  ["Attendance & safety", "Daily registers, lateness, absence, device attendance and alerts", ShieldCheck, "/school/attendance"],
-  ["Fees & finance", "Fees, invoices, receipts, balances, collections and payroll", WalletCards, "/school/fees"],
+  ["Students & families", "Admissions, learner records, guardians and people operations.", Users, "/features/students-families"],
+  ["Academics", "Classes, subjects, timetable, homework, assessment and report cards.", GraduationCap, "/features/academics"],
+  ["Attendance & safety", "Daily registers, lateness, absence, device attendance and alerts.", ShieldCheck, "/features/attendance-safety"],
+  ["Fees & finance", "Fees, invoices, receipts, balances, collections and payroll.", WalletCards, "/features/fees-finance"],
 ] as const;
 
 export default function HomePage() {
   return (
     <main className="home-shell">
-      <div className="home-glow home-glow-a" />
-      <div className="home-glow home-glow-b" />
+      <div className="home-glow home-glow-a" aria-hidden="true" />
+      <div className="home-glow home-glow-b" aria-hidden="true" />
       <div className="home-wrap">
         <header className="topbar">
           <Link href="/" className="brand" aria-label="SukuuNova home"><Image className="brand-logo" src="/brand/sukuunova-logo.svg" alt="SukuuNova" width={190} height={54} priority /></Link>
@@ -40,26 +41,26 @@ export default function HomePage() {
         <section className="hero" id="platform">
           <div className="hero-copy-wrap">
             <div className="eyebrow"><span className="eyebrow-dot" /> Built for modern African schools</div>
-            <h1>One calm system for <span>the whole school.</span></h1>
-            <p className="hero-copy">SukuuNova connects school leadership, teachers, finance teams and families around the real school day — with one record, one gateway and clear role-based workspaces.</p>
+            <h1>Run the whole school <span>with a clearer picture.</span></h1>
+            <p className="hero-copy">SukuuNova brings the school day into one calm system — people, academics, attendance, communication and finance connected around the records that matter.</p>
             <div className="hero-actions">
               <Link className="primary-cta" href="/login/school">Enter your school <ArrowRight size={16} aria-hidden="true" /></Link>
-              <Link className="top-link" href="/for-schools"><Building2 size={15} aria-hidden="true" /> Explore for schools</Link>
+              <Link className="secondary-cta" href="/for-schools">See what schools can do <ArrowRight size={16} aria-hidden="true" /></Link>
             </div>
-            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>Fast for existing users.</strong><span>Choose your school, continue as Staff or Guardian, and get straight to work.</span></div></div>
+            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>Designed around real school work.</strong><span>Each workspace starts with the responsibility, then connects the records behind it.</span></div></div>
           </div>
           <HomeProductPreview />
         </section>
 
         <section className="intent-grid" id="how-it-works" aria-label="Who SukuuNova is for">
-          <Link className="intent-card intent-school" href="/for-schools"><span className="intent-icon"><Building2 size={20} aria-hidden="true" /></span><span className="section-kicker">FOR SCHOOL LEADERS</span><h2>Run the school from one command centre.</h2><p>See setup readiness, approvals, people, academics and finance without hunting through separate systems.</p><span className="intent-link">Explore SukuuNova for schools <ArrowRight size={15} /></span></Link>
+          <Link className="intent-card intent-school" href="/for-schools"><span className="intent-icon"><Building2 size={20} aria-hidden="true" /></span><span className="section-kicker">FOR SCHOOL LEADERS</span><h2>Run the school from one command centre.</h2><p>See setup readiness, approvals, people, academics and finance without hunting through separate systems.</p><span className="intent-link">Explore for schools <ArrowRight size={15} /></span></Link>
           <Link className="intent-card intent-users" href="/login/school"><span className="intent-icon"><LogIn size={20} aria-hidden="true" /></span><span className="section-kicker">FOR EXISTING USERS</span><h2>Get into your school quickly.</h2><p>Staff and guardians use the same secure school gateway, with each role seeing only what belongs to them.</p><span className="intent-link">School login <ArrowRight size={15} /></span></Link>
-          <Link className="intent-card intent-network" href="/about"><span className="intent-icon"><ShieldCheck size={20} aria-hidden="true" /></span><span className="section-kicker">FOR PARTNERS &amp; INVESTORS</span><h2>See the operating architecture.</h2><p>Learn how SukuuNova combines tenant isolation, audited operations and connected school workflows into one platform.</p><span className="intent-link">About the platform <ArrowRight size={15} /></span></Link>
+          <Link className="intent-card intent-network" href="/about"><span className="intent-icon"><ShieldCheck size={20} aria-hidden="true" /></span><span className="section-kicker">FOR PARTNERS &amp; INVESTORS</span><h2>See the operating architecture.</h2><p>Understand how connected records, permissions and operational workflows fit together.</p><span className="intent-link">About SukuuNova <ArrowRight size={15} /></span></Link>
         </section>
 
         <section className="modules" id="modules">
           <div className="section-kicker">THE SCHOOL, IN ONE PLACE</div>
-          <div className="section-head"><h2>Built around the work, not a menu.</h2><p>Each workspace is designed around a real school responsibility, then connected to the records that responsibility depends on.</p></div>
+          <div className="section-head"><div><h2>Built around the work, not a menu.</h2><p>Choose a responsibility to see how SukuuNova handles it from first record to daily action and history.</p></div></div>
           <div className="module-grid">
             {modules.map(([title, copy, Icon, href]) => <Link className="module-card" href={href} key={title}><span className="module-icon"><Icon size={21} aria-hidden="true" /></span><h3>{title}</h3><p>{copy}</p><span className="module-arrow"><ArrowRight size={16} aria-hidden="true" /></span></Link>)}
           </div>
