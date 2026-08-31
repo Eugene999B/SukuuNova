@@ -1,0 +1,68 @@
+name: One-time theme consolidation
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/theme-consolidation-once.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Consolidate workspace theme
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/visual-system.css')
+          s = p.read_text()
+          replacements = {
+            ':root{--vs-bg:#061019;--vs-bg-2:#08151f;--vs-panel:#0c1b26;--vs-panel-2:#102532;--vs-line:rgba(255,255,255,.075);--vs-line-strong:rgba(98,246,231,.16);--vs-text:#eef8f6;--vs-muted:#7e969b;--vs-accent:#62f6e7;--vs-accent-2:#7476ff;--vs-warm:#f4c46a}': ':root{--vs-bg:var(--sn-canvas);--vs-bg-2:var(--sn-surface-2);--vs-panel:var(--sn-surface);--vs-panel-2:var(--sn-surface-2);--vs-line:var(--sn-line);--vs-line-strong:color-mix(in srgb,var(--sn-primary) 20%,var(--sn-line));--vs-text:var(--sn-ink);--vs-muted:var(--sn-muted);--vs-accent:var(--sn-accent);--vs-accent-2:var(--sn-platform-accent);--vs-warm:var(--sn-teacher-accent)}',
+            'html{background:radial-gradient(circle at 10% 0%,rgba(98,246,231,.075),transparent 24%),radial-gradient(circle at 90% 10%,rgba(116,118,255,.09),transparent 26%),linear-gradient(180deg,var(--vs-bg-2),var(--vs-bg)) fixed;background-color:var(--vs-bg)}': 'html{background:linear-gradient(180deg,var(--sn-surface-2),var(--sn-canvas)) fixed;background-color:var(--sn-canvas)}',
+            '::selection{background:rgba(98,246,231,.24);color:#fff}': '::selection{background:color-mix(in srgb,var(--sn-primary) 24%,transparent);color:var(--sn-ink)}',
+            '*{scrollbar-width:thin;scrollbar-color:rgba(98,246,231,.2) transparent}': '*{scrollbar-width:thin;scrollbar-color:color-mix(in srgb,var(--sn-primary) 25%,transparent) transparent}',
+            '*::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:rgba(98,246,231,.18);border-radius:99px}*::-webkit-scrollbar-track{background:transparent}': '*::-webkit-scrollbar{width:8px;height:8px}*::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--sn-primary) 22%,transparent);border-radius:99px}*::-webkit-scrollbar-track{background:transparent}',
+            '.app-sidebar{background:linear-gradient(180deg,rgba(7,17,26,.96),rgba(6,15,23,.98))!important;border-right:1px solid rgba(255,255,255,.065)!important;box-shadow:18px 0 60px rgba(0,0,0,.14)}': '.app-sidebar{background:var(--sn-surface)!important;border-right:1px solid var(--sn-line)!important;box-shadow:18px 0 40px rgba(55,46,38,.06)}',
+            '.app-topbar{background:linear-gradient(180deg,rgba(8,20,29,.82),rgba(8,20,29,.55))!important;border-bottom-color:rgba(255,255,255,.06)!important;backdrop-filter:blur(18px)}': '.app-topbar{background:color-mix(in srgb,var(--sn-surface) 92%,transparent)!important;border-bottom-color:var(--sn-line)!important;backdrop-filter:blur(18px)}',
+            'input,textarea,select{background:rgba(255,255,255,.035)!important;border-color:rgba(255,255,255,.085)!important;color:#e9f5f3!important;caret-color:var(--vs-accent);color-scheme:dark;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}': 'input,textarea,select{background:var(--sn-surface)!important;border-color:var(--sn-line)!important;color:var(--sn-ink)!important;caret-color:var(--sn-primary);color-scheme:light;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease}',
+            'select option,select optgroup{background:#0c1b26!important;color:#eef8f6!important}': 'select option,select optgroup{background:var(--sn-surface)!important;color:var(--sn-ink)!important}',
+            'input::placeholder,textarea::placeholder{color:#789196!important;opacity:1}': 'input::placeholder,textarea::placeholder{color:var(--sn-muted)!important;opacity:1}',
+            'input:focus,textarea:focus,select:focus{border-color:rgba(98,246,231,.38)!important;box-shadow:0 0 0 3px rgba(98,246,231,.07),0 10px 30px rgba(0,0,0,.12);background:rgba(255,255,255,.05)!important}': 'input:focus,textarea:focus,select:focus{border-color:var(--sn-primary)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--sn-primary) 12%,transparent),var(--sn-shadow-sm);background:var(--sn-surface)!important}',
+            'label{color:#b8cbc8}': 'label{color:var(--sn-ink-2)}',
+            '.app-kpi-value,.module-metrics strong{background:linear-gradient(135deg,#f4fffc,#9fece2 62%,#9da5ff);-webkit-background-clip:text;background-clip:text;color:transparent}': '.app-kpi-value,.module-metrics strong{background:linear-gradient(135deg,var(--sn-primary),var(--sn-accent) 62%,var(--sn-platform-accent));-webkit-background-clip:text;background-clip:text;color:transparent}',
+            'body{background:transparent!important;color:var(--nova-ink)!important}': 'body{background:transparent!important;color:var(--sn-ink)!important}',
+            'html{background:linear-gradient(180deg,#f8fbfd 0%,#eef4f8 100%) fixed!important;background-color:#eef4f8!important}': 'html{background:linear-gradient(180deg,var(--sn-surface-2) 0%,var(--sn-canvas) 100%) fixed!important;background-color:var(--sn-canvas)!important}',
+            'body:before{background-image:radial-gradient(circle at 84% 0%,rgba(65,105,255,.09),transparent 28%),radial-gradient(circle at 18% 8%,rgba(28,199,160,.10),transparent 25%);opacity:.9;mask-image:none}': 'body:before{background-image:radial-gradient(circle at 84% 0%,color-mix(in srgb,var(--sn-platform-accent) 9%,transparent),transparent 28%),radial-gradient(circle at 18% 8%,color-mix(in srgb,var(--sn-accent) 9%,transparent),transparent 25%);opacity:.7;mask-image:none}',
+            '.app-main{background:linear-gradient(180deg,rgba(248,251,253,.96),rgba(242,247,250,.98))!important}': '.app-main{background:linear-gradient(180deg,var(--sn-surface-2),var(--sn-canvas))!important}',
+            '.app-main:before{background:radial-gradient(circle at 82% 0%,rgba(65,105,255,.055),transparent 30%),radial-gradient(circle at 20% 7%,rgba(28,199,160,.05),transparent 24%)}': '.app-main:before{background:radial-gradient(circle at 82% 0%,color-mix(in srgb,var(--sn-platform-accent) 6%,transparent),transparent 30%),radial-gradient(circle at 20% 7%,color-mix(in srgb,var(--sn-accent) 6%,transparent),transparent 24%)}',
+            '.app-card,.module-card,.module-metrics article,.module-table-wrap,.module-register-empty,.module-dropzone{background:var(--nova-surface)!important;border:1px solid var(--nova-line)!important;box-shadow:var(--nova-shadow)!important;backdrop-filter:none!important;color:var(--nova-ink)!important}': '.app-card,.module-card,.module-metrics article,.module-table-wrap,.module-register-empty,.module-dropzone{background:var(--sn-surface)!important;border:1px solid var(--sn-line)!important;box-shadow:var(--sn-shadow-md)!important;backdrop-filter:none!important;color:var(--sn-ink)!important}',
+            '.app-card h1,.app-card h2,.app-card h3,.app-card h4,.module-topline h2,.module-section-title h3,.module-card h3{color:var(--nova-ink)!important}': '.app-card h1,.app-card h2,.app-card h3,.app-card h4,.module-topline h2,.module-section-title h3,.module-card h3{color:var(--sn-ink)!important}',
+            '.app-card p,.module-topline p,.module-section-title p,.module-card p,.module-overline,.module-section-title>div>span{color:var(--nova-muted)!important}': '.app-card p,.module-topline p,.module-section-title p,.module-card p,.module-overline,.module-section-title>div>span{color:var(--sn-muted)!important}',
+            'input,textarea,select{background:#fff!important;border-color:#cedde6!important;color:#173041!important;color-scheme:light!important;box-shadow:none!important}': 'input,textarea,select{background:var(--sn-surface)!important;border-color:var(--sn-line)!important;color:var(--sn-ink)!important;color-scheme:light!important;box-shadow:none!important}',
+            'label{color:#36505f!important}': 'label{color:var(--sn-ink-2)!important}',
+            '.app-list-row:hover,.module-workflow-step:hover,.module-setup-list a:hover,.module-command-flow>div:hover{background:var(--nova-soft-mint)!important;border-color:#c9eee3!important;transform:none!important}': '.app-list-row:hover,.module-workflow-step:hover,.module-setup-list a:hover,.module-command-flow>div:hover{background:var(--sn-school-tint)!important;border-color:color-mix(in srgb,var(--sn-school-accent) 20%,var(--sn-line))!important;transform:none!important}',
+            '.app-pill{background:var(--nova-soft-mint)!important;border-color:#c6eee3!important;color:#13745f!important}': '.app-pill{background:var(--sn-school-tint)!important;border-color:color-mix(in srgb,var(--sn-school-accent) 20%,var(--sn-line))!important;color:var(--sn-school-accent)!important}',
+          }
+          for old,new in replacements.items():
+              if old in s:
+                  s=s.replace(old,new)
+          p.write_text(s)
+
+          p = Path('src/app/login/school/page.tsx')
+          s = p.read_text()
+          s = s.replace('import Link from "next/link";\n', 'import Link from "next/link";\nimport { Building2, ShieldCheck, UsersRound } from "lucide-react";\n')
+          s = s.replace('<strong>♙ Staff</strong>', '<strong><UsersRound size={14} aria-hidden="true" /> Staff</strong>')
+          s = s.replace('<strong>♧ Guardian</strong>', '<strong><UsersRound size={14} aria-hidden="true" /> Guardian</strong>')
+          s = s.replace('<strong>🔐 Protected</strong>', '<strong><ShieldCheck size={14} aria-hidden="true" /> Protected</strong>')
+          s = s.replace('<div className="auth-context">🏫 Enter your school</div>', '<div className="auth-context"><Building2 size={12} aria-hidden="true" /> Enter your school</div>')
+          p.write_text(s)
+          PY
+      - name: Commit consolidation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app/visual-system.css src/app/login/school/page.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m 'refactor(theme): consolidate remaining warm visual layer'
+          git push
