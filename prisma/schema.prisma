@@ -314,7 +314,6 @@ model Term {
   school       School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   academicYear AcademicYear @relation(fields: [academicYearId, schoolId], references: [id, schoolId], onDelete: Cascade)
   assessments  Assessment[]
-  scores       Score[]
   invoices     Invoice[]
   feeItems     FeeItem[]
   reportCards  ReportCard[]
