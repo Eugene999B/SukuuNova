@@ -1,12 +1,3 @@
 import "../capability.css";
 import { MarketingCapabilityPage } from "@/components/MarketingCapabilityPage";
-
-export default function AcademicsFeaturePage() {
-  return <MarketingCapabilityPage eyebrow="Teaching & learning" title="From the timetable to the report card, keep teaching in one place." intro="Set up classes and subjects once, give teachers the tools they need, and keep marks and reports tied to the right learners." accent="#244f83" workspaceHref="/school/classes" workspaceLabel="Academics" sections={[
-    { title: "Set up classes and subjects", body: "Create the structure teachers actually work with: classes, subjects, houses and teaching assignments." },
-    { title: "Build the week", body: "Put lessons on the timetable and make it easy for teachers to see what they are teaching and where." },
-    { title: "Give teachers a place to teach", body: "Keep homework, class work and everyday teaching tasks close to the class and subject they belong to." },
-    { title: "Record marks as you go", body: "Enter assessment results against the right learner and subject, without keeping another private spreadsheet." },
-    { title: "Finish with the report", body: "Bring the term’s results together when it is time to review and prepare report cards." },
-  ]} outcomes={["One clear academic structure", "A timetable teachers can work from", "Marks tied to the right learner and subject", "Less work when reports are due"]} />;
-}
+export default function AcademicsFeaturePage(){return <MarketingCapabilityPage eyebrow="Teaching & learning" title="From the timetable to the report card, keep teaching in one place." intro="Set up classes and subjects once, give teachers the tools they need, and keep marks and reports tied to the right learners." accent="#244f83" workspaceHref="/school/classes" workspaceLabel="Academics" sections={[{title:"Set up classes and subjects",body:"Create the structure teachers actually work with: classes, subjects, houses and teaching assignments."},{title:"Build the week",body:"Put lessons on the timetable and make it easy for teachers to see what they are teaching and where."},{title:"Give teachers a place to teach",body:"Keep homework, class work and everyday teaching tasks close to the class and subject they belong to."},{title:"Record marks as you go",body:"Enter assessment results against the right learner and subject, without keeping another private spreadsheet."},{title:"Finish with the report",body:"Bring the term’s results together when it is time to review and prepare report cards."}]} outcomes={["One clear academic structure","A timetable teachers can work from","Marks tied to the right learner and subject","Less work when reports are due"]}/>;}
