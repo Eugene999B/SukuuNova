@@ -61,19 +61,19 @@ if 'model Device {' not in content:
     content += r'''
 
 model Device {
-  id                  String   @id @default(cuid())
-  schoolId            String
-  deviceSerial        String
-  kind                String
-  label               String
-  apiKeyHash          String
-  status              String   @default("active")
-  lastSeenAt          DateTime?
-  createdAt           DateTime @default(now())
-  school              School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  attendanceEvents    AttendanceEvent[]
-  identities          DeviceIdentity[]
-  attendanceReceipts  DeviceAttendanceReceipt[]
+  id              String   @id @default(cuid())
+  schoolId        String
+  deviceSerial    String
+  kind            String
+  label           String
+  apiKeyHash      String
+  status          String   @default("active")
+  lastSeenAt      DateTime?
+  createdAt       DateTime @default(now())
+  school          School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  attendanceEvents AttendanceEvent[]
+  identities      DeviceIdentity[]
+  attendanceReceipts DeviceAttendanceReceipt[]
   @@unique([id, schoolId])
   @@unique([schoolId, deviceSerial])
   @@index([schoolId])
@@ -122,7 +122,6 @@ if '"Device"' not in read('src/lib/db.ts'):
 if 'student_attendance' not in read('src/lib/message-outbox.ts'):
     replace_once('src/lib/message-outbox.ts', '"student_absence"|"staff_late"', '"student_absence"|"student_attendance"|"staff_late"')
 
-# Attendance service changes.
 p='src/lib/attendance-service.ts'; s=read(p)
 if 'deviceAuthenticated?: boolean' not in s:
     replace_once(p, '    schoolId: string; actorId: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face"; confidenceScore?: number; deviceId?: string; timestamp?: Date;\n', '    schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; deviceAuthenticated?: boolean;\n')
@@ -136,16 +135,12 @@ if 'deviceAuthenticated?: boolean' not in s:
     if s.count(marker)!=1: raise SystemExit('student notification anchor not found')
     write(p, s.replace(marker, notify+marker, 1))
 
-# Face service.
 p='src/lib/face-service.ts'; s=read(p)
 if 'deviceAuthenticated?: boolean' not in s:
     replace_once(p, '    schoolId: string;\n    actorId: string;\n    image: string;\n    deviceId?: string;\n    type: "in" | "out";\n    timestamp?: Date;\n', '    schoolId: string;\n    actorId?: string;\n    image: string;\n    deviceId?: string;\n    type: "in" | "out";\n    deviceAuthenticated?: boolean;\n')
     replace_once(p, '  await requirePermission(tx, input.actorId, "attendance:record");\n  const [settings, match] = await Promise.all([', '  if (!input.deviceAuthenticated) {\n    if (!input.actorId) throw new AppError("A staff actor is required for face attendance.", 401, "ACTOR_REQUIRED");\n    await requirePermission(tx, input.actorId, "attendance:record");\n  } else if (!input.deviceId) {\n    throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");\n  }\n  const [settings, match] = await Promise.all([')
     replace_once(p, '    timestamp: input.timestamp,\n', '')
 
-# Staff-session face endpoint.
-p='src/app/api/phase2/face/route.ts'; s=read(p)
-new_s, n = re.subn(r',?timestamp:z\.coerce\.date\(\)\.optional\(\)', '', s, count=1)
-if n != 1: raise SystemExit('face route timestamp field not found')
-write(p, new_s)
-PYTHON_DONE
+p='src/app/api/phase2/face/route.ts'; s=read(p); new_s,n=re.subn(r',?timestamp:z\.coerce\.date\(\)\.optional\(\)','',s,count=1)
+if n!=1: raise SystemExit('phase2 face timestamp field not found')
+write(p,new_s)
