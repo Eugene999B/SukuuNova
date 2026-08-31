@@ -41,6 +41,7 @@ describe("offline sync state machine", () => {
     const operation = {
       clientOperationId: "offline-op-001",
       clientVersion: 1,
+      baseEntityVersion: 0,
       entityId: studentId,
       operationType: "ATTENDANCE_RECORD" as const,
       payload: { studentId, type: "in" as const, method: "card" as const, attendanceDate: createdAt.toISOString() },
@@ -62,11 +63,48 @@ describe("offline sync state machine", () => {
     });
   });
 
+  it("returns CONFLICT when the attendance record changed online after the client snapshot", async () => {
+    const createdAt = new Date().toISOString();
+    const firstOperation = {
+      clientOperationId: "offline-op-version-1",
+      clientVersion: 1,
+      baseEntityVersion: 0,
+      entityId: studentId,
+      operationType: "ATTENDANCE_RECORD" as const,
+      payload: { studentId, type: "in" as const, method: "card" as const, attendanceDate: createdAt },
+      createdAt
+    };
+
+    await withTenant(fixture.schoolId, async (tx) => {
+      const first = await processOfflineSync(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, deviceId, operations: [firstOperation] });
+      expect(first.results[0]).toMatchObject({ status: "APPLIED" });
+
+      const conflict = await processOfflineSync(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        deviceId,
+        operations: [{
+          clientOperationId: "offline-op-version-2",
+          clientVersion: 1,
+          baseEntityVersion: 0,
+          entityId: studentId,
+          operationType: "ATTENDANCE_RECORD",
+          payload: { studentId, type: "out", method: "card", attendanceDate: createdAt },
+          createdAt
+        }]
+      });
+
+      expect(conflict.results[0]).toMatchObject({ status: "CONFLICT" });
+      expect(String(conflict.results[0]?.reason)).toContain("changed online");
+    });
+  });
+
   it("rejects reuse of a client operation ID with a different payload", async () => {
     const createdAt = new Date().toISOString();
     const operation = {
       clientOperationId: "offline-op-002",
       clientVersion: 1,
+      baseEntityVersion: 0,
       entityId: studentId,
       operationType: "ATTENDANCE_RECORD" as const,
       payload: { studentId, type: "in" as const, method: "card" as const, attendanceDate: createdAt },
@@ -102,6 +140,7 @@ describe("offline sync state machine", () => {
         operations: [{
           clientOperationId: "offline-op-003",
           clientVersion: 1,
+          baseEntityVersion: 0,
           entityId: studentId,
           operationType: "ATTENDANCE_RECORD",
           payload: { studentId, type: "in", method: "card", attendanceDate: expired },
