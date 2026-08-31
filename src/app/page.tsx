@@ -8,10 +8,10 @@ import { HomePresence } from "@/components/HomePresence";
 import { HomeProductPreview } from "@/components/HomeProductPreview";
 
 const modules = [
-  ["Students & families", "Admissions, learner records, guardians and day-to-day people operations", Users, "/features"],
-  ["Academics", "Classes, subjects, timetable, homework, assessments and report cards", GraduationCap, "/features"],
-  ["Attendance & safety", "Daily registers, lateness, absence, device attendance and alerts", ShieldCheck, "/features"],
-  ["Fees & finance", "Fees, invoices, receipts, balances, collections and payroll", WalletCards, "/features"],
+  ["Students & families", "Admissions, learner records, guardians and day-to-day people operations", Users, "/school/students"],
+  ["Academics", "Classes, subjects, timetable, homework, assessments and report cards", GraduationCap, "/school/classes"],
+  ["Attendance & safety", "Daily registers, lateness, absence, device attendance and alerts", ShieldCheck, "/school/attendance"],
+  ["Fees & finance", "Fees, invoices, receipts, balances, collections and payroll", WalletCards, "/school/fees"],
 ] as const;
 
 export default function HomePage() {
