@@ -1,29 +1,57 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { accentOptions, getThemePreferences, saveThemePreferences, type AccentName, type Density, type ThemeMode } from "@/components/ThemeProvider";
+import { Check } from "lucide-react";
+import { getThemePreferences, saveThemePreferences, themePresets, type Density, type ThemePreset } from "@/components/ThemeProvider";
 
 export default function ThemePreferences() {
-  const [mode, setMode] = useState<ThemeMode>("light");
-  const [accent, setAccent] = useState<AccentName>("coral");
+  const [selected, setSelected] = useState<ThemePreset>("paper");
   const [density, setDensity] = useState<Density>("comfortable");
 
   useEffect(() => {
     const value = getThemePreferences();
-    setMode(value.mode); setAccent(value.accent); setDensity(value.density);
+    const match = themePresets.find((preset) => preset.mode === value.mode && preset.accent === value.accent);
+    setSelected(match?.id ?? "paper");
+    setDensity(value.density);
   }, []);
 
-  const update = (patch: Partial<{mode:ThemeMode;accent:AccentName;density:Density}>) => {
-    const next = saveThemePreferences(patch);
-    setMode(next.mode); setAccent(next.accent); setDensity(next.density);
+  const updatePreset = (preset: (typeof themePresets)[number]) => {
+    saveThemePreferences({ mode: preset.mode, accent: preset.accent });
+    setSelected(preset.id);
+  };
+
+  const updateDensity = (value: Density) => {
+    saveThemePreferences({ density: value });
+    setDensity(value);
   };
 
   return <section className="theme-preferences">
-    <div className="theme-preferences-head"><div><span className="eyebrow">Personal appearance</span><h3>Make SukuuNova feel like yours</h3><p>Your choices are saved for this account and apply across the school workspace on this device.</p></div><span className="theme-live-dot">Live</span></div>
+    <div className="theme-preferences-head">
+      <div><span className="eyebrow">Personal appearance</span><h3>Make SukuuNova feel like yours</h3><p>Choose a complete look that stays readable and comfortable across the school workspace on this device.</p></div>
+      <span className="theme-live-dot">Live</span>
+    </div>
+
     <div className="theme-preferences-grid">
-      <div><span className="theme-label">Theme</span><div className="theme-choice-row"><button className={mode==="light"?"selected":""} onClick={()=>update({mode:"light"})}><span className="theme-preview light-preview"/>Light</button><button className={mode==="dark"?"selected":""} onClick={()=>update({mode:"dark"})}><span className="theme-preview dark-preview"/>Dark</button></div></div>
-      <div><span className="theme-label">Accent colour</span><div className="accent-grid">{accentOptions.map(option=><button key={option.id} title={option.label} aria-label={`Use ${option.label} accent`} className={accent===option.id?"selected":""} onClick={()=>update({accent:option.id})}><span style={{background:option.value}}/>{option.label}</button>)}</div></div>
-      <div><span className="theme-label">Interface density</span><div className="theme-choice-row"><button className={density==="comfortable"?"selected":""} onClick={()=>update({density:"comfortable"})}><b>Comfortable</b><small>More breathing room</small></button><button className={density==="compact"?"selected":""} onClick={()=>update({density:"compact"})}><b>Compact</b><small>More information on screen</small></button></div></div>
+      <div className="theme-preferences-wide">
+        <span className="theme-label">SukuuNova theme</span>
+        <div className="theme-preset-grid">
+          {themePresets.map((preset) => (
+            <button type="button" key={preset.id} className={`theme-preset ${selected === preset.id ? "selected" : ""}`} onClick={() => updatePreset(preset)} aria-pressed={selected === preset.id}>
+              <span className={`theme-preset-preview theme-preview-${preset.id}`} aria-hidden="true"><i /><b /><em /></span>
+              <span className="theme-preset-copy"><strong>{preset.label}</strong><small>{preset.description}</small></span>
+              {selected === preset.id && <Check size={16} aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <span className="theme-label">Interface density</span>
+        <div className="theme-choice-row">
+          <button type="button" className={density === "comfortable" ? "selected" : ""} onClick={() => updateDensity("comfortable")} aria-pressed={density === "comfortable"}><b>Comfortable</b><small>More breathing room</small></button>
+          <button type="button" className={density === "compact" ? "selected" : ""} onClick={() => updateDensity("compact")} aria-pressed={density === "compact"}><b>Compact</b><small>More information on screen</small></button>
+        </div>
+      </div>
     </div>
   </section>;
 }
