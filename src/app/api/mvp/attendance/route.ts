@@ -12,11 +12,12 @@ const target = z.union([
   z.object({ studentId: z.string(), staffId: z.never().optional() }),
   z.object({ staffId: z.string(), studentId: z.never().optional() })
 ]);
+const periodId = z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/).optional();
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("record"), target, type: z.enum(["in", "out"]), timestamp: z.coerce.date().optional() }),
+  z.object({ action: z.literal("record"), target, type: z.enum(["in", "out"]), periodId, timestamp: z.coerce.date().optional() }),
   z.object({ action: z.literal("finalize"), day: z.coerce.date(), classId: z.string().optional() }),
   z.object({ action: z.literal("qrToken"), kind: z.enum(["student", "staff"]), id: z.string() }),
-  z.object({ action: z.literal("qrScan"), token: z.string(), type: z.enum(["in", "out"]), timestamp: z.coerce.date().optional() })
+  z.object({ action: z.literal("qrScan"), token: z.string(), type: z.enum(["in", "out"]), periodId, timestamp: z.coerce.date().optional() })
 ]);
 
 export async function GET(request: Request) {
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       if (input.action === "record") {
-        return recordAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, target: input.target, type: input.type, method: "manual", timestamp: input.timestamp });
+        return recordAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, target: input.target, type: input.type, method: "manual", timestamp: input.timestamp, periodId: input.periodId });
       }
       if (input.action === "finalize") {
         return finalizeStudentAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, day: input.day, classId: input.classId });
@@ -58,7 +59,8 @@ export async function POST(request: Request) {
         target: verified.kind === "student" ? { studentId: verified.id } : { staffId: verified.id },
         type: input.type,
         method: "qr",
-        timestamp: input.timestamp
+        timestamp: input.timestamp,
+        periodId: input.periodId
       });
     });
     return NextResponse.json({ ok: true, result });
