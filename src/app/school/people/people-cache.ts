@@ -1,7 +1,7 @@
 import { cacheTenantRead } from "@/lib/server-cache";
 
 export function getPeopleSnapshot(schoolId: string) {
-  return cacheTenantRead(
+  const load = cacheTenantRead(
     ["sukuuNova", "people", "overview", schoolId],
     async () => {
       const { withTenant } = await import("@/lib/db");
@@ -13,7 +13,7 @@ export function getPeopleSnapshot(schoolId: string) {
           tx.user.findMany({ where: { status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, email: true, phone: true, userRoles: { select: { role: { select: { name: true } } } }, guardianProfiles: { select: { id: true } } } }),
           tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], take: 12, select: { id: true, name: true, level: true, classTeacher: { select: { name: true } }, _count: { select: { students: true, subjectAssignments: true } } } }),
           tx.student.count({ where: { classId: null, status: "active" } }),
-          tx.student.findMany({ orderBy: { createdAt: "desc" }, take: 8, select: { id: true, name: true, admissionNo: true, status: true, class: { select: { name: true, level: true } } } }),
+          tx.student.findMany({ orderBy: { id: "desc" }, take: 8, select: { id: true, name: true, admissionNo: true, status: true, class: { select: { name: true, level: true } } } }),
         ]);
         return { studentCount, activeStudentCount, recentStudents, guardians, users, classes, unassigned };
       });
@@ -21,4 +21,5 @@ export function getPeopleSnapshot(schoolId: string) {
     30,
     [`sukuunova:people:${schoolId}`],
   );
+  return load();
 }
