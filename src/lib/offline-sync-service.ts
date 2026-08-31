@@ -1,0 +1,159 @@
+import { createHash } from "node:crypto";
+import type { Prisma } from "@prisma/client";
+import type { TenantDb } from "./db";
+import { AppError } from "./errors";
+import { hasPermission } from "./rbac";
+import { recordAttendance } from "./attendance-service";
+
+export type SyncOutcome =
+  | "APPLIED"
+  | "ALREADY_APPLIED"
+  | "CONFLICT"
+  | "REJECTED_PERMISSION"
+  | "REJECTED_VALIDATION"
+  | "EXPIRED";
+
+export type SyncInput = {
+  clientOperationId: string;
+  clientVersion: number;
+  entityId?: string;
+  operationType: "ATTENDANCE_RECORD";
+  payload: Record<string, unknown>;
+  createdAt: string;
+};
+
+const MAX_OFFLINE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function payloadHash(payload: Record<string, unknown>) {
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+function dateOnly(value: Date) {
+  return value.toISOString().slice(0, 10);
+}
+
+async function assertDevice(tx: TenantDb, schoolId: string, deviceId: string) {
+  const device = await tx.device.findFirst({
+    where: { id: deviceId, status: "active" },
+    select: { id: true }
+  });
+  if (!device) throw new AppError("Offline sync device is not active in this school.", 401, "INVALID_DEVICE");
+}
+
+export async function processOfflineSync(
+  tx: TenantDb,
+  input: { schoolId: string; actorId: string; deviceId: string; operations: SyncInput[] }
+) {
+  await assertDevice(tx, input.schoolId, input.deviceId);
+  const results: Array<Record<string, unknown>> = [];
+
+  for (const operation of input.operations) {
+    const createdAt = new Date(operation.createdAt);
+    const hash = payloadHash(operation.payload);
+    const base = { clientOperationId: operation.clientOperationId, operationType: operation.operationType };
+
+    if (!Number.isInteger(operation.clientVersion) || operation.clientVersion < 1 || !operation.clientOperationId.trim()) {
+      results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Invalid client operation metadata." });
+      continue;
+    }
+    if (Number.isNaN(createdAt.getTime())) {
+      results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Invalid createdAt." });
+      continue;
+    }
+    if (Date.now() - createdAt.getTime() > MAX_OFFLINE_AGE_MS) {
+      results.push({ ...base, status: "EXPIRED" as SyncOutcome, reason: "Offline operation is older than the allowed sync window." });
+      continue;
+    }
+
+    const existing = await tx.$queryRaw<Array<{
+      id: string;
+      payloadHash: string;
+      status: SyncOutcome;
+      result: Prisma.JsonValue | null;
+      reason: string | null;
+    }>>`
+      SELECT "id", "payloadHash", "status", "result", "reason"
+      FROM "SyncOperation"
+      WHERE "schoolId" = ${input.schoolId}
+        AND "deviceId" = ${input.deviceId}
+        AND "clientOperationId" = ${operation.clientOperationId}
+      LIMIT 1
+    `;
+
+    if (existing[0]) {
+      if (existing[0].payloadHash !== hash) {
+        results.push({ ...base, status: "CONFLICT" as SyncOutcome, reason: "The same client operation ID was already used with a different payload." });
+      } else {
+        results.push({ ...base, status: "ALREADY_APPLIED" as SyncOutcome, result: existing[0].result ?? null, reason: existing[0].reason ?? null });
+      }
+      continue;
+    }
+
+    if (operation.operationType !== "ATTENDANCE_RECORD") {
+      results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "This operation type is not enabled for offline sync." });
+      continue;
+    }
+
+    const studentId = typeof operation.payload.studentId === "string" ? operation.payload.studentId : "";
+    const type = operation.payload.type === "in" || operation.payload.type === "out" ? operation.payload.type : null;
+    const method = operation.payload.method === "manual" || operation.payload.method === "qr" || operation.payload.method === "face" || operation.payload.method === "fingerprint" || operation.payload.method === "card"
+      ? operation.payload.method
+      : null;
+    const attendanceDate = typeof operation.payload.attendanceDate === "string" ? new Date(operation.payload.attendanceDate) : null;
+
+    if (!studentId || !type || !method || !attendanceDate || Number.isNaN(attendanceDate.getTime())) {
+      results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Attendance payload is incomplete or invalid." });
+      continue;
+    }
+
+    if (dateOnly(attendanceDate) !== dateOnly(new Date())) {
+      results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Offline attendance may only be synchronized for the current attendance date." });
+      continue;
+    }
+
+    if (!(await hasPermission(tx, input.actorId, "attendance:record"))) {
+      results.push({ ...base, status: "REJECTED_PERMISSION" as SyncOutcome, reason: "This account no longer has attendance recording permission." });
+      continue;
+    }
+
+    const operationId = `sync-${input.deviceId}-${operation.clientOperationId}`;
+    await tx.$executeRaw`
+      INSERT INTO "SyncOperation" (
+        "id", "schoolId", "deviceId", "clientOperationId", "clientVersion",
+        "entityId", "operationType", "payload", "payloadHash", "status", "createdAt"
+      ) VALUES (
+        ${operationId}, ${input.schoolId}, ${input.deviceId}, ${operation.clientOperationId}, ${operation.clientVersion},
+        ${operation.entityId ?? studentId}, ${operation.operationType}, ${JSON.stringify(operation.payload)}::jsonb,
+        ${hash}, 'QUEUED', ${createdAt}
+      )
+    `;
+
+    try {
+      const event = await recordAttendance(tx, {
+        schoolId: input.schoolId,
+        actorId: input.actorId,
+        target: { studentId },
+        type,
+        method,
+      });
+      const result = { eventId: event.id };
+      await tx.$executeRaw`
+        UPDATE "SyncOperation"
+        SET "status" = 'APPLIED', "result" = ${JSON.stringify(result)}::jsonb, "processedAt" = NOW()
+        WHERE "id" = ${operationId} AND "schoolId" = ${input.schoolId}
+      `;
+      results.push({ ...base, status: "APPLIED" as SyncOutcome, result });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Attendance operation failed.";
+      const status: SyncOutcome = message.includes("permission") || message.includes("permitted") ? "REJECTED_PERMISSION" : "REJECTED_VALIDATION";
+      await tx.$executeRaw`
+        UPDATE "SyncOperation"
+        SET "status" = ${status}, "reason" = ${message.slice(0, 500)}, "processedAt" = NOW()
+        WHERE "id" = ${operationId} AND "schoolId" = ${input.schoolId}
+      `;
+      results.push({ ...base, status, reason: message.slice(0, 500) });
+    }
+  }
+
+  return { results };
+}
