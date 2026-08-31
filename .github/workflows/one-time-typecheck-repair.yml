@@ -1,0 +1,61 @@
+name: One-time typecheck repair
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/one-time-typecheck-repair.yml']
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Patch known compiler failures
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          def edit(path, old, new):
+              p=Path(path); s=p.read_text()
+              if old not in s:
+                  raise SystemExit(f'Expected text not found in {path}: {old[:100]}')
+              p.write_text(s.replace(old,new,1))
+          # attendance nullable guardian phone
+          edit('src/lib/attendance-service.ts', '    for (const link of student.guardians) {\n      await enqueueSms(tx, {', '    for (const link of student.guardians) {\n      if (!link.guardian.phone) continue;\n      await enqueueSms(tx, {')
+          # phase4 emergency guardian phone is nullable
+          edit('src/lib/phase4-service.ts', 'const[guardians,users]=await Promise.all([tx.guardian.findMany({select:{id:true,phone:true}}),', 'const[guardians,users]=await Promise.all([tx.guardian.findMany({where:{phone:{not:null}},select:{id:true,phone:true}}),')
+          # platform student model has no createdAt
+          edit('src/lib/platform-admin-service.ts', 'orderBy:{createdAt:"desc"},take:50}),tx.user.findMany', 'orderBy:{id:"desc"},take:50}),tx.user.findMany')
+          # message test fixtures need unique idempotency keys
+          p=Path('tests/message-outbox.test.ts'); s=p.read_text(); s=s.replace('          nextAttemptAt: new Date()\n', '          nextAttemptAt: new Date(),\n          idempotencyKey: `test-${Math.random().toString(36).slice(2)}`\n') ; p.write_text(s)
+          # phase1 test now uses queue + worker contract
+          p=Path('tests/phase1.test.ts'); s=p.read_text()
+          old='''      const messages = await enqueueSms(tx, {\n        schoolId: fixture.schoolId,\n        recipientType: "guardian",\n        recipientId: parentId,\n        recipientPhone: "+233200000001",\n        body: "Phase 1 synchronous SMS proof"\n      }, { sms: sender });\n      expect(messages[0].status).toBe("sent");'''
+          new='''      const messages = await enqueueSms(tx, {\n        schoolId: fixture.schoolId,\n        recipientType: "guardian",\n        recipientId: parentId,\n        recipientPhone: "+233200000001",\n        body: "Phase 1 queued SMS proof",\n        templateKey: "school_announcement"\n      });\n      expect(messages[0].status).toBe("queued");\n      await processMessageBatchOnce({ sms: sender }, 1);\n      const sent = await tx.message.findUnique({ where: { id: messages[0].id } });\n      expect(sent?.status).toBe("sent");'''
+          if old not in s: raise SystemExit('phase1 target not found')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          # import worker helper if absent
+          s=p.read_text()
+          if 'processMessageBatchOnce' not in s.split('\n',3)[1]:
+              s=s.replace('import { enqueueSms } from "../src/lib/sms-outbox";', 'import { enqueueSms, processMessageBatchOnce } from "../src/lib/sms-outbox";')
+              p.write_text(s)
+      - name: Validate
+        run: |
+          npm ci --include=dev --ignore-scripts --no-audit --no-fund
+          npx prisma generate
+          npx prisma validate
+          npx tsc --noEmit --pretty false
+      - name: Commit repair and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/one-time-typecheck-repair.yml
+          git add .
+          git commit -m 'fix: resolve remaining typecheck failures'
+          git push
