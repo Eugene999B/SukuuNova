@@ -5,7 +5,8 @@ import { routeError, UnauthorizedError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
 import { requireSchoolScope } from "@/lib/platform-school-scope";
-import { createPlatformSchool, suspendPlatformSchool, searchCrossSchool, listPlans, createPlan, assignPlan, generatePlatformInvoice, recordPlatformPayment, listBilling, updateSupportTicket, impersonateUser, listPlatformSchools } from "@/lib/phase4-service";
+import { createPlatformSchool, suspendPlatformSchool, searchCrossSchool, listPlans, createPlan, assignPlan, generatePlatformInvoice, recordPlatformPayment, listBilling, updateSupportTicket, listPlatformSchools } from "@/lib/phase4-service";
+import { impersonateUser } from "@/lib/phase4-ops-service";
 import { listSupportTicketsForPlatform } from "@/lib/phase4-platform-support";
 const postSchema=z.discriminatedUnion("action",[
  z.object({action:z.literal("createSchool"),uniqueCode:z.string().min(3).max(40),schoolName:z.string().min(2).max(160),ownerName:z.string().min(2).max(160),ownerEmail:z.string().email(),ownerPassword:z.string().min(12).max(256)}),
