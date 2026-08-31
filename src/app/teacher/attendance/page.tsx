@@ -35,7 +35,7 @@ export default async function TeacherAttendancePage({ searchParams }: { searchPa
     const [school, classes, students, events] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.class.findMany({ where: { OR: [{ classTeacherId: session.userId }, { subjectAssignments: { some: { teacherId: session.userId } } }] }, orderBy: { name: "asc" }, select: { id: true, name: true, level: true } }),
-      tx.student.findMany({ where: { status: "active", class: { OR: [{ classTeacherId: session.userId }, { subjectAssignments: { some: { teacherId: session.userId } }] } }, orderBy: { name: "asc" }, select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } }),
+      tx.student.findMany({ where: { status: "active", class: { OR: [{ classTeacherId: session.userId }, { subjectAssignments: { some: { teacherId: session.userId } } }] } }, orderBy: { name: "asc" }, select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } }),
       tx.attendanceEvent.findMany({ where: { attendanceDate: new Date(`${date}T00:00:00.000Z`), studentId: { not: null }, student: { class: { OR: [{ classTeacherId: session.userId }, { subjectAssignments: { some: { teacherId: session.userId } } }] } } }, include: { student: { select: { name: true, admissionNo: true, class: { select: { name: true, level: true } } } } }, orderBy: { timestamp: "desc" }, take: 300 })
     ]);
     return { school, classes, students, events };
