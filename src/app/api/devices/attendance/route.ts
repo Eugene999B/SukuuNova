@@ -13,6 +13,7 @@ const schema = z.object({
   idempotencyKey: z.string().trim().min(8).max(200),
   capturedAt: z.string().datetime().optional(),
   type: z.enum(["in", "out"]),
+  periodId: z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/).optional(),
   image: z.string().min(100).optional(),
   externalId: z.string().trim().max(200).optional(),
   confidence: z.number().min(0).max(100).optional()
@@ -106,6 +107,10 @@ export async function POST(request: Request) {
         }
       }
 
+      if (input.periodId) {
+        await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${input.periodId}, true)`;
+      }
+
       let recorded: Awaited<ReturnType<typeof matchFaceAttendance>>;
       if (input.kind === "face") {
         if (!input.image) throw new AppError("Face device events require image data.", 400, "INVALID_INPUT");
@@ -123,7 +128,8 @@ export async function POST(request: Request) {
           deviceId: device.id,
           externalId: input.externalId,
           confidence: input.confidence,
-          type: input.type
+          type: input.type,
+          periodId: input.periodId
         });
       } else {
         if (!input.externalId) throw new AppError("Card device events require externalId.", 400, "INVALID_INPUT");
@@ -132,7 +138,8 @@ export async function POST(request: Request) {
           deviceId: device.id,
           externalId: input.externalId,
           confidence: input.confidence,
-          type: input.type
+          type: input.type,
+          periodId: input.periodId
         });
       }
 
