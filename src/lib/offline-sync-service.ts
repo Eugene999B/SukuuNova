@@ -166,7 +166,7 @@ export async function processOfflineSync(
     }
 
     try {
-      const event = await recordAttendance(tx, { schoolId: input.schoolId, actorId: input.actorId, target: { studentId }, type, method });
+      const event = await recordAttendance(tx, { schoolId: input.schoolId, actorId: input.actorId, target: { studentId }, type, method, periodId });
       const result = { eventId: event.id };
       await tx.$executeRaw`
         UPDATE "SyncOperation"
