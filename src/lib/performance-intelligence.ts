@@ -30,22 +30,20 @@ export async function getClassSubjectIntelligence(tx: TenantDb, input: RankingIn
   const [students, assessments] = await Promise.all([
     tx.student.findMany({
       where: { classId: { in: classIds }, status: "active" },
-      select: { id: true, name: true, admissionNo: true },
+      select: { id: true, name: true, admissionNo: true, classId: true },
       orderBy: { name: "asc" }
     }),
     tx.assessment.findMany({
       where: { classId: { in: classIds }, subjectId: input.subjectId, termId: input.termId },
-      select: { id: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true } } },
+      select: { id: true, classId: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true } } },
       orderBy: [{ classId: "asc" }, { name: "asc" }]
     })
   ]);
 
   const rows: PerformanceRow[] = students.map((student) => {
-    const studentClassAssessments = assessments.filter((assessment) => {
-      return assessment.scores.some((score) => score.studentId === student.id);
-    });
+    const studentAssessments = assessments.filter((assessment) => assessment.classId === student.classId);
     const result = calculateSubjectResult(
-      studentClassAssessments.map((assessment) => ({
+      studentAssessments.map((assessment) => ({
         id: assessment.id,
         name: assessment.name,
         type: assessment.type,
