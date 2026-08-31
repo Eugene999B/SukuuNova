@@ -13,7 +13,9 @@ type NotificationInput={
 type NotificationSenders={sms?:SmsSender;whatsapp?:WhatsAppSender};
 
 const MAX_ATTEMPTS=5;
-const RETRY_DELAYS_MS=[0,30_000,5*60_000,30*60_000,2*60*60_000];
+const BASE_RETRY_DELAY_MS=30_000;
+const MAX_RETRY_DELAY_MS=2*60*60_000;
+const JITTER_MAX_MS=5_000;
 
 function configuredChannels(value:Prisma.JsonValue|null|undefined):Channel[]{
   const candidate = !Array.isArray(value) && value && typeof value === "object" ? (value as Record<string,Prisma.JsonValue>).channels : value;
@@ -71,8 +73,10 @@ function permanentFailure(message:string){
 }
 
 function nextRetryAt(attempt:number){
-  const index=Math.min(Math.max(attempt-1,0),RETRY_DELAYS_MS.length-1);
-  return new Date(Date.now()+RETRY_DELAYS_MS[index]);
+  const exponent=Math.max(attempt-1,0);
+  const exponential=Math.min(MAX_RETRY_DELAY_MS,BASE_RETRY_DELAY_MS*Math.pow(2,exponent));
+  const jitter=Math.floor(Math.random()*(JITTER_MAX_MS+1));
+  return new Date(Date.now()+exponential+jitter);
 }
 
 async function deliverCreatedMessage(
@@ -91,9 +95,7 @@ async function deliverCreatedMessage(
       const sid=contentSid(settings?.whatsappTemplateConfig,message.templateKey);
       if(!sid)throw new Error("No Twilio ContentSid is configured for "+message.templateKey+".");
       const messageVariables=variables(message.templateVariables);
-      if(message.mediaUrl){
-        messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig,message.templateKey)]=message.mediaUrl;
-      }
+      if(message.mediaUrl)messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig,message.templateKey)]=message.mediaUrl;
       await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:messageVariables,mediaUrl:message.mediaUrl||undefined});
     }else throw new Error("Unsupported message channel: "+message.channel);
     return tx.message.update({where:{id:message.id},data:{status:"sent",sentAt:new Date(),lastError:null,nextAttemptAt:new Date()}});
@@ -103,7 +105,7 @@ async function deliverCreatedMessage(
     if(permanentFailure(lastError)||message.attempts>=MAX_ATTEMPTS){
       return tx.message.update({where:{id:message.id},data:{status:"failed",lastError}});
     }
-    return tx.message.update({where:{id:message.id},data:{status:"queued",lastError,nextAttemptAt:nextRetryAt(message.attempts+1)}});
+    return tx.message.update({where:{id:message.id},data:{status:"queued",lastError,nextAttemptAt:nextRetryAt(message.attempts)}});
   }
 }
 
