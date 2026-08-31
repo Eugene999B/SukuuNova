@@ -12,6 +12,7 @@ type MatchInput = {
   confidence?: number;
   type: "in" | "out";
   kind: "fingerprint" | "card";
+  periodId?: string;
 };
 
 export async function matchDeviceIdentityAttendance(input: MatchInput) {
@@ -49,7 +50,8 @@ export async function matchDeviceIdentityAttendance(input: MatchInput) {
     method: input.kind,
     confidenceScore: input.confidence,
     deviceId: input.deviceId,
-    deviceAuthenticated: true
+    deviceAuthenticated: true,
+    periodId: input.periodId
   });
 
   return { status: "recorded" as const, event };
