@@ -4,7 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import TeacherTeachingWorkspace from "@/components/TeacherTeachingWorkspace";
+import TeacherTeachingWorkspaceV2 from "@/components/TeacherTeachingWorkspaceV2";
 import "@/app/globals.css";
 import "../school/staff/staff-workspace.css";
 
@@ -53,7 +53,7 @@ export default async function TeacherPortalPage({ searchParams }: Props) {
         <article className="staff-card"><div className="staff-card-head"><div><span>My teaching load</span><h3>Classes & subjects</h3><p>These relationships control what you can teach, mark and monitor.</p></div></div><div className="staff-capability-grid">{led.map((c)=><div key={c.id}><b>{c.level ? `${c.level} · ` : ""}{c.name}</b><small>Class teacher · {c._count.students} learners</small></div>)}{assignments.map((a)=><div key={`${a.class.id}-${a.subject.id}`}><b>{a.subject.name}</b><small>{a.class.level ? `${a.class.level} · ` : ""}{a.class.name} · {a.class._count.students} learners</small></div>)}{led.length===0 && assignments.length===0 ? <div><b>No teaching assignments yet</b><small>Ask the school owner to connect your staff profile to classes and subjects.</small></div> : null}</div></article>
         <article className="staff-card"><div className="staff-card-head"><div><span>Teaching actions</span><h3>Open your work areas</h3><p>Every link stays inside your teacher scope.</p></div></div><div className="staff-role-stack"><Link href="/teacher/attendance" className="staff-link-grid"><span>Take attendance</span><span>→</span></Link><Link href="/teacher?view=My%20Gradebook" className="staff-link-grid"><span>Enter marks</span><span>→</span></Link><Link href="/teacher?view=My%20Homework" className="staff-link-grid"><span>Homework & exercises</span><span>→</span></Link><Link href="/teacher?view=My%20Timetable" className="staff-link-grid"><span>My timetable</span><span>→</span></Link><Link href="/teacher?view=My%20Messages" className="staff-link-grid"><span>My messages</span><span>→</span></Link><Link href="/account/security" className="staff-link-grid"><span>Account security</span><span>→</span></Link></div></article>
       </section>
-      <TeacherTeachingWorkspace assignments={assignments.map((a) => ({ classId: a.classId, subjectId: a.subjectId, class: { name: a.class.name, level: a.class.level }, subject: { name: a.subject.name } }))} terms={data.terms} timetable={data.timetable} initialTab={initialTab(params.view)} />
+      <TeacherTeachingWorkspaceV2 assignments={assignments.map((a) => ({ classId: a.classId, subjectId: a.subjectId, class: { name: a.class.name, level: a.class.level }, subject: { name: a.subject.name } }))} terms={data.terms} timetable={data.timetable} initialTab={initialTab(params.view)} />
     </div>
   </AppShell>;
 }
