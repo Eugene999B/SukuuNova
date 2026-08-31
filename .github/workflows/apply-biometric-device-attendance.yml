@@ -1,0 +1,33 @@
+name: Apply biometric device attendance implementation
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/apply-biometric-device-attendance.py'
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply and validate product changes
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        run: |
+          python scripts/apply-biometric-device-attendance.py
+          npm ci
+          ./node_modules/.bin/prisma format
+          ./node_modules/.bin/prisma validate
+          ./node_modules/.bin/prisma generate
+          git diff --check
+          git status --short
+      - name: Commit product files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prisma/schema.prisma prisma/migrations/20260831081000_biometric_devices/migration.sql src/lib/db.ts src/lib/message-outbox.ts src/lib/attendance-service.ts src/lib/face-service.ts src/app/api/phase2/face/route.ts src/lib/device-auth.ts src/lib/device-identity-service.ts src/app/api/devices/attendance/route.ts src/app/api/school/devices/route.ts src/app/api/school/devices/identities/route.ts src/app/school/settings/devices/page.tsx src/app/school/settings/SchoolSettingsWorkspace.tsx docs/biometric-devices.md
+          git commit -m "feat: add hardware biometric attendance"
+          git push origin main
