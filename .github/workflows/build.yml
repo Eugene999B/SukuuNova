@@ -1,11 +1,14 @@
 name: Build verification
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
 permissions:
   contents: write
+
 jobs:
   build:
     if: github.actor != 'github-actions[bot]'
@@ -30,11 +33,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+
       - name: Create non-superuser test database
         env:
           PGHOST: localhost
@@ -43,51 +48,34 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sukuunova_test LOGIN NOSUPERUSER NOBYPASSRLS;"
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_test OWNER sukuunova_test;"
+
       - name: Install dependencies from lockfile
         run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
-      - name: Integrate biometric attendance once
-        run: |
-          set -euo pipefail
-          if ! grep -q '^model Device {' prisma/schema.prisma; then
-            python scripts/apply-biometric-device-attendance.py
-            mkdir -p prisma/migrations/20260831081000_biometric_devices
-            cat > prisma/migrations/20260831081000_biometric_devices/migration.sql <<'SQL'
-ALTER TABLE "AttendanceEvent" ALTER COLUMN "recordedBy" DROP NOT NULL;
-ALTER TABLE "Device" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Device" FORCE ROW LEVEL SECURITY;
-CREATE POLICY "Device_tenant_isolation" ON "Device" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());
-ALTER TABLE "DeviceIdentity" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "DeviceIdentity" FORCE ROW LEVEL SECURITY;
-CREATE POLICY "DeviceIdentity_tenant_isolation" ON "DeviceIdentity" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());
-ALTER TABLE "DeviceAttendanceReceipt" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "DeviceAttendanceReceipt" FORCE ROW LEVEL SECURITY;
-CREATE POLICY "DeviceAttendanceReceipt_tenant_isolation" ON "DeviceAttendanceReceipt" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());
-SQL
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add prisma/schema.prisma prisma/migrations/20260831081000_biometric_devices src/lib/db.ts src/lib/message-outbox.ts src/lib/attendance-service.ts src/lib/face-service.ts src/app/api/phase2/face/route.ts
-            git commit -m 'feat: integrate biometric attendance'
-            git push
-          else
-            echo 'Biometric schema already integrated.'
-          fi
+
       - name: Generate Prisma client
         run: npx prisma generate
+
       - name: Validate Prisma schema
         run: npx prisma validate
+
       - name: Apply migrations
         run: npm run db:migrate
+
       # Verification deliberately runs from the exact commit that triggered this workflow.
       - name: Typecheck
         run: npx tsc --noEmit --pretty false
+
       - name: Lint
         run: npm run lint
+
       - name: Tests
         run: npm run test
+
       - name: Build application
         env:
           NODE_ENV: production
         run: npm run build
+
       - name: Release to Railway
         env:
           NODE_ENV: production
