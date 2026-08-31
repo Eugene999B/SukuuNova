@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - 'scripts/apply-biometric-device-attendance.py'
+      - '.github/workflows/apply-biometric-device-attendance.yml'
 permissions:
   contents: write
 jobs:
