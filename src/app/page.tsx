@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Building2, GraduationCap, LogIn, ShieldCheck, Users, WalletCards } from "lucide-react";
 import "./home.css";
+import "./home-redesign.css";
 import { HomeLeadChat } from "@/components/HomeLeadChat";
 import { HomePresence } from "@/components/HomePresence";
 import { HomeProductPreview } from "@/components/HomeProductPreview";
