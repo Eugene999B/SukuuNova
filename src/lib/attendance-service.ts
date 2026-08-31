@@ -211,6 +211,7 @@ export async function finalizeStudentAttendance(
   for (const student of students) {
     if (student.attendanceEvents.length > 0) continue;
     for (const link of student.guardians) {
+      if (!link.guardian.phone) continue;
       await enqueueSms(tx, {
         schoolId: input.schoolId,
         recipientType: "guardian",
