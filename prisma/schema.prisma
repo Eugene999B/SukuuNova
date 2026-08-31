@@ -279,10 +279,28 @@ model AcademicYear {
   endDate   DateTime
   isLocked  Boolean  @default(false)
   school    School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  events    CalendarEvent[]
   terms     Term[]
   @@unique([id, schoolId])
   @@unique([schoolId, name])
   @@index([schoolId])
+}
+
+model CalendarEvent {
+  id                String       @id @default(cuid())
+  schoolId          String
+  academicYearId    String
+  type              String
+  name              String
+  startDate         DateTime
+  endDate           DateTime
+  affectsAttendance Boolean      @default(true)
+  affectsTransport  Boolean      @default(false)
+  school            School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYear      AcademicYear @relation(fields: [academicYearId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  @@unique([id, schoolId])
+  @@index([schoolId])
+  @@index([schoolId, startDate, endDate])
 }
 
 model Term {
