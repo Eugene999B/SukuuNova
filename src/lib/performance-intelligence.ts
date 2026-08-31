@@ -11,26 +11,41 @@ export type PerformanceRow = {
   complete: boolean;
 };
 
-export async function getClassSubjectIntelligence(
-  tx: TenantDb,
-  input: { classId: string; subjectId: string; termId: string; rules: AssessmentRules }
-) {
+type RankingInput = {
+  classId: string;
+  subjectId: string;
+  termId: string;
+  rules: AssessmentRules;
+  scope?: "class" | "year_group";
+};
+
+export async function getClassSubjectIntelligence(tx: TenantDb, input: RankingInput) {
+  const anchorClass = await tx.class.findUnique({ where: { id: input.classId }, select: { id: true, level: true } });
+  if (!anchorClass) return emptyResult(input);
+
+  const classIds = input.scope === "year_group" && anchorClass.level
+    ? (await tx.class.findMany({ where: { level: anchorClass.level }, select: { id: true } })).map((row) => row.id)
+    : [input.classId];
+
   const [students, assessments] = await Promise.all([
     tx.student.findMany({
-      where: { classId: input.classId, status: "active" },
+      where: { classId: { in: classIds }, status: "active" },
       select: { id: true, name: true, admissionNo: true },
       orderBy: { name: "asc" }
     }),
     tx.assessment.findMany({
-      where: { classId: input.classId, subjectId: input.subjectId, termId: input.termId },
+      where: { classId: { in: classIds }, subjectId: input.subjectId, termId: input.termId },
       select: { id: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true } } },
-      orderBy: { name: "asc" }
+      orderBy: [{ classId: "asc" }, { name: "asc" }]
     })
   ]);
 
   const rows: PerformanceRow[] = students.map((student) => {
+    const studentClassAssessments = assessments.filter((assessment) => {
+      return assessment.scores.some((score) => score.studentId === student.id);
+    });
     const result = calculateSubjectResult(
-      assessments.map((assessment) => ({
+      studentClassAssessments.map((assessment) => ({
         id: assessment.id,
         name: assessment.name,
         type: assessment.type,
@@ -51,7 +66,10 @@ export async function getClassSubjectIntelligence(
     };
   });
 
-  const ranked = rows.filter((row) => row.total != null).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
+  const ranked = rows.filter((row) => row.total != null).sort((a, b) => {
+    if ((b.total ?? -1) !== (a.total ?? -1)) return (b.total ?? -1) - (a.total ?? -1);
+    return a.studentName.localeCompare(b.studentName);
+  });
   let position = 0;
   let previous: number | null = null;
   for (let index = 0; index < ranked.length; index += 1) {
@@ -71,6 +89,7 @@ export async function getClassSubjectIntelligence(
     subjectId: input.subjectId,
     classId: input.classId,
     termId: input.termId,
+    scope: input.scope ?? "class",
     rows,
     summary: {
       totalStudents: rows.length,
@@ -82,5 +101,17 @@ export async function getClassSubjectIntelligence(
       needsAttention: needsAttention.map((row) => ({ studentId: row.studentId, studentName: row.studentName, total: row.total, grade: row.grade, complete: row.complete }))
     },
     assessments: assessments.map((assessment) => ({ id: assessment.id, name: assessment.name, type: assessment.type, maxScore: Number(assessment.maxScore), weight: Number(assessment.weight) }))
+  };
+}
+
+function emptyResult(input: RankingInput) {
+  return {
+    subjectId: input.subjectId,
+    classId: input.classId,
+    termId: input.termId,
+    scope: input.scope ?? "class",
+    rows: [] as PerformanceRow[],
+    summary: { totalStudents: 0, completeStudents: 0, completionRate: 100, average: null, highest: null, lowest: null, needsAttention: [] },
+    assessments: [] as Array<{ id: string; name: string; type: string; maxScore: number; weight: number }>
   };
 }
