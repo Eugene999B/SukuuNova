@@ -8,9 +8,9 @@ import { ChevronDown, type LucideIcon } from "lucide-react";
 export type NavItem = { icon: LucideIcon; label: string; href: string; primary?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
 
-export function SidebarNav({ groups, active }: { groups: NavGroup[]; active: string }) {
+export function SidebarNav({ groups, active, storageScope = "default" }: { groups: NavGroup[]; active: string; storageScope?: string }) {
   const pathname = usePathname();
-  const storageKey = "sukuunova-sidebar-groups";
+  const storageKey = `sukuunova-sidebar-groups:${storageScope}`;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -20,7 +20,7 @@ export function SidebarNav({ groups, active }: { groups: NavGroup[]; active: str
     } catch {
       setCollapsed({});
     }
-  }, []);
+  }, [storageKey]);
 
   const activeLabel = useMemo(() => {
     const matches = groups
