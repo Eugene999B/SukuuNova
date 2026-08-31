@@ -634,9 +634,11 @@ model Message {
   nextAttemptAt DateTime @default(now())
   sentAt DateTime?
   lastError String?
+  idempotencyKey String
   createdAt DateTime @default(now())
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   @@unique([id, schoolId])
+  @@unique([schoolId, idempotencyKey])
   @@index([schoolId])
   @@index([status, nextAttemptAt])
 }
