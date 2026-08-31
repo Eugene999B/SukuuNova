@@ -27,7 +27,7 @@ def update_model(path, model_name, transform):
     block = match.group(0)
     new_block = transform(block)
     if new_block == block:
-        raise SystemExit(f"No change produced for Prisma model {model_name}")
+        return
     write(path, content[:match.start()] + new_block + content[match.end():])
 
 schema = 'prisma/schema.prisma'
