@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight, CheckCircle2, GraduationCap, School, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -36,9 +37,9 @@ export default async function PeoplePage() {
             <h3>Build the school around real relationships.</h3>
             <p>Students are the learner records, Guardians are the family relationship, Staff are the workforce accounts, and Classes provide the academic operating context. Everything downstream can reference these records instead of duplicating them.</p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-              <Link className="module-hero-button" href="/school/students">Open student register →</Link>
-              <Link className="module-hero-button" href="/school/guardians">Manage guardians →</Link>
-              <Link className="module-hero-button" href="/school/staff">Open staff →</Link>
+              <Link className="module-hero-button" href="/school/students">Open student register <ArrowRight size={13} aria-hidden="true" /></Link>
+              <Link className="module-hero-button" href="/school/guardians">Manage guardians <ArrowRight size={13} aria-hidden="true" /></Link>
+              <Link className="module-hero-button" href="/school/staff">Open staff <ArrowRight size={13} aria-hidden="true" /></Link>
             </div>
           </div>
           <div className="module-setup-list">
@@ -59,19 +60,19 @@ export default async function PeoplePage() {
 
         <div className="module-split">
           <section className="module-card">
-            <div className="module-section-title"><div><span>Learner flow</span><h3>Recent students</h3><p>Jump directly into Student 360, class placement and downstream records.</p></div><Link href="/school/students">View all →</Link></div>
-            <div className="module-table-wrap"><table><thead><tr><th>Student</th><th>Placement</th><th>Status</th></tr></thead><tbody>{data.recentStudents.length ? data.recentStudents.map((student) => <tr key={student.id}><td style={{ padding: 12 }}><Link href={`/school/students/${student.id}`}><strong>{student.name}</strong></Link><div style={{ color: "#60787d", fontSize: 8 }}>{student.admissionNo}</div></td><td style={{ padding: 12 }}>{student.class ? `${student.class.level ?? ""}${student.class.level ? " · " : ""}${student.class.name}` : "Needs placement"}</td><td style={{ padding: 12 }}>{student.status}</td></tr>) : <tr><td colSpan={3}><div className="module-empty"><div className="module-empty-mark">◎</div><strong>No student activity yet</strong><p>The register is empty. Start by creating the first learner.</p></div></td></tr>}</tbody></table></div>
+            <div className="module-section-title"><div><span>Learner flow</span><h3>Recent students</h3><p>Jump directly into Student 360, class placement and downstream records.</p></div><Link href="/school/students">View all <ArrowRight size={12} aria-hidden="true" /></Link></div>
+            <div className="module-table-wrap"><table><thead><tr><th>Student</th><th>Placement</th><th>Status</th></tr></thead><tbody>{data.recentStudents.length ? data.recentStudents.map((student) => <tr key={student.id}><td style={{ padding: 12 }}><Link href={`/school/students/${student.id}`}><strong>{student.name}</strong></Link><div style={{ color: "#60787d", fontSize: 8 }}>{student.admissionNo}</div></td><td style={{ padding: 12 }}>{student.class ? `${student.class.level ?? ""}${student.class.level ? " · " : ""}${student.class.name}` : "Needs placement"}</td><td style={{ padding: 12 }}>{student.status}</td></tr>) : <tr><td colSpan={3}><div className="module-empty"><div className="module-empty-mark"><GraduationCap size={17} aria-hidden="true" /></div><strong>No student activity yet</strong><p>The register is empty. Start by creating the first learner.</p></div></td></tr>}</tbody></table></div>
           </section>
 
           <section className="module-card">
-            <div className="module-section-title"><div><span>Family network</span><h3>Guardian coverage</h3><p>Family records should always map to explicit child relationships.</p></div><Link href="/school/guardians">Open directory →</Link></div>
-            <div className="module-workflow">{data.guardians.slice(0, 6).map((guardian) => <div className="module-workflow-step" key={guardian.id}><span>{guardian.students.length}</span><div><strong>{guardian.name}</strong><small>{guardian.students.length ? guardian.students.map((item) => item.student.name).join(", ") : "No children linked"}{guardian.userId ? " · Portal enabled" : " · Portal not provisioned"}</small></div></div>)}{!data.guardians.length ? <div className="module-empty"><div className="module-empty-mark">◌</div><strong>No guardians yet</strong><p>Create guardian profiles from the family directory.</p></div> : null}</div>
+            <div className="module-section-title"><div><span>Family network</span><h3>Guardian coverage</h3><p>Family records should always map to explicit child relationships.</p></div><Link href="/school/guardians">Open directory <ArrowRight size={12} aria-hidden="true" /></Link></div>
+            <div className="module-workflow">{data.guardians.slice(0, 6).map((guardian) => <div className="module-workflow-step" key={guardian.id}><span>{guardian.students.length}</span><div><strong>{guardian.name}</strong><small>{guardian.students.length ? guardian.students.map((item) => item.student.name).join(", ") : "No children linked"}{guardian.userId ? " · Portal enabled" : " · Portal not provisioned"}</small></div></div>)}{!data.guardians.length ? <div className="module-empty"><div className="module-empty-mark"><Users size={17} aria-hidden="true" /></div><strong>No guardians yet</strong><p>Create guardian profiles from the family directory.</p></div> : null}</div>
           </section>
         </div>
 
         <section className="module-card">
-          <div className="module-section-title"><div><span>School structure</span><h3>Classes are the connecting unit</h3><p>Every class can become the shared context for attendance, subjects, timetable, gradebook and reporting.</p></div><Link href="/school/classes">Manage classes →</Link></div>
-          <div className="module-workflow">{data.classes.map((schoolClass) => <div className="module-workflow-step" key={schoolClass.id}><span>{schoolClass._count.students}</span><div><strong>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</strong><small>{schoolClass.classTeacher?.name ?? "No class teacher"} · {schoolClass._count.subjectAssignments} subject assignments · <Link href={`/school/classes?class=${schoolClass.id}`}>open group</Link></small></div></div>)}{!data.classes.length ? <div className="module-empty"><div className="module-empty-mark">⌂</div><strong>No class groups yet</strong><p>Create the academic structure before building class-based workflows.</p><Link href="/school/classes?action=create" className="module-hero-button">Create first class →</Link></div> : null}</div>
+          <div className="module-section-title"><div><span>School structure</span><h3>Classes are the connecting unit</h3><p>Every class can become the shared context for attendance, subjects, timetable, gradebook and reporting.</p></div><Link href="/school/classes">Manage classes <ArrowRight size={12} aria-hidden="true" /></Link></div>
+          <div className="module-workflow">{data.classes.map((schoolClass) => <div className="module-workflow-step" key={schoolClass.id}><span>{schoolClass._count.students}</span><div><strong>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</strong><small>{schoolClass.classTeacher?.name ?? "No class teacher"} · {schoolClass._count.subjectAssignments} subject assignments · <Link href={`/school/classes?class=${schoolClass.id}`}>open group</Link></small></div></div>)}{!data.classes.length ? <div className="module-empty"><div className="module-empty-mark"><School size={17} aria-hidden="true" /></div><strong>No class groups yet</strong><p>Create the academic structure before building class-based workflows.</p><Link href="/school/classes?action=create" className="module-hero-button">Create first class <ArrowRight size={13} aria-hidden="true" /></Link></div> : null}</div>
         </section>
 
         <section className="module-card">
