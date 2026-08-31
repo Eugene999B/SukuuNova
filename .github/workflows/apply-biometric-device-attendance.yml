@@ -18,6 +18,7 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: |
+          set -euo pipefail
           python scripts/apply-biometric-device-attendance.py
           npm ci
           ./node_modules/.bin/prisma format
