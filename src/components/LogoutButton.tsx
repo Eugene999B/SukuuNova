@@ -3,11 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function LogoutButton({
-  universe
-}: {
-  universe: "school" | "platform";
-}) {
+export function LogoutButton({ universe }: { universe: "school" | "platform" | "guardian" }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
