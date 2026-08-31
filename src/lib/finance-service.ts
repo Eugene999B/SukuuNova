@@ -10,6 +10,13 @@ export async function createFeeItem(tx: TenantDb, input: {
 }) {
   await requirePermission(tx, input.actorId, "finance:write");
   if (input.amount <= 0) throw new AppError("Fee amount must be positive.", 400, "INVALID_AMOUNT");
+  const term = await tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, isLocked: true } });
+  if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
+  if (term.isLocked) throw new AppError("Locked terms cannot receive new fee items.", 409, "TERM_LOCKED");
+  if (input.classId) {
+    const klass = await tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId }, select: { id: true } });
+    if (!klass) throw new AppError("Class not found.", 404, "CLASS_NOT_FOUND");
+  }
   const item = await tx.feeItem.create({ data: {
     schoolId: input.schoolId, termId: input.termId, classId: input.classId,
     name: input.name.trim(), amount: new Prisma.Decimal(input.amount)
@@ -25,15 +32,17 @@ export async function generateInvoice(tx: TenantDb, input: {
   schoolId: string; actorId: string; studentId: string; termId: string;
 }) {
   await requirePermission(tx, input.actorId, "invoices:create");
-  const student = await tx.student.findUnique({
-    where: { id: input.studentId },
+  const student = await tx.student.findFirst({
+    where: { id: input.studentId, schoolId: input.schoolId },
     include: { guardians: { where: { isPrimary: true }, include: { guardian: true } } }
   });
   if (!student) throw new AppError("Student not found.", 404, "NOT_FOUND");
-  const existing = await tx.invoice.findUnique({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } } });
+  const term = await tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, isLocked: true } });
+  if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
+  const existing = await tx.invoice.findFirst({ where: { studentId: input.studentId, termId: input.termId, schoolId: input.schoolId } });
   if (existing) throw new AppError("This student already has an invoice for the selected term.", 409, "INVOICE_EXISTS");
   const items = await tx.feeItem.findMany({
-    where: { termId: input.termId, OR: [{ classId: null }, { classId: student.classId ?? "__none__" }] }
+    where: { schoolId: input.schoolId, termId: input.termId, OR: [{ classId: null }, { classId: student.classId ?? "__none__" }] }
   });
   if (items.length === 0) throw new AppError("No fee items apply to this student.", 409, "NO_FEE_ITEMS");
   const total = items.reduce((sum, item) => sum.plus(item.amount), new Prisma.Decimal(0));
@@ -62,9 +71,9 @@ export async function generateInvoice(tx: TenantDb, input: {
   return invoice;
 }
 
-async function refreshInvoiceStatus(tx: TenantDb, invoiceId: string) {
-  const invoice = await tx.invoice.findUnique({
-    where: { id: invoiceId }, include: { payments: { include: { reversals: true } } }
+async function refreshInvoiceStatus(tx: TenantDb, invoiceId: string, schoolId?: string) {
+  const invoice = await tx.invoice.findFirst({
+    where: schoolId ? { id: invoiceId, schoolId } : { id: invoiceId }, include: { payments: { include: { reversals: true } } }
   });
   if (!invoice) throw new AppError("Invoice not found.", 404, "NOT_FOUND");
   const paid = invoice.payments.reduce(
@@ -73,6 +82,7 @@ async function refreshInvoiceStatus(tx: TenantDb, invoiceId: string) {
     ),
     new Prisma.Decimal(0)
   );
+  if (paid.lessThan(0)) throw new AppError("Invoice accounting invariant violated.", 409, "NEGATIVE_PAID_BALANCE");
   const status = paid.greaterThanOrEqualTo(invoice.totalAmount)
     ? "paid" : paid.greaterThan(0) ? "part_paid" : "unpaid";
   await tx.invoice.update({ where: { id: invoice.id }, data: { status } });
@@ -86,26 +96,21 @@ export async function recordPayment(tx: TenantDb, input: {
   await requirePermission(tx, input.actorId, "payments:record");
   if (input.amount <= 0) throw new AppError("Payment amount must be positive.", 400, "INVALID_AMOUNT");
   const reference = input.reference?.trim() || undefined;
-  if ((input.method === "momo" || input.method === "bank" || input.method === "cheque") && !reference) {
-    throw new AppError("A transaction/reference number is required for this payment method.", 400, "REFERENCE_REQUIRED");
-  }
+  if ((input.method === "momo" || input.method === "bank" || input.method === "cheque") && !reference) throw new AppError("A transaction/reference number is required for this payment method.", 400, "REFERENCE_REQUIRED");
 
+  const current = await refreshInvoiceStatus(tx, input.invoiceId, input.schoolId);
+  if (current.status === "paid") throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
+  const outstanding = current.invoice.totalAmount.minus(current.paid);
   const amount = new Prisma.Decimal(input.amount);
+  if (amount.greaterThan(outstanding)) throw new AppError("Payment exceeds the outstanding invoice balance. Handle the extra amount as an approved credit or refund.", 409, "OVERPAYMENT_REQUIRES_REVIEW");
+
   if (reference) {
-    const existing = await tx.payment.findFirst({
-      where: { reference },
-      select: { id: true, invoiceId: true, amount: true, method: true }
-    });
+    const existing = await tx.payment.findFirst({ where: { schoolId: input.schoolId, reference }, select: { id: true, invoiceId: true, amount: true, method: true } });
     if (existing) {
       if (existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) return existing;
       throw new AppError("This payment reference has already been used for a different transaction.", 409, "DUPLICATE_PAYMENT_REFERENCE");
     }
   }
-
-  const current = await refreshInvoiceStatus(tx, input.invoiceId);
-  if (current.status === "paid") throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
-  const outstanding = current.invoice.totalAmount.minus(current.paid);
-  if (amount.greaterThan(outstanding)) throw new AppError("Payment exceeds the outstanding invoice balance. Handle the extra amount as an approved credit or refund.", 409, "OVERPAYMENT_REQUIRES_REVIEW");
 
   let payment;
   try {
@@ -115,15 +120,15 @@ export async function recordPayment(tx: TenantDb, input: {
     } });
   } catch (error) {
     if ((error as { code?: string }).code === "P2002" && reference) {
-      const existing = await tx.payment.findFirst({ where: { reference }, select: { id: true, invoiceId: true, amount: true, method: true } });
+      const existing = await tx.payment.findFirst({ where: { schoolId: input.schoolId, reference }, select: { id: true, invoiceId: true, amount: true, method: true } });
       if (existing && existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) return existing;
       throw new AppError("This payment reference has already been used for a different transaction.", 409, "DUPLICATE_PAYMENT_REFERENCE");
     }
     throw error;
   }
 
-  const result = await refreshInvoiceStatus(tx, input.invoiceId);
-  const guardians = await tx.studentGuardian.findMany({ where: { studentId: result.invoice.studentId, isPrimary: true }, include: { guardian: true } });
+  const result = await refreshInvoiceStatus(tx, input.invoiceId, input.schoolId);
+  const guardians = await tx.studentGuardian.findMany({ where: { schoolId: input.schoolId, studentId: result.invoice.studentId, isPrimary: true }, include: { guardian: true } });
   for (const link of guardians) {
     if (!link.guardian.phone) continue;
     await enqueueSms(tx, {
@@ -136,10 +141,7 @@ export async function recordPayment(tx: TenantDb, input: {
       templateVariables: { "1": payment.amount.toFixed(2), "2": result.status, "3": input.invoiceId }
     });
   }
-  await appendSchoolAudit(tx, {
-    schoolId: input.schoolId, actorId: input.actorId, action: "payment.recorded",
-    entityType: "Payment", entityId: payment.id, after: payment
-  });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "payment.recorded", entityType: "Payment", entityId: payment.id, after: payment });
   return payment;
 }
 
@@ -149,7 +151,7 @@ export async function reversePayment(tx: TenantDb, input: {
   await requirePermission(tx, input.actorId, "payments:reverse");
   const reason = input.reason.trim();
   if (reason.length < 2) throw new AppError("A reason is required when reversing a payment.", 400, "REVERSAL_REASON_REQUIRED");
-  const payment = await tx.payment.findUnique({ where: { id: input.paymentId }, include: { reversals: true } });
+  const payment = await tx.payment.findFirst({ where: { id: input.paymentId, schoolId: input.schoolId }, include: { reversals: true } });
   if (!payment) throw new AppError("Payment not found.", 404, "NOT_FOUND");
   const reversed = payment.reversals.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
   const amount = new Prisma.Decimal(input.amount);
@@ -158,10 +160,7 @@ export async function reversePayment(tx: TenantDb, input: {
     schoolId: input.schoolId, paymentId: payment.id, amount,
     reason, reversedBy: input.actorId
   } });
-  await refreshInvoiceStatus(tx, payment.invoiceId);
-  await appendSchoolAudit(tx, {
-    schoolId: input.schoolId, actorId: input.actorId, action: "payment.reversed",
-    entityType: "PaymentReversal", entityId: reversal.id, after: reversal
-  });
+  await refreshInvoiceStatus(tx, payment.invoiceId, input.schoolId);
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "payment.reversed", entityType: "PaymentReversal", entityId: reversal.id, after: reversal });
   return reversal;
 }
