@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CircleCheckBig, GraduationCap, UsersRound, WalletCards, ArrowRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { DataCard } from "@/components/ui/DataCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { withTenant } from "@/lib/db";
 import { requireGuardianSession } from "@/lib/guardian-auth";
@@ -104,8 +105,4 @@ export default async function GuardianModulePage({ params }: Props) {
       )}
     </AppShell>
   );
-}
-
-function DataCard({ label, value, meta, icon: Icon }: { label: string; value: React.ReactNode; meta: string; icon: typeof UsersRound }) {
-  return <article className="sn-data-card"><div className="sn-data-card-top"><span className="sn-data-card-label">{label}</span><span className="sn-data-card-icon"><Icon size={16} aria-hidden="true" /></span></div><strong className="sn-data-card-value">{value}</strong><span className="sn-data-card-meta">{meta}</span></article>;
 }
