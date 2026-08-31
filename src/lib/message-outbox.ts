@@ -1,8 +1,7 @@
 import type { Prisma } from "@prisma/client";
-import type { TenantDb } from "./db";
-import { db, withTenant } from "./db";
+import { db, withTenant } from "@/lib/db";
 
-export type NotificationTemplateKey="student_absence"|"student_attendance"|"staff_late"|"invoice_created"|"payment_received"|"report_card_ready"|"transport_boarding"|"emergency_broadcast"|"school_announcement";
+type NotificationTemplateKey="student_absence"|"student_attendance"|"staff_late"|"invoice_created"|"payment_received"|"report_card_ready"|"transport_boarding"|"emergency_broadcast"|"school_announcement";
 type RecipientType="guardian"|"staff"|"user";
 type Channel="sms"|"whatsapp";
 
@@ -12,6 +11,9 @@ type NotificationInput={
 };
 
 type NotificationSenders={sms?:SmsSender;whatsapp?:WhatsAppSender};
+
+const MAX_ATTEMPTS=5;
+const RETRY_DELAYS_MS=[0,30_000,5*60_000,30*60_000,2*60*60_000];
 
 function configuredChannels(value:Prisma.JsonValue|null|undefined):Channel[]{
   const candidate = !Array.isArray(value) && value && typeof value === "object" ? (value as Record<string,Prisma.JsonValue>).channels : value;
@@ -48,7 +50,7 @@ export const httpSmsSender:SmsSender=async({phone,body,senderId})=>{
   const url=process.env.SMS_PROVIDER_URL,token=process.env.SMS_PROVIDER_TOKEN;
   if(!url||!token)throw new Error("SMS provider is not configured.");
   const response=await fetch(url,{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+token},body:JSON.stringify({to:phone,body,senderId:senderId||process.env.SMS_SENDER_ID})});
-  if(!response.ok)throw new Error("SMS provider returned HTTP "+response.status);
+  if(!response.ok)throw new Error(`SMS provider HTTP ${response.status}`);
 };
 
 export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,variables})=>{
@@ -56,7 +58,7 @@ export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,var
   if(!accountSid||!authToken||!from)throw new Error("Twilio WhatsApp is not configured.");
   const form=new URLSearchParams({To:phone.startsWith("whatsapp:")?phone:"whatsapp:"+phone,From:from.startsWith("whatsapp:")?from:"whatsapp:"+from,ContentSid:sid,ContentVariables:JSON.stringify(variables)});
   const response=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+encodeURIComponent(accountSid)+"/Messages.json",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded",authorization:"Basic "+Buffer.from(accountSid+":"+authToken).toString("base64")},body:form});
-  if(!response.ok)throw new Error("Twilio WhatsApp returned HTTP "+response.status);
+  if(!response.ok)throw new Error(`Twilio WhatsApp HTTP ${response.status}`);
 };
 
 function variables(value:Prisma.JsonValue|null){
@@ -64,9 +66,18 @@ function variables(value:Prisma.JsonValue|null){
   return Object.fromEntries(Object.entries(value).filter((entry):entry is [string,string]=>typeof entry[1]==="string"));
 }
 
+function permanentFailure(message:string){
+  return /HTTP (400|401|403|404)\b|no .*configured|no .*template|unsupported message channel|unavailable/i.test(message);
+}
+
+function nextRetryAt(attempt:number){
+  const index=Math.min(Math.max(attempt-1,0),RETRY_DELAYS_MS.length-1);
+  return new Date(Date.now()+RETRY_DELAYS_MS[index]);
+}
+
 async function deliverCreatedMessage(
-  tx:TenantDb,
-  message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null},
+  tx:Prisma.TransactionClient,
+  message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null;attempts:number},
   settings:{smsSenderId?:string|null;whatsappTemplateConfig?:Prisma.JsonValue|null}|null|undefined,
   senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}
 ){
@@ -83,24 +94,27 @@ async function deliverCreatedMessage(
       if(message.mediaUrl){
         messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig,message.templateKey)]=message.mediaUrl;
       }
-      await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:messageVariables});
+      await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:messageVariables,mediaUrl:message.mediaUrl||undefined});
     }else throw new Error("Unsupported message channel: "+message.channel);
-    return tx.message.update({where:{id:message.id},data:{status:"sent",sentAt:new Date(),lastError:null}});
+    return tx.message.update({where:{id:message.id},data:{status:"sent",sentAt:new Date(),lastError:null,nextAttemptAt:new Date()}});
   }catch(error){
     const lastError=error instanceof Error?error.message.slice(0,500):"Unknown message error";
-    console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.schoolId,lastError});
-    return tx.message.update({where:{id:message.id},data:{status:"failed",lastError}});
+    console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.schoolId,lastError,attempts:message.attempts});
+    if(permanentFailure(lastError)||message.attempts>=MAX_ATTEMPTS){
+      return tx.message.update({where:{id:message.id},data:{status:"failed",lastError}});
+    }
+    return tx.message.update({where:{id:message.id},data:{status:"queued",lastError,nextAttemptAt:nextRetryAt(message.attempts+1)}});
   }
 }
 
-export async function enqueueNotification(tx:TenantDb,input:NotificationInput,senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}){
+export async function enqueueNotification(tx:Prisma.TransactionClient,input:NotificationInput){
   const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}});
   const channels=configuredChannels(settings?.notificationChannels);
   const messages=[];
   for(const channel of channels){
     if(channel==="whatsapp"&&!input.templateKey)continue;
-    const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"sending",attempts:1,nextAttemptAt:new Date()}});
-    messages.push(await deliverCreatedMessage(tx,message,settings,senders));
+    const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt:new Date()}});
+    messages.push(message);
   }
   return messages;
 }
@@ -116,7 +130,8 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
       const claimed=await withTenant(directory.schoolId,tx=>tx.message.updateMany({where:{id:job.id,status:"queued"},data:{status:"sending",attempts:{increment:1}}}));
       if(claimed.count===0)continue;
       const settings=await withTenant(directory.schoolId,tx=>tx.schoolSettings.findUnique({where:{schoolId:directory.schoolId}}));
-      await withTenant(directory.schoolId,tx=>deliverCreatedMessage(tx,{...job,schoolId:directory.schoolId},settings,senders));
+      const claimedJob={...job,schoolId:directory.schoolId,attempts:job.attempts+1};
+      await withTenant(directory.schoolId,tx=>deliverCreatedMessage(tx,claimedJob,settings,senders));
       processed++;
     }
   }
