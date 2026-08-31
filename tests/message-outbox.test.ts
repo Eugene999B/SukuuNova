@@ -1,47 +1,60 @@
 import { describe, expect, it } from "vitest";
-import { Prisma } from "@prisma/client";
-import { processMessageBatchOnce } from "../src/lib/message-outbox";
+import { enqueueNotification, processMessageBatchOnce } from "../src/lib/message-outbox";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 
 describe("message outbox", () => {
   it("queues a notification without calling an external provider", async () => {
     const fixture = await createTenantFixture();
-    let providerCalls = 0;
 
     await withTenant(fixture.schoolId, async (tx) => {
-      const rows = await tx.message.createMany({
-        data: [{
+      const rows = await enqueueNotification(tx, {
+        schoolId: fixture.schoolId,
+        recipientType: "user",
+        recipientId: fixture.memberId,
+        recipientPhone: "+233240000000",
+        body: "Queued test",
+        templateKey: "school_announcement"
+      });
+
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((row) => row.status === "queued")).toBe(true);
+      expect(await tx.message.count({ where: { recipientPhone: "+233240000000" } })).toBe(rows.length);
+    });
+  });
+
+  it("delivers queued work in the worker and records the attempt", async () => {
+    const fixture = await createTenantFixture();
+    await withTenant(fixture.schoolId, async (tx) => {
+      await tx.message.create({
+        data: {
           schoolId: fixture.schoolId,
           channel: "sms",
           recipientType: "user",
           recipientId: fixture.memberId,
-          recipientPhone: "+233240000000",
-          body: "Queued test",
+          recipientPhone: "+233241000000",
+          body: "Delivery test",
           status: "queued",
           attempts: 0,
           nextAttemptAt: new Date()
-        }]
+        }
       });
-      expect(rows.count).toBe(1);
     });
 
+    let providerCalls = 0;
     await processMessageBatchOnce({
       sms: async () => { providerCalls += 1; }
     }, 1);
 
     expect(providerCalls).toBe(1);
     await withTenant(fixture.schoolId, async (tx) => {
-      const message = await tx.message.findFirst({
-        where: { recipientPhone: "+233240000000" },
-        orderBy: { createdAt: "desc" }
-      });
+      const message = await tx.message.findFirst({ where: { recipientPhone: "+233241000000" } });
       expect(message?.status).toBe("sent");
       expect(message?.attempts).toBe(1);
     });
   });
 
-  it("requeues a temporary provider failure until the retry limit", async () => {
+  it("requeues a temporary provider failure", async () => {
     const fixture = await createTenantFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.message.create({
@@ -64,10 +77,7 @@ describe("message outbox", () => {
     }, 1);
 
     await withTenant(fixture.schoolId, async (tx) => {
-      const message = await tx.message.findFirst({
-        where: { recipientPhone: "+233250000000" },
-        orderBy: { createdAt: "desc" }
-      });
+      const message = await tx.message.findFirst({ where: { recipientPhone: "+233250000000" } });
       expect(message?.status).toBe("queued");
       expect(message?.attempts).toBe(1);
       expect(message?.nextAttemptAt.getTime()).toBeGreaterThan(Date.now());
@@ -97,10 +107,7 @@ describe("message outbox", () => {
     }, 1);
 
     await withTenant(fixture.schoolId, async (tx) => {
-      const message = await tx.message.findFirst({
-        where: { recipientPhone: "+233260000000" },
-        orderBy: { createdAt: "desc" }
-      });
+      const message = await tx.message.findFirst({ where: { recipientPhone: "+233260000000" } });
       expect(message?.status).toBe("failed");
       expect(message?.lastError).toContain("HTTP 400");
     });
