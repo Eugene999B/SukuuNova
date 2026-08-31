@@ -1,0 +1,40 @@
+name: Repair access suspense
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Repair Access page Suspense boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/app/school/settings/access/page.tsx')
+          s = p.read_text()
+          original = s
+          if 'import { Suspense, useEffect, useMemo, useState } from "react";' not in s:
+              s = s.replace('import { useEffect, useMemo, useState } from "react";', 'import { Suspense, useEffect, useMemo, useState } from "react";')
+          if 'function AccessPageInner()' not in s:
+              s = s.replace('export default function AccessPage() {', 'function AccessPageInner() {')
+              s += '\n\nexport default function AccessPage() {\n  return (\n    <Suspense fallback={<div className="access-shell" aria-busy="true">Loading access settings…</div>}>\n      <AccessPageInner />\n    </Suspense>\n  );\n}\n'
+          if s == original:
+              raise SystemExit('Access page already repaired or unexpected source shape; nothing to do.')
+          p.write_text(s)
+          PY
+      - name: Commit repair and remove workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/app/school/settings/access/page.tsx
+          git commit -m 'fix(settings): suspend access search params consumer' || exit 0
+          git rm .github/workflows/repair-access-suspense.yml
+          git commit -m 'chore: remove temporary access repair workflow'
+          git push
