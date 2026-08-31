@@ -17,7 +17,6 @@ import "./app-shell.css";
 
 type Universe = "school" | "platform" | "teacher";
 type Props = { universe: Universe; title: string; subtitle: string; active?: string; schoolName?: string; schoolCode?: string; userName?: string; role?: string; children: React.ReactNode };
-
 type Group = { label: string; items: Array<{ icon: LucideIcon; label: string; href: string; primary?: boolean }> };
 
 const schoolGroups: Group[] = [
@@ -140,26 +139,28 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [compact, setCompact] = useState(false);
 
+  const preferenceScope = `${universe}:${schoolCode || "platform"}:${userName || "user"}`.replace(/\s+/g, "_").toLowerCase();
+
   useEffect(() => {
-    try { setCompact(localStorage.getItem("sukuunova-sidebar-compact") === "true"); } catch { setCompact(false); }
+    try { setCompact(localStorage.getItem(`sukuunova-sidebar-compact:${preferenceScope}`) === "true"); } catch { setCompact(false); }
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen(true); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [preferenceScope]);
 
   const paletteItems = useMemo(() => commandItems(groups), [groups]);
   const avatar = initials(userName);
   const isTeacher = universe === "teacher";
-  const toggleCompact = () => setCompact((value) => { const next = !value; localStorage.setItem("sukuunova-sidebar-compact", String(next)); return next; });
+  const toggleCompact = () => setCompact((value) => { const next = !value; try { localStorage.setItem(`sukuunova-sidebar-compact:${preferenceScope}`, String(next)); } catch {} return next; });
 
   return <div className={`app-shell app-shell-${universe} ${compact ? "is-compact" : ""}`}>
     <aside className="app-sidebar">
       <Link href="/" className="app-brand"><span className="app-brand-mark">S</span><span className="app-brand-copy"><strong>SukuuNova</strong><small>{universe === "platform" ? "Platform Control" : isTeacher ? "Teacher Workspace" : "School Workspace"}</small></span></Link>
       <div className="app-school-chip"><span className="app-chip-avatar">{avatar}</span><span><b>{universe === "platform" ? "SukuuNova Network" : schoolName}</b><small>{universe === "platform" ? "All schools" : `${schoolCode}${schoolCode ? " · " : ""}School account`}</small></span></div>
-      <SidebarNav groups={normalize(groups)} active={active} />
-      <div className="app-sidebar-bottom"><div className="app-help"><Link href={universe === "platform" ? "/platform/support" : "/school/help"}><CircleHelp size={15} aria-hidden="true" /><span>Help & Support</span></Link></div><div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div><div className="app-account-actions"><Link href="/account/security" className="app-account-link"><Settings size={14} aria-hidden="true" /><span>Account security</span></Link><LogoutButton universe={universe === "platform" ? "platform" : "school"} /></div><button type="button" className="app-collapse-button" onClick={toggleCompact}>{compact ? <Settings2 size={14} aria-hidden="true" /> : <span>Collapse sidebar</span>}</button></div>
+      <SidebarNav groups={normalize(groups)} active={active} storageScope={preferenceScope} />
+      <div className="app-sidebar-bottom"><div className="app-help"><Link href={universe === "platform" ? "/platform/support" : "/school/help"}><CircleHelp size={15} aria-hidden="true" /><span>Help & Support</span></Link></div><div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div><div className="app-account-actions"><Link href="/account/security" className="app-account-link"><Settings size={14} aria-hidden="true" /><span>Account security</span></Link><LogoutButton universe={universe === "platform" ? "platform" : "school"} /></div><button type="button" className="app-collapse-button" onClick={toggleCompact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}>{compact ? <Settings2 size={14} aria-hidden="true" /> : <span>Collapse sidebar</span>}</button></div>
     </aside>
     <main className="app-main"><header className="app-topbar"><div><div className="app-breadcrumb">SukuuNova <span>›</span> {universe === "platform" ? "Platform Control" : schoolName}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="app-top-actions"><button type="button" className="app-search" onClick={() => setPaletteOpen(true)} aria-label="Open command palette"><Search size={16} aria-hidden="true" /><span>Search anything</span><kbd>⌘ K</kbd></button><Link className="app-icon-button" href={universe === "platform" ? "/platform/inbox" : isTeacher ? "/teacher/module?view=My%20Messages" : "/school/communications/alerts"} aria-label="Notifications"><BellRing size={17} aria-hidden="true" /><i /></Link></div></header><div className="app-content">{children}</div></main>
     <CommandPalette items={paletteItems} open={paletteOpen} onClose={() => setPaletteOpen(false)} liveSearchEndpoint={universe === "school" ? "/api/school/quick-search" : undefined} />
