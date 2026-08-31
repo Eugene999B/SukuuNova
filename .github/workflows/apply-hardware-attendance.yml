@@ -1,0 +1,475 @@
+name: Apply hardware attendance implementation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-hardware-attendance.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Patch product
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          def read(path):
+              return (root / path).read_text()
+
+          def write(path, content):
+              p = root / path
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(content)
+
+          def replace_once(path, old, new):
+              s = read(path)
+              n = s.count(old)
+              if n != 1:
+                  raise SystemExit(f'{path}: expected exactly 1 match, found {n}: {old[:160]!r}')
+              write(path, s.replace(old, new, 1))
+
+          # Prisma schema relations and models.
+          schema = 'prisma/schema.prisma'
+          replace_once(schema,
+              '  houses              House[]\n}',
+              '  houses              House[]\n  devices             Device[]\n  deviceIdentities    DeviceIdentity[]\n  deviceAttendanceReceipts DeviceAttendanceReceipt[]\n}')
+          replace_once(schema,
+              '  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")\n',
+              '  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")\n  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStaff")\n')
+          replace_once(schema,
+              '  faceEnrollments  FaceEnrollment[]\n',
+              '  faceEnrollments  FaceEnrollment[]\n  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStudent")\n')
+          replace_once(schema,
+              '  recorder         User     @relation("AttendanceRecorder", fields: [recordedBy, schoolId], references: [id, schoolId], onDelete: Restrict)\n',
+              '  recorder         User?    @relation("AttendanceRecorder", fields: [recordedBy, schoolId], references: [id, schoolId], onDelete: Restrict)\n  device           Device?  @relation(fields: [deviceId, schoolId], references: [id, schoolId], onDelete: Restrict)\n')
+          replace_once(schema, '  recordedBy       String\n', '  recordedBy       String?\n')
+          if 'model Device {' in read(schema):
+              raise SystemExit('Device model already exists; aborting rather than duplicating schema')
+          with open(root / schema, 'a') as f:
+              f.write(r'''
+
+model Device {
+  id                 String   @id @default(cuid())
+  schoolId           String
+  deviceSerial       String
+  kind               String
+  label              String
+  apiKeyHash         String
+  status             String   @default("active")
+  lastSeenAt         DateTime?
+  createdAt          DateTime @default(now())
+  school             School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  attendanceEvents   AttendanceEvent[]
+  identities         DeviceIdentity[]
+  attendanceReceipts DeviceAttendanceReceipt[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, deviceSerial])
+  @@index([schoolId])
+}
+
+model DeviceIdentity {
+  id         String   @id @default(cuid())
+  schoolId   String
+  deviceKind String
+  externalId String
+  studentId  String?
+  staffId    String?
+  createdAt  DateTime @default(now())
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  student    Student? @relation("DeviceIdentityStudent", fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  staff      User?    @relation("DeviceIdentityStaff", fields: [staffId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  @@unique([id, schoolId])
+  @@unique([schoolId, deviceKind, externalId])
+  @@unique([schoolId, deviceKind, studentId])
+  @@unique([schoolId, deviceKind, staffId])
+  @@index([schoolId])
+}
+
+model DeviceAttendanceReceipt {
+  id             String   @id @default(cuid())
+  schoolId       String
+  deviceId       String
+  idempotencyKey String
+  nonce          String
+  capturedAt     DateTime?
+  createdAt      DateTime @default(now())
+  processedAt    DateTime?
+  school         School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  device         Device   @relation(fields: [deviceId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  @@unique([id, schoolId])
+  @@unique([schoolId, deviceId, idempotencyKey])
+  @@unique([schoolId, deviceId, nonce])
+  @@index([schoolId])
+  @@index([schoolId, deviceId, createdAt])
+}
+''')
+
+          # Tenant model allow-list.
+          replace_once('src/lib/db.ts',
+              '  "ReportCardTemplate"\n]);',
+              '  "ReportCardTemplate",\n  "Device",\n  "DeviceIdentity",\n  "DeviceAttendanceReceipt"\n]);')
+
+          # Attendance service: device-authenticated path, authoritative server time, guardian alerts.
+          p = 'src/lib/attendance-service.ts'
+          s = read(p)
+          replace_once(p,
+              '    schoolId: string; actorId: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face"; confidenceScore?: number; deviceId?: string; timestamp?: Date;\n',
+              '    schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; deviceAuthenticated?: boolean;\n')
+          replace_once(p,
+              '  await requirePermission(tx, input.actorId, "attendance:record");\n  if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);\n  else await authorizeStaffAttendance(tx, input.actorId);\n',
+              '  if (input.deviceAuthenticated) {\n    if (!input.deviceId) throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");\n  } else {\n    if (!input.actorId) throw new ForbiddenError("A staff actor is required for attendance.");\n    await requirePermission(tx, input.actorId, "attendance:record");\n    if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);\n    else await authorizeStaffAttendance(tx, input.actorId);\n  }\n')
+          replace_once(p, '  const timestamp = input.timestamp ?? new Date();', '  const timestamp = new Date();')
+          replace_once(p, '      recordedBy: input.actorId\n', '      recordedBy: input.actorId ?? null\n')
+          replace_once(p,
+              '    schoolId: input.schoolId, actorId: input.actorId, action: "attendance.recorded",',
+              '    schoolId: input.schoolId, actorId: input.actorId ?? ("device:" + input.deviceId), action: "attendance.recorded",')
+          if 'templateKey: "student_attendance"' in s:
+              raise SystemExit('student_attendance notification already present; aborting duplicate insertion')
+          anchor = '  if (input.target.staffId && isLate) {'
+          if s.count(anchor) != 1:
+              raise SystemExit('student notification insertion anchor missing')
+          guardian_block = '''  if (input.target.studentId) {\n    const student = await tx.student.findUnique({ where: { id: input.target.studentId }, select: { name: true } });\n    const guardians = await tx.studentGuardian.findMany({\n      where: { studentId: input.target.studentId, isPrimary: true },\n      include: { guardian: { select: { id: true, phone: true } } }\n    });\n    const attendanceLabel = input.type === "out" ? "checked out" : (isLate ? "checked in late" : "checked in on time");\n    for (const link of guardians) {\n      if (!link.guardian.phone) continue;\n      await enqueueSms(tx, {\n        schoolId: input.schoolId,\n        recipientType: "guardian",\n        recipientId: link.guardian.id,\n        recipientPhone: link.guardian.phone,\n        body: "SukuuNova attendance alert: " + (student?.name ?? "Your child") + " " + attendanceLabel + ".",\n        templateKey: "student_attendance",\n        templateVariables: { "1": student?.name ?? "Student", "2": attendanceLabel }\n      });\n    }\n  }\n\n'''
+          s = s.replace(anchor, guardian_block + anchor, 1)
+          write(p, s)
+
+          # Notification key.
+          replace_once('src/lib/message-outbox.ts',
+              'export type NotificationTemplateKey="student_absence"|"staff_late"',
+              'export type NotificationTemplateKey="student_absence"|"student_attendance"|"staff_late"')
+
+          # Face service: remove caller timestamp and permit authenticated devices.
+          p = 'src/lib/face-service.ts'
+          s = read(p)
+          replace_once(p,
+              '    actorId: string;\n    image: string;\n    deviceId?: string;\n    type: "in" | "out";\n    timestamp?: Date;\n',
+              '    actorId?: string;\n    image: string;\n    deviceId?: string;\n    type: "in" | "out";\n    deviceAuthenticated?: boolean;\n')
+          replace_once(p,
+              '  await requirePermission(tx, input.actorId, "attendance:record");\n  const [settings, match] = await Promise.all([',
+              '  if (!input.deviceAuthenticated) {\n    if (!input.actorId) throw new AppError("A staff actor is required for face attendance.", 401, "ACTOR_REQUIRED");\n    await requirePermission(tx, input.actorId, "attendance:record");\n  } else if (!input.deviceId) {\n    throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");\n  }\n  const [settings, match] = await Promise.all([')
+          replace_once(p, '    timestamp: input.timestamp,\n', '')
+          write(p, s)
+
+          # Existing staff-session face route: timestamp is never accepted from callers.
+          p = 'src/app/api/phase2/face/route.ts'
+          s = read(p)
+          new_s, n = re.subn(r',timestamp:z\.coerce\.date\(\)\.optional\(\)', '', s, count=1)
+          if n != 1:
+              raise SystemExit('phase2 face timestamp field not found in expected schema')
+          write(p, new_s)
+          PY
+
+          cat > src/lib/device-auth.ts <<'EOF'
+          import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+          import { AppError } from "./errors";
+
+          export function generateDeviceSecret(): string {
+            return randomBytes(32).toString("base64url");
+          }
+
+          export function hashDeviceSecret(secret: string): string {
+            return createHash("sha256").update(secret, "utf8").digest("hex");
+          }
+
+          export function signDevicePayload(apiKeyHash: string, timestamp: string, nonce: string, rawBody: string): string {
+            return createHmac("sha256", apiKeyHash)
+              .update(timestamp + "\n" + nonce + "\n" + rawBody, "utf8")
+              .digest("hex");
+          }
+
+          export function verifyDeviceSignature(input: {
+            apiKeyHash: string;
+            timestamp: string;
+            nonce: string;
+            rawBody: string;
+            signature: string;
+            now?: Date;
+            maxSkewMs?: number;
+          }): void {
+            const timestampMs = Number(input.timestamp);
+            if (!Number.isInteger(timestampMs)) throw new AppError("Invalid device timestamp.", 401, "INVALID_DEVICE_SIGNATURE");
+            const now = input.now ?? new Date();
+            const maxSkewMs = input.maxSkewMs ?? 5 * 60 * 1000;
+            if (Math.abs(now.getTime() - timestampMs) > maxSkewMs) throw new AppError("Device request timestamp is outside the allowed replay window.", 401, "DEVICE_TIMESTAMP_EXPIRED");
+            if (!/^[0-9a-f]{64}$/i.test(input.signature)) throw new AppError("Invalid device signature.", 401, "INVALID_DEVICE_SIGNATURE");
+            const expected = Buffer.from(signDevicePayload(input.apiKeyHash, input.timestamp, input.nonce, input.rawBody), "hex");
+            const received = Buffer.from(input.signature, "hex");
+            if (expected.length !== received.length || !timingSafeEqual(expected, received)) throw new AppError("Invalid device signature.", 401, "INVALID_DEVICE_SIGNATURE");
+          }
+          EOF
+
+          cat > src/lib/device-identity-service.ts <<'EOF'
+          import { Prisma } from "@prisma/client";
+          import { AppError } from "./errors";
+          import { recordAttendance } from "./attendance-service";
+
+          type Transaction = Prisma.TransactionClient;
+
+          type MatchInput = {
+            tx: Transaction;
+            schoolId: string;
+            deviceId: string;
+            externalId: string;
+            confidence?: number;
+            type: "in" | "out";
+            kind: "fingerprint" | "card";
+          };
+
+          export async function matchDeviceIdentityAttendance(input: MatchInput) {
+            const externalId = input.externalId.trim();
+            if (!externalId) throw new AppError("Device externalId is required.", 400, "INVALID_INPUT");
+            if (input.confidence !== undefined && (!Number.isFinite(input.confidence) || input.confidence < 0 || input.confidence > 100)) throw new AppError("Confidence must be between 0 and 100.", 400, "INVALID_INPUT");
+            const identity = await input.tx.deviceIdentity.findFirst({ where: { deviceKind: input.kind, externalId }, select: { studentId: true, staffId: true } });
+            if (!identity?.studentId && !identity?.staffId) throw new AppError("Device identity is not enrolled for this school.", 404, "DEVICE_IDENTITY_NOT_FOUND");
+            const target = identity.studentId ? { studentId: identity.studentId } : { staffId: identity.staffId! };
+            const event = await recordAttendance(input.tx, { schoolId: input.schoolId, target, type: input.type, method: input.kind, confidenceScore: input.confidence, deviceId: input.deviceId, deviceAuthenticated: true });
+            return { status: "recorded" as const, event };
+          }
+
+          export async function matchFingerprintAttendance(tx: Transaction, input: Omit<MatchInput, "tx" | "kind">) {
+            return matchDeviceIdentityAttendance({ ...input, tx, kind: "fingerprint" });
+          }
+
+          export async function matchCardAttendance(tx: Transaction, input: Omit<MatchInput, "tx" | "kind">) {
+            return matchDeviceIdentityAttendance({ ...input, tx, kind: "card" });
+          }
+          EOF
+
+          cat > src/app/api/devices/attendance/route.ts <<'EOF'
+          import { NextResponse } from "next/server";
+          import { z } from "zod";
+          import { db, withTenant } from "@/lib/db";
+          import { AppError, UnauthorizedError, routeError } from "@/lib/errors";
+          import { verifyDeviceSignature } from "@/lib/device-auth";
+          import { matchFaceAttendance } from "@/lib/face-service";
+          import { matchFingerprintAttendance, matchCardAttendance } from "@/lib/device-identity-service";
+
+          const schema = z.object({ schoolCode:z.string().trim().min(2).max(80), deviceSerial:z.string().trim().min(2).max(120), kind:z.enum(["face","fingerprint","card"]), idempotencyKey:z.string().trim().min(8).max(200), capturedAt:z.string().datetime().optional(), type:z.enum(["in","out"]), image:z.string().min(100).optional(), externalId:z.string().trim().max(200).optional(), confidence:z.number().min(0).max(100).optional() });
+
+          export async function POST(request: Request) {
+            try {
+              const rawBody = await request.text();
+              let input: z.infer<typeof schema>;
+              try { input = schema.parse(JSON.parse(rawBody)); } catch { throw new AppError("Invalid device request payload.", 400, "INVALID_INPUT"); }
+              const timestamp = request.headers.get("x-device-timestamp") ?? "";
+              const nonce = request.headers.get("x-device-nonce") ?? "";
+              const signature = request.headers.get("x-device-signature") ?? "";
+              if (!timestamp || !nonce || !signature) throw new UnauthorizedError("Missing device authentication headers.");
+              const directory = await db.schoolLoginDirectory.findUnique({ where:{ uniqueCode:input.schoolCode.toLowerCase() }, select:{ schoolId:true, status:true } });
+              if (!directory || directory.status !== "active") throw new UnauthorizedError("Device authentication failed.");
+
+              const result = await withTenant(directory.schoolId, async (tx) => {
+                const device = await tx.device.findUnique({ where:{ schoolId_deviceSerial:{ schoolId:directory.schoolId, deviceSerial:input.deviceSerial } }, select:{ id:true, apiKeyHash:true, kind:true, status:true } });
+                if (!device || device.status !== "active" || device.kind !== input.kind) throw new UnauthorizedError("Device authentication failed.");
+                verifyDeviceSignature({ apiKeyHash:device.apiKeyHash, timestamp, nonce, rawBody, signature });
+                try {
+                  await tx.deviceAttendanceReceipt.create({ data:{ schoolId:directory.schoolId, deviceId:device.id, idempotencyKey:input.idempotencyKey, nonce, capturedAt:input.capturedAt?new Date(input.capturedAt):null } });
+                } catch (error) {
+                  if ((error as {code?:string}).code === "P2002") {
+                    const duplicate = await tx.deviceAttendanceReceipt.findFirst({ where:{ deviceId:device.id, OR:[{ idempotencyKey:input.idempotencyKey },{ nonce }] }, select:{ id:true } });
+                    if (duplicate) return { status:"duplicate" as const };
+                  }
+                  throw error;
+                }
+                const serverReceivedAt = new Date();
+                await tx.device.update({ where:{ id:device.id }, data:{ lastSeenAt:serverReceivedAt } });
+                if (input.capturedAt) {
+                  const capturedAt = new Date(input.capturedAt);
+                  const deviationMs = Math.abs(serverReceivedAt.getTime() - capturedAt.getTime());
+                  if (deviationMs > 10000) console.warn("Device attendance capture time differs from server time; server time is authoritative", { deviceId:device.id, deviationMs });
+                }
+                let recorded;
+                if (input.kind === "face") {
+                  if (!input.image) throw new AppError("Face device events require image data.", 400, "INVALID_INPUT");
+                  recorded = await matchFaceAttendance(tx, { schoolId:directory.schoolId, image:input.image, deviceId:device.id, type:input.type, deviceAuthenticated:true });
+                } else if (input.kind === "fingerprint") {
+                  if (!input.externalId) throw new AppError("Fingerprint device events require externalId.", 400, "INVALID_INPUT");
+                  recorded = await matchFingerprintAttendance(tx, { schoolId:directory.schoolId, deviceId:device.id, externalId:input.externalId, confidence:input.confidence, type:input.type });
+                } else {
+                  if (!input.externalId) throw new AppError("Card device events require externalId.", 400, "INVALID_INPUT");
+                  recorded = await matchCardAttendance(tx, { schoolId:directory.schoolId, deviceId:device.id, externalId:input.externalId, confidence:input.confidence, type:input.type });
+                }
+                const receipt = await tx.deviceAttendanceReceipt.findFirstOrThrow({ where:{ deviceId:device.id, idempotencyKey:input.idempotencyKey } });
+                await tx.deviceAttendanceReceipt.update({ where:{ id:receipt.id }, data:{ processedAt:new Date() } });
+                return { status:"recorded" as const, eventId:recorded.event.id };
+              });
+              return NextResponse.json({ ok:true, result }, { status:result.status === "duplicate" ? 200 : 201 });
+            } catch (error) { return routeError(error); }
+          }
+          EOF
+
+          cat > src/app/api/school/devices/route.ts <<'EOF'
+          import { NextResponse } from "next/server";
+          import { z } from "zod";
+          import { requireSchoolSession } from "@/lib/auth";
+          import { withTenant } from "@/lib/db";
+          import { routeError } from "@/lib/errors";
+          import { requirePermission } from "@/lib/rbac";
+          import { appendSchoolAudit } from "@/lib/audit";
+          import { generateDeviceSecret, hashDeviceSecret } from "@/lib/device-auth";
+          const createSchema=z.object({deviceSerial:z.string().trim().min(2).max(120),kind:z.enum(["face","fingerprint","card"]),label:z.string().trim().min(1).max(120)});
+          const patchSchema=z.object({id:z.string().min(1),action:z.literal("revoke")});
+          export async function GET(){try{const s=await requireSchoolSession();const devices=await withTenant(s.schoolId,async tx=>{await requirePermission(tx,s.userId,"settings:manage_school");return tx.device.findMany({select:{id:true,deviceSerial:true,kind:true,label:true,status:true,lastSeenAt:true,createdAt:true},orderBy:{createdAt:"desc"}});});return NextResponse.json({devices});}catch(e){return routeError(e);}}
+          export async function POST(r:Request){try{const s=await requireSchoolSession();const i=createSchema.parse(await r.json());const secret=generateDeviceSecret();const apiKeyHash=hashDeviceSecret(secret);const device=await withTenant(s.schoolId,async tx=>{await requirePermission(tx,s.userId,"settings:manage_school");const d=await tx.device.create({data:{schoolId:s.schoolId,deviceSerial:i.deviceSerial,kind:i.kind,label:i.label,apiKeyHash,status:"active"},select:{id:true,deviceSerial:true,kind:true,label:true,status:true,createdAt:true}});await appendSchoolAudit(tx,{schoolId:s.schoolId,actorId:s.userId,action:"device.registered",entityType:"Device",entityId:d.id,after:{deviceSerial:d.deviceSerial,kind:d.kind,label:d.label}});return d;});return NextResponse.json({ok:true,device,deviceSecret:secret,warning:"Copy this device secret now. It will never be shown again."},{status:201});}catch(e){return routeError(e);}}
+          export async function PATCH(r:Request){try{const s=await requireSchoolSession();const i=patchSchema.parse(await r.json());const device=await withTenant(s.schoolId,async tx=>{await requirePermission(tx,s.userId,"settings:manage_school");const before=await tx.device.findUnique({where:{id:i.id},select:{id:true,status:true,deviceSerial:true,kind:true,label:true}});if(!before)throw new Error("Device not found.");const d=await tx.device.update({where:{id:before.id},data:{status:"revoked"},select:{id:true,status:true,deviceSerial:true,kind:true,label:true}});await appendSchoolAudit(tx,{schoolId:s.schoolId,actorId:s.userId,action:"device.revoked",entityType:"Device",entityId:d.id,before,after:d});return d;});return NextResponse.json({ok:true,device});}catch(e){return routeError(e);}}
+          EOF
+
+          cat > src/app/api/school/devices/identities/route.ts <<'EOF'
+          import { NextResponse } from "next/server";
+          import { z } from "zod";
+          import { requireSchoolSession } from "@/lib/auth";
+          import { withTenant } from "@/lib/db";
+          import { routeError } from "@/lib/errors";
+          import { requirePermission } from "@/lib/rbac";
+          import { appendSchoolAudit } from "@/lib/audit";
+          const createSchema=z.object({deviceKind:z.enum(["fingerprint","card"]),externalId:z.string().trim().min(1).max(200),targetType:z.enum(["student","staff"]),targetId:z.string().min(1)});
+          export async function GET(){try{const s=await requireSchoolSession();const data=await withTenant(s.schoolId,async tx=>{await requirePermission(tx,s.userId,"settings:manage_school");return Promise.all([tx.deviceIdentity.findMany({orderBy:{createdAt:"desc"},select:{id:true,deviceKind:true,externalId:true,studentId:true,staffId:true,createdAt:true}}),tx.student.findMany({where:{status:"active"},orderBy:{name:"asc"},select:{id:true,name:true,admissionNo:true}}),tx.user.findMany({where:{status:{in:["active","pending"]}},orderBy:{name:"asc"},select:{id:true,name:true,email:true}})]);});return NextResponse.json({identities:data[0],students:data[1],staff:data[2]});}catch(e){return routeError(e);}}
+          export async function POST(r:Request){try{const s=await requireSchoolSession();const i=createSchema.parse(await r.json());const identity=await withTenant(s.schoolId,async tx=>{await requirePermission(tx,s.userId,"settings:manage_school");const person=i.targetType==="student"?await tx.student.findUnique({where:{id:i.targetId},select:{id:true}}):await tx.user.findUnique({where:{id:i.targetId},select:{id:true}});if(!person)throw new Error("Target person was not found.");const d=await tx.deviceIdentity.create({data:{schoolId:s.schoolId,deviceKind:i.deviceKind,externalId:i.externalId,studentId:i.targetType==="student"?i.targetId:undefined,staffId:i.targetType==="staff"?i.targetId:undefined},select:{id:true,deviceKind:true,externalId:true,studentId:true,staffId:true,createdAt:true}});await appendSchoolAudit(tx,{schoolId:s.schoolId,actorId:s.userId,action:"device.identity_registered",entityType:"DeviceIdentity",entityId:d.id,after:d});return d;});return NextResponse.json({ok:true,identity},{status:201});}catch(e){return routeError(e);}}
+          export async function DELETE(r:Request){try{const s=await requireSchoolSession();const i=z.object({id:z.string().min(1)}).parse(await r.json());const identity=await withTenant(s.schoolId,async tx=>{await requirePermission(tx,s.userId,"settings:manage_school");const before=await tx.deviceIdentity.findUnique({where:{id:i.id}});if(!before)throw new Error("Device identity was not found.");const d=await tx.deviceIdentity.delete({where:{id:before.id}});await appendSchoolAudit(tx,{schoolId:s.schoolId,actorId:s.userId,action:"device.identity_removed",entityType:"DeviceIdentity",entityId:d.id,before});return d;});return NextResponse.json({ok:true,identity});}catch(e){return routeError(e);}}
+          EOF
+
+          cat > src/app/school/settings/devices/page.tsx <<'EOF'
+          "use client";
+          import { useEffect, useState } from "react";
+          import { AppShell } from "@/components/AppShell";
+          type Device={id:string;deviceSerial:string;kind:string;label:string;status:string;lastSeenAt:string|null;createdAt:string};
+          type Identity={id:string;deviceKind:string;externalId:string;studentId:string|null;staffId:string|null;createdAt:string};
+          type Person={id:string;name:string;admissionNo?:string;email?:string|null};
+          export default function DevicesPage(){
+            const[devices,setDevices]=useState<Device[]>([]),[identities,setIdentities]=useState<Identity[]>([]),[students,setStudents]=useState<Person[]>([]),[staff,setStaff]=useState<Person[]>([]),[serial,setSerial]=useState(""),[label,setLabel]=useState("Main Gate"),[kind,setKind]=useState("fingerprint"),[secret,setSecret]=useState(""),[externalId,setExternalId]=useState(""),[identityKind,setIdentityKind]=useState("fingerprint"),[targetType,setTargetType]=useState("student"),[targetId,setTargetId]=useState(""),[message,setMessage]=useState("");
+            async function loadDevices(){const r=await fetch("/api/school/devices");const d=await r.json();if(r.ok)setDevices(d.devices??[]);else setMessage(d.error??"Could not load devices.");}
+            async function loadIdentities(){const r=await fetch("/api/school/devices/identities");const d=await r.json();if(r.ok){setIdentities(d.identities??[]);setStudents(d.students??[]);setStaff(d.staff??[]);setTargetId(v=>v||(targetType==="student"?d.students?.[0]?.id:d.staff?.[0]?.id)||"");}else setMessage(d.error??"Could not load device identities.");}
+            useEffect(()=>{void loadDevices();void loadIdentities();},[]);
+            async function register(){setMessage("");setSecret("");const r=await fetch("/api/school/devices",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({deviceSerial:serial,kind,label})});const d=await r.json();if(!r.ok)return setMessage(d.error??d.message??"Could not register device.");setSecret(d.deviceSecret);setMessage("Device registered. Copy the secret now; it will never be shown again.");setSerial("");await loadDevices();}
+            async function revoke(id:string){if(!window.confirm("Revoke this device? It will stop accepting attendance immediately."))return;const r=await fetch("/api/school/devices",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({id,action:"revoke"})});const d=await r.json();setMessage(r.ok?"Device revoked.":d.error??d.message??"Could not revoke device.");if(r.ok)await loadDevices();}
+            async function enroll(){const r=await fetch("/api/school/devices/identities",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({deviceKind:identityKind,externalId,targetType,targetId})});const d=await r.json();setMessage(r.ok?"Hardware identity mapping saved.":d.error??d.message??"Could not save mapping.");if(r.ok){setExternalId("");await loadIdentities();}}
+            async function remove(id:string){const r=await fetch("/api/school/devices/identities",{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({id})});const d=await r.json();setMessage(r.ok?"Mapping removed.":d.error??d.message??"Could not remove mapping.");if(r.ok)await loadIdentities();}
+            const people=targetType==="student"?students:staff;
+            return <AppShell universe="school" title="Biometric Attendance Devices" subtitle="Register attendance terminals, issue one-time secrets, map hardware identities, and revoke lost devices." active="Security & Access"><main style={{display:"grid",gap:18}}>
+              <section className="app-card app-panel"><p className="app-kpi-label">DEVICE REGISTRATION</p><h2>Connect an attendance terminal</h2><div style={{display:"grid",gap:12,maxWidth:820,gridTemplateColumns:"1fr 1fr"}}><input value={serial} onChange={e=>setSerial(e.target.value)} placeholder="Device serial"/><input value={label} onChange={e=>setLabel(e.target.value)} placeholder="Label, e.g. Main Gate"/><select value={kind} onChange={e=>setKind(e.target.value)}><option value="fingerprint">Fingerprint</option><option value="face">Face</option><option value="card">Card</option></select><button className="app-action" onClick={()=>void register()} disabled={!serial.trim()||!label.trim()}><strong>Register device</strong></button></div>{secret?<div className="app-banner" style={{marginTop:14}}><strong>Copy this device secret now</strong><p style={{wordBreak:"break-all"}}>{secret}</p></div>:null}</section>
+              <section className="app-card app-panel"><p className="app-kpi-label">DEVICE IDENTITY MAPPING</p><h2>Map terminal identities to people</h2><p>Fingerprint and card terminals report an external identity; raw biometric templates are not stored by SukuuNova.</p><div style={{display:"grid",gap:12,maxWidth:900,gridTemplateColumns:"1fr 1fr 1fr"}}><select value={identityKind} onChange={e=>setIdentityKind(e.target.value)}><option value="fingerprint">Fingerprint</option><option value="card">Card</option></select><input value={externalId} onChange={e=>setExternalId(e.target.value)} placeholder="Vendor external ID"/><select value={targetType} onChange={e=>{const v=e.target.value;setTargetType(v);setTargetId((v==="student"?students[0]?.id:staff[0]?.id)||"")}}><option value="student">Student</option><option value="staff">Staff</option></select><select value={targetId} onChange={e=>setTargetId(e.target.value)}>{people.map(p=><option key={p.id} value={p.id}>{p.name}{p.admissionNo?` · ${p.admissionNo}`:""}</option>)}</select><button className="app-action" onClick={()=>void enroll()} disabled={!externalId.trim()||!targetId}><strong>Save mapping</strong></button></div><div style={{marginTop:16,display:"grid",gap:8}}>{identities.map(i=>{const p=i.studentId?students.find(x=>x.id===i.studentId):staff.find(x=>x.id===i.staffId);return <div key={i.id} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr auto",gap:12,alignItems:"center",border:"1px solid var(--app-line,#d7e0e0)",padding:10,borderRadius:10}}><span>{i.deviceKind}</span><strong>{i.externalId}</strong><span>{p?.name??"Unknown person"}</span><button className="app-pill" onClick={()=>void remove(i.id)}>Remove</button></div>})}</div></section>
+              <section className="app-card app-panel"><p className="app-kpi-label">REGISTERED DEVICES</p>{devices.length===0?<p>No attendance devices registered yet.</p>:<div style={{display:"grid",gap:10}}>{devices.map(d=><div key={d.id} style={{display:"grid",gridTemplateColumns:"1.4fr .8fr 1fr auto",gap:12,alignItems:"center",border:"1px solid var(--app-line,#d7e0e0)",padding:12,borderRadius:12}}><div><strong>{d.label}</strong><div>{d.deviceSerial}</div></div><span>{d.kind}</span><span>{d.status}{d.lastSeenAt?` · ${new Date(d.lastSeenAt).toLocaleString()`:" · never seen"}</span>{d.status==="active"?<button className="app-pill" onClick={()=>void revoke(d.id)}>Revoke</button>:<span className="app-pill">Revoked</span>}</div>)}</div>}{message?<div className="app-banner" style={{marginTop:14}}><p>{message}</p></div>:null}</section>
+            </main></AppShell>;
+          }
+          EOF
+
+          cat > prisma/migrations/20260831083000_biometric_devices/migration.sql <<'EOF'
+          CREATE TABLE "Device" (
+            "id" TEXT NOT NULL,
+            "schoolId" TEXT NOT NULL,
+            "deviceSerial" TEXT NOT NULL,
+            "kind" TEXT NOT NULL,
+            "label" TEXT NOT NULL,
+            "apiKeyHash" TEXT NOT NULL,
+            "status" TEXT NOT NULL DEFAULT 'active',
+            "lastSeenAt" TIMESTAMP(3),
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "Device_pkey" PRIMARY KEY ("id"),
+            CONSTRAINT "Device_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE
+          );
+          CREATE TABLE "DeviceIdentity" (
+            "id" TEXT NOT NULL,
+            "schoolId" TEXT NOT NULL,
+            "deviceKind" TEXT NOT NULL,
+            "externalId" TEXT NOT NULL,
+            "studentId" TEXT,
+            "staffId" TEXT,
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT "DeviceIdentity_pkey" PRIMARY KEY ("id"),
+            CONSTRAINT "DeviceIdentity_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+            CONSTRAINT "DeviceIdentity_studentId_schoolId_fkey" FOREIGN KEY ("studentId","schoolId") REFERENCES "Student"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE,
+            CONSTRAINT "DeviceIdentity_staffId_schoolId_fkey" FOREIGN KEY ("staffId","schoolId") REFERENCES "User"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE
+          );
+          CREATE TABLE "DeviceAttendanceReceipt" (
+            "id" TEXT NOT NULL,
+            "schoolId" TEXT NOT NULL,
+            "deviceId" TEXT NOT NULL,
+            "idempotencyKey" TEXT NOT NULL,
+            "nonce" TEXT NOT NULL,
+            "capturedAt" TIMESTAMP(3),
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "processedAt" TIMESTAMP(3),
+            CONSTRAINT "DeviceAttendanceReceipt_pkey" PRIMARY KEY ("id"),
+            CONSTRAINT "DeviceAttendanceReceipt_schoolId_fkey" FOREIGN KEY ("schoolId") REFERENCES "School"("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+            CONSTRAINT "DeviceAttendanceReceipt_deviceId_schoolId_fkey" FOREIGN KEY ("deviceId","schoolId") REFERENCES "Device"("id","schoolId") ON DELETE CASCADE ON UPDATE CASCADE
+          );
+          ALTER TABLE "AttendanceEvent" ALTER COLUMN "recordedBy" DROP NOT NULL;
+          ALTER TABLE "AttendanceEvent" ADD CONSTRAINT "AttendanceEvent_deviceId_schoolId_fkey" FOREIGN KEY ("deviceId","schoolId") REFERENCES "Device"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
+          ALTER TABLE "Device" ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE "Device" FORCE ROW LEVEL SECURITY;
+          CREATE POLICY "Device_tenant_isolation" ON "Device" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());
+          ALTER TABLE "DeviceIdentity" ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE "DeviceIdentity" FORCE ROW LEVEL SECURITY;
+          CREATE POLICY "DeviceIdentity_tenant_isolation" ON "DeviceIdentity" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());
+          ALTER TABLE "DeviceAttendanceReceipt" ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE "DeviceAttendanceReceipt" FORCE ROW LEVEL SECURITY;
+          CREATE POLICY "DeviceAttendanceReceipt_tenant_isolation" ON "DeviceAttendanceReceipt" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());
+          CREATE UNIQUE INDEX "Device_id_schoolId_key" ON "Device"("id","schoolId");
+          CREATE UNIQUE INDEX "Device_schoolId_deviceSerial_key" ON "Device"("schoolId","deviceSerial");
+          CREATE INDEX "Device_schoolId_idx" ON "Device"("schoolId");
+          CREATE UNIQUE INDEX "DeviceIdentity_id_schoolId_key" ON "DeviceIdentity"("id","schoolId");
+          CREATE UNIQUE INDEX "DeviceIdentity_schoolId_deviceKind_externalId_key" ON "DeviceIdentity"("schoolId","deviceKind","externalId");
+          CREATE UNIQUE INDEX "DeviceIdentity_schoolId_deviceKind_studentId_key" ON "DeviceIdentity"("schoolId","deviceKind","studentId");
+          CREATE UNIQUE INDEX "DeviceIdentity_schoolId_deviceKind_staffId_key" ON "DeviceIdentity"("schoolId","deviceKind","staffId");
+          CREATE INDEX "DeviceIdentity_schoolId_idx" ON "DeviceIdentity"("schoolId");
+          CREATE UNIQUE INDEX "DeviceAttendanceReceipt_id_schoolId_key" ON "DeviceAttendanceReceipt"("id","schoolId");
+          CREATE UNIQUE INDEX "DeviceAttendanceReceipt_schoolId_deviceId_idempotencyKey_key" ON "DeviceAttendanceReceipt"("schoolId","deviceId","idempotencyKey");
+          CREATE UNIQUE INDEX "DeviceAttendanceReceipt_schoolId_deviceId_nonce_key" ON "DeviceAttendanceReceipt"("schoolId","deviceId","nonce");
+          CREATE INDEX "DeviceAttendanceReceipt_schoolId_idx" ON "DeviceAttendanceReceipt"("schoolId");
+          CREATE INDEX "DeviceAttendanceReceipt_schoolId_deviceId_createdAt_idx" ON "DeviceAttendanceReceipt"("schoolId","deviceId","createdAt");
+          ALTER TABLE "Device" ADD CONSTRAINT "Device_kind_check" CHECK ("kind" IN ('face','fingerprint','card'));
+          ALTER TABLE "Device" ADD CONSTRAINT "Device_status_check" CHECK ("status" IN ('active','revoked'));
+          ALTER TABLE "DeviceIdentity" ADD CONSTRAINT "DeviceIdentity_kind_check" CHECK ("deviceKind" IN ('fingerprint','card'));
+          ALTER TABLE "DeviceIdentity" ADD CONSTRAINT "DeviceIdentity_target_check" CHECK (((CASE WHEN "studentId" IS NOT NULL THEN 1 ELSE 0 END) + (CASE WHEN "staffId" IS NOT NULL THEN 1 ELSE 0 END)) = 1);
+          EOF
+
+          cat > docs/biometric-devices.md <<'EOF'
+          # SukuuNova hardware attendance devices
+
+          Devices are registered by a school administrator under Settings → Security & Access. SukuuNova generates a random secret, stores only its SHA-256 hash, and shows the raw secret exactly once.
+
+          Each device request signs the exact raw JSON body using HMAC-SHA256 over `timestamp + "\n" + nonce + "\n" + rawBody`, with the stored SHA-256 secret hash as the HMAC key. This preserves the requirement that the raw secret is never stored while giving the server a deterministic verification key.
+
+          Authentication headers are `X-Device-Timestamp`, `X-Device-Nonce`, and `X-Device-Signature`. Requests older than five minutes are rejected. Nonces and idempotency keys are unique per device.
+
+          `schoolCode` is carried inside the signed body so the server can resolve the tenant before querying the FORCE-RLS `Device` table. All tenant reads/writes then run inside `withTenant(schoolId)`.
+
+          `DeviceAttendanceReceipt` is a narrow relational receipt table rather than the older P3OfflineSyncQueue. It gives the device protocol explicit unique constraints for idempotency and nonce replay prevention, while the receipt remains in the same database transaction as the attendance write.
+
+          Device `capturedAt` is diagnostic only. `recordAttendance()` always uses server time for attendance timestamp and lateness calculations.
+
+          Fingerprint and card hardware reports a vendor external ID. Schools map those IDs to students or staff in Settings. SukuuNova does not receive or store raw fingerprint templates/images for this integration.
+          EOF
+
+          ./node_modules/.bin/prisma format
+          ./node_modules/.bin/prisma validate
+          ./node_modules/.bin/prisma generate
+          git diff --check
+
+      - name: Build and commit product
+        run: |
+          npm run build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prisma/schema.prisma prisma/migrations/20260831083000_biometric_devices/migration.sql src/lib/db.ts src/lib/message-outbox.ts src/lib/attendance-service.ts src/lib/face-service.ts src/app/api/phase2/face/route.ts src/lib/device-auth.ts src/lib/device-identity-service.ts src/app/api/devices/attendance/route.ts src/app/api/school/devices/route.ts src/app/api/school/devices/identities/route.ts src/app/school/settings/devices/page.tsx docs/biometric-devices.md
+          git commit -m "feat: add hardware biometric attendance"
+          git push origin main
