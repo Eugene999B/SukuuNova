@@ -68,7 +68,6 @@ export async function prepareEmergencySnapshot(tx: TenantDb, input: { schoolId: 
 
 export async function confirmEmergencySnapshot(tx: TenantDb, input: { schoolId: string; actorId: string; confirmationToken: string; message: string }) {
   const tokenData = verifyToken(input.confirmationToken, input.schoolId, input.actorId);
-  if (input.message.trim() !== input.message.trim()) throw new AppError("Invalid emergency message.", 400, "INVALID_INPUT");
   const rows = await tx.$queryRaw<Array<{ id: string; message: string; recipientSnapshot: Prisma.JsonValue; status: string; confirmationExpiresAt: Date }>>`
     SELECT "id", "message", "recipientSnapshot", "status", "confirmationExpiresAt"
     FROM "EmergencyBroadcast"
@@ -82,8 +81,9 @@ export async function confirmEmergencySnapshot(tx: TenantDb, input: { schoolId: 
   if (!row) throw new AppError("Emergency confirmation not found.", 404, "NOT_FOUND");
   if (row.status !== "PREVIEWED") throw new AppError("Emergency broadcast is no longer awaiting confirmation.", 409, "INVALID_STATE");
   if (Date.now() > row.confirmationExpiresAt.getTime()) throw new AppError("Emergency confirmation has expired.", 409, "CONFIRMATION_EXPIRED");
+  if (input.message.trim() !== row.message.trim()) throw new AppError("The emergency message changed after preview. Create a new preview before confirming.", 409, "MESSAGE_CHANGED");
 
-  const snapshot = Array.isArray(row.recipientSnapshot) ? row.recipientSnapshot.filter((item): item is SnapshotRecipient => !!item && typeof item === "object" && !Array.isArray(item) && (item as Record<string, unknown>).type !== undefined && typeof (item as Record<string, unknown>).id === "string" && typeof (item as Record<string, unknown>).phone === "string") : [];
+  const snapshot = Array.isArray(row.recipientSnapshot) ? row.recipientSnapshot.filter((item): item is SnapshotRecipient => !!item && typeof item === "object" && !Array.isArray(item) && ((item as Record<string, unknown>).type === "guardian" || (item as Record<string, unknown>).type === "staff") && typeof (item as Record<string, unknown>).id === "string" && typeof (item as Record<string, unknown>).phone === "string") : [];
   let queued = 0;
   for (const recipient of snapshot) {
     const results = await enqueueNotification(tx, {
