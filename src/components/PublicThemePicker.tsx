@@ -6,8 +6,8 @@ export type PublicTheme = "teal" | "paper" | "midnight" | "high-contrast";
 
 const KEY = "sukuunova-public-theme";
 const themes: Array<{ id: PublicTheme; label: string }> = [
-  { id: "teal", label: "Sukuu Teal" },
   { id: "paper", label: "Warm Paper" },
+  { id: "teal", label: "Sukuu Teal" },
   { id: "midnight", label: "Midnight" },
   { id: "high-contrast", label: "High Contrast" },
 ];
@@ -17,11 +17,11 @@ function applyTheme(theme: PublicTheme) {
 }
 
 export function PublicThemePicker() {
-  const [theme, setTheme] = useState<PublicTheme>("teal");
+  const [theme, setTheme] = useState<PublicTheme>("paper");
 
   useEffect(() => {
     const saved = localStorage.getItem(KEY) as PublicTheme | null;
-    const next = themes.some((item) => item.id === saved) ? saved as PublicTheme : "teal";
+    const next = themes.some((item) => item.id === saved) ? saved as PublicTheme : "paper";
     setTheme(next);
     applyTheme(next);
   }, []);
