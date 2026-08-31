@@ -1,16 +1,75 @@
 import type { ResetDeliveryEnvelope } from "./password-reset";
+import { httpSmsSender } from "./message-outbox";
 
-// Phase 0 deliberately contains no email/SMS/WhatsApp integration.
-// Replace this adapter with a secure provider in a later authorized phase.
-// The raw token is never logged or returned by an API route.
-export async function deliverResetToken(
-  envelope: ResetDeliveryEnvelope
-): Promise<void> {
-  void envelope.token;
-  console.info("Password reset token prepared for external delivery", {
-    universe: envelope.universe,
-    recipient: envelope.recipient,
-    expiresAt: envelope.expiresAt.toISOString(),
-    deliveryAdapterConfigured: false
+const DEV_TOKEN_ECHO_ENABLED =
+  process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_TOKEN_ECHO === "true";
+
+type EmailSender = (input: { to: string; subject: string; body: string }) => Promise<void>;
+
+const httpEmailSender: EmailSender = async ({ to, subject, body }) => {
+  const url = process.env.EMAIL_PROVIDER_URL;
+  const token = process.env.EMAIL_PROVIDER_TOKEN;
+  const from = process.env.EMAIL_FROM;
+  if (!url || !token || !from) {
+    throw new Error(
+      "Email provider is not configured (EMAIL_PROVIDER_URL / EMAIL_PROVIDER_TOKEN / EMAIL_FROM)."
+    );
+  }
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + token },
+    body: JSON.stringify({ from, to, subject, text: body })
   });
+  if (!response.ok) throw new Error("Email provider returned HTTP " + response.status);
+};
+
+function isEmail(value: string): boolean {
+  return value.includes("@");
+}
+
+function buildResetUrl(envelope: ResetDeliveryEnvelope): string {
+  const base = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+  const path = envelope.universe === "platform" ? "/platform/reset-password" : "/login/guardian/password-reset";
+  return base + path + "?token=" + encodeURIComponent(envelope.token);
+}
+
+// Sends the reset token out-of-band (email or SMS depending on the recipient
+// identifier). The token is NEVER returned to the HTTP caller and NEVER
+// rendered in any UI. Delivery failures are logged server-side only — they
+// must never change the API response shape or leak the token.
+export async function deliverResetToken(envelope: ResetDeliveryEnvelope): Promise<void> {
+  const resetUrl = buildResetUrl(envelope);
+  const subject = "SukuuNova password reset";
+  const body =
+    "A password reset was requested for your SukuuNova " +
+    envelope.universe +
+    " account" +
+    (envelope.schoolCode ? " (school " + envelope.schoolCode + ")" : "") +
+    ". Use this link to set a new password: " +
+    resetUrl +
+    ". This link expires at " +
+    envelope.expiresAt.toISOString() +
+    ". If you did not request this, you can ignore this message.";
+
+  try {
+    if (isEmail(envelope.recipient)) {
+      await httpEmailSender({ to: envelope.recipient, subject, body });
+    } else {
+      await httpSmsSender({ phone: envelope.recipient, body });
+    }
+  } catch (error) {
+    console.error("Password reset delivery failed", {
+      universe: envelope.universe,
+      expiresAt: envelope.expiresAt.toISOString(),
+      error: error instanceof Error ? error.message : "Unknown delivery error"
+    });
+  }
+
+  if (DEV_TOKEN_ECHO_ENABLED) {
+    // Local-development convenience only. Requires NODE_ENV !== "production"
+    // AND an explicit ALLOW_DEV_TOKEN_ECHO=true env var — never on by default,
+    // never reachable in production regardless of env var misconfiguration
+    // because of the NODE_ENV check above.
+    console.warn("[DEV ONLY] Password reset link (never sent to any client response):", resetUrl);
+  }
 }
