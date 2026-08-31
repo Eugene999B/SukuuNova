@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import "./access-workspace.css";
 
@@ -106,6 +107,7 @@ function initials(name: string) {
 }
 
 export default function AccessPage() {
+  const searchParams = useSearchParams();
   const [data, setData] = useState<Data | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [roleNames, setRoleNames] = useState<string[]>([]);
@@ -131,6 +133,13 @@ export default function AccessPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    const requestedUserId = searchParams.get("userId");
+    if (!data || !requestedUserId) return;
+    const requestedUser = data.users.find((user) => user.id === requestedUserId);
+    if (requestedUser && requestedUser.id !== selectedId) openUser(requestedUser);
+  }, [data, searchParams, selectedId]);
 
   const selected = data?.users.find((user) => user.id === selectedId);
   const pendingStaff = (data?.users ?? []).filter((user) => user.status === "pending");
