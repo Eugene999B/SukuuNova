@@ -1,9 +1,16 @@
 import { Skeleton, SkeletonCard, SkeletonText } from "./Skeleton";
 import styles from "./WorkspaceSkeleton.module.css";
 
-export function WorkspaceSkeleton({ cards = 4, rows = 6 }: { cards?: number; rows?: number }) {
+type WorkspaceSkeletonProps = {
+  variant?: string;
+  title?: string;
+  cards?: number;
+  rows?: number;
+};
+
+export function WorkspaceSkeleton({ variant, title, cards = 4, rows = 6 }: WorkspaceSkeletonProps) {
   return (
-    <main className={styles.shell} aria-label="Loading SukuuNova workspace">
+    <main className={styles.shell} aria-label={title ? `Loading ${title}` : variant ? `Loading ${variant} workspace` : "Loading SukuuNova workspace"}>
       <section className={styles.header}>
         <Skeleton width="90px" height="9px" />
         <Skeleton width="240px" height="30px" />
