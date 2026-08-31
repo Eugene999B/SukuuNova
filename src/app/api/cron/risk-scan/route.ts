@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest } from "next/server";
-import { runRiskScanForAllSchools } from "@/lib/phase4-service";
+import { runRiskScanForAllSchools } from "@/lib/phase4-ops-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
