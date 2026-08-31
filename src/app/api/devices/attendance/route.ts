@@ -80,10 +80,7 @@ export async function POST(request: Request) {
           const duplicate = await tx.deviceAttendanceReceipt.findFirst({
             where: {
               deviceId: device.id,
-              OR: [
-                { idempotencyKey: input.idempotencyKey },
-                { nonce }
-              ]
+              OR: [{ idempotencyKey: input.idempotencyKey }, { nonce }]
             },
             select: { id: true }
           });
@@ -138,24 +135,6 @@ export async function POST(request: Request) {
           type: input.type
         });
       }
-
-      if (recorded.status !== "recorded") return recorded;
-
-      if (recorded.status !== "recorded") return recorded;
-
-      if (recorded.status !== "recorded") return recorded;
-
-      if (recorded.status !== "recorded") return recorded;
-
-      if (recorded.status !== "recorded") return recorded;
-
-      if (recorded.status !== "recorded") return recorded;
-
-      if (recorded.status !== "recorded") return recorded;
-
-      if (recorded.status !== "recorded") return recorded;
-
-      if (recorded.status !== "recorded") return recorded;
 
       if (recorded.status !== "recorded") return recorded;
 
