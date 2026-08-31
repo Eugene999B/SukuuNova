@@ -118,6 +118,7 @@ function AccessPageInner() {
   const [grantKeys, setGrantKeys] = useState<string[]>([]);
   const [denyKeys, setDenyKeys] = useState<string[]>([]);
   const [search, setSearch] = useState("");
+  const [handoff, setHandoff] = useState<{name:string;login:string;roles:string[];password:string}|null>(null);
 
   const load = async () => {
     try {
@@ -163,6 +164,7 @@ function AccessPageInner() {
   }, [filteredPermissions]);
 
   function openUser(user: User) {
+    setHandoff(null);
     setSelectedId(user.id);
     setDraftRoles(user.userRoles.map((entry) => entry.role.name));
     setGrantKeys(user.permissionOverrides.filter((entry) => entry.granted).map((entry) => entry.permission.key));
@@ -236,11 +238,17 @@ function AccessPageInner() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "Could not update account.");
-      setMessage(
-        activating
-          ? `${selected.name}'s staff login is now active.`
-          : `${selected.name}'s role and direct permission profile was updated.`,
-      );
+      if (activating) {
+        setHandoff({
+          name: selected.name,
+          login: selected.email || selected.phone || "No email or phone provided",
+          roles: draftRoles,
+          password: form.password,
+        });
+        setMessage(`${selected.name}'s staff login is now active.`);
+      } else {
+        setMessage(`${selected.name}'s role and direct permission profile was updated.`);
+      }
       setForm((current) => ({ ...current, password: "" }));
       await load();
     } catch (error) {
@@ -458,6 +466,23 @@ function AccessPageInner() {
                   ))}
                 </div>
               </div>
+            </div>
+          </section>
+        ) : null}
+
+        {handoff ? (
+          <section className="access-card" role="status" aria-live="polite">
+            <div className="access-card-head">
+              <div>
+                <span className="access-kicker">ACCOUNT READY</span>
+                <h3>Here is what to tell {handoff.name}</h3>
+                <p>The password below is shown only because you just set it. It is not stored in this handoff panel after you leave or select another account.</p>
+              </div>
+            </div>
+            <div className="access-note">
+              <strong>Login: {handoff.login}</strong><br />
+              <span>Role: {handoff.roles.join(" + ") || "No role"}</span><br />
+              <span>Initial password: <code>{handoff.password}</code></span>
             </div>
           </section>
         ) : null}
