@@ -1,6 +1,55 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, ChartNoAxesCombined, GraduationCap, ShieldCheck, UsersRound, WalletCards } from "lucide-react";
+import { ArrowRight, BarChart3, GraduationCap, ShieldCheck, UsersRound, WalletCards } from "lucide-react";
 import "../home.css";
-const features=[["Run the day","Attendance, timetable, lessons, homework and the little exceptions that make up a real school day.",ChartNoAxesCombined],["Know your people","Students, guardians and staff stay connected to classes, subjects, communication and history.",UsersRound],["Keep the money clear","Fees, invoices, payments, arrears and receipts live in one financial story.",WalletCards],["Stay close to families","Announcements, messages and direct contact paths keep families informed without adding more noise.",UsersRound],["See the bigger picture","School leadership gets useful signals instead of a wall of disconnected numbers.",ChartNoAxesCombined],["Grow safely","Roles, permissions, audit trails, password recovery and platform controls are part of the foundation.",ShieldCheck]] as const;
-export default function FeaturesPage(){return <main className="home-shell"><div className="home-wrap"><header className="topbar"><Link href="/" className="brand"><Image className="brand-logo" src="/brand/sukuunova-logo.svg" alt="SukuuNova" width={190} height={54}/></Link><nav className="topnav"><Link href="/about">About</Link><Link href="/for-schools">For schools</Link><Link href="/contact">Contact</Link></nav><Link className="top-button" href="/login/school">Enter your school <ArrowRight size={14} aria-hidden="true"/></Link></header><section className="hero"><div className="hero-copy-wrap"><div className="eyebrow"><span className="eyebrow-dot"/> The useful stuff, connected</div><h1>Everything important, <span>in context.</span></h1><p className="hero-copy">SukuuNova is not just a set of pages. It is a connected school workspace where a person, a class, an invoice and an announcement can make sense together.</p></div></section><section className="modules"><div className="module-grid">{features.map(([title,copy,Icon],i)=><article className="module-card" key={title}><span className="module-icon"><Icon size={19} aria-hidden="true"/></span><span className="module-num">{String(i+1).padStart(2,"0")}</span><h3>{title}</h3><p>{copy}</p></article>)}</div></section><footer className="footer"><span>© 2026 SukuuNova</span><span>Built with care by humans.</span><Link href="/contact">Have a question? Talk to us <ArrowRight size={13} aria-hidden="true"/></Link></footer></div></main>}
+import "../home-redesign.css";
+import "../home-premium.css";
+import "./features-premium.css";
+
+const features = [
+  ["Students & families", "Keep learner records, guardians, admissions and people work connected.", UsersRound, "/features/students-families"],
+  ["Academics", "Plan classes and subjects, manage the timetable, teach, assess and report.", GraduationCap, "/features/academics"],
+  ["Attendance & safety", "Know who is present, late, absent and needs follow-up across the day.", ShieldCheck, "/features/attendance-safety"],
+  ["Fees & finance", "Keep charges, invoices, payments, arrears and payroll in one financial story.", WalletCards, "/features/fees-finance"],
+] as const;
+
+export default function FeaturesPage() {
+  return (
+    <main className="features-premium-shell">
+      <div className="features-premium-wrap">
+        <header className="topbar feature-topbar">
+          <Link href="/" className="brand" aria-label="SukuuNova home"><Image className="brand-logo" src="/brand/sukuunova-logo.svg" alt="SukuuNova" width={190} height={54} priority /></Link>
+          <nav className="topnav" aria-label="Primary navigation"><Link href="/for-schools">For schools</Link><Link href="/about">About</Link><Link href="/contact">Contact</Link></nav>
+          <Link className="top-button" href="/login/school">Enter your school <ArrowRight size={14} aria-hidden="true" /></Link>
+        </header>
+
+        <section className="features-hero">
+          <div className="features-hero-kicker"><BarChart3 size={15} aria-hidden="true" /> A clearer school operating system</div>
+          <h1>Every important responsibility.<br /><span>Connected.</span></h1>
+          <p>Explore how SukuuNova turns the real work of a school into focused workspaces — then keeps the records, decisions and follow-up connected.</p>
+          <div className="features-hero-actions"><Link className="primary-cta" href="/for-schools">See the school story <ArrowRight size={16} aria-hidden="true" /></Link><Link className="secondary-cta" href="/login/school">Existing user login</Link></div>
+        </section>
+
+        <section className="feature-card-grid" aria-label="SukuuNova capabilities">
+          {features.map(([title, copy, Icon, href], index) => (
+            <Link className="feature-premium-card" href={href} key={title}>
+              <div className="feature-premium-icon"><Icon size={21} aria-hidden="true" /></div>
+              <span className="feature-premium-number">0{index + 1}</span>
+              <h2>{title}</h2>
+              <p>{copy}</p>
+              <span className="feature-premium-link">Explore <ArrowRight size={15} aria-hidden="true" /></span>
+            </Link>
+          ))}
+        </section>
+
+        <section className="features-quote">
+          <span>THE IDEA</span>
+          <blockquote>“The school should not have to become a software company just to know what is happening.”</blockquote>
+          <p>SukuuNova is designed so the system carries the complexity while people keep the context.</p>
+        </section>
+
+        <footer className="footer"><span>© 2026 SukuuNova</span><span><Link href="/about">About</Link> · <Link href="/contact">Contact</Link> · <Link href="/login/platform">Platform access</Link></span></footer>
+      </div>
+    </main>
+  );
+}
