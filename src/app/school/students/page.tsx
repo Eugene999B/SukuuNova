@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { randomInt } from "node:crypto";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { CircleCheckBig, GraduationCap, UserPlus, UsersRound } from "lucide-react";
 import { AddStudentDialog } from "@/components/students/AddStudentDialog";
 import { AppShell } from "@/components/AppShell";
@@ -9,6 +10,7 @@ import { DataCard } from "@/components/ui/DataCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
+import { cachedSchoolRead } from "@/lib/school-cache";
 import { requirePermission } from "@/lib/rbac";
 import "./students-workspace.css";
 import "./students-light-theme.css";
@@ -18,6 +20,17 @@ import "@/components/students/add-student-dialog.css";
 function createIndexNumber() {
   const year = new Date().getFullYear();
   return `SN-${year}-${String(randomInt(0, 1_000_000)).padStart(6, "0")}`;
+}
+
+async function getStudentsPageData(schoolId: string) {
+  return cachedSchoolRead(schoolId, "students-page", () => withTenant(schoolId, async (tx) => {
+    const [school, classes, students] = await Promise.all([
+      tx.school.findUnique({ where: { id: schoolId }, select: { name: true, uniqueCode: true } }),
+      tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
+      tx.student.findMany({ orderBy: [{ name: "asc" }], take: 250, select: { id: true, name: true, admissionNo: true, dob: true, status: true, photoUrl: true, class: { select: { id: true, name: true, level: true } }, _count: { select: { attendanceEvents: true, reportCards: true, invoices: true } } } }),
+    ]);
+    return { school, classes, students };
+  }), 30);
 }
 
 async function createStudent(formData: FormData) {
@@ -52,6 +65,7 @@ async function createStudent(formData: FormData) {
     }
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
   });
+  revalidatePath("/school/students");
   redirect("/school/students");
 }
 
@@ -59,12 +73,7 @@ export default async function StudentsPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:read");
-    const [school, classes, students] = await Promise.all([
-      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
-      tx.student.findMany({ orderBy: [{ name: "asc" }], take: 250, select: { id: true, name: true, admissionNo: true, dob: true, status: true, photoUrl: true, class: { select: { id: true, name: true, level: true } }, _count: { select: { attendanceEvents: true, reportCards: true, invoices: true } } } }),
-    ]);
-    return { school, classes, students };
+    return getStudentsPageData(session.schoolId);
   });
   const unassigned = data.students.filter((student) => !student.class);
   const assignedCount = data.students.length - unassigned.length;
