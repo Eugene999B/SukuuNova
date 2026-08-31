@@ -85,6 +85,10 @@ Notification delivery is also Vercel-compatible. SMS/WhatsApp notifications crea
 
 This synchronous delivery is a deliberate free-tier simplification. At larger usage volumes, the preferred architecture is a serverless-native queue such as QStash or a platform that supports a dedicated persistent worker.
 
+## Password reset delivery
+
+Password reset links are delivered out-of-band and are never returned by reset APIs or rendered in client UI. Email delivery uses the HTTP provider configured with `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_TOKEN`, and `EMAIL_FROM`; SMS delivery reuses the existing `SMS_PROVIDER_URL`, `SMS_PROVIDER_TOKEN`, and `SMS_SENDER_ID` configuration. For local development only, `ALLOW_DEV_TOKEN_ECHO=true` can enable a server-side console warning containing the reset link; it is disabled by default and is never honored when `NODE_ENV=production`.
+
 ## Environment variables
 
 All provider configuration is environment-driven; secrets are not hardcoded. `.env.example` contains the full application set, including:
@@ -92,6 +96,7 @@ All provider configuration is environment-driven; secrets are not hardcoded. `.e
 - `DATABASE_URL`, `TEST_DATABASE_URL`
 - `SCHOOL_AUTH_SECRET`, `PLATFORM_AUTH_SECRET`
 - `SMS_PROVIDER_URL`, `SMS_PROVIDER_TOKEN`, `SMS_SENDER_ID`
+- `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_TOKEN`, `EMAIL_FROM`, `ALLOW_DEV_TOKEN_ECHO`
 - `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `FACE_EMBEDDING_ENCRYPTION_KEY`
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`, `OPENAI_RESPONSES_URL`
@@ -99,7 +104,7 @@ All provider configuration is environment-driven; secrets are not hardcoded. `.e
 - `RISK_SCAN_CRON_SECRET`
 - `RISK_SCAN_INTERVAL_MS` — documentation for the desired external scheduler cadence; it is no longer used to drive an in-process timer.
 
-Set production values in Vercel Environment Variables. Do not commit real credentials. Preview deployments should use a disposable database rather than production school data once real data exists.
+Set production values in Vercel Environment Variables. Do not commit real credentials. Preview deployments should use a disposable database rather than production school data once real school data exists.
 
 ## PostgreSQL and RLS deployment requirement
 
@@ -129,7 +134,7 @@ The final Phase 4 verification run passed:
 3. typecheck diagnostics;
 4. production build.
 
-The Phase 4 suite covers feature-flag enforcement, platform permission separation, multi-branch authorization, safe WhatsApp intent refusal, AI draft/accept boundaries, and emergency broadcast confirmation. The Phase 0-3 invariant suite remains part of `npm run test`.
+The Phase 4 suite covers feature-flag enforcement, platform permission separation, multi-branch authorization, safe WhatsApp intent refusal, AI-draft/accept boundaries, and emergency broadcast confirmation. The Phase 0-3 invariant suite remains part of `npm run test`.
 
 ## Manual Vercel setup checklist
 
