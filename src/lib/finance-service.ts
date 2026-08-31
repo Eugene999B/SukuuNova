@@ -96,21 +96,15 @@ export async function recordPayment(tx: TenantDb, input: {
       select: { id: true, invoiceId: true, amount: true, method: true }
     });
     if (existing) {
-      if (existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) {
-        return existing;
-      }
+      if (existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) return existing;
       throw new AppError("This payment reference has already been used for a different transaction.", 409, "DUPLICATE_PAYMENT_REFERENCE");
     }
   }
 
   const current = await refreshInvoiceStatus(tx, input.invoiceId);
-  if (current.status === "paid") {
-    throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
-  }
+  if (current.status === "paid") throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
   const outstanding = current.invoice.totalAmount.minus(current.paid);
-  if (amount.greaterThan(outstanding)) {
-    throw new AppError("Payment exceeds the outstanding invoice balance. Handle the extra amount as an approved credit or refund.", 409, "OVERPAYMENT_REQUIRES_REVIEW");
-  }
+  if (amount.greaterThan(outstanding)) throw new AppError("Payment exceeds the outstanding invoice balance. Handle the extra amount as an approved credit or refund.", 409, "OVERPAYMENT_REQUIRES_REVIEW");
 
   let payment;
   try {
@@ -120,22 +114,15 @@ export async function recordPayment(tx: TenantDb, input: {
     } });
   } catch (error) {
     if ((error as { code?: string }).code === "P2002" && reference) {
-      const existing = await tx.payment.findFirst({
-        where: { reference },
-        select: { id: true, invoiceId: true, amount: true, method: true }
-      });
-      if (existing && existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) {
-        return existing;
-      }
+      const existing = await tx.payment.findFirst({ where: { reference }, select: { id: true, invoiceId: true, amount: true, method: true } });
+      if (existing && existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) return existing;
       throw new AppError("This payment reference has already been used for a different transaction.", 409, "DUPLICATE_PAYMENT_REFERENCE");
     }
     throw error;
   }
 
   const result = await refreshInvoiceStatus(tx, input.invoiceId);
-  const guardians = await tx.studentGuardian.findMany({
-    where: { studentId: result.invoice.studentId, isPrimary: true }, include: { guardian: true }
-  });
+  const guardians = await tx.studentGuardian.findMany({ where: { studentId: result.invoice.studentId, isPrimary: true }, include: { guardian: true } });
   for (const link of guardians) {
     await enqueueSms(tx, {
       schoolId: input.schoolId,
@@ -157,17 +144,17 @@ export async function recordPayment(tx: TenantDb, input: {
 export async function reversePayment(tx: TenantDb, input: {
   schoolId: string; actorId: string; paymentId: string; amount: number; reason: string;
 }) {
-  await requirePermission(tx, input.actorId, "payments:record");
+  await requirePermission(tx, input.actorId, "payments:reverse");
+  const reason = input.reason.trim();
+  if (reason.length < 2) throw new AppError("A reason is required when reversing a payment.", 400, "REVERSAL_REASON_REQUIRED");
   const payment = await tx.payment.findUnique({ where: { id: input.paymentId }, include: { reversals: true } });
   if (!payment) throw new AppError("Payment not found.", 404, "NOT_FOUND");
   const reversed = payment.reversals.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
   const amount = new Prisma.Decimal(input.amount);
-  if (amount.lessThanOrEqualTo(0) || reversed.plus(amount).greaterThan(payment.amount)) {
-    throw new AppError("Reversal exceeds the unreversed payment balance.", 400, "INVALID_REVERSAL");
-  }
+  if (amount.lessThanOrEqualTo(0) || reversed.plus(amount).greaterThan(payment.amount)) throw new AppError("Reversal exceeds the unreversed payment balance.", 400, "INVALID_REVERSAL");
   const reversal = await tx.paymentReversal.create({ data: {
     schoolId: input.schoolId, paymentId: payment.id, amount,
-    reason: input.reason.trim(), reversedBy: input.actorId
+    reason, reversedBy: input.actorId
   } });
   await refreshInvoiceStatus(tx, payment.invoiceId);
   await appendSchoolAudit(tx, {
