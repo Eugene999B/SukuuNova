@@ -7,6 +7,7 @@ import "./visual-system.css";
 import "./typography.css";
 import "./sukuunova-overrides.css";
 import "./theme-switcher.css";
+import "@/components/ui/skeleton.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
