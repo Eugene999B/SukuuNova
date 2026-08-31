@@ -5,7 +5,8 @@ import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { hasPermission } from "@/lib/rbac";
-import { addGroupBranch, createSchoolGroup, createSupportTicket, listAiDrafts, listSupportTickets, ownerGroupReport, riskFlags, schoolImpersonationNotice } from "@/lib/phase4-service";
+import { addGroupBranch, createSchoolGroup, createSupportTicket, listAiDrafts, listSupportTickets, ownerGroupReport } from "@/lib/phase4-service";
+import { riskFlags, schoolImpersonationNotice } from "@/lib/phase4-ops-service";
 import { createStructuredAiDraft, acceptStructuredAiDraft, discardStructuredAiDraft } from "@/lib/ai-assistant-service";
 import { confirmEmergencySnapshot, prepareEmergencySnapshot } from "@/lib/emergency-broadcast-service";
 
