@@ -12,13 +12,18 @@ function replaceOnce(file, oldText, newText) {
   write(file, content.replace(oldText, newText));
 }
 
-// Apply only the existing-file/schema edits. This script never commits.
 execFileSync(process.platform === "win32" ? "python.exe" : "python3", ["scripts/apply-biometric-device-attendance.py"], {
   cwd: root,
   stdio: "inherit"
 });
 
-// The device route needs to accept face manual-review results as well as recorded results.
+// DeviceIdentity is school-level; vendor external IDs map to a person within a school/kind.
+const schemaFile = "prisma/schema.prisma";
+const schema = read(schemaFile);
+if (schema.includes("  identities          DeviceIdentity[]\n")) {
+  write(schemaFile, schema.replace("  identities          DeviceIdentity[]\n", ""));
+}
+
 const deviceRoute = "src/app/api/devices/attendance/route.ts";
 let route = read(deviceRoute);
 route = route.replace(
@@ -31,7 +36,6 @@ route = route.replace(
 );
 write(deviceRoute, route);
 
-// Make hardware management reachable from the main School Settings workspace.
 const settings = "src/app/school/settings/SchoolSettingsWorkspace.tsx";
 if (!read(settings).includes("Attendance devices")) {
   replaceOnce(
@@ -49,8 +53,6 @@ if (!read(settings).includes("Attendance devices")) {
 const migrationDir = "prisma/migrations/20260831081000_biometric_devices";
 const migrationFile = `${migrationDir}/migration.sql`;
 if (!fs.existsSync(`${root}/${migrationFile}`)) {
-  // Critical: do NOT create the migration directory until after migrate diff,
-  // otherwise Prisma treats the empty directory as a broken migration.
   const shadow = process.env.BIOMETRIC_SHADOW_DATABASE_URL ?? "postgresql://postgres@localhost:5432/postgres";
   const generated = execFileSync(
     process.platform === "win32" ? "npx.cmd" : "npx",
@@ -63,7 +65,6 @@ if (!fs.existsSync(`${root}/${migrationFile}`)) {
     ],
     { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }
   );
-
   fs.mkdirSync(`${root}/${migrationDir}`, { recursive: true });
   const rls = `
 ALTER TABLE "Device" ENABLE ROW LEVEL SECURITY;
