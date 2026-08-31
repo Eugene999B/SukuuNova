@@ -32,11 +32,8 @@ function dateOnly(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
-async function assertDevice(tx: TenantDb, schoolId: string, deviceId: string) {
-  const device = await tx.device.findFirst({
-    where: { id: deviceId, status: "active" },
-    select: { id: true }
-  });
+async function assertDevice(tx: TenantDb, deviceId: string) {
+  const device = await tx.device.findFirst({ where: { id: deviceId, status: "active" }, select: { id: true } });
   if (!device) throw new AppError("Offline sync device is not active in this school.", 401, "INVALID_DEVICE");
 }
 
@@ -44,7 +41,7 @@ export async function processOfflineSync(
   tx: TenantDb,
   input: { schoolId: string; actorId: string; deviceId: string; operations: SyncInput[] }
 ) {
-  await assertDevice(tx, input.schoolId, input.deviceId);
+  await assertDevice(tx, input.deviceId);
   const results: Array<Record<string, unknown>> = [];
 
   for (const operation of input.operations) {
@@ -65,13 +62,7 @@ export async function processOfflineSync(
       continue;
     }
 
-    const existing = await tx.$queryRaw<Array<{
-      id: string;
-      payloadHash: string;
-      status: SyncOutcome;
-      result: Prisma.JsonValue | null;
-      reason: string | null;
-    }>>`
+    const existing = await tx.$queryRaw<Array<{ id: string; payloadHash: string; status: SyncOutcome; result: Prisma.JsonValue | null; reason: string | null }>>`
       SELECT "id", "payloadHash", "status", "result", "reason"
       FROM "SyncOperation"
       WHERE "schoolId" = ${input.schoolId}
@@ -79,7 +70,6 @@ export async function processOfflineSync(
         AND "clientOperationId" = ${operation.clientOperationId}
       LIMIT 1
     `;
-
     if (existing[0]) {
       if (existing[0].payloadHash !== hash) {
         results.push({ ...base, status: "CONFLICT" as SyncOutcome, reason: "The same client operation ID was already used with a different payload." });
@@ -100,24 +90,21 @@ export async function processOfflineSync(
       ? operation.payload.method
       : null;
     const attendanceDate = typeof operation.payload.attendanceDate === "string" ? new Date(operation.payload.attendanceDate) : null;
-
     if (!studentId || !type || !method || !attendanceDate || Number.isNaN(attendanceDate.getTime())) {
       results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Attendance payload is incomplete or invalid." });
       continue;
     }
-
     if (dateOnly(attendanceDate) !== dateOnly(new Date())) {
       results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Offline attendance may only be synchronized for the current attendance date." });
       continue;
     }
-
     if (!(await hasPermission(tx, input.actorId, "attendance:record"))) {
       results.push({ ...base, status: "REJECTED_PERMISSION" as SyncOutcome, reason: "This account no longer has attendance recording permission." });
       continue;
     }
 
     const operationId = `sync-${input.deviceId}-${operation.clientOperationId}`;
-    await tx.$executeRaw`
+    const inserted = await tx.$executeRaw`
       INSERT INTO "SyncOperation" (
         "id", "schoolId", "deviceId", "clientOperationId", "clientVersion",
         "entityId", "operationType", "payload", "payloadHash", "status", "createdAt"
@@ -126,16 +113,27 @@ export async function processOfflineSync(
         ${operation.entityId ?? studentId}, ${operation.operationType}, ${JSON.stringify(operation.payload)}::jsonb,
         ${hash}, 'QUEUED', ${createdAt}
       )
+      ON CONFLICT ("schoolId", "deviceId", "clientOperationId") DO NOTHING
     `;
+    if (inserted === 0) {
+      const raced = await tx.$queryRaw<Array<{ payloadHash: string; status: SyncOutcome; result: Prisma.JsonValue | null; reason: string | null }>>`
+        SELECT "payloadHash", "status", "result", "reason"
+        FROM "SyncOperation"
+        WHERE "schoolId" = ${input.schoolId}
+          AND "deviceId" = ${input.deviceId}
+          AND "clientOperationId" = ${operation.clientOperationId}
+        LIMIT 1
+      `;
+      if (raced[0]?.payloadHash !== hash) {
+        results.push({ ...base, status: "CONFLICT" as SyncOutcome, reason: "The same client operation ID was already used with a different payload." });
+      } else {
+        results.push({ ...base, status: "ALREADY_APPLIED" as SyncOutcome, result: raced[0]?.result ?? null, reason: raced[0]?.reason ?? null });
+      }
+      continue;
+    }
 
     try {
-      const event = await recordAttendance(tx, {
-        schoolId: input.schoolId,
-        actorId: input.actorId,
-        target: { studentId },
-        type,
-        method,
-      });
+      const event = await recordAttendance(tx, { schoolId: input.schoolId, actorId: input.actorId, target: { studentId }, type, method });
       const result = { eventId: event.id };
       await tx.$executeRaw`
         UPDATE "SyncOperation"
