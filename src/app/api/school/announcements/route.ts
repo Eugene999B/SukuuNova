@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       }
 
       const now = new Date();
+      const announcementId = `announcement-${now.getTime()}-${session.userId.slice(0, 8)}`;
       if (recipients.length) {
         await tx.message.createMany({
           data: recipients.map((recipient) => ({
@@ -67,12 +68,12 @@ export async function POST(request: Request) {
             status: "delivered",
             attempts: 1,
             nextAttemptAt: now,
-            sentAt: now
+            sentAt: now,
+            idempotencyKey: `announcement:${session.schoolId}:${announcementId}:${recipient.id}:in_app`
           }))
         });
       }
 
-      const announcementId = `announcement-${now.getTime()}-${session.userId.slice(0, 8)}`;
       await appendSchoolAudit(tx, {
         schoolId: session.schoolId,
         actorId: session.userId,
