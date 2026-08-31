@@ -46,11 +46,12 @@ function severityForAttendance(rate: number, recentAbsences: number) {
   return "LOW";
 }
 
-async function attendanceEvidence(tx: TenantDb, studentId: string, start: Date, end: Date) {
+async function attendanceEvidence(tx: TenantDb, schoolId: string, studentId: string, start: Date, end: Date) {
   const rows = await tx.$queryRaw<Array<{ presentDays: bigint }>>`
     SELECT COUNT(DISTINCT "attendanceDate")::bigint AS "presentDays"
     FROM "AttendanceEvent"
-    WHERE "studentId" = ${studentId}
+    WHERE "schoolId" = ${schoolId}
+      AND "studentId" = ${studentId}
       AND "type" = 'in'
       AND "attendanceDate" BETWEEN ${start.toISOString().slice(0, 10)}::date AND ${end.toISOString().slice(0, 10)}::date
   `;
@@ -61,88 +62,44 @@ async function attendanceEvidence(tx: TenantDb, studentId: string, start: Date, 
   return { expectedSessions, presentSessions, recentAbsenceCount, attendanceRate };
 }
 
-async function scoreAverage(tx: TenantDb, studentId: string, termId: string | null) {
+async function scoreAverage(tx: TenantDb, schoolId: string, studentId: string, termId: string | null) {
   if (!termId) return null;
   const rows = await tx.$queryRaw<Array<{ average: string | null }>>`
     SELECT AVG(("s"."value" / NULLIF("a"."maxScore", 0)) * 100)::numeric::text AS "average"
     FROM "Score" s
     JOIN "Assessment" a ON a."id" = s."assessmentId" AND a."schoolId" = s."schoolId"
-    WHERE s."studentId" = ${studentId}
-      AND s."schoolId" = a."schoolId"
+    WHERE s."schoolId" = ${schoolId}
+      AND s."studentId" = ${studentId}
       AND a."termId" = ${termId}
   `;
   return rows[0]?.average == null ? null : Number(rows[0].average);
 }
 
-export async function impersonateUser(input: {
-  adminId: string;
-  adminRole: string;
-  schoolId: string;
-  userId: string;
-  reason: string;
-}) {
+export async function impersonateUser(input: { adminId: string; adminRole: string; schoolId: string; userId: string; reason: string }) {
   requirePlatformPermission(input.adminRole, "schools:impersonate");
   return withTenant(input.schoolId, async (tx) => {
-    const user = await tx.user.findUnique({
-      where: { id: input.userId },
-      select: { id: true, name: true, status: true },
-    });
-    if (!user || user.status !== "active") {
-      throw new AppError("Target user is not active.", 404, "USER_NOT_FOUND");
-    }
+    const user = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, status: true } });
+    if (!user || user.status !== "active") throw new AppError("Target user is not active.", 404, "USER_NOT_FOUND");
     const reason = text(input.reason, "reason", 500);
     const id = createId();
-    await tx.$executeRawUnsafe(
-      `INSERT INTO "ImpersonationLog" ("id","platformAdminId","schoolId","impersonatedUserId","reason") VALUES ($1,$2,$3,$4,$5)`,
-      id,
-      input.adminId,
-      input.schoolId,
-      input.userId,
-      reason,
-    );
-    await appendPlatformAudit({
-      actorId: input.adminId,
-      action: "impersonation.started",
-      targetSchoolId: input.schoolId,
-      targetEntity: "User",
-      meta: { impersonationId: id, impersonatedUserId: input.userId, reason },
-    });
-    await appendSchoolAudit(tx, {
-      schoolId: input.schoolId,
-      actorId: input.userId,
-      action: "platform.impersonation_started",
-      entityType: "ImpersonationLog",
-      entityId: id,
-      after: { platformAdminId: input.adminId, reason, visibleToSchool: true },
-    });
+    await tx.$executeRawUnsafe(`INSERT INTO "ImpersonationLog" ("id","platformAdminId","schoolId","impersonatedUserId","reason") VALUES ($1,$2,$3,$4,$5)`, id, input.adminId, input.schoolId, input.userId, reason);
+    await appendPlatformAudit({ actorId: input.adminId, action: "impersonation.started", targetSchoolId: input.schoolId, targetEntity: "User", meta: { impersonationId: id, impersonatedUserId: input.userId, reason } });
+    await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.userId, action: "platform.impersonation_started", entityType: "ImpersonationLog", entityId: id, after: { platformAdminId: input.adminId, reason, visibleToSchool: true } });
     return { id, userId: user.id, userName: user.name, reason };
   });
 }
 
-export async function endImpersonation(
-  schoolId: string,
-  impersonationId: string,
-  adminId: string,
-) {
+export async function endImpersonation(schoolId: string, impersonationId: string, adminId: string) {
   return withTenant(schoolId, async (tx) => {
-    const changed = await tx.$executeRawUnsafe(
-      `UPDATE "ImpersonationLog" SET "endedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "schoolId"=$2 AND "platformAdminId"=$3 AND "endedAt" IS NULL`,
-      impersonationId,
-      schoolId,
-      adminId,
-    );
-    if (changed !== 1) {
-      throw new AppError("Impersonation session not found or already ended.", 409, "IMPERSONATION_CLOSED");
-    }
+    const changed = await tx.$executeRawUnsafe(`UPDATE "ImpersonationLog" SET "endedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "schoolId"=$2 AND "platformAdminId"=$3 AND "endedAt" IS NULL`, impersonationId, schoolId, adminId);
+    if (changed !== 1) throw new AppError("Impersonation session not found or already ended.", 409, "IMPERSONATION_CLOSED");
     await appendPlatformAudit({ actorId: adminId, action: "impersonation.ended", targetSchoolId: schoolId, targetEntity: "User", meta: { impersonationId } });
     return { ok: true };
   });
 }
 
 export async function schoolImpersonationNotice(schoolId: string, actorId: string) {
-  return withTenant(schoolId, (tx) => tx.$queryRawUnsafe<unknown[]>(
-    `SELECT "id","reason","startedAt","endedAt" FROM "ImpersonationLog" WHERE "schoolId"=$1 AND "impersonatedUserId"=$2 ORDER BY "startedAt" DESC LIMIT 20`, schoolId, actorId,
-  ));
+  return withTenant(schoolId, (tx) => tx.$queryRawUnsafe<unknown[]>(`SELECT "id","reason","startedAt","endedAt" FROM "ImpersonationLog" WHERE "schoolId"=$1 AND "impersonatedUserId"=$2 ORDER BY "startedAt" DESC LIMIT 20`, schoolId, actorId));
 }
 
 export async function riskFlags(schoolId: string, actorId: string) {
@@ -150,17 +107,8 @@ export async function riskFlags(schoolId: string, actorId: string) {
     await requirePermission(tx, actorId, "risk_flags:view");
     const teacherClasses = await tx.class.findMany({ where: { classTeacherId: actorId }, select: { id: true } });
     const isTeacher = teacherClasses.length > 0 && !(await hasPermission(tx, actorId, "students:write"));
-    if (isTeacher) {
-      return tx.$queryRawUnsafe<unknown[]>(
-        `SELECT r.*,s."name" AS "studentName",s."admissionNo" FROM "StudentRiskFlag" r JOIN "Student" s ON s."id"=r."studentId" AND s."schoolId"=r."schoolId" WHERE r."schoolId"=$1 AND r."resolvedAt" IS NULL AND (r."expiresAt" IS NULL OR r."expiresAt" > NOW()) AND s."classId" = ANY($2::text[]) ORDER BY r."flaggedAt" DESC LIMIT 300`,
-        schoolId,
-        teacherClasses.map((c) => c.id),
-      );
-    }
-    return tx.$queryRawUnsafe<unknown[]>(
-      `SELECT r.*,s."name" AS "studentName",s."admissionNo" FROM "StudentRiskFlag" r JOIN "Student" s ON s."id"=r."studentId" AND s."schoolId"=r."schoolId" WHERE r."schoolId"=$1 AND r."resolvedAt" IS NULL AND (r."expiresAt" IS NULL OR r."expiresAt" > NOW()) ORDER BY r."flaggedAt" DESC LIMIT 300`,
-      schoolId,
-    );
+    if (isTeacher) return tx.$queryRawUnsafe<unknown[]>(`SELECT r.*,s."name" AS "studentName",s."admissionNo" FROM "StudentRiskFlag" r JOIN "Student" s ON s."id"=r."studentId" AND s."schoolId"=r."schoolId" WHERE r."schoolId"=$1 AND r."resolvedAt" IS NULL AND (r."expiresAt" IS NULL OR r."expiresAt" > NOW()) AND s."classId" = ANY($2::text[]) ORDER BY r."flaggedAt" DESC LIMIT 300`, schoolId, teacherClasses.map((c) => c.id));
+    return tx.$queryRawUnsafe<unknown[]>(`SELECT r.*,s."name" AS "studentName",s."admissionNo" FROM "StudentRiskFlag" r JOIN "Student" s ON s."id"=r."studentId" AND s."schoolId"=r."schoolId" WHERE r."schoolId"=$1 AND r."resolvedAt" IS NULL AND (r."expiresAt" IS NULL OR r."expiresAt" > NOW()) ORDER BY r."flaggedAt" DESC LIMIT 300`, schoolId);
   });
 }
 
@@ -170,41 +118,38 @@ export async function runRiskScanForSchool(schoolId: string) {
     const window7Start = addDays(utcDateOnly(now), -6);
     const window30Start = addDays(utcDateOnly(now), -29);
     const windowEnd = utcDateOnly(now);
-    const currentTerm = await tx.term.findFirst({
-      where: { startDate: { lte: now }, endDate: { gte: now } },
-      orderBy: { startDate: "desc" },
-      select: { id: true, name: true, startDate: true, endDate: true },
-    });
+    const currentTerm = await tx.term.findFirst({ where: { startDate: { lte: now }, endDate: { gte: now } }, orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true } });
     const previousTerm = currentTerm
       ? await tx.term.findFirst({ where: { endDate: { lt: currentTerm.startDate } }, orderBy: { endDate: "desc" }, select: { id: true, name: true } })
       : await tx.term.findFirst({ where: { endDate: { lt: now } }, orderBy: { endDate: "desc" }, select: { id: true, name: true } });
-
     const students = await tx.student.findMany({ where: { status: "active" }, select: { id: true } });
     let created = 0;
     let updated = 0;
 
     for (const student of students) {
       const [attendance7, attendance30, currentAverage, previousAverage, arrears] = await Promise.all([
-        attendanceEvidence(tx, student.id, window7Start, windowEnd),
-        attendanceEvidence(tx, student.id, window30Start, windowEnd),
-        scoreAverage(tx, student.id, currentTerm?.id ?? null),
-        scoreAverage(tx, student.id, previousTerm?.id ?? null),
-        tx.$queryRawUnsafe<Array<{ total: string }>>(
-          `SELECT COALESCE(SUM("totalAmount"),0)::text total FROM "Invoice" WHERE "schoolId"=$1 AND "studentId"=$2 AND "status" <> 'paid'${currentTerm ? ` AND "termId"='${currentTerm.id}'` : ""}`,
-          schoolId,
-          student.id,
-        ),
+        attendanceEvidence(tx, schoolId, student.id, window7Start, windowEnd),
+        attendanceEvidence(tx, schoolId, student.id, window30Start, windowEnd),
+        scoreAverage(tx, schoolId, student.id, currentTerm?.id ?? null),
+        scoreAverage(tx, schoolId, student.id, previousTerm?.id ?? null),
+        currentTerm
+          ? tx.$queryRaw<Array<{ total: string }>>`
+              SELECT COALESCE(SUM("totalAmount"),0)::text total
+              FROM "Invoice"
+              WHERE "schoolId"=${schoolId} AND "studentId"=${student.id} AND "termId"=${currentTerm.id} AND "status" <> 'paid'
+            `
+          : tx.$queryRaw<Array<{ total: string }>>`
+              SELECT COALESCE(SUM("totalAmount"),0)::text total
+              FROM "Invoice"
+              WHERE "schoolId"=${schoolId} AND "studentId"=${student.id} AND "status" <> 'paid'
+            `,
       ]);
 
       const signals: Array<{ reason: string; severity: string; detail: Record<string, unknown> }> = [];
       if ((attendance7.expectedSessions >= 5 && attendance7.attendanceRate !== null && attendance7.attendanceRate < 0.8 && attendance7.recentAbsenceCount >= 3) ||
           (attendance30.expectedSessions >= 10 && attendance30.attendanceRate !== null && attendance30.attendanceRate < 0.8 && attendance30.recentAbsenceCount >= 3)) {
         const evidence = attendance30.expectedSessions >= 10 ? attendance30 : attendance7;
-        signals.push({
-          reason: "ATTENDANCE_CONCERN",
-          severity: severityForAttendance(evidence.attendanceRate ?? 1, evidence.recentAbsenceCount),
-          detail: { window7: attendance7, window30: attendance30, rule: "attendanceRate < 0.80 and recentAbsenceCount >= 3" },
-        });
+        signals.push({ reason: "ATTENDANCE_CONCERN", severity: severityForAttendance(evidence.attendanceRate ?? 1, evidence.recentAbsenceCount), detail: { window7: attendance7, window30: attendance30, rule: "attendanceRate < 0.80 and recentAbsenceCount >= 3" } });
       }
       if (currentAverage !== null && previousAverage !== null && currentAverage < previousAverage - 10) {
         signals.push({ reason: "ACADEMIC_DECLINE", severity: currentAverage < previousAverage - 20 ? "HIGH" : "MEDIUM", detail: { currentTerm: currentTerm?.name ?? null, previousTerm: previousTerm?.name ?? null, currentAverage: Number(currentAverage.toFixed(2)), previousAverage: Number(previousAverage.toFixed(2)), delta: Number((currentAverage - previousAverage).toFixed(2)) } });
@@ -223,10 +168,7 @@ export async function runRiskScanForSchool(schoolId: string) {
         if (existing[0]) {
           await tx.$executeRaw`
             UPDATE "StudentRiskFlag"
-            SET "detail"=${JSON.stringify(signal.detail)}::jsonb,
-                "severity"=${signal.severity},
-                "expiresAt"=${expiresAt},
-                "reviewStatus"=CASE WHEN "reviewStatus"='RESOLVED' THEN 'OPEN' ELSE "reviewStatus" END
+            SET "detail"=${JSON.stringify(signal.detail)}::jsonb, "severity"=${signal.severity}, "expiresAt"=${expiresAt}, "reviewStatus"=CASE WHEN "reviewStatus"='RESOLVED' THEN 'OPEN' ELSE "reviewStatus" END
             WHERE "id"=${existing[0].id} AND "schoolId"=${schoolId}
           `;
           updated += 1;
@@ -243,11 +185,7 @@ export async function runRiskScanForSchool(schoolId: string) {
     await tx.$executeRaw`
       UPDATE "StudentRiskFlag"
       SET "reviewStatus"='EXPIRED'
-      WHERE "schoolId"=${schoolId}
-        AND "resolvedAt" IS NULL
-        AND "expiresAt" IS NOT NULL
-        AND "expiresAt" <= NOW()
-        AND "reviewStatus"='OPEN'
+      WHERE "schoolId"=${schoolId} AND "resolvedAt" IS NULL AND "expiresAt" IS NOT NULL AND "expiresAt" <= NOW() AND "reviewStatus"='OPEN'
     `;
 
     return { schoolId, currentTermId: currentTerm?.id ?? null, previousTermId: previousTerm?.id ?? null, created, updated };
