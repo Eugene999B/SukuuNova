@@ -107,7 +107,12 @@ export async function recordAttendance(
     throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   }
 
-  const periodId = validatePeriodId(input.periodId);
+  let periodId = input.periodId?.trim();
+  if (!periodId) {
+    const setting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
+    periodId = setting[0]?.value?.trim() || "DAILY";
+  }
+  periodId = validatePeriodId(periodId);
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
 
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
