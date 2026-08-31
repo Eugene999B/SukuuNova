@@ -4,6 +4,7 @@ import { ArrowRight, Building2, GraduationCap, LogIn, ShieldCheck, Users, Wallet
 import "./home.css";
 import "./home-redesign.css";
 import "./home-premium.css";
+import "./theme-home.css";
 import { HomeLeadChat } from "@/components/HomeLeadChat";
 import { HomeProductPreview } from "@/components/HomeProductPreview";
 
