@@ -20,15 +20,14 @@ export async function POST(request: Request) {
     if (!school || school.status !== "active") throw new UnauthorizedError("Invalid school or guardian credentials.");
     const guardian = await db.guardian.findFirst({
       where: { schoolId: school.id, user: { is: { status: "active", OR: [{ email: input.identifier.toLowerCase() }, { phone: input.identifier }] } } },
-      select: { id: true, name: true, userId: true, user: { select: { id: true, passwordHash: true } } }
+      select: { id: true, name: true, userId: true, user: { select: { id: true, passwordHash: true, needsPasswordChange: true } } }
     });
     if (!guardian?.user || !(await compare(input.password, guardian.user.passwordHash))) throw new UnauthorizedError("Invalid school or guardian credentials.");
     await clearLoginAttempts(key);
-    const response = NextResponse.json({ ok: true, guardian: { name: guardian.name, schoolName: school.name } });
-    response.cookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ kind: "guardian", userId: guardian.user.id, guardianId: guardian.id, schoolId: school.id, name: guardian.name, schoolName: school.name, needsPasswordChange: false }), sessionCookieOptions());
+    const needsPasswordChange = Boolean(guardian.user.needsPasswordChange);
+    const response = NextResponse.json({ ok: true, guardian: { name: guardian.name, schoolName: school.name, needsPasswordChange } });
+    response.cookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ kind: "guardian", userId: guardian.user.id, guardianId: guardian.id, schoolId: school.id, name: guardian.name, schoolName: school.name, needsPasswordChange }), sessionCookieOptions());
     response.cookies.delete("sukuunova_school_session");
     return response;
-  } catch (error) {
-    return routeError(error);
-  }
+  } catch (error) { return routeError(error); }
 }
