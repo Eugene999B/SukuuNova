@@ -5,6 +5,7 @@ import "./home.css";
 import "./home-redesign.css";
 import "./home-premium.css";
 import "./theme-home.css";
+import "./theme-brand.css";
 import { HomeLeadChat } from "@/components/HomeLeadChat";
 import { HomeProductPreview } from "@/components/HomeProductPreview";
 
