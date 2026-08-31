@@ -61,6 +61,7 @@ jobs:
       - name: Apply migrations
         run: npm run db:migrate
 
+      # Verification deliberately runs from the exact commit that triggered this workflow.
       - name: Typecheck
         run: npx tsc --noEmit --pretty false
 
