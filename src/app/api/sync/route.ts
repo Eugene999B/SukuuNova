@@ -8,6 +8,7 @@ import { processOfflineSync } from "@/lib/offline-sync-service";
 const operationSchema = z.object({
   clientOperationId: z.string().trim().min(8).max(200),
   clientVersion: z.number().int().min(1),
+  baseEntityVersion: z.number().int().min(0).optional(),
   entityId: z.string().trim().max(200).optional(),
   operationType: z.literal("ATTENDANCE_RECORD"),
   payload: z.record(z.string(), z.unknown()),
