@@ -1,4 +1,4 @@
-import { createHash, createId } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import type { TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
@@ -72,9 +72,9 @@ export async function createStructuredAiDraft(input: { schoolId: string; actorId
     }
     const system = "Return JSON only with exactly {draft,evidence,cautions}. draft is the proposed language only. evidence must contain only exact strings from the supplied deterministic evidence list. Do not invent school facts, diagnoses, grades, attendance, or events. cautions should state uncertainty when the evidence is incomplete.";
     const structured = await callStructuredAi(JSON.stringify({ data: safe, evidence }), evidence, system);
-    const requestId = createId(); const hash = inputHash(safe);
+    const requestId = randomBytes(16).toString("hex"); const hash = inputHash(safe);
     await tx.$executeRaw`INSERT INTO "AiRequest" ("id","schoolId","userId","featureName","promptVersion","model","inputRecordIds","inputDataHash","output","approvalStatus") VALUES (${requestId},${input.schoolId},${input.actorId},${input.type},${PROMPT_VERSION},${providerModel()},${JSON.stringify(recordIds)}::jsonb,${hash},${JSON.stringify(structured)}::jsonb,'SUGGESTED')`;
-    const draftId = createId();
+    const draftId = randomBytes(16).toString("hex");
     await tx.$executeRaw`INSERT INTO "AiDraft" ("id","schoolId","type","context","draftText","status") VALUES (${draftId},${input.schoolId},${input.type},${JSON.stringify({ ...safe, requestId, evidence, cautions: structured.cautions })}::jsonb,${structured.draft},'suggested')`;
     return { id: draftId, requestId, type: input.type, status: "suggested" as const, draftText: structured.draft, evidence: structured.evidence, cautions: structured.cautions };
   });
