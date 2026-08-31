@@ -1,5 +1,5 @@
 import { WorkspaceSkeleton } from "@/components/ui/WorkspaceSkeleton";
 
 export default function GuardianLoading() {
-  return <WorkspaceSkeleton cards={4} rows={5} />;
+  return <WorkspaceSkeleton variant="guardian" cards={4} rows={5} />;
 }
