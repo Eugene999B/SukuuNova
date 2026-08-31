@@ -14,7 +14,6 @@ export default function GradebookEntryGrid({ assessments, rows }: { assessments:
   const [saving, setSaving] = useState<string>("");
   const [saved, setSaved] = useState<string>("");
   const [error, setError] = useState<string>("");
-  const [rollback, setRollback] = useState<Record<string, { value: string; total: number | null }>>({});
 
   function calculateOptimisticTotal(studentId: string, nextValue: string, assessmentId: string) {
     const row = rows.find((item) => item.student.id === studentId);
@@ -44,23 +43,19 @@ export default function GradebookEntryGrid({ assessments, rows }: { assessments:
       setError(`Enter a mark from 0 to ${maxScore}.`);
       return;
     }
-    const previousValue = rollback[key]?.value ?? initial[key] ?? "";
+    const previousValue = values[key] ?? initial[key] ?? "";
     const previousTotal = totals[studentId] ?? initialTotals[studentId] ?? null;
-    setRollback((current) => ({ ...current, [key]: { value: previousValue, total: previousTotal } }));
-    setTotals((current) => ({ ...current, [studentId]: calculateOptimisticTotal(studentId, raw, assessmentId) }));
+    const optimisticTotal = calculateOptimisticTotal(studentId, raw, assessmentId);
+    setTotals((current) => ({ ...current, [studentId]: optimisticTotal }));
     setSaving(key); setError(""); setSaved("");
     try {
       const response = await fetch("/api/mvp/gradebook", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "score", studentId, assessmentId, value }) });
       const data = await response.json() as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "The mark could not be saved.");
       setSaved(key);
-      setRollback((current) => { const next = { ...current }; delete next[key]; return next; });
     } catch (err) {
-      const previous = rollback[key];
-      if (previous) {
-        setValues((current) => ({ ...current, [key]: previous.value }));
-        setTotals((current) => ({ ...current, [studentId]: previous.total }));
-      }
+      setValues((current) => ({ ...current, [key]: previousValue }));
+      setTotals((current) => ({ ...current, [studentId]: previousTotal }));
       setError(err instanceof Error ? err.message : "The mark could not be saved.");
     } finally { setSaving(""); }
   }
