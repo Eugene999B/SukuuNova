@@ -1,0 +1,8 @@
+"use client";
+import { useState } from "react";
+
+type Result={type:string;id:string;name:string;schoolName:string;detail:string};
+export default function PlatformSearchWorkspace(){
+ const [q,setQ]=useState(""); const [results,setResults]=useState<Result[]>([]); const [loading,setLoading]=useState(false); const [message,setMessage]=useState("");
+ const search=async()=>{const value=q.trim();if(!value)return;setLoading(true);setMessage("");try{const r=await fetch("/api/platform/phase4",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"search",q:value})});const d=await r.json() as {results?:Result[];error?:string};if(!r.ok)throw new Error(d.error||"Search failed");setResults(d.results||[]);}catch(e){setResults([]);setMessage(e instanceof Error?e.message:"Search failed");}finally{setLoading(false)}};
+ return <section style={{display:"grid",gap:16,maxWidth:1100}}><div className="app-card app-panel"><h2>Global Search</h2><p>Search across the schools you are authorised to investigate.</p><div style={{display:"flex",gap:8,marginTop:14}}><input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")void search()}} placeholder="School, student, staff member or code" style={{flex:1}}/><button className="app-action" onClick={()=>void search()} disabled={loading}>{loading?"Searching…":"Search"}</button></div>{message&&<p style={{marginTop:10}}>{message}</p>}</div><div className="app-card app-panel"><h3>Results</h3>{!results.length?<p>No results yet. Search by a name, school code or other identifier.</p>:results.map(r=><div className="app-list-row" key={`${r.type}-${r.id}`}><div><b>{r.name}</b><span>{r.type} · {r.schoolName} · {r.detail}</span></div></div>)}</div></section>}
