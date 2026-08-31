@@ -36,7 +36,8 @@ describe("message outbox", () => {
           body: "Delivery test",
           status: "queued",
           attempts: 0,
-          nextAttemptAt: new Date()
+          nextAttemptAt: new Date(),
+          idempotencyKey: `test-delivery:${fixture.schoolId}:${fixture.memberId}`
         }
       });
     });
@@ -67,7 +68,8 @@ describe("message outbox", () => {
           body: "Retry test",
           status: "queued",
           attempts: 0,
-          nextAttemptAt: new Date()
+          nextAttemptAt: new Date(),
+          idempotencyKey: `test-retry:${fixture.schoolId}:${fixture.memberId}`
         }
       });
     });
@@ -97,7 +99,8 @@ describe("message outbox", () => {
           body: "Permanent failure test",
           status: "queued",
           attempts: 0,
-          nextAttemptAt: new Date()
+          nextAttemptAt: new Date(),
+          idempotencyKey: `test-permanent:${fixture.schoolId}:${fixture.memberId}`
         }
       });
     });
@@ -126,7 +129,8 @@ describe("message outbox", () => {
           body: "Claim test",
           status: "queued",
           attempts: 0,
-          nextAttemptAt: new Date()
+          nextAttemptAt: new Date(),
+          idempotencyKey: `test-claim:${fixture.schoolId}:${fixture.memberId}`
         }
       });
     });
