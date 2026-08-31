@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowRight, Building2, GraduationCap, LogIn, ShieldCheck, Users, WalletCards } from "lucide-react";
 import "./home.css";
 import "./home-redesign.css";
@@ -20,7 +21,7 @@ export default function HomePage() {
       <div className="home-glow home-glow-b" />
       <div className="home-wrap">
         <header className="topbar">
-          <Link href="/" className="brand" aria-label="SukuuNova home"><img className="brand-logo" src="/brand/sukuunova-logo.svg" alt="SukuuNova" /></Link>
+          <Link href="/" className="brand" aria-label="SukuuNova home"><Image className="brand-logo" src="/brand/sukuunova-logo.svg" alt="SukuuNova" width={190} height={54} priority /></Link>
           <nav className="topnav" aria-label="Primary navigation">
             <Link href="/features">Platform</Link>
             <Link href="#how-it-works">How it works</Link>
@@ -45,7 +46,7 @@ export default function HomePage() {
               <Link className="primary-cta" href="/login/school">Enter your school <ArrowRight size={16} aria-hidden="true" /></Link>
               <Link className="top-link" href="/for-schools"><Building2 size={15} aria-hidden="true" /> Explore for schools</Link>
             </div>
-            <div className="hero-proof"><img className="proof-logo" src="/icon.svg" alt="" /><div><strong>Fast for existing users.</strong><span>Choose your school, continue as Staff or Guardian, and get straight to work.</span></div></div>
+            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>Fast for existing users.</strong><span>Choose your school, continue as Staff or Guardian, and get straight to work.</span></div></div>
           </div>
           <HomeProductPreview />
         </section>
