@@ -7,11 +7,10 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
@@ -48,6 +47,12 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_test OWNER sukuunova_test;"
       - name: Install dependencies from lockfile
         run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
+      - name: Generate ephemeral secrets
+        run: |
+          echo "SCHOOL_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "PLATFORM_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "FACE_EMBEDDING_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "WHATSAPP_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
       - name: Generate Prisma client
         run: npx prisma generate
       - name: Validate Prisma schema
@@ -60,17 +65,7 @@ jobs:
         run: npm run lint
       - name: Tests
         run: npm run test
-      - name: Build application
+      - name: Production build
         env:
           NODE_ENV: production
         run: npm run build
-      - name: Release to Railway
-        env:
-          NODE_ENV: production
-        run: |
-          printf 'verified %s\n' "$GITHUB_SHA" > .railway-deploy-trigger
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .railway-deploy-trigger package.json scripts/biometric-bootstrap.mjs prisma/schema.prisma prisma/migrations/20260831081000_biometric_devices src/lib/db.ts src/lib/message-outbox.ts src/lib/attendance-service.ts src/lib/face-service.ts src/app/api/phase2/face/route.ts src/app/api/devices/attendance/route.ts src/app/api/school/devices/route.ts src/app/api/school/devices/identities/route.ts src/lib/device-auth.ts src/lib/device-identity-service.ts src/app/school/settings/devices/page.tsx
-          git commit -m "feat: add hardware biometric attendance" || exit 0
-          git push
