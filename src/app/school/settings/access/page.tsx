@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import "./access-workspace.css";
@@ -106,7 +106,7 @@ function initials(name: string) {
     .toUpperCase();
 }
 
-export default function AccessPage() {
+function AccessPageInner() {
   const searchParams = useSearchParams();
   const [data, setData] = useState<Data | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -474,5 +474,14 @@ export default function AccessPage() {
         </section>
       </div>
     </AppShell>
+  );
+}
+
+
+export default function AccessPage() {
+  return (
+    <Suspense fallback={<div className="access-shell" aria-busy="true">Loading access settings…</div>}>
+      <AccessPageInner />
+    </Suspense>
   );
 }
