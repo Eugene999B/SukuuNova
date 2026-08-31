@@ -21,7 +21,8 @@ export async function GET(request: Request) {
     const subjectId = url.searchParams.get("subjectId");
     const termId = url.searchParams.get("termId");
     const result = await withTenant(session.schoolId, async (tx) => {
-      const students = await visibleStudents(tx, session.userId);
+      const visible = await visibleStudents(tx, session.userId);
+      const students = classId ? visible.filter((row) => row.classId === classId) : visible;
       const studentIds = students.map((row) => row.id);
       const classIds = [...new Set(students.flatMap((row) => row.classId ? [row.classId] : []))];
       const [config, assessments, scores, performance] = await Promise.all([
