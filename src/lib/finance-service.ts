@@ -44,6 +44,7 @@ export async function generateInvoice(tx: TenantDb, input: {
     schoolId: input.schoolId, invoiceId: invoice.id, feeItemId: item.id, amount: item.amount
   })) });
   for (const link of student.guardians) {
+    if (!link.guardian.phone) continue;
     await enqueueSms(tx, {
       schoolId: input.schoolId,
       recipientType: "guardian",
@@ -124,6 +125,7 @@ export async function recordPayment(tx: TenantDb, input: {
   const result = await refreshInvoiceStatus(tx, input.invoiceId);
   const guardians = await tx.studentGuardian.findMany({ where: { studentId: result.invoice.studentId, isPrimary: true }, include: { guardian: true } });
   for (const link of guardians) {
+    if (!link.guardian.phone) continue;
     await enqueueSms(tx, {
       schoolId: input.schoolId,
       recipientType: "guardian",
