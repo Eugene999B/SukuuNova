@@ -18,8 +18,9 @@ async function queueAttendanceAlert(formData: FormData) {
     if (!student) throw new Error("Learner not found in this school.");
     const primary = student.guardians[0]?.guardian;
     if (!primary) throw new Error("No primary guardian is linked to this learner.");
+    if (!primary.phone) throw new Error("The primary guardian has no phone number.");
     const body = kind === "late" ? `SukuuNova attendance notice: ${student.name} (${student.admissionNo}) was recorded late today. Please contact the school if there is anything we should know.` : `SukuuNova attendance notice: ${student.name} (${student.admissionNo}) was recorded absent today. Please contact the school if this absence requires explanation.`;
-    await tx.message.create({ data:{schoolId:session.schoolId,channel:"sms",recipientType:"guardian",recipientId:primary.id,recipientPhone:primary.phone,body,templateKey:kind === "late" ? "attendance_late" : "attendance_absent",templateVariables:{studentId:student.id,studentName:student.name,admissionNo:student.admissionNo},status:"queued",nextAttemptAt:new Date()} });
+    await tx.message.create({ data:{schoolId:session.schoolId,channel:"sms",recipientType:"guardian",recipientId:primary.id,recipientPhone:primary.phone,body,templateKey:kind === "late" ? "attendance_late" : "attendance_absent",templateVariables:{studentId:student.id,studentName:student.name,admissionNo:student.admissionNo},status:"queued",nextAttemptAt:new Date(),idempotencyKey:`guardian-alert:${session.schoolId}:${student.id}:${kind}:${new Date().toISOString().slice(0,10)}`} });
     await tx.auditLogSchool.create({ data:{schoolId:session.schoolId,actorId:session.userId,action:"guardian_alert.queued",entityType:"Guardian",entityId:primary.id,after:{studentId:student.id,kind,channel:"sms"}} });
   });
   redirect("/school/communications/alerts");
