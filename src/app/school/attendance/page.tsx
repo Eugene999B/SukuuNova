@@ -16,6 +16,7 @@ async function recordAttendance(formData: FormData) {
   const session = await requireSchoolSession();
   const studentId = String(formData.get("studentId") ?? "").trim();
   const attendanceDate = dateOnly(String(formData.get("attendanceDate") ?? "").trim());
+  const attendanceDateValue = new Date(`${attendanceDate}T00:00:00.000Z`);
   const type = String(formData.get("type") ?? "present").trim();
   const isLate = String(formData.get("isLate") ?? "") === "true";
   if (!studentId || !["present", "absent", "late", "excused"].includes(type)) throw new Error("Student and attendance status are required.");
@@ -23,9 +24,9 @@ async function recordAttendance(formData: FormData) {
     await requirePermission(tx, session.userId, "attendance:record");
     const student = await tx.student.findUnique({ where: { id: studentId }, select: { id: true, name: true } });
     if (!student) throw new Error("The selected student does not belong to this school.");
-    const existing = await tx.attendanceEvent.findFirst({ where: { schoolId: session.schoolId, studentId, attendanceDate }, select: { id: true } });
+    const existing = await tx.attendanceEvent.findFirst({ where: { schoolId: session.schoolId, studentId, attendanceDate: attendanceDateValue }, select: { id: true } });
     if (existing) throw new Error(`${student.name} already has an attendance record for ${attendanceDate}.`);
-    const event = await tx.attendanceEvent.create({ data: { schoolId: session.schoolId, studentId, type, method: "school_register", timestamp: new Date(), attendanceDate: new Date(`${attendanceDate}T00:00:00.000Z`), isLate: isLate || type === "late", recordedBy: session.userId } });
+    const event = await tx.attendanceEvent.create({ data: { schoolId: session.schoolId, studentId, type, method: "school_register", timestamp: new Date(), attendanceDate: attendanceDateValue, isLate: isLate || type === "late", recordedBy: session.userId } });
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "attendance.recorded", entityType: "AttendanceEvent", entityId: event.id, after: { studentId, attendanceDate, type, isLate: isLate || type === "late" } } });
   });
   redirect("/school/attendance");
