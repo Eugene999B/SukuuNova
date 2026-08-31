@@ -24,7 +24,7 @@ jobs:
           path = Path("prisma/schema.prisma")
           text = path.read_text()
 
-          if "model CalendarEvent {" in text and "events         CalendarEvent[]" in text:
+          if "model CalendarEvent {" in text and "events    CalendarEvent[]" in text:
               print("CalendarEvent already present; nothing to do")
               raise SystemExit(0)
 
@@ -83,14 +83,10 @@ jobs:
 
           path.write_text(text.replace(old, new, 1))
           print("Restored CalendarEvent Prisma model")
-      - name: Validate Prisma schema
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-        run: npx prisma validate
       - name: Commit repair
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add prisma/schema.prisma .github/workflows/repair-calendar-schema.yml .github/repair-calendar-schema
-          git commit -m 'fix(schema): restore calendar event model' || exit 0
+          git add prisma/schema.prisma
+          git commit -m 'fix(schema): restore calendar event model'
           git push
