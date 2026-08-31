@@ -149,6 +149,7 @@ model User {
   phone               String?
   passwordHash        String
   status              String   @default("active")
+  needsPasswordChange Boolean  @default(false)
   createdAt           DateTime @default(now())
   school              School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   userRoles           UserRole[]

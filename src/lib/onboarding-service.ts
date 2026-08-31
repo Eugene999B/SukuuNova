@@ -72,7 +72,8 @@ export async function onboardSchool(input: {
         schoolId,
         name: input.ownerName.trim(),
         email: input.ownerEmail.trim().toLowerCase(),
-        passwordHash: ownerPasswordHash
+        passwordHash: ownerPasswordHash,
+        needsPasswordChange: true
       }
     });
     await tx.userRole.create({

@@ -38,6 +38,8 @@ export default async function DashboardPage() {
         pendingReportCards,
         pendingFeeAdjustments,
         pendingStaff,
+        activatedNonOwnerStaff,
+        hasBranding,
       ] = await Promise.all([
         tx.student.count(),
         tx.guardian.count(),
@@ -69,6 +71,10 @@ export default async function DashboardPage() {
             userRoles: { some: { role: { key: { notIn: ["guardian", "parent", "student"] } } } },
           },
         }),
+        tx.user.count({
+          where: { status: "active", NOT: { userRoles: { some: { role: { key: "owner" } } } }, userRoles: { some: { role: { key: { notIn: ["guardian", "parent", "student"] } } } } },
+        }),
+        tx.school.findUnique({ where: { id: schoolSession.schoolId }, select: { logoUrl: true, brandColors: true } }).then(s => Boolean(s?.logoUrl || s?.brandColors)),
       ]);
 
       return {
@@ -89,6 +95,8 @@ export default async function DashboardPage() {
         pendingReportCards,
         pendingFeeAdjustments: pendingFeeAdjustments[0]?.count ?? 0,
         pendingStaff,
+        activatedNonOwnerStaff,
+        hasBranding,
       };
     });
 
@@ -105,7 +113,7 @@ type AnnouncementPreview = { id: string; body: string; createdAt: Date };
 type SchoolStats = {
   students: number; guardians: number; staff: number; classes: number; subjects: number; feeItems: number;
   invoices: number; payments: number; attendance: number; events: number; announcements: AnnouncementPreview[];
-  academicYears: number; terms: number; reportTemplates: number; pendingStaff: number; pendingReportCards: number; pendingFeeAdjustments: number;
+  academicYears: number; terms: number; reportTemplates: number; pendingStaff: number; pendingReportCards: number; pendingFeeAdjustments: number; activatedNonOwnerStaff: number; hasBranding: boolean;
 };
 
 const quickStats = [
@@ -117,10 +125,11 @@ const quickStats = [
 
 function SchoolAdminDashboard({ name, school, code, role, stats }: { name: string; school: string; code: string; role: string; stats: SchoolStats }) {
   const setup = [
-    ["School profile & branding", true, "/school/settings"],
+    ["School profile & branding", Boolean(stats.hasBranding), "/school/settings"],
     ["Academic calendar", stats.academicYears > 0 && stats.terms > 0, "/school/terms"],
     ["Classes & subjects", stats.classes > 0 && stats.subjects > 0, "/school/classes"],
-    ["Staff accounts", stats.staff > 0 && stats.pendingStaff === 0, "/school/staff"],
+    ["Students", stats.students > 0, "/school/students"],
+    ["Staff accounts", stats.activatedNonOwnerStaff > 0 && stats.pendingStaff === 0, "/school/settings/access"],
     ["Fee structure", stats.feeItems > 0, "/school/fees"],
     ["Report-card templates", stats.reportTemplates > 0, "/school/report-cards"],
   ] as const;

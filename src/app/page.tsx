@@ -4,12 +4,12 @@ import { HomeLeadChat } from "@/components/HomeLeadChat";
 import { HomePresence } from "@/components/HomePresence";
 
 const modules = [
-  ["Students", "Admissions, records, guardians and learner journeys", "01", "/school/students"],
-  ["Academics", "Classes, subjects, timetable, homework and results", "02", "/school/subjects"],
-  ["Attendance", "Daily registers, lateness, absence and alerts", "03", "/school/attendance"],
-  ["Fees & finance", "Invoices, receipts, balances and collections", "04", "/school/fees"],
-  ["Communication", "Guardians, announcements, SMS, WhatsApp and events", "05", "/school/communications/announcements"],
-  ["People & HR", "Teachers, staff, roles, leave and payroll", "06", "/school/staff"],
+  ["Students", "Admissions, records, guardians and learner journeys", "01", "/features"],
+  ["Academics", "Classes, subjects, timetable, homework and results", "02", "/features"],
+  ["Attendance", "Daily registers, lateness, absence and alerts", "03", "/features"],
+  ["Fees & finance", "Invoices, receipts, balances and collections", "04", "/features"],
+  ["Communication", "Guardians, announcements, SMS, WhatsApp and events", "05", "/features"],
+  ["People & HR", "Teachers, staff, roles, leave and payroll", "06", "/features"],
 ];
 
 export default function HomePage() {
