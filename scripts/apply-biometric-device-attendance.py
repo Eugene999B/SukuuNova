@@ -72,7 +72,6 @@ model Device {
   createdAt       DateTime @default(now())
   school          School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   attendanceEvents AttendanceEvent[]
-  identities      DeviceIdentity[]
   attendanceReceipts DeviceAttendanceReceipt[]
   @@unique([id, schoolId])
   @@unique([schoolId, deviceSerial])
@@ -124,7 +123,7 @@ if 'student_attendance' not in read('src/lib/message-outbox.ts'):
 
 p='src/lib/attendance-service.ts'; s=read(p)
 if 'deviceAuthenticated?: boolean' not in s:
-    replace_once(p, '    schoolId: string; actorId: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face"; confidenceScore?: number; deviceId?: string; timestamp?: Date;\n', '    schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; deviceAuthenticated?: boolean;\n')
+    replace_once(p, '    schoolId: string; actorId: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face"; confidenceScore?: number; deviceId?: string; timestamp?: Date;\n', '    schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; timestamp?: Date; deviceAuthenticated?: boolean;\n')
     replace_once(p, '  await requirePermission(tx, input.actorId, "attendance:record");\n  if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);\n  else await authorizeStaffAttendance(tx, input.actorId);\n', '  if (input.deviceAuthenticated) {\n    if (!input.deviceId) throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");\n  } else {\n    if (!input.actorId) throw new ForbiddenError("A staff actor is required for attendance.");\n    await requirePermission(tx, input.actorId, "attendance:record");\n    if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);\n    else await authorizeStaffAttendance(tx, input.actorId);\n  }\n')
     replace_once(p, '  const timestamp = input.timestamp ?? new Date();', '  const timestamp = new Date();')
     replace_once(p, '      recordedBy: input.actorId\n', '      recordedBy: input.actorId ?? null\n')
