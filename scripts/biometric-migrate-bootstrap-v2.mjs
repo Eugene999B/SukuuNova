@@ -20,8 +20,8 @@ execFileSync(process.platform === "win32" ? "python.exe" : "python3", ["scripts/
 // DeviceIdentity is school-level; vendor external IDs map to a person within a school/kind.
 const schemaFile = "prisma/schema.prisma";
 const schema = read(schemaFile);
-if (schema.includes("  identities          DeviceIdentity[]\n")) {
-  write(schemaFile, schema.replace("  identities          DeviceIdentity[]\n", ""));
+if (schema.includes("  identities      DeviceIdentity[]\n")) {
+  write(schemaFile, schema.replace("  identities      DeviceIdentity[]\n", ""));
 }
 
 const deviceRoute = "src/app/api/devices/attendance/route.ts";
@@ -56,13 +56,7 @@ if (!fs.existsSync(`${root}/${migrationFile}`)) {
   const shadow = process.env.BIOMETRIC_SHADOW_DATABASE_URL ?? "postgresql://postgres@localhost:5432/postgres";
   const generated = execFileSync(
     process.platform === "win32" ? "npx.cmd" : "npx",
-    [
-      "prisma", "migrate", "diff",
-      "--from-migrations", "./prisma/migrations",
-      "--to-schema-datamodel", "./prisma/schema.prisma",
-      "--shadow-database-url", shadow,
-      "--script"
-    ],
+    ["prisma", "migrate", "diff", "--from-migrations", "./prisma/migrations", "--to-schema-datamodel", "./prisma/schema.prisma", "--shadow-database-url", shadow, "--script"],
     { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] }
   );
   fs.mkdirSync(`${root}/${migrationDir}`, { recursive: true });
@@ -80,8 +74,4 @@ CREATE POLICY "DeviceAttendanceReceipt_tenant_isolation" ON "DeviceAttendanceRec
   write(migrationFile, `${generated.trim()}\n${rls}`);
 }
 
-execFileSync(
-  process.platform === "win32" ? "npx.cmd" : "npx",
-  ["prisma", "generate"],
-  { cwd: root, stdio: "inherit" }
-);
+execFileSync(process.platform === "win32" ? "npx.cmd" : "npx", ["prisma", "generate"], { cwd: root, stdio: "inherit" });
