@@ -21,8 +21,8 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     const school = schoolRows[0];
     if (!school || school.status !== "active") throw new UnauthorizedError(LOGIN_FAILURE);
     const identifier = normalizedIdentifier(input.identifier);
-    const userRows = await tx.$queryRaw<{ id: string; schoolId: string; name: string; passwordHash: string; status: string }[]>`
-      SELECT u."id", u."schoolId", u."name", u."passwordHash", u."status"
+    const userRows = await tx.$queryRaw<{ id: string; schoolId: string; name: string; passwordHash: string; status: string; needsPasswordChange: boolean }[]>`
+      SELECT u."id", u."schoolId", u."name", u."passwordHash", u."status", u."needsPasswordChange"
       FROM "User" u
       WHERE u."schoolId" = ${directory.schoolId}
         AND u."status" = 'active'
@@ -52,7 +52,7 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     const hasSchoolWorkspaceRole = roleKeys.some((key) => schoolWorkspaceRoles.has(key));
     const hasTeacherWorkspaceRole = roleKeys.some((key) => teacherWorkspaceRoles.has(key));
     const portal = hasSchoolWorkspaceRole ? "school" : hasTeacherWorkspaceRole ? "teacher" : "school";
-    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleEntries.map((role) => role.name), roleKeys, needsPasswordChange: false };
+    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleEntries.map((role) => role.name), roleKeys, needsPasswordChange: Boolean(user.needsPasswordChange) };
   });
 }
 
