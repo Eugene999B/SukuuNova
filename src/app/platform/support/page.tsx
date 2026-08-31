@@ -1,2 +1,2 @@
-import PlatformAdminWorkspace from "@/components/PlatformAdminWorkspace";
-export default function SupportPage(){return <PlatformAdminWorkspace section="support"/>;}
+import SupportConsole from "./SupportConsole";
+export default function SupportPage(){return <SupportConsole/>;}
