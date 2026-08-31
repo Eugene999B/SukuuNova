@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { StudentPhotoCapture } from "@/components/students/StudentPhotoCapture";
+import { OptimisticSubmitButton } from "@/components/ui/OptimisticSubmitButton";
+import { Tooltip } from "@/components/ui/Tooltip";
 
 type SchoolClass = { id: string; name: string; level: string | null; _count: { students: number } };
 type CreateStudentAction = (formData: FormData) => Promise<void>;
@@ -80,7 +82,9 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
                 <h2 id="add-student-title">Create a new learner</h2>
                 <p>Complete the learner record in a calm guided flow. SukuuNova generates the Index Number automatically.</p>
               </div>
-              <button type="button" className="dialog-close" onClick={closeDialog} aria-label="Close">×</button>
+              <Tooltip label="Close student admission dialog">
+                <button type="button" className="dialog-close" onClick={closeDialog} aria-label="Close">×</button>
+              </Tooltip>
             </header>
 
             <div className="student-dialog-progress" aria-label="Student creation steps">
@@ -133,7 +137,7 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
                 <div className="dialog-footer-note"><span className="secure-dot" />Secure school record</div>
                 <div className="dialog-footer-actions">
                   <button type="button" className="button secondary" onClick={() => step === 0 ? closeDialog() : setStep((value) => value - 1)}>{step === 0 ? "Cancel" : "Back"}</button>
-                  {step < steps.length - 1 ? <button type="button" className="button primary" onClick={() => setStep((value) => value + 1)}>Continue <span>→</span></button> : <button type="submit" className="button primary">Create student & generate index <span>→</span></button>}
+                  {step < steps.length - 1 ? <button type="button" className="button primary" onClick={() => setStep((value) => value + 1)}>Continue <span>→</span></button> : <OptimisticSubmitButton className="button primary" pendingLabel="Creating student…">Create student &amp; generate index <span>→</span></OptimisticSubmitButton>}
                 </div>
               </footer>
             </form>
