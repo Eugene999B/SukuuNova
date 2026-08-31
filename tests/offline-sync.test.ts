@@ -32,10 +32,7 @@ describe("offline sync state machine", () => {
           classId
         }
       })).id;
-      await tx.schoolSettings.update({
-        where: { schoolId: fixture.schoolId },
-        data: { expectedResumptionTime: "08:00" }
-      });
+      await tx.schoolSettings.update({ where: { schoolId: fixture.schoolId }, data: { expectedResumptionTime: "08:00" } });
     });
   });
 
@@ -46,71 +43,52 @@ describe("offline sync state machine", () => {
       clientVersion: 1,
       entityId: studentId,
       operationType: "ATTENDANCE_RECORD" as const,
-      payload: {
-        studentId,
-        type: "in" as const,
-        method: "card" as const,
-        attendanceDate: createdAt.toISOString()
-      },
+      payload: { studentId, type: "in" as const, method: "card" as const, attendanceDate: createdAt.toISOString() },
       createdAt: createdAt.toISOString()
     };
 
     await withTenant(fixture.schoolId, async (tx) => {
-      const first = await processOfflineSync(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        deviceId,
-        operations: [operation]
-      });
+      const first = await processOfflineSync(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, deviceId, operations: [operation] });
       expect(first.results[0]).toMatchObject({ status: "APPLIED" });
 
-      const retry = await processOfflineSync(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        deviceId,
-        operations: [operation]
-      });
+      const retry = await processOfflineSync(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, deviceId, operations: [operation] });
       expect(retry.results[0]).toMatchObject({ status: "ALREADY_APPLIED" });
-      expect(await tx.syncOperation.count({ where: { clientOperationId: operation.clientOperationId } })).toBe(1);
+      const ledgerCount = await tx.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count FROM "SyncOperation"
+        WHERE "schoolId" = ${fixture.schoolId} AND "clientOperationId" = ${operation.clientOperationId}
+      `;
+      expect(Number(ledgerCount[0]?.count ?? 0)).toBe(1);
       expect(await tx.attendanceEvent.count({ where: { studentId, method: "card" } })).toBe(1);
     });
   });
 
   it("rejects reuse of a client operation ID with a different payload", async () => {
+    const createdAt = new Date().toISOString();
     const operation = {
       clientOperationId: "offline-op-002",
       clientVersion: 1,
       entityId: studentId,
       operationType: "ATTENDANCE_RECORD" as const,
-      payload: {
-        studentId,
-        type: "in" as const,
-        method: "card" as const,
-        attendanceDate: new Date().toISOString()
-      },
-      createdAt: new Date().toISOString()
+      payload: { studentId, type: "in" as const, method: "card" as const, attendanceDate: createdAt },
+      createdAt
     };
 
     await withTenant(fixture.schoolId, async (tx) => {
-      const first = await processOfflineSync(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        deviceId,
-        operations: [operation]
-      });
+      const first = await processOfflineSync(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, deviceId, operations: [operation] });
       expect(first.results[0]).toMatchObject({ status: "APPLIED" });
 
       const conflict = await processOfflineSync(tx, {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
         deviceId,
-        operations: [{
-          ...operation,
-          payload: { ...operation.payload, type: "out" as const }
-        }]
+        operations: [{ ...operation, payload: { ...operation.payload, type: "out" as const } }]
       });
       expect(conflict.results[0]).toMatchObject({ status: "CONFLICT" });
-      expect(await tx.syncOperation.count({ where: { clientOperationId: operation.clientOperationId } })).toBe(1);
+      const ledgerCount = await tx.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*)::bigint AS count FROM "SyncOperation"
+        WHERE "schoolId" = ${fixture.schoolId} AND "clientOperationId" = ${operation.clientOperationId}
+      `;
+      expect(Number(ledgerCount[0]?.count ?? 0)).toBe(1);
     });
   });
 
