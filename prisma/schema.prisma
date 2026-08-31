@@ -234,12 +234,11 @@ model UserPermissionOverride {
   userId       String
   permissionId String
   granted      Boolean
-  school       School     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user         User       @relation(fields: [userId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  school       School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user         User   @relation(fields: [userId, schoolId], references: [id, schoolId], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
   @@id([userId, permissionId])
   @@index([schoolId])
-  @@index([permissionId])
 }
 
 model SchoolPasswordResetToken {
@@ -252,88 +251,131 @@ model SchoolPasswordResetToken {
   createdAt DateTime @default(now())
   school    School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   user      User     @relation(fields: [userId, schoolId], references: [id, schoolId], onDelete: Cascade)
-  @@index([schoolId])
-  @@index([userId, expiresAt])
+  @@unique([id, schoolId])
+  @@index([schoolId, userId, expiresAt])
 }
 
 model AuditLogSchool {
-  id         String   @id @default(cuid())
-  schoolId   String
-  actorId    String
-  action      String
+  id        String   @id @default(cuid())
+  schoolId  String
+  actorId   String
+  action    String
   entityType String
-  entityId   String
-  before     Json?
-  after      Json?
-  createdAt  DateTime @default(now())
-  school     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  @@index([schoolId])
-  @@index([schoolId, actorId])
+  entityId  String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  @@unique([id, schoolId])
   @@index([schoolId, createdAt])
+  @@index([schoolId, entityType, entityId])
 }
 
 model AcademicYear {
-  id             String          @id @default(cuid())
-  schoolId       String
-  name           String
-  startDate      DateTime
-  endDate        DateTime
-  school         School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  events         CalendarEvent[]
-  terms          Term[]
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  isLocked  Boolean  @default(false)
+  school    School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  terms     Term[]
   @@unique([id, schoolId])
   @@unique([schoolId, name])
   @@index([schoolId])
 }
 
-model CalendarEvent {
-  id                 String       @id @default(cuid())
-  schoolId           String
-  academicYearId     String
-  type               String
-  name               String
-  startDate          DateTime
-  endDate            DateTime
-  affectsAttendance  Boolean      @default(true)
-  affectsTransport   Boolean      @default(false)
-  school             School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  academicYear       AcademicYear @relation(fields: [academicYearId, schoolId], references: [id, schoolId], onDelete: Cascade)
-  @@unique([id, schoolId])
-  @@index([schoolId])
-  @@index([schoolId, startDate, endDate])
-}
-
 model Term {
-  id             String       @id @default(cuid())
-  schoolId       String
+  id           String   @id @default(cuid())
+  schoolId     String
   academicYearId String
-  name           String
-  startDate      DateTime
-  endDate        DateTime
-  isLocked       Boolean      @default(false)
-  school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  academicYear   AcademicYear @relation(fields: [academicYearId, schoolId], references: [id, schoolId], onDelete: Cascade)
-  assessments    Assessment[]
-  reportCards    ReportCard[]
-  feeItems       FeeItem[]
-  invoices       Invoice[]
+  name         String
+  startDate    DateTime
+  endDate      DateTime
+  isLocked     Boolean  @default(false)
+  school       School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYear AcademicYear @relation(fields: [academicYearId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  assessments  Assessment[]
+  scores       Score[]
+  invoices     Invoice[]
+  feeItems     FeeItem[]
+  reportCards  ReportCard[]
   @@unique([id, schoolId])
   @@unique([schoolId, academicYearId, name])
   @@index([schoolId])
-  @@index([schoolId, isLocked])
+}
+
+model Student {
+  id            String   @id @default(cuid())
+  schoolId      String
+  admissionNo   String
+  name          String
+  dob           DateTime?
+  status        String   @default("active")
+  classId       String?
+  houseId       String?
+  photoUrl      String?
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  class         Class?   @relation(fields: [classId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  house         House?   @relation(fields: [houseId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  guardians     StudentGuardian[]
+  attendanceEvents AttendanceEvent[]
+  scores        Score[]
+  reportCards   ReportCard[]
+  invoices      Invoice[]
+  faceEnrollments FaceEnrollment[]
+  faceMatchReviews FaceMatchReview[]
+  approvedPickups ApprovedPickup[]
+  pickupEvents  PickupEvent[]
+  pickupApprovalRequests PickupApprovalRequest[]
+  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStudent")
+  @@unique([id, schoolId])
+  @@unique([schoolId, admissionNo])
+  @@index([schoolId])
+  @@index([schoolId, classId])
+}
+
+model Guardian {
+  id        String  @id @default(cuid())
+  schoolId  String
+  name      String
+  phone     String?
+  email     String?
+  userId    String?
+  school    School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user      User?   @relation("GuardianUser", fields: [userId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  students  StudentGuardian[]
+  faceConsents FaceEnrollment[] @relation("FaceConsentGuardian")
+  approvedPickups ApprovedPickup[]
+  pickupEvents PickupEvent[]
+  pickupRequests PickupApprovalRequest[]
+  @@unique([id, schoolId])
+  @@unique([schoolId, phone])
+  @@index([schoolId])
+}
+
+model StudentGuardian {
+  schoolId       String
+  studentId      String
+  guardianId     String
+  relationship   String
+  isPrimary      Boolean @default(false)
+  school         School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  student        Student @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  guardian       Guardian @relation(fields: [guardianId, schoolId], references: [id, schoolId], onDelete: Cascade)
+  @@id([studentId, guardianId])
+  @@index([schoolId])
 }
 
 model House {
-  id          String    @id @default(cuid())
+  id          String  @id @default(cuid())
   schoolId    String
   name        String
   code        String
   color       String?
   description String?
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  school      School    @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  isActive    Boolean @default(true)
+  school      School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   students    Student[]
   @@unique([id, schoolId])
   @@unique([schoolId, name])
@@ -341,83 +383,18 @@ model House {
   @@index([schoolId])
 }
 
-model Student {
-  id               String            @id @default(cuid())
-  schoolId         String
-  admissionNo      String
-  name             String
-  dob              DateTime?
-  classId          String?
-  houseId          String?
-  status           String            @default("active")
-  photoUrl         String?
-  createdAt        DateTime          @default(now())
-  school           School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  class            Class?            @relation(fields: [classId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  house            House?            @relation(fields: [houseId, schoolId], references: [id, schoolId], onDelete: SetNull)
-  guardians        StudentGuardian[]
-  attendanceEvents AttendanceEvent[]
-  scores           Score[]
-  reportCards      ReportCard[]
-  invoices         Invoice[]
-  faceEnrollments  FaceEnrollment[]
-  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStudent")
-  faceMatchReviews FaceMatchReview[]
-  approvedPickups  ApprovedPickup[]
-  pickupEvents     PickupEvent[]
-  pickupRequests   PickupApprovalRequest[]
-  @@unique([id, schoolId])
-  @@unique([schoolId, admissionNo])
-  @@index([schoolId])
-  @@index([schoolId, classId])
-  @@index([schoolId, houseId])
-}
-
-model Guardian {
-  id          String            @id @default(cuid())
-  schoolId    String
-  userId      String?
-  name        String
-  phone       String
-  school      School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user        User?             @relation("GuardianUser", fields: [userId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  students    StudentGuardian[]
-  faceConsents FaceEnrollment[] @relation("FaceConsentGuardian")
-  approvedPickups ApprovedPickup[]
-  pickupEvents PickupEvent[]
-  pickupRequests PickupApprovalRequest[]
-  @@unique([id, schoolId])
-  @@unique([schoolId, phone])
-  @@unique([userId, schoolId])
-  @@index([schoolId])
-}
-
-model StudentGuardian {
-  schoolId     String
-  studentId    String
-  guardianId   String
-  relationship String
-  isPrimary    Boolean  @default(false)
-  school       School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  student      Student  @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Cascade)
-  guardian     Guardian @relation(fields: [guardianId, schoolId], references: [id, schoolId], onDelete: Cascade)
-  @@id([studentId, guardianId])
-  @@index([schoolId])
-  @@index([guardianId])
-}
-
 model Class {
-  id                 String                @id @default(cuid())
-  schoolId           String
-  name               String
-  level              String?
-  classTeacherId     String?
-  school             School                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  classTeacher       User?                 @relation("ClassTeacher", fields: [classTeacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
-  students           Student[]
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  level        String?
+  classTeacherId String?
+  school       School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classTeacher User?    @relation("ClassTeacher", fields: [classTeacherId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  students     Student[]
   subjectAssignments ClassSubjectTeacher[]
-  assessments        Assessment[]
-  feeItems            FeeItem[]
+  assessments  Assessment[]
+  feeItems     FeeItem[]
   timetableSlots     TimetableSlot[]
   @@unique([id, schoolId])
   @@unique([schoolId, name])
@@ -528,7 +505,7 @@ model ReportCard {
   pdfData             Bytes?
   calculationSnapshot Json?
   calculationVersion  Int      @default(1)
-  remarks             String?
+  remarks              String?
   status              String   @default("draft")
   submittedBy         String?
   submittedAt         DateTime?
@@ -604,6 +581,7 @@ model Payment {
   invoice Invoice @relation(fields: [invoiceId, schoolId], references: [id, schoolId], onDelete: Restrict)
   reversals PaymentReversal[]
   @@unique([id, schoolId])
+  @@unique([schoolId, reference])
   @@index([schoolId])
   @@index([schoolId, invoiceId])
 }
@@ -846,7 +824,6 @@ model ReportCardTemplate {
   @@index([schoolId])
 }
 
-
 model Device {
   id              String   @id @default(cuid())
   schoolId        String
@@ -873,7 +850,7 @@ model DeviceIdentity {
   studentId  String?
   staffId    String?
   createdAt  DateTime @default(now())
-  school     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  school     School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   student    Student? @relation("DeviceIdentityStudent", fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
   staff      User?    @relation("DeviceIdentityStaff", fields: [staffId, schoolId], references: [id, schoolId], onDelete: Restrict)
   @@unique([id, schoolId])
