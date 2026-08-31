@@ -24,9 +24,9 @@ export async function GET(request: Request) {
     const q = parsed.q;
 
     const results = await withTenant(session.schoolId, async (tx) => {
-      const [canReadStudents, canReadFees] = await Promise.all([
+      const [canReadStudents, canReadFinance] = await Promise.all([
         hasPermission(tx, session.userId, "students:read"),
-        hasPermission(tx, session.userId, "fees:read")
+        hasPermission(tx, session.userId, "finance:read")
       ]);
 
       const [students, invoices] = await Promise.all([
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
               take: 6
             })
           : Promise.resolve([]),
-        canReadFees
+        canReadFinance
           ? tx.invoice.findMany({
               where: { id: { contains: q, mode: "insensitive" } },
               select: { id: true, status: true, totalAmount: true, student: { select: { name: true, admissionNo: true } } },
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
         kind: "invoice",
         title: `Invoice ${invoice.id.slice(-8).toUpperCase()}`,
         subtitle: `${invoice.student.name} · ${invoice.status} · ${invoice.totalAmount.toString()}`,
-        href: `/school/fees/invoices/${invoice.id}`
+        href: "/school/fees/invoices"
       }));
 
       return [...studentResults, ...invoiceResults].slice(0, 10);
