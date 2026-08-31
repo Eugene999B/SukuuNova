@@ -44,7 +44,7 @@ export default function HomePage() {
               <Link className="primary-cta" href="/login/school">Open your school <ArrowRight size={16} aria-hidden="true" /></Link>
               <Link className="secondary-cta" href="/for-schools">See how it works <ArrowRight size={16} aria-hidden="true" /></Link>
             </div>
-            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>For the work schools do every day.</strong><span>People, classes, attendance, communication and finance stay connected as the work moves forward.</span></div></div>
+            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>Made for everyday school work.</strong><span>Keep people, classes, attendance, communication and finance together without making the job harder.</span></div></div>
           </div>
           <HomeProductPreview />
         </section>
