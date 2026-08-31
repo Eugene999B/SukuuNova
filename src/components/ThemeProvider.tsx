@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 
 export type ThemeMode = "light" | "dark";
 export type AccentName = "coral" | "emerald" | "violet" | "amber" | "rose" | "teal";
@@ -8,7 +9,7 @@ export type Density = "comfortable" | "compact";
 
 type Preferences = { mode: ThemeMode; accent: AccentName; density: Density };
 
-const DEFAULTS: Preferences = { mode: "light", accent: "coral", density: "comfortable" };
+const DEFAULTS: Preferences = { mode: "light", accent: "teal", density: "comfortable" };
 const KEY = "sukuunova-theme-preferences";
 
 function applyPreferences(value: Preferences) {
@@ -38,10 +39,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setPreferences(value);
     applyPreferences(value);
   }, []);
-
   useEffect(() => { applyPreferences(preferences); localStorage.setItem(KEY, JSON.stringify(preferences)); }, [preferences]);
-
-  return <>{children}</>;
+  return <><ThemeSwitcher />{children}</>;
 }
 
 export function saveThemePreferences(patch: Partial<Preferences>): Preferences {
@@ -52,10 +51,18 @@ export function saveThemePreferences(patch: Partial<Preferences>): Preferences {
 }
 
 export const accentOptions: { id: AccentName; label: string; value: string }[] = [
-  { id: "coral", label: "Coral", value: "#e7654f" },
-  { id: "emerald", label: "Emerald", value: "#168f72" },
-  { id: "violet", label: "Violet", value: "#7250c9" },
-  { id: "amber", label: "Amber", value: "#c67d16" },
-  { id: "rose", label: "Rose", value: "#c24e79" },
+  { id: "coral", label: "Coral", value: "#b94b3b" },
+  { id: "emerald", label: "Emerald", value: "#16724f" },
+  { id: "violet", label: "Violet", value: "#5c4ba5" },
+  { id: "amber", label: "Amber", value: "#9a6205" },
+  { id: "rose", label: "Rose", value: "#a94770" },
   { id: "teal", label: "Teal", value: "#147f87" },
+];
+
+export type ThemePreset = "paper" | "midnight" | "slate" | "warm";
+export const themePresets: { id: ThemePreset; label: string; mode: ThemeMode; accent: AccentName; description: string }[] = [
+  { id: "paper", label: "Paper", mode: "light", accent: "teal", description: "Bright, clean and calm" },
+  { id: "midnight", label: "Midnight", mode: "dark", accent: "teal", description: "Deep navy with clear text" },
+  { id: "slate", label: "Slate", mode: "dark", accent: "violet", description: "Cool dark workspace" },
+  { id: "warm", label: "Warm", mode: "light", accent: "amber", description: "Soft cream and ink" },
 ];
