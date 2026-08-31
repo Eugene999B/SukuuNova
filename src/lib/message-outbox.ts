@@ -6,12 +6,7 @@ export type NotificationTemplateKey="student_absence"|"student_attendance"|"staf
 type RecipientType="guardian"|"staff"|"user";
 type Channel="sms"|"whatsapp";
 
-type NotificationInput={
-  schoolId:string; recipientType:RecipientType; recipientId:string; recipientPhone:string; body:string;
-  templateKey?:NotificationTemplateKey; templateVariables?:Record<string,string>; mediaUrl?:string;
-  idempotencyKey?:string;
-};
-
+type NotificationInput={schoolId:string; recipientType:RecipientType; recipientId:string; recipientPhone:string; body:string; templateKey?:NotificationTemplateKey; templateVariables?:Record<string,string>; mediaUrl?:string; idempotencyKey?:string};
 type NotificationSenders={sms?:SmsSender;whatsapp?:WhatsAppSender};
 
 const MAX_ATTEMPTS=5;
@@ -25,7 +20,6 @@ function configuredChannels(value:Prisma.JsonValue|null|undefined):Channel[]{
   const channels=candidate.filter((item):item is Channel=>item==="sms"||item==="whatsapp");
   return channels.length?[...new Set(channels)]:["sms"];
 }
-
 function contentSid(value:Prisma.JsonValue|null|undefined,key:string){
   if(!value||Array.isArray(value)||typeof value!=="object")return undefined;
   const candidate=(value as Record<string,Prisma.JsonValue>)[key];
@@ -36,7 +30,6 @@ function contentSid(value:Prisma.JsonValue|null|undefined,key:string){
   }
   return undefined;
 }
-
 function mediaVariableKey(value:Prisma.JsonValue|null|undefined,key:string){
   if(!value||Array.isArray(value)||typeof value!=="object")return "mediaUrl";
   const candidate=(value as Record<string,Prisma.JsonValue>)[key];
@@ -49,14 +42,12 @@ function mediaVariableKey(value:Prisma.JsonValue|null|undefined,key:string){
 
 export type SmsSender=(input:{phone:string;body:string;senderId?:string})=>Promise<void>;
 export type WhatsAppSender=(input:{phone:string;contentSid:string;variables:Record<string,string>;mediaUrl?:string})=>Promise<void>;
-
 export const httpSmsSender:SmsSender=async({phone,body,senderId})=>{
   const url=process.env.SMS_PROVIDER_URL,token=process.env.SMS_PROVIDER_TOKEN;
   if(!url||!token)throw new Error("SMS provider is not configured.");
   const response=await fetch(url,{method:"POST",headers:{"content-type":"application/json",authorization:"Bearer "+token},body:JSON.stringify({to:phone,body,senderId:senderId||process.env.SMS_SENDER_ID})});
   if(!response.ok)throw new Error(`SMS provider HTTP ${response.status}`);
 };
-
 export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,variables})=>{
   const accountSid=process.env.TWILIO_ACCOUNT_SID,authToken=process.env.TWILIO_AUTH_TOKEN,from=process.env.TWILIO_WHATSAPP_FROM;
   if(!accountSid||!authToken||!from)throw new Error("Twilio WhatsApp is not configured.");
@@ -64,89 +55,34 @@ export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,var
   const response=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+encodeURIComponent(accountSid)+"/Messages.json",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded",authorization:"Basic "+Buffer.from(accountSid+":"+authToken).toString("base64")},body:form});
   if(!response.ok)throw new Error(`Twilio WhatsApp HTTP ${response.status}`);
 };
+function variables(value:Prisma.JsonValue|null){ if(!value||Array.isArray(value)||typeof value!=="object")return{}; return Object.fromEntries(Object.entries(value).filter((entry):entry is [string,string]=>typeof entry[1]==="string")); }
+function permanentFailure(message:string){ return /HTTP (400|401|403|404)\b|no .*configured|no .*template|unsupported message channel|unavailable/i.test(message); }
+function nextRetryAt(attempt:number){ const exponent=Math.max(attempt-1,0); const exponential=Math.min(MAX_RETRY_DELAY_MS,BASE_RETRY_DELAY_MS*Math.pow(2,exponent)); const jitter=Math.floor(Math.random()*(JITTER_MAX_MS+1)); return new Date(Date.now()+exponential+jitter); }
+function deterministicIdempotencyKey(input:NotificationInput,channel:Channel){ const explicit=input.idempotencyKey?.trim(); if(explicit)return `${explicit}:${channel}`; if(!input.templateKey)return `manual:${randomBytes(16).toString("hex")}:${channel}`; const digest=createHash("sha256").update(input.schoolId+"|"+input.templateKey+"|"+input.recipientId+"|"+input.body+"|"+JSON.stringify(input.templateVariables??{})).digest("hex"); return `${input.schoolId}:${input.templateKey}:${input.recipientId}:v1:${digest}:${channel}`; }
 
-function variables(value:Prisma.JsonValue|null){
-  if(!value||Array.isArray(value)||typeof value!=="object")return{};
-  return Object.fromEntries(Object.entries(value).filter((entry):entry is [string,string]=>typeof entry[1]==="string"));
-}
-
-function permanentFailure(message:string){
-  return /HTTP (400|401|403|404)\b|no .*configured|no .*template|unsupported message channel|unavailable/i.test(message);
-}
-
-function nextRetryAt(attempt:number){
-  const exponent=Math.max(attempt-1,0);
-  const exponential=Math.min(MAX_RETRY_DELAY_MS,BASE_RETRY_DELAY_MS*Math.pow(2,exponent));
-  const jitter=Math.floor(Math.random()*(JITTER_MAX_MS+1));
-  return new Date(Date.now()+exponential+jitter);
-}
-
-function deterministicIdempotencyKey(input:NotificationInput,channel:Channel){
-  const explicit=input.idempotencyKey?.trim();
-  if(explicit)return `${explicit}:${channel}`;
-  if(!input.templateKey)return `manual:${randomBytes(16).toString("hex")}:${channel}`;
-  const digest=createHash("sha256")
-    .update(input.schoolId+"|"+input.templateKey+"|"+input.recipientId+"|"+input.body+"|"+JSON.stringify(input.templateVariables??{}))
-    .digest("hex");
-  return `${input.schoolId}:${input.templateKey}:${input.recipientId}:v1:${digest}:${channel}`;
-}
-
-async function deliverCreatedMessage(
-  tx:Prisma.TransactionClient,
-  message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null;attempts:number},
-  settings:{smsSenderId?:string|null;whatsappTemplateConfig?:Prisma.JsonValue|null}|null|undefined,
-  senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}
-){
+async function deliverCreatedMessage(tx:Prisma.TransactionClient,message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null;attempts:number},settings:{smsSenderId?:string|null;whatsappTemplateConfig?:Prisma.JsonValue|null}|null|undefined,senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}){
   try{
-    if(message.channel==="sms"){
-      if(!senders.sms)throw new Error("SMS sender is unavailable.");
-      await senders.sms({phone:message.recipientPhone,body:message.body,senderId:settings?.smsSenderId||undefined});
-    }else if(message.channel==="whatsapp"){
-      if(!senders.whatsapp)throw new Error("WhatsApp sender is unavailable.");
-      if(!message.templateKey)throw new Error("WhatsApp job has no approved template key.");
-      const sid=contentSid(settings?.whatsappTemplateConfig,message.templateKey);
-      if(!sid)throw new Error("No Twilio ContentSid is configured for "+message.templateKey+".");
-      const messageVariables=variables(message.templateVariables);
-      if(message.mediaUrl)messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig,message.templateKey)]=message.mediaUrl;
-      await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:messageVariables,mediaUrl:message.mediaUrl||undefined});
-    }else throw new Error("Unsupported message channel: "+message.channel);
+    if(message.channel==="sms"){if(!senders.sms)throw new Error("SMS sender is unavailable."); await senders.sms({phone:message.recipientPhone,body:message.body,senderId:settings?.smsSenderId||undefined});}
+    else if(message.channel==="whatsapp"){if(!senders.whatsapp)throw new Error("WhatsApp sender is unavailable."); if(!message.templateKey)throw new Error("WhatsApp job has no approved template key."); const sid=contentSid(settings?.whatsappTemplateConfig,message.templateKey); if(!sid)throw new Error("No Twilio ContentSid is configured for "+message.templateKey+"."); const messageVariables=variables(message.templateVariables); if(message.mediaUrl)messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig,message.templateKey)]=message.mediaUrl; await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:messageVariables,mediaUrl:message.mediaUrl||undefined});}
+    else throw new Error("Unsupported message channel: "+message.channel);
     return tx.message.update({where:{id:message.id},data:{status:"sent",sentAt:new Date(),lastError:null,nextAttemptAt:new Date()}});
   }catch(error){
     const lastError=error instanceof Error?error.message.slice(0,500):"Unknown message error";
     console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.schoolId,lastError,attempts:message.attempts});
-    if(permanentFailure(lastError)||message.attempts>=MAX_ATTEMPTS){
-      return tx.message.update({where:{id:message.id},data:{status:"failed",lastError}});
-    }
+    if(permanentFailure(lastError)||message.attempts>=MAX_ATTEMPTS)return tx.message.update({where:{id:message.id},data:{status:"failed",lastError}});
     return tx.message.update({where:{id:message.id},data:{status:"queued",lastError,nextAttemptAt:nextRetryAt(message.attempts)}});
   }
 }
 
 export async function enqueueNotification(tx:Prisma.TransactionClient,input:NotificationInput){
-  const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}});
-  const channels=configuredChannels(settings?.notificationChannels);
-  const messages=[];
-  for(const channel of channels){
-    if(channel==="whatsapp"&&!input.templateKey)continue;
-    const idempotencyKey=deterministicIdempotencyKey(input,channel);
-    const existing=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}});
-    if(existing){messages.push(existing);continue;}
-    try{
-      const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt:new Date(),idempotencyKey}});
-      messages.push(message);
-    }catch(error){
-      if((error as {code?:string}).code!=="P2002")throw error;
-      const existingAfterRace=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}});
-      if(!existingAfterRace)throw error;
-      messages.push(existingAfterRace);
-    }
-  }
+  const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}}); const channels=configuredChannels(settings?.notificationChannels); const messages=[];
+  for(const channel of channels){ if(channel==="whatsapp"&&!input.templateKey)continue; const idempotencyKey=deterministicIdempotencyKey(input,channel); const existing=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(existing){messages.push(existing);continue;} try{ const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt:new Date(),idempotencyKey}}); messages.push(message);}catch(error){ if((error as {code?:string}).code!=="P2002")throw error; const existingAfterRace=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(!existingAfterRace)throw error; messages.push(existingAfterRace); } }
   return messages;
 }
-
 export const enqueueSms=enqueueNotification;
 
-export async function processMessageBatchOnce(senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender},batchSize=20){
-  const directories=await db.schoolLoginDirectory.findMany({where:{status:"active"}});let processed=0;
+export async function processMessageBatchOnce(senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender},batchSize=20,schoolIdFilter?:string){
+  const directories=await db.schoolLoginDirectory.findMany({where:{status:"active",...(schoolIdFilter?{schoolId:schoolIdFilter}:{})}}); let processed=0;
   for(const directory of directories){
     if(processed>=batchSize)break;
     const jobs=await withTenant(directory.schoolId,tx=>tx.message.findMany({where:{status:"queued",nextAttemptAt:{lte:new Date()}},orderBy:{createdAt:"asc"},take:batchSize-processed}));
@@ -161,5 +97,4 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
   }
   return processed;
 }
-
-export async function processSmsBatchOnce(sender:SmsSender=httpSmsSender,batchSize=20){return processMessageBatchOnce({sms:sender},batchSize);} 
+export async function processSmsBatchOnce(sender:SmsSender=httpSmsSender,batchSize=20,schoolIdFilter?:string){return processMessageBatchOnce({sms:sender},batchSize,schoolIdFilter);} 
