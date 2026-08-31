@@ -4,9 +4,10 @@ import "./design-tokens.css";
 import "./ui-system.css";
 import "./student-theme.css";
 import "./visual-system.css";
-import "./sukuunova-bright.css";
 import "./typography.css";
 import "./public-theme.css";
+import "../components/app-shell.css";
+import "./login/login.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { PublicThemeGate } from "@/components/PublicThemeGate";
 
