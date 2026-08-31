@@ -2,28 +2,11 @@ import "../capability.css";
 import { MarketingCapabilityPage } from "@/components/MarketingCapabilityPage";
 
 export default function AttendanceSafetyFeaturePage() {
-  return (
-    <MarketingCapabilityPage
-      eyebrow="Attendance & safety"
-      title="Know who is present, late or missing before it becomes a bigger problem."
-      intro="Daily registers, lateness, absence, device attendance and exception handling come together so a school can respond quickly and keep a dependable record of the day."
-      accent="#195b55"
-      workspaceHref="/school/attendance"
-      workspaceLabel="Open Attendance"
-      sections={[
-        { title: "Start with the daily register", body: "Give staff a clear place to mark attendance and see the current state of every learner." },
-        { title: "Lateness is visible too", body: "Capture exceptions instead of forcing the school to reconstruct the morning from messages and memory." },
-        { title: "Device attendance can feed the same story", body: "Keep approved device-based attendance connected to the school record instead of treating it as a separate universe." },
-        { title: "Follow up from the exception", body: "Make absence and attendance exceptions easier to review and act on while the context is still fresh." },
-        { title: "Sensitive data stays controlled", body: "Attendance information follows the same role and tenant boundaries as the rest of the school record." },
-        { title: "Leadership gets useful signals", body: "Spot patterns and recurring exceptions without reducing attendance to a single headline number." },
-      ]}
-      outcomes={[
-        "Faster daily attendance routines",
-        "Clearer visibility into lateness and absence",
-        "One record for manual and approved device attendance",
-        "Better follow-through on attendance exceptions",
-      ]}
-    />
-  );
+  return <MarketingCapabilityPage eyebrow="Attendance & safety" title="See who is in school, who is late and who needs a call." intro="Take the morning register, catch absences early and keep a clear record of what happened during the day." accent="#195b55" workspaceHref="/school/attendance" workspaceLabel="Attendance" sections={[
+    { title: "Start with the register", body: "Teachers can record who is present and who is not without waiting for the office to rebuild the list later." },
+    { title: "Mark the exceptions", body: "Lateness and absence stay visible, so a missed learner does not disappear into a pile of messages." },
+    { title: "Bring device attendance together", body: "Approved attendance devices can feed into the same school record used by staff." },
+    { title: "Follow up while it is fresh", body: "Open the exception, check the context and take the next step while the information is still current." },
+    { title: "Keep the record", body: "The school is left with a clear history of attendance events that authorised staff can review later." },
+  ]} outcomes={["A faster morning register", "Clearer absence and lateness follow-up", "Manual and approved device attendance in one place", "A record the school can return to later"]} />;
 }
