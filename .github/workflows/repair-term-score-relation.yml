@@ -1,0 +1,34 @@
+name: Repair term score relation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/repair-term-score-relation"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Remove invalid Term scores relation
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path("prisma/schema.prisma")
+          text = p.read_text()
+          old = "  scores       Score[]\n"
+          if old not in text:
+              raise SystemExit("Expected Term.scores relation not found; refusing to modify schema")
+          p.write_text(text.replace(old, "", 1))
+      - name: Commit repair
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add prisma/schema.prisma
+          git commit -m 'fix(schema): remove invalid term score relation'
+          git push
