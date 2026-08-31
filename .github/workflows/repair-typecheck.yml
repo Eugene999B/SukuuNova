@@ -10,53 +10,50 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Patch verified TypeScript contracts
+      - name: Apply idempotent type fixes
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def patch(path, fn):
-              p=Path(path); s=p.read_text(); out=fn(s)
+          def edit(path, transform, label):
+              p = Path(path)
+              s = p.read_text()
+              out = transform(s)
               if out == s:
-                  raise SystemExit(f'No change made to {path}; expected pattern may already be fixed or has drifted')
-              p.write_text(out)
+                  print(f'{label}: no change needed')
+              else:
+                  p.write_text(out)
+                  print(f'{label}: changed')
 
-          patch('src/app/school/report-cards/[id]/print/page.tsx', lambda s: (
-              s.replace(
-                  'type GradeBand = { grade?: string; min?: number; max?: number; remark?: string; label?: string };',
-                  'import type { AssessmentRules, GradeBand } from "@/lib/assessment-engine";\n\ntype ReportSettings = { showOverallPosition:boolean; positionScope:"class"|"year_group"; remarkSource:"grade_band"|"position_band"; positionBandLabels:unknown; behaviorRatingFields:unknown; promotionRule:"manual"|"pass_mark"|"overall_position" };'
-              ) if 'type GradeBand = { grade?: string; min?: number; max?: number; remark?: string; label?: string };' in s else s
-          ).replace(
-              'type ReportSettings = { showOverallPosition:boolean; positionScope:"class"|"year_group"; remarkSource:"grade_band"|"position_band"; positionBandLabels:unknown; behaviorRatingFields:unknown; promotionRule:"manual"|"pass_mark"|"overall_position" };\nimport type { AssessmentRules, GradeBand } from "@/lib/assessment-engine";',
-              'type ReportSettings = { showOverallPosition:boolean; positionScope:"class"|"year_group"; remarkSource:"grade_band"|"position_band"; positionBandLabels:unknown; behaviorRatingFields:unknown; promotionRule:"manual"|"pass_mark"|"overall_position" };\nimport type { AssessmentRules, GradeBand } from "@/lib/assessment-engine";'
-          ).replace(
-              'grade:typeof item.grade==="string"?item.grade:typeof item.label==="string"?item.label:undefined,',
-              'grade:typeof item.grade==="string"?item.grade:typeof item.label==="string"?item.label:"",'
-          ).replace(
-              'const rulesFor=(settings:',
-              'const rulesFor=(settings:'
-          ).replace(
-              'return{categories:normalized,rounding,missingScorePolicy,allowTeacherOverride:configured.allowTeacherOverride===true,gradingScale:gradeScale(settings.gradingScale)} as const;',
-              'return{categories:normalized,rounding,missingScorePolicy,allowTeacherOverride:configured.allowTeacherOverride===true,gradingScale:gradeScale(settings.gradingScale)} as AssessmentRules;'
-          ).replace(
-              'const promotionDecision=reportSettings.promotionRule===',
-              'const promotionDecision: "promoted" | "not_promoted" | "decision_required"=reportSettings.promotionRule==='
-          )
-          ))
+          def report_fix(s):
+              if 'import type { AssessmentRules, GradeBand } from "@/lib/assessment-engine";' not in s:
+                  local = 'type GradeBand = { grade?: string; min?: number; max?: number; remark?: string; label?: string };'
+                  if local in s:
+                      s = s.replace(local, 'import type { AssessmentRules, GradeBand } from "@/lib/assessment-engine";', 1)
+                  else:
+                      marker = 'type ReportSettings ='
+                      if marker not in s:
+                          raise SystemExit('report card: ReportSettings marker missing')
+                      s = s.replace(marker, 'import type { AssessmentRules, GradeBand } from "@/lib/assessment-engine";\\n'+marker, 1)
+              s = s.replace('grade:typeof item.grade==="string"?item.grade:typeof item.label==="string"?item.label:undefined,', 'grade:typeof item.grade==="string"?item.grade:typeof item.label==="string"?item.label:"",')
+              s = s.replace('return{categories:normalized,rounding,missingScorePolicy,allowTeacherOverride:configured.allowTeacherOverride===true,gradingScale:gradeScale(settings.gradingScale)} as const;', 'return{categories:normalized,rounding,missingScorePolicy,allowTeacherOverride:configured.allowTeacherOverride===true,gradingScale:gradeScale(settings.gradingScale)} as AssessmentRules;')
+              s = s.replace('const promotionDecision=reportSettings.promotionRule===', 'const promotionDecision: "promoted" | "not_promoted" | "decision_required"=reportSettings.promotionRule===')
+              return s
 
-          patch('src/app/teacher/attendance/page.tsx', lambda s: s
-              .replace(
-                  'const type = String(formData.get("type") || "in").trim();',
-                  'const rawType = String(formData.get("type") || "in").trim();\n  const type: "in" | "out" = rawType === "out" ? "out" : "in";'
-              )
-              .replace('method: "teacher_register"', 'method: "manual"')
-          )
+          def attendance_fix(s):
+              if 'const type = String(formData.get("type") || "in").trim();' in s:
+                  s = s.replace('const type = String(formData.get("type") || "in").trim();', 'const rawType = String(formData.get("type") || "in").trim();\\n  const type: "in" | "out" = rawType === "out" ? "out" : "in";', 1)
+              s = s.replace('method: "teacher_register"', 'method: "manual"')
+              return s
 
-          patch('src/lib/phase4-service.ts', lambda s: s.replace(
-              'db.$queryRaw<Array<{schoolId:string;uniqueCode:string}>>(`SELECT d."schoolId",d."uniqueCode"',
-              'db.$queryRawUnsafe<Array<{schoolId:string;uniqueCode:string}>>(`SELECT d."schoolId",d."uniqueCode"'
-          ))
+          def phase4_fix(s):
+              return s.replace('db.$queryRaw<Array<{schoolId:string;uniqueCode:string}>>(`SELECT d."schoolId",d."uniqueCode"', 'db.$queryRawUnsafe<Array<{schoolId:string;uniqueCode:string}>>(`SELECT d."schoolId",d."uniqueCode"', 1)
+
+          edit('src/app/school/report-cards/[id]/print/page.tsx', report_fix, 'report-card')
+          edit('src/app/teacher/attendance/page.tsx', attendance_fix, 'teacher-attendance')
+          edit('src/lib/phase4-service.ts', phase4_fix, 'phase4-service')
           PY
+          git diff --check
 
       - name: Commit fixes and remove repair workflow
         run: |
@@ -64,5 +61,8 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/app/school/report-cards/'[id]'/print/page.tsx src/app/teacher/attendance/page.tsx src/lib/phase4-service.ts .github/workflows/repair-typecheck.yml
           git rm .github/workflows/repair-typecheck.yml
-          git commit -m 'fix(ci): repair remaining typecheck contracts'
+          if git diff --cached --quiet; then
+            echo 'No product changes were required; leaving workflow removal as the only commit.'
+          fi
+          git commit -m 'fix(ci): resolve remaining typecheck contracts'
           git push
