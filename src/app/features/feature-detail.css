@@ -1,0 +1,33 @@
+.feature-detail-shell{min-height:100vh;background:#fff;color:#0a1830;font-family:var(--sn-font-family,Inter,system-ui,sans-serif)}
+.feature-detail-wrap{max-width:1180px;margin:0 auto;padding:0 28px 28px}
+.feature-detail-topbar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:76px;border-bottom:1px solid #e6ebf2;gap:20px}
+.detail-back,.detail-login{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-size:13px;font-weight:700;color:#5f6f86}
+.detail-login{justify-self:end;color:#0a1830}
+.detail-brand{font-size:18px;font-weight:800;letter-spacing:-.04em;color:#0a1830;text-decoration:none}
+.feature-detail-hero{padding:96px 0 88px;max-width:860px;margin:0 auto;text-align:center}
+.detail-icon{width:62px;height:62px;margin:0 auto 24px;border-radius:20px;display:grid;place-items:center;background:var(--feature-tint);color:var(--feature-accent);border:1px solid color-mix(in srgb,var(--feature-accent) 16%,#e6ebf2)}
+.detail-eyebrow{display:block;color:var(--feature-accent);font-size:11px;font-weight:800;letter-spacing:.16em}
+.feature-detail-hero h1{margin:16px auto 18px;font-size:clamp(42px,6vw,76px);line-height:1.02;letter-spacing:-.065em;max-width:820px;color:#09172d}
+.feature-detail-hero>p{margin:0 auto;max-width:760px;color:#66758a;font-size:18px;line-height:1.72}
+.detail-actions{display:flex;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:30px}
+.detail-primary,.detail-secondary{display:inline-flex;align-items:center;gap:8px;padding:14px 18px;border-radius:14px;text-decoration:none;font-size:13px;font-weight:800}
+.detail-primary{background:#0a1830;color:#fff;box-shadow:0 16px 34px rgba(10,24,48,.16)}
+.detail-secondary{border:1px solid #dbe2eb;color:#0a1830;background:#fff}
+.detail-content-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:18px;padding:26px 0}
+.detail-panel{border:1px solid #e3e8ef;border-radius:28px;background:#fbfcfe;padding:34px;box-shadow:0 20px 50px rgba(15,34,62,.06)}
+.detail-panel-featured{background:linear-gradient(180deg,#fbfdff 0%,#f4f8fc 100%)}
+.detail-panel-label{font-size:10px;font-weight:800;letter-spacing:.15em;color:var(--feature-accent)}
+.detail-panel h2,.detail-system h2{margin:10px 0 12px;font-size:clamp(28px,4vw,44px);line-height:1.06;letter-spacing:-.05em;color:#0a1830}
+.detail-panel p{margin:0;color:#6a788d;font-size:15px;line-height:1.7}
+.detail-point-grid{display:grid;gap:10px}
+.detail-point{display:flex;align-items:flex-start;gap:12px;padding:20px;border:1px solid #e5eaf1;border-radius:18px;background:#fff}
+.detail-point svg{flex:0 0 auto;color:var(--feature-accent);margin-top:1px}
+.detail-point p{margin:0;color:#24364e;font-size:14px;line-height:1.55;font-weight:650}
+.detail-system{display:grid;grid-template-columns:1fr 1.2fr;gap:25px;align-items:center;margin-top:34px;padding:32px;border-radius:28px;background:#09172d;color:#fff}
+.detail-system h2{color:#fff;margin-bottom:0}
+.detail-flow{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;color:#adbad0}
+.detail-flow span{display:inline-flex;align-items:center;gap:7px;padding:10px 12px;border:1px solid rgba(255,255,255,.11);border-radius:12px;background:rgba(255,255,255,.045);font-size:11px;font-weight:700;color:#f4f7fb}
+.detail-footer{display:flex;justify-content:space-between;gap:20px;padding:48px 0 10px;border-top:1px solid #e6ebf2;margin-top:48px;color:#6f7d91;font-size:11px}
+.detail-footer a{color:#3f526b;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;gap:6px}
+@media(max-width:860px){.feature-detail-topbar{grid-template-columns:1fr auto}.detail-brand{display:none}.feature-detail-hero{padding:70px 0}.detail-content-grid,.detail-system{grid-template-columns:1fr}.detail-flow{justify-content:flex-start}.detail-footer{flex-wrap:wrap}}
+@media(max-width:600px){.feature-detail-wrap{padding-inline:18px}.feature-detail-topbar{min-height:66px}.feature-detail-hero h1{font-size:45px}.feature-detail-hero>p{font-size:16px}.detail-panel{padding:24px}.detail-system{padding:24px}.detail-footer{display:grid}}
