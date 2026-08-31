@@ -1,13 +1,15 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { db, withTenant } from "@/lib/db";
 
-type NotificationTemplateKey="student_absence"|"student_attendance"|"staff_late"|"invoice_created"|"payment_received"|"report_card_ready"|"transport_boarding"|"emergency_broadcast"|"school_announcement";
+type NotificationTemplateKey="student_absence"|"student_attendance"|"staff_late"|"invoice_created"|"payment_received"|"report_card_ready"|"transport_boarding"|"feeding_notice"|"emergency_broadcast"|"school_announcement";
 type RecipientType="guardian"|"staff"|"user";
 type Channel="sms"|"whatsapp";
 
 type NotificationInput={
   schoolId:string; recipientType:RecipientType; recipientId:string; recipientPhone:string; body:string;
   templateKey?:NotificationTemplateKey; templateVariables?:Record<string,string>; mediaUrl?:string;
+  idempotencyKey?:string;
 };
 
 type NotificationSenders={sms?:SmsSender;whatsapp?:WhatsAppSender};
@@ -79,6 +81,16 @@ function nextRetryAt(attempt:number){
   return new Date(Date.now()+exponential+jitter);
 }
 
+function deterministicIdempotencyKey(input:NotificationInput,channel:Channel){
+  const explicit=input.idempotencyKey?.trim();
+  if(explicit)return `${explicit}:${channel}`;
+  if(!input.templateKey)return `manual:${randomBytes(16).toString("hex")}:${channel}`;
+  const digest=createHash("sha256")
+    .update(input.schoolId+"|"+input.templateKey+"|"+input.recipientId+"|"+input.body+"|"+JSON.stringify(input.templateVariables??{}))
+    .digest("hex");
+  return `${input.schoolId}:${input.templateKey}:${input.recipientId}:v1:${digest}:${channel}`;
+}
+
 async function deliverCreatedMessage(
   tx:Prisma.TransactionClient,
   message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null;attempts:number},
@@ -115,8 +127,18 @@ export async function enqueueNotification(tx:Prisma.TransactionClient,input:Noti
   const messages=[];
   for(const channel of channels){
     if(channel==="whatsapp"&&!input.templateKey)continue;
-    const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt:new Date()}});
-    messages.push(message);
+    const idempotencyKey=deterministicIdempotencyKey(input,channel);
+    const existing=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}});
+    if(existing){messages.push(existing);continue;}
+    try{
+      const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt:new Date(),idempotencyKey}});
+      messages.push(message);
+    }catch(error){
+      if((error as {code?:string}).code!=="P2002")throw error;
+      const existingAfterRace=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}});
+      if(!existingAfterRace)throw error;
+      messages.push(existingAfterRace);
+    }
   }
   return messages;
 }
