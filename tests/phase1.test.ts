@@ -10,7 +10,7 @@ import {
   submitReportCard
 } from "../src/lib/report-card-service";
 import { visibleStudents } from "../src/lib/sis-service";
-import { enqueueSms } from "../src/lib/sms-outbox";
+import { enqueueSms, processMessageBatchOnce } from "../src/lib/sms-outbox";
 import { createTenantFixture, type Fixture } from "./helpers";
 
 describe("Phase 1 MVP security and workflow gates", () => {
@@ -283,7 +283,7 @@ describe("Phase 1 MVP security and workflow gates", () => {
     });
   });
 
-  it("sends SMS synchronously without requiring a worker", async () => {
+  it("queues SMS for worker delivery", async () => {
     const sender = async () => undefined;
     await withTenant(fixture.schoolId, async (tx) => {
       const messages = await enqueueSms(tx, {
@@ -291,9 +291,13 @@ describe("Phase 1 MVP security and workflow gates", () => {
         recipientType: "guardian",
         recipientId: parentId,
         recipientPhone: "+233200000001",
-        body: "Phase 1 synchronous SMS proof"
-      }, { sms: sender });
-      expect(messages[0].status).toBe("sent");
+        body: "Phase 1 queued SMS proof",
+        templateKey: "school_announcement"
+      });
+      expect(messages[0].status).toBe("queued");
+      expect(await processMessageBatchOnce({ sms: sender }, 1)).toBe(1);
+      const sent = await tx.message.findUnique({ where: { id: messages[0].id } });
+      expect(sent?.status).toBe("sent");
     });
   });
 
