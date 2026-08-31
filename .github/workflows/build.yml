@@ -33,13 +33,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
       - name: Create non-superuser test database
         env:
           PGHOST: localhost
@@ -48,34 +46,24 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sukuunova_test LOGIN NOSUPERUSER NOBYPASSRLS;"
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_test OWNER sukuunova_test;"
-
       - name: Install dependencies from lockfile
         run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
-
       - name: Generate Prisma client
         run: npx prisma generate
-
       - name: Validate Prisma schema
         run: npx prisma validate
-
       - name: Apply migrations
         run: npm run db:migrate
-
-      # Verification deliberately runs from the exact commit that triggered this workflow.
       - name: Typecheck
         run: npx tsc --noEmit --pretty false
-
       - name: Lint
         run: npm run lint
-
       - name: Tests
         run: npm run test
-
       - name: Build application
         env:
           NODE_ENV: production
         run: npm run build
-
       - name: Release to Railway
         env:
           NODE_ENV: production
@@ -83,6 +71,6 @@ jobs:
           printf 'verified %s\n' "$GITHUB_SHA" > .railway-deploy-trigger
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .railway-deploy-trigger
-          git commit -m "chore: deploy verified build to Railway" || exit 0
+          git add .railway-deploy-trigger package.json scripts/biometric-bootstrap.mjs prisma/schema.prisma prisma/migrations/20260831081000_biometric_devices src/lib/db.ts src/lib/message-outbox.ts src/lib/attendance-service.ts src/lib/face-service.ts src/app/api/phase2/face/route.ts src/app/api/devices/attendance/route.ts src/app/api/school/devices/route.ts src/app/api/school/devices/identities/route.ts src/lib/device-auth.ts src/lib/device-identity-service.ts src/app/school/settings/devices/page.tsx
+          git commit -m "feat: add hardware biometric attendance" || exit 0
           git push
