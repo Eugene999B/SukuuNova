@@ -1,2 +1,2 @@
-import PlatformAdminWorkspace from "@/components/PlatformAdminWorkspace";
-export default function SearchPage(){return <PlatformAdminWorkspace section="analytics"/>;}
+import PlatformSearchWorkspace from "./PlatformSearchWorkspace";
+export default function SearchPage(){return <PlatformSearchWorkspace/>;}
