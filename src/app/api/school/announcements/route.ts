@@ -38,17 +38,17 @@ export async function POST(request: Request) {
 
       let recipients: Array<{ id: string; name: string; phone: string | null }> = [];
       if (input.audience === "all_staff") {
-        recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });
+        recipients = await tx.user.findMany({ where: { status: "active", schoolId: session.schoolId }, select: { id: true, name: true, phone: true } });
       } else if (input.audience === "teaching_staff") {
-        recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { name: { contains: "teacher", mode: "insensitive" } } } } }, select: { id: true, name: true, phone: true } });
+        recipients = await tx.user.findMany({ where: { status: "active", schoolId: session.schoolId, userRoles: { some: { role: { name: { contains: "teacher", mode: "insensitive" } } } } }, select: { id: true, name: true, phone: true } });
       } else if (input.audience === "guardians") {
-        recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
+        recipients = await tx.user.findMany({ where: { status: "active", schoolId: session.schoolId, guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
       } else if (input.audience === "role") {
         if (!input.roleId) throw new ForbiddenError("Choose a role audience.");
-        recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { roleId: input.roleId } } }, select: { id: true, name: true, phone: true } });
+        recipients = await tx.user.findMany({ where: { status: "active", schoolId: session.schoolId, userRoles: { some: { roleId: input.roleId } } }, select: { id: true, name: true, phone: true } });
       } else {
         if (!input.userId) throw new ForbiddenError("Choose a recipient.");
-        const user = await tx.user.findFirst({ where: { id: input.userId, status: "active" }, select: { id: true, name: true, phone: true } });
+        const user = await tx.user.findFirst({ where: { id: input.userId, schoolId: session.schoolId, status: "active" }, select: { id: true, name: true, phone: true } });
         if (user) recipients = [user];
       }
 
