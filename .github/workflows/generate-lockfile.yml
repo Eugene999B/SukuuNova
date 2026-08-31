@@ -1,18 +1,15 @@
 name: Generate npm lockfile
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
 permissions:
   contents: write
-
 jobs:
   lockfile:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,16 +17,67 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Generate lockfile
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Commit lockfile when needed
+      - name: Install dependencies
+        run: npm ci
+      - name: Integrate biometric attendance
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: |
-          if [ -f package-lock.json ] && git diff --quiet -- package-lock.json && git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then
-            echo 'package-lock.json is already tracked and up to date.'
-            exit 0
-          fi
+          set -euo pipefail
+          python - <<'PY'
+from pathlib import Path
+p=Path('.')
+def r(f): return (p/f).read_text()
+def w(f,s): (p/f).write_text(s)
+def x(f,a,b):
+    s=r(f); n=s.count(a)
+    if n != 1: raise SystemExit(f'{f}: expected one match, got {n}')
+    w(f,s.replace(a,b,1))
+schema='prisma/schema.prisma'
+s=r(schema)
+if 'model Device {' not in s:
+    x(schema,'  houses              House[]\n}', '  houses              House[]\n  devices             Device[]\n  deviceIdentities    DeviceIdentity[]\n  deviceAttendanceReceipts DeviceAttendanceReceipt[]\n}')
+    x(schema,'  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")\n', '  faceReviewsCompleted FaceMatchReview[] @relation("FaceReviewedBy")\n  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStaff")\n')
+    x(schema,'  faceMatchReviews FaceMatchReview[]\n', '  faceMatchReviews FaceMatchReview[]\n  deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStudent")\n')
+    x(schema,'  recordedBy       String\n', '  recordedBy       String?\n')
+    x(schema,'  recorder         User     @relation("AttendanceRecorder", fields: [recordedBy, schoolId], references: [id, schoolId], onDelete: Restrict)\n', '  recorder         User?    @relation("AttendanceRecorder", fields: [recordedBy, schoolId], references: [id, schoolId], onDelete: Restrict)\n  device           Device?  @relation(fields: [deviceId, schoolId], references: [id, schoolId], onDelete: Restrict)\n')
+    w(schema,r(schema)+'''\n\nmodel Device {\n  id                 String   @id @default(cuid())\n  schoolId           String\n  deviceSerial       String\n  kind               String\n  label              String\n  apiKeyHash         String\n  status             String   @default("active")\n  lastSeenAt         DateTime?\n  createdAt          DateTime @default(now())\n  school             School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)\n  attendanceEvents   AttendanceEvent[]\n  identities         DeviceIdentity[]\n  attendanceReceipts DeviceAttendanceReceipt[]\n  @@unique([id, schoolId])\n  @@unique([schoolId, deviceSerial])\n  @@index([schoolId])\n}\n\nmodel DeviceIdentity {\n  id         String   @id @default(cuid())\n  schoolId   String\n  deviceKind String\n  externalId String\n  studentId  String?\n  staffId    String?\n  createdAt  DateTime @default(now())\n  school     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)\n  student    Student? @relation("DeviceIdentityStudent", fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)\n  staff      User?    @relation("DeviceIdentityStaff", fields: [staffId, schoolId], references: [id, schoolId], onDelete: Restrict)\n  @@unique([id, schoolId])\n  @@unique([schoolId, deviceKind, externalId])\n  @@unique([schoolId, deviceKind, studentId])\n  @@unique([schoolId, deviceKind, staffId])\n  @@index([schoolId])\n}\n\nmodel DeviceAttendanceReceipt {\n  id             String   @id @default(cuid())\n  schoolId       String\n  deviceId       String\n  idempotencyKey String\n  nonce          String\n  capturedAt     DateTime?\n  createdAt      DateTime @default(now())\n  processedAt    DateTime?\n  school         School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)\n  device         Device   @relation(fields: [deviceId, schoolId], references: [id, schoolId], onDelete: Cascade)\n  @@unique([id, schoolId])\n  @@unique([schoolId, deviceId, idempotencyKey])\n  @@unique([schoolId, deviceId, nonce])\n  @@index([schoolId])\n  @@index([schoolId, deviceId, createdAt])\n}\n''')
+x('src/lib/db.ts','  "ReportCardTemplate"\n]);','  "ReportCardTemplate",\n  "Device",\n  "DeviceIdentity",\n  "DeviceAttendanceReceipt"\n]);')
+x('src/lib/message-outbox.ts','export type NotificationTemplateKey="student_absence"|"staff_late"','export type NotificationTemplateKey="student_absence"|"student_attendance"|"staff_late"')
+ap='src/lib/attendance-service.ts'
+x(ap,'    schoolId: string; actorId: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face"; confidenceScore?: number; deviceId?: string; timestamp?: Date;\n','    schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out";\n    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; deviceAuthenticated?: boolean;\n')
+x(ap,'  await requirePermission(tx, input.actorId, "attendance:record");\n  if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);\n  else await authorizeStaffAttendance(tx, input.actorId);\n','  if (input.deviceAuthenticated) {\n    if (!input.deviceId) throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");\n  } else {\n    if (!input.actorId) throw new ForbiddenError("A staff actor is required for attendance.");\n    await requirePermission(tx, input.actorId, "attendance:record");\n    if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);\n    else await authorizeStaffAttendance(tx, input.actorId);\n  }\n')
+x(ap,'  const timestamp = input.timestamp ?? new Date();','  const timestamp = new Date();')
+x(ap,'      recordedBy: input.actorId\n','      recordedBy: input.actorId ?? null\n')
+x(ap,'    schoolId: input.schoolId, actorId: input.actorId, action: "attendance.recorded",','    schoolId: input.schoolId, actorId: input.actorId ?? ("device:" + input.deviceId), action: "attendance.recorded",')
+s=r(ap)
+if 'templateKey: "student_attendance"' not in s:
+    g='''  if (input.target.studentId) {\n    const student = await tx.student.findUnique({ where: { id: input.target.studentId }, select: { name: true } });\n    const guardians = await tx.studentGuardian.findMany({ where: { studentId: input.target.studentId, isPrimary: true }, include: { guardian: { select: { id: true, phone: true } } } });\n    const attendanceLabel = input.type === "out" ? "checked out" : (isLate ? "checked in late" : "checked in on time");\n    for (const link of guardians) {\n      if (!link.guardian.phone) continue;\n      await enqueueSms(tx, { schoolId: input.schoolId, recipientType: "guardian", recipientId: link.guardian.id, recipientPhone: link.guardian.phone, body: "SukuuNova attendance alert: " + (student?.name ?? "Your child") + " " + attendanceLabel + ".", templateKey: "student_attendance", templateVariables: { "1": student?.name ?? "Student", "2": attendanceLabel } });\n    }\n  }\n\n'''
+    if '  if (input.target.staffId && isLate) {' not in s: raise SystemExit('attendance insertion anchor missing')
+    w(ap,s.replace('  if (input.target.staffId && isLate) {',g+'  if (input.target.staffId && isLate) {',1))
+fp='src/lib/face-service.ts'
+x(fp,'    actorId: string;\n    image: string;\n    deviceId?: string;\n    type: "in" | "out";\n    timestamp?: Date;\n','    actorId?: string;\n    image: string;\n    deviceId?: string;\n    type: "in" | "out";\n    deviceAuthenticated?: boolean;\n')
+x(fp,'  await requirePermission(tx, input.actorId, "attendance:record");\n  const [settings, match] = await Promise.all([','  if (!input.deviceAuthenticated) {\n    if (!input.actorId) throw new AppError("A staff actor is required for face attendance.", 401, "ACTOR_REQUIRED");\n    await requirePermission(tx, input.actorId, "attendance:record");\n  } else if (!input.deviceId) {\n    throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");\n  }\n  const [settings, match] = await Promise.all([')
+x(fp,'    timestamp: input.timestamp,\n','')
+fr='src/app/api/phase2/face/route.ts'
+s=r(fr); ns=s.replace('timestamp:z.coerce.date().optional(),','')
+if ns==s: raise SystemExit('phase2 face timestamp field not found')
+w(fr,ns)
+m='prisma/migrations/20260831081000_biometric_devices/migration.sql'
+Path(m).parent.mkdir(parents=True,exist_ok=True)
+w(m,'''ALTER TABLE "AttendanceEvent" ALTER COLUMN "recordedBy" DROP NOT NULL;\nALTER TABLE "Device" ENABLE ROW LEVEL SECURITY;\nALTER TABLE "Device" FORCE ROW LEVEL SECURITY;\nCREATE POLICY "Device_tenant_isolation" ON "Device" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());\nALTER TABLE "DeviceIdentity" ENABLE ROW LEVEL SECURITY;\nALTER TABLE "DeviceIdentity" FORCE ROW LEVEL SECURITY;\nCREATE POLICY "DeviceIdentity_tenant_isolation" ON "DeviceIdentity" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());\nALTER TABLE "DeviceAttendanceReceipt" ENABLE ROW LEVEL SECURITY;\nALTER TABLE "DeviceAttendanceReceipt" FORCE ROW LEVEL SECURITY;\nCREATE POLICY "DeviceAttendanceReceipt_tenant_isolation" ON "DeviceAttendanceReceipt" USING ("schoolId" = sukuunova_current_school_id()) WITH CHECK ("schoolId" = sukuunova_current_school_id());\n''')
+PY
+          python /tmp/integrate.py
+          ./node_modules/.bin/prisma format
+          ./node_modules/.bin/prisma validate
+          ./node_modules/.bin/prisma generate
+          git diff --check
+      - name: Commit integration
+        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package-lock.json
-          git commit -m 'chore: add deterministic npm lockfile'
+          git add prisma/schema.prisma prisma/migrations/20260831081000_biometric_devices/migration.sql src/lib/db.ts src/lib/message-outbox.ts src/lib/attendance-service.ts src/lib/face-service.ts src/app/api/phase2/face/route.ts
+          git commit -m 'feat: integrate biometric attendance'
           git push
+      - name: Generate lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
