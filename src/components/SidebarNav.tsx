@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
@@ -8,7 +9,7 @@ export type NavItem = { icon: LucideIcon; label: string; href: string; primary?:
 export type NavGroup = { label: string; items: NavItem[] };
 
 export function SidebarNav({ groups, active }: { groups: NavGroup[]; active: string }) {
-  const pathname = usePathnameSafe();
+  const pathname = usePathname();
   const storageKey = "sukuunova-sidebar-groups";
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -63,12 +64,4 @@ export function SidebarNav({ groups, active }: { groups: NavGroup[]; active: str
       })}
     </nav>
   );
-}
-
-function usePathnameSafe() {
-  // Kept isolated so the navigation component has no routing logic beyond active-state detection.
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const { usePathname } = require("next/navigation") as typeof import("next/navigation");
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  return usePathname();
 }
