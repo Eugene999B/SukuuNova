@@ -16,6 +16,7 @@ export type SyncOutcome =
 export type SyncInput = {
   clientOperationId: string;
   clientVersion: number;
+  baseEntityVersion?: number;
   entityId?: string;
   operationType: "ATTENDANCE_RECORD";
   payload: Record<string, unknown>;
@@ -51,6 +52,10 @@ export async function processOfflineSync(
 
     if (!Number.isInteger(operation.clientVersion) || operation.clientVersion < 1 || !operation.clientOperationId.trim()) {
       results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Invalid client operation metadata." });
+      continue;
+    }
+    if (operation.baseEntityVersion !== undefined && (!Number.isInteger(operation.baseEntityVersion) || operation.baseEntityVersion < 0)) {
+      results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Invalid base entity version." });
       continue;
     }
     if (Number.isNaN(createdAt.getTime())) {
@@ -103,14 +108,42 @@ export async function processOfflineSync(
       continue;
     }
 
+    const periodId = typeof operation.payload.periodId === "string" && operation.payload.periodId.trim()
+      ? operation.payload.periodId.trim()
+      : "DAILY";
+    const currentRecord = await tx.$queryRaw<Array<{ id: string; version: number; status: string }>>`
+      SELECT "id", "version", "status"
+      FROM "AttendanceRecord"
+      WHERE "schoolId" = ${input.schoolId}
+        AND "studentId" = ${studentId}
+        AND "attendanceDate" = ${attendanceDate.toISOString().slice(0, 10)}::date
+        AND "periodId" = ${periodId}
+      LIMIT 1
+    `;
+    const currentVersion = currentRecord[0]?.version ?? 0;
+    if (operation.baseEntityVersion !== undefined) {
+      if (!currentRecord[0] && operation.baseEntityVersion !== 0) {
+        results.push({ ...base, status: "CONFLICT" as SyncOutcome, reason: "The offline client expected an existing attendance record, but it no longer exists." });
+        continue;
+      }
+      if (currentRecord[0] && operation.baseEntityVersion !== currentVersion) {
+        results.push({
+          ...base,
+          status: "CONFLICT" as SyncOutcome,
+          reason: `The attendance record changed online. Client version ${operation.baseEntityVersion}; server version ${currentVersion}.`
+        });
+        continue;
+      }
+    }
+
     const operationId = `sync-${input.deviceId}-${operation.clientOperationId}`;
     const inserted = await tx.$executeRaw`
       INSERT INTO "SyncOperation" (
         "id", "schoolId", "deviceId", "clientOperationId", "clientVersion",
-        "entityId", "operationType", "payload", "payloadHash", "status", "createdAt"
+        "baseEntityVersion", "entityId", "operationType", "payload", "payloadHash", "status", "createdAt"
       ) VALUES (
         ${operationId}, ${input.schoolId}, ${input.deviceId}, ${operation.clientOperationId}, ${operation.clientVersion},
-        ${operation.entityId ?? studentId}, ${operation.operationType}, ${JSON.stringify(operation.payload)}::jsonb,
+        ${operation.baseEntityVersion ?? null}, ${operation.entityId ?? studentId}, ${operation.operationType}, ${JSON.stringify(operation.payload)}::jsonb,
         ${hash}, 'QUEUED', ${createdAt}
       )
       ON CONFLICT ("schoolId", "deviceId", "clientOperationId") DO NOTHING
