@@ -14,9 +14,9 @@
 .intent-card:hover{transform:translateY(-3px);box-shadow:var(--sn-shadow-md);border-color:var(--portal-accent,var(--sn-primary))}
 .intent-card .section-kicker{display:block;margin-top:18px;color:var(--portal-accent,var(--sn-primary))}
 .intent-card h2{margin:9px 0 10px;font:700 24px/1.1 var(--sn-font-family);letter-spacing:-.035em}
-.intent-card p{margin:0;color:var(--sn-muted);line-height:1.6;font-size:13px}
+.intent-card p{margin:0;color:var(--sn-muted);line-height:1.65;font-size:15px}
 .intent-icon{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:var(--portal-tint,var(--sn-school-tint));color:var(--portal-accent,var(--sn-primary))}
-.intent-link{display:inline-flex;align-items:center;gap:7px;margin-top:22px;color:var(--sn-ink-2);font-size:11px;font-weight:800}
+.intent-link{display:inline-flex;align-items:center;gap:7px;margin-top:22px;color:var(--sn-ink-2);font-size:12px;font-weight:800}
 .intent-school{--portal-accent:var(--sn-school-accent);--portal-tint:var(--sn-school-tint)}
 .intent-users{--portal-accent:var(--sn-teacher-accent);--portal-tint:var(--sn-teacher-tint)}
 .intent-network{--portal-accent:var(--sn-platform-accent);--portal-tint:var(--sn-platform-tint)}
