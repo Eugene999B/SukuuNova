@@ -21,7 +21,7 @@ export default function HomePage() {
       <div className="home-glow home-glow-b" aria-hidden="true" />
       <div className="home-wrap">
         <header className="topbar">
-          <Link href="/" className="brand" aria-label="SukuuNova home"><Image className="brand-logo" src="/brand/sukuunova-logo.svg" alt="SukuuNova" width={190} height={54} priority /></Link>
+          <Link href="/" className="brand brand-compact" aria-label="SukuuNova home"><Image className="brand-mark-image" src="/brand/sukuunova-favicon.svg" alt="" width={38} height={38} priority /><span className="brand-wordmark">SukuuNova</span></Link>
           <nav className="topnav" aria-label="Primary navigation">
             <Link href="/features">What it does</Link>
             <Link href="#how-it-works">How it works</Link>
