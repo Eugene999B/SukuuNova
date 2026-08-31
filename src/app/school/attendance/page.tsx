@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_cache, revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { CircleAlert, CircleCheckBig, Clock3, UsersRound, UserRoundCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -29,25 +30,40 @@ async function recordAttendance(formData: FormData) {
     const event = await tx.attendanceEvent.create({ data: { schoolId: session.schoolId, studentId, type, method: "school_register", timestamp: new Date(), attendanceDate: attendanceDateValue, isLate: isLate || type === "late", recordedBy: session.userId } });
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "attendance.recorded", entityType: "AttendanceEvent", entityId: event.id, after: { studentId, attendanceDate, type, isLate: isLate || type === "late" } } });
   });
+  revalidatePath("/school/attendance");
   redirect("/school/attendance");
+}
+
+async function readAttendanceWorkspace(schoolId: string, today: string) {
+  return withTenant(schoolId, async tx => {
+    const canRecord = await hasPermission(tx, (await tx.user.findUnique({ where: { id: schoolId }, select: { id: true } }))?.id ?? "", "attendance:record").catch(() => false);
+    const [school, students, classes, todayEvents, recentEvents] = await Promise.all([
+      tx.school.findUnique({ where: { id: schoolId }, select: { name: true, uniqueCode: true } }),
+      tx.student.findMany({ where: { status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } }),
+      tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
+      tx.attendanceEvent.findMany({ where: { attendanceDate: new Date(`${today}T00:00:00.000Z`), studentId: { not: null } }, include: { student: { select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } } }, orderBy: { timestamp: "desc" }, take: 500 }),
+      tx.attendanceEvent.findMany({ where: { studentId: { not: null } }, include: { student: { select: { name: true, admissionNo: true } } }, orderBy: { timestamp: "desc" }, take: 20 })
+    ]);
+    return { school, students, classes, todayEvents, recentEvents, canRecord };
+  });
 }
 
 export default async function AttendancePage() {
   const session = await requireSchoolSession();
   const today = new Date().toISOString().slice(0, 10);
-  const data = await withTenant(session.schoolId, async tx => {
+  const auth = await withTenant(session.schoolId, async tx => {
     const canRecord = await hasPermission(tx, session.userId, "attendance:record");
     const canReview = await hasPermission(tx, session.userId, "attendance:review");
     if (!canRecord && !canReview) await requirePermission(tx, session.userId, "attendance:view_own");
-    const [school, students, classes, todayEvents, recentEvents] = await Promise.all([
-      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.student.findMany({ where: { status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } }),
-      tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
-      tx.attendanceEvent.findMany({ where: { schoolId: session.schoolId, attendanceDate: new Date(`${today}T00:00:00.000Z`), studentId: { not: null } }, include: { student: { select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } } }, orderBy: { timestamp: "desc" }, take: 500 }),
-      tx.attendanceEvent.findMany({ where: { schoolId: session.schoolId, studentId: { not: null } }, include: { student: { select: { name: true, admissionNo: true } } }, orderBy: { timestamp: "desc" }, take: 20 })
-    ]);
-    return { school, students, classes, todayEvents, recentEvents, canRecord };
+    return { canRecord };
   });
+  const getCachedWorkspace = unstable_cache(
+    () => readAttendanceWorkspace(session.schoolId, today),
+    ["sukuunova", "attendance-workspace", session.schoolId, today],
+    { revalidate: 30 }
+  );
+  const data = await getCachedWorkspace();
+  data.canRecord = auth.canRecord;
   const recordedToday = new Set(data.todayEvents.map(e => e.studentId).filter(Boolean));
   const present = data.todayEvents.filter(e => e.type === "present").length;
   const absent = data.todayEvents.filter(e => e.type === "absent").length;
