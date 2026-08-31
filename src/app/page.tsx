@@ -5,14 +5,13 @@ import "./home.css";
 import "./home-redesign.css";
 import "./home-premium.css";
 import { HomeLeadChat } from "@/components/HomeLeadChat";
-import { HomePresence } from "@/components/HomePresence";
 import { HomeProductPreview } from "@/components/HomeProductPreview";
 
 const modules = [
-  ["Students & families", "Admissions, learner records, guardians and people operations.", Users, "/features/students-families"],
-  ["Academics", "Classes, subjects, timetable, homework, assessment and report cards.", GraduationCap, "/features/academics"],
-  ["Attendance & safety", "Daily registers, lateness, absence, device attendance and alerts.", ShieldCheck, "/features/attendance-safety"],
-  ["Fees & finance", "Fees, invoices, receipts, balances, collections and payroll.", WalletCards, "/features/fees-finance"],
+  ["Students & families", "Keep admissions, learner records and family details together.", Users, "/features/students-families"],
+  ["Teaching & learning", "Plan classes, lessons, marks, homework and reports in one place.", GraduationCap, "/features/academics"],
+  ["Attendance & safety", "Record attendance, follow absences and keep families informed.", ShieldCheck, "/features/attendance-safety"],
+  ["Fees & finance", "Track fees, invoices, payments, balances and receipts clearly.", WalletCards, "/features/fees-finance"],
 ] as const;
 
 export default function HomePage() {
@@ -24,7 +23,7 @@ export default function HomePage() {
         <header className="topbar">
           <Link href="/" className="brand" aria-label="SukuuNova home"><Image className="brand-logo" src="/brand/sukuunova-logo.svg" alt="SukuuNova" width={190} height={54} priority /></Link>
           <nav className="topnav" aria-label="Primary navigation">
-            <Link href="/features">Platform</Link>
+            <Link href="/features">What it does</Link>
             <Link href="#how-it-works">How it works</Link>
             <Link href="/for-schools">For schools</Link>
             <Link href="/about">About</Link>
@@ -32,43 +31,41 @@ export default function HomePage() {
           </nav>
           <div className="top-actions">
             <Link className="top-link" href="/login/platform"><LogIn size={15} aria-hidden="true" /> Platform</Link>
-            <Link className="top-button" href="/login/school">Enter your school <ArrowRight size={15} aria-hidden="true" /></Link>
+            <Link className="top-button" href="/login/school">School login <ArrowRight size={15} aria-hidden="true" /></Link>
           </div>
         </header>
 
-        <HomePresence />
-
         <section className="hero" id="platform">
           <div className="hero-copy-wrap">
-            <div className="eyebrow"><span className="eyebrow-dot" /> Built for modern African schools</div>
-            <h1>Run the whole school <span>with a clearer picture.</span></h1>
-            <p className="hero-copy">SukuuNova brings the school day into one calm system — people, academics, attendance, communication and finance connected around the records that matter.</p>
+            <div className="eyebrow"><span className="eyebrow-dot" /> School management, made simpler</div>
+            <h1>Keep the whole school <span>in one place.</span></h1>
+            <p className="hero-copy">SukuuNova gives school leaders, teachers and families one secure place to handle the everyday work of school.</p>
             <div className="hero-actions">
-              <Link className="primary-cta" href="/login/school">Enter your school <ArrowRight size={16} aria-hidden="true" /></Link>
-              <Link className="secondary-cta" href="/for-schools">See what schools can do <ArrowRight size={16} aria-hidden="true" /></Link>
+              <Link className="primary-cta" href="/login/school">Open your school <ArrowRight size={16} aria-hidden="true" /></Link>
+              <Link className="secondary-cta" href="/for-schools">See how it works <ArrowRight size={16} aria-hidden="true" /></Link>
             </div>
-            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>Designed around real school work.</strong><span>Each workspace starts with the responsibility, then connects the records behind it.</span></div></div>
+            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>For the work schools do every day.</strong><span>People, classes, attendance, communication and finance stay connected as the work moves forward.</span></div></div>
           </div>
           <HomeProductPreview />
         </section>
 
         <section className="intent-grid" id="how-it-works" aria-label="Who SukuuNova is for">
-          <Link className="intent-card intent-school" href="/for-schools"><span className="intent-icon"><Building2 size={20} aria-hidden="true" /></span><span className="section-kicker">FOR SCHOOL LEADERS</span><h2>Run the school from one command centre.</h2><p>See setup readiness, approvals, people, academics and finance without hunting through separate systems.</p><span className="intent-link">Explore for schools <ArrowRight size={15} /></span></Link>
-          <Link className="intent-card intent-users" href="/login/school"><span className="intent-icon"><LogIn size={20} aria-hidden="true" /></span><span className="section-kicker">FOR EXISTING USERS</span><h2>Get into your school quickly.</h2><p>Staff and guardians use the same secure school gateway, with each role seeing only what belongs to them.</p><span className="intent-link">School login <ArrowRight size={15} /></span></Link>
-          <Link className="intent-card intent-network" href="/about"><span className="intent-icon"><ShieldCheck size={20} aria-hidden="true" /></span><span className="section-kicker">FOR PARTNERS &amp; INVESTORS</span><h2>See the operating architecture.</h2><p>Understand how connected records, permissions and operational workflows fit together.</p><span className="intent-link">About SukuuNova <ArrowRight size={15} /></span></Link>
+          <Link className="intent-card intent-school" href="/for-schools"><span className="intent-icon"><Building2 size={20} aria-hidden="true" /></span><span className="section-kicker">SCHOOL LEADERS</span><h2>Know what is happening across the school.</h2><p>Bring people, academics, attendance and finance into one working view.</p><span className="intent-link">For schools <ArrowRight size={15} /></span></Link>
+          <Link className="intent-card intent-users" href="/login/school"><span className="intent-icon"><LogIn size={20} aria-hidden="true" /></span><span className="section-kicker">STAFF &amp; FAMILIES</span><h2>Get to the work that belongs to you.</h2><p>Each person sees the tools and school records they need, without the clutter.</p><span className="intent-link">Go to school login <ArrowRight size={15} /></span></Link>
+          <Link className="intent-card intent-network" href="/about"><span className="intent-icon"><ShieldCheck size={20} aria-hidden="true" /></span><span className="section-kicker">BUILT FOR TRUST</span><h2>Keep school records protected.</h2><p>Clear roles and permissions help the right people do the right work with confidence.</p><span className="intent-link">About SukuuNova <ArrowRight size={15} /></span></Link>
         </section>
 
         <section className="modules" id="modules">
-          <div className="section-kicker">THE SCHOOL, IN ONE PLACE</div>
-          <div className="section-head"><div><h2>Built around the work, not a menu.</h2><p>Choose a responsibility to see how SukuuNova handles it from first record to daily action and history.</p></div></div>
+          <div className="section-kicker">WHAT YOU CAN RUN</div>
+          <div className="section-head"><div><h2>The school day, without the clutter.</h2><p>Start with the part of school you manage. Follow the link to see the work and the tools behind it.</p></div></div>
           <div className="module-grid">
             {modules.map(([title, copy, Icon, href]) => <Link className="module-card" href={href} key={title}><span className="module-icon"><Icon size={21} aria-hidden="true" /></span><h3>{title}</h3><p>{copy}</p><span className="module-arrow"><ArrowRight size={16} aria-hidden="true" /></span></Link>)}
           </div>
         </section>
 
-        <section className="closing-cta"><div><span className="section-kicker">READY FOR THE SCHOOL DAY</span><h2>Less chasing. More control.</h2><p>Give the people running your school one place to see what matters and act on it.</p></div><div style={{ display: "grid", gap: 10 }}><Link className="primary-cta" href="/for-schools">See how schools use it <ArrowRight size={16} aria-hidden="true" /></Link><HomeLeadChat /></div></section>
+        <section className="closing-cta"><div><span className="section-kicker">READY TO GET STARTED?</span><h2>Put the school in one place.</h2><p>Give your team one system for the records and work they already manage every day.</p></div><div style={{ display: "grid", gap: 10 }}><Link className="primary-cta" href="/for-schools">See SukuuNova for schools <ArrowRight size={16} aria-hidden="true" /></Link><HomeLeadChat /></div></section>
 
-        <footer className="footer"><span>© 2026 SukuuNova</span><span>Built with care by humans.</span><span><Link href="/about">About</Link> · <Link href="/contact">Contact</Link> · <Link href="/login/platform">Platform access</Link></span></footer>
+        <footer className="footer"><span>© 2026 SukuuNova</span><span>School work, kept together.</span><span><Link href="/about">About</Link> · <Link href="/contact">Contact</Link> · <Link href="/login/platform">Platform access</Link></span></footer>
       </div>
     </main>
   );
