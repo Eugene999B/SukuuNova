@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { ForbiddenError, routeError } from "@/lib/errors";
@@ -8,6 +9,7 @@ import { appendSchoolAudit } from "@/lib/audit";
 import { enqueueNotification } from "@/lib/message-outbox";
 import { createCalendarEvent } from "@/lib/calendar-service";
 import { getSchoolAuthorization } from "@/lib/authorization";
+import { cacheTenantRead } from "@/lib/server-cache";
 
 type Recipient = { id: string; name: string; phone: string | null };
 type JsonRecord = Record<string, unknown>;
@@ -21,15 +23,21 @@ export async function GET() {
   try {
     const session = await requireSchoolSession();
     if (!(await canCommunicate(session.schoolId, session.userId))) throw new ForbiddenError("Your account is not authorised to view school communications.");
-    return withTenant(session.schoolId, async (tx) => {
-      const [messages, recipients, settings, events] = await Promise.all([
-        tx.message.findMany({ where: { schoolId: session.schoolId }, orderBy: { createdAt: "desc" }, take: 80, select: { id: true, channel: true, recipientType: true, recipientId: true, body: true, status: true, createdAt: true, sentAt: true, lastError: true } }),
-        tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, phone: true, userRoles: { select: { role: { select: { name: true } } } } } }),
-        tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { smsSenderId: true, notificationChannels: true, whatsappTemplateConfig: true } }),
-        tx.calendarEvent.findMany({ where: { schoolId: session.schoolId }, orderBy: { startDate: "asc" }, take: 80 })
-      ]);
-      return NextResponse.json({ messages, recipients: recipients.map((r) => ({ id: r.id, name: r.name, phone: r.phone, roles: r.userRoles.map((x) => x.role.name) })), settings: { smsSenderId: settings?.smsSenderId || null, channels: settings?.notificationChannels || [], whatsapp: settings?.whatsappTemplateConfig || {} }, events });
-    });
+    const data = await cacheTenantRead(
+      ["communications", "read", session.schoolId],
+      () => withTenant(session.schoolId, async (tx) => {
+        const [messages, recipients, settings, events] = await Promise.all([
+          tx.message.findMany({ where: { schoolId: session.schoolId }, orderBy: { createdAt: "desc" }, take: 80, select: { id: true, channel: true, recipientType: true, recipientId: true, body: true, status: true, createdAt: true, sentAt: true, lastError: true } }),
+          tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, phone: true, userRoles: { select: { role: { select: { name: true } } } } } }),
+          tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { smsSenderId: true, notificationChannels: true, whatsappTemplateConfig: true } }),
+          tx.calendarEvent.findMany({ where: { schoolId: session.schoolId }, orderBy: { startDate: "asc" }, take: 80 })
+        ]);
+        return { messages, recipients: recipients.map((r) => ({ id: r.id, name: r.name, phone: r.phone, roles: r.userRoles.map((x) => x.role.name) })), settings: { smsSenderId: settings?.smsSenderId || null, channels: settings?.notificationChannels || [], whatsapp: settings?.whatsappTemplateConfig || {} }, events };
+      }),
+      15,
+      [`communications:${session.schoolId}`]
+    );
+    return NextResponse.json(data, { headers: { "cache-control": "private, max-age=15, stale-while-revalidate=15" } });
   } catch (error) { return routeError(error); }
 }
 
@@ -52,6 +60,7 @@ export async function POST(request: Request) {
         if (value.channel === "in_app") await tx.message.createMany({ data: recipients.map((r) => ({ schoolId: session.schoolId, channel: "in_app", recipientType: "user", recipientId: r.id, recipientPhone: r.phone || "", body: `${value.title}\n\n${value.body}`, templateKey: "direct_message", templateVariables: { title: value.title }, mediaUrl: value.mediaUrl || null, status: "delivered", attempts: 1, sentAt: new Date(), nextAttemptAt: new Date() })) });
         else for (const recipient of recipients) { if (!recipient.phone) continue; await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl }); }
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "message.sent", entityType: "MessageBatch", entityId: `message-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: recipients.length } });
+        revalidatePath("/school/communications/messages"); revalidatePath("/school/communications/broadcasts"); revalidatePath("/school/communications/announcements");
         return NextResponse.json({ ok: true, message: `Message sent to ${recipients.length} matched recipient${recipients.length === 1 ? "" : "s"}.` });
       });
     }
@@ -67,13 +76,14 @@ export async function POST(request: Request) {
         let queued = 0;
         for (const recipient of recipients) { if (!recipient.phone) continue; if (value.channel === "sms" && !process.env.SMS_PROVIDER_URL) break; if (value.channel === "whatsapp" && !process.env.TWILIO_ACCOUNT_SID) break; await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl }); queued++; }
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "broadcast.queued", entityType: "Broadcast", entityId: `broadcast-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: queued, scheduleAt: value.scheduleAt || null } });
+        revalidatePath("/school/communications/messages"); revalidatePath("/school/communications/broadcasts");
         return NextResponse.json({ ok: true, message: queued ? `Broadcast prepared for ${queued} recipient${queued === 1 ? "" : "s"}.` : "Broadcast saved as a draft because the external provider is not configured yet." });
       });
     }
 
     if (input?.action === "create_event") {
       const value = eventSchema.parse(input); const start = new Date(value.startDate); const end = new Date(value.endDate);
-      return withTenant(session.schoolId, async (tx) => { const year = await tx.academicYear.findFirst({ where: { schoolId: session.schoolId }, orderBy: { startDate: "desc" } }); if (!year) throw new Error("Create an academic year before creating calendar events."); const event = await createCalendarEvent({ schoolId: session.schoolId, actorId: session.userId, academicYearId: year.id, type: value.type, name: value.name, startDate: start, endDate: end }); await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "event.created", entityType: "CalendarEvent", entityId: event.id, after: { location: value.location || null, description: value.description || null, notifyGuardians: Boolean(value.notifyGuardians), notifyStaff: Boolean(value.notifyStaff) } }); return NextResponse.json({ ok: true, message: "Event created and added to the school calendar.", event }); });
+      return withTenant(session.schoolId, async (tx) => { const year = await tx.academicYear.findFirst({ where: { schoolId: session.schoolId }, orderBy: { startDate: "desc" } }); if (!year) throw new Error("Create an academic year before creating calendar events."); const event = await createCalendarEvent({ schoolId: session.schoolId, actorId: session.userId, academicYearId: year.id, type: value.type, name: value.name, startDate: start, endDate: end }); await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "event.created", entityType: "CalendarEvent", entityId: event.id, after: { location: value.location || null, description: value.description || null, notifyGuardians: Boolean(value.notifyGuardians), notifyStaff: Boolean(value.notifyStaff) } }); revalidatePath("/school/events"); return NextResponse.json({ ok: true, message: "Event created and added to the school calendar.", event }); });
     }
 
     if (input?.action === "save_settings") {
@@ -87,6 +97,7 @@ export async function POST(request: Request) {
         const notificationConfig = { channels, smsCredits: typeof currentChannels.smsCredits === "number" ? currentChannels.smsCredits : 0, automation: { payment_received: Boolean(input.payment_received), report_card_ready: Boolean(input.report_card_ready), student_absence: Boolean(input.student_absence), staff_late: Boolean(input.staff_late), transport_boarding: Boolean(input.transport_boarding), emergency_broadcast: Boolean(input.emergency_broadcast) } };
         await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: { smsSenderId: input.smsSenderId ? String(input.smsSenderId) : undefined, notificationChannels: JSON.parse(JSON.stringify(notificationConfig)) as Prisma.InputJsonValue, whatsappTemplateConfig: JSON.parse(JSON.stringify(nextConfig)) as Prisma.InputJsonValue } });
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "communications.settings_updated", entityType: "SchoolSettings", entityId: session.schoolId, after: JSON.parse(JSON.stringify(notificationConfig)) });
+        revalidatePath("/school/communications/settings");
         return NextResponse.json({ ok: true, message: "Communication settings saved." });
       });
     }
