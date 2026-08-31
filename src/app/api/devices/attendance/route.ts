@@ -153,6 +153,8 @@ export async function POST(request: Request) {
 
       if (recorded.status !== "recorded") return recorded;
 
+      if (recorded.status !== "recorded") return recorded;
+
       const receipt = await tx.deviceAttendanceReceipt.findFirstOrThrow({
         where: { deviceId: device.id, idempotencyKey: input.idempotencyKey },
         select: { id: true }
