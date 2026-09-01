@@ -54,8 +54,7 @@ const patchedSource = originalSource
   .replace(/['\"]device['\"]/g, "'qr'")
   .replace(/type:\s*["']CA["']/g, "type: 'ca'")
   .replace(/type:\s*["']EXAM["']/g, "type: 'exam'")
-  .replace(/schoolId, termId, classId: null, name/g, "schoolId, termId, classId: classes[0].id, name")
-  .replace(/schoolId, termId, classId: null, name, amount/g, "schoolId, termId, classId: classes[0].id, name, amount");
+  .replace(/classId:\s*null/g, "classId: classes[0].id");
 fs.writeFileSync(temp, patchedSource, "utf8");
 
 const cleanup = () => {
