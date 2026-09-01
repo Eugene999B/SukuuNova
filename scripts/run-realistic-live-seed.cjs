@@ -48,24 +48,29 @@ const source = path.join(scriptsDir, "seed-realistic-test-school.cjs");
 const temp = path.join(scriptsDir, `.seed-live-runtime-${process.pid}.cjs`);
 const originalSource = fs.readFileSync(source, "utf8");
 
-// Apply only deterministic fixture compatibility changes. Keep raw SQL JSONB
-// handling centralized at exec() so future JSONB fixture fields do not require
-// fragile regular-expression rewrites.
 let patchedSource = originalSource
-  .replace(/['\"]device['\"]/g, "'qr'")
-  .replace(/type:\s*["']CA["']/g, "type: 'ca'")
-  .replace(/type:\s*["']EXAM["']/g, "type: 'exam'")
+  .replace(/[\"']device[\"']/g, "'qr'")
+  .replace(/type:\s*[\"']CA[\"']/g, "type: 'ca'")
+  .replace(/type:\s*[\"']EXAM[\"']/g, "type: 'exam'")
   .replace(/classId:\s*null/g, "classId: classes[0].id")
-  .replace(/method:\s*["']bank_transfer["']/g, "method: 'momo'");
+  .replace(/method:\s*[\"']bank_transfer[\"']/g, "method: 'momo'");
 
 patchedSource = patchedSource.replace(
-  'async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }',
+  "async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }",
   `async function exec(tx, sql, ...params) {
     let normalizedSql = sql;
-    if (normalizedSql.includes('"P3FeedingMenu"') && normalizedSql.includes('"items"')) normalizedSql = normalizedSql.replace(',$4,520,$5)', ',$4::jsonb,520,$5)');
-    if (normalizedSql.includes('"P3ExamQuestion"') && normalizedSql.includes('"options"')) normalizedSql = normalizedSql.replace(',$4,$5,1,5,$6)', ',$4,$5::jsonb,1,5,$6)');
-    if (normalizedSql.includes('"P3ExamAttempt"') && normalizedSql.includes('"answers"')) normalizedSql = normalizedSql.replace(',$7,\'submitted\',22.5,$8)', ',$7,\'submitted\',22.5,$8::jsonb)');
-    if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"payload"')) normalizedSql = normalizedSql.replace(",'attendance',$4,'pending'", ",'attendance',$4::jsonb,'pending'");
+    if (normalizedSql.includes('"P3FeedingMenu"') && normalizedSql.includes('"items"')) {
+      normalizedSql = normalizedSql.replace(",$4,520,$5)", ",$4::jsonb,520,$5)");
+    }
+    if (normalizedSql.includes('"P3ExamQuestion"') && normalizedSql.includes('"options"')) {
+      normalizedSql = normalizedSql.replace(",$4,$5,1,5,$6)", ",$4,$5::jsonb,1,5,$6)");
+    }
+    if (normalizedSql.includes('"P3ExamAttempt"') && normalizedSql.includes('"answers"')) {
+      normalizedSql = normalizedSql.replace(",$7,'submitted',22.5,$8)", ",$7,'submitted',22.5,$8::jsonb)");
+    }
+    if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"payload"')) {
+      normalizedSql = normalizedSql.replace(",'attendance',$4,'pending'", ",'attendance',$4::jsonb,'pending'");
+    }
     return tx.$executeRawUnsafe(normalizedSql, ...params);
   }`,
 );
