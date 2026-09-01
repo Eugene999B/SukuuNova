@@ -74,8 +74,16 @@ patchedSource = patchedSource.replace(
     }
     if (normalizedSql.includes('"P3FinanceAdjustment"') && normalizedSql.includes('"approvedAt"')) {
       normalizedSql = normalizedSql.replace(",$5,$6,$7)", ",$5,$6,$7::timestamp)");
-      if (normalizedParams.length === 8) {
-        normalizedParams = [normalizedParams[0], normalizedParams[1], normalizedParams[2], normalizedParams[3], normalizedParams[5], normalizedParams[6], normalizedParams[7]];
+      // The canonical fixture currently supplies one stray argument immediately
+      // before approvedAt. The SQL has exactly seven placeholders:
+      //   id, schoolId, studentId, invoiceId, requestedBy, approvedBy, approvedAt
+      // When eight runtime arguments are present and the final value is a Date,
+      // drop only the seventh argument (index 6) so the IDs stay aligned.
+      if (normalizedParams.length === 8 && normalizedParams[7] instanceof Date) {
+        normalizedParams = [
+          normalizedParams[0], normalizedParams[1], normalizedParams[2], normalizedParams[3],
+          normalizedParams[4], normalizedParams[5], normalizedParams[7],
+        ];
       }
     }
     return tx.$executeRawUnsafe(normalizedSql, ...normalizedParams);
