@@ -3,7 +3,6 @@ import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { getSchoolAuthorization } from "@/lib/authorization";
-import { withTenant } from "@/lib/db";
 import StaffAttendanceDesk from "../StaffAttendanceDesk";
 
 type ModuleConfig = { title: string; subtitle: string; action: string; tabs: string[] };
@@ -47,21 +46,7 @@ const configs: Record<string, ModuleConfig> = {
   help:{title:"Help & Support",subtitle:"Find guides and manage support requests.",action:"Contact support",tabs:["Guides","Requests","Updates"]}
 };
 
-const teacherAllowedModules = new Set([
-  "classes",
-  "subjects",
-  "timetable",
-  "lessons",
-  "homework",
-  "gradebook",
-  "exams",
-  "report-cards",
-  "attendance",
-  "communications/messages",
-  "communications/announcements",
-  "search",
-  "help",
-]);
+const teacherAllowedModules = new Set(["classes","subjects","timetable","lessons","homework","gradebook","exams","report-cards","attendance","communications/messages","communications/announcements","search","help"]);
 
 const searchCategories = [
   { icon:"♟", title:"People", text:"Students, guardians, staff and teachers", links:[["Students","/school/students"],["Guardians","/school/guardians"],["Staff & Teachers","/school/staff"]] },
@@ -96,24 +81,22 @@ export default async function SchoolModulePage({params}:{params:Promise<{module?
   }
   if (key === "search") return <SearchCentre schoolName={school.school.name} sessionName={session.name} teacherMode={isTeacher} />;
 
-  const base = `/school/${key}`;
   return <AppShell universe={isTeacher ? "teacher" : "school"} title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.school.name} schoolCode={school.school.uniqueCode} userName={session.name}>
     <div className="module-shell">
-      <section className="module-hero"><div><span className="eyebrow">{school.school.name}</span><h2>{config.title}</h2><p>{config.subtitle}</p></div><div className="module-actions"><Link className="button secondary" href="/school/reports/analytics">Analytics</Link><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div></section>
-      <nav className="module-tabs" aria-label={`${config.title} views`}>{config.tabs.map((tab) => <Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-tab">{tab}</Link>)}</nav>
-      <section className="module-layout"><div className="module-panel"><div className="module-toolbar"><form className="module-search" action={base}><input name="q" placeholder={`Search ${config.title.toLowerCase()}…`} /><button className="button secondary" type="submit">Search</button></form><Link className="button secondary" href="/school/terms">Term context</Link></div><div className="module-table-wrap"><table className="module-table"><thead><tr><th>Record</th><th>Status</th><th>Last activity</th><th /></tr></thead><tbody><tr><td colSpan={4}><div className="module-empty"><strong>No records in this view</strong><span>Use the action above to create or open work.</span><Link className="button primary" href={`${base}?action=create`}>{config.action}</Link></div></td></tr></tbody></table></div></div><aside className="module-side-card"><div className="module-side-card-head"><h3>Work queue</h3><span>{session.name}</span></div><div className="module-list">{config.tabs.slice(0,4).map((tab,index) => <Link key={tab} href={`${base}?view=${encodeURIComponent(tab)}`} className="module-list-item"><span className="module-list-index">{index+1}</span><span>{tab}</span><span>→</span></Link>)}</div></aside></section>
+      <section className="module-hero"><div><span className="eyebrow">{school.school.name}</span><h2>{config.title}</h2><p>{config.subtitle}</p></div><div className="module-actions"><Link className="button secondary" href="/school/reports/analytics">View analytics</Link><Link className="button secondary" href="/school/terms">Term context</Link></div></section>
+      <nav className="module-tabs" aria-label={`${config.title} views`} aria-disabled="true">{config.tabs.map((tab) => <span key={tab} className="module-tab" aria-disabled="true">{tab}</span>)}</nav>
+      <section className="module-layout"><div className="module-panel"><div className="module-empty"><span className="eyebrow">Prototype / placeholder</span><strong>Workflow not connected yet</strong><span>This route is intentionally read-only. No create, edit, search, or record change is exposed here until this module is backed by a real operational workflow.</span><div className="module-actions"><Link className="button secondary" href="/school/reports/analytics">View school analytics</Link><Link className="button secondary" href="/school/terms">Review term context</Link></div></div></div><aside className="module-side-card"><div className="module-side-card-head"><h3>Module status</h3><span>Read-only</span></div><div className="module-list"><div className="module-list-item"><span className="module-list-index">1</span><span>Data changes</span><span>Disabled</span></div><div className="module-list-item"><span className="module-list-index">2</span><span>Search</span><span>Not connected</span></div><div className="module-list-item"><span className="module-list-index">3</span><span>Record workflow</span><span>Not connected</span></div><div className="module-list-item"><span className="module-list-index">4</span><span>Role-safe fallback</span><span>Active</span></div></div></aside></section>
     </div>
   </AppShell>;
 }
 
 function SearchCentre({schoolName,sessionName,teacherMode}:{schoolName:string;sessionName:string;teacherMode:boolean}) {
   const categories = teacherMode ? searchCategories.filter((category) => category.title === "People" || category.title === "Academics" || category.title === "Communication") : searchCategories;
-  return <AppShell universe={teacherMode ? "teacher" : "school"} title="Search" subtitle="Find anything you need in this school workspace." active="Search" schoolName={schoolName} userName={sessionName}>
+  return <AppShell universe={teacherMode ? "teacher" : "school"} title="Search" subtitle="Find something you need in this school workspace." active="Search" schoolName={schoolName} userName={sessionName}>
     <div className="module-shell search-centre">
-      <section className="search-hero"><div><span className="eyebrow">{schoolName}</span><h2>Find something fast.</h2><p>Search by name, admission number, staff name, subject, invoice or message.</p></div></section>
-      <form className="search-main-form" action="/school/search" method="get"><span className="search-main-icon">⌕</span><input name="q" placeholder="Search the school…" aria-label="Search the school"/><button className="button primary" type="submit">Search</button></form>
+      <section className="search-hero"><div><span className="eyebrow">{schoolName}</span><h2>Search index not connected yet.</h2><p>Use the direct module links below until a tenant-scoped global search index is wired into this workspace.</p></div></section>
       <div className="search-category-grid">{categories.map((category) => <section className="search-category" key={category.title}><div className="search-category-icon">{category.icon}</div><div className="search-category-head"><h3>{category.title}</h3><p>{category.text}</p></div><div className="search-category-links">{category.links.map(([label,href]) => <Link href={href} key={label}>{label}<span>→</span></Link>)}</div></section>)}</div>
-      <section className="search-tip"><span>⌕</span><div><strong>Search first, then open the record.</strong><p>Results stay inside your school account and respect your role permissions.</p></div></section>
+      <section className="search-tip"><span>⌕</span><div><strong>Global search is intentionally read-only.</strong><p>No search request is submitted from this screen until a real tenant-scoped index is available.</p></div></section>
     </div>
   </AppShell>;
 }
