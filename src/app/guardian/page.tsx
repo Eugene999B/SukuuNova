@@ -9,36 +9,51 @@ import "@/app/globals.css";
 
 const PUBLISHED_REPORT_STATES = ["approved", "sent"] as const;
 
+function localDateInTimeZone(value: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return `${year}-${month}-${day}`;
+}
+
 export default async function GuardianPortalPage() {
   const session = await requireGuardianSession();
   if (session.needsPasswordChange) redirect("/account/security?required=1");
 
-  const data = await withTenant(session.schoolId, async (tx) => tx.guardian.findFirst({
-    where: { id: session.guardianId, schoolId: session.schoolId, userId: session.userId },
-    select: {
-      name: true,
-      students: {
-        include: {
-          student: {
+  const data = await withTenant(session.schoolId, async (tx) => {
+    const [schoolSettings, guardian] = await Promise.all([
+      tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
+      tx.guardian.findFirst({
+        where: { id: session.guardianId, schoolId: session.schoolId, userId: session.userId },
+        select: {
+          name: true,
+          students: {
             include: {
-              class: true,
-              attendanceEvents: true,
-              scores: { include: { assessment: true, subject: true } },
-              reportCards: {
-                where: { status: { in: [...PUBLISHED_REPORT_STATES] } },
-                select: { termId: true, status: true },
+              student: {
+                include: {
+                  class: true,
+                  attendanceEvents: true,
+                  scores: { include: { assessment: true, subject: true }, orderBy: { createdAt: "desc" } },
+                  reportCards: {
+                    where: { status: { in: [...PUBLISHED_REPORT_STATES] } },
+                    select: { termId: true, status: true },
+                  },
+                  invoices: { include: { payments: true } },
+                },
               },
-              invoices: { include: { payments: true } },
             },
           },
         },
-      },
-    },
-  }));
+      }),
+    ]);
+    return { timezone: schoolSettings?.timezone || "Africa/Accra", guardian };
+  });
 
-  if (!data) redirect("/login/guardian");
+  if (!data.guardian) redirect("/login/guardian");
 
-  const children = data.students.map((x) => x.student);
+  const today = localDateInTimeZone(new Date(), data.timezone);
+  const children = data.guardian.students.map((x) => x.student);
   const visibleScores = (student: typeof children[number]) => {
     const visibleTerms = new Set(student.reportCards.map((report) => report.termId));
     return student.scores.filter((score) => visibleTerms.has(score.assessment.termId));
@@ -50,7 +65,7 @@ export default async function GuardianPortalPage() {
     ),
     0,
   );
-  const firstName = data.name.split(/\s+/)[0] || data.name;
+  const firstName = data.guardian.name.split(/\s+/)[0] || data.guardian.name;
 
   return (
     <AppShell
@@ -60,7 +75,7 @@ export default async function GuardianPortalPage() {
       active="Overview"
       schoolName={session.schoolName}
       schoolCode=""
-      userName={data.name}
+      userName={data.guardian.name}
       role="Guardian"
     >
       <div className="guardian-command-center">
@@ -78,7 +93,7 @@ export default async function GuardianPortalPage() {
         </section>
 
         <section className="guardian-task-grid">
-          <Link href="/guardian/attendance" className="guardian-task-card"><span className="guardian-task-icon"><CircleCheckBig size={18} aria-hidden="true" /></span><div><strong>Today’s attendance</strong><span>See attendance for each child.</span></div><ArrowRight size={16} aria-hidden="true" /></Link>
+          <Link href="/guardian/attendance" className="guardian-task-card"><span className="guardian-task-icon"><CircleCheckBig size={18} aria-hidden="true" /></span><div><strong>Today’s attendance</strong><span>{children.length ? `${children.filter((student) => student.attendanceEvents.some((event) => localDateInTimeZone(event.attendanceDate, data.timezone) === today)).length} of ${children.length} children have attendance recorded today.` : "No linked children yet."}</span></div><ArrowRight size={16} aria-hidden="true" /></Link>
           <Link href="/guardian/academics" className="guardian-task-card"><span className="guardian-task-icon"><GraduationCap size={18} aria-hidden="true" /></span><div><strong>Recent results</strong><span>Open published academic records.</span></div><ArrowRight size={16} aria-hidden="true" /></Link>
           <Link href="/guardian/messages" className="guardian-task-card"><span className="guardian-task-icon"><Mail size={18} aria-hidden="true" /></span><div><strong>Messages</strong><span>Read school conversations and updates.</span></div><ArrowRight size={16} aria-hidden="true" /></Link>
           <Link href="/guardian/fees" className="guardian-task-card"><span className="guardian-task-icon"><WalletCards size={18} aria-hidden="true" /></span><div><strong>Fees & receipts</strong><span>Review balances and receipts.</span></div><ArrowRight size={16} aria-hidden="true" /></Link>
@@ -90,6 +105,7 @@ export default async function GuardianPortalPage() {
             {children.length ? children.map((student) => {
               const scores = visibleScores(student);
               const latest = scores[0];
+              const todayAttendance = student.attendanceEvents.filter((event) => localDateInTimeZone(event.attendanceDate, data.timezone) === today);
               const childBalance = student.invoices.reduce((n, inv) => n + Number(inv.totalAmount) - inv.payments.reduce((p, x) => p + Number(x.amount), 0), 0);
               return (
                 <article className="guardian-child" key={student.id}>
@@ -100,7 +116,7 @@ export default async function GuardianPortalPage() {
                     <div><h3>{student.name}</h3><p>{student.admissionNo} · {student.class?.level ? `${student.class.level} · ` : ""}{student.class?.name ?? "Unassigned"}</p></div>
                   </div>
                   <div className="guardian-child-facts">
-                    <div><span>Attendance</span><strong>{student.attendanceEvents.length}</strong></div>
+                    <div><span>Today</span><strong>{todayAttendance[0]?.type ?? "Not recorded"}</strong></div>
                     <div><span>Latest result</span><strong>{latest ? String(latest.value) : "—"}</strong></div>
                     <div><span>Fees</span><strong>GH₵{childBalance.toFixed(2)}</strong></div>
                   </div>
