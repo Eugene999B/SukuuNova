@@ -1,9 +1,45 @@
 import Link from "next/link";
-import { Building2, ShieldCheck, UsersRound } from "lucide-react";
+import { Building2, HeartHandshake, ShieldCheck, UsersRound } from "lucide-react";
 import { LoginForm } from "@/components/LoginForm";
 import "../login.css";
 import "./gateway.css";
 
 export default function SchoolLoginPage() {
-  return <main className="auth-shell"><section className="auth-visual"><div className="auth-orbit" /><div className="auth-grid" /><div className="auth-preview"><div className="auth-preview-top"><span>SukuuNova · School access</span><span>Secure</span></div><div className="auth-preview-main">One doorway for everyone in your school.</div><div className="auth-preview-kpis"><div className="auth-preview-kpi"><b>Staff</b><span>Teaching & operations</span></div><div className="auth-preview-kpi"><b>Guardians</b><span>Family visibility</span></div><div className="auth-preview-kpi"><b>School code</b><span>One workspace</span></div><div className="auth-preview-kpi"><b>Protected</b><span>Tenant-isolated access</span></div></div></div><div className="auth-copy"><div className="auth-kicker"><span className="auth-dot" /> One secure school gateway</div><h2>Enter your school, <span>then choose your path.</span></h2><p>Use your school code first. SukuuNova will then take you through the correct Staff or Guardian sign-in experience.</p><div className="auth-feature-grid"><div className="auth-feature"><strong><UsersRound size={14} aria-hidden="true" /> Staff</strong><span>Teachers, principals, finance teams, administrators and school support staff.</span></div><div className="auth-feature"><strong><UsersRound size={14} aria-hidden="true" /> Guardian</strong><span>Parents and guardians see only the children the school has connected to them.</span></div><div className="auth-feature"><strong><ShieldCheck size={14} aria-hidden="true" /> Protected</strong><span>Every final login is checked against the selected school and account.</span></div></div></div></section><section className="auth-form-pane"><div className="auth-panel"><Link href="/" className="auth-brand"><span className="auth-brand-mark">S</span><span><strong>SukuuNova</strong><small>School access</small></span></Link><div className="auth-context"><Building2 size={12} aria-hidden="true" /> Enter your school</div><div className="auth-heading"><h1>Find your school.</h1><p>Start with the school code provided by your school. We’ll guide you to the right login.</p></div><LoginForm universe="school" /><div className="auth-divider">Other access</div><div className="auth-secondary"><Link href="/">← Back to home</Link><Link href="/login/platform">Platform access</Link></div><div className="auth-foot">Your school code selects the correct school environment; your credentials are still required to enter.</div></div></section></main>;
+  return (
+    <main className="auth-shell">
+      <section className="auth-visual" aria-label="SukuuNova school access">
+        <div className="auth-copy">
+          <div className="auth-kicker"><span className="auth-dot" /> School operations</div>
+          <h2>Manage the school with <span>clarity.</span></h2>
+          <p>Attendance, learning, people, communication and finance in one secure school workspace.</p>
+          <div className="auth-feature-grid">
+            <div className="auth-feature"><strong><UsersRound size={14} aria-hidden="true" /> For staff and teachers</strong><span>Get straight to the work assigned to you.</span></div>
+            <div className="auth-feature"><strong><HeartHandshake size={14} aria-hidden="true" /> For families</strong><span>Guardians see the children and information connected to them.</span></div>
+            <div className="auth-feature"><strong><ShieldCheck size={14} aria-hidden="true" /> Built for trust</strong><span>School records stay within the correct school workspace.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section className="auth-form-pane">
+        <div className="auth-panel">
+          <Link href="/" className="auth-brand" aria-label="SukuuNova home">
+            <span className="auth-brand-mark">S</span>
+            <span><strong>SukuuNova</strong><small>School workspace</small></span>
+          </Link>
+          <div className="auth-context"><Building2 size={12} aria-hidden="true" /> School access</div>
+          <div className="auth-heading">
+            <h1>Welcome back</h1>
+            <p>Sign in to manage attendance, learning and school operations in one place.</p>
+          </div>
+          <LoginForm universe="school" />
+          <div className="auth-divider">Need another door?</div>
+          <div className="auth-secondary">
+            <Link href="/">Back to SukuuNova</Link>
+            <Link href="/login/platform">Platform access</Link>
+          </div>
+          <p className="auth-foot">Need help with access? <Link href="/contact">Contact support</Link>.</p>
+        </div>
+      </section>
+    </main>
+  );
 }
