@@ -5,7 +5,7 @@
   },
   "deploy": {
     "startCommand": "npx next start --port ${PORT:-3000} --hostname 0.0.0.0",
-    "preDeployCommand": ["npx prisma migrate deploy && if [ \"${RUN_DB_SEED:-}\" = \"true\" ]; then npx prisma db seed; fi"],
+    "preDeployCommand": ["npx prisma migrate deploy"],
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
