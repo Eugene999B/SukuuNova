@@ -9,10 +9,6 @@ type Props = { universe: "school" } | { universe: "platform" };
 type SchoolStage = "school" | "role" | "credentials";
 type SchoolRole = "staff" | "guardian";
 
-function isFinanceRole(roles: unknown[]) { const normalized = roles.map((role) => String(role).toLowerCase()); return normalized.some((role) => role.includes("accountant") || role.includes("bursar") || role === "finance officer" || role === "cashier" || role === "finance clerk"); }
-
-function isPayrollRole(roles: unknown[]) { const normalized = roles.map((role) => String(role).toLowerCase()); return normalized.some((role) => role.includes("payroll officer") || role.includes("hr manager") || role.includes("hr officer")); }
-
 export function LoginForm(props: Props) {
   const router = useRouter();
   const [schoolStage, setSchoolStage] = useState<SchoolStage>(props.universe === "school" ? "school" : "credentials");
