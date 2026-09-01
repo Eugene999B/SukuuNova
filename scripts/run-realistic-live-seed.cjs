@@ -12,10 +12,9 @@
  * - Does not touch existing tenants except the requested synthetic school code.
  *
  * Runtime compatibility patches are intentionally applied to a temporary copy
- * of the existing fixture: the current schema rejects the fixture's historical
- * "device" attendance method, uppercase assessment types, nullable feeItem
- * classId, and the large fixture needs a longer Prisma interactive-transaction
- * timeout than the default five seconds.
+ * of the existing fixture for schema compatibility during this controlled test
+ * run: attendance method, assessment type, required fee item classId, payment
+ * method, and a longer Prisma interactive transaction timeout.
  */
 const fs = require("fs");
 const path = require("path");
@@ -54,7 +53,8 @@ const patchedSource = originalSource
   .replace(/['\"]device['\"]/g, "'qr'")
   .replace(/type:\s*["']CA["']/g, "type: 'ca'")
   .replace(/type:\s*["']EXAM["']/g, "type: 'exam'")
-  .replace(/classId:\s*null/g, "classId: classes[0].id");
+  .replace(/classId:\s*null/g, "classId: classes[0].id")
+  .replace(/method:\s*["']bank_transfer["']/g, "method: 'momo'");
 fs.writeFileSync(temp, patchedSource, "utf8");
 
 const cleanup = () => {
