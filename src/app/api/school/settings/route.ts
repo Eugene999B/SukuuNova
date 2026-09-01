@@ -49,7 +49,16 @@ export async function PATCH(request: Request) {
       await requirePermission(tx, session.userId, "settings:manage_school");
       const beforeSchool = await tx.school.findUnique({ where: { id: session.schoolId } });
       const beforeSettings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId } });
-      const school = input.school ? await tx.school.update({ where: { id: session.schoolId }, data: { name: input.school.name, uniqueCode: input.school.uniqueCode.toLowerCase() } }) : beforeSchool;
+      let school = beforeSchool;
+      if (input.school) {
+        const uniqueCode = input.school.uniqueCode.trim().toLowerCase();
+        school = await tx.school.update({ where: { id: session.schoolId }, data: { name: input.school.name, uniqueCode } });
+        await tx.schoolLoginDirectory.upsert({
+          where: { schoolId: session.schoolId },
+          update: { uniqueCode, status: school.status === "active" ? "active" : "inactive" },
+          create: { schoolId: session.schoolId, uniqueCode, status: school.status === "active" ? "active" : "inactive" },
+        });
+      }
       const settings = input.settings ? await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: input.settings }) : beforeSettings;
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "settings.school_workspace_updated", entityType: "SchoolSettings", entityId: session.schoolId, before: { school: beforeSchool, settings: beforeSettings }, after: { school, settings } });
       return { school, settings };
