@@ -53,7 +53,11 @@ let patchedSource = originalSource
   .replace(/type:\s*[\"']CA[\"']/g, "type: 'ca'")
   .replace(/type:\s*[\"']EXAM[\"']/g, "type: 'exam'")
   .replace(/classId:\s*null/g, "classId: classes[0].id")
-  .replace(/method:\s*[\"']bank_transfer[\"']/g, "method: 'momo'");
+  .replace(/method:\s*[\"']bank_transfer[\"']/g, "method: 'momo'")
+  .replace(
+    "))?.id,'x',users.accountant.id,users.principal.id,d(\"2026-01-20\"));",
+    "))?.id,users.accountant.id,users.principal.id,d(\"2026-01-20\"));",
+  );
 
 patchedSource = patchedSource.replace(
   "async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }",
