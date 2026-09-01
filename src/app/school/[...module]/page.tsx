@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { getSchoolAuthorization } from "@/lib/authorization";
+import { withTenant } from "@/lib/db";
 import StaffAttendanceDesk from "../StaffAttendanceDesk";
 
 type ModuleConfig = { title: string; subtitle: string; action: string; tabs: string[] };
@@ -84,7 +85,7 @@ export default async function SchoolModulePage({params}:{params:Promise<{module?
   return <AppShell universe={isTeacher ? "teacher" : "school"} title={config.title} subtitle={config.subtitle} active={config.title} schoolName={school.school.name} schoolCode={school.school.uniqueCode} userName={session.name}>
     <div className="module-shell">
       <section className="module-hero"><div><span className="eyebrow">{school.school.name}</span><h2>{config.title}</h2><p>{config.subtitle}</p></div><div className="module-actions"><Link className="button secondary" href="/school/reports/analytics">View analytics</Link><Link className="button secondary" href="/school/terms">Term context</Link></div></section>
-      <nav className="module-tabs" aria-label={`${config.title} views`} aria-disabled="true">{config.tabs.map((tab) => <span key={tab} className="module-tab" aria-disabled="true">{tab}</span>)}</nav>
+      <nav className="module-tabs" aria-label={`${config.title} views`}>{config.tabs.map((tab) => <span key={tab} className="module-tab" aria-disabled="true">{tab}</span>)}</nav>
       <section className="module-layout"><div className="module-panel"><div className="module-empty"><span className="eyebrow">Prototype / placeholder</span><strong>Workflow not connected yet</strong><span>This route is intentionally read-only. No create, edit, search, or record change is exposed here until this module is backed by a real operational workflow.</span><div className="module-actions"><Link className="button secondary" href="/school/reports/analytics">View school analytics</Link><Link className="button secondary" href="/school/terms">Review term context</Link></div></div></div><aside className="module-side-card"><div className="module-side-card-head"><h3>Module status</h3><span>Read-only</span></div><div className="module-list"><div className="module-list-item"><span className="module-list-index">1</span><span>Data changes</span><span>Disabled</span></div><div className="module-list-item"><span className="module-list-index">2</span><span>Search</span><span>Not connected</span></div><div className="module-list-item"><span className="module-list-index">3</span><span>Record workflow</span><span>Not connected</span></div><div className="module-list-item"><span className="module-list-index">4</span><span>Role-safe fallback</span><span>Active</span></div></div></aside></section>
     </div>
   </AppShell>;
