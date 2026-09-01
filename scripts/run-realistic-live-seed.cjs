@@ -11,10 +11,9 @@
  *   isolation guard remains satisfied.
  * - Does not touch existing tenants except the requested synthetic school code.
  *
- * Runtime compatibility patches are intentionally applied to a temporary copy
- * of the existing fixture for schema compatibility during this controlled test
- * run: attendance method, assessment type, required fee item classId, payment
- * method, and a longer Prisma interactive transaction timeout.
+ * Runtime compatibility patches are applied only to a temporary copy of the
+ * fixture for this controlled synthetic tenant run. The production schema is
+ * not weakened to accommodate test data.
  */
 const fs = require("fs");
 const path = require("path");
@@ -54,9 +53,14 @@ const patchedSource = originalSource
   .replace(/type:\s*["']CA["']/g, "type: 'ca'")
   .replace(/type:\s*["']EXAM["']/g, "type: 'exam'")
   .replace(/classId:\s*null/g, "classId: classes[0].id")
-  .replace(/method:\s*["']bank_transfer["']/g, "method: 'momo'");
+  .replace(/method:\s*["']bank_transfer["']/g, "method: 'momo'")
+  .replace(/'Lunch',\$4,520,\$5/g, "'Lunch',$4::jsonb,520,$5")
+  .replace(/'Lunch',\$5,1,5,\$6/g, "'Lunch',$5::jsonb,1,5,$6")
+  .replace(/VALUES \(\$1,\$2,\$3,\$4,'submitted',22\.5,\$8\)/g, "VALUES ($1,$2,$3,$4,'submitted',22.5,$8::jsonb)")
+  .replace(/'attendance',\$4,'pending'/g, "'attendance',$4::jsonb,'pending'");
 fs.writeFileSync(temp, patchedSource, "utf8");
 
+console.log(`[live-seed] starting synthetic tenant ${code}`);
 const cleanup = () => {
   try { fs.unlinkSync(temp); } catch {}
 };
