@@ -13,8 +13,9 @@
  *
  * Runtime compatibility patches are intentionally applied to a temporary copy
  * of the existing fixture: the current schema rejects the fixture's historical
- * "device" attendance method, Assessment type values must be lowercase, and the
- * large fixture needs a longer Prisma interactive-transaction timeout.
+ * "device" attendance method, uppercase assessment types, nullable feeItem
+ * classId, and the large fixture needs a longer Prisma interactive-transaction
+ * timeout than the default five seconds.
  */
 const fs = require("fs");
 const path = require("path");
@@ -51,8 +52,10 @@ const temp = path.join(scriptsDir, `.seed-live-runtime-${process.pid}.cjs`);
 const originalSource = fs.readFileSync(source, "utf8");
 const patchedSource = originalSource
   .replace(/['\"]device['\"]/g, "'qr'")
-  .replace(/type: \"CA\"/g, 'type: "ca"')
-  .replace(/type: \"EXAM\"/g, 'type: "exam"');
+  .replace(/type:\s*["']CA["']/g, "type: 'ca'")
+  .replace(/type:\s*["']EXAM["']/g, "type: 'exam'")
+  .replace(/schoolId, termId, classId: null, name/g, "schoolId, termId, classId: classes[0].id, name")
+  .replace(/schoolId, termId, classId: null, name, amount/g, "schoolId, termId, classId: classes[0].id, name, amount");
 fs.writeFileSync(temp, patchedSource, "utf8");
 
 const cleanup = () => {
