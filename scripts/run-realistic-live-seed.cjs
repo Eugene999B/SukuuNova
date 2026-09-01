@@ -71,6 +71,15 @@ patchedSource = patchedSource.replace(
     if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"payload"')) {
       normalizedSql = normalizedSql.replace(",'attendance',$4,'pending'", ",'attendance',$4::jsonb,'pending'");
     }
+    if (normalizedSql.includes('"P3FinanceAdjustment"') && normalizedSql.includes('"approvedAt"')) {
+      normalizedSql = normalizedSql.replace(",$5,$6,$7)", ",$5,$6,$7::timestamp)");
+    }
+    if (normalizedSql.includes('"P3RecruitmentPosting"') && normalizedSql.includes('"closingDate"')) {
+      normalizedSql = normalizedSql.replace(",'open',$3,$4)", ",'open',$3::timestamp,$4)");
+    }
+    if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"createdAt"')) {
+      normalizedSql = normalizedSql.replace(",$5,$6)", ",$5,$6::timestamp)");
+    }
     return tx.$executeRawUnsafe(normalizedSql, ...params);
   }`,
 );
