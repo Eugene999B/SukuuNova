@@ -9,10 +9,6 @@ import { appendSchoolAudit } from "@/lib/audit";
 import { routeError, ForbiddenError, AppError } from "@/lib/errors";
 import { syncDefaultRbac } from "@/lib/role-builder-service";
 
-const contactSchema = z.object({
-  email: z.string().trim().email().optional().or(z.literal("")),
-  phone: z.string().trim().min(3).max(40).optional().or(z.literal("")),
-});
 const createSchema = z.object({ name:z.string().trim().min(2).max(160), email:z.string().trim().email().optional().or(z.literal("")), phone:z.string().trim().min(3).max(40).optional().or(z.literal("")), password:z.string().min(12).max(256), roleNames:z.array(z.string().min(2).max(80)).min(1).max(12).optional(), roleName:z.string().min(2).max(80).optional() }).refine((x)=>Boolean(x.roleNames?.length||x.roleName),{message:"At least one role is required."}).refine((x)=>Boolean(x.email||x.phone),{message:"Provide an email address or phone number for login."});
 const updateSchema = z.object({ userId:z.string().min(1), status:z.enum(["active","suspended","pending"]), name:z.string().trim().min(2).max(160).optional(), email:z.string().trim().email().optional().or(z.literal("")), phone:z.string().trim().min(3).max(40).optional().or(z.literal("")), password:z.string().min(12).max(256).optional(), roleNames:z.array(z.string().min(2).max(80)).min(1).max(12).optional(), roleName:z.string().min(2).max(80).optional(), grantedPermissionKeys:z.array(z.string()).max(100).optional(), deniedPermissionKeys:z.array(z.string()).max(100).optional(), clearPermissionOverrides:z.boolean().optional() }).refine((x)=>x.email===undefined||x.email!==""||Boolean(x.phone),{message:"An account needs an email address or phone number for login."});
 async function canManage(tx:Parameters<typeof requirePermission>[0],userId:string){try{await requirePermission(tx,userId,"users:write");return true}catch{return false}}
