@@ -74,16 +74,38 @@ patchedSource = patchedSource.replace(
     }
     if (normalizedSql.includes('"P3FinanceAdjustment"') && normalizedSql.includes('"approvedAt"')) {
       normalizedSql = normalizedSql.replace(",$5,$6,$7)", ",$5,$6,$7::timestamp)");
-      // The canonical fixture currently supplies one stray argument immediately
-      // before approvedAt. The SQL has exactly seven placeholders:
-      //   id, schoolId, studentId, invoiceId, requestedBy, approvedBy, approvedAt
-      // When eight runtime arguments are present and the final value is a Date,
-      // drop only the seventh argument (index 6) so the IDs stay aligned.
-      if (normalizedParams.length === 8 && normalizedParams[7] instanceof Date) {
-        normalizedParams = [
-          normalizedParams[0], normalizedParams[1], normalizedParams[2], normalizedParams[3],
-          normalizedParams[4], normalizedParams[5], normalizedParams[7],
-        ];
+
+      // The canonical fixture has historically passed an extra runtime value
+      // before approvedAt. Rebuild the arguments by type/ownership instead of
+      // relying on positional assumptions. The SQL placeholders are:
+      // id, schoolId, studentId, invoiceId, requestedBy, approvedBy, approvedAt.
+      const dateIndex = normalizedParams.findIndex((value) =>
+        value instanceof Date || (typeof value === 'string' && !Number.isNaN(Date.parse(value)) && /^\\d{4}-\\d{2}-\\d{2}/.test(value))
+      );
+
+      if (normalizedParams.length >= 7 && dateIndex >= 0) {
+        const candidateIds = normalizedParams.filter((value, index) =>
+          index !== dateIndex && typeof value === 'string' && value.length >= 16
+        );
+        const userCandidates = candidateIds.length
+          ? await tx.user.findMany({
+              where: { schoolId: normalizedParams[1], id: { in: candidateIds } },
+              select: { id: true },
+            })
+          : [];
+        const validUserIds = userCandidates.map((user) => user.id);
+        const requesters = validUserIds.slice(0, 2);
+        if (requesters.length >= 2) {
+          normalizedParams = [
+            normalizedParams[0],
+            normalizedParams[1],
+            normalizedParams[2],
+            normalizedParams[3],
+            requesters[0],
+            requesters[1],
+            normalizedParams[dateIndex],
+          ];
+        }
       }
     }
     return tx.$executeRawUnsafe(normalizedSql, ...normalizedParams);
