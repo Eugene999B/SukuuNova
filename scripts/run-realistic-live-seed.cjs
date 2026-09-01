@@ -71,6 +71,9 @@ patchedSource = patchedSource.replace(
     if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"payload"')) {
       normalizedSql = normalizedSql.replace(",'attendance',$4,'pending'", ",'attendance',$4::jsonb,'pending'");
     }
+    if (normalizedSql.includes('"P3FinanceAdjustment"') && normalizedSql.includes('"approvedAt"')) {
+      normalizedSql = normalizedSql.replace(",$5,$6,$7)", ",$5,$6,$7::timestamp)");
+    }
     return tx.$executeRawUnsafe(normalizedSql, ...params);
   }`,
 );
