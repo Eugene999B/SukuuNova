@@ -59,6 +59,7 @@ patchedSource = patchedSource.replace(
   "async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }",
   `async function exec(tx, sql, ...params) {
     let normalizedSql = sql;
+    let normalizedParams = params;
     if (normalizedSql.includes('"P3FeedingMenu"') && normalizedSql.includes('"items"')) {
       normalizedSql = normalizedSql.replace(",$4,520,$5)", ",$4::jsonb,520,$5)");
     }
@@ -73,8 +74,11 @@ patchedSource = patchedSource.replace(
     }
     if (normalizedSql.includes('"P3FinanceAdjustment"') && normalizedSql.includes('"approvedAt"')) {
       normalizedSql = normalizedSql.replace(",$5,$6,$7)", ",$5,$6,$7::timestamp)");
+      if (normalizedParams.length === 8) {
+        normalizedParams = [normalizedParams[0], normalizedParams[1], normalizedParams[2], normalizedParams[3], normalizedParams[5], normalizedParams[6], normalizedParams[7]];
+      }
     }
-    return tx.$executeRawUnsafe(normalizedSql, ...params);
+    return tx.$executeRawUnsafe(normalizedSql, ...normalizedParams);
   }`,
 );
 
