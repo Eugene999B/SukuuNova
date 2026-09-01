@@ -1,65 +1,27 @@
 import Link from "next/link";
 import { ArrowRight, CircleAlert, FileText, ReceiptText, WalletCards } from "lucide-react";
 
-type FinanceStats = {
-  invoices: number;
-  outstandingInvoices: number;
-  payments: number;
-  pendingFeeAdjustments: number;
-  announcements: Array<{ id: string; body: string; createdAt: Date }>;
-};
-
+type FinanceStats = { invoices: number; payments: number; pendingFeeAdjustments: number };
 type Props = { name: string; school: string; code: string; role: string; stats: FinanceStats };
 
 export function FinanceDashboard({ name, school, code, role, stats }: Props) {
   const firstName = name.trim().split(/\s+/)[0] || name;
-  return (
-    <div className="finance-command-center">
-      <section className="finance-hero">
-        <div><span className="finance-eyebrow">Finance workspace</span><h1>Good morning, {firstName}.</h1><p>Start with the payments and invoices that need your attention today.</p></div>
-        <div className="finance-identity"><strong>{school}</strong><span>{code} · {role}</span></div>
-      </section>
-
-      <section className="finance-work-grid">
-        <Link href="/school/fees/invoices?status=unpaid" className="finance-work-card finance-work-primary">
-          <span className="finance-work-icon"><ReceiptText size={18} aria-hidden="true" /></span>
-          <div><span>Outstanding invoices</span><strong>{stats.outstandingInvoices}</strong><p>Open unpaid invoices and follow up where needed.</p></div><ArrowRight size={17} aria-hidden="true" />
-        </Link>
-        <Link href="/school/fees/payments" className="finance-work-card">
-          <span className="finance-work-icon"><WalletCards size={18} aria-hidden="true" /></span>
-          <div><span>Payment records</span><strong>{stats.payments}</strong><p>Review recent collections and receipts.</p></div><ArrowRight size={17} aria-hidden="true" />
-        </Link>
-        <Link href="/school/fees/overview" className="finance-work-card">
-          <span className="finance-work-icon"><CircleAlert size={18} aria-hidden="true" /></span>
-          <div><span>Adjustments to review</span><strong>{stats.pendingFeeAdjustments}</strong><p>Fee adjustments waiting for approval.</p></div><ArrowRight size={17} aria-hidden="true" />
-        </Link>
-      </section>
-
-      <section className="finance-lower-grid">
-        <article className="finance-panel">
-          <div className="finance-panel-head"><div><span className="finance-eyebrow">Today</span><h2>Useful shortcuts</h2></div></div>
-          <div className="finance-shortcuts">
-            <Link href="/school/fees/payments"><strong>Record payment</strong><span>Post a collection against an invoice.</span><ArrowRight size={15} aria-hidden="true" /></Link>
-            <Link href="/school/fees/invoices"><strong>Find invoice</strong><span>Search invoices by learner or term.</span><ArrowRight size={15} aria-hidden="true" /></Link>
-            <Link href="/school/fees/reports"><strong>Finance reports</strong><span>Review collections and balances.</span><ArrowRight size={15} aria-hidden="true" /></Link>
-            <Link href="/school/fees/payroll"><strong>Payroll</strong><span>Open staff payroll when you have access.</span><ArrowRight size={15} aria-hidden="true" /></Link>
-          </div>
-        </article>
-        <article className="finance-panel">
-          <div className="finance-panel-head"><div><span className="finance-eyebrow">Record overview</span><h2>Finance at a glance</h2></div></div>
-          <div className="finance-metrics">
-            <div><span>All invoices</span><strong>{stats.invoices}</strong></div>
-            <div><span>Outstanding</span><strong>{stats.outstandingInvoices}</strong></div>
-            <div><span>Payments recorded</span><strong>{stats.payments}</strong></div>
-            <div><span>Adjustments pending</span><strong>{stats.pendingFeeAdjustments}</strong></div>
-          </div>
-          <Link className="finance-all-link" href="/school/fees"><FileText size={14} aria-hidden="true" /> Open Finance <ArrowRight size={14} aria-hidden="true" /></Link>
-        </article>
-      </section>
-    </div>
-  );
+  return <div className="finance-command-center">
+    <section className="finance-hero"><div><span className="finance-eyebrow">Finance workspace</span><h1>Good morning, {firstName}.</h1><p>Start with the invoices and payment work that needs your attention today.</p></div><div className="finance-identity"><strong>{school}</strong><span>{code} · {role}</span></div></section>
+    <section className="finance-work-grid">
+      <Link href="/school/fees/invoices?status=unpaid" className="finance-work-card"><span className="finance-work-icon"><ReceiptText size={18} aria-hidden="true" /></span><div><span>Unpaid invoices</span><strong>{stats.invoices}</strong><p>Open invoice records and follow up on balances.</p></div><ArrowRight size={17} aria-hidden="true" /></Link>
+      <Link href="/school/fees/payments" className="finance-work-card"><span className="finance-work-icon"><WalletCards size={18} aria-hidden="true" /></span><div><span>Payment records</span><strong>{stats.payments}</strong><p>Review collections and receipts.</p></div><ArrowRight size={17} aria-hidden="true" /></Link>
+      <Link href="/school/fees/overview" className="finance-work-card"><span className="finance-work-icon"><CircleAlert size={18} aria-hidden="true" /></span><div><span>Adjustments to review</span><strong>{stats.pendingFeeAdjustments}</strong><p>Fee adjustments waiting for approval.</p></div><ArrowRight size={17} aria-hidden="true" /></Link>
+    </section>
+    <section className="finance-lower-grid"><article className="finance-panel"><div className="finance-panel-head"><div><span className="finance-eyebrow">Today</span><h2>Useful shortcuts</h2></div></div><div className="finance-shortcuts">
+      <Link href="/school/fees/payments"><strong>Record payment</strong><span>Post a collection against an invoice.</span><ArrowRight size={15} aria-hidden="true" /></Link>
+      <Link href="/school/fees/invoices"><strong>Find invoice</strong><span>Search invoices by learner or term.</span><ArrowRight size={15} aria-hidden="true" /></Link>
+      <Link href="/school/fees/reports"><strong>Finance reports</strong><span>Review collections and balances.</span><ArrowRight size={15} aria-hidden="true" /></Link>
+      <Link href="/school/fees/payroll"><strong>Payroll</strong><span>Open payroll when you have access.</span><ArrowRight size={15} aria-hidden="true" /></Link>
+    </div></article><article className="finance-panel"><div className="finance-panel-head"><div><span className="finance-eyebrow">Record overview</span><h2>Finance at a glance</h2></div></div><div className="finance-metrics">
+      <div><span>Invoice records</span><strong>{stats.invoices}</strong></div><div><span>Payment records</span><strong>{stats.payments}</strong></div><div><span>Adjustments pending</span><strong>{stats.pendingFeeAdjustments}</strong></div>
+    </div><Link className="finance-all-link" href="/school/fees"><FileText size={14} aria-hidden="true" /> Open Finance <ArrowRight size={14} aria-hidden="true" /></Link></article></section>
+  </div>;
 }
 
-export const financeDashboardStyles = `
-.finance-command-center{display:grid;gap:18px;max-width:1180px;margin:0 auto;padding:4px 0 36px}.finance-hero,.finance-panel{border:1px solid var(--color-border);background:var(--color-surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)}.finance-hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;padding:28px}.finance-eyebrow{display:block;color:var(--color-brand);font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.12em}.finance-hero h1{margin:7px 0;color:var(--color-text-primary);font-size:30px;letter-spacing:-.04em}.finance-hero p{margin:0;color:var(--color-text-secondary);font-size:12px}.finance-identity{text-align:right}.finance-identity strong,.finance-identity span{display:block}.finance-identity strong{color:var(--color-text-primary);font-size:12px}.finance-identity span{margin-top:4px;color:var(--color-text-muted);font-size:10px}.finance-work-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.finance-work-card{display:flex;align-items:flex-start;gap:12px;padding:18px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text-primary);text-decoration:none;box-shadow:var(--shadow-sm)}.finance-work-card:hover{border-color:var(--color-brand);background:var(--color-surface-soft);transform:translateY(-1px)}.finance-work-card>div{min-width:0;flex:1}.finance-work-icon{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:10px;background:var(--color-brand-soft);color:var(--color-brand)}.finance-work-card div>span{display:block;color:var(--color-text-secondary);font-size:10px;font-weight:750}.finance-work-card strong{display:block;margin:5px 0;font-size:26px;letter-spacing:-.04em}.finance-work-card p{margin:0;color:var(--color-text-muted);font-size:9px;line-height:1.5}.finance-work-card>svg{margin-top:5px;color:var(--color-brand)}.finance-lower-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:18px}.finance-panel{padding:22px}.finance-panel h2{margin:5px 0 0;color:var(--color-text-primary);font-size:18px;letter-spacing:-.025em}.finance-shortcuts{display:grid;gap:4px;margin-top:16px}.finance-shortcuts a{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--color-border);color:var(--color-text-primary);text-decoration:none}.finance-shortcuts a>div{flex:1;min-width:0}.finance-shortcuts strong{display:block;font-size:10px}.finance-shortcuts span{display:block;margin-top:3px;color:var(--color-text-muted);font-size:8px}.finance-shortcuts svg{color:var(--color-brand)}.finance-metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:16px;border:1px solid var(--color-border);border-radius:10px;overflow:hidden}.finance-metrics div{padding:15px;background:var(--color-surface-soft)}.finance-metrics span{display:block;color:var(--color-text-muted);font-size:8px}.finance-metrics strong{display:block;margin-top:5px;color:var(--color-text-primary);font-size:22px}.finance-all-link{display:inline-flex;align-items:center;gap:6px;margin-top:15px;color:var(--color-brand);font-size:10px;font-weight:800;text-decoration:none}@media(max-width:820px){.finance-work-grid,.finance-lower-grid{grid-template-columns:1fr}.finance-hero{display:block}.finance-identity{text-align:left;margin-top:14px}}@media(max-width:520px){.finance-hero{padding:20px}.finance-hero h1{font-size:25px}.finance-panel{padding:18px}}
-`;
+export const financeDashboardStyles = `.finance-command-center{display:grid;gap:18px;max-width:1180px;margin:0 auto;padding:4px 0 36px}.finance-hero,.finance-panel{border:1px solid var(--color-border);background:var(--color-surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)}.finance-hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;padding:28px}.finance-eyebrow{display:block;color:var(--color-brand);font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.12em}.finance-hero h1{margin:7px 0;color:var(--color-text-primary);font-size:30px;letter-spacing:-.04em}.finance-hero p{margin:0;color:var(--color-text-secondary);font-size:12px}.finance-identity{text-align:right}.finance-identity strong,.finance-identity span{display:block}.finance-identity strong{color:var(--color-text-primary);font-size:12px}.finance-identity span{margin-top:4px;color:var(--color-text-muted);font-size:10px}.finance-work-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.finance-work-card{display:flex;align-items:flex-start;gap:12px;padding:18px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text-primary);text-decoration:none;box-shadow:var(--shadow-sm)}.finance-work-card:hover{border-color:var(--color-brand);background:var(--color-surface-soft);transform:translateY(-1px)}.finance-work-card>div{min-width:0;flex:1}.finance-work-icon{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:10px;background:var(--color-brand-soft);color:var(--color-brand)}.finance-work-card div>span{display:block;color:var(--color-text-secondary);font-size:10px;font-weight:750}.finance-work-card strong{display:block;margin:5px 0;font-size:26px;letter-spacing:-.04em}.finance-work-card p{margin:0;color:var(--color-text-muted);font-size:9px;line-height:1.5}.finance-work-card>svg{margin-top:5px;color:var(--color-brand)}.finance-lower-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:18px}.finance-panel{padding:22px}.finance-panel h2{margin:5px 0 0;color:var(--color-text-primary);font-size:18px;letter-spacing:-.025em}.finance-shortcuts{display:grid;gap:4px;margin-top:16px}.finance-shortcuts a{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--color-border);color:var(--color-text-primary);text-decoration:none}.finance-shortcuts strong{display:block;font-size:10px}.finance-shortcuts span{display:block;margin-top:3px;color:var(--color-text-muted);font-size:8px}.finance-shortcuts svg{color:var(--color-brand)}.finance-metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:16px;border:1px solid var(--color-border);border-radius:10px;overflow:hidden}.finance-metrics div{padding:15px;background:var(--color-surface-soft)}.finance-metrics span{display:block;color:var(--color-text-muted);font-size:8px}.finance-metrics strong{display:block;margin-top:5px;color:var(--color-text-primary);font-size:22px}.finance-all-link{display:inline-flex;align-items:center;gap:6px;margin-top:15px;color:var(--color-brand);font-size:10px;font-weight:800;text-decoration:none}@media(max-width:820px){.finance-work-grid,.finance-lower-grid{grid-template-columns:1fr}.finance-hero{display:block}.finance-identity{text-align:left;margin-top:14px}}@media(max-width:520px){.finance-hero{padding:20px}.finance-hero h1{font-size:25px}.finance-panel{padding:18px}}`;
