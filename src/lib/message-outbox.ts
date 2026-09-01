@@ -6,7 +6,7 @@ export type NotificationTemplateKey="student_absence"|"student_attendance"|"staf
 type RecipientType="guardian"|"staff"|"user";
 type Channel="sms"|"whatsapp";
 
-type NotificationInput={schoolId:string; recipientType:RecipientType; recipientId:string; recipientPhone:string; body:string; templateKey?:NotificationTemplateKey; templateVariables?:Record<string,string>; mediaUrl?:string; idempotencyKey?:string};
+type NotificationInput={schoolId:string; recipientType:RecipientType; recipientId:string; recipientPhone:string; body:string; templateKey?:NotificationTemplateKey; templateVariables?:Record<string,string>; mediaUrl?:string; idempotencyKey?:string; scheduledAt?:Date};
 type NotificationSenders={sms?:SmsSender;whatsapp?:WhatsAppSender};
 
 const MAX_ATTEMPTS=5;
@@ -75,8 +75,8 @@ async function deliverCreatedMessage(tx:Prisma.TransactionClient,message:{id:str
 }
 
 export async function enqueueNotification(tx:Prisma.TransactionClient,input:NotificationInput){
-  const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}}); const channels=configuredChannels(settings?.notificationChannels); const messages=[];
-  for(const channel of channels){ if(channel==="whatsapp"&&!input.templateKey)continue; const idempotencyKey=deterministicIdempotencyKey(input,channel); const existing=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(existing){messages.push(existing);continue;} try{ const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt:new Date(),idempotencyKey}}); messages.push(message);}catch(error){ if((error as {code?:string}).code!=="P2002")throw error; const existingAfterRace=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(!existingAfterRace)throw error; messages.push(existingAfterRace); } }
+  const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}}); const channels=configuredChannels(settings?.notificationChannels); const messages=[]; const nextAttemptAt=input.scheduledAt && input.scheduledAt.getTime()>Date.now()?input.scheduledAt:new Date();
+  for(const channel of channels){ if(channel==="whatsapp"&&!input.templateKey)continue; const idempotencyKey=deterministicIdempotencyKey(input,channel); const existing=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(existing){messages.push(existing);continue;} try{ const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt,idempotencyKey}}); messages.push(message);}catch(error){ if((error as {code?:string}).code!=="P2002")throw error; const existingAfterRace=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(!existingAfterRace)throw error; messages.push(existingAfterRace); } }
   return messages;
 }
 export const enqueueSms=enqueueNotification;
@@ -97,4 +97,4 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
   }
   return processed;
 }
-export async function processSmsBatchOnce(sender:SmsSender=httpSmsSender,batchSize=20,schoolIdFilter?:string){return processMessageBatchOnce({sms:sender},batchSize,schoolIdFilter);} 
+export async function processSmsBatchOnce(sender:SmsSender=httpSmsSender,batchSize=20,schoolIdFilter?:string){return processMessageBatchOnce({sms:sender},batchSize,schoolIdFilter);}
