@@ -9,6 +9,7 @@ import "./sukuunova-overrides.css";
 import "./theme-switcher.css";
 import "./theme-runtime.css";
 import "./ui-trust.css";
+import "./theme-hardening.css";
 import "@/components/ui/skeleton.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
