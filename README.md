@@ -1,201 +1,523 @@
 # SukuuNova
 
-SukuuNova is a school operations platform being built for real day-to-day school work, with a strong focus on Ghanaian schools. The idea is simple: instead of making a school jump between separate systems for students, staff, classes, attendance, academics, fees, communication, safety and administration, SukuuNova brings those jobs together in one place.
+SukuuNova is a multi-tenant school operations platform designed for real day-to-day school work, with a strong focus on Ghanaian schools and the realities of running a modern school.
 
-This README is the main handover document for the project. A developer, Claude, Codex, or another engineering agent should be able to read this file first and get a realistic picture of what the system is, what is already built, how the pieces fit together, what is still being refined, and what must not be broken.
+The product goal is not to be another collection of disconnected school-management screens. SukuuNova is intended to become the operating system of a school: the place where a school manages people, academics, attendance, money, communication, safety, transport, staffing, family relationships, reporting and operational decisions from one connected environment.
 
-**Repository:** `Eugene999B/SukuuNova`  
-**Branch:** `main`  
-**Product name:** **SukuuNova**  
-**Framework:** Next.js App Router  
-**Language:** TypeScript  
-**Database:** PostgreSQL 16  
-**ORM:** Prisma  
-**UI:** React + Tailwind CSS + the project's shared CSS/design-token system
+This README is the **primary engineering handover document** for the repository. A developer or AI coding agent should read it before changing the system. It explains what SukuuNova is, who uses it, how the major systems connect, what the security model requires, which functionality exists, what is still being refined, how the code is organized, and the direction of future development.
 
-> **Important:** Work in this repository is for **SukuuNova only**. Do not apply changes from another product or another repository here by accident.
+> **Important:** This repository is for **SukuuNova only**. Do not import assumptions, code, styling, terminology or workflows from another product or repository unless they have been deliberately adapted to SukuuNova.
 
 ---
 
-## Where the project stands
+## 1. Product identity
 
-The original planned product was built in four main phases, and those phases are now integrated into the same application.
+- **Product:** SukuuNova
+- **Repository:** `Eugene999B/SukuuNova`
+- **Primary branch:** `main`
+- **Framework:** Next.js App Router
+- **Language:** TypeScript
+- **UI:** React, Tailwind CSS and shared SukuuNova CSS/design tokens
+- **Database:** PostgreSQL 16
+- **ORM:** Prisma
+- **Deployment:** Railway for the production application/database environment
+- **Authentication:** Separate platform and school JWT security domains
+- **AI:** OpenAI Responses API through server-side application code
 
-### Phase 0 — foundation
+SukuuNova is a **multi-school SaaS platform**. Every school is a tenant. The platform operator can manage many schools, while each school's staff, teachers and guardians operate within their own authorized school context.
 
-The foundation is in place: the application structure, authentication foundations, tenancy model, database, permissions, audit patterns and the basic school workspace.
+The system must always be understood as three connected experiences:
 
-### Phase 1 — core school operations
+1. **SukuuNova Platform** — the operator control plane above schools.
+2. **School Workspace** — the operational system used by school staff and teachers.
+3. **Family/Guardian Experience** — the controlled family-facing view of a child's school life.
 
-The first real school-management layer is complete. This is the part that makes SukuuNova useful as a normal school system: people, students, classes, subjects, academic setup, attendance, fees, messaging, reporting and related administrative workflows.
-
-### Phase 2 — differentiating modules
-
-Phase 2 added the larger operational features that make the system more than a basic school database. These include face recognition, payroll, transport, feeding, CBT, library, assets, recruitment and the associated access/feature controls.
-
-### Phase 3 — day-to-day operations
-
-Phase 3 expanded the operational side of the product: richer attendance and safety work, communication, reporting, staffing, timetables and substitutions, family workflows, and the supporting operational controls around those areas.
-
-### Phase 4 — platform maturity and controlled AI
-
-Phase 4 added the platform-management side of SukuuNova and the first carefully limited automation/AI features. This includes school management from the platform side, subscriptions and billing, school support, audited impersonation, school groups, risk signals, narrowly scoped WhatsApp assistance, human-reviewed AI drafts and emergency broadcast confirmation.
-
-Phase 4 is considered the final **planned product phase**. The work after that is incremental product refinement, bug fixing, hardening, visual improvements, hardware/biometric integration and other practical work that continues to improve the product.
-
-### Work added after the phase plan
-
-The repository has continued to evolve after Phase 4. Recent work includes:
-
-- hardware/biometric attendance support;
-- device registration and device identity management;
-- device attendance receipts with idempotency keys and nonces;
-- improvements to the public SukuuNova homepage;
-- stronger branding on white surfaces;
-- user-selectable themes on the homepage and inside signed-in areas;
-- consolidation of the theme picker so Settings and the global picker use the same theme presets;
-- continued accessibility, visual and responsive refinements.
+The product also has a public marketing/entry website and supporting integrations such as messaging, WhatsApp, biometric devices and AI-assisted workflows.
 
 ---
 
-## What SukuuNova actually is
+## 2. Product philosophy
 
-It helps to think of SukuuNova as two connected control planes with a family-facing side around the school tenant.
+SukuuNova is being built around a few principles.
 
-### 1. The SukuuNova platform
+### One connected school system
 
-This is the operator/super-admin side. It exists above individual schools and is responsible for things such as:
+Students, guardians, staff, classes, subjects, attendance, academics, finance and communication should reinforce each other instead of behaving like separate databases.
 
-- creating and managing schools;
-- activating, suspending and reactivating schools;
-- finding and investigating schools across the platform;
-- assigning subscription plans and managing platform billing;
-- reconciling manual platform payments;
-- handling support tickets and support conversations;
-- viewing platform health and audit information;
-- managing platform-level notifications and operations;
-- using audited impersonation when legitimate support work requires entering a school context;
-- managing platform configuration and related controls.
+For example:
 
-### 2. The school workspace
+- a student belongs to a class;
+- the class determines teaching context;
+- teaching context determines subjects and assessments;
+- assessments produce scores;
+- scores contribute to report cards;
+- attendance contributes to academic and pastoral context;
+- invoices and payments describe the family's financial relationship with the school;
+- guardians see only the information they are entitled to see;
+- communications can be targeted using real school relationships.
 
-A school is a tenant. Inside that tenant, authorized people run the actual school.
+### Human workflow before database structure
 
-The school workspace covers:
+A screen is not considered good merely because it can display database records. It should make the real job easy.
 
-- school profile and settings;
-- academic years and terms;
-- staff and role management;
-- students and guardians;
-- houses;
-- classes and class teachers;
-- subjects and teacher assignments;
-- attendance;
-- biometric/device attendance;
-- assessments, scores and gradebook work;
-- report cards and report-card templates;
-- fees, invoices, payments and payment reversals;
-- payroll and payslips;
-- messaging and notifications;
+A teacher thinks:
+
+> Select my class → select today → mark the register.
+
+A teacher should not have to create 40 individual attendance records through a database-shaped interface.
+
+A bursar thinks:
+
+> Find account → understand balance → record payment → issue receipt → reconcile.
+
+A school administrator thinks:
+
+> Set up the academic year → create classes → assign people → run school operations → review results.
+
+Future UI work must start from these human workflows and then map them to the underlying data model.
+
+### Safety over convenience
+
+School data is sensitive. The system must prefer explicit permissions, tenant isolation, auditability, confirmation for destructive actions and human review for consequential automation.
+
+### Real functionality over decorative completeness
+
+A polished button must not pretend to perform an operation that is not implemented.
+
+If a workflow is unavailable, the interface should say so clearly rather than presenting a fake success state or prototype control as though it were production functionality.
+
+### Consistency is a product feature
+
+All workspaces should feel like one product. Shared navigation, typography, spacing, forms, buttons, tables, cards, status indicators, responsive behaviour and theme tokens should be reused rather than recreated module by module.
+
+---
+
+## 3. The complete system at a glance
+
+SukuuNova can be understood as a set of connected operational domains.
+
+### Platform management
+
+The platform operator manages the SaaS itself:
+
+- create schools;
+- activate, suspend and reactivate schools;
+- search and investigate schools;
+- manage subscription plans;
+- manage school-level platform billing;
+- reconcile manual platform payments;
+- manage support tickets;
+- inspect platform health and audits;
+- manage school groups/branches;
+- use controlled, audited impersonation when support work requires entering a school context;
+- manage platform-level operational controls.
+
+### School administration
+
+The school manages its identity and operating structure:
+
+- school profile;
+- school code/login identity;
+- academic years;
+- terms;
 - calendar/events;
-- timetables and substitute-teacher assignments;
-- admissions;
-- visitor and pickup/safety workflows;
-- face enrollment and face-match review;
-- transport;
-- feeding;
-- CBT;
-- library;
-- assets/inventory;
-- recruitment;
-- reporting and exports;
-- school settings and theme/appearance preferences.
+- roles and permissions;
+- staff;
+- students;
+- guardians;
+- houses;
+- classes;
+- class teachers;
+- subjects;
+- teacher assignments;
+- school settings;
+- appearance/theme preferences.
 
-### 3. Guardians and families
+### Admissions
 
-Guardians have their own school-facing access path. Their records are connected to the students they are responsible for, and the system is designed so family users only see information they are actually entitled to see.
+Admissions is intended to cover the complete journey from interest to enrolled learner:
 
-There are also selected guardian communication workflows, including the restricted WhatsApp assistant described later in this document.
+- enquiries;
+- applicant records;
+- application review;
+- document/decision workflow;
+- acceptance/rejection;
+- enrolment;
+- conversion into the normal student/family records.
 
-### Teachers
+### Student and family management
 
-Teachers operate inside the school workspace but normally have a narrower set of permissions than school administrators. Their work includes teaching-related screens, attendance, grade entry, timetable information, students, homework/academic activity and the modules that their role allows.
+Student records form the centre of the school tenant.
+
+A student can be associated with:
+
+- class;
+- house;
+- guardians;
+- attendance;
+- assessments and scores;
+- report cards;
+- invoices;
+- face enrollment;
+- device identity;
+- pickup and safety events;
+- other operational records.
+
+Guardians can be linked to one or more students, subject to the school's relationships and authorization rules.
+
+### Academic management
+
+Academic operations include:
+
+- academic years;
+- terms;
+- subjects;
+- class/subject teacher assignments;
+- assessments;
+- grade entry;
+- gradebook;
+- score calculation;
+- moderation;
+- report-card generation;
+- report-card templates;
+- approval/review workflows;
+- publication to families;
+- lesson planning;
+- homework/exercises;
+- timetable management;
+- substitute-teacher assignments.
+
+### Attendance
+
+Attendance supports ordinary school attendance as well as the newer device/biometric direction.
+
+The system covers:
+
+- class registers;
+- daily attendance;
+- present/absent/late/excused states where supported;
+- attendance history;
+- exception handling;
+- staff attendance;
+- device registration;
+- device identities;
+- attendance receipts;
+- idempotency protection;
+- nonce-based request protection;
+- face enrollment and face-match review.
+
+Attendance should eventually feel like a fast operational register, not a CRUD database.
+
+### Finance
+
+Finance covers:
+
+- fee items;
+- fee structures;
+- invoices;
+- invoice lines;
+- balances;
+- payments;
+- receipts;
+- arrears;
+- payment reversals;
+- payroll and payslips.
+
+Financial history must remain auditable. A payment reversal is a financial event; it should not be implemented by silently rewriting historical payment data.
+
+### Communication
+
+Communication includes:
+
+- school messages;
+- announcements;
+- SMS/WhatsApp broadcast workflows;
+- notification templates;
+- queued delivery;
+- delivery status;
+- failure tracking;
+- retry-oriented behaviour;
+- emergency broadcast confirmation.
+
+Messaging should never expose recipients from another tenant and should clearly distinguish draft, queued, sent and failed states.
+
+### Safety and gate operations
+
+Safety workflows include:
+
+- approved pickup relationships;
+- pickup approval requests;
+- pickup events;
+- visitor logging;
+- device identity management;
+- face enrollment/matching review.
+
+The important distinction is between **authorization to pick up**, **a request to pick up**, and **the actual pickup event**. Those should not be collapsed into one field or one generic action.
+
+### Transport
+
+Transport is intended to manage:
+
+- routes;
+- stops;
+- vehicles;
+- drivers;
+- student assignments;
+- operational route information.
+
+### Feeding
+
+Feeding covers the school's meal operation, including planning and daily service information.
+
+### Library
+
+Library covers:
+
+- catalogue;
+- borrowing;
+- returns;
+- due dates;
+- overdue items;
+- learner/library relationships.
+
+### Assets and inventory
+
+The operational asset area is intended for:
+
+- assets;
+- stock/inventory;
+- assignments;
+- maintenance;
+- retirement/disposal records.
+
+### Human resources and recruitment
+
+HR-related functionality includes:
+
+- staff records;
+- salary structures;
+- payroll runs;
+- payslips;
+- vacancies;
+- applicants;
+- interviews;
+- offers;
+- recruitment status.
+
+### CBT and examinations
+
+The broader academic/examination direction includes:
+
+- assessments;
+- examination schedules;
+- mark entry;
+- moderation;
+- results;
+- computer-based testing (CBT).
+
+### Reporting and analytics
+
+Reporting should eventually give different roles the information they need without forcing them to understand the database.
+
+Examples include:
+
+- attendance reports;
+- academic performance;
+- finance/arrears;
+- staff information;
+- operational summaries;
+- management dashboards;
+- school/group-level comparisons where authorized.
+
+Analytics must use real data. Placeholder KPIs, fake trend charts or buttons that only change local UI state must not be represented as completed functionality.
 
 ---
 
-## The security model matters as much as the UI
+## 4. User roles and experiences
 
-SukuuNova is deliberately multi-tenant. A school must never be able to see another school's records simply because someone guessed an ID or called an API directly.
+### Platform administrator
 
-The database and application code therefore treat tenant boundaries as a real security boundary rather than something enforced only by the frontend.
+The platform administrator operates SukuuNova itself.
 
-### Separate authentication worlds
+Typical responsibilities:
 
-Platform authentication and school authentication are separate JWT universes.
+- school onboarding;
+- subscription management;
+- billing administration;
+- support;
+- platform search;
+- school investigation;
+- controlled impersonation;
+- platform audit and operational oversight.
 
-- Platform accounts are represented by `PlatformAdmin` and use `PLATFORM_AUTH_SECRET`.
-- School accounts are represented by `User` records belonging to a specific `School` and use `SCHOOL_AUTH_SECRET`.
-- Guardian access has its own school-facing login/reset flow.
+Platform authority must never be treated as automatic permission to perform every school action. Platform and school security domains are deliberately separated.
 
-A platform permission such as `schools:impersonate` is intentionally separate from ordinary school-management authority such as `schools:manage`.
+### School owner/administrator
 
-### Passwords and reset links
+This is the main school management role.
 
-Passwords are hashed with `bcryptjs`.
+The owner/administrator can manage the school's people, academic structure, finance, communication, operational modules, settings and reporting according to assigned permissions.
 
-Password-reset tokens are stored as hashes and have an expiry/use lifecycle. Reset APIs are not supposed to hand the reset link back to the browser or render the raw token into client UI.
+### Teacher
 
-For local development only, `ALLOW_DEV_TOKEN_ECHO=true` can enable a server-side console warning containing a reset link. That setting is not honored in production.
+Teachers should see a focused workspace based on their assigned responsibilities.
 
-Login throttling is persisted through the `LoginRateLimit` model rather than depending only on process memory.
+Typical teacher work includes:
 
-### Tenant isolation
+- assigned classes;
+- assigned subjects;
+- attendance;
+- gradebook/score entry;
+- assessments;
+- homework;
+- lesson planning;
+- timetable;
+- student context;
+- permitted communication.
 
-School-owned records carry `schoolId`, and relationships between school-owned records use same-school constraints where needed.
+A teacher must not be able to discover or modify another teacher's restricted data simply by changing a URL or submitting a different record ID.
 
-The application uses the existing tenant transaction/context helpers, including `withTenant()` and related authorization helpers, and the database design supports forced PostgreSQL RLS for tenant security.
+### Guardian
 
-When adding new school-owned functionality, future work must preserve this pattern. Do not trust a client-provided `schoolId` just because it looks valid. The authenticated tenant is the source of truth.
+Guardians should see only their linked children and only information released to the family.
 
-### Auditing
+Important family information includes:
 
-School-level and platform-level actions can be recorded through separate audit models. Important security-sensitive operations should leave an audit trail rather than silently modifying data.
+- child identity;
+- attendance where published/allowed;
+- academic results that have been released;
+- report cards;
+- school messages;
+- fees and balances where applicable;
+- relevant calendar information;
+- approved family workflows.
+
+A guardian dashboard must use semantically correct data. For example, a label such as “today's attendance” must actually mean today's attendance rather than a count of all historical events.
 
 ---
 
-## Platform impersonation is intentionally visible
+## 5. Multi-tenancy and security
 
-Platform support sometimes needs to look at a school's workspace to investigate a problem. SukuuNova supports that through an explicit impersonation flow rather than a hidden administrator backdoor.
+Tenant isolation is a core architectural requirement, not a UI convention.
 
-Impersonation is:
+### School tenant
+
+Every school has its own tenant identity. School-owned records are scoped to that school, normally through `schoolId` and related same-school relationships.
+
+The authenticated school context is the source of truth.
+
+**Never trust a client-provided `schoolId`.**
+
+When writing a new route or API:
+
+1. authenticate the user;
+2. establish the correct school/platform context;
+3. authorize the requested action;
+4. query through the correct tenant boundary;
+5. validate related records belong to the same tenant;
+6. perform the operation;
+7. audit consequential actions where appropriate.
+
+### PostgreSQL and tenant protection
+
+The project uses tenant-aware transaction helpers such as `withTenant()` and the database design supports PostgreSQL row-level security protections.
+
+Application-level filtering and database-level protection should reinforce each other.
+
+### Separate authentication domains
+
+Platform authentication and school authentication are separate JWT security universes.
+
+- Platform accounts use `PlatformAdmin` and `PLATFORM_AUTH_SECRET`.
+- School users use `User` records associated with a school and `SCHOOL_AUTH_SECRET`.
+- Guardian access follows the school-facing family authentication path.
+
+Do not merge these authentication systems for convenience.
+
+### Passwords and resets
+
+Passwords are hashed using `bcryptjs`.
+
+Password-reset tokens are stored as hashes and have expiry/use lifecycle controls.
+
+The raw reset token should not be exposed to client UI.
+
+For local development only, `ALLOW_DEV_TOKEN_ECHO=true` may allow a server-side console warning containing a reset link. It must not become a production behaviour.
+
+Login throttling is persisted through `LoginRateLimit` rather than relying only on process memory.
+
+### Permissions
+
+The authorization model supports:
+
+- roles;
+- permissions;
+- role-permission assignments;
+- user-role assignments;
+- user-specific permission overrides.
+
+Permission checks must happen at the server boundary for sensitive actions. Hiding a button is not authorization.
+
+### Auditability
+
+The system has separate school and platform audit models.
+
+Security-sensitive and consequential actions should leave an audit trail, particularly:
+
+- impersonation;
+- permission changes;
+- payment reversals;
+- sensitive record changes;
+- approval/rejection operations;
+- emergency communication;
+- biometric/identity operations;
+- destructive administrative operations.
+
+---
+
+## 6. Platform impersonation
+
+Platform support sometimes needs to inspect a school's actual workspace.
+
+SukuuNova therefore has an explicit impersonation mechanism rather than a hidden backdoor.
+
+Impersonation is designed to be:
 
 - permission-gated;
-- limited to 30 minutes;
-- tied to an explicit reason;
-- recorded in the platform audit log;
-- recorded in the school audit log;
-- visible to the school through its own audit view.
+- time-limited;
+- tied to a reason;
+- recorded in the platform audit trail;
+- recorded in the school audit trail;
+- visible to the school through its audit surface.
 
-The distinction is important: support access should be powerful enough to solve problems, but it must also be accountable.
+The current intended maximum session duration is 30 minutes.
+
+Ending an impersonation session uses:
+
+`POST /api/platform/impersonation`
+
+Never add silent “god mode” access that bypasses the existing accountability model.
 
 ---
 
-## The data model at a glance
+## 7. Data model
 
-The Prisma schema lives in `prisma/schema.prisma`. It is the best place to inspect the exact fields and relationships, but the major groups are below.
+The authoritative schema is `prisma/schema.prisma`.
+
+The main model families are:
 
 ### Platform and tenancy
 
 - `PlatformAdmin`
-- `AuditLogPlatform`
-- `SubscriptionPlan`
-- `SchoolLoginDirectory`
-- `LoginRateLimit`
-- `PlatformPasswordResetToken`
 - `School`
 - `SchoolSettings`
+- `SchoolLoginDirectory`
+- `SubscriptionPlan`
+- `LoginRateLimit`
+- `PlatformPasswordResetToken`
+- `AuditLogPlatform`
 
-### School users and permissions
+### Users and authorization
 
 - `User`
 - `Role`
@@ -206,27 +528,23 @@ The Prisma schema lives in `prisma/schema.prisma`. It is the best place to inspe
 - `SchoolPasswordResetToken`
 - `AuditLogSchool`
 
-The role system supports both role-level permissions and individual user overrides.
-
-### Academic calendar and school structure
+### Academic structure
 
 - `AcademicYear`
-- `CalendarEvent`
 - `Term`
+- `CalendarEvent`
 - `House`
 - `Class`
 - `Subject`
 - `ClassSubjectTeacher`
 
-### Students and families
+### Learners and families
 
 - `Student`
 - `Guardian`
 - `StudentGuardian`
 
-Students can belong to classes and houses and can be connected to one or more guardians. The model also connects students to attendance, scores, report cards, invoices, face enrollment, device identities and pickup/safety records.
-
-### Attendance and biometric identity
+### Attendance and identity
 
 - `AttendanceEvent`
 - `FaceEnrollment`
@@ -235,154 +553,370 @@ Students can belong to classes and houses and can be connected to one or more gu
 - `DeviceIdentity`
 - `DeviceAttendanceReceipt`
 
-The newer hardware-attendance layer supports registered devices, external device identities, idempotent attendance receipts and nonce-based protection against accidental or repeated submissions.
-
-Face data is treated as sensitive. Face enrollment can be tied to guardian consent, and face-match results can be routed through a human review state rather than automatically trusting every match.
-
-### Assessments and academic records
+### Academics
 
 - `Assessment`
 - `Score`
 - `ReportCard`
 - `ReportCardTemplate`
+- `AiDraft`
 
-Scores belong to students, assessments and subjects. Report cards retain calculation information and the workflow state for drafting, submission, approval and sending.
-
-### Finance
+### Finance and payroll
 
 - `FeeItem`
 - `Invoice`
 - `InvoiceLine`
 - `Payment`
 - `PaymentReversal`
-
-The finance model is built around invoices and payments, with explicit reversal records rather than silently editing historical payment information.
+- `SalaryStructure`
+- `PayrollRun`
+- `Payslip`
 
 ### Communication
 
 - `Message`
 
-Messages record channel, recipient details, body/template information, delivery state, attempts and failure information. The notification layer is designed to keep school operations from failing just because an external provider is temporarily unavailable.
-
-### Timetable and staffing operations
+### Operations and safety
 
 - `TimetableSlot`
 - `SubstituteAssignment`
-- `SalaryStructure`
-- `PayrollRun`
-- `Payslip`
 - `VisitorLog`
-
-### Safety and pickup
-
 - `ApprovedPickup`
 - `PickupApprovalRequest`
 - `PickupEvent`
 
-These models let schools distinguish pre-approved pickup relationships from one-off requests and actual pickup events.
+Additional models may exist in the schema for specialized functionality. Always inspect the current schema before assuming a model or field exists.
 
 ---
 
-## Main areas of the application
+## 8. Major application areas and routes
 
-The route structure has grown over time, but these are the important areas to understand when navigating the code.
+The exact route tree changes as the product evolves, so agents should search the repository before modifying a route. The following are the major entry points.
 
 ### Public website
 
-The public side includes the main homepage plus feature, school-information, about and contact pages. The homepage is designed to introduce SukuuNova clearly without looking like an internal admin dashboard.
-
-The main homepage entry point is:
-
-`/`
-
-The homepage also links users toward:
-
+- `/`
 - `/features`
 - `/for-schools`
 - `/about`
 - `/contact`
+
+The public site should communicate SukuuNova as a serious school platform rather than looking like an internal admin dashboard.
+
+### Authentication
+
+The application has separate entry paths for platform and school users, including:
+
 - `/login/platform`
 - `/login/school`
 
-The feature pages cover subjects such as students/families, academics, attendance/safety and fees/finance.
+Reset/password recovery routes and server handlers live alongside their respective authentication systems.
 
-### Platform
+### School workspace
 
-The platform control surface is reached at:
-
-`/platform`
-
-The main Phase 4 platform API surface is:
-
-`/api/platform/phase4`
-
-This is where school creation/management, plans, platform billing, support operations, search and impersonation-related work is concentrated.
-
-Ending an active impersonation session uses:
-
-`POST /api/platform/impersonation`
-
-### School
-
-The school workspace is the largest part of the application. Major areas include:
-
-- students;
-- classes;
-- attendance;
-- fees/finance;
-- academics and assessments;
-- report cards;
-- staff;
-- timetable;
-- settings;
-- admissions;
-- communications;
-- safety/pickup/visitor functions;
-- premium modules such as transport, feeding, CBT, library, assets, recruitment and payroll.
-
-Examples of core routes include:
+Important examples include:
 
 - `/school/students`
-- `/school/classes`
-- `/school/attendance`
-- `/school/fees`
-- `/school/settings`
+- `/school/guardians`
 - `/school/staff`
+- `/school/classes`
+- `/school/subjects`
 - `/school/timetable`
+- `/school/attendance`
+- `/school/gradebook`
+- `/school/report-cards`
+- `/school/fees`
+- `/school/fees/invoices`
+- `/school/fees/payments`
+- `/school/fees/arrears`
+- `/school/settings`
+- `/school/communications/messages`
+- `/school/communications/announcements`
+- `/school/events`
 
-There are many more sub-routes under the school area. When changing a module, search the repository for its route and supporting dialogs/components rather than assuming everything lives in one `page.tsx`.
+Specialized school areas include admissions, safety/pickup, transport, feeding, CBT, library, assets, recruitment and payroll.
 
-### Phase 4 school console
+### Platform workspace
 
-`/phase4`
+The platform control surface is rooted at:
 
-The school Phase 4 area brings together support requests, risk flags, AI drafts, group reporting and emergency-confirmation operations.
+- `/platform`
 
-The main Phase 4 school API is:
+Platform APIs include school management, subscriptions, billing, support, search and controlled operational functions.
 
-`GET/POST /api/phase4`
+Some API paths retain historical naming from earlier internal organization. **Those names are compatibility details, not product stages or roadmap terminology.** Do not use old naming to decide what should be built next.
 
-The WhatsApp assistant endpoint is:
+### Family/guardian workspace
 
-`POST /api/phase4/whatsapp`
+The guardian experience has its own route space and server-side authorization. Guardian child records must always be resolved through the authenticated guardian-to-student relationship rather than by trusting a URL parameter alone.
 
 ---
 
-## Important Phase 4 functionality
+## 9. Academic system
 
-Phase 4 is not one giant AI feature. It is a collection of controlled platform and school operations.
+The academic system is one of the most important parts of SukuuNova.
 
-### School groups
+The expected conceptual flow is:
 
-A school owner can work with multiple branches under a School Group. Consolidated reporting is read-only and is intentionally limited to the owning Owner.
+**Academic year → term → class → subject → teacher → assessment → score → moderation → report card → approval → publication**
 
-Branch records are not merged into one shared tenant. Underlying branch queries still run with independent tenant context, preserving school boundaries.
+### Academic setup
 
-### Platform subscriptions and billing
+Administrators configure:
 
-The platform supports subscription plans, school-level platform billing records and manual payment reconciliation. Existing premium school modules can be enabled/disabled through feature flags associated with the subscription plan.
+- academic years;
+- terms;
+- classes;
+- houses;
+- subjects;
+- teacher assignments;
+- assessment structures;
+- grade bands and calculation rules where supported.
 
-The guarded premium areas include:
+### Gradebook
+
+The gradebook should be organized around a teacher's or administrator's actual working context:
+
+**Term → Class → Subject → Assessment → Learners → Scores**
+
+It should not force the user to navigate an enormous database-shaped collection of unrelated assignment cards.
+
+### Score integrity
+
+Score entry must validate:
+
+- student belongs to the relevant school/class context;
+- assessment belongs to the correct academic context;
+- score is within allowed range;
+- duplicate score conditions are handled safely;
+- locked/published academic records cannot be casually modified;
+- consequential changes are auditable.
+
+### Report cards
+
+Report cards are the controlled output of academic records.
+
+The desired workflow is:
+
+**Draft → Review → Approve → Publish → Family access → Archive**
+
+Publishing must be deliberate. A guardian should not see an unapproved or unpublished result merely because a database record exists.
+
+### Timetable
+
+Timetable functionality should consider:
+
+- class conflicts;
+- teacher conflicts;
+- room conflicts where applicable;
+- period ranges;
+- substitution;
+- replacement of existing schedules.
+
+Destructive rebuild operations should show the user what will be replaced before applying it.
+
+---
+
+## 10. Attendance and biometric architecture
+
+Attendance is both a normal school workflow and an integration point for future physical devices.
+
+### Normal attendance
+
+The ideal human workflow is:
+
+**Select class → select date → load roster → mark everyone → resolve exceptions → save/submit**
+
+Quick actions such as “All Present” can make large registers practical, with individual overrides for absent, late or excused learners.
+
+### Staff attendance
+
+Staff attendance follows a similar operational model but uses staff records and the appropriate permissions.
+
+### Device attendance
+
+The device layer provides a path for registered physical attendance devices to submit attendance events securely.
+
+Important concepts include:
+
+- registered device;
+- external device identity;
+- signed/authenticated request context;
+- idempotency key;
+- nonce;
+- attendance receipt;
+- duplicate protection;
+- reconciliation.
+
+A device retry must not create duplicate attendance events.
+
+### Face recognition
+
+Face recognition is treated as sensitive identity technology, not as an automatic truth engine.
+
+The system has concepts for:
+
+- face enrollment;
+- consent/authorization context;
+- face matching;
+- match review.
+
+Where a match needs human confirmation, the workflow should allow a staff member to review it instead of automatically converting an uncertain match into a school record.
+
+---
+
+## 11. Finance architecture
+
+Finance should be treated as an operational ledger, not merely a list of numbers.
+
+### Fees
+
+Fee items describe what the school charges.
+
+### Invoices
+
+Invoices describe what a particular student/account is expected to pay, with invoice lines showing the underlying fee items.
+
+### Payments
+
+Payments record money received against financial obligations.
+
+### Reversals
+
+A reversal is a separate financial event that explains why a prior payment is no longer treated as valid.
+
+### Required UX direction
+
+A bursar should be able to understand, at a glance:
+
+- what was billed;
+- what was paid;
+- what remains;
+- what is overdue;
+- what is reversed;
+- what action should happen next.
+
+Payment entry should clearly show the amount, account, method, reference where relevant, resulting balance and receipt outcome before final confirmation.
+
+The current supported payment-method set includes common methods such as Cash, MoMo and Card. Future payment integrations should be added behind explicit provider abstractions and reconciliation rules.
+
+---
+
+## 12. Communication and notification architecture
+
+The `Message` model is the durable record for school communication.
+
+A communication should have a lifecycle such as:
+
+**Draft → audience selected → review → queued → sending → sent/failed → retry/reconcile**
+
+Provider failure should not corrupt the underlying school operation.
+
+The message/outbox layer is designed to persist delivery information, attempts and failure details.
+
+The current serverless-compatible implementation can attempt external delivery during the request. At greater scale, a durable queue/worker architecture should be introduced so sending can be retried independently of the web request.
+
+### Emergency communication
+
+Emergency broadcast is intentionally more guarded than ordinary messaging. It should require explicit confirmation and use the established delivery/audit machinery.
+
+Never create an emergency action that can be triggered accidentally by a normal button click.
+
+---
+
+## 13. Guardian and family communication
+
+SukuuNova has a restricted WhatsApp assistant concept for guardians.
+
+The important architectural rule is that WhatsApp is **not** a free-form AI-to-database interface.
+
+The assistant should:
+
+1. identify the authenticated/verified guardian context;
+2. resolve only that guardian's permitted children;
+3. classify supported intents;
+4. query only the necessary school data;
+5. return a concise answer;
+6. refuse or safely redirect unsupported questions.
+
+Current supported-style use cases include information such as:
+
+- child attendance/arrival status;
+- fee balance;
+- next relevant calendar event.
+
+Unsupported requests must not be answered by guessing.
+
+The endpoint currently used for the WhatsApp assistant is:
+
+`POST /api/phase4/whatsapp`
+
+The path name is a legacy compatibility name. It does not represent a product stage.
+
+---
+
+## 14. AI architecture
+
+AI is an assistant inside SukuuNova, not the authority over school records.
+
+### Current AI-assisted workflows
+
+The current application has controlled AI drafting for areas such as:
+
+- lesson-note drafting;
+- report-card remark drafting.
+
+The server-side AI integration is configured through environment variables such as:
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_RESPONSES_URL`
+
+The configured model is environment-controlled. Do not hard-code a model assumption into product logic.
+
+### Narrow context
+
+AI requests should contain only the context needed for the task.
+
+For example, a report-card remark request may use:
+
+- learner display name;
+- aggregate scores;
+- attendance information;
+- class;
+- term.
+
+A lesson-note request may use:
+
+- class;
+- subject;
+- topic;
+- learning objectives;
+- other explicitly supplied lesson context.
+
+Do not send the whole school database to a model merely because the model could technically process it.
+
+### Human approval
+
+AI-generated content should be represented as a draft.
+
+The `AiDraft` concept uses a controlled lifecycle such as `suggested`, followed by human acceptance, editing or rejection.
+
+AI must not silently mutate official academic or operational records.
+
+The safe rule is:
+
+> **AI suggests. A human decides. The normal application workflow records the decision.**
+
+---
+
+## 15. Subscription and feature controls
+
+SukuuNova is intended to support different school subscription levels.
+
+The platform can associate a school with a subscription plan and use feature flags to control premium functionality.
+
+Premium areas include functionality such as:
 
 - face recognition;
 - payroll;
@@ -393,583 +927,738 @@ The guarded premium areas include:
 - assets;
 - recruitment.
 
-The feature guard belongs at the route/authorization boundary, not just in the UI. Hiding a button is not enough.
+Feature protection must exist at the server/authorization boundary. A UI-only check is not sufficient.
 
-### Support tickets
-
-Schools can open support tickets, exchange threaded messages and see support status. Platform staff can manage the support side.
-
-### Risk signals
-
-SukuuNova can identify students who may be at risk based on signals such as:
-
-- attendance patterns;
-- score trends;
-- fee arrears.
-
-These signals are presented to authorized school staff. The system does **not** automatically notify parents just because a risk flag was produced.
-
-### Emergency/lockdown broadcast
-
-Emergency broadcast has an explicit two-step confirmation mechanism and reuses the existing SukuuNova messaging queue rather than creating a completely separate delivery system.
+When a feature is unavailable, the product should explain why and provide the appropriate upgrade/admin path rather than failing with a mysterious error.
 
 ---
 
-## The AI boundaries are deliberate
+## 16. School groups and branches
 
-SukuuNova uses OpenAI's Responses API for two main AI-assisted drafting workflows:
+SukuuNova is designed to support organizations that operate multiple school branches.
 
-1. lesson-note drafting;
-2. report-card remark drafting.
+A school group can contain separate branch tenants while allowing authorized owners to see consolidated information where appropriate.
 
-The model configuration comes from:
+Important rule:
 
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `OPENAI_RESPONSES_URL`
+> **Consolidation does not erase tenant boundaries.**
 
-The default model configured by the application is `gpt-5.6-luna` unless overridden by environment configuration.
-
-### What gets sent to the model
-
-The application does not simply dump the whole school database into a model request.
-
-The server builds a narrow context for each request.
-
-For report-card remarks, that context can contain things such as:
-
-- the student's display name;
-- aggregate score percentages;
-- attendance counts;
-- class name;
-- term identifier.
-
-For lesson-note drafting, the context is restricted to the supplied subject/topic/objectives/class information plus an optional target score identifier.
-
-### Human approval is required
-
-AI output is stored as an `AiDraft` in `suggested` status.
-
-An AI-generated draft cannot directly change a student's actual records. An authorized human must explicitly accept it, optionally edit it, or discard it. Once accepted, the normal application write path and audit logging take over.
-
-This is an important design rule for future work: **AI may suggest; it does not silently mutate school records.**
-
-### WhatsApp is not a general AI agent
-
-The WhatsApp parent assistant is intentionally much narrower than a chatbot.
-
-The supported intents are predefined and map to real parent-scoped school queries such as:
-
-- child arrival/attendance status;
-- fee balance;
-- next recorded calendar event.
-
-Unsupported questions receive a safe fallback rather than a guessed answer.
-
-Do not turn this into a general-purpose LLM-to-database agent without a deliberate security/product review.
+A group report may aggregate authorized branch data, but each branch remains independently scoped in the underlying queries and security model.
 
 ---
 
-## Notification and messaging behaviour
+## 17. UI/UX architecture
 
-Messages are persisted through the `Message` model with delivery state and retry-related information.
+The application is undergoing continuous visual and workflow consolidation. This is a product-level concern, not cosmetic cleanup.
 
-The current serverless-compatible path attempts external SMS/WhatsApp delivery synchronously during the request. Provider failures are caught, logged and stored as failed delivery attempts rather than crashing the underlying school operation.
+### One design language
 
-That approach is deliberately simple and works with the current deployment model. At larger scale, a serverless-native queue such as QStash or a platform with a persistent worker would be a better long-term architecture.
+All workspaces should converge on shared semantic tokens for:
 
----
+- page background;
+- surface/card background;
+- elevated surface;
+- primary text;
+- muted text;
+- border;
+- accent;
+- success;
+- warning;
+- danger;
+- focus states.
 
-## Attendance and biometric work
+Components should consume semantic variables rather than scattering literal `bg-white`, `text-white`, `bg-slate-*` and similar values throughout unrelated modules.
 
-Attendance is one of the important areas of the product and now supports both ordinary school-recording workflows and hardware-oriented flows.
+### Theme support
 
-The recent biometric/device work adds:
+SukuuNova supports user-selectable theme presets and needs consistent light/dark behaviour across:
 
-- registered attendance devices;
-- device API-key hashes rather than storing device keys in plaintext;
-- external identity mappings for students and staff;
-- device attendance receipts;
-- idempotency keys to stop duplicate processing;
-- nonces for replay protection;
-- device last-seen information;
-- optional confidence scores on attendance records;
-- face-match review records for cases that need staff confirmation.
+- public website;
+- platform workspace;
+- school workspace;
+- settings;
+- specialized modules.
 
-The system continues to support normal staff-entered attendance alongside device-based attendance.
+A page must not become unreadable because a component contains hard-coded text or surface colours from another theme.
 
-Offline synchronization remains intentionally limited. The existing Phase 3 rule is that only attendance and score records may be synchronized offline, using idempotent client-generated keys and live permission checks at synchronization time.
+### Responsive behaviour
 
----
+Mobile and desktop should use the same information architecture while adapting layout density and interaction patterns.
 
-## Academics and report cards
+The target is not “desktop squeezed onto a phone.”
 
-Academic configuration starts at the school, academic year and term level.
+Mobile should:
 
-Schools can define classes, subjects, teachers, assessments and scores. The report-card system keeps a calculation snapshot and a calculation version so that generated academic results can be traced back to the rules/data used to produce them.
+- preserve the most important action;
+- keep navigation understandable;
+- avoid horizontal overflow where possible;
+- use drawers/sheets or responsive tables where appropriate;
+- maintain readable touch targets;
+- preserve form usability.
 
-Report cards move through a controlled workflow that can include drafting, submission, approval and sending.
+Desktop should use the available space for operational efficiency rather than simply making every card wider.
 
-The current school settings model supports configuration for items such as:
+### Accessibility
 
-- grading scales;
-- report-card templates;
-- CA/exam weighting;
-- whether partial report cards are allowed;
-- report-card configuration and watermark information;
-- attendance grace time;
-- expected resumption time;
-- timezone (defaulting to `Africa/Accra`);
-- notification settings;
-- WhatsApp template configuration;
-- timetable and assessment configuration.
+Important controls need:
 
----
+- semantic labels;
+- keyboard access;
+- visible focus states;
+- sensible contrast;
+- appropriate disabled/loading states;
+- meaningful error messages;
+- screen-reader-friendly structure where practical.
 
-## Finance and payment history
+### Operational states
 
-Finance is built around fee items, invoices, invoice lines, payments and explicit payment reversals.
+Every real workflow should deliberately handle:
 
-A payment should not simply be overwritten after the fact when a correction is needed. The system records a reversal with a reason and actor so financial history remains understandable.
-
-This same principle should continue into future finance work: preserve the history and make corrections auditable.
-
----
-
-## Staff, payroll and people management
-
-The people model separates general `User` accounts from the specific operational relationships they have with classes, subjects, attendance, timetables and payroll.
-
-Payroll includes:
-
-- salary structures;
-- payroll runs;
-- payslips;
-- gross/deduction/net information;
-- PDF storage references/data where applicable.
-
-Recruitment is part of the premium module set and is feature-guarded accordingly.
-
----
-
-## Safety, pickup and visitors
-
-SukuuNova has more than an attendance system. It also contains school-safety workflows for:
-
-- approved guardians/pickup relationships;
-- pickup approval requests;
-- approved/unauthorized pickup tracking;
-- actual pickup events;
-- visitor logs and staff hosts.
-
-These features are connected to student/guardian relationships so that the school can keep a history of who was authorized to collect a student and what actually happened.
+- loading;
+- empty;
+- success;
+- validation error;
+- permission denied;
+- not found;
+- network/server failure;
+- saving;
+- saved;
+- unsaved changes;
+- destructive confirmation.
 
 ---
 
-## Themes and the public brand
+## 18. Generic pages versus real workflows
 
-The public homepage and signed-in school workspace share a global theme system.
+The repository contains some generic module infrastructure that is useful for scaffolding and fallback behaviour.
 
-The current user-selectable presets are:
+That infrastructure must not be mistaken for completed product functionality.
 
-### Paper
+A generic page may show:
 
-A light, clean and calm default look.
+- module title;
+- tabs;
+- description;
+- empty state;
+- links to other areas.
 
-### Midnight
+That is useful as a safe fallback, but it is not a substitute for a real operational workflow.
 
-A deep navy dark theme with clear text and restrained contrast.
+Examples:
 
-### Slate
+- attendance needs a roster/register workflow;
+- gradebook needs class/subject/assessment context;
+- finance needs account/billing/payment context;
+- timetable needs conflict-aware scheduling;
+- library needs catalogue/loan operations;
+- visitor management needs gate workflow;
+- recruitment needs candidate pipeline actions.
 
-A cooler dark workspace using a different accent treatment from Midnight.
+When implementing a module, first ask:
 
-### Warm
+> “What is the human trying to accomplish?”
 
-A soft cream-and-ink light theme for users who do not like a cold white interface.
-
-The themes are meant to be comfortable to use for long periods. Bright, glowing combinations are intentionally avoided.
-
-Theme preferences are stored in local storage under:
-
-`sukuunova-theme-preferences`
-
-The preference model supports:
-
-- light/dark mode;
-- accent colour;
-- interface density.
-
-### Important theme implementation detail
-
-The global `ThemeProvider` mounts the `ThemeSwitcher`, so theme selection is available across the application instead of being hidden only in Settings.
-
-Settings uses the same four presets so users do not have two competing appearance systems.
-
-Current source files include:
-
-- `src/components/ThemeProvider.tsx`
-- `src/components/ThemeSwitcher.tsx`
-- `src/app/school/settings/ThemePreferences.tsx`
-- `src/app/theme-home.css`
-- `src/app/home.css`
-- `src/app/home-redesign.css`
-- `src/app/home-premium.css`
-- `src/app/design-tokens.css`
-
-### Brand/logo detail
-
-The full SukuuNova SVG lives at:
-
-`public/brand/sukuunova-logo.svg`
-
-The compact homepage header uses the high-contrast favicon mark together with the `SukuuNova` wordmark rather than relying on the full large logo asset. This was done specifically to keep the name crisp on white surfaces.
-
-When working on the brand, do not reintroduce the old pale white/blue treatment that caused the wordmark to look faded on light backgrounds.
+Then build the smallest complete workflow that actually accomplishes it.
 
 ---
 
-## File and component orientation
+## 19. Route and API development rules
 
-The project is a Next.js App Router application. Most functionality is organised under `src/app`, with reusable application components under `src/components` and shared design/utility code elsewhere in the repository.
+Before changing a route:
 
-Some useful places to start when investigating the UI are:
+1. search for the route;
+2. inspect its parent layout/shell;
+3. inspect related components;
+4. inspect its server actions/API handlers;
+5. inspect the Prisma models used by the workflow;
+6. inspect authorization checks;
+7. inspect audit behaviour;
+8. inspect existing tests;
+9. verify whether another route already implements the same job.
 
-- `src/app/page.tsx` — public homepage;
-- `src/app/school/` — school workspace;
-- `src/app/school/settings/` — school settings and preferences;
-- `src/components/ThemeProvider.tsx` — global appearance state;
-- `src/components/ThemeSwitcher.tsx` — global theme picker;
-- `prisma/schema.prisma` — database model and relationships;
-- `prisma/seed.ts` — seed data;
-- `src/app/design-tokens.css` — shared design tokens;
-- `src/app/theme-home.css` — homepage theme overrides.
+Avoid creating duplicate representations of the same business operation unless there is a clear role-specific reason.
 
-The repository also contains specialised dialogs, print views, feature-module components and API route handlers. Search by route, model name or feature name before creating duplicate implementations.
+### Server-side rule
 
----
+Business logic should live on the server or in reusable server-side services rather than relying on client-only state.
 
-## API areas worth knowing about
+### Validation rule
 
-The complete API surface is larger than this list, but these are the especially important Phase 4 routes and health/deployment endpoints.
+Validate both:
 
-| Method | Route | What it is for |
-|---|---|---|
-| GET/POST | `/api/platform/phase4` | Platform school, subscription, billing, support, search and related operations |
-| POST | `/api/platform/impersonation` | End an active audited platform impersonation session |
-| GET/POST | `/api/phase4` | School support, risk flags, AI drafts, school-group reporting and emergency confirmation |
-| POST | `/api/phase4/whatsapp` | Restricted WhatsApp parent-assistant intents |
-| GET | `/api/health` | Deployment/application health check |
+- shape/type of input;
+- authorization/business invariants.
 
-The application also has the earlier Phase 0–3 APIs for students, classes, attendance, finance, academics, staff, messaging, timetable, safety and the other school modules.
+### Tenant rule
 
----
+Every school-owned query must be tenant-scoped.
 
-## Environment variables
+### Audit rule
 
-Provider configuration is environment-driven. Real secrets should never be committed to the repository.
-
-The important variables currently documented by the application include:
-
-### Core database/auth
-
-- `DATABASE_URL`
-- `TEST_DATABASE_URL`
-- `SCHOOL_AUTH_SECRET`
-- `PLATFORM_AUTH_SECRET`
-
-### SMS
-
-- `SMS_PROVIDER_URL`
-- `SMS_PROVIDER_TOKEN`
-- `SMS_SENDER_ID`
-
-### Email/password reset
-
-- `EMAIL_PROVIDER_URL`
-- `EMAIL_PROVIDER_TOKEN`
-- `EMAIL_FROM`
-- `ALLOW_DEV_TOKEN_ECHO`
-
-### Face/biometric infrastructure
-
-- `AWS_REGION`
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `FACE_EMBEDDING_ENCRYPTION_KEY`
-
-### WhatsApp/Twilio
-
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_WHATSAPP_FROM`
-- `WHATSAPP_WEBHOOK_SECRET`
-
-### OpenAI
-
-- `OPENAI_API_KEY`
-- `OPENAI_MODEL`
-- `OPENAI_RESPONSES_URL`
-
-### Risk scanning
-
-- `RISK_SCAN_CRON_SECRET`
-- `RISK_SCAN_INTERVAL_MS`
-
-`RISK_SCAN_INTERVAL_MS` is now documentation/configuration for the desired scheduler cadence rather than a reason to start a long-running in-process timer.
+Important mutations should record who performed them, what changed and why where appropriate.
 
 ---
 
-## Deployment and hosting
+## 20. Database and migration rules
 
-### Current production workflow
+Prisma migrations are historical implementation records. Their directory names may contain old internal naming conventions from when the system was organized differently.
 
-The current production service used in the active development workflow is **Railway**.
+**Those names are not the product roadmap and must not be used to define current development work.**
 
-There are two relevant services in the Railway project:
+The authoritative current schema is:
 
-- `SukuuNova` — the application service;
-- `Postgres` — the PostgreSQL service.
+`prisma/schema.prisma`
 
-Recent production deployments have successfully passed the `/api/health` check, and the production build has been reaching the Next.js build successfully.
+When changing the schema:
 
-The live Railway project is used for the current iterative development/deployment workflow, so future agents should not assume that an older Vercel deployment description is the active production environment.
+1. understand existing relationships;
+2. preserve tenant isolation;
+3. consider existing production data;
+4. create a safe Prisma migration;
+5. test migration application against the production-style database;
+6. update affected server code;
+7. update UI and validation;
+8. consider rollback/recovery implications.
 
-### Vercel compatibility
-
-The codebase has also been kept compatible with Vercel's serverless deployment model.
-
-The build command is:
-
-```bash
-prisma generate && next build
-```
-
-Do **not** casually replace that with `prisma migrate deploy`. Database migrations are a deliberate database operation and should not be triggered automatically by every application build.
-
-The application has no requirement for a permanent worker process to serve normal requests. The risk scan is implemented as a protected one-shot HTTP endpoint:
-
-`POST /api/cron/risk-scan`
-
-It expects:
-
-`Authorization: Bearer <RISK_SCAN_CRON_SECRET>`
-
-The old long-running `worker:risk` and `worker:messages` approach is not the model to rely on for a serverless runtime.
-
-The repository includes `.github/workflows/risk-scan.yml` for an external scheduled call every six hours. It uses:
-
-- `SUKUUUNOVA_APP_URL`
-- `RISK_SCAN_CRON_SECRET`
-
-The same endpoint could later be called by another scheduler without changing the application logic.
-
-### Database deployment discipline
-
-For any separate managed PostgreSQL deployment, keep the tenant security model intact. The intended application database role should be `NOSUPERUSER` and `NOBYPASSRLS` and should receive only the privileges the application requires.
-
-Do not use a provider's default superuser/admin connection as the application's normal runtime `DATABASE_URL`.
-
-Before a first live use of a new production database, run:
-
-```bash
-prisma migrate deploy
-```
-
-as an explicit database operation and verify the tenant-isolation checks against the restricted application role.
+Never casually delete or rename production data fields merely to simplify a screen.
 
 ---
 
-## Storage
+## 21. Testing philosophy
 
-The current repository does not contain a complete object-storage integration such as S3, Cloudflare R2 or Supabase Storage.
+Unit tests and builds are necessary but are not enough for SukuuNova.
 
-Face/biometric work relies on the relevant AWS services and stores application references rather than trying to build a local persistent file system inside the app runtime.
+The system needs human-style acceptance testing around complete journeys.
 
-There are database fields for things such as report-card/payslip PDF data or URLs, but future persistent file/photo functionality should use proper object storage rather than assuming a deployment filesystem is permanent.
+### Owner journey
 
----
+Create school → establish academic year/term → create classes → add staff → assign teachers → enrol students → connect guardians → configure fees → record payments → configure timetable → enter marks → approve results → publish report cards → communicate with families.
 
-## Development commands
+### Teacher journey
 
-The core scripts are defined in `package.json`.
+Login → see only assigned work → open class → take attendance → enter marks → create/assign academic work → inspect timetable → communicate where permitted.
 
-```bash
-npm run dev
-npm run build
-npm start
-npm run lint
-npm run test
-npm run test:watch
-npm run db:generate
-npm run db:migrate
-npm run db:seed
-```
+### Guardian journey
 
-The current package configuration uses Node `>=20.19.0`.
+Login → see only linked children → see released attendance/results → inspect report card → see appropriate fee information → receive school communications.
 
-The important package versions in the current application include Next.js 15, React 19, Prisma 6, TypeScript 5.9, Tailwind CSS 3.4 and Vitest 3.
+### Bursar journey
 
----
+Configure fees → generate invoice → record full/partial payment → issue receipt → inspect balance → reconcile → reverse a payment where necessary → verify audit history.
 
-## Verification and testing
+### Gate/safety journey
 
-The project has a test suite built around Vitest and includes the earlier product invariants together with Phase 4-specific checks.
+Find learner → identify authorized pickup person → process approved pickup → handle unapproved person → create approval request → obtain required authorization → record final pickup event.
 
-The final Phase 4 verification was recorded as passing:
+### Platform journey
 
-1. Prisma migrations;
-2. all 35 tests;
-3. typecheck diagnostics;
-4. production build.
+Create school → assign plan → inspect school → suspend/reactivate → handle support → enter controlled impersonation with reason → inspect school → exit impersonation → verify audit records.
 
-The Phase 4 test coverage includes the important security/product boundaries around:
+### Failure testing
 
-- premium feature-flag enforcement;
-- platform permission separation;
-- multi-branch authorization;
-- safe WhatsApp refusal behaviour;
-- AI draft versus accepted-record boundaries;
-- emergency broadcast confirmation.
+Every important journey should also test:
 
-The repository's broader Phase 0–3 invariant checks remain part of `npm run test`.
-
-### Current non-blocking technical warnings
-
-The deployment/build process can still surface warnings that are not application failures, including:
-
-- npm audit vulnerabilities that need to be reviewed rather than blindly force-fixed;
-- Prisma's deprecation warning around the old `package.json#prisma` configuration ahead of Prisma 7;
-- package-manager detection guidance from Railway/Railpack.
-
-These should be handled deliberately. Do not solve a warning by introducing unrelated breaking upgrades while working on an unrelated product feature.
+- invalid input;
+- duplicate submission;
+- unauthorized user;
+- wrong tenant;
+- direct URL access;
+- stale browser state;
+- refresh during workflow;
+- network failure;
+- empty database state;
+- cancelled operation;
+- destructive confirmation;
+- concurrent/duplicate requests where relevant.
 
 ---
 
-## Seed data and the planned full test environment
+## 22. Deployment and infrastructure
 
-A major upcoming task is to make the test environment feel like a real school instead of forcing a person to enter every record manually before testing.
+Production deployment is currently centred on Railway.
 
-The goal is to populate a coherent test environment across the relevant roles and modules, including:
+The application and PostgreSQL database are represented as Railway services in the production environment.
 
-- platform owner/super-admin records;
-- platform administrators;
-- one or more realistic schools;
-- school owners and administrators;
-- teachers and other staff;
-- guardians/families;
-- students;
-- houses and classes;
-- subjects and teacher assignments;
-- academic years and terms;
-- attendance history;
-- biometric/device records where useful;
-- assessments and scores;
+GitHub Actions is used for repository automation and checks, including build/type/lint/test-oriented workflows and specialized operational workflows.
+
+Important deployment documentation also exists under `docs/`, including Railway production guidance.
+
+### Deployment discipline
+
+Do not judge production health solely from GitHub commit success.
+
+A change should be considered complete only after:
+
+1. code is committed;
+2. CI/build checks pass;
+3. Railway deployment completes successfully;
+4. application health is verified;
+5. the relevant user workflow is tested;
+6. logs are checked when something behaves unexpectedly.
+
+Avoid producing many tiny competing deployments while a major stabilization task is in progress. Prefer coherent, reviewable changes.
+
+---
+
+## 23. Environment configuration
+
+The exact production values must remain in the deployment secret store and must never be committed.
+
+The repository includes `.env.example` as the reference for expected configuration.
+
+Important categories include:
+
+- database connection;
+- school authentication secret;
+- platform authentication secret;
+- AI provider configuration;
+- messaging provider credentials;
+- WhatsApp integration settings;
+- deployment/runtime settings;
+- development-only controls.
+
+Never expose secrets in UI, logs, client bundles, README files or error responses.
+
+---
+
+## 24. Current engineering reality
+
+SukuuNova has substantial underlying architecture, but the product is still being refined toward a fully coherent production experience.
+
+The important distinction is:
+
+### Strong foundations
+
+There is meaningful existing work around:
+
+- multi-tenancy;
+- authentication;
+- permissions;
+- audit logging;
+- academic calculations;
+- finance data structures;
+- attendance;
+- pickup approval;
+- messaging/outbox behaviour;
+- platform management;
+- subscription controls;
+- support;
+- AI drafts;
+- biometric/device attendance foundations.
+
+### Areas requiring continued product work
+
+Some screens and modules have historically been more complete in backend/data structure than in human-facing workflow.
+
+Therefore an agent must never assume:
+
+> “The route exists, so the feature is finished.”
+
+A route may be:
+
+- fully operational;
+- partially operational;
+- read-only;
+- a safe fallback/scaffold;
+- visually complete but functionally incomplete;
+- awaiting integration.
+
+The correct approach is to inspect the actual server actions/API/data path before claiming a feature is complete.
+
+### Current product priority
+
+The immediate objective is **system-wide coherence and correctness**:
+
+- eliminate broken routes;
+- eliminate misleading prototype behaviour;
+- finish real workflows;
+- unify the design system;
+- fix cross-module data inconsistencies;
+- strengthen role/tenant enforcement;
+- improve responsive behaviour;
+- improve loading/error/empty states;
+- test complete human journeys;
+- verify production after deployment.
+
+New functionality should not be used as an excuse to leave existing core workflows half-finished.
+
+---
+
+## 25. Large future capabilities
+
+SukuuNova is intended to grow significantly beyond the current school-management foundation. These are future directions, not claims that every item is already implemented.
+
+### Hardware-first attendance ecosystem
+
+The device work can evolve into a complete school attendance infrastructure:
+
+- biometric terminals;
+- fingerprint/face devices;
+- secure device provisioning;
+- device health monitoring;
+- offline event buffering;
+- automatic synchronization;
+- duplicate-event reconciliation;
+- device fleet management;
+- attendance dashboards;
+- gate-level alerts.
+
+The goal is for a physical attendance event to become a trusted event in SukuuNova without requiring staff to re-enter it manually.
+
+### Mobile applications and progressive web experience
+
+The platform can evolve into dedicated mobile experiences for:
+
+- teachers;
+- school administrators;
+- guardians;
+- gate/security staff;
+- drivers/transport staff.
+
+The mobile direction should prioritize the jobs people actually perform away from a desk rather than simply reproducing every desktop screen.
+
+### Offline-first school operations
+
+Schools may have unreliable connectivity. Future work can introduce offline-capable workflows for high-frequency operations such as:
+
+- attendance;
+- gate/pickup;
+- selected classroom workflows;
+- device synchronization.
+
+Offline events must have safe reconciliation and idempotency rather than naïvely overwriting server state.
+
+### Ghana-focused payments and reconciliation
+
+The finance system can become much more deeply integrated with local payment infrastructure, including automated payment confirmation, reference reconciliation, receipts and finance dashboards.
+
+Potential integrations may include mobile-money and bank payment providers appropriate to the Ghanaian market.
+
+Any provider integration must preserve the invoice/payment/reversal/audit model.
+
+### Advanced school analytics
+
+Future analytics can connect:
+
+- attendance;
+- academic performance;
+- fees/arrears;
+- enrolment;
+- staffing;
+- operations;
+- retention;
+- family engagement.
+
+The objective is not to produce decorative charts. It is to answer questions such as:
+
+> Which learners need attention?
+> Which classes have attendance problems?
+> Which fee accounts require follow-up?
+> Which subjects are underperforming?
+> Where are operational bottlenecks?
+
+### AI school operations assistant
+
+AI can eventually become a controlled operational assistant capable of helping authorized staff with tasks such as:
+
+- summarizing school activity;
+- drafting communications;
+- preparing lesson materials;
+- identifying unusual trends;
+- explaining reports;
+- suggesting follow-up actions;
+- preparing administrative drafts.
+
+The existing principle remains: **AI should be permission-aware, tenant-scoped, auditable and human-controlled for consequential actions.**
+
+### Intelligent academic support
+
+Future academic features may include:
+
+- deeper curriculum planning;
+- personalized learner insights;
+- automated assessment analysis;
+- question generation;
+- teacher resource generation;
+- intervention recommendations;
+- richer moderation tools.
+
+Official academic records should still require the appropriate human authority.
+
+### Parent/family super-app direction
+
+The family experience can eventually become a comprehensive school-family channel covering:
+
+- attendance;
+- fees;
 - report cards;
-- fee items;
-- invoices, payments and balances;
-- payroll and payslips;
-- timetables and substitutions;
-- transport/feeding/CBT/library/assets/recruitment test records where relevant;
-- communication history and realistic notifications;
-- support tickets and platform-side records;
-- risk-signal examples;
-- AI draft examples;
-- safety/pickup/visitor examples.
+- announcements;
+- events;
+- transport status;
+- meal information;
+- permission/consent workflows;
+- pickup authorization;
+- direct school communication.
 
-The important part is consistency. A student's class, subjects, teacher, attendance, guardian relationship, invoices, academic records and report card should make sense together. The seed data should be useful for actually walking through workflows, filters, dashboards, approvals, reports and edge cases.
+WhatsApp can remain an important access channel while the dedicated family experience grows.
 
-That test dataset should be created in the **test environment/database**, not mixed into genuine production school records.
+### School communications platform
 
----
+The messaging system can evolve toward a full communication centre with:
 
-## Things future agents should be careful about
+- audience segmentation;
+- reusable templates;
+- scheduled campaigns;
+- multilingual content;
+- delivery analytics;
+- provider fallback;
+- message preferences;
+- family notification controls;
+- automated but policy-controlled reminders.
 
-A few rules should be treated as project-level guardrails.
+### Digital admissions and enrolment
 
-### Do not weaken tenant security for convenience
+The admissions system can become an end-to-end digital pipeline with:
 
-Never bypass the existing tenant helpers, authorization checks or same-school relationship constraints just to make a feature easier to implement.
+- enquiry capture;
+- online applications;
+- document collection;
+- interview scheduling;
+- admission decisions;
+- offer letters;
+- digital acceptance;
+- deposit/payment;
+- automatic learner onboarding.
 
-### Do not turn AI into a silent write engine
+### Broader school ecosystem integrations
 
-AI features are deliberately human-gated. Preserve the `suggested` → human decision → normal write path model.
+Longer-term integrations can include:
 
-### Do not hide security-sensitive platform activity
+- accounting systems;
+- payment providers;
+- biometric hardware vendors;
+- SMS providers;
+- WhatsApp providers;
+- email;
+- calendars;
+- document storage;
+- educational content systems;
+- identity providers;
+- government/education reporting systems where officially supported.
 
-Impersonation, support access and other platform operations need to remain auditable.
+Integrations should be isolated behind service boundaries rather than leaking provider-specific logic throughout the application.
 
-### Do not build duplicate theme systems
+### Multi-school intelligence
 
-There is one current global theme model. The homepage picker and Settings should stay aligned.
+For authorized school groups and platform operators, SukuuNova can eventually provide stronger benchmarking and operational intelligence across branches without compromising tenant isolation.
 
-### Do not restore the old washed-out logo treatment
+### Developer and integration platform
 
-The light homepage must keep the SukuuNova wordmark clearly readable.
-
-### Do not assume a frontend restriction is sufficient
-
-If something is premium, tenant-restricted or role-restricted, enforce that in the server/API boundary as well as in the UI.
-
-### Do not put real credentials into source control
-
-Use environment configuration.
-
-### Do not run production migrations accidentally from a build
-
-Migrations are an explicit deployment/database step.
-
-### Do not mix another product into this repository
-
-This is the SukuuNova repository and should stay that way.
-
----
-
-## A practical way to approach future work
-
-Before changing a module, first understand three things:
-
-1. the relevant route(s) under `src/app`;
-2. the supporting components/API handlers;
-3. the Prisma model relationships and permission/tenant rules involved.
-
-Then make the smallest coherent change, run the relevant tests/build, inspect the deployment status, and keep the repository in a state where the next person can understand what changed.
-
-For security-sensitive or multi-tenant work, test both the allowed case and the denied/cross-tenant case.
-
-For UI work, check desktop and mobile layouts and make sure the current theme system continues to behave consistently.
+A mature SukuuNova can eventually expose carefully permissioned APIs/webhooks so schools and approved partners can integrate external systems without accessing the database directly.
 
 ---
 
-## Current working checkpoint
+## 26. What must never happen
 
-At the latest project checkpoint, SukuuNova has:
+The following are architectural red lines.
 
-- the integrated Phase 0–4 product;
-- hardware/biometric attendance work on top of the phase plan;
-- a working multi-tenant school/platform architecture;
-- the current platform, school, teacher and guardian surfaces;
-- the Phase 4 support, billing, school-group, risk, AI and emergency functionality;
-- a refined public homepage;
-- the current high-contrast SukuuNova brand treatment;
-- four global visual themes: Paper, Midnight, Slate and Warm;
-- a unified theme experience between the global picker and Settings;
-- Railway production deployment with a separate PostgreSQL service;
-- a successful recent production build/healthcheck path;
-- a comprehensive seed/test-data task still planned for later so full system testing can be done without manually entering every record.
+### Never cross tenant boundaries
 
-That is the state future development should start from.
+A user from School A must never receive School B data.
+
+### Never trust the frontend for authorization
+
+A hidden button is not security.
+
+### Never expose secrets
+
+No API keys, reset tokens, database credentials or private integration credentials in client code, logs or documentation.
+
+### Never silently mutate official records with AI
+
+AI-generated suggestions require the appropriate human workflow.
+
+### Never fake completion
+
+A disabled or unavailable feature should be clearly represented as unavailable. Do not simulate successful persistence with local React state.
+
+### Never destroy financial history casually
+
+Use reversals/adjustments and audit records where the business model requires them.
+
+### Never introduce another competing design system without a strong reason
+
+SukuuNova should become visually and behaviourally more unified over time, not less.
+
+### Never make a destructive operation one-click by accident
+
+Show impact, request confirmation and preserve auditability.
+
+### Never assume route existence means feature completion
+
+Verify the complete path from UI → server → authorization → database → response.
 
 ---
 
-## Final note for Claude, Codex and other agents
+## 27. How an AI coding agent should work on SukuuNova
 
-Please read this README before making changes to SukuuNova.
+When an agent receives a task, it should follow this sequence.
 
-The safest assumption is that a feature which appears simple in the browser may have consequences for tenant isolation, permissions, audit history, financial records, notification delivery, academic calculations, device identity or another part of the system.
+### Step 1 — Identify the product area
 
-When the existing code already has a pattern for a job, follow that pattern instead of creating a second one.
+Determine whether the task concerns:
 
-When something is unclear, inspect the repository and schema first. Do not invent architecture that is already present in the application.
+- platform;
+- school administration;
+- academics;
+- attendance;
+- finance;
+- communication;
+- safety;
+- family;
+- a premium module;
+- public website;
+- infrastructure.
 
-And most importantly: **keep SukuuNova coherent as one system.**
+### Step 2 — Trace the complete implementation
+
+Find:
+
+- route;
+- page/component;
+- server action/API;
+- service/helper;
+- Prisma model;
+- authorization;
+- audit;
+- tests;
+- deployment impact.
+
+### Step 3 — Understand the human workflow
+
+Before writing UI, decide what the user is actually trying to accomplish.
+
+### Step 4 — Preserve security
+
+Verify tenant scope, permission scope and related-record ownership.
+
+### Step 5 — Reuse existing systems
+
+Prefer existing:
+
+- `AppShell`/workspace shell;
+- design tokens;
+- auth helpers;
+- tenant helpers;
+- RBAC utilities;
+- audit utilities;
+- service layers;
+- shared UI components.
+
+Do not create a second implementation of an existing platform primitive.
+
+### Step 6 — Handle all states
+
+Do not ship only the happy path.
+
+### Step 7 — Test
+
+Run the relevant type/lint/test/build checks and, where possible, exercise the actual browser workflow.
+
+### Step 8 — Verify production
+
+After deployment, inspect the real service and relevant logs before calling the task complete.
+
+---
+
+## 28. Repository orientation
+
+Useful top-level locations include:
+
+- `src/app/` — Next.js routes and application pages/API routes
+- `src/components/` — reusable UI components
+- `src/lib/` — authentication, authorization, database, services and shared server logic
+- `prisma/schema.prisma` — authoritative data model
+- `prisma/migrations/` — database migration history
+- `docs/` — focused operational/deployment documentation
+- `.github/workflows/` — CI and operational automation
+- `.env.example` — expected environment configuration
+- `package.json` — scripts and dependencies
+
+The exact structure evolves. Search before assuming a file location.
+
+---
+
+## 29. Useful implementation concepts
+
+Some important concepts recur throughout the codebase.
+
+### `withTenant()`
+
+Use the existing tenant-aware database pattern for school-scoped work. Do not replace it with unscoped database calls for convenience.
+
+### Authorization helpers
+
+Use the existing authorization/RBAC mechanisms rather than duplicating permission logic inside individual components.
+
+### School services
+
+Reusable school operations should live in server-side services/helpers when they are used by multiple routes.
+
+### Message outbox
+
+Messaging should use the durable message/outbox architecture instead of directly coupling every school operation to an external provider.
+
+### Audit utilities
+
+Use the existing school/platform audit mechanisms for consequential operations.
+
+### Shared shell and design system
+
+Use the existing workspace shell and shared semantic styling. If a component needs a new token, consider whether it belongs in the shared system rather than in a one-off stylesheet.
+
+---
+
+## 30. Definition of “done” for SukuuNova
+
+A feature is not done merely because:
+
+- a page renders;
+- a button exists;
+- a database model exists;
+- an API returns 200;
+- a card looks polished.
+
+A feature is done when the intended user can complete the real workflow safely.
+
+That means:
+
+**Correct data + correct authorization + correct tenant scope + correct business rules + usable UI + complete states + auditability where needed + tests + successful production verification.**
+
+The ultimate standard is simple:
+
+> **Could a real school use this operation confidently on a busy day without needing to understand how the database works?**
+
+If the answer is no, the feature still needs work.
+
+---
+
+## 31. Final direction
+
+SukuuNova is not being built as a collection of screens that happen to share a database.
+
+It is being built as a connected school operating platform.
+
+The work ahead is therefore not about endlessly adding isolated pages. It is about making every existing part trustworthy, coherent and useful, then extending the platform into deeper automation, hardware, payments, mobile experiences, analytics, family communication and intelligent school operations.
+
+The current development mindset is:
+
+**inspect deeply → understand the real workflow → fix the underlying logic → enforce security → make the UI coherent → test the whole journey → verify production → move to the next problem.**
+
+There is no product-stage numbering to follow. The repository should be treated as one evolving system whose quality improves continuously.
+
+When in doubt, preserve the three things SukuuNova cannot compromise:
+
+1. **the school user's ability to get real work done;**
+2. **the privacy and integrity of school data;**
+3. **the consistency and trustworthiness of the product.**
