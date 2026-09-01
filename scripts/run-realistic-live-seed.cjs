@@ -11,9 +11,8 @@
  *   isolation guard remains satisfied.
  * - Does not touch existing tenants except the requested synthetic school code.
  *
- * Runtime compatibility patches are applied only to a temporary copy of the
- * fixture for this controlled synthetic tenant run. The production schema is
- * not weakened to accommodate test data.
+ * Compatibility patches are applied only to a temporary copy of the fixture.
+ * The production schema is never weakened to accommodate test data.
  */
 const fs = require("fs");
 const path = require("path");
@@ -48,19 +47,29 @@ const scriptsDir = __dirname;
 const source = path.join(scriptsDir, "seed-realistic-test-school.cjs");
 const temp = path.join(scriptsDir, `.seed-live-runtime-${process.pid}.cjs`);
 const originalSource = fs.readFileSync(source, "utf8");
-const patchedSource = originalSource
+
+// Apply only deterministic fixture compatibility changes. Keep raw SQL JSONB
+// handling centralized at exec() so future JSONB fixture fields do not require
+// fragile regular-expression rewrites.
+let patchedSource = originalSource
   .replace(/['\"]device['\"]/g, "'qr'")
   .replace(/type:\s*["']CA["']/g, "type: 'ca'")
   .replace(/type:\s*["']EXAM["']/g, "type: 'exam'")
   .replace(/classId:\s*null/g, "classId: classes[0].id")
-  .replace(/method:\s*["']bank_transfer["']/g, "method: 'momo'")
-  // Raw SQL JSONB columns used by Phase 3 operations.
-  .replace(/(\"items\"\) VALUES \(\$1,\$2,\$3,\$4),/g, "$1")
-  .replace(/("meal","items","plannedCost","createdBy"\) VALUES \(\$1,\$2,\$3,'Lunch',\$4,520,\$5\)/g, "$1")
-  .replace(/'Lunch',\$4,520,\$5/g, "'Lunch',$4::jsonb,520,$5")
-  .replace(/\"prompt\",\"options\",\"correctOptionIndex\",\"points\",\"orderIndex\"\) VALUES \(\$1,\$2,\$3,\$4,\$5,1,5,\$6\)/g, '\"prompt\",\"options\",\"correctOptionIndex\",\"points\",\"orderIndex\") VALUES ($1,$2,$3,$4,$5::jsonb,1,5,$6)')
-  .replace(/\"answers\"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,'submitted',22\.5,\$8\)/g, '\"answers\") VALUES ($1,$2,$3,$4,$5,$6,$7,\'submitted\',22.5,$8::jsonb)')
-  .replace(/'attendance',\$4,'pending'/g, "'attendance',$4::jsonb,'pending'");
+  .replace(/method:\s*["']bank_transfer["']/g, "method: 'momo'");
+
+patchedSource = patchedSource.replace(
+  'async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }',
+  `async function exec(tx, sql, ...params) {
+    let normalizedSql = sql;
+    if (normalizedSql.includes('"P3FeedingMenu"') && normalizedSql.includes('"items"')) normalizedSql = normalizedSql.replace(',$4,520,$5)', ',$4::jsonb,520,$5)');
+    if (normalizedSql.includes('"P3ExamQuestion"') && normalizedSql.includes('"options"')) normalizedSql = normalizedSql.replace(',$4,$5,1,5,$6)', ',$4,$5::jsonb,1,5,$6)');
+    if (normalizedSql.includes('"P3ExamAttempt"') && normalizedSql.includes('"answers"')) normalizedSql = normalizedSql.replace(',$7,\'submitted\',22.5,$8)', ',$7,\'submitted\',22.5,$8::jsonb)');
+    if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"payload"')) normalizedSql = normalizedSql.replace(",'attendance',$4,'pending'", ",'attendance',$4::jsonb,'pending'");
+    return tx.$executeRawUnsafe(normalizedSql, ...params);
+  }`,
+);
+
 fs.writeFileSync(temp, patchedSource, "utf8");
 
 console.log(`[live-seed] starting synthetic tenant ${code}`);
