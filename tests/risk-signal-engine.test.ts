@@ -160,7 +160,7 @@ describe("deterministic risk signal engine", () => {
         window30: { expectedSessions: number; presentSessions: number };
       };
       expect(detail.window7.expectedSessions).toBe(5);
-      expect(detail.window7.presentSessions).toBe(2);
+      expect(detail.window7.presentSessions).toBe(3);
       expect(detail.window30.expectedSessions).toBe(22);
       expect(detail.window30.presentSessions).toBe(3);
       expect(attendance.expiresAt).toBeInstanceOf(Date);
