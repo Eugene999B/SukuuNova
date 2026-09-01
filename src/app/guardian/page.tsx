@@ -101,7 +101,7 @@ export default async function GuardianPortalPage() {
                   </div>
                   <div className="guardian-child-facts">
                     <div><span>Attendance</span><strong>{student.attendanceEvents.length}</strong></div>
-                    <div><span>Latest result</span><strong>{latest ? latest.value : "—"}</strong></div>
+                    <div><span>Latest result</span><strong>{latest ? String(latest.value) : "—"}</strong></div>
                     <div><span>Fees</span><strong>GH₵{childBalance.toFixed(2)}</strong></div>
                   </div>
                   <Link href={`/guardian/children/${student.id}`} className="guardian-child-link">Open learner <ArrowRight size={14} aria-hidden="true" /></Link>
