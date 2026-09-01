@@ -46,7 +46,7 @@ async function refreshInvoiceStatus(tx: TenantDb, invoiceId: string, schoolId?: 
   if (!invoice) throw new AppError("Invoice not found.", 404, "NOT_FOUND");
   const paid = invoice.payments.reduce((sum, payment) => sum.plus(payment.amount).minus(payment.reversals.reduce((reversed, row) => reversed.plus(row.amount), new Prisma.Decimal(0))), new Prisma.Decimal(0));
   if (paid.lessThan(0)) throw new AppError("Invoice accounting invariant violated.", 409, "NEGATIVE_PAID_BALANCE");
-  const status = paid.greaterThanOrEqualTo(invoice.totalAmount) ? "PAID" : paid.greaterThan(0) ? "PART_PAID" : "UNPAID";
+  const status = paid.greaterThanOrEqualTo(invoice.totalAmount) ? "paid" : paid.greaterThan(0) ? "partial" : "unpaid";
   await tx.invoice.update({ where: { id: invoice.id }, data: { status } });
   return { invoice, paid, status };
 }
@@ -57,7 +57,7 @@ export async function recordPayment(tx: TenantDb, input: { schoolId: string; act
   const reference = input.reference?.trim() || undefined;
   if ((input.method === "momo" || input.method === "bank" || input.method === "cheque") && !reference) throw new AppError("A transaction/reference number is required for this payment method.", 400, "REFERENCE_REQUIRED");
   const current = await refreshInvoiceStatus(tx, input.invoiceId, input.schoolId);
-  if (current.status === "PAID") throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
+  if (current.status === "paid") throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
   const outstanding = current.invoice.totalAmount.minus(current.paid);
   const amount = new Prisma.Decimal(input.amount);
   if (amount.greaterThan(outstanding)) throw new AppError("Payment exceeds the outstanding invoice balance. Handle the extra amount as an approved credit or refund.", 409, "OVERPAYMENT_REQUIRES_REVIEW");
