@@ -13,8 +13,8 @@
  *
  * Runtime compatibility patches are intentionally applied to a temporary copy
  * of the existing fixture: the current schema rejects the fixture's historical
- * "device" attendance method, and the large fixture needs a longer Prisma
- * interactive-transaction timeout than the default five seconds.
+ * "device" attendance method, Assessment type values must be lowercase, and the
+ * large fixture needs a longer Prisma interactive-transaction timeout.
  */
 const fs = require("fs");
 const path = require("path");
@@ -49,7 +49,10 @@ const scriptsDir = __dirname;
 const source = path.join(scriptsDir, "seed-realistic-test-school.cjs");
 const temp = path.join(scriptsDir, `.seed-live-runtime-${process.pid}.cjs`);
 const originalSource = fs.readFileSync(source, "utf8");
-const patchedSource = originalSource.replace(/['\"]device['\"]/g, "'qr'");
+const patchedSource = originalSource
+  .replace(/['\"]device['\"]/g, "'qr'")
+  .replace(/type: \"CA\"/g, 'type: "ca"')
+  .replace(/type: \"EXAM\"/g, 'type: "exam"');
 fs.writeFileSync(temp, patchedSource, "utf8");
 
 const cleanup = () => {
