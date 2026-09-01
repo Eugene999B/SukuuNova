@@ -53,8 +53,7 @@ let patchedSource = originalSource
   .replace(/type:\s*[\"']CA[\"']/g, "type: 'ca'")
   .replace(/type:\s*[\"']EXAM[\"']/g, "type: 'exam'")
   .replace(/classId:\s*null/g, "classId: classes[0].id")
-  .replace(/method:\s*[\"']bank_transfer[\"']/g, "method: 'momo'")
-  .replace(/channel:\s*[\"']in_app[\"']/g, "channel: 'sms'");
+  .replace(/method:\s*[\"']bank_transfer[\"']/g, "method: 'momo'");
 
 patchedSource = patchedSource.replace(
   "async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }",
@@ -71,12 +70,6 @@ patchedSource = patchedSource.replace(
     }
     if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"payload"')) {
       normalizedSql = normalizedSql.replace(",'attendance',$4,'pending'", ",'attendance',$4::jsonb,'pending'");
-    }
-    if (normalizedSql.includes('"P3FeedingBudget"')) {
-      normalizedSql = normalizedSql.replaceAll("$4", "$4::timestamp").replaceAll("$5),($6,$2,'September Supplement',$7,$8,6200,$5)", "$5),($6,$2,'September Supplement',$7::timestamp,$8::timestamp,6200,$9)");
-    }
-    if (normalizedSql.includes('"P3RecruitmentPosting"') && normalizedSql.includes('"closingDate"')) {
-      normalizedSql = normalizedSql.replace(",$3,$4)", ",$3::timestamp,$4)");
     }
     return tx.$executeRawUnsafe(normalizedSql, ...params);
   }`,
