@@ -17,7 +17,6 @@
  * interactive-transaction timeout than the default five seconds.
  */
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 
 if (process.env.ALLOW_REAL_APP_TEST_SEED !== "true") {
@@ -46,14 +45,18 @@ PrismaClient.prototype.$transaction = function patchedTransaction(arg, options, 
   return originalTransaction.call(this, arg, options, ...rest);
 };
 
-const source = path.resolve(__dirname, "seed-realistic-test-school.cjs");
-const temp = path.join(os.tmpdir(), `sukuunova-live-seed-${process.pid}.cjs`);
+const scriptsDir = __dirname;
+const source = path.join(scriptsDir, "seed-realistic-test-school.cjs");
+const temp = path.join(scriptsDir, `.seed-live-runtime-${process.pid}.cjs`);
 const originalSource = fs.readFileSync(source, "utf8");
 const patchedSource = originalSource.replace(/['\"]device['\"]/g, "'qr'");
 fs.writeFileSync(temp, patchedSource, "utf8");
 
-process.on("exit", () => {
+const cleanup = () => {
   try { fs.unlinkSync(temp); } catch {}
-});
+};
+process.on("exit", cleanup);
+process.on("SIGINT", () => { cleanup(); process.exit(130); });
+process.on("SIGTERM", () => { cleanup(); process.exit(143); });
 
 require(temp);
