@@ -20,36 +20,27 @@ type Props = { universe: Universe; title: string; subtitle: string; active?: str
 type Group = { label: string; items: Array<{ icon: LucideIcon; label: string; href: string; primary?: boolean }> };
 
 const schoolGroups: Group[] = [
-  { label: "Workspace", items: [
-    { icon: LayoutDashboard, label: "Overview", href: "/dashboard", primary: true },
-    { icon: Users, label: "People Hub", href: "/school/people", primary: true },
+  { label: "Home", items: [
+    { icon: LayoutDashboard, label: "Home", href: "/dashboard", primary: true },
     { icon: Search, label: "Search", href: "/school/search" },
   ] },
   { label: "People", items: [
     { icon: UsersRound, label: "Students", href: "/school/students", primary: true },
     { icon: UsersRound, label: "Guardians", href: "/school/guardians" },
     { icon: UserCog, label: "Staff & Teachers", href: "/school/staff", primary: true },
-  ] },
-  { label: "Admissions", items: [
-    { icon: MessageSquarePlus, label: "Enquiries", href: "/school/admissions/enquiries" },
-    { icon: ClipboardList, label: "Applications", href: "/school/admissions/applications" },
-    { icon: ClipboardCheck, label: "Enrolment", href: "/school/admissions/enrolment" },
     { icon: Building2, label: "Classes & Houses", href: "/school/classes", primary: true },
+    { icon: MessageSquarePlus, label: "Admissions & Enrolment", href: "/school/admissions/enquiries" },
   ] },
   { label: "Academics", items: [
     { icon: BookOpen, label: "Subjects", href: "/school/subjects" },
     { icon: CalendarClock, label: "Timetable", href: "/school/timetable", primary: true },
-    { icon: FileCheck2, label: "Print Timetable", href: "/school/timetable/print" },
-    { icon: Settings2, label: "Academic Setup", href: "/school/academics/setup" },
-    { icon: CalendarDays, label: "Terms & Calendar", href: "/school/terms" },
-    { icon: CircleCheckBig, label: "Academic Readiness", href: "/school/academics/health" },
     { icon: NotebookPen, label: "Lessons & Planning", href: "/school/lessons" },
     { icon: ClipboardPenLine, label: "Homework & Exercises", href: "/school/homework" },
     { icon: Table2, label: "Gradebook", href: "/school/gradebook", primary: true },
-    { icon: Table2, label: "Gradebook Studio", href: "/school/gradebook/studio" },
-    { icon: ChartNoAxesCombined, label: "Performance Studio", href: "/school/academics/performance" },
     { icon: GraduationCap, label: "Exams & Assessments", href: "/school/exams" },
     { icon: FileText, label: "Report Cards", href: "/school/report-cards" },
+    { icon: Settings2, label: "Academic Setup", href: "/school/academics/setup" },
+    { icon: CalendarDays, label: "Terms & Calendar", href: "/school/terms" },
   ] },
   { label: "Attendance", items: [
     { icon: CircleCheckBig, label: "Student Attendance", href: "/school/attendance", primary: true },
@@ -70,17 +61,24 @@ const schoolGroups: Group[] = [
     { icon: Megaphone, label: "Announcements", href: "/school/communications/announcements" },
     { icon: MessagesSquare, label: "SMS / WhatsApp", href: "/school/communications/broadcasts" },
     { icon: CalendarDays, label: "Events", href: "/school/events" },
-    { icon: Settings, label: "Communication Settings", href: "/school/communications/settings" },
   ] },
-  { label: "Reports & Admin", items: [
+  { label: "Operations", items: [
+    { icon: Users, label: "People Hub", href: "/school/people" },
+    { icon: ClipboardList, label: "Pickup", href: "/school/pickup" },
+    { icon: Building2, label: "Visitors", href: "/school/visitors" },
+    { icon: Activity, label: "Devices", href: "/school/devices" },
+  ] },
+  { label: "Reports", items: [
     { icon: ChartNoAxesCombined, label: "School Analytics", href: "/school/reports/analytics" },
     { icon: FileText, label: "Reports", href: "/school/reports" },
     { icon: Download, label: "Downloads & Exports", href: "/school/downloads" },
+  ] },
+  { label: "Settings", items: [
     { icon: ShieldCheck, label: "Roles & Permissions", href: "/school/settings/roles" },
     { icon: UserCog, label: "Sub-accounts & Access", href: "/school/settings/access" },
     { icon: Settings, label: "School Settings", href: "/school/settings" },
+    { icon: CircleHelp, label: "Help & Support", href: "/school/help" },
   ] },
-  { label: "Support", items: [{ icon: CircleHelp, label: "Help & Support", href: "/school/help" }] },
 ];
 
 const teacherGroups: Group[] = [
@@ -174,6 +172,6 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
       <div className="app-sidebar-bottom"><div className="app-help"><Link href={universe === "platform" ? "/platform/support" : isGuardian ? "/guardian/messages" : "/school/help"}><CircleHelp size={15} aria-hidden="true" /><span>Help & Support</span></Link></div><div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div><div className="app-account-actions"><Link href="/account/security" className="app-account-link"><Settings size={14} aria-hidden="true" /><span>Account security</span></Link><LogoutButton universe={universe === "platform" ? "platform" : universe === "guardian" ? "guardian" : "school"} /></div><button type="button" className="app-collapse-button" onClick={toggleCompact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}>{compact ? <Settings2 size={14} aria-hidden="true" /> : <span>Collapse sidebar</span>}</button></div>
     </aside>
     <main className="app-main"><header className="app-topbar"><div><div className="app-breadcrumb">SukuuNova <span>›</span> {universe === "platform" ? "Platform Control" : schoolName}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="app-top-actions"><button type="button" className="app-search" onClick={() => setPaletteOpen(true)} aria-label="Open command palette"><Search size={16} aria-hidden="true" /><span>Search anything</span><kbd>⌘ K</kbd></button><Link className="app-icon-button" href={universe === "platform" ? "/platform/inbox" : isGuardian ? "/guardian/messages" : isTeacher ? "/teacher/module?view=My%20Messages" : "/school/communications/alerts"} aria-label="Notifications"><BellRing size={17} aria-hidden="true" /><i /></Link></div></header><div className="app-content">{children}</div></main>
-    <CommandPalette items={paletteItems} open={paletteOpen} onClose={() => setPaletteOpen(false)} liveSearchEndpoint={universe === "school" ? "/api/school/quick-search" : undefined} />
+    <CommandPalette items={paletteItems} open={paletteOpen} onClose={() => setPaletteOpen(false)} liveSearchEndpoint={universe === "school" ? "/api/search" : undefined} />
   </div>;
 }
