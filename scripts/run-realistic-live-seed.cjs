@@ -53,7 +53,14 @@ let patchedSource = originalSource
   .replace(/type:\s*[\"']CA[\"']/g, "type: 'ca'")
   .replace(/type:\s*[\"']EXAM[\"']/g, "type: 'exam'")
   .replace(/classId:\s*null/g, "classId: classes[0].id")
-  .replace(/method:\s*[\"']bank_transfer[\"']/g, "method: 'momo'");
+  .replace(/method:\s*[\"']bank_transfer[\"']/g, "method: 'momo'")
+  // The fixture's historical VisitorLog sample computed timeOut 30 minutes
+  // before timeIn. Keep the production CHECK constraint intact and normalize
+  // the synthetic row so a completed visit always ends after it begins.
+  .replace(
+    /timeOut:\s*i%2\s*\?\s*new Date\(now\.getTime\(\)-\(i\*3600000\)-1800000\)\s*:\s*null/g,
+    "timeOut: i%2 ? new Date(now.getTime()-(i*3600000)+1800000) : null"
+  );
 
 patchedSource = patchedSource.replace(
   "async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }",
