@@ -54,9 +54,12 @@ const patchedSource = originalSource
   .replace(/type:\s*["']EXAM["']/g, "type: 'exam'")
   .replace(/classId:\s*null/g, "classId: classes[0].id")
   .replace(/method:\s*["']bank_transfer["']/g, "method: 'momo'")
+  // Raw SQL JSONB columns used by Phase 3 operations.
+  .replace(/(\"items\"\) VALUES \(\$1,\$2,\$3,\$4),/g, "$1")
+  .replace(/("meal","items","plannedCost","createdBy"\) VALUES \(\$1,\$2,\$3,'Lunch',\$4,520,\$5\)/g, "$1")
   .replace(/'Lunch',\$4,520,\$5/g, "'Lunch',$4::jsonb,520,$5")
-  .replace(/'Lunch',\$5,1,5,\$6/g, "'Lunch',$5::jsonb,1,5,$6")
-  .replace(/VALUES \(\$1,\$2,\$3,\$4,'submitted',22\.5,\$8\)/g, "VALUES ($1,$2,$3,$4,'submitted',22.5,$8::jsonb)")
+  .replace(/\"prompt\",\"options\",\"correctOptionIndex\",\"points\",\"orderIndex\"\) VALUES \(\$1,\$2,\$3,\$4,\$5,1,5,\$6\)/g, '\"prompt\",\"options\",\"correctOptionIndex\",\"points\",\"orderIndex\") VALUES ($1,$2,$3,$4,$5::jsonb,1,5,$6)')
+  .replace(/\"answers\"\) VALUES \(\$1,\$2,\$3,\$4,\$5,\$6,\$7,'submitted',22\.5,\$8\)/g, '\"answers\") VALUES ($1,$2,$3,$4,$5,$6,$7,\'submitted\',22.5,$8::jsonb)')
   .replace(/'attendance',\$4,'pending'/g, "'attendance',$4::jsonb,'pending'");
 fs.writeFileSync(temp, patchedSource, "utf8");
 
