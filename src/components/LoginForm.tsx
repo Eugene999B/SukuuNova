@@ -9,15 +9,9 @@ type Props = { universe: "school" } | { universe: "platform" };
 type SchoolStage = "school" | "role" | "credentials";
 type SchoolRole = "staff" | "guardian";
 
-function isFinanceRole(roles: unknown[]) {
-  const normalized = roles.map((role) => String(role).toLowerCase());
-  return normalized.some((role) => role.includes("accountant") || role.includes("bursar") || role === "finance officer" || role === "cashier" || role === "finance clerk");
-}
+function isFinanceRole(roles: unknown[]) { const normalized = roles.map((role) => String(role).toLowerCase()); return normalized.some((role) => role.includes("accountant") || role.includes("bursar") || role === "finance officer" || role === "cashier" || role === "finance clerk"); }
 
-function isPayrollRole(roles: unknown[]) {
-  const normalized = roles.map((role) => String(role).toLowerCase());
-  return normalized.some((role) => role.includes("payroll officer") || role.includes("hr manager") || role.includes("hr officer"));
-}
+function isPayrollRole(roles: unknown[]) { const normalized = roles.map((role) => String(role).toLowerCase()); return normalized.some((role) => role.includes("payroll officer") || role.includes("hr manager") || role.includes("hr officer")); }
 
 export function LoginForm(props: Props) {
   const router = useRouter();
@@ -29,8 +23,7 @@ export function LoginForm(props: Props) {
   const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true); setError("");
+    event.preventDefault(); setPending(true); setError("");
     const data = new FormData(event.currentTarget);
     const identifier = String(data.get("identifier") ?? "").trim();
     const password = String(data.get("password") ?? "");
@@ -40,22 +33,14 @@ export function LoginForm(props: Props) {
       const body = props.universe === "school" ? (schoolRole === "guardian" ? { schoolCode, identifier, password } : { uniqueCode: schoolCode, identifier, password }) : { email: platformEmail, password };
       const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
       const result = await response.json();
-      if (!response.ok) {
-        setError(result.message || "The email or password is incorrect.");
-        return;
-      }
+      if (!response.ok) { setError(result.message || "The email or password is incorrect."); return; }
       if (props.universe === "school" && schoolRole === "guardian") router.push("/guardian");
       else if (props.universe === "school" && result.user?.needsPasswordChange) router.push("/account/security?required=1");
       else if (props.universe === "school" && result.user?.portal === "teacher") router.push("/teacher");
-      else {
-        const roles = Array.isArray(result.user?.roles) ? result.user.roles : [];
-        const defaultDestination = isFinanceRole(roles) ? "/school/fees" : isPayrollRole(roles) ? "/school/fees/payroll" : "/dashboard";
-        router.push(props.universe === "platform" ? "/platform" : defaultDestination);
-      }
+      else router.push(props.universe === "platform" ? "/platform" : "/dashboard");
       router.refresh();
-    } catch {
-      setError("Unable to reach SukuuNova right now. Please try again.");
-    } finally { setPending(false); }
+    } catch { setError("Unable to reach SukuuNova right now. Please try again."); }
+    finally { setPending(false); }
   }
 
   if (props.universe === "school") {
