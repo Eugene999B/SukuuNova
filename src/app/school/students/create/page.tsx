@@ -47,7 +47,7 @@ async function createStudent(formData: FormData) {
 
     if (guardianName && guardianPhone) {
       const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
-      await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } }).catch(() => undefined);
+      await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });
     }
 
     const leastFilledHouse = await tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT h."id",h."name" FROM "House" h LEFT JOIN "Student" s ON s."houseId"=h."id" AND s."schoolId"=h."schoolId" AND s."status"='active' WHERE h."schoolId"=${session.schoolId} AND h."isActive"=true GROUP BY h."id",h."name" ORDER BY COUNT(s."id") ASC,h."name" ASC LIMIT 1`;
