@@ -34,35 +34,29 @@ export function getThemePreferences(): Preferences {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState<Preferences>(DEFAULTS);
-  useEffect(() => {
-    const value = getThemePreferences();
-    setPreferences(value);
-    applyPreferences(value);
-  }, []);
+  useEffect(() => { const value = getThemePreferences(); setPreferences(value); applyPreferences(value); }, []);
   useEffect(() => { applyPreferences(preferences); localStorage.setItem(KEY, JSON.stringify(preferences)); }, [preferences]);
   return <><ThemeSwitcher />{children}</>;
 }
 
 export function saveThemePreferences(patch: Partial<Preferences>): Preferences {
   const next = { ...getThemePreferences(), ...patch };
-  localStorage.setItem(KEY, JSON.stringify(next));
-  applyPreferences(next);
-  return next;
+  localStorage.setItem(KEY, JSON.stringify(next)); applyPreferences(next); return next;
 }
 
 export const accentOptions: { id: AccentName; label: string; value: string }[] = [
-  { id: "coral", label: "Coral", value: "#b94b3b" },
-  { id: "emerald", label: "Emerald", value: "#16724f" },
-  { id: "violet", label: "Violet", value: "#5c4ba5" },
-  { id: "amber", label: "Amber", value: "#9a6205" },
-  { id: "rose", label: "Rose", value: "#a94770" },
-  { id: "teal", label: "Teal", value: "#147f87" },
+  { id: "coral", label: "Clay", value: "#9b4f3f" },
+  { id: "emerald", label: "Forest", value: "#18794e" },
+  { id: "violet", label: "Indigo", value: "#5962a8" },
+  { id: "amber", label: "Amber", value: "#a15c00" },
+  { id: "rose", label: "Rose", value: "#a24d70" },
+  { id: "teal", label: "Sukuu Green", value: "#176b5f" },
 ];
 
 export type ThemePreset = "paper" | "midnight" | "slate" | "warm";
 export const themePresets: { id: ThemePreset; label: string; mode: ThemeMode; accent: AccentName; description: string }[] = [
   { id: "paper", label: "Paper", mode: "light", accent: "teal", description: "Bright, clean and calm" },
-  { id: "midnight", label: "Midnight", mode: "dark", accent: "teal", description: "Deep navy with clear text" },
-  { id: "slate", label: "Slate", mode: "dark", accent: "violet", description: "Cool dark workspace" },
+  { id: "midnight", label: "Night", mode: "dark", accent: "teal", description: "Green-charcoal with clear text" },
+  { id: "slate", label: "Indigo", mode: "dark", accent: "violet", description: "Cool dark workspace" },
   { id: "warm", label: "Warm", mode: "light", accent: "amber", description: "Soft cream and ink" },
 ];
