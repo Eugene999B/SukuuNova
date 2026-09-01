@@ -23,20 +23,15 @@ export async function GET() {
   try {
     const session = await requireSchoolSession();
     if (!(await canCommunicate(session.schoolId, session.userId))) throw new ForbiddenError("Your account is not authorised to view school communications.");
-    const data = await cacheTenantRead(
-      ["communications", "read", session.schoolId],
-      () => withTenant(session.schoolId, async (tx) => {
-        const [messages, recipients, settings, events] = await Promise.all([
-          tx.message.findMany({ where: { schoolId: session.schoolId }, orderBy: { createdAt: "desc" }, take: 80, select: { id: true, channel: true, recipientType: true, recipientId: true, body: true, status: true, createdAt: true, sentAt: true, lastError: true } }),
-          tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, phone: true, userRoles: { select: { role: { select: { name: true } } } } } }),
-          tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { smsSenderId: true, notificationChannels: true, whatsappTemplateConfig: true } }),
-          tx.calendarEvent.findMany({ where: { schoolId: session.schoolId }, orderBy: { startDate: "asc" }, take: 80 })
-        ]);
-        return { messages, recipients: recipients.map((r) => ({ id: r.id, name: r.name, phone: r.phone, roles: r.userRoles.map((x) => x.role.name) })), settings: { smsSenderId: settings?.smsSenderId || null, channels: settings?.notificationChannels || [], whatsapp: settings?.whatsappTemplateConfig || {} }, events };
-      }),
-      15,
-      [`communications:${session.schoolId}`]
-    );
+    const data = await cacheTenantRead(["communications", "read", session.schoolId], () => withTenant(session.schoolId, async (tx) => {
+      const [messages, recipients, settings, events] = await Promise.all([
+        tx.message.findMany({ where: { schoolId: session.schoolId }, orderBy: { createdAt: "desc" }, take: 80, select: { id: true, channel: true, recipientType: true, recipientId: true, body: true, status: true, createdAt: true, sentAt: true, nextAttemptAt: true, lastError: true } }),
+        tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, take: 300, select: { id: true, name: true, phone: true, userRoles: { select: { role: { select: { name: true } } } } } }),
+        tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { smsSenderId: true, notificationChannels: true, whatsappTemplateConfig: true } }),
+        tx.calendarEvent.findMany({ where: { schoolId: session.schoolId }, orderBy: { startDate: "asc" }, take: 80 }),
+      ]);
+      return { messages, recipients: recipients.map((r) => ({ id: r.id, name: r.name, phone: r.phone, roles: r.userRoles.map((x) => x.role.name) })), settings: { smsSenderId: settings?.smsSenderId || null, channels: settings?.notificationChannels || [], whatsapp: settings?.whatsappTemplateConfig || {} }, events };
+    }), 15, [`communications:${session.schoolId}`]);
     return NextResponse.json(data, { headers: { "cache-control": "private, max-age=15, stale-while-revalidate=15" } });
   } catch (error) { return routeError(error); }
 }
@@ -58,8 +53,7 @@ export async function POST(request: Request) {
         else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });
         if (!recipients.length) return NextResponse.json({ ok: true, message: "No recipients matched that audience." });
         if (value.channel === "in_app") {
-          const batchKey = `direct:${session.schoolId}:${Date.now()}`;
-          const now = new Date();
+          const batchKey = `direct:${session.schoolId}:${Date.now()}`; const now = new Date();
           await tx.message.createMany({ data: recipients.map((r) => ({ schoolId: session.schoolId, channel: "in_app", recipientType: "user", recipientId: r.id, recipientPhone: r.phone || "", body: `${value.title}\n\n${value.body}`, templateKey: "direct_message", templateVariables: { title: value.title }, mediaUrl: value.mediaUrl || null, status: "delivered", attempts: 1, sentAt: now, nextAttemptAt: now, idempotencyKey: `${batchKey}:${r.id}:in_app` })) });
         } else for (const recipient of recipients) { if (!recipient.phone) continue; await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl }); }
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "message.sent", entityType: "MessageBatch", entityId: `message-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: recipients.length } });
@@ -70,6 +64,9 @@ export async function POST(request: Request) {
 
     if (input?.action === "broadcast") {
       const value = broadcastSchema.parse(input);
+      const scheduledAt = value.scheduleAt ? new Date(value.scheduleAt) : null;
+      if (scheduledAt && Number.isNaN(scheduledAt.getTime())) return NextResponse.json({ error: "INVALID_INPUT", message: "Choose a valid schedule time." }, { status: 400 });
+      if (scheduledAt && scheduledAt.getTime() <= Date.now()) return NextResponse.json({ error: "INVALID_INPUT", message: "Scheduled broadcast time must be in the future." }, { status: 400 });
       return withTenant(session.schoolId, async (tx) => {
         let recipients: Recipient[] = [];
         if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
@@ -77,10 +74,16 @@ export async function POST(request: Request) {
         else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
         else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });
         let queued = 0;
-        for (const recipient of recipients) { if (!recipient.phone) continue; if (value.channel === "sms" && !process.env.SMS_PROVIDER_URL) break; if (value.channel === "whatsapp" && !process.env.TWILIO_ACCOUNT_SID) break; await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl }); queued++; }
-        await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "broadcast.queued", entityType: "Broadcast", entityId: `broadcast-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: queued, scheduleAt: value.scheduleAt || null } });
+        for (const recipient of recipients) {
+          if (!recipient.phone) continue;
+          if (value.channel === "sms" && !process.env.SMS_PROVIDER_URL) break;
+          if (value.channel === "whatsapp" && !process.env.TWILIO_ACCOUNT_SID) break;
+          await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl, scheduledAt: scheduledAt || undefined, idempotencyKey: `broadcast:${session.schoolId}:${value.audience}:${value.channel}:${value.title}:${value.body}:${scheduledAt?.toISOString() || "now"}` });
+          queued++;
+        }
+        await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: scheduledAt ? "broadcast.scheduled" : "broadcast.queued", entityType: "Broadcast", entityId: `broadcast-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: queued, scheduleAt: scheduledAt?.toISOString() || null } });
         revalidatePath("/school/communications/messages"); revalidatePath("/school/communications/broadcasts");
-        return NextResponse.json({ ok: true, message: queued ? `Broadcast prepared for ${queued} recipient${queued === 1 ? "" : "s"}.` : "Broadcast saved as a draft because the external provider is not configured yet." });
+        return NextResponse.json({ ok: true, message: scheduledAt ? `Broadcast scheduled for ${scheduledAt.toLocaleString("en-GH")}. ${queued} recipient${queued === 1 ? "" : "s"} queued.` : `Broadcast queued for ${queued} recipient${queued === 1 ? "" : "s"}.` });
       });
     }
 
@@ -92,23 +95,13 @@ export async function POST(request: Request) {
     if (input?.action === "save_settings") {
       const channels = Array.isArray(input.channels) ? input.channels : ["in_app"];
       return withTenant(session.schoolId, async (tx) => {
-        const current = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { notificationChannels: true, whatsappTemplateConfig: true } });
-        const currentChannels = asRecord(current?.notificationChannels);
-        const nextConfig = { ...asRecord(current?.whatsappTemplateConfig) };
-        if (input.whatsappFrom) Object.assign(nextConfig, { from: String(input.whatsappFrom) });
-        if (input.reportCardMediaBase) Object.assign(nextConfig, { reportCardMediaBase: String(input.reportCardMediaBase) });
+        const current = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { notificationChannels: true, whatsappTemplateConfig: true } }); const currentChannels = asRecord(current?.notificationChannels); const nextConfig = { ...asRecord(current?.whatsappTemplateConfig) };
+        if (input.whatsappFrom) Object.assign(nextConfig, { from: String(input.whatsappFrom) }); if (input.reportCardMediaBase) Object.assign(nextConfig, { reportCardMediaBase: String(input.reportCardMediaBase) });
         const notificationConfig = { channels, smsCredits: typeof currentChannels.smsCredits === "number" ? currentChannels.smsCredits : 0, automation: { payment_received: Boolean(input.payment_received), report_card_ready: Boolean(input.report_card_ready), student_absence: Boolean(input.student_absence), staff_late: Boolean(input.staff_late), transport_boarding: Boolean(input.transport_boarding), emergency_broadcast: Boolean(input.emergency_broadcast) } };
         await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: { smsSenderId: input.smsSenderId ? String(input.smsSenderId) : undefined, notificationChannels: JSON.parse(JSON.stringify(notificationConfig)) as Prisma.InputJsonValue, whatsappTemplateConfig: JSON.parse(JSON.stringify(nextConfig)) as Prisma.InputJsonValue } });
-        await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "communications.settings_updated", entityType: "SchoolSettings", entityId: session.schoolId, after: JSON.parse(JSON.stringify(notificationConfig)) });
-        revalidatePath("/school/communications/settings");
-        return NextResponse.json({ ok: true, message: "Communication settings saved." });
+        await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "communications.settings_updated", entityType: "SchoolSettings", entityId: session.schoolId, after: JSON.parse(JSON.stringify(notificationConfig)) }); revalidatePath("/school/communications/settings"); return NextResponse.json({ ok: true, message: "Communication settings saved." });
       });
     }
-
     return NextResponse.json({ error: "INVALID_ACTION", message: "Unsupported communication action." }, { status: 400 });
-  } catch (error) {
-    if (error instanceof z.ZodError) return NextResponse.json({ error: "INVALID_INPUT", message: "Please complete the communication details." }, { status: 400 });
-    if (error instanceof ForbiddenError) return NextResponse.json({ error: error.code, message: error.message }, { status: error.status });
-    return routeError(error);
-  }
+  } catch (error) { if (error instanceof z.ZodError) return NextResponse.json({ error: "INVALID_INPUT", message: "Please complete the communication details." }, { status: 400 }); if (error instanceof ForbiddenError) return NextResponse.json({ error: error.code, message: error.message }, { status: error.status }); return routeError(error); }
 }
