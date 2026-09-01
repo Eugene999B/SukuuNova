@@ -13,13 +13,14 @@ export async function saveClassAttendance(classId: string, attendanceDate: strin
   const dateValue = new Date(`${attendanceDate}T00:00:00.000Z`);
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "attendance:record");
-    const students = await tx.student.findMany({ where: { classId, status: "active", id: { in: entries.map((x) => x.studentId) } }, select: { id: true, name: true } });
-    if (students.length !== entries.length) throw new Error("One or more learners no longer belong to this class or school.");
-    const existing = await tx.attendanceEvent.findMany({ where: { attendanceDate: dateValue, studentId: { in: students.map((s) => s.id) } }, select: { studentId: true } });
-    const existingIds = new Set(existing.map((x) => x.studentId));
-    if (existingIds.size) throw new Error("Some learners already have attendance recorded for this date. Refresh the register before saving again.");
+    const uniqueIds = [...new Set(entries.map((entry) => entry.studentId))];
+    if (uniqueIds.length !== entries.length) throw new Error("A learner appears more than once in this register.");
+    const students = await tx.student.findMany({ where: { classId, status: "active", id: { in: uniqueIds } }, select: { id: true } });
+    if (students.length !== uniqueIds.length) throw new Error("One or more learners no longer belong to this class or school.");
+    const existing = await tx.attendanceEvent.findMany({ where: { attendanceDate: dateValue, studentId: { in: uniqueIds } }, select: { studentId: true } });
+    if (existing.length) throw new Error("Some learners already have attendance recorded for this date. Refresh the register before saving again.");
     const now = new Date();
-    await tx.$transaction(entries.map((entry) => tx.attendanceEvent.create({ data: { schoolId: session.schoolId, studentId: entry.studentId, type: entry.type, method: "school_register", timestamp: now, attendanceDate: dateValue, isLate: Boolean(entry.isLate) || entry.type === "late", recordedBy: session.userId } })));
+    await tx.attendanceEvent.createMany({ data: entries.map((entry) => ({ schoolId: session.schoolId, studentId: entry.studentId, type: entry.type, method: "school_register", timestamp: now, attendanceDate: dateValue, isLate: Boolean(entry.isLate) || entry.type === "late", recordedBy: session.userId })) });
     await tx.auditLogSchool.createMany({ data: entries.map((entry) => ({ schoolId: session.schoolId, actorId: session.userId, action: "attendance.recorded", entityType: "AttendanceEvent", entityId: `${classId}:${attendanceDate}:${entry.studentId}`, after: { classId, studentId: entry.studentId, attendanceDate, type: entry.type, isLate: Boolean(entry.isLate) || entry.type === "late" } })) });
   });
   revalidatePath("/school/attendance");
