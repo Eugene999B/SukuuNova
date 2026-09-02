@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     }
 
     const result = await withTenant(session.schoolId, async (tx) => {
-      await requirePermission(tx, session.userId, "attendance:view_own");
+      await requirePermission(tx, session.userId, "attendance:staff_scan");
       const verified = await verifyStaffAttendanceQr(input.token, session.schoolId);
       const challenge = await tx.auditLogSchool.findFirst({
         where: {
