@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { Prisma } from "@prisma/client";
 import { rawDb } from "./db";
 import { RateLimitError } from "./errors";
 
@@ -25,7 +26,7 @@ function normalizeIp(ip: string | undefined): string | undefined {
 }
 
 async function consumeBucket(
-  tx: Parameters<Parameters<typeof rawDb.$transaction>[0]>[0],
+  tx: Prisma.TransactionClient,
   bucket: Bucket,
   now: Date,
 ): Promise<number> {
