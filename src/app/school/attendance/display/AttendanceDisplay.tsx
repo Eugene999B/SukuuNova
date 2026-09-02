@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import encodeQR from "qr";
 
+type DisplayLocation = { latitude: number; longitude: number; accuracyM?: number };
+
 export default function AttendanceDisplay({ schoolName }: { schoolName: string }) {
   const [token, setToken] = useState("");
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [location, setLocation] = useState<{ latitude: number; longitude: number; accuracyM?: number }>();
+  const [clock, setClock] = useState(() => Date.now());
+  const [location, setLocation] = useState<DisplayLocation>();
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -45,14 +48,13 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
     return () => window.clearInterval(timer);
   }, [refresh]);
 
-  const svg = useMemo(() => token ? encodeQR(token, "svg", { ecc: "high", border: 4, scale: 8 }) : "", [token]);
-  const remaining = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000)) : 0;
-
   useEffect(() => {
-    if (!expiresAt) return;
-    const timer = window.setInterval(() => setExpiresAt((current) => current ? new Date(current) : null), 1000);
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
     return () => window.clearInterval(timer);
-  }, [expiresAt?.getTime()]);
+  }, []);
+
+  const svg = useMemo(() => token ? encodeQR(token, "svg", { ecc: "high", border: 4, scale: 8 }) : "", [token]);
+  const remaining = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - clock) / 1000)) : 0;
 
   return <main className="min-h-screen bg-slate-950 px-5 py-8 text-white sm:px-10">
     <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl flex-col items-center justify-center">
