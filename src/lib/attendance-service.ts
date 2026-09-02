@@ -54,14 +54,21 @@ async function validateStaffState(tx: TenantDb, schoolId: string, staffId: strin
 
 async function validateStudentState(tx: TenantDb, schoolId: string, studentId: string, day: Date, periodId: string, type: "in" | "out") {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-attendance:${schoolId}:${studentId}:${day.toISOString()}:${periodId}`}))`;
-  const latest = await tx.attendanceEvent.findFirst({
-    where: { schoolId, studentId, attendanceDate: day, periodId, type: { in: ["in", "out"] } },
-    orderBy: [{ timestamp: "desc" }, { id: "desc" }],
-    select: { id: true, type: true }
-  });
-  if (type === "in" && latest?.type === "in") throw new AppError("This student is already checked in for this attendance period.", 409, "ALREADY_CHECKED_IN");
-  if (type === "in" && latest?.type === "out") throw new AppError("This student's attendance period is already closed. A supervisor correction is required for another entry.", 409, "ATTENDANCE_CLOSED");
-  if (type === "out" && latest?.type !== "in") throw new AppError("The student must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
+  const latest = await tx.$queryRaw<Array<{ id: string; type: string }>>`
+    SELECT "id", "type"
+    FROM "AttendanceEvent"
+    WHERE "schoolId" = ${schoolId}
+      AND "studentId" = ${studentId}
+      AND "attendanceDate" = ${day}
+      AND "periodId" = ${periodId}
+      AND "type" IN ('in', 'out')
+    ORDER BY "timestamp" DESC, "id" DESC
+    LIMIT 1
+  `;
+  const current = latest[0];
+  if (type === "in" && current?.type === "in") throw new AppError("This student is already checked in for this attendance period.", 409, "ALREADY_CHECKED_IN");
+  if (type === "in" && current?.type === "out") throw new AppError("This student's attendance period is already closed. A supervisor correction is required for another entry.", 409, "ATTENDANCE_CLOSED");
+  if (type === "out" && current?.type !== "in") throw new AppError("The student must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
 }
 
 export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; type: "in" | "out"; verification: string; verificationMeta?: Record<string, unknown> }) {
