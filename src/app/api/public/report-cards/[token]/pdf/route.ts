@@ -12,11 +12,11 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
       await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", payload.schoolId);
       const report = await tx.reportCard.findFirst({ where: { id: payload.reportId, schoolId: payload.schoolId }, select: { id: true, status: true, pdfData: true } });
       if (!report || !report.pdfData || !["approved", "sent"].includes(report.status)) return null;
-      return report;
+      return { pdfData: report.pdfData };
     });
     if (!result) return NextResponse.json({ ok: false, message: "The report-card is not available." }, { status: 404 });
 
-    return new Response(Uint8Array.from(result.pdfData).buffer, {
+    return new Response(result.pdfData, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'inline; filename="sukuunova-report-card.pdf"',
