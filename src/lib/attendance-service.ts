@@ -53,7 +53,7 @@ async function validateStaffState(tx: TenantDb, schoolId: string, staffId: strin
 }
 
 export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; type: "in" | "out"; verification: string; verificationMeta?: Record<string, unknown> }) {
-  await requirePermission(tx, input.actorId, "attendance:staff_scan");
+  await requirePermission(tx, input.actorId, "attendance:staff_scan", input.schoolId);
   const staff = await tx.user.findFirst({ where: { id: input.actorId, schoolId: input.schoolId, status: "active" }, select: { id: true, schoolId: true, name: true } });
   if (!staff) throw new ForbiddenError("Only an active staff account in this school can use staff check-in.");
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
@@ -89,12 +89,12 @@ function validatePeriodId(value: string | undefined) {
   return periodId;
 }
 
-export async function recordAttendance(tx: TenantDb, input: { schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out"; method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; deviceAuthenticated?: boolean; periodId?: string }) {
+export async function recordAttendance(tx: TenantDb, input: { schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out"; method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; timestamp?: Date; deviceAuthenticated?: boolean; periodId?: string }) {
   if (input.deviceAuthenticated) {
     if (!input.deviceId) throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");
   } else {
     if (!input.actorId) throw new ForbiddenError("A staff actor is required for attendance.");
-    await requirePermission(tx, input.actorId, "attendance:record");
+    await requirePermission(tx, input.actorId, "attendance:record", input.schoolId);
     if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);
     else {
       await authorizeStaffAttendance(tx, input.actorId);
@@ -150,7 +150,7 @@ export async function attendanceSummary(tx: TenantDb, input: { actorId: string; 
 }
 
 export async function finalizeStudentAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; day: Date; classId?: string }) {
-  await requirePermission(tx, input.actorId, "attendance:record");
+  await requirePermission(tx, input.actorId, "attendance:record", input.schoolId);
   const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
   if (await isAttendanceBlocked(tx, input.day)) return { queued: 0, calendarBlocked: true };
   const students = await tx.student.findMany({ where: { status: "active", ...classFilter }, include: { attendanceEvents: { where: { attendanceDate: input.day, type: "in" }, select: { id: true } }, guardians: { where: { isPrimary: true }, include: { guardian: true } } } });
