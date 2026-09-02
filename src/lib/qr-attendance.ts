@@ -10,8 +10,6 @@ export type StaffAttendanceQrPayload = {
   purpose: "staff-check-in";
   challengeId: string;
   nonce: string;
-  displayIpHash: string;
-  displayLocation?: { latitude: number; longitude: number; accuracyM?: number };
 };
 
 function secret() {
@@ -81,16 +79,12 @@ export async function createStaffAttendanceQr(
   schoolId: string,
   challengeId: string,
   nonce: string,
-  expiresAt: Date,
-  displayIpHash: string,
-  displayLocation?: { latitude: number; longitude: number; accuracyM?: number }
+  expiresAt: Date
 ) {
   return new SignJWT({
     schoolId,
     purpose: "staff-check-in",
-    nonce,
-    displayIpHash,
-    ...(displayLocation ? { displayLocation } : {})
+    nonce
   })
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .setSubject("staff-check-in")
@@ -115,36 +109,75 @@ export async function verifyStaffAttendanceQr(token: string, schoolId: string): 
       payload.sub !== "staff-check-in" ||
       typeof payload.jti !== "string" ||
       typeof payload.nonce !== "string" ||
-      typeof payload.displayIpHash !== "string"
+      payload.nonce.length < 32
     ) {
       throw new Error("invalid payload");
-    }
-    const displayLocation = payload.displayLocation;
-    if (
-      displayLocation !== undefined &&
-      (typeof displayLocation !== "object" || displayLocation === null ||
-        typeof displayLocation.latitude !== "number" ||
-        typeof displayLocation.longitude !== "number")
-    ) {
-      throw new Error("invalid location payload");
     }
     return {
       schoolId,
       purpose: "staff-check-in",
       challengeId: payload.jti,
-      nonce: payload.nonce,
-      displayIpHash: payload.displayIpHash,
-      displayLocation: displayLocation as StaffAttendanceQrPayload["displayLocation"]
+      nonce: payload.nonce
     };
   } catch {
     throw new AppError("The school check-in QR is invalid or expired.", 400, "INVALID_STAFF_QR");
   }
 }
 
+export async function issueStaffAttendanceChallenge(
+  tx: TenantDb,
+  input: {
+    schoolId: string;
+    actorId: string;
+    challengeId: string;
+    nonce: string;
+    issuedAt: Date;
+    expiresAt: Date;
+    displayIpHash: string;
+    displayLocation?: { latitude: number; longitude: number; accuracyM?: number };
+  }
+) {
+  const challenge = await tx.auditLogSchool.create({
+    data: {
+      schoolId: input.schoolId,
+      actorId: input.actorId,
+      action: "attendance.qr.issued",
+      entityType: "StaffAttendanceQrChallenge",
+      entityId: input.challengeId,
+      after: {
+        nonceHash: hashQrSecret(input.nonce),
+        issuedAt: input.issuedAt.toISOString(),
+        expiresAt: input.expiresAt.toISOString(),
+        displayIpHash: input.displayIpHash,
+        ...(input.displayLocation ? { displayLocation: input.displayLocation } : {})
+      }
+    }
+  });
+  return challenge;
+}
+
 export async function consumeStaffAttendanceQr(
   tx: TenantDb,
   input: { schoolId: string; actorId: string; challengeId: string; nonce: string; verification: string; meta?: Record<string, unknown> }
 ) {
+  const challenge = await tx.auditLogSchool.findFirst({
+    where: {
+      schoolId: input.schoolId,
+      action: "attendance.qr.issued",
+      entityType: "StaffAttendanceQrChallenge",
+      entityId: input.challengeId
+    },
+    orderBy: { createdAt: "desc" },
+    select: { after: true }
+  });
+  const after = challenge?.after;
+  const nonceHash = after && typeof after === "object" && after !== null && "nonceHash" in after && typeof after.nonceHash === "string" ? after.nonceHash : null;
+  const expiresAtRaw = after && typeof after === "object" && after !== null && "expiresAt" in after && typeof after.expiresAt === "string" ? after.expiresAt : null;
+  const displayIpHash = after && typeof after === "object" && after !== null && "displayIpHash" in after && typeof after.displayIpHash === "string" ? after.displayIpHash : null;
+  if (!nonceHash || hashQrSecret(input.nonce) !== nonceHash || !expiresAtRaw || new Date(expiresAtRaw).getTime() <= Date.now()) {
+    throw new AppError("This attendance code is invalid or expired.", 409, "CHALLENGE_INVALID_OR_EXPIRED");
+  }
+
   const id = hashQrSecret(`staff-qr-consumption:${input.schoolId}:${input.challengeId}:${input.nonce}:${input.actorId}`);
   const result = await tx.auditLogSchool.createMany({
     data: [{
@@ -156,6 +189,7 @@ export async function consumeStaffAttendanceQr(
       entityId: input.challengeId,
       after: {
         verification: input.verification,
+        displayIpHash,
         ...(input.meta ? { meta: input.meta } : {})
       }
     }],
@@ -164,4 +198,19 @@ export async function consumeStaffAttendanceQr(
   if (result.count !== 1) {
     throw new AppError("This attendance code has already been used on this account.", 409, "QR_REPLAY");
   }
+}
+
+export function displayLocationFromChallenge(after: unknown) {
+  if (!after || typeof after !== "object") return undefined;
+  const value = "displayLocation" in after ? after.displayLocation : undefined;
+  if (!value || typeof value !== "object") return undefined;
+  const row = value as Record<string, unknown>;
+  if (typeof row.latitude !== "number" || typeof row.longitude !== "number") return undefined;
+  return { latitude: row.latitude, longitude: row.longitude, accuracyM: typeof row.accuracyM === "number" ? row.accuracyM : undefined };
+}
+
+export function displayIpHashFromChallenge(after: unknown) {
+  if (!after || typeof after !== "object") return undefined;
+  const value = "displayIpHash" in after ? after.displayIpHash : undefined;
+  return typeof value === "string" ? value : undefined;
 }
