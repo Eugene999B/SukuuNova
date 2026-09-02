@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
       if (input.action === "reissue") return { kind: "json" as const, value: await reissueIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
       if (input.action === "revoke") return { kind: "json" as const, value: await revokeIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
-      const cards = await getIdentityCardsByScope(tx, session.schoolId, school.uniqueCode, input.scope as IdentityCardScope, input.ids ?? [], session.userId);
+      const cards = await getIdentityCardsByScope(tx, session.schoolId, school.uniqueCode, input.scope as IdentityCardScope, input.ids ?? []);
       if (!cards.length) throw new AppError("No identity cards matched this selection.", 404, "NO_CARDS");
       return { kind: "pdf" as const, pdf: await buildIdentityCardPdf(cards, school, new URL(request.url).origin) };
     });
@@ -45,5 +45,4 @@ export async function POST(request: Request) {
     return new NextResponse(result.pdf, { status: 200, headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${schoolSafeFilename(session.schoolId)}-identity-cards.pdf"`, "cache-control": "private, no-store" } });
   } catch (error) { return routeError(error); }
 }
-
 function schoolSafeFilename(value: string) { return value.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 80) || "school"; }
