@@ -46,7 +46,7 @@ export async function authorizeStaffAttendance(tx: TenantDb, actorId: string) {
 
 async function validateStaffState(tx: TenantDb, schoolId: string, staffId: string, day: Date, type: "in" | "out") {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`staff-attendance:${schoolId}:${staffId}:${day.toISOString()}`}))`;
-  const latest = await tx.attendanceEvent.findFirst({ where: { schoolId, staffId, attendanceDate: day, type: { in: ["in", "out"] } }, orderBy: { timestamp: "desc" }, select: { id: true, type: true } });
+  const latest = await tx.attendanceEvent.findFirst({ where: { schoolId, staffId, attendanceDate: day, type: { in: ["in", "out"] } }, orderBy: [{ timestamp: "desc" }, { id: "desc" }], select: { id: true, type: true } });
   if (type === "in" && latest?.type === "in") throw new AppError("You are already checked in for today.", 409, "ALREADY_CHECKED_IN");
   if (type === "in" && latest?.type === "out") throw new AppError("Your attendance is already closed for today. A supervisor correction is required for another entry.", 409, "ATTENDANCE_CLOSED");
   if (type === "out" && latest?.type !== "in") throw new AppError("You must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
