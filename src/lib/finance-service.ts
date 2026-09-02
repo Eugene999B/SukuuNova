@@ -26,6 +26,8 @@ export async function generateInvoice(tx: TenantDb, input: { schoolId: string; a
   if (!student) throw new AppError("Student not found.", 404, "NOT_FOUND");
   const term = await tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, isLocked: true } });
   if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
+  if (term.isLocked) throw new AppError("Locked terms cannot receive new invoices.", 409, "TERM_LOCKED");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-generation:${input.schoolId}:${input.studentId}:${input.termId}`}))`;
   const existing = await tx.invoice.findFirst({ where: { studentId: input.studentId, termId: input.termId, schoolId: input.schoolId } });
   if (existing) throw new AppError("This student already has an invoice for the selected term.", 409, "INVOICE_EXISTS");
   const items = await tx.feeItem.findMany({ where: { schoolId: input.schoolId, termId: input.termId, OR: [{ classId: null }, { classId: student.classId ?? "__none__" }] } });
@@ -56,10 +58,6 @@ export async function recordPayment(tx: TenantDb, input: { schoolId: string; act
   if (input.amount <= 0) throw new AppError("Payment amount must be positive.", 400, "INVALID_AMOUNT");
   const reference = input.reference?.trim() || undefined;
   if ((input.method === "momo" || input.method === "bank" || input.method === "cheque") && !reference) throw new AppError("A transaction/reference number is required for this payment method.", 400, "REFERENCE_REQUIRED");
-
-  // Serialize balance validation, payment creation and invoice-status refresh for
-  // this invoice. Without this lock, concurrent collectors could both observe the
-  // same outstanding balance and independently pass the overpayment check.
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-payment:${input.schoolId}:${input.invoiceId}`}))`;
   const current = await refreshInvoiceStatus(tx, input.invoiceId, input.schoolId);
   if (current.status === "paid") throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
