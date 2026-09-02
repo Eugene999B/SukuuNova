@@ -1,0 +1,29 @@
+name: SukuuNova temporary QR lock export
+
+on:
+  push:
+    branches:
+      - feat/staff-qr-checkin
+
+permissions:
+  contents: read
+
+jobs:
+  export-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Generate lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: sukuunova-qr-package-lock
+          path: package-lock.json
+          retention-days: 1
