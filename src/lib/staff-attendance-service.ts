@@ -16,7 +16,7 @@ export async function staffAttendanceDashboard(
     staffId?: string;
   }
 ) {
-  await requirePermission(tx, input.actorId, "attendance:record_staff");
+  await requirePermission(tx, input.actorId, "attendance:review");
 
   if (Number.isNaN(input.startDate.getTime()) || Number.isNaN(input.endDate.getTime())) {
     throw new AppError("Attendance dashboard dates are invalid.", 400, "INVALID_DATE");
