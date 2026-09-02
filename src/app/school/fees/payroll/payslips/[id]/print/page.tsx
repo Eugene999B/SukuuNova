@@ -11,13 +11,13 @@ export default async function PayslipPrintPage({ params }: { params: Promise<{ i
   const { id } = await params;
   const data = await withTenant(session.schoolId, async (tx) => {
     await requireSchoolFeatureInTransaction(tx, session.schoolId, "payroll");
-    const payslip = await getVisiblePayslipPdf(tx, { actorId: session.userId, payslipId: id });
+    const payslip = await getVisiblePayslipPdf(tx, { schoolId: session.schoolId, actorId: session.userId, payslipId: id });
     const [school, staff] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
-      tx.user.findUnique({ where: { id: payslip.staffId }, select: { name: true, email: true } })
+      tx.user.findFirst({ where: { id: payslip.staffId, schoolId: session.schoolId }, select: { name: true, email: true } })
     ]);
     if (!school || !staff || !payslip.payrollRunId) return null;
-    const run = await tx.payrollRun.findUnique({ where: { id: payslip.payrollRunId }, select: { period: true } });
+    const run = await tx.payrollRun.findFirst({ where: { id: payslip.payrollRunId, schoolId: session.schoolId }, select: { period: true } });
     if (!run) return null;
     const settings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { reportCardWatermark: true } });
     return {
