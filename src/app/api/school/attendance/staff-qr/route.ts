@@ -17,7 +17,7 @@ const locationSchema = z.object({
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("challenge"), displayLocation: locationSchema }),
-  z.object({ action: z.literal("scan"), token: z.string().min(50).max(10000), location: locationSchema })
+  z.object({ action: z.literal("scan"), token: z.string().min(50).max(10000), location: locationSchema, idempotencyKey: z.string().uuid() })
 ]);
 
 function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
@@ -29,6 +29,13 @@ function distanceMeters(a: { latitude: number; longitude: number }, b: { latitud
   const lat2 = toRadians(b.latitude);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
   return 2 * earthRadius * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function noStoreJson(payload: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("Cache-Control", "no-store, private, max-age=0");
+  headers.set("Pragma", "no-cache");
+  return NextResponse.json(payload, { ...init, headers });
 }
 
 export async function POST(request: Request) {
@@ -58,19 +65,28 @@ export async function POST(request: Request) {
         const token = await createStaffAttendanceQr(session.schoolId, challengeId, nonce, expiresAt);
         return { token, challengeId, issuedAt: issuedAt.toISOString(), expiresAt: expiresAt.toISOString() };
       });
-      return NextResponse.json({ ok: true, result, refreshAfterSeconds: 30 });
+      return noStoreJson({ ok: true, result, refreshAfterSeconds: 30 });
     }
 
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "attendance:staff_scan");
+
+      const idempotencyAuditId = hashClientIp(`staff-qr-idempotency:${session.schoolId}:${session.userId}:${input.idempotencyKey}`);
+      const previous = await tx.auditLogSchool.findUnique({ where: { id: idempotencyAuditId }, select: { actorId: true, after: true } });
+      if (previous) {
+        if (previous.actorId !== session.userId) throw new AppError("That attendance request key is already in use.", 409, "IDEMPOTENCY_KEY_REUSED");
+        const previousAfter = previous.after;
+        const eventId = previousAfter && typeof previousAfter === "object" && previousAfter !== null && "eventId" in previousAfter && typeof previousAfter.eventId === "string" ? previousAfter.eventId : null;
+        if (!eventId) throw new AppError("The previous attendance receipt is incomplete.", 409, "IDEMPOTENCY_RECEIPT_INVALID");
+        const event = await tx.attendanceEvent.findFirst({ where: { id: eventId, schoolId: session.schoolId, staffId: session.userId }, select: { id: true, staffId: true, type: true, timestamp: true, attendanceDate: true, isLate: true, method: true } });
+        if (!event) throw new AppError("The previous attendance record is no longer available.", 409, "IDEMPOTENCY_EVENT_MISSING");
+        const verification = previousAfter && typeof previousAfter === "object" && previousAfter !== null && "verification" in previousAfter && typeof previousAfter.verification === "string" ? previousAfter.verification : "qr";
+        return { event, verification };
+      }
+
       const verified = await verifyStaffAttendanceQr(input.token, session.schoolId);
       const challenge = await tx.auditLogSchool.findFirst({
-        where: {
-          schoolId: session.schoolId,
-          action: "attendance.qr.issued",
-          entityType: "StaffAttendanceQrChallenge",
-          entityId: verified.challengeId
-        },
+        where: { schoolId: session.schoolId, action: "attendance.qr.issued", entityType: "StaffAttendanceQrChallenge", entityId: verified.challengeId },
         orderBy: { createdAt: "desc" },
         select: { after: true }
       });
@@ -99,10 +115,7 @@ export async function POST(request: Request) {
         geoReason = "display_location_unavailable";
       }
 
-      if (!sameNetwork && !geoVerified) {
-        throw new AppError("Attendance check-in could not verify that you are at school. Please connect to the school's network or allow location access and scan the live code again.", 403, "SCHOOL_PRESENCE_NOT_VERIFIED");
-      }
-
+      if (!sameNetwork && !geoVerified) throw new AppError("Attendance check-in could not verify that you are at school. Please connect to the school's network or allow location access and scan the live code again.", 403, "SCHOOL_PRESENCE_NOT_VERIFIED");
       const verification = sameNetwork && geoVerified ? "qr+network+location" : sameNetwork ? "qr+network" : "qr+location";
 
       try {
@@ -111,11 +124,7 @@ export async function POST(request: Request) {
           actorId: session.userId,
           type: "in",
           verification,
-          verificationMeta: {
-            networkMatch: sameNetwork,
-            locationMatch: geoVerified,
-            ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {})
-          }
+          verificationMeta: { networkMatch: sameNetwork, locationMatch: geoVerified, ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}) }
         });
 
         await consumeStaffAttendanceQr(tx, {
@@ -124,20 +133,22 @@ export async function POST(request: Request) {
           challengeId: verified.challengeId,
           nonce: verified.nonce,
           verification,
-          meta: {
-            networkMatch: sameNetwork,
-            locationMatch: geoVerified,
-            ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}),
-            locationReason: geoReason
-          }
+          meta: { networkMatch: sameNetwork, locationMatch: geoVerified, ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}), locationReason: geoReason, idempotencyKey: input.idempotencyKey }
         });
 
+        await tx.auditLogSchool.create({
+          data: {
+            id: idempotencyAuditId,
+            schoolId: session.schoolId,
+            actorId: session.userId,
+            action: "attendance.qr.idempotency",
+            entityType: "AttendanceEvent",
+            entityId: event.id,
+            after: { eventId: event.id, verification }
+          }
+        });
         return { event, verification };
       } catch (error) {
-        // Business-rule failures (for example, an existing same-day check-in)
-        // must still burn the one-time challenge. Catch AppError, record the
-        // consumption in this transaction, then return the failure for the
-        // response layer after the transaction has committed.
         if (!(error instanceof AppError)) throw error;
         await consumeStaffAttendanceQr(tx, {
           schoolId: session.schoolId,
@@ -145,21 +156,14 @@ export async function POST(request: Request) {
           challengeId: verified.challengeId,
           nonce: verified.nonce,
           verification,
-          meta: {
-            networkMatch: sameNetwork,
-            locationMatch: geoVerified,
-            ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}),
-            locationReason: geoReason,
-            outcome: "rejected",
-            errorCode: error.code
-          }
+          meta: { networkMatch: sameNetwork, locationMatch: geoVerified, ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}), locationReason: geoReason, outcome: "rejected", errorCode: error.code, idempotencyKey: input.idempotencyKey }
         });
         return { error };
       }
     });
 
     if ("error" in result) throw result.error;
-    return NextResponse.json({ ok: true, result });
+    return noStoreJson({ ok: true, result });
   } catch (error) {
     return routeError(error);
   }
