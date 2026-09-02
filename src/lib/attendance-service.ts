@@ -9,15 +9,9 @@ type AttendanceTarget =
   | { staffId: string; studentId?: never };
 
 function localParts(value: Date, timezone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
-    hour: "2-digit", minute: "2-digit", hourCycle: "h23"
-  }).formatToParts(value);
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(value);
   const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? "";
-  return {
-    dateKey: get("year") + "-" + get("month") + "-" + get("day"),
-    minutes: Number(get("hour")) * 60 + Number(get("minute"))
-  };
+  return { dateKey: get("year") + "-" + get("month") + "-" + get("day"), minutes: Number(get("hour")) * 60 + Number(get("minute")) };
 }
 
 function attendanceDate(value: Date, timezone: string) {
@@ -50,38 +44,30 @@ export async function authorizeStaffAttendance(tx: TenantDb, actorId: string) {
   await requirePermission(tx, actorId, "attendance:record_staff");
 }
 
-export async function recordStaffSelfAttendance(
-  tx: TenantDb,
-  input: {
-    schoolId: string;
-    actorId: string;
-    type: "in" | "out";
-    verification: string;
-    verificationMeta?: Record<string, unknown>;
-  }
-) {
+async function validateStaffState(tx: TenantDb, schoolId: string, staffId: string, day: Date, type: "in" | "out") {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`staff-attendance:${schoolId}:${staffId}:${day.toISOString()}`}))`;
+  const latest = await tx.attendanceEvent.findFirst({ where: { schoolId, staffId, attendanceDate: day, type: { in: ["in", "out"] } }, orderBy: { timestamp: "desc" }, select: { id: true, type: true } });
+  if (type === "in" && latest?.type === "in") throw new AppError("You are already checked in for today.", 409, "ALREADY_CHECKED_IN");
+  if (type === "in" && latest?.type === "out") throw new AppError("Your attendance is already closed for today. A supervisor correction is required for another entry.", 409, "ATTENDANCE_CLOSED");
+  if (type === "out" && latest?.type !== "in") throw new AppError("You must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
+}
+
+export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; type: "in" | "out"; verification: string; verificationMeta?: Record<string, unknown> }) {
   await requirePermission(tx, input.actorId, "attendance:staff_scan");
   const staff = await tx.user.findFirst({ where: { id: input.actorId, schoolId: input.schoolId, status: "active" }, select: { id: true, schoolId: true, name: true } });
   if (!staff) throw new ForbiddenError("Only an active staff account in this school can use staff check-in.");
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
-
   const timestamp = new Date();
   const day = attendanceDate(timestamp, settings.timezone);
   if (await isAttendanceBlocked(tx, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
-
   const periodSetting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
   const periodId = periodSetting[0]?.value?.trim() || "DAILY";
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
-
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`staff-attendance:${input.schoolId}:${input.actorId}:${day.toISOString()}:${input.type}`}))`;
-  const latest = await tx.attendanceEvent.findFirst({ where: { schoolId: input.schoolId, staffId: input.actorId, attendanceDate: day, type: { in: ["in", "out"] } }, orderBy: { timestamp: "desc" }, select: { id: true, type: true } });
-  if (input.type === "in" && latest?.type === "in") throw new AppError("You are already checked in for today.", 409, "ALREADY_CHECKED_IN");
-  if (input.type === "out" && latest?.type !== "in") throw new AppError("You must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
-
+  await validateStaffState(tx, input.schoolId, input.actorId, day, input.type);
   const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, staffId: input.actorId, type: input.type, method: "qr", timestamp, attendanceDate: day, isLate, recordedBy: input.actorId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: input.type === "in" ? "attendance.staff.checked_in" : "attendance.staff.checked_out", entityType: "AttendanceEvent", entityId: event.id, after: { event, verification: input.verification, ...(input.verificationMeta ? { verificationMeta: input.verificationMeta } : {}) } });
   return event;
@@ -103,13 +89,7 @@ function validatePeriodId(value: string | undefined) {
   return periodId;
 }
 
-export async function recordAttendance(
-  tx: TenantDb,
-  input: {
-    schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out";
-    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; deviceAuthenticated?: boolean; periodId?: string;
-  }
-) {
+export async function recordAttendance(tx: TenantDb, input: { schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out"; method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; deviceAuthenticated?: boolean; periodId?: string }) {
   if (input.deviceAuthenticated) {
     if (!input.deviceId) throw new AppError("Authenticated device id is required.", 401, "DEVICE_CONTEXT_REQUIRED");
   } else {
@@ -122,13 +102,11 @@ export async function recordAttendance(
       if (!staff) throw new ForbiddenError("The selected staff account is not active in this school.");
     }
   }
-
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
   const timestamp = new Date();
   const day = attendanceDate(timestamp, settings.timezone);
   if (await isAttendanceBlocked(tx, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
-
   let periodId = input.periodId?.trim();
   if (!periodId) {
     const setting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
@@ -139,10 +117,9 @@ export async function recordAttendance(
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
-
+  if (input.target.staffId && input.actorId && !input.deviceAuthenticated) await validateStaffState(tx, input.schoolId, input.target.staffId, day, input.type);
   const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, studentId: input.target.studentId, staffId: input.target.staffId, type: input.type, method: input.method, timestamp, attendanceDate: day, isLate, confidenceScore: input.confidenceScore, deviceId: input.deviceId, recordedBy: input.actorId ?? null } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId ?? ("device:" + input.deviceId), action: "attendance.recorded", entityType: "AttendanceEvent", entityId: event.id, after: event });
-
   if (input.target.studentId) {
     const student = await tx.student.findUnique({ where: { id: input.target.studentId }, select: { name: true } });
     const guardians = await tx.studentGuardian.findMany({ where: { studentId: input.target.studentId, isPrimary: true }, include: { guardian: { select: { id: true, phone: true } } } });
@@ -152,15 +129,12 @@ export async function recordAttendance(
       await enqueueSms(tx, { schoolId: input.schoolId, recipientType: "guardian", recipientId: link.guardian.id, recipientPhone: link.guardian.phone, body: "SukuuNova attendance alert: " + (student?.name ?? "Your child") + " " + attendanceLabel + ".", templateKey: "student_attendance", templateVariables: { "1": student?.name ?? "Student", "2": attendanceLabel } });
     }
   }
-
   if (input.target.staffId && isLate) {
     const [staff, hrUsers] = await Promise.all([
       tx.user.findFirst({ where: { id: input.target.staffId, schoolId: input.schoolId }, select: { name: true } }),
       tx.user.findMany({ where: { schoolId: input.schoolId, phone: { not: null }, userRoles: { some: { role: { key: "hr_officer" } } } }, select: { id: true, phone: true } })
     ]);
-    for (const user of hrUsers) {
-      await enqueueSms(tx, { schoolId: input.schoolId, recipientType: "user", recipientId: user.id, recipientPhone: user.phone!, body: "SukuuNova alert: " + (staff?.name ?? "a staff member") + " checked in late.", templateKey: "staff_late", templateVariables: { "1": staff?.name ?? "Staff member", "2": timestamp.toISOString() } });
-    }
+    for (const user of hrUsers) await enqueueSms(tx, { schoolId: input.schoolId, recipientType: "user", recipientId: user.id, recipientPhone: user.phone!, body: "SukuuNova alert: " + (staff?.name ?? "a staff member") + " checked in late.", templateKey: "staff_late", templateVariables: { "1": staff?.name ?? "Staff member", "2": timestamp.toISOString() } });
   }
   return event;
 }
