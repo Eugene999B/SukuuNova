@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 import { processOfflineSync } from "../src/lib/offline-sync-service";
@@ -9,7 +9,7 @@ describe("offline sync state machine", () => {
   let classId: string;
   let studentId: string;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     fixture = await createTenantFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       deviceId = (await tx.device.create({ data: { schoolId: fixture.schoolId, deviceSerial: "sync-device-" + fixture.schoolId, kind: "card", label: "Offline Sync Test Device", apiKeyHash: "a".repeat(64) } })).id;
