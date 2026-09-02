@@ -40,6 +40,20 @@ describe("school identity cards", () => {
     });
   });
 
+  it("revokes a staff card when the staff member loses staff eligibility", async () => {
+    await withTenant(fixture.schoolId, async (tx) => {
+      const school = await tx.school.findUnique({ where: { id: fixture.schoolId }, select: { uniqueCode: true } });
+      const current = await listIdentityCards(tx, fixture.schoolId, school!.uniqueCode, fixture.ownerId);
+      expect(current.some((card) => card.staffId === staffId && card.status === "active")).toBe(true);
+      await tx.userRole.deleteMany({ where: { schoolId: fixture.schoolId, userId: staffId } });
+      const result = await ensureIdentityCardsForSchool(tx, fixture.schoolId, school!.uniqueCode, fixture.ownerId);
+      expect(result.revokedStale).toBeGreaterThanOrEqual(1);
+      const after = await listIdentityCards(tx, fixture.schoolId, school!.uniqueCode, fixture.ownerId);
+      expect(after.filter((card) => card.staffId === staffId && card.status === "active")).toHaveLength(0);
+      expect(after.filter((card) => card.staffId === staffId)).toHaveLength(1);
+    });
+  });
+
   it("rejects tampered signatures", () => {
     const now = new Date("2026-09-02T10:00:00.000Z");
     const card = { schoolId: "school-a", serial: "SNV-A-ST-123", personType: "student" as const, issuedAt: now, expiresAt: new Date("2028-09-02T10:00:00.000Z"), version: 1 };
@@ -56,10 +70,10 @@ describe("school identity cards", () => {
     });
   });
 
-  it("produces an A4 print pack for selected cards", async () => {
+  it("produces an A4 print pack for selected current cards", async () => {
     await withTenant(fixture.schoolId, async (tx) => {
       const school = await tx.school.findUnique({ where: { id: fixture.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } });
-      const cards = await listIdentityCards(tx, fixture.schoolId, school!.uniqueCode, fixture.ownerId);
+      const cards = (await listIdentityCards(tx, fixture.schoolId, school!.uniqueCode, fixture.ownerId)).filter((card) => card.status === "active" && !card.isExpired);
       const selected = cards.slice(0, 2);
       const pdf = await buildIdentityCardPdf(selected, school!, "https://sukuunova.example");
       expect(Buffer.byteLength(pdf)).toBeGreaterThan(1000);
