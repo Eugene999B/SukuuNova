@@ -12,7 +12,7 @@ export async function GET(
     const session = await requireSchoolSession();
     const { id } = await context.params;
     const payslip = await withTenant(session.schoolId, (tx) =>
-      getVisiblePayslipPdf(tx, { actorId: session.userId, payslipId: id })
+      getVisiblePayslipPdf(tx, { schoolId: session.schoolId, actorId: session.userId, payslipId: id })
     );
     return new NextResponse(payslip.pdfData, {
       headers: {
