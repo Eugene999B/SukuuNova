@@ -52,6 +52,18 @@ async function validateStaffState(tx: TenantDb, schoolId: string, staffId: strin
   if (type === "out" && latest?.type !== "in") throw new AppError("You must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
 }
 
+async function validateStudentState(tx: TenantDb, schoolId: string, studentId: string, day: Date, periodId: string, type: "in" | "out") {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-attendance:${schoolId}:${studentId}:${day.toISOString()}:${periodId}`}))`;
+  const latest = await tx.attendanceEvent.findFirst({
+    where: { schoolId, studentId, attendanceDate: day, periodId, type: { in: ["in", "out"] } },
+    orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+    select: { id: true, type: true }
+  });
+  if (type === "in" && latest?.type === "in") throw new AppError("This student is already checked in for this attendance period.", 409, "ALREADY_CHECKED_IN");
+  if (type === "in" && latest?.type === "out") throw new AppError("This student's attendance period is already closed. A supervisor correction is required for another entry.", 409, "ATTENDANCE_CLOSED");
+  if (type === "out" && latest?.type !== "in") throw new AppError("The student must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
+}
+
 export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; type: "in" | "out"; verification: string; verificationMeta?: Record<string, unknown> }) {
   await requirePermission(tx, input.actorId, "attendance:staff_scan", input.schoolId);
   const staff = await tx.user.findFirst({ where: { id: input.actorId, schoolId: input.schoolId, status: "active" }, select: { id: true, schoolId: true, name: true } });
@@ -120,6 +132,7 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
   if (input.target.staffId) await validateStaffState(tx, input.schoolId, input.target.staffId, day, input.type);
+  else await validateStudentState(tx, input.schoolId, input.target.studentId, day, periodId, input.type);
   const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, studentId: input.target.studentId, staffId: input.target.staffId, type: input.type, method: input.method, timestamp, attendanceDate: day, isLate, confidenceScore: input.confidenceScore, deviceId: input.deviceId, recordedBy: input.actorId ?? null } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId ?? ("device:" + input.deviceId), action: "attendance.recorded", entityType: "AttendanceEvent", entityId: event.id, after: event });
   if (input.target.studentId) {
