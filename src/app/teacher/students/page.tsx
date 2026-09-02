@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
+import { roleKeyForName, isTeachingRoleKey } from "@/lib/authorization";
 import "@/app/globals.css";
 import "@/app/school/staff/staff-workspace.css";
 
@@ -12,15 +13,15 @@ export default async function TeacherStudentsPage() {
     where: { id: session.userId },
     select: {
       name: true,
-      userRoles: { select: { role: { select: { name: true } } } },
+      userRoles: { select: { role: { select: { key: true, name: true } } } },
       classTeacherFor: { select: { id: true, name: true, level: true } },
       subjectAssignments: { select: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } } } },
     },
   }));
   if (!data) redirect("/login/school");
-  const roles = data.userRoles.map((entry) => entry.role.name);
-  const isTeacher = roles.some((role) => /teacher|academic lead|head of department/i.test(role));
-  const elevated = roles.some((role) => /owner|administrator|principal|vice principal/i.test(role));
+  const roleKeys = data.userRoles.map((entry) => entry.role.key?.trim() || roleKeyForName(entry.role.name));
+  const isTeacher = roleKeys.some((key) => isTeachingRoleKey(key));
+  const elevated = roleKeys.some((key) => ["owner", "administrator", "principal", "vice_principal"].includes(key));
   if (!isTeacher || elevated) redirect("/dashboard");
 
   const classIds = [...new Set([...data.classTeacherFor.map((item) => item.id), ...data.subjectAssignments.map((item) => item.class.id)])];
@@ -31,7 +32,7 @@ export default async function TeacherStudentsPage() {
   }));
 
   return (
-    <AppShell universe="teacher" title="My Students" subtitle="Learners in the classes assigned to your teaching profile." active="My Students" schoolName="School Workspace" userName={data.name} role={roles[0] ?? "Teacher"}>
+    <AppShell universe="teacher" title="My Students" subtitle="Learners in the classes assigned to your teaching profile." active="My Students" schoolName="School Workspace" userName={data.name} role={data.userRoles[0]?.role.name ?? "Teacher"}>
       <div className="staff-workspace">
         <section className="staff-header"><div><span className="staff-eyebrow">TEACHER PORTAL · MY STUDENTS</span><h2>My student roster</h2><p>This list is calculated from your assigned class relationships. Students outside those classes are not included.</p></div><Link className="staff-primary-cta" href="/teacher">← Teacher home</Link></section>
         <section className="staff-metrics"><article><span>Students in scope</span><strong>{students.length}</strong><small>Assigned classes only</small></article><article><span>Classes in scope</span><strong>{classIds.length}</strong><small>Class lead + subject assignments</small></article><article><span>Class lead</span><strong>{data.classTeacherFor.length}</strong><small>Primary class responsibility</small></article><article><span>Subjects</span><strong>{new Set(data.subjectAssignments.map((item) => item.subject.id)).size}</strong><small>Teaching assignments</small></article></section>
