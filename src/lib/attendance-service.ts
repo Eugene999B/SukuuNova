@@ -118,7 +118,7 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
-  if (input.target.staffId && input.actorId && !input.deviceAuthenticated) await validateStaffState(tx, input.schoolId, input.target.staffId, day, input.type);
+  if (input.target.staffId) await validateStaffState(tx, input.schoolId, input.target.staffId, day, input.type);
   const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, studentId: input.target.studentId, staffId: input.target.staffId, type: input.type, method: input.method, timestamp, attendanceDate: day, isLate, confidenceScore: input.confidenceScore, deviceId: input.deviceId, recordedBy: input.actorId ?? null } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId ?? ("device:" + input.deviceId), action: "attendance.recorded", entityType: "AttendanceEvent", entityId: event.id, after: event });
   if (input.target.studentId) {
@@ -133,7 +133,7 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   if (input.target.staffId && isLate) {
     const [staff, hrUsers] = await Promise.all([
       tx.user.findFirst({ where: { id: input.target.staffId, schoolId: input.schoolId }, select: { name: true } }),
-      tx.user.findMany({ where: { schoolId: input.schoolId, phone: { not: null }, userRoles: { some: { role: { key: "hr_officer" } } } }, select: { id: true, phone: true } })
+      tx.user.findMany({ where: { schoolId: input.schoolId, phone: { not: null }, userRoles: { some: { role: { key: "hr_officer" } } }, }, select: { id: true, phone: true } })
     ]);
     for (const user of hrUsers) await enqueueSms(tx, { schoolId: input.schoolId, recipientType: "user", recipientId: user.id, recipientPhone: user.phone!, body: "SukuuNova alert: " + (staff?.name ?? "a staff member") + " checked in late.", templateKey: "staff_late", templateVariables: { "1": staff?.name ?? "Staff member", "2": timestamp.toISOString() } });
   }
