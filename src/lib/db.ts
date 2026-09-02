@@ -19,7 +19,7 @@ const READ_OPERATIONS = new Set(["findUnique", "findUniqueOrThrow", "findFirst",
 const UPDATE_OPERATIONS = new Set(["update", "updateMany", "updateManyAndReturn"]);
 const DELETE_OPERATIONS = new Set(["delete", "deleteMany"]);
 
-type MutableArgs = Record<string, any>;
+type MutableArgs = Record<string, unknown>;
 
 function assertNoContradictoryWhere(model: string, where: MutableArgs, schoolId: string) {
   if (model === "School" && typeof where.id === "string" && where.id !== schoolId) throw new TenantScopeError();
@@ -45,57 +45,36 @@ function tenantData(model: string, data: MutableArgs | MutableArgs[], schoolId: 
 function rejectTenantKeyMutation(model: string, data: MutableArgs | undefined, schoolId: string) {
   if (!data) return;
   const tenantKey = model === "School" ? "id" : "schoolId";
-  if (Object.prototype.hasOwnProperty.call(data, tenantKey) && data[tenantKey] !== schoolId) {
-    throw new TenantScopeError("Tenant ownership cannot be changed.");
-  }
+  if (Object.prototype.hasOwnProperty.call(data, tenantKey) && data[tenantKey] !== schoolId) throw new TenantScopeError("Tenant ownership cannot be changed.");
 }
 
 const globalForPrisma = globalThis as unknown as { sukuunovaPrisma?: PrismaClient };
-const basePrisma = globalForPrisma.sukuunovaPrisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-});
+const basePrisma = globalForPrisma.sukuunovaPrisma ?? new PrismaClient({ log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"] });
 if (process.env.NODE_ENV !== "production") globalForPrisma.sukuunovaPrisma = basePrisma;
-
 export const rawDb = basePrisma;
-
 export const db = basePrisma.$extends({
   name: "sukuunova-tenant-and-audit-guard",
   query: {
     $allModels: {
       $allOperations: async ({ model, operation, args, query }) => {
-        if (AUDIT_MODELS.has(model) && (UPDATE_OPERATIONS.has(operation) || DELETE_OPERATIONS.has(operation) || operation === "upsert")) {
-          throw new TenantScopeError("Audit logs are append-only.");
-        }
-        if (APPEND_ONLY_MODELS.has(model) && (UPDATE_OPERATIONS.has(operation) || DELETE_OPERATIONS.has(operation) || operation === "upsert")) {
-          throw new TenantScopeError("Financial ledger records are append-only.");
-        }
-        if (DELETE_PROTECTED_MODELS.has(model) && DELETE_OPERATIONS.has(operation)) {
-          throw new TenantScopeError("Invoices cannot be deleted.");
-        }
+        if (AUDIT_MODELS.has(model) && (UPDATE_OPERATIONS.has(operation) || DELETE_OPERATIONS.has(operation) || operation === "upsert")) throw new TenantScopeError("Audit logs are append-only.");
+        if (APPEND_ONLY_MODELS.has(model) && (UPDATE_OPERATIONS.has(operation) || DELETE_OPERATIONS.has(operation) || operation === "upsert")) throw new TenantScopeError("Financial ledger records are append-only.");
+        if (DELETE_PROTECTED_MODELS.has(model) && DELETE_OPERATIONS.has(operation)) throw new TenantScopeError("Invoices cannot be deleted.");
         if (!TENANT_MODELS.has(model)) return query(args);
-
         const schoolId = currentSchoolId();
         const next = { ...(args as MutableArgs) };
-
-        if (READ_OPERATIONS.has(operation)) {
-          next.where = tenantWhere(model, next.where, schoolId);
-        } else if (operation === "create") {
-          next.data = tenantData(model, next.data, schoolId);
-        } else if (operation === "createMany" || operation === "createManyAndReturn") {
-          next.data = tenantData(model, next.data, schoolId);
-        } else if (UPDATE_OPERATIONS.has(operation)) {
-          next.where = tenantWhere(model, next.where, schoolId);
-          rejectTenantKeyMutation(model, next.data, schoolId);
-        } else if (DELETE_OPERATIONS.has(operation)) {
-          next.where = tenantWhere(model, next.where, schoolId);
-        } else if (operation === "upsert") {
-          next.where = tenantWhere(model, next.where, schoolId);
-          next.create = tenantData(model, next.create, schoolId);
-          rejectTenantKeyMutation(model, next.update, schoolId);
-        } else {
-          throw new TenantScopeError("Unsupported tenant-scoped Prisma operation: " + operation);
-        }
-
+        if (READ_OPERATIONS.has(operation)) next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
+        else if (operation === "create") next.data = tenantData(model, next.data as MutableArgs, schoolId);
+        else if (operation === "createMany" || operation === "createManyAndReturn") next.data = tenantData(model, next.data as MutableArgs | MutableArgs[], schoolId);
+        else if (UPDATE_OPERATIONS.has(operation)) {
+          next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
+          rejectTenantKeyMutation(model, next.data as MutableArgs | undefined, schoolId);
+        } else if (DELETE_OPERATIONS.has(operation)) next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
+        else if (operation === "upsert") {
+          next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
+          next.create = tenantData(model, next.create as MutableArgs, schoolId);
+          rejectTenantKeyMutation(model, next.update as MutableArgs | undefined, schoolId);
+        } else throw new TenantScopeError("Unsupported tenant-scoped Prisma operation: " + operation);
         return query(next as typeof args);
       },
     },
@@ -103,7 +82,6 @@ export const db = basePrisma.$extends({
 });
 
 export type TenantDb = Prisma.TransactionClient;
-
 export async function withTenant<T>(schoolIdInput: string, work: (tx: TenantDb) => Promise<T>): Promise<T> {
   const schoolId = validateSchoolId(schoolIdInput);
   return tenantContext.run({ schoolId }, async () => db.$transaction(async (extendedTx) => {
