@@ -134,13 +134,13 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
     const setting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
     periodId = setting[0]?.value?.trim() || "DAILY";
   }
-  periodId = validatePeriodId(periodId);
-  await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
+  const validatedPeriodId = validatePeriodId(periodId);
+  await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${validatedPeriodId}, true)`;
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
   if (input.target.staffId) await validateStaffState(tx, input.schoolId, input.target.staffId, day, input.type);
-  else await validateStudentState(tx, input.schoolId, input.target.studentId, day, periodId, input.type);
+  else await validateStudentState(tx, input.schoolId, input.target.studentId, day, validatedPeriodId, input.type);
   const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, studentId: input.target.studentId, staffId: input.target.staffId, type: input.type, method: input.method, timestamp, attendanceDate: day, isLate, confidenceScore: input.confidenceScore, deviceId: input.deviceId, recordedBy: input.actorId ?? null } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId ?? ("device:" + input.deviceId), action: "attendance.recorded", entityType: "AttendanceEvent", entityId: event.id, after: event });
   if (input.target.studentId) {
