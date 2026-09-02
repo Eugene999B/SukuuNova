@@ -60,7 +60,7 @@ export async function POST(request: Request) {
       throw new AppError("Invalid device request payload.", 400, "INVALID_INPUT");
     }
 
-    await enforceDeviceAttendanceRateLimit(requestIp(request.headers), input.deviceSerial);
+    await enforceDeviceAttendanceRateLimit(requestIp(request.headers), input.deviceSerial, { skipIp: true });
 
     const timestamp = request.headers.get("x-device-timestamp") ?? "";
     const nonce = request.headers.get("x-device-nonce") ?? "";
