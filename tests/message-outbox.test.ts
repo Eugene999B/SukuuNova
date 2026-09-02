@@ -86,4 +86,62 @@ describe("message outbox", () => {
     ]);
     expect(providerCalls).toBe(1);
   });
+
+  it("reclaims an expired sending lease", async () => {
+    const fixture = await createTenantFixture();
+    await withTenant(fixture.schoolId, async (tx) => {
+      await tx.message.create({ data: {
+        schoolId: fixture.schoolId, channel: "sms", recipientType: "user", recipientId: fixture.memberId,
+        recipientPhone: "+233280000000", body: "Lease recovery", status: "sending", attempts: 1,
+        nextAttemptAt: new Date(Date.now() - 1_000), idempotencyKey: `test-lease:${fixture.schoolId}:${fixture.memberId}`
+      } });
+    });
+    let providerCalls = 0;
+    await processMessageBatchOnce({ sms: async () => { providerCalls += 1; } }, 1, fixture.schoolId);
+    expect(providerCalls).toBe(1);
+    await withTenant(fixture.schoolId, async (tx) => {
+      const message = await tx.message.findFirst({ where: { recipientPhone: "+233280000000" } });
+      expect(message?.status).toBe("sent"); expect(message?.attempts).toBe(2);
+    });
+  });
+
+  it("fences a stale worker so it cannot overwrite a newer lease owner", async () => {
+    const fixture = await createTenantFixture();
+    await withTenant(fixture.schoolId, async (tx) => {
+      await tx.message.create({ data: {
+        schoolId: fixture.schoolId, channel: "sms", recipientType: "user", recipientId: fixture.memberId,
+        recipientPhone: "+233290000000", body: "Lease fencing", status: "queued", attempts: 0,
+        nextAttemptAt: new Date(), idempotencyKey: `test-fence:${fixture.schoolId}:${fixture.memberId}`
+      } });
+    });
+    let providerCalls = 0;
+    let releaseFirst!: () => void;
+    const firstBlocked = new Promise<void>((resolve) => { releaseFirst = resolve; });
+    let firstStarted!: () => void;
+    const firstHasStarted = new Promise<void>((resolve) => { firstStarted = resolve; });
+    const sender = async () => {
+      providerCalls += 1;
+      if (providerCalls === 1) {
+        firstStarted();
+        await firstBlocked;
+      }
+    };
+    const firstWorker = processMessageBatchOnce({ sms: sender }, 1, fixture.schoolId);
+    await firstHasStarted;
+    await withTenant(fixture.schoolId, async (tx) => {
+      await tx.message.updateMany({
+        where: { recipientPhone: "+233290000000", status: "sending" },
+        data: { nextAttemptAt: new Date(Date.now() - 1_000) }
+      });
+    });
+    const secondWorker = processMessageBatchOnce({ sms: sender }, 1, fixture.schoolId);
+    await secondWorker;
+    releaseFirst();
+    await firstWorker;
+    expect(providerCalls).toBe(2);
+    await withTenant(fixture.schoolId, async (tx) => {
+      const message = await tx.message.findFirst({ where: { recipientPhone: "+233290000000" } });
+      expect(message?.status).toBe("sent"); expect(message?.attempts).toBe(2);
+    });
+  });
 });
