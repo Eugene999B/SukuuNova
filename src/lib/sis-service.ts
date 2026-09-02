@@ -13,6 +13,12 @@ export async function registerStudent(input: {
 }) {
   return withTenant(input.schoolId, async (tx) => {
     await requirePermission(tx, input.actorId, "students:write");
+    if (!input.name.trim()) throw new AppError("Student name is required.", 400, "NAME_REQUIRED");
+    if (!input.admissionNo.trim()) throw new AppError("Admission number is required.", 400, "ADMISSION_NUMBER_REQUIRED");
+    if (input.classId) {
+      const schoolClass = await tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId }, select: { id: true } });
+      if (!schoolClass) throw new AppError("The selected class does not belong to this school.", 400, "CLASS_NOT_FOUND");
+    }
     const student = await tx.student.create({ data: {
       schoolId: input.schoolId, admissionNo: input.admissionNo.trim(),
       name: input.name.trim(), dob: input.dob, classId: input.classId, photoUrl: input.photoUrl
