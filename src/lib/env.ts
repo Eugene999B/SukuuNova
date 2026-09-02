@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+const optionalString = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().min(1).optional(),
+);
+
+const optionalUrl = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().trim().url().optional(),
+);
+
 const productionSchema = z.object({
   NODE_ENV: z.literal("production"),
   DATABASE_URL: z.string().trim().min(1, "DATABASE_URL is required."),
@@ -7,17 +17,20 @@ const productionSchema = z.object({
 });
 
 const optionalSchema = z.object({
-  APP_URL: z.string().trim().url().optional(),
-  NEXT_PUBLIC_APP_URL: z.string().trim().url().optional(),
-  FACE_EMBEDDING_ENCRYPTION_KEY: z.string().min(32).optional(),
-  AWS_REGION: z.string().trim().min(1).optional(),
-  AWS_ACCESS_KEY_ID: z.string().trim().min(1).optional(),
-  AWS_SECRET_ACCESS_KEY: z.string().trim().min(1).optional(),
-  SMS_PROVIDER_URL: z.string().trim().url().optional(),
-  SMS_PROVIDER_TOKEN: z.string().trim().min(1).optional(),
-  TWILIO_ACCOUNT_SID: z.string().trim().min(1).optional(),
-  TWILIO_AUTH_TOKEN: z.string().trim().min(1).optional(),
-  TWILIO_WHATSAPP_FROM: z.string().trim().min(1).optional(),
+  APP_URL: optionalUrl,
+  NEXT_PUBLIC_APP_URL: optionalUrl,
+  FACE_EMBEDDING_ENCRYPTION_KEY: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().trim().min(32).optional(),
+  ),
+  AWS_REGION: optionalString,
+  AWS_ACCESS_KEY_ID: optionalString,
+  AWS_SECRET_ACCESS_KEY: optionalString,
+  SMS_PROVIDER_URL: optionalUrl,
+  SMS_PROVIDER_TOKEN: optionalString,
+  TWILIO_ACCOUNT_SID: optionalString,
+  TWILIO_AUTH_TOKEN: optionalString,
+  TWILIO_WHATSAPP_FROM: optionalString,
 });
 
 export function validateRuntimeEnv() {
@@ -38,6 +51,10 @@ export function validateRuntimeEnv() {
 
   if (optional.SMS_PROVIDER_URL && !optional.SMS_PROVIDER_TOKEN) {
     throw new Error("Invalid production environment configuration: SMS_PROVIDER_TOKEN is required when SMS_PROVIDER_URL is configured.");
+  }
+
+  if (optional.SMS_PROVIDER_TOKEN && !optional.SMS_PROVIDER_URL) {
+    throw new Error("Invalid production environment configuration: SMS_PROVIDER_URL is required when SMS_PROVIDER_TOKEN is configured.");
   }
 
   if (optional.TWILIO_ACCOUNT_SID || optional.TWILIO_AUTH_TOKEN || optional.TWILIO_WHATSAPP_FROM) {
