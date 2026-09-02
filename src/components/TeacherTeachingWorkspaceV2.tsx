@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 type Assignment = { classId: string; subjectId: string; class: { name: string; level: string | null }; subject: { name: string } };
 type Term = { id: string; name: string; academicYear?: { name: string } | null };
@@ -33,20 +33,20 @@ export default function TeacherTeachingWorkspaceV2({ assignments, terms, timetab
   const selectedAssignment = assignments[assignmentIndex];
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-  async function loadGradebook() {
+  const loadGradebook = useCallback(async () => {
     if (!selectedAssignment || !termId) return;
     setLoading(true); setError("");
     try {
       const data = await api(`/api/mvp/gradebook?classId=${encodeURIComponent(selectedAssignment.classId)}&subjectId=${encodeURIComponent(selectedAssignment.subjectId)}&termId=${encodeURIComponent(termId)}`);
       setGradebook({ students: data.students || [], assessments: data.assessments || [], scores: data.scores || [] });
     } catch (e) { setError(e instanceof Error ? e.message : "Could not load the gradebook."); } finally { setLoading(false); }
-  }
+  }, [selectedAssignment, termId]);
   async function loadHomework() {
     setError("");
     try { const data = await api("/api/school/homework"); setHomework(data.rows || []); }
     catch (e) { setError(e instanceof Error ? e.message : "Could not load homework."); }
   }
-  useEffect(() => { void loadGradebook(); }, [assignmentIndex, termId]);
+  useEffect(() => { void loadGradebook(); }, [loadGradebook]);
   useEffect(() => { if (tab === "homework") void loadHomework(); }, [tab]);
   const scoreMap = useMemo(() => new Map(gradebook.scores.map((s) => [`${s.studentId}:${s.assessmentId}`, Number(s.value)])), [gradebook.scores]);
 
