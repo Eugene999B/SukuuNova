@@ -123,6 +123,7 @@ export async function POST(request: Request) {
           schoolId: session.schoolId,
           actorId: session.userId,
           type: "in",
+          method: "qr",
           verification,
           verificationMeta: { networkMatch: sameNetwork, locationMatch: geoVerified, ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}) }
         });
