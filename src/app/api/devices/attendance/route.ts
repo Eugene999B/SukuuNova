@@ -66,6 +66,11 @@ export async function POST(request: Request) {
         signature
       });
 
+      const capturedAt = input.capturedAt ? new Date(input.capturedAt) : new Date();
+      if (Number.isNaN(capturedAt.getTime())) {
+        throw new AppError("Invalid device capture timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
+      }
+
       try {
         await tx.deviceAttendanceReceipt.create({
           data: {
@@ -73,7 +78,7 @@ export async function POST(request: Request) {
             deviceId: device.id,
             idempotencyKey: input.idempotencyKey,
             nonce,
-            capturedAt: input.capturedAt ? new Date(input.capturedAt) : null
+            capturedAt
           }
         });
       } catch (error) {
@@ -96,15 +101,12 @@ export async function POST(request: Request) {
         data: { lastSeenAt: serverReceivedAt }
       });
 
-      if (input.capturedAt) {
-        const capturedAt = new Date(input.capturedAt);
-        const deviationMs = Math.abs(serverReceivedAt.getTime() - capturedAt.getTime());
-        if (deviationMs > 10_000) {
-          console.warn("Device attendance capture time differs from server time; server time is authoritative", {
-            deviceId: device.id,
-            deviationMs
-          });
-        }
+      const deviationMs = Math.abs(serverReceivedAt.getTime() - capturedAt.getTime());
+      if (deviationMs > 10_000) {
+        console.warn("Device attendance capture time differs from server time", {
+          deviceId: device.id,
+          deviationMs
+        });
       }
 
       if (input.periodId) {
@@ -119,7 +121,9 @@ export async function POST(request: Request) {
           image: input.image,
           deviceId: device.id,
           type: input.type,
-          deviceAuthenticated: true
+          deviceAuthenticated: true,
+          periodId: input.periodId,
+          timestamp: capturedAt
         });
       } else if (input.kind === "fingerprint") {
         if (!input.externalId) throw new AppError("Fingerprint device events require externalId.", 400, "INVALID_INPUT");
@@ -129,7 +133,8 @@ export async function POST(request: Request) {
           externalId: input.externalId,
           confidence: input.confidence,
           type: input.type,
-          periodId: input.periodId
+          periodId: input.periodId,
+          timestamp: capturedAt
         });
       } else {
         if (!input.externalId) throw new AppError("Card device events require externalId.", 400, "INVALID_INPUT");
@@ -139,7 +144,8 @@ export async function POST(request: Request) {
           externalId: input.externalId,
           confidence: input.confidence,
           type: input.type,
-          periodId: input.periodId
+          periodId: input.periodId,
+          timestamp: capturedAt
         });
       }
 
