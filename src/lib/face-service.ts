@@ -127,6 +127,8 @@ export async function matchFaceAttendance(
     deviceId?: string;
     type: "in" | "out";
     deviceAuthenticated?: boolean;
+    periodId?: string;
+    timestamp?: Date;
   },
   provider: FaceProvider = awsFaceProvider
 ) {
@@ -168,7 +170,9 @@ export async function matchFaceAttendance(
         candidateStudentId: enrollment?.studentId,
         candidateStaffId: enrollment?.staffId,
         confidenceScore: confidence,
-        deviceId: input.deviceId
+        deviceId: input.deviceId,
+        periodId: input.periodId?.trim() || "DAILY",
+        capturedAt: input.timestamp ?? new Date()
       }
     });
     return {
@@ -187,7 +191,9 @@ export async function matchFaceAttendance(
     type: input.type,
     method: "face",
     confidenceScore: confidence,
-    deviceId: input.deviceId
+    deviceId: input.deviceId,
+    periodId: input.periodId,
+    timestamp: input.timestamp
   });
   return { status: "recorded" as const, event };
 }
@@ -248,7 +254,9 @@ export async function reviewFaceMatch(
     confidenceScore: review.confidenceScore
       ? Number(review.confidenceScore)
       : undefined,
-    deviceId: review.deviceId ?? undefined
+    deviceId: review.deviceId ?? undefined,
+    periodId: review.periodId,
+    timestamp: review.capturedAt ?? undefined
   });
   const confirmed = await tx.faceMatchReview.update({
     where: { id: review.id },
