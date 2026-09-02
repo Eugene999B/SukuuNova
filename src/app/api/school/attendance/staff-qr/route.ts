@@ -104,6 +104,23 @@ export async function POST(request: Request) {
       }
 
       const verification = sameNetwork && geoVerified ? "qr+network+location" : sameNetwork ? "qr+network" : "qr+location";
+
+      // Record the attendance before consuming the challenge. If another request
+      // wins the one-time challenge race, this transaction rolls back the event.
+      // This preserves the stronger invariant: a challenge is consumed only when
+      // a real staff attendance event successfully commits with it.
+      const event = await recordStaffSelfAttendance(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        type: "in",
+        verification,
+        verificationMeta: {
+          networkMatch: sameNetwork,
+          locationMatch: geoVerified,
+          ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {})
+        }
+      });
+
       await consumeStaffAttendanceQr(tx, {
         schoolId: session.schoolId,
         actorId: session.userId,
@@ -118,17 +135,6 @@ export async function POST(request: Request) {
         }
       });
 
-      const event = await recordStaffSelfAttendance(tx, {
-        schoolId: session.schoolId,
-        actorId: session.userId,
-        type: "in",
-        verification,
-        verificationMeta: {
-          networkMatch: sameNetwork,
-          locationMatch: geoVerified,
-          ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {})
-        }
-      });
       return { event, verification };
     });
 
