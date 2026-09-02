@@ -12,6 +12,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { cachedSchoolRead } from "@/lib/school-cache";
 import { requirePermission } from "@/lib/rbac";
+import { ensureIdentityCardsForSchool } from "@/lib/identity-card-service";
 import "./students-workspace.css";
 import "./students-light-theme.css";
 import "./students-light-overrides.css";
@@ -63,6 +64,9 @@ async function createStudent(formData: FormData) {
       const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
       await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });
     }
+    const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
+    if (!school?.uniqueCode) throw new Error("The school's identification code is missing.");
+    await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
   });
   revalidatePath("/school/students");
