@@ -1,0 +1,5 @@
+.finance-app{color-scheme:light}
+.finance-app :where(h1,h2,h3,h4,h5,h6,p,span,div,label,td,th,small,b,strong){color:var(--ink)}
+.finance-app .text-white:not(button):not([role="button"]){color:var(--ink)!important}
+.finance-app .text-slate-300,.finance-app .text-slate-400,.finance-app .text-slate-500{color:var(--muted)!important}
+.finance-app input,.finance-app textarea,.finance-app select{color-scheme:light;color:var(--ink)}
