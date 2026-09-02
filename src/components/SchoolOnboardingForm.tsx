@@ -5,7 +5,7 @@ import { FormEvent, useState } from "react";
 type CreatedSchool = { name: string; uniqueCode: string; ownerEmail: string; ownerPassword: string };
 
 export function SchoolOnboardingForm() {
-  const [notice, setNotice] = useState("Create a tenant with all default Phase 1 roles and permissions.");
+  const [notice, setNotice] = useState("Create a tenant with all default school roles and permissions.");
   const [created, setCreated] = useState<CreatedSchool | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
