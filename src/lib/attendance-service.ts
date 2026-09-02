@@ -24,12 +24,8 @@ function attendanceDate(value: Date, timezone: string) {
   return new Date(localParts(value, timezone).dateKey + "T00:00:00.000Z");
 }
 
-function localCalendarDate(value: Date, timezone: string) {
-  return localParts(value, timezone).dateKey;
-}
-
 export async function isAttendanceBlocked(tx: TenantDb, day: Date) {
-  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: day.toISOString().slice(0, 10) }, select: { timezone: true } }).catch(() => null);
+  const settings = await tx.schoolSettings.findFirst({ select: { timezone: true } });
   const timezone = settings?.timezone || "Africa/Accra";
   const targetDate = day.toISOString().slice(0, 10);
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
@@ -45,9 +41,7 @@ export async function isAttendanceBlocked(tx: TenantDb, day: Date) {
 
 export async function authorizeStudentAttendance(tx: TenantDb, actorId: string, studentId: string) {
   if (await hasPermission(tx, actorId, "attendance:record_all")) return;
-  if (!(await hasPermission(tx, actorId, "attendance:record_assigned"))) {
-    throw new ForbiddenError("You are not permitted to record this student's attendance.");
-  }
+  if (!(await hasPermission(tx, actorId, "attendance:record_assigned"))) throw new ForbiddenError("You are not permitted to record this student's attendance.");
   const assigned = await tx.student.findFirst({ where: { id: studentId, class: { classTeacherId: actorId } }, select: { id: true } });
   if (!assigned) throw new ForbiddenError("Teachers may record attendance only for their assigned class.");
 }
@@ -69,18 +63,16 @@ export async function recordStaffSelfAttendance(
   await requirePermission(tx, input.actorId, "attendance:staff_scan");
   const staff = await tx.user.findFirst({ where: { id: input.actorId, schoolId: input.schoolId, status: "active" }, select: { id: true, schoolId: true, name: true } });
   if (!staff) throw new ForbiddenError("Only an active staff account in this school can use staff check-in.");
-
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
 
   const timestamp = new Date();
   const day = attendanceDate(timestamp, settings.timezone);
-  if (await isAttendanceBlockedForSchool(tx, input.schoolId, day, settings.timezone)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
+  if (await isAttendanceBlocked(tx, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
 
   const periodSetting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
   const periodId = periodSetting[0]?.value?.trim() || "DAILY";
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
-
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
@@ -93,20 +85,6 @@ export async function recordStaffSelfAttendance(
   const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, staffId: input.actorId, type: input.type, method: "qr", timestamp, attendanceDate: day, isLate, recordedBy: input.actorId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: input.type === "in" ? "attendance.staff.checked_in" : "attendance.staff.checked_out", entityType: "AttendanceEvent", entityId: event.id, after: { event, verification: input.verification, ...(input.verificationMeta ? { verificationMeta: input.verificationMeta } : {}) } });
   return event;
-}
-
-async function isAttendanceBlockedForSchool(tx: TenantDb, schoolId: string, day: Date, timezone: string) {
-  const targetDate = localCalendarDate(day, "UTC");
-  const rows = await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT "id"
-    FROM "CalendarEvent"
-    WHERE "schoolId" = ${schoolId}
-      AND "affectsAttendance" = true
-      AND ("startDate" AT TIME ZONE 'UTC' AT TIME ZONE ${timezone})::date <= ${targetDate}::date
-      AND ("endDate" AT TIME ZONE 'UTC' AT TIME ZONE ${timezone})::date >= ${targetDate}::date
-    LIMIT 1
-  `;
-  return rows.length > 0;
 }
 
 async function authorizedSummaryClassFilter(tx: TenantDb, actorId: string, requestedClassId?: string) {
@@ -149,7 +127,7 @@ export async function recordAttendance(
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
   const timestamp = new Date();
   const day = attendanceDate(timestamp, settings.timezone);
-  if (await isAttendanceBlockedForSchool(tx, input.schoolId, day, settings.timezone)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
+  if (await isAttendanceBlocked(tx, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
 
   let periodId = input.periodId?.trim();
   if (!periodId) {
@@ -190,7 +168,7 @@ export async function recordAttendance(
 export async function attendanceSummary(tx: TenantDb, input: { actorId: string; day: Date; classId?: string }) {
   await requirePermission(tx, input.actorId, "attendance:record");
   const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
-  if (await isAttendanceBlockedForSchool(tx, (await tx.user.findUnique({ where: { id: input.actorId }, select: { schoolId: true } }))?.schoolId ?? "", input.day, "Africa/Accra")) return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
+  if (await isAttendanceBlocked(tx, input.day)) return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
   const events = await tx.attendanceEvent.findMany({ where: { attendanceDate: input.day, type: "in", student: classFilter }, select: { studentId: true, isLate: true } });
   const total = await tx.student.count({ where: { status: "active", ...classFilter } });
   const presentIds = new Set(events.flatMap((event) => event.studentId ? [event.studentId] : []));
@@ -200,8 +178,7 @@ export async function attendanceSummary(tx: TenantDb, input: { actorId: string; 
 export async function finalizeStudentAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; day: Date; classId?: string }) {
   await requirePermission(tx, input.actorId, "attendance:record");
   const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
-  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { timezone: true } });
-  if (await isAttendanceBlockedForSchool(tx, input.schoolId, input.day, settings?.timezone || "Africa/Accra")) return { queued: 0, calendarBlocked: true };
+  if (await isAttendanceBlocked(tx, input.day)) return { queued: 0, calendarBlocked: true };
   const students = await tx.student.findMany({ where: { status: "active", ...classFilter }, include: { attendanceEvents: { where: { attendanceDate: input.day, type: "in" }, select: { id: true } }, guardians: { where: { isPrimary: true }, include: { guardian: true } } } });
   let queued = 0;
   for (const student of students) {
