@@ -66,12 +66,12 @@ export async function recordStaffSelfAttendance(
     verificationMeta?: Record<string, unknown>;
   }
 ) {
-  await requirePermission(tx, input.actorId, "attendance:view_own");
+  await requirePermission(tx, input.actorId, "attendance:staff_scan");
   const staff = await tx.user.findFirst({
-    where: { id: input.actorId, status: "active" },
+    where: { id: input.actorId, schoolId: input.schoolId, status: "active" },
     select: { id: true, schoolId: true, name: true }
   });
-  if (!staff || staff.schoolId !== input.schoolId) {
+  if (!staff) {
     throw new ForbiddenError("Only an active staff account in this school can use staff check-in.");
   }
 
@@ -99,16 +99,23 @@ export async function recordStaffSelfAttendance(
     : null;
 
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`staff-attendance:${input.schoolId}:${input.actorId}:${day.toISOString()}:${input.type}`}))`;
-  const existing = await tx.attendanceEvent.findFirst({
-    where: { staffId: input.actorId, attendanceDate: day, type: input.type },
-    select: { id: true, timestamp: true, method: true }
+
+  const latest = await tx.attendanceEvent.findFirst({
+    where: {
+      schoolId: input.schoolId,
+      staffId: input.actorId,
+      attendanceDate: day,
+      type: { in: ["in", "out"] }
+    },
+    orderBy: { timestamp: "desc" },
+    select: { id: true, type: true }
   });
-  if (existing) {
-    throw new AppError(
-      input.type === "in" ? "You are already checked in for today." : "You are already checked out for today.",
-      409,
-      "ATTENDANCE_ALREADY_RECORDED"
-    );
+
+  if (input.type === "in" && latest?.type === "in") {
+    throw new AppError("You are already checked in for today.", 409, "ALREADY_CHECKED_IN");
+  }
+  if (input.type === "out" && latest?.type !== "in") {
+    throw new AppError("You must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
   }
 
   const event = await tx.attendanceEvent.create({
@@ -127,7 +134,7 @@ export async function recordStaffSelfAttendance(
   await appendSchoolAudit(tx, {
     schoolId: input.schoolId,
     actorId: input.actorId,
-    action: "attendance.recorded",
+    action: input.type === "in" ? "attendance.staff.checked_in" : "attendance.staff.checked_out",
     entityType: "AttendanceEvent",
     entityId: event.id,
     after: { event, verification: input.verification, ...(input.verificationMeta ? { verificationMeta: input.verificationMeta } : {}) }
@@ -164,7 +171,7 @@ export async function recordAttendance(
   tx: TenantDb,
   input: {
     schoolId: string; actorId?: string; target: AttendanceTarget; type: "in" | "out";
-    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; timestamp?: Date; deviceAuthenticated?: boolean; periodId?: string;
+    method: "manual" | "qr" | "face" | "fingerprint" | "card"; confidenceScore?: number; deviceId?: string; deviceAuthenticated?: boolean; periodId?: string;
   }
 ) {
   if (input.deviceAuthenticated) {
