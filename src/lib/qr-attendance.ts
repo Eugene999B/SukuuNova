@@ -178,7 +178,10 @@ export async function consumeStaffAttendanceQr(
     throw new AppError("This attendance code is invalid or expired.", 409, "CHALLENGE_INVALID_OR_EXPIRED");
   }
 
-  const id = hashQrSecret(`staff-qr-consumption:${input.schoolId}:${input.challengeId}:${input.nonce}:${input.actorId}`);
+  // The challenge identifier is the one-time consumption key. Do not include
+  // actorId here: a school-wide challenge must be consumable by at most one
+  // authenticated staff account, even when concurrent scans race.
+  const id = hashQrSecret(`staff-qr-consumption:${input.schoolId}:${input.challengeId}`);
   const result = await tx.auditLogSchool.createMany({
     data: [{
       id,
@@ -196,7 +199,7 @@ export async function consumeStaffAttendanceQr(
     skipDuplicates: true
   });
   if (result.count !== 1) {
-    throw new AppError("This attendance code has already been used on this account.", 409, "QR_REPLAY");
+    throw new AppError("This attendance code has already been used.", 409, "QR_REPLAY");
   }
 }
 
