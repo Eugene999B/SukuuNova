@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createStaffAttendanceQr, consumeStaffAttendanceQr, freshChallengeId, freshNonce, hashQrSecret, verifyStaffAttendanceQr } from "@/lib/qr-attendance";
+import { createStaffAttendanceQr, consumeStaffAttendanceQr, freshChallengeId, freshNonce, hashQrSecret, verifyStaffAttendanceQr, clientIpFromHeaders } from "@/lib/qr-attendance";
 import { jwtVerify } from "jose";
 
 const TEST_SECRET = "qr-attendance-test-secret-01234567890123456789";
@@ -117,5 +117,14 @@ describe("staff attendance QR", () => {
       code: "QR_REPLAY",
       status: 409
     });
+  });
+
+  it("does not treat x-forwarded-for as a trusted network identity", () => {
+    const headers = new Headers({
+      "x-forwarded-for": "198.51.100.1",
+      "x-real-ip": "203.0.113.7"
+    });
+    expect(clientIpFromHeaders(headers)).toBe("203.0.113.7");
+    expect(clientIpFromHeaders(new Headers({ "x-forwarded-for": "198.51.100.1" }))).toBe("unknown");
   });
 });
