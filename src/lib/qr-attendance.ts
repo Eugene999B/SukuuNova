@@ -25,9 +25,13 @@ export function hashQrSecret(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+/**
+ * Return only a proxy-supplied real-IP header for security decisions.
+ * Do not use the first x-forwarded-for value: it may contain an untrusted
+ * client-supplied value unless the deployment explicitly guarantees a trusted chain.
+ */
 export function clientIpFromHeaders(headers: Headers) {
-  const forwarded = headers.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return forwarded || headers.get("x-real-ip")?.trim() || "unknown";
+  return headers.get("x-real-ip")?.trim() || "unknown";
 }
 
 export function hashClientIp(ip: string) {
