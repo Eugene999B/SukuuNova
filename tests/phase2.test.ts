@@ -329,6 +329,7 @@ describe("Phase 2 differentiator safety gates", () => {
       });
 
       const result = await suggestSubstitutes(tx, {
+        schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
         absentTeacherId: staffId,
         day,
