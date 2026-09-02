@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
-import { attendanceSummary, authorizeStaffAttendance, authorizeStudentAttendance, finalizeStudentAttendance, recordAttendance } from "@/lib/attendance-service";
-import { createAttendanceQr, verifyAttendanceQr } from "@/lib/qr-attendance";
+import { attendanceSummary, finalizeStudentAttendance, recordAttendance } from "@/lib/attendance-service";
 import { requirePermission } from "@/lib/rbac";
+import { z } from "zod";
 
 const target = z.union([
   z.object({ studentId: z.string(), staffId: z.never().optional() }),
@@ -14,10 +13,8 @@ const target = z.union([
 ]);
 const periodId = z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/).optional();
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("record"), target, type: z.enum(["in", "out"]), periodId, timestamp: z.coerce.date().optional() }),
-  z.object({ action: z.literal("finalize"), day: z.coerce.date(), classId: z.string().optional() }),
-  z.object({ action: z.literal("qrToken"), kind: z.enum(["student", "staff"]), id: z.string() }),
-  z.object({ action: z.literal("qrScan"), token: z.string(), type: z.enum(["in", "out"]), periodId, timestamp: z.coerce.date().optional() })
+  z.object({ action: z.literal("record"), target, type: z.enum(["in", "out"]), periodId }),
+  z.object({ action: z.literal("finalize"), day: z.coerce.date(), classId: z.string().optional() })
 ]);
 
 export async function GET(request: Request) {
@@ -38,30 +35,18 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       if (input.action === "record") {
-        return recordAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, target: input.target, type: input.type, method: "manual", timestamp: input.timestamp, periodId: input.periodId });
-      }
-      if (input.action === "finalize") {
-        return finalizeStudentAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, day: input.day, classId: input.classId });
-      }
-      if (input.action === "qrToken") {
         await requirePermission(tx, session.userId, "attendance:record");
-        if (input.kind === "staff") {
-          await authorizeStaffAttendance(tx, session.userId);
-        } else {
-          await authorizeStudentAttendance(tx, session.userId, input.id);
-        }
-        return { token: await createAttendanceQr(session.schoolId, { kind: input.kind, id: input.id }) };
+        return recordAttendance(tx, {
+          schoolId: session.schoolId,
+          actorId: session.userId,
+          target: input.target,
+          type: input.type,
+          method: "manual",
+          periodId: input.periodId
+        });
       }
-      const verified = await verifyAttendanceQr(input.token, session.schoolId);
-      return recordAttendance(tx, {
-        schoolId: session.schoolId,
-        actorId: session.userId,
-        target: verified.kind === "student" ? { studentId: verified.id } : { staffId: verified.id },
-        type: input.type,
-        method: "qr",
-        timestamp: input.timestamp,
-        periodId: input.periodId
-      });
+      await requirePermission(tx, session.userId, "attendance:record");
+      return finalizeStudentAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, day: input.day, classId: input.classId });
     });
     return NextResponse.json({ ok: true, result });
   } catch (error) { return routeError(error); }
