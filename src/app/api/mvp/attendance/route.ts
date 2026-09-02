@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Invalid attendance period." }, { status: 400 });
     }
     const result = await withTenant(session.schoolId, (tx) =>
-      attendanceSummary(tx, { actorId: session.userId, day, classId: url.searchParams.get("classId") ?? undefined, periodId: requestedPeriod })
+      attendanceSummary(tx, { actorId: session.userId, day, classId: url.searchParams.get("classId") ?? undefined, periodId: requestedPeriod, schoolId: session.schoolId })
     );
     return NextResponse.json(result);
   } catch (error) { return routeError(error); }
