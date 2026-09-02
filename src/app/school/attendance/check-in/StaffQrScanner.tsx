@@ -45,10 +45,11 @@ export default function StaffQrScanner() {
                 );
               });
             }
+            const idempotencyKey = crypto.randomUUID();
             const response = await fetch("/api/school/attendance/staff-qr", {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ action: "scan", token: decoded, location })
+              body: JSON.stringify({ action: "scan", token: decoded, location, idempotencyKey })
             });
             const body = await response.json();
             if (!response.ok) throw new Error(body.error ?? "Unable to complete school check-in.");
