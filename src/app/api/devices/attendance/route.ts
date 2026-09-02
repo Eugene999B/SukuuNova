@@ -127,7 +127,7 @@ export async function POST(request: Request) {
             select: { id: true }
           });
           if (reusedNonce) {
-            throw new UnauthorizedError("Device nonce has already been used.", "REPLAY_DETECTED");
+            throw new AppError("Device nonce has already been used.", 401, "REPLAY_DETECTED");
           }
         }
         throw error;
