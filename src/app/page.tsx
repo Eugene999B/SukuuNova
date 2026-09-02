@@ -6,6 +6,7 @@ import "./home-redesign.css";
 import "./home-premium.css";
 import "./theme-home.css";
 import "./theme-brand.css";
+import "./home-photos.css";
 import { HomeLeadChat } from "@/components/HomeLeadChat";
 import { HomeProductPreview } from "@/components/HomeProductPreview";
 
@@ -14,6 +15,12 @@ const modules = [
   ["Teaching & learning", "Plan classes, lessons, marks, homework and reports in one place.", GraduationCap, "/features/academics"],
   ["Attendance & safety", "Record attendance, follow absences and keep families informed.", ShieldCheck, "/features/attendance-safety"],
   ["Fees & finance", "Track fees, invoices, payments, balances and receipts clearly.", WalletCards, "/features/fees-finance"],
+] as const;
+
+const photoItems = [
+  ["Duck-ai-image-2026-09-01-06-50 (1).jpeg", "A school environment designed for people and progress."],
+  ["Duck-ai-image-2026-09-01-06-50 (2).jpeg", "Bring the everyday school experience into one connected system."],
+  ["Duck-ai-image-2026-09-01-06-51 (1).jpeg", "Give staff and families a clearer view of school life."],
 ] as const;
 
 export default function HomePage() {
@@ -49,6 +56,13 @@ export default function HomePage() {
             <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>Made for everyday school work.</strong><span>Keep people, classes, attendance, communication and finance together without making the job harder.</span></div></div>
           </div>
           <HomeProductPreview />
+        </section>
+
+        <section className="photo-showcase" aria-label="SukuuNova in the real school day">
+          <div className="photo-showcase-copy"><span className="section-kicker">A PLATFORM WITH A HUMAN FEEL</span><h2>Technology that still feels like school.</h2><p>Use the real school day as the centre of the experience — from classrooms and people to communication, attendance and family connection.</p></div>
+          <div className="photo-grid">
+            {photoItems.map(([src, alt]) => <div className="photo-card" key={src}><Image src={`/brand/${src}`} alt={alt} fill sizes="(max-width: 760px) 100vw, 33vw" /></div>)}
+          </div>
         </section>
 
         <section className="intent-grid" id="how-it-works" aria-label="Who SukuuNova is for">

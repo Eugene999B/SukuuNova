@@ -1,13 +1,17 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Building2, HeartHandshake, ShieldCheck, UsersRound } from "lucide-react";
 import { LoginForm } from "@/components/LoginForm";
 import "../login.css";
 import "./gateway.css";
+import "../login-photo.css";
 
 export default function SchoolLoginPage() {
   return (
     <main className="auth-shell">
-      <section className="auth-visual" aria-label="SukuuNova school access">
+      <section className="auth-visual auth-photo-visual" aria-label="SukuuNova school access">
+        <Image className="auth-photo-image" src="/brand/sukuu-school-login.jpeg" alt="A welcoming school environment" fill priority sizes="(max-width: 900px) 100vw, 54vw" />
+        <div className="auth-photo-overlay" aria-hidden="true" />
         <div className="auth-copy">
           <div className="auth-kicker"><span className="auth-dot" /> School operations</div>
           <h2>Manage the school with <span>clarity.</span></h2>
