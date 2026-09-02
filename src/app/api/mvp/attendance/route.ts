@@ -22,8 +22,12 @@ export async function GET(request: Request) {
     const session = await requireSchoolSession();
     const url = new URL(request.url);
     const day = new Date(url.searchParams.get("day") ?? new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+    const requestedPeriod = url.searchParams.get("periodId") ?? undefined;
+    if (requestedPeriod && !/^[A-Za-z0-9_-]{1,64}$/.test(requestedPeriod.trim())) {
+      return NextResponse.json({ error: "Invalid attendance period." }, { status: 400 });
+    }
     const result = await withTenant(session.schoolId, (tx) =>
-      attendanceSummary(tx, { actorId: session.userId, day, classId: url.searchParams.get("classId") ?? undefined })
+      attendanceSummary(tx, { actorId: session.userId, day, classId: url.searchParams.get("classId") ?? undefined, periodId: requestedPeriod })
     );
     return NextResponse.json(result);
   } catch (error) { return routeError(error); }
