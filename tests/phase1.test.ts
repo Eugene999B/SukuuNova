@@ -206,7 +206,7 @@ describe("Phase 1 MVP security and workflow gates", () => {
           target: { studentId },
           type: "in",
           method: "manual",
-          timestamp: new Date("2000-01-01T00:00:00.000Z"),
+          timestamp: new Date("2000-01-01T08:11:00.000Z"),
         });
         expect(event.isLate).toBe(true);
 
