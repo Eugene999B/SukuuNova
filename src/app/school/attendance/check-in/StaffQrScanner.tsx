@@ -6,10 +6,13 @@ import { useEffect, useRef, useState } from "react";
 export default function StaffQrScanner() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
+  const doneRef = useRef(false);
   const [cameraError, setCameraError] = useState("");
   const [message, setMessage] = useState("Point your rear camera at the live school QR code.");
   const [working, setWorking] = useState(false);
   const [done, setDone] = useState(false);
+
+  useEffect(() => { doneRef.current = done; }, [done]);
 
   useEffect(() => {
     let cancelled = false;
@@ -25,7 +28,7 @@ export default function StaffQrScanner() {
         const canvas = new QRCanvas();
         let busy = false;
         const cancelLoop = frameLoop(async () => {
-          if (busy || done || working) return;
+          if (busy || doneRef.current) return;
           const decoded = camera.readFrame(canvas);
           if (decoded === undefined || !decoded) return;
           busy = true;
@@ -49,6 +52,7 @@ export default function StaffQrScanner() {
             });
             const body = await response.json();
             if (!response.ok) throw new Error(body.error ?? "Unable to complete school check-in.");
+            doneRef.current = true;
             setDone(true);
             setMessage(body.result?.verification ? `Checked in successfully · ${body.result.verification}` : "Checked in successfully.");
             camera.stop();
@@ -66,7 +70,7 @@ export default function StaffQrScanner() {
     }
     void start();
     return () => { cancelled = true; stopRef.current?.(); };
-  }, [done, working]);
+  }, []);
 
   return <div className="mx-auto max-w-2xl">
     <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
