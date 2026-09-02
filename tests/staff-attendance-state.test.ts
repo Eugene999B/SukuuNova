@@ -18,6 +18,7 @@ describe("staff attendance state machine", () => {
           schoolId: fixture.schoolId,
           actorId: fixture.ownerId,
           type: "out",
+          method: "manual",
           verification: "test"
         })
       ).rejects.toMatchObject({ code: "INVALID_CHECKOUT_STATE", status: 409 });
@@ -26,6 +27,7 @@ describe("staff attendance state machine", () => {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
         type: "in",
+        method: "manual",
         verification: "test"
       });
 
@@ -33,6 +35,7 @@ describe("staff attendance state machine", () => {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
         type: "out",
+        method: "manual",
         verification: "test"
       });
 
@@ -41,6 +44,7 @@ describe("staff attendance state machine", () => {
           schoolId: fixture.schoolId,
           actorId: fixture.ownerId,
           type: "out",
+          method: "manual",
           verification: "test"
         })
       ).rejects.toMatchObject({ code: "INVALID_CHECKOUT_STATE", status: 409 });
@@ -50,6 +54,7 @@ describe("staff attendance state machine", () => {
           schoolId: fixture.schoolId,
           actorId: fixture.ownerId,
           type: "in",
+          method: "manual",
           verification: "test"
         })
       ).rejects.toMatchObject({ code: "ATTENDANCE_CLOSED", status: 409 });
