@@ -14,10 +14,13 @@ export default async function IdentityCardVerificationPage({
   const code = schoolCode.trim().toLowerCase();
   const directory = await rawDb.schoolLoginDirectory.findUnique({ where: { uniqueCode: code }, select: { schoolId: true, status: true } });
   if (!directory || directory.status !== "active" || !sig) notFound();
-  const result = await publicIdentityCardBySerial(directory.schoolId, code, serial, sig);
+
+  const result = await publicIdentityCardBySerial(directory.schoolId, serial, sig);
   if (!result) notFound();
 
   const verified = result.state === "verified";
+  const schoolName = result.school.name;
+
   return (
     <main className="min-h-screen bg-slate-100 px-5 py-10 text-slate-900">
       <div className="mx-auto max-w-xl">
@@ -25,7 +28,7 @@ export default async function IdentityCardVerificationPage({
           <div className="bg-slate-950 px-6 py-7 text-white sm:px-8">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">SukuuNova identity verification</p>
             <h1 className="mt-2 text-2xl font-bold sm:text-3xl">{result.card.personName}</h1>
-            <p className="mt-1 text-sm text-slate-300">{result.card.personType === "student" ? "Student" : "Staff"} · {schoolCode.toUpperCase()}</p>
+            <p className="mt-1 text-sm text-slate-300">{result.card.personType === "student" ? "Student" : "Staff"} · {schoolName}</p>
           </div>
           <div className="space-y-6 p-6 sm:p-8">
             <div className={`rounded-2xl border p-4 ${verified ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
@@ -37,7 +40,7 @@ export default async function IdentityCardVerificationPage({
               </p>
             </div>
             <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">School</dt><dd className="mt-1 font-semibold">{schoolCode.toUpperCase()}</dd></div>
+              <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">School</dt><dd className="mt-1 font-semibold">{schoolName}</dd></div>
               <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Card serial</dt><dd className="mt-1 break-all font-mono text-sm">{result.card.serial}</dd></div>
               {result.card.personType === "student" ? <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Admission number</dt><dd className="mt-1 font-semibold">{result.card.admissionNo ?? "Not available"}</dd></div> : null}
               {result.card.personType === "student" ? <div><dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">Class</dt><dd className="mt-1 font-semibold">{result.card.className ?? "Not assigned"}</dd></div> : null}
