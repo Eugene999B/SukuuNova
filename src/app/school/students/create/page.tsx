@@ -37,6 +37,8 @@ async function createStudent(formData: FormData) {
       if (!schoolClass) throw new Error("The selected class does not belong to this school.");
     }
 
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${session.schoolId}`}))`;
+
     let indexNumber = createIndexNumber();
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const exists = await tx.student.findFirst({ where: { schoolId: session.schoolId, admissionNo: indexNumber }, select: { id: true } });
@@ -51,32 +53,20 @@ async function createStudent(formData: FormData) {
       await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });
     }
 
-    const leastFilledHouse = await tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT h."id",h."name" FROM "House" h LEFT JOIN "Student" s ON s."houseId"=h."id" AND s."schoolId"=h."schoolId" AND s."status"='active' WHERE h."schoolId"=${session.schoolId} AND h."isActive"=true GROUP BY h."id",h."name" ORDER BY COUNT(s."id") ASC,h."name" ASC LIMIT 1`;
-    const house = leastFilledHouse[0] ?? null;
-    if (house) await tx.$executeRaw`UPDATE "Student" SET "houseId"=${house.id} WHERE "id"=${student.id} AND "schoolId"=${session.schoolId}`;
+    const houses = await tx.house.findMany({ where: { schoolId: session.schoolId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+    let house = null as { id: string; name: string } | null;
+    if (houses.length) {
+      const grouped = await tx.student.groupBy({ by: ["houseId"], where: { schoolId: session.schoolId, status: "active", houseId: { not: null } }, _count: { _all: true } });
+      const counts = new Map(houses.map((item) => [item.id, grouped.find((row) => row.houseId === item.id)?._count._all ?? 0]));
+      house = [...houses].sort((a, b) => (counts.get(a.id)! - counts.get(b.id)!) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))[0] ?? null;
+      if (house) await tx.student.update({ where: { id: student.id }, data: { houseId: house.id } });
+    }
 
     const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
     if (!school?.uniqueCode) throw new Error("School identity configuration is incomplete.");
     await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
 
-    await tx.auditLogSchool.create({
-      data: {
-        schoolId: session.schoolId,
-        actorId: session.userId,
-        action: "student.created",
-        entityType: "Student",
-        entityId: student.id,
-        after: {
-          name,
-          indexNumber,
-          classId: classId || null,
-          houseId: house?.id ?? null,
-          houseName: house?.name ?? null,
-          guardianLinked: Boolean(guardianName && guardianPhone),
-          photoCaptured: Boolean(photoData),
-        },
-      },
-    });
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, houseId: house?.id ?? null, houseName: house?.name ?? null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
   });
   redirect("/school/students");
 }
@@ -92,11 +82,5 @@ export default async function CreateStudentPage() {
     return { school, classes };
   });
 
-  return (
-    <AppShell universe="school" title="Add student" subtitle="Guided learner admission" active="Students" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
-      <div style={{ minHeight: "calc(100vh - 120px)", display: "grid", placeItems: "center", padding: "24px" }}>
-        <AddStudentDialog classes={data.classes} action={createStudent} initialOpen />
-      </div>
-    </AppShell>
-  );
+  return <AppShell universe="school" title="Add student" subtitle="Guided learner admission" active="Students" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}><div style={{ minHeight: "calc(100vh - 120px)", display: "grid", placeItems: "center", padding: "24px" }}><AddStudentDialog classes={data.classes} action={createStudent} initialOpen /></div></AppShell>;
 }
