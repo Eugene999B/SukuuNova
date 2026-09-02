@@ -47,6 +47,14 @@ export function routeError(error: unknown): NextResponse {
     return response;
   }
 
+  const errorCode = (error as { code?: string }).code;
+  if (errorCode === "P2002") {
+    return NextResponse.json(
+      { error: "DUPLICATE_RECORD", message: "A record with the same unique identifiers already exists." },
+      { status: 409 }
+    );
+  }
+
   console.error("Unhandled SukuuNova route error", error);
   return NextResponse.json(
     { error: "INTERNAL_ERROR", message: "An unexpected error occurred." },
