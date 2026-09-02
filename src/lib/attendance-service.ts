@@ -130,18 +130,19 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   if (timestamp.getTime() > Date.now() + 5 * 60 * 1000) throw new AppError("Attendance timestamp cannot be more than 5 minutes in the future.", 400, "ATTENDANCE_TIMESTAMP_IN_FUTURE");
   const day = attendanceDate(timestamp, settings.timezone);
   if (await isAttendanceBlocked(tx, input.schoolId, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
-  let periodId = input.periodId?.trim();
-  if (!periodId) {
-    const setting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
-    periodId = setting[0]?.value?.trim() || "DAILY";
-  }
-  const validatedPeriodId: string = validatePeriodId(periodId);
+  const periodSetting = input.periodId?.trim() ? null : await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
+  const validatedPeriodId = validatePeriodId(input.periodId?.trim() || periodSetting?.[0]?.value?.trim() || "DAILY");
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${validatedPeriodId}, true)`;
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
-  if (input.target.staffId) await validateStaffState(tx, input.schoolId, input.target.staffId, day, input.type);
-  else await validateStudentState(tx, input.schoolId, input.target.studentId, day, validatedPeriodId, input.type);
+  if (input.target.staffId) {
+    await validateStaffState(tx, input.schoolId, input.target.staffId, day, input.type);
+  } else {
+    const studentId = input.target.studentId;
+    if (!studentId) throw new AppError("A student attendance target is required.", 400, "INVALID_ATTENDANCE_TARGET");
+    await validateStudentState(tx, input.schoolId, studentId, day, validatedPeriodId, input.type);
+  }
   const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, studentId: input.target.studentId, staffId: input.target.staffId, type: input.type, method: input.method, timestamp, attendanceDate: day, isLate, confidenceScore: input.confidenceScore, deviceId: input.deviceId, recordedBy: input.actorId ?? null } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId ?? ("device:" + input.deviceId), action: "attendance.recorded", entityType: "AttendanceEvent", entityId: event.id, after: event });
   if (input.target.studentId) {
