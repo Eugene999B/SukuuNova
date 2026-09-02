@@ -13,7 +13,7 @@ export default function WorkerAccessPage(){
  const load=()=>fetch("/api/platform/worker-access").then(async r=>{if(!r.ok)throw new Error((await r.json() as {error?:string}).error||"Could not load worker access.");return r.json() as Promise<Payload>}).then(d=>{setData(d);setWorkerId(current=>current||d.workers[0]?.id||"");}).catch(e=>setMessage(e instanceof Error?e.message:"Could not load worker access."));
  useEffect(()=>{void load()},[]);
  const currentAccess=useMemo(()=>data?.access?.[workerId]??[],[data,workerId]);
- useEffect(()=>{setSelected(currentAccess.map(x=>x.schoolId))},[workerId,currentAccess.length]);
+ useEffect(()=>{setSelected(currentAccess.map(x=>x.schoolId))},[workerId,currentAccess]);
  const worker=data?.workers.find(w=>w.id===workerId);
  const toggle=(id:string)=>setSelected(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);
  const save=async()=>{if(!workerId)return;setSaving(true);setMessage("");try{const r=await fetch("/api/platform/worker-access",{method:"PUT",headers:{"content-type":"application/json"},body:JSON.stringify({adminId:workerId,schoolIds:selected})});const d=await r.json() as {error?:string};if(!r.ok)throw new Error(d.error||"Could not save scope.");setMessage("Worker school scope saved and audited.");await load()}catch(e){setMessage(e instanceof Error?e.message:"Could not save scope.")}finally{setSaving(false)}};
