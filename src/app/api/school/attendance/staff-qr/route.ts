@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
+import { AppError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { syncDefaultRbac } from "@/lib/role-builder-service";
@@ -54,7 +54,8 @@ export async function POST(request: Request) {
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "attendance:view_own");
       const verified = await verifyStaffAttendanceQr(input.token, session.schoolId);
-      const sameNetwork = ipHash !== hashClientIp("unknown") && ipHash === verified.displayIpHash;
+      const unknownIpHash = hashClientIp("unknown");
+      const sameNetwork = ipHash !== unknownIpHash && ipHash === verified.displayIpHash;
 
       let geoVerified = false;
       let distanceM: number | undefined;
@@ -77,7 +78,7 @@ export async function POST(request: Request) {
       }
 
       if (!sameNetwork && !geoVerified) {
-        throw new Error(`Attendance check-in could not verify that you are at school (${geoReason}).`);
+        throw new AppError("Attendance check-in could not verify that you are at school. Please connect to the school's network or allow location access and scan the live code again.", 403, "SCHOOL_PRESENCE_NOT_VERIFIED");
       }
 
       const verification = sameNetwork && geoVerified ? "qr+network+location" : sameNetwork ? "qr+network" : "qr+location";
