@@ -28,12 +28,12 @@ export async function matchDeviceIdentityAttendance(input: MatchInput) {
   }
 
   const identity = await input.tx.deviceIdentity.findFirst({
-    where: { schoolId: input.schoolId, deviceId: input.deviceId, deviceKind: input.kind, externalId },
+    where: { schoolId: input.schoolId, deviceKind: input.kind, externalId },
     select: { studentId: true, staffId: true }
   });
   if (!identity?.studentId && !identity?.staffId) {
     throw new AppError(
-      "Device identity is not enrolled for this school/device.",
+      "Device identity is not enrolled for this school.",
       404,
       "DEVICE_IDENTITY_NOT_FOUND"
     );
