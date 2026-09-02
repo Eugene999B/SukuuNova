@@ -5,7 +5,7 @@ import { createTenantFixture } from "./helpers";
 import { createFeeItem, generateInvoice, recordPayment } from "../src/lib/finance-service";
 
 describe("finance payment integrity", () => {
-  it("treats the same payment reference as an idempotent retry and rejects reuse for a different transaction", async () => {
+  it("treats the same payment reference as an idempotent retry even after full settlement and rejects reuse for a different transaction", async () => {
     const fixture = await createTenantFixture();
 
     await withTenant(fixture.schoolId, async (tx) => {
@@ -52,7 +52,7 @@ describe("finance payment integrity", () => {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
         invoiceId: invoice.id,
-        amount: 125,
+        amount: 500,
         method: "momo",
         reference: "MOMO-FIN-001"
       });
@@ -60,7 +60,7 @@ describe("finance payment integrity", () => {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
         invoiceId: invoice.id,
-        amount: 125,
+        amount: 500,
         method: "momo",
         reference: "MOMO-FIN-001"
       });
@@ -79,7 +79,7 @@ describe("finance payment integrity", () => {
 
       expect(
         (await tx.payment.findUnique({ where: { id: first.id }, select: { amount: true } }))?.amount
-      ).toEqual(new Prisma.Decimal(125));
+      ).toEqual(new Prisma.Decimal(500));
     });
   });
 
