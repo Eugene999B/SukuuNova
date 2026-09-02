@@ -179,8 +179,16 @@ export async function recordAttendance(
   } else {
     if (!input.actorId) throw new ForbiddenError("A staff actor is required for attendance.");
     await requirePermission(tx, input.actorId, "attendance:record");
-    if (input.target.studentId) await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);
-    else await authorizeStaffAttendance(tx, input.actorId);
+    if (input.target.studentId) {
+      await authorizeStudentAttendance(tx, input.actorId, input.target.studentId);
+    } else {
+      await authorizeStaffAttendance(tx, input.actorId);
+      const staff = await tx.user.findFirst({
+        where: { id: input.target.staffId, schoolId: input.schoolId, status: "active" },
+        select: { id: true }
+      });
+      if (!staff) throw new ForbiddenError("The selected staff account is not active in this school.");
+    }
   }
 
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
