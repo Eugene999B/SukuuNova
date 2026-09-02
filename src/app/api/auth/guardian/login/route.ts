@@ -13,15 +13,11 @@ export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
     const key = await recordLoginAttempt("guardian-login:" + input.schoolCode.toLowerCase(), input.identifier, requestIp(request.headers));
-    try {
-      const guardian = await authenticateGuardianUser(input);
-      await clearLoginAttempts(key);
-      const response = NextResponse.json({ ok: true, guardian: { name: guardian.name, schoolName: guardian.schoolName, needsPasswordChange: guardian.needsPasswordChange } });
-      response.cookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ kind: "guardian", userId: guardian.userId, guardianId: guardian.guardianId, schoolId: guardian.schoolId, name: guardian.name, schoolName: guardian.schoolName, needsPasswordChange: guardian.needsPasswordChange }), sessionCookieOptions());
-      response.cookies.delete("sukuunova_school_session");
-      return response;
-    } catch (error) {
-      throw error;
-    }
+    const guardian = await authenticateGuardianUser(input);
+    await clearLoginAttempts(key);
+    const response = NextResponse.json({ ok: true, guardian: { name: guardian.name, schoolName: guardian.schoolName, needsPasswordChange: guardian.needsPasswordChange } });
+    response.cookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ kind: "guardian", userId: guardian.userId, guardianId: guardian.guardianId, schoolId: guardian.schoolId, name: guardian.name, schoolName: guardian.schoolName, needsPasswordChange: guardian.needsPasswordChange }), sessionCookieOptions());
+    response.cookies.delete("sukuunova_school_session");
+    return response;
   } catch (error) { return routeError(error); }
 }
