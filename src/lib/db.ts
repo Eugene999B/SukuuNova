@@ -1,6 +1,9 @@
 import { Prisma, PrismaClient } from "@prisma/client";
 import { TenantScopeError } from "./errors";
 import { currentSchoolId, tenantContext, validateSchoolId } from "./tenant-context";
+import { runtimeEnv } from "./env";
+
+void runtimeEnv;
 
 const TENANT_MODELS = new Set([
   "School", "SchoolSettings", "User", "Role", "RolePermission", "UserRole", "UserPermissionOverride",
