@@ -14,11 +14,11 @@ export async function addApprovedPickup(
 ) {
   await requirePermission(tx, input.actorId, "attendance:pickup_approve");
   const [student, guardian] = await Promise.all([
-    tx.student.findUnique({ where: { id: input.studentId }, select: { id: true } }),
-    tx.guardian.findUnique({ where: { id: input.guardianId }, select: { id: true } })
+    tx.student.findFirst({ where: { id: input.studentId, schoolId: input.schoolId }, select: { id: true } }),
+    tx.guardian.findFirst({ where: { id: input.guardianId, schoolId: input.schoolId }, select: { id: true } })
   ]);
   if (!student || !guardian) {
-    throw new AppError("Student or guardian not found.", 404, "NOT_FOUND");
+    throw new AppError("Student or guardian not found in this school.", 404, "NOT_FOUND");
   }
   const approved = await tx.approvedPickup.upsert({
     where: {
@@ -57,15 +57,15 @@ export async function attemptPickup(
 ) {
   await requirePermission(tx, input.actorId, "attendance:record");
   const [student, guardian, approved] = await Promise.all([
-    tx.student.findUnique({ where: { id: input.studentId }, select: { id: true } }),
-    tx.guardian.findUnique({ where: { id: input.guardianId }, select: { id: true } }),
+    tx.student.findFirst({ where: { id: input.studentId, schoolId: input.schoolId }, select: { id: true } }),
+    tx.guardian.findFirst({ where: { id: input.guardianId, schoolId: input.schoolId }, select: { id: true } }),
     tx.approvedPickup.findFirst({
-      where: { studentId: input.studentId, guardianId: input.guardianId },
+      where: { schoolId: input.schoolId, studentId: input.studentId, guardianId: input.guardianId },
       select: { id: true }
     })
   ]);
   if (!student || !guardian) {
-    throw new AppError("Student or collecting guardian not found.", 404, "NOT_FOUND");
+    throw new AppError("Student or collecting guardian not found in this school.", 404, "NOT_FOUND");
   }
   if (approved) {
     const event = await tx.pickupEvent.create({
@@ -89,6 +89,7 @@ export async function attemptPickup(
 
   const existing = await tx.pickupApprovalRequest.findFirst({
     where: {
+      schoolId: input.schoolId,
       studentId: input.studentId,
       collectedByGuardianId: input.guardianId,
       status: "pending"
@@ -123,8 +124,8 @@ export async function reviewPickupRequest(
   }
 ) {
   await requirePermission(tx, input.actorId, "attendance:pickup_approve");
-  const request = await tx.pickupApprovalRequest.findUnique({
-    where: { id: input.requestId }
+  const request = await tx.pickupApprovalRequest.findFirst({
+    where: { id: input.requestId, schoolId: input.schoolId }
   });
   if (!request) throw new AppError("Pickup request not found.", 404, "NOT_FOUND");
   if (request.status !== "pending") {
@@ -134,7 +135,7 @@ export async function reviewPickupRequest(
     throw new ForbiddenError("A different authorized staff member must approve an unscheduled pickup.");
   }
   if (input.decision === "rejected") {
-    return tx.pickupApprovalRequest.update({
+    const rejected = await tx.pickupApprovalRequest.update({
       where: { id: request.id },
       data: {
         status: "rejected",
@@ -142,6 +143,16 @@ export async function reviewPickupRequest(
         reviewedAt: new Date()
       }
     });
+    await appendSchoolAudit(tx, {
+      schoolId: input.schoolId,
+      actorId: input.actorId,
+      action: "pickup.rejected",
+      entityType: "PickupApprovalRequest",
+      entityId: request.id,
+      before: { status: request.status },
+      after: { status: rejected.status, studentId: request.studentId, guardianId: request.collectedByGuardianId }
+    });
+    return rejected;
   }
 
   await tx.pickupApprovalRequest.update({
