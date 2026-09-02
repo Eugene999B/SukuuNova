@@ -4,6 +4,7 @@ import { withTenant } from "@/lib/db";
 import FinanceWorkspace from "@/components/FinanceWorkspace";
 import { FinanceEvidenceDock } from "@/components/FinanceEvidenceDock";
 import "@/components/finance-evidence.css";
+import "./finance-theme-parity.css";
 
 export default async function FinanceRoute({ mode }: { mode: "overview"|"fees"|"invoices"|"payments"|"arrears"|"reports"|"payroll" }) {
   const session = await requireSchoolSession();
