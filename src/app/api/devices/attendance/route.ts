@@ -162,6 +162,13 @@ export async function POST(request: Request) {
       { status: result.status === "duplicate" ? 200 : 201 }
     );
   } catch (error) {
+    if ((error as { code?: string }).code === "P2002") {
+      throw new AppError(
+        "Attendance has already been recorded for this person and attendance type today.",
+        409,
+        "DUPLICATE_ATTENDANCE"
+      );
+    }
     return routeError(error);
   }
 }
