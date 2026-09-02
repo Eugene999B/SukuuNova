@@ -12,6 +12,8 @@ const EXPORT_PERMISSIONS: Record<string, string> = {
   gradebook: "exports:gradebook",
 };
 
+const MAX_EXPORT_ROWS = 5000;
+
 function csvCell(value: unknown) {
   const text = value == null ? "" : String(value);
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -32,6 +34,16 @@ function parseDate(value: string | null, endOfDay = false) {
     throw new AppError("Export date is invalid.", 400, "INVALID_EXPORT_DATE");
   }
   return date;
+}
+
+function assertWithinExportLimit(count: number) {
+  if (count > MAX_EXPORT_ROWS) {
+    throw new AppError(
+      `Export is limited to ${MAX_EXPORT_ROWS.toLocaleString()} rows. Narrow the filters and try again.`,
+      413,
+      "EXPORT_TOO_LARGE",
+    );
+  }
 }
 
 export async function GET(
@@ -61,6 +73,7 @@ export async function GET(
       if (dataset === "students") {
         const rows = await tx.student.findMany({
           orderBy: { name: "asc" },
+          take: MAX_EXPORT_ROWS + 1,
           select: {
             admissionNo: true,
             name: true,
@@ -68,6 +81,7 @@ export async function GET(
             class: { select: { name: true } },
           },
         });
+        assertWithinExportLimit(rows.length);
         return {
           filename: `${school.uniqueCode}-students.csv`,
           body: csv(
@@ -80,6 +94,7 @@ export async function GET(
       if (dataset === "staff") {
         const rows = await tx.user.findMany({
           orderBy: { name: "asc" },
+          take: MAX_EXPORT_ROWS + 1,
           select: {
             name: true,
             email: true,
@@ -99,6 +114,7 @@ export async function GET(
               ),
             ),
         );
+        assertWithinExportLimit(staff.length);
         return {
           filename: `${school.uniqueCode}-staff.csv`,
           body: csv(
@@ -132,7 +148,7 @@ export async function GET(
             },
           },
           orderBy: { attendanceDate: "desc" },
-          take: 5000,
+          take: MAX_EXPORT_ROWS + 1,
           select: {
             attendanceDate: true,
             type: true,
@@ -147,6 +163,7 @@ export async function GET(
             },
           },
         });
+        assertWithinExportLimit(rows.length);
         return {
           filename: `${school.uniqueCode}-attendance.csv`,
           body: csv(
@@ -167,7 +184,7 @@ export async function GET(
       if (dataset === "fees") {
         const rows = await tx.invoice.findMany({
           orderBy: { createdAt: "desc" },
-          take: 5000,
+          take: MAX_EXPORT_ROWS + 1,
           select: {
             totalAmount: true,
             status: true,
@@ -182,6 +199,7 @@ export async function GET(
             payments: { select: { amount: true } },
           },
         });
+        assertWithinExportLimit(rows.length);
         return {
           filename: `${school.uniqueCode}-fee-balances.csv`,
           body: csv(
@@ -220,12 +238,14 @@ export async function GET(
             { subject: { name: "asc" } },
             { name: "asc" },
           ],
+          take: MAX_EXPORT_ROWS + 1,
           select: {
             id: true,
             name: true,
             type: true,
             maxScore: true,
             scores: {
+              take: MAX_EXPORT_ROWS + 1,
               select: {
                 studentId: true,
                 value: true,
@@ -236,9 +256,12 @@ export async function GET(
             subject: { select: { name: true } },
           },
         });
+        let rowCount = 0;
         const rows: unknown[][] = [];
         for (const assessment of assessments) {
           for (const score of assessment.scores) {
+            rowCount++;
+            if (rowCount > MAX_EXPORT_ROWS) break;
             rows.push([
               assessment.class.name,
               assessment.subject.name,
@@ -250,7 +273,9 @@ export async function GET(
               Number(score.value).toFixed(2),
             ]);
           }
+          if (rowCount > MAX_EXPORT_ROWS) break;
         }
+        assertWithinExportLimit(rowCount);
         return {
           filename: `${school.uniqueCode}-gradebook.csv`,
           body: csv(
