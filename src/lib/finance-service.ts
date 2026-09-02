@@ -53,31 +53,29 @@ async function refreshInvoiceStatus(tx: TenantDb, invoiceId: string, schoolId?: 
   return { invoice, paid, status };
 }
 
-export async function recordPayment(tx: TenantDb, input: { schoolId: string; actorId: string; invoiceId: string; amount: number; method: "momo" | "cash" | "card" | "bank" | "cheque"; reference?: string; }) {
+export async function recordPayment(tx: TenantDb, input: { schoolId: string; actorId: string; invoiceId: string; amount: number; method: "momo" | "cash" | "card" | "bank" | "cheque"; reference: string; }) {
   await requirePermission(tx, input.actorId, "payments:record");
   if (input.amount <= 0) throw new AppError("Payment amount must be positive.", 400, "INVALID_AMOUNT");
-  const reference = input.reference?.trim() || undefined;
-  if ((input.method === "momo" || input.method === "bank" || input.method === "cheque") && !reference) throw new AppError("A transaction/reference number is required for this payment method.", 400, "REFERENCE_REQUIRED");
+  const reference = input.reference.trim();
+  if (!reference) throw new AppError("A payment reference or receipt number is required so retries cannot create duplicate payments.", 400, "REFERENCE_REQUIRED");
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-payment:${input.schoolId}:${input.invoiceId}`}))`;
   const current = await refreshInvoiceStatus(tx, input.invoiceId, input.schoolId);
+  const amount = new Prisma.Decimal(input.amount);
   if (current.status === "paid") throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
   const outstanding = current.invoice.totalAmount.minus(current.paid);
-  const amount = new Prisma.Decimal(input.amount);
   if (amount.greaterThan(outstanding)) throw new AppError("Payment exceeds the outstanding invoice balance. Handle the extra amount as an approved credit or refund.", 409, "OVERPAYMENT_REQUIRES_REVIEW");
-  if (reference) {
-    const existing = await tx.payment.findFirst({ where: { schoolId: input.schoolId, reference }, select: { id: true, invoiceId: true, amount: true, method: true } });
-    if (existing) {
-      if (existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) return existing;
-      throw new AppError("This payment reference has already been used for a different transaction.", 409, "DUPLICATE_PAYMENT_REFERENCE");
-    }
+  const existing = await tx.payment.findFirst({ where: { schoolId: input.schoolId, reference }, select: { id: true, invoiceId: true, amount: true, method: true } });
+  if (existing) {
+    if (existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) return existing;
+    throw new AppError("This payment reference has already been used for a different transaction.", 409, "DUPLICATE_PAYMENT_REFERENCE");
   }
   let payment;
   try {
     payment = await tx.payment.create({ data: { schoolId: input.schoolId, invoiceId: input.invoiceId, amount, method: input.method, reference, reconciledBy: input.actorId } });
   } catch (error) {
-    if ((error as { code?: string }).code === "P2002" && reference) {
-      const existing = await tx.payment.findFirst({ where: { schoolId: input.schoolId, reference }, select: { id: true, invoiceId: true, amount: true, method: true } });
-      if (existing && existing.invoiceId === input.invoiceId && existing.amount.equals(amount) && existing.method === input.method) return existing;
+    if ((error as { code?: string }).code === "P2002") {
+      const duplicate = await tx.payment.findFirst({ where: { schoolId: input.schoolId, reference }, select: { id: true, invoiceId: true, amount: true, method: true } });
+      if (duplicate && duplicate.invoiceId === input.invoiceId && duplicate.amount.equals(amount) && duplicate.method === input.method) return duplicate;
       throw new AppError("This payment reference has already been used for a different transaction.", 409, "DUPLICATE_PAYMENT_REFERENCE");
     }
     throw error;
