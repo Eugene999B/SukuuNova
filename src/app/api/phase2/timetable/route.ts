@@ -26,7 +26,7 @@ export async function GET() {
         tx.subject.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
         tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
         tx.timetableSlot.findMany({ where: { schoolId: session.schoolId }, include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } }, teacher: { select: { id: true, name: true } } }, orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }] }),
-        tx.substituteAssignment.findMany({ include: { timetableSlot: { include: { class: true, subject: true } }, substituteTeacher: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 50 }),
+        tx.substituteAssignment.findMany({ where: { schoolId: session.schoolId }, include: { timetableSlot: { include: { class: true, subject: true } }, substituteTeacher: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 50 }),
         getAcademicEngineConfig(tx)
       ]);
       return { school, classes, subjects, teachers, slots, assignments, timetableConfig: academic.timetable };
@@ -43,8 +43,8 @@ export async function POST(request: Request) {
       const common = { schoolId: session.schoolId, actorId: session.userId };
       switch (input.action) {
         case "saveSlot": return createTimetableSlot(tx, { ...common, ...input });
-        case "deleteSlot": return deleteTimetableSlot(tx, { actorId: session.userId, slotId: input.slotId });
-        case "suggest": return suggestSubstitutes(tx, { actorId: session.userId, ...input });
+        case "deleteSlot": return deleteTimetableSlot(tx, { ...common, slotId: input.slotId });
+        case "suggest": return suggestSubstitutes(tx, { ...common, ...input });
         case "confirm": return confirmSubstitute(tx, { ...common, ...input });
       }
     });
