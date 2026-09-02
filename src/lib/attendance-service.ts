@@ -1,4 +1,5 @@
 import { AppError, ForbiddenError } from "./errors";
+import { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
 import { hasPermission, requirePermission } from "./rbac";
@@ -165,11 +166,21 @@ export async function attendanceSummary(tx: TenantDb, input: { actorId: string; 
   await requirePermission(tx, input.actorId, "attendance:record");
   const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
   if (await isAttendanceBlocked(tx, input.day)) return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
-  const periodFilter = input.periodId ? { periodId: input.periodId.trim() } : {};
-  const events = await tx.attendanceEvent.findMany({ where: { attendanceDate: input.day, type: "in", ...periodFilter, student: classFilter }, select: { studentId: true, isLate: true } });
-  const total = await tx.student.count({ where: { status: "active", ...classFilter } });
-  const presentIds = new Set(events.flatMap((event) => event.studentId ? [event.studentId] : []));
-  const lateIds = new Set(events.flatMap((event) => event.studentId && event.isLate ? [event.studentId] : []));
+  const students = await tx.student.findMany({ where: { status: "active", ...classFilter }, select: { id: true } });
+  const studentIds = students.map((student) => student.id);
+  if (!studentIds.length) return { calendarBlocked: false, present: 0, late: 0, absent: 0 };
+  const periodId = input.periodId?.trim();
+  const events = await tx.$queryRaw<Array<{ studentId: string; isLate: boolean | null }>>`
+    SELECT "studentId", "isLate"
+    FROM "AttendanceEvent"
+    WHERE "attendanceDate" = ${input.day}
+      AND "type" = 'in'
+      AND "studentId" IN (${Prisma.join(studentIds)})
+      ${periodId ? Prisma.sql`AND "periodId" = ${periodId}` : Prisma.empty}
+  `;
+  const total = studentIds.length;
+  const presentIds = new Set(events.map((event) => event.studentId));
+  const lateIds = new Set(events.filter((event) => event.studentId && event.isLate).map((event) => event.studentId));
   return { calendarBlocked: false, present: presentIds.size, late: lateIds.size, absent: Math.max(0, total - presentIds.size) };
 }
 
