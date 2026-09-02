@@ -148,7 +148,8 @@ export async function attendanceSummary(tx: TenantDb, input: { actorId: string; 
   const events = await tx.attendanceEvent.findMany({ where: { attendanceDate: input.day, type: "in", student: classFilter }, select: { studentId: true, isLate: true } });
   const total = await tx.student.count({ where: { status: "active", ...classFilter } });
   const presentIds = new Set(events.flatMap((event) => event.studentId ? [event.studentId] : []));
-  return { calendarBlocked: false, present: presentIds.size, late: events.filter((event) => event.isLate).length, absent: Math.max(0, total - presentIds.size) };
+  const lateIds = new Set(events.flatMap((event) => event.studentId && event.isLate ? [event.studentId] : []));
+  return { calendarBlocked: false, present: presentIds.size, late: lateIds.size, absent: Math.max(0, total - presentIds.size) };
 }
 
 export async function finalizeStudentAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; day: Date; classId?: string }) {
