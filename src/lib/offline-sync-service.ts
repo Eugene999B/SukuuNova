@@ -29,8 +29,13 @@ function payloadHash(payload: Record<string, unknown>) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
-function dateOnly(value: Date) {
-  return value.toISOString().slice(0, 10);
+function localDateKey(value: Date, timezone: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(value);
 }
 
 async function assertDevice(tx: TenantDb, deviceId: string) {
@@ -43,6 +48,8 @@ export async function processOfflineSync(
   input: { schoolId: string; actorId: string; deviceId: string; operations: SyncInput[] }
 ) {
   await assertDevice(tx, input.deviceId);
+  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { timezone: true } });
+  const timezone = settings?.timezone || "Africa/Accra";
   const results: Array<Record<string, unknown>> = [];
 
   for (const operation of input.operations) {
@@ -94,12 +101,17 @@ export async function processOfflineSync(
     const method = operation.payload.method === "manual" || operation.payload.method === "qr" || operation.payload.method === "face" || operation.payload.method === "fingerprint" || operation.payload.method === "card"
       ? operation.payload.method
       : null;
-    const attendanceDate = typeof operation.payload.attendanceDate === "string" ? new Date(operation.payload.attendanceDate) : null;
-    if (!studentId || !type || !method || !attendanceDate || Number.isNaN(attendanceDate.getTime())) {
+    const rawTimestamp = typeof operation.payload.timestamp === "string"
+      ? operation.payload.timestamp
+      : typeof operation.payload.attendanceDate === "string"
+        ? operation.payload.attendanceDate
+        : null;
+    const timestamp = rawTimestamp ? new Date(rawTimestamp) : null;
+    if (!studentId || !type || !method || !timestamp || Number.isNaN(timestamp.getTime())) {
       results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Attendance payload is incomplete or invalid." });
       continue;
     }
-    if (dateOnly(attendanceDate) !== dateOnly(new Date())) {
+    if (localDateKey(timestamp, timezone) !== localDateKey(new Date(), timezone)) {
       results.push({ ...base, status: "REJECTED_VALIDATION" as SyncOutcome, reason: "Offline attendance may only be synchronized for the current attendance date." });
       continue;
     }
@@ -111,6 +123,7 @@ export async function processOfflineSync(
     const periodId = typeof operation.payload.periodId === "string" && operation.payload.periodId.trim()
       ? operation.payload.periodId.trim()
       : "DAILY";
+    const attendanceDate = new Date(localDateKey(timestamp, timezone) + "T00:00:00.000Z");
     const currentRecord = await tx.$queryRaw<Array<{ id: string; version: number; status: string }>>`
       SELECT "id", "version", "status"
       FROM "AttendanceRecord"
@@ -166,7 +179,7 @@ export async function processOfflineSync(
     }
 
     try {
-      const event = await recordAttendance(tx, { schoolId: input.schoolId, actorId: input.actorId, target: { studentId }, type, method, periodId });
+      const event = await recordAttendance(tx, { schoolId: input.schoolId, actorId: input.actorId, target: { studentId }, type, method, periodId, timestamp });
       const result = { eventId: event.id };
       await tx.$executeRaw`
         UPDATE "SyncOperation"
