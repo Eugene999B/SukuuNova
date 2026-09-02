@@ -82,7 +82,7 @@ export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId:
   const day = attendanceDate(timestamp, settings.timezone);
   if (await isAttendanceBlocked(tx, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   const periodSetting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
-  const periodId = periodSetting[0]?.value?.trim() || "DAILY";
+  const periodId: string = periodSetting[0]?.value?.trim() || "DAILY";
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
@@ -103,7 +103,7 @@ async function authorizedSummaryClassFilter(tx: TenantDb, actorId: string, reque
   return requestedClassId ? { classId: requestedClassId } : { classId: { in: assignedIds } };
 }
 
-function validatePeriodId(value: string | undefined) {
+function validatePeriodId(value: string | undefined): string {
   const periodId = value?.trim() || "DAILY";
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(periodId)) throw new AppError("Invalid attendance period.", 400, "INVALID_ATTENDANCE_PERIOD");
   return periodId;
