@@ -16,13 +16,12 @@ describe("staff attendance state machine", () => {
       await expect(
         recordStaffSelfAttendance(tx, {
           schoolId: fixture.schoolId,
-          actorId: fixture.memberId,
+          actorId: fixture.ownerId,
           type: "out",
           verification: "test"
         })
       ).rejects.toMatchObject({ code: "INVALID_CHECKOUT_STATE", status: 409 });
 
-      // The fixture member is not granted staff-scan by default; use the owner for the state-machine path.
       await recordStaffSelfAttendance(tx, {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
