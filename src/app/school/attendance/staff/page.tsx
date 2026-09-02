@@ -16,15 +16,19 @@ export default async function StaffAttendancePage({ searchParams }: { searchPara
 
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "attendance:review", session.schoolId);
-    return staffAttendanceDashboard(tx, {
-      actorId: session.userId,
-      startDate: new Date(`${start}T00:00:00.000Z`),
-      endDate: new Date(`${end}T00:00:00.000Z`),
-      staffId: params.staffId || undefined
-    });
+    const [school, dashboard] = await Promise.all([
+      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
+      staffAttendanceDashboard(tx, {
+        actorId: session.userId,
+        startDate: new Date(`${start}T00:00:00.000Z`),
+        endDate: new Date(`${end}T00:00:00.000Z`),
+        staffId: params.staffId || undefined
+      })
+    ]);
+    return { school, ...dashboard };
   });
 
-  return <AppShell universe="school" title="Staff Attendance" subtitle="Review staff presence, punctuality and attendance trends without mixing them into student class registers." active="Staff Attendance" userName={session.name} schoolName="School Workspace" schoolCode="">
+  return <AppShell universe="school" title="Staff Attendance" subtitle="Review staff presence, punctuality and attendance trends without mixing them into student class registers." active="Staff Attendance" userName={session.name} schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""}>
     <div className="module-workspace">
       <section className="module-card">
         <form style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 }}>
