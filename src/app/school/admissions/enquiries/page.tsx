@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { requirePermission } from "@/lib/rbac";
 import { withTenant } from "@/lib/db";
+import { ensureIdentityCardsForSchool } from "@/lib/identity-card-service";
 import "./enquiries.css";
 
 const STAGES = [
@@ -86,6 +87,9 @@ async function convertEnquiry(formData: FormData) {
       const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: enquiry.phone } }, update: { name: enquiry.guardianName }, create: { schoolId: session.schoolId, name: enquiry.guardianName, phone: enquiry.phone } });
       await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: "Parent/Guardian", isPrimary: true } });
     }
+    const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
+    if (!school?.uniqueCode) throw new Error("The school's identification code is missing.");
+    await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
     await tx.$executeRawUnsafe(`UPDATE "AdmissionEnquiry" SET "stage"='converted',"convertedStudentId"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2 AND "schoolId"=$3`, student.id, id, session.schoolId);
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "admission_enquiry.converted", entityType: "AdmissionEnquiry", entityId: id, after: { studentId: student.id, admissionNo } } });
   });
