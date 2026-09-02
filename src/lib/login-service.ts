@@ -56,6 +56,31 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
   });
 }
 
+export async function authenticateGuardianUser(input: { schoolCode: string; identifier: string; password: string }) {
+  const uniqueCode = input.schoolCode.trim().toLowerCase();
+  if (input.password.length < MIN_PASSWORD_LENGTH) throw new UnauthorizedError("This password is no longer accepted. Use the password reset flow to secure the account.");
+  const directory = await authDb.schoolLoginDirectory.findUnique({ where: { uniqueCode }, select: { schoolId: true, status: true } });
+  if (!directory || directory.status !== "active") throw new UnauthorizedError(LOGIN_FAILURE);
+  return authDb.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
+    const schoolRows = await tx.$queryRaw<{ id: string; name: string; status: string }[]>`SELECT "id", "name", "status" FROM "School" WHERE "id" = ${directory.schoolId} LIMIT 1`;
+    const school = schoolRows[0];
+    if (!school || school.status !== "active") throw new UnauthorizedError(LOGIN_FAILURE);
+    const identifier = normalizedIdentifier(input.identifier);
+    const guardianRows = await tx.$queryRaw<{ guardianId: string; guardianName: string; userId: string; passwordHash: string; needsPasswordChange: boolean }[]>`
+      SELECT g."id" AS "guardianId", g."name" AS "guardianName", u."id" AS "userId", u."passwordHash", u."needsPasswordChange"
+      FROM "Guardian" g
+      INNER JOIN "User" u ON u."id" = g."userId" AND u."schoolId" = g."schoolId"
+      WHERE g."schoolId" = ${directory.schoolId}
+        AND u."status" = 'active'
+        AND (u."email" = ${identifier} OR u."phone" = ${identifier})
+      LIMIT 1`;
+    const guardian = guardianRows[0];
+    if (!guardian || !(await compare(input.password, guardian.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
+    return { userId: guardian.userId, guardianId: guardian.guardianId, schoolId: directory.schoolId, name: guardian.guardianName, schoolName: school.name, needsPasswordChange: Boolean(guardian.needsPasswordChange) };
+  });
+}
+
 export async function authenticatePlatformAdmin(input: { email: string; password: string }) {
   const admin = await authDb.platformAdmin.findUnique({ where: { email: input.email.trim().toLowerCase() }, select: { id: true, name: true, passwordHash: true, status: true, role: true } });
   if (!admin || admin.status !== "active" || !(await compare(input.password, admin.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
