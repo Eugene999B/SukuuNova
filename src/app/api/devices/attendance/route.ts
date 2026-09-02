@@ -5,6 +5,10 @@ import { AppError, UnauthorizedError, routeError } from "@/lib/errors";
 import { verifyDeviceSignature } from "@/lib/device-auth";
 import { matchFaceAttendance } from "@/lib/face-service";
 import { matchFingerprintAttendance, matchCardAttendance } from "@/lib/device-identity-service";
+import { enforceDeviceAttendanceRateLimit } from "@/lib/device-rate-limit";
+import { requestIp } from "@/lib/rate-limit";
+
+const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
 const schema = z.object({
   schoolCode: z.string().trim().min(2).max(80),
@@ -19,15 +23,44 @@ const schema = z.object({
   confidence: z.number().min(0).max(100).optional()
 });
 
+async function readBodyWithLimit(request: Request): Promise<string> {
+  const declaredLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    throw new AppError("Device request payload is too large.", 413, "PAYLOAD_TOO_LARGE");
+  }
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > MAX_BODY_BYTES) {
+        await reader.cancel();
+        throw new AppError("Device request payload is too large.", 413, "PAYLOAD_TOO_LARGE");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))));
+}
+
 export async function POST(request: Request) {
   try {
-    const rawBody = await request.text();
+    await enforceDeviceAttendanceRateLimit(requestIp(request.headers));
+    const rawBody = await readBodyWithLimit(request);
     let input: z.infer<typeof schema>;
     try {
       input = schema.parse(JSON.parse(rawBody));
     } catch {
       throw new AppError("Invalid device request payload.", 400, "INVALID_INPUT");
     }
+
+    await enforceDeviceAttendanceRateLimit(requestIp(request.headers), input.deviceSerial);
 
     const timestamp = request.headers.get("x-device-timestamp") ?? "";
     const nonce = request.headers.get("x-device-nonce") ?? "";
@@ -83,14 +116,19 @@ export async function POST(request: Request) {
         });
       } catch (error) {
         if ((error as { code?: string }).code === "P2002") {
-          const duplicate = await tx.deviceAttendanceReceipt.findFirst({
-            where: {
-              deviceId: device.id,
-              OR: [{ idempotencyKey: input.idempotencyKey }, { nonce }]
-            },
+          const sameOperation = await tx.deviceAttendanceReceipt.findFirst({
+            where: { deviceId: device.id, idempotencyKey: input.idempotencyKey },
             select: { id: true }
           });
-          if (duplicate) return { status: "duplicate" as const };
+          if (sameOperation) return { status: "duplicate" as const };
+
+          const reusedNonce = await tx.deviceAttendanceReceipt.findFirst({
+            where: { deviceId: device.id, nonce },
+            select: { id: true }
+          });
+          if (reusedNonce) {
+            throw new UnauthorizedError("Device nonce has already been used.", "REPLAY_DETECTED");
+          }
         }
         throw error;
       }
