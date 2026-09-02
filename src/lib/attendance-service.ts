@@ -86,10 +86,8 @@ export async function recordStaffSelfAttendance(
     throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   }
 
-  let periodId: string | undefined;
-  const setting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
-  periodId = setting[0]?.value?.trim() || "DAILY";
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(periodId)) periodId = "DAILY";
+  const periodSetting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
+  const periodId = periodSetting[0]?.value?.trim() || "DAILY";
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
 
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
@@ -100,6 +98,7 @@ export async function recordStaffSelfAttendance(
     ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes
     : null;
 
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`staff-attendance:${input.schoolId}:${input.actorId}:${day.toISOString()}:${input.type}`}))`;
   const existing = await tx.attendanceEvent.findFirst({
     where: { staffId: input.actorId, attendanceDate: day, type: input.type },
     select: { id: true, timestamp: true, method: true }
