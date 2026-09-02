@@ -231,12 +231,57 @@ describe("Phase 2 differentiator safety gates", () => {
         }
       });
 
-      const visible = await visiblePayslips(tx, staffId);
+      const visible = await visiblePayslips(tx, { schoolId: fixture.schoolId, userId: staffId });
       expect(visible.map((row) => row.id)).toEqual([own.id]);
       await expect(getVisiblePayslipPdf(tx, {
+        schoolId: fixture.schoolId,
         actorId: staffId,
         payslipId: someoneElses.id
       })).rejects.toMatchObject({ status: 403 });
+    });
+  });
+
+  it("keeps payroll runs, salary structures and printable payslips inside the authenticated school", async () => {
+    let otherStaffSalaryId = "";
+    let otherRunId = "";
+    let otherPayslipId = "";
+
+    await withTenant(other.schoolId, async (tx) => {
+      otherStaffSalaryId = (await tx.salaryStructure.create({
+        data: {
+          schoolId: other.schoolId,
+          staffId: other.ownerId,
+          grossSalary: 5000,
+          deductions: []
+        }
+      })).id;
+      otherRunId = (await tx.payrollRun.create({
+        data: { schoolId: other.schoolId, period: "2026-09" }
+      })).id;
+      otherPayslipId = (await tx.payslip.create({
+        data: {
+          schoolId: other.schoolId,
+          payrollRunId: otherRunId,
+          staffId: other.ownerId,
+          gross: 5000,
+          deductions: [],
+          net: 5000,
+          pdfData: Buffer.from("other-school-payslip")
+        }
+      })).id;
+    });
+
+    await withTenant(fixture.schoolId, async (tx) => {
+      expect(otherStaffSalaryId).toBeTruthy();
+      expect(await tx.salaryStructure.findMany({ where: { schoolId: fixture.schoolId } })).toHaveLength(0);
+      expect(await visiblePayslips(tx, { schoolId: fixture.schoolId, userId: fixture.ownerId })).toHaveLength(0);
+      await expect(getVisiblePayslipPdf(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        payslipId: otherPayslipId
+      })).rejects.toMatchObject({ status: 404 });
+
+      await expect(tx.payrollRun.findFirst({ where: { id: otherRunId, schoolId: fixture.schoolId } })).resolves.toBeNull();
     });
   });
 
@@ -284,6 +329,7 @@ describe("Phase 2 differentiator safety gates", () => {
       });
 
       const result = await suggestSubstitutes(tx, {
+        schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
         absentTeacherId: staffId,
         day,

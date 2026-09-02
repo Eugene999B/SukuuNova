@@ -56,6 +56,86 @@ export async function authorizeStaffAttendance(tx: TenantDb, actorId: string) {
   await requirePermission(tx, actorId, "attendance:record_staff");
 }
 
+export async function recordStaffSelfAttendance(
+  tx: TenantDb,
+  input: {
+    schoolId: string;
+    actorId: string;
+    type: "in" | "out";
+    verification: string;
+    verificationMeta?: Record<string, unknown>;
+  }
+) {
+  await requirePermission(tx, input.actorId, "attendance:view_own");
+  const staff = await tx.user.findFirst({
+    where: { id: input.actorId, status: "active" },
+    select: { id: true, schoolId: true, name: true }
+  });
+  if (!staff || staff.schoolId !== input.schoolId) {
+    throw new ForbiddenError("Only an active staff account in this school can use staff check-in.");
+  }
+
+  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
+  if (!settings?.expectedResumptionTime) {
+    throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
+  }
+
+  const timestamp = new Date();
+  const day = attendanceDate(timestamp, settings.timezone);
+  if (await isAttendanceBlocked(tx, day)) {
+    throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
+  }
+
+  const periodSetting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
+  const periodId = periodSetting[0]?.value?.trim() || "DAILY";
+  await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
+
+  const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
+  }
+  const isLate = input.type === "in"
+    ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes
+    : null;
+
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`staff-attendance:${input.schoolId}:${input.actorId}:${day.toISOString()}:${input.type}`}))`;
+  const existing = await tx.attendanceEvent.findFirst({
+    where: { staffId: input.actorId, attendanceDate: day, type: input.type },
+    select: { id: true, timestamp: true, method: true }
+  });
+  if (existing) {
+    throw new AppError(
+      input.type === "in" ? "You are already checked in for today." : "You are already checked out for today.",
+      409,
+      "ATTENDANCE_ALREADY_RECORDED"
+    );
+  }
+
+  const event = await tx.attendanceEvent.create({
+    data: {
+      schoolId: input.schoolId,
+      staffId: input.actorId,
+      type: input.type,
+      method: "qr",
+      timestamp,
+      attendanceDate: day,
+      isLate,
+      recordedBy: input.actorId
+    }
+  });
+
+  await appendSchoolAudit(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    action: "attendance.recorded",
+    entityType: "AttendanceEvent",
+    entityId: event.id,
+    after: { event, verification: input.verification, ...(input.verificationMeta ? { verificationMeta: input.verificationMeta } : {}) }
+  });
+
+  return event;
+}
+
 async function authorizedSummaryClassFilter(tx: TenantDb, actorId: string, requestedClassId?: string) {
   if (await hasPermission(tx, actorId, "attendance:review") || await hasPermission(tx, actorId, "attendance:record_all")) {
     return requestedClassId ? { classId: requestedClassId } : {};

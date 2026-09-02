@@ -345,7 +345,10 @@ describe("Phase 1 MVP security and workflow gates", () => {
       messageId = messages[0].id;
     });
 
-    expect(await processMessageBatchOnce({ sms: sender }, 1, fixture.schoolId)).toBe(1);
+    // Earlier workflow tests may have legitimately queued an SMS for this school.
+    // Process enough of the queue to reach the message created by this test instead
+    // of relying on queue ordering.
+    expect(await processMessageBatchOnce({ sms: sender }, 20, fixture.schoolId)).toBeGreaterThan(0);
 
     await withTenant(fixture.schoolId, async (tx) => {
       const sent = await tx.message.findUnique({ where: { id: messageId } });

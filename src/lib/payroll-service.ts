@@ -17,9 +17,15 @@ function deductionSnapshot(gross: number, deductions: DeductionInput[]) {
     if (!row.label.trim() || row.value < 0) {
       throw new AppError("Invalid payroll deduction.", 400, "INVALID_DEDUCTION");
     }
+    if (row.type === "percent" && row.value > 100) {
+      throw new AppError("Percentage deductions cannot exceed 100%.", 400, "INVALID_DEDUCTION");
+    }
     const amount = row.type === "percent"
       ? gross * row.value / 100
       : row.value;
+    if (amount > gross) {
+      throw new AppError("A payroll deduction cannot exceed gross salary.", 400, "INVALID_DEDUCTION");
+    }
     return {
       label: row.label.trim(),
       type: row.type,
@@ -72,6 +78,12 @@ export async function setSalaryStructure(
   if (input.grossSalary <= 0) {
     throw new AppError("Gross salary must be positive.", 400, "INVALID_SALARY");
   }
+  const staff = await tx.user.findFirst({
+    where: { id: input.staffId, schoolId: input.schoolId, status: "active" },
+    select: { id: true }
+  });
+  if (!staff) throw new AppError("Staff account not found in this school.", 404, "STAFF_NOT_FOUND");
+
   const snapshot = deductionSnapshot(input.grossSalary, input.deductions);
   const before = await tx.salaryStructure.findUnique({
     where: { schoolId_staffId: { schoolId: input.schoolId, staffId: input.staffId } }
@@ -109,9 +121,32 @@ export async function createPayrollRun(
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.period)) {
     throw new AppError("Payroll period must use YYYY-MM.", 400, "INVALID_PAYROLL_PERIOD");
   }
-  return tx.payrollRun.create({
+
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`payroll-run:${input.schoolId}:${input.period}`}))`;
+  const existing = await tx.payrollRun.findFirst({
+    where: { schoolId: input.schoolId, period: input.period },
+    select: { id: true, status: true }
+  });
+  if (existing) {
+    throw new AppError(
+      `A payroll run already exists for ${input.period}.`,
+      409,
+      "PAYROLL_RUN_ALREADY_EXISTS"
+    );
+  }
+
+  const run = await tx.payrollRun.create({
     data: { schoolId: input.schoolId, period: input.period }
   });
+  await appendSchoolAudit(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    action: "payroll.created",
+    entityType: "PayrollRun",
+    entityId: run.id,
+    after: { period: run.period, status: run.status }
+  });
+  return run;
 }
 
 export async function processPayrollRun(
@@ -119,21 +154,31 @@ export async function processPayrollRun(
   input: { schoolId: string; actorId: string; payrollRunId: string }
 ) {
   await requirePermission(tx, input.actorId, "payroll:manage");
-  const run = await tx.payrollRun.findUnique({ where: { id: input.payrollRunId } });
-  if (!run) throw new AppError("Payroll run not found.", 404, "NOT_FOUND");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`payroll-process:${input.schoolId}:${input.payrollRunId}`}))`;
+
+  const run = await tx.payrollRun.findFirst({
+    where: { id: input.payrollRunId, schoolId: input.schoolId }
+  });
+  if (!run) throw new AppError("Payroll run not found in this school.", 404, "NOT_FOUND");
   if (run.status !== "draft") {
     throw new AppError("Only draft payroll runs can be processed.", 409, "INVALID_STATE");
   }
+
   const [structures, school] = await Promise.all([
-    tx.salaryStructure.findMany({ include: { staff: true } }),
-    tx.school.findFirst({ select: { name: true } })
+    tx.salaryStructure.findMany({
+      where: { schoolId: input.schoolId },
+      include: { staff: true }
+    }),
+    tx.school.findFirst({ where: { id: input.schoolId }, select: { name: true } })
   ]);
   if (!school || structures.length === 0) {
     throw new AppError("Salary structures are required before processing.", 409, "NO_SALARY_STRUCTURES");
   }
+
   for (const structure of structures) {
+    if (structure.staff.schoolId !== input.schoolId || structure.staff.status !== "active") continue;
     const gross = Number(structure.grossSalary);
-    const source = structure.deductions as unknown as DeductionInput[];
+    const source = Array.isArray(structure.deductions) ? structure.deductions as unknown as DeductionInput[] : [];
     const deductions = deductionSnapshot(gross, source);
     const totalDeductions = deductions.reduce((sum, row) => sum + row.amount, 0);
     const net = Math.max(0, Math.round((gross - totalDeductions) * 100) / 100);
@@ -160,6 +205,7 @@ export async function processPayrollRun(
       }
     });
   }
+
   const updated = await tx.payrollRun.update({
     where: { id: run.id },
     data: { status: "processed", processedAt: new Date() }
@@ -170,7 +216,7 @@ export async function processPayrollRun(
     action: "payroll.processed",
     entityType: "PayrollRun",
     entityId: run.id,
-    after: { period: run.period, payslips: structures.length }
+    after: { period: run.period, payslips: structures.filter((structure) => structure.staff.schoolId === input.schoolId && structure.staff.status === "active").length }
   });
   return updated;
 }
@@ -180,7 +226,9 @@ export async function markPayrollPaid(
   input: { schoolId: string; actorId: string; payrollRunId: string }
 ) {
   await requirePermission(tx, input.actorId, "payroll:manage");
-  const run = await tx.payrollRun.findUnique({ where: { id: input.payrollRunId } });
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`payroll-pay:${input.schoolId}:${input.payrollRunId}`}))`;
+
+  const run = await tx.payrollRun.findFirst({ where: { id: input.payrollRunId, schoolId: input.schoolId } });
   if (!run || run.status !== "processed") {
     throw new AppError("Only processed payroll can be marked paid.", 409, "INVALID_STATE");
   }
@@ -200,16 +248,20 @@ export async function markPayrollPaid(
   return updated;
 }
 
-export async function visiblePayslips(tx: TenantDb, userId: string) {
-  if (await hasPermission(tx, userId, "payroll:manage")) {
+export async function visiblePayslips(
+  tx: TenantDb,
+  input: { schoolId: string; userId: string }
+) {
+  if (await hasPermission(tx, input.userId, "payroll:manage")) {
     return tx.payslip.findMany({
+      where: { schoolId: input.schoolId },
       include: { staff: { select: { id: true, name: true } }, payrollRun: true },
       orderBy: { createdAt: "desc" }
     });
   }
-  await requirePermission(tx, userId, "payroll:view_own");
+  await requirePermission(tx, input.userId, "payroll:view_own");
   return tx.payslip.findMany({
-    where: { staffId: userId },
+    where: { schoolId: input.schoolId, staffId: input.userId },
     include: { payrollRun: true },
     orderBy: { createdAt: "desc" }
   });
@@ -217,9 +269,11 @@ export async function visiblePayslips(tx: TenantDb, userId: string) {
 
 export async function getVisiblePayslipPdf(
   tx: TenantDb,
-  input: { actorId: string; payslipId: string }
+  input: { schoolId: string; actorId: string; payslipId: string }
 ) {
-  const payslip = await tx.payslip.findUnique({ where: { id: input.payslipId } });
+  const payslip = await tx.payslip.findFirst({
+    where: { id: input.payslipId, schoolId: input.schoolId }
+  });
   if (!payslip?.pdfData) throw new AppError("Payslip PDF not found.", 404, "NOT_FOUND");
   const manager = await hasPermission(tx, input.actorId, "payroll:manage");
   const own = await hasPermission(tx, input.actorId, "payroll:view_own");

@@ -82,4 +82,82 @@ describe("finance payment integrity", () => {
       ).toEqual(new Prisma.Decimal(125));
     });
   });
+
+  it("serializes concurrent payments so the invoice cannot be over-collected", async () => {
+    const fixture = await createTenantFixture();
+    let invoiceId = "";
+
+    await withTenant(fixture.schoolId, async (tx) => {
+      const year = await tx.academicYear.create({
+        data: {
+          schoolId: fixture.schoolId,
+          name: "2026/2027 Concurrent",
+          startDate: new Date("2026-09-01T00:00:00.000Z"),
+          endDate: new Date("2027-07-31T00:00:00.000Z")
+        }
+      });
+      const term = await tx.term.create({
+        data: {
+          schoolId: fixture.schoolId,
+          academicYearId: year.id,
+          name: "Term 1 Concurrent",
+          startDate: new Date("2026-09-01T00:00:00.000Z"),
+          endDate: new Date("2026-12-18T00:00:00.000Z")
+        }
+      });
+      const student = await tx.student.create({
+        data: {
+          schoolId: fixture.schoolId,
+          admissionNo: "FIN-CONCURRENT-" + fixture.schoolId,
+          name: "Concurrent Finance Test Student"
+        }
+      });
+
+      await createFeeItem(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        termId: term.id,
+        name: "Tuition",
+        amount: 300
+      });
+      const invoice = await generateInvoice(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        studentId: student.id,
+        termId: term.id
+      });
+      invoiceId = invoice.id;
+    });
+
+    const attempts = await Promise.allSettled([
+      withTenant(fixture.schoolId, (tx) => recordPayment(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        invoiceId,
+        amount: 200,
+        method: "cash",
+        reference: "CONCURRENT-CASH-001"
+      })),
+      withTenant(fixture.schoolId, (tx) => recordPayment(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        invoiceId,
+        amount: 200,
+        method: "cash",
+        reference: "CONCURRENT-CASH-002"
+      }))
+    ]);
+
+    const fulfilled = attempts.filter((result) => result.status === "fulfilled");
+    const rejected = attempts.filter((result) => result.status === "rejected");
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({ reason: expect.objectContaining({ code: "OVERPAYMENT_REQUIRES_REVIEW" }) });
+
+    await withTenant(fixture.schoolId, async (tx) => {
+      const payments = await tx.payment.findMany({ where: { invoiceId }, select: { amount: true } });
+      expect(payments).toHaveLength(1);
+      expect(payments[0].amount).toEqual(new Prisma.Decimal(200));
+    });
+  });
 });

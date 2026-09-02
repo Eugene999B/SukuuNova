@@ -26,6 +26,8 @@ export async function generateInvoice(tx: TenantDb, input: { schoolId: string; a
   if (!student) throw new AppError("Student not found.", 404, "NOT_FOUND");
   const term = await tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, isLocked: true } });
   if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
+  if (term.isLocked) throw new AppError("Locked terms cannot receive new invoices.", 409, "TERM_LOCKED");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-generation:${input.schoolId}:${input.studentId}:${input.termId}`}))`;
   const existing = await tx.invoice.findFirst({ where: { studentId: input.studentId, termId: input.termId, schoolId: input.schoolId } });
   if (existing) throw new AppError("This student already has an invoice for the selected term.", 409, "INVOICE_EXISTS");
   const items = await tx.feeItem.findMany({ where: { schoolId: input.schoolId, termId: input.termId, OR: [{ classId: null }, { classId: student.classId ?? "__none__" }] } });
@@ -56,6 +58,7 @@ export async function recordPayment(tx: TenantDb, input: { schoolId: string; act
   if (input.amount <= 0) throw new AppError("Payment amount must be positive.", 400, "INVALID_AMOUNT");
   const reference = input.reference?.trim() || undefined;
   if ((input.method === "momo" || input.method === "bank" || input.method === "cheque") && !reference) throw new AppError("A transaction/reference number is required for this payment method.", 400, "REFERENCE_REQUIRED");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-payment:${input.schoolId}:${input.invoiceId}`}))`;
   const current = await refreshInvoiceStatus(tx, input.invoiceId, input.schoolId);
   if (current.status === "paid") throw new AppError("This invoice is already fully paid. Record an approved credit or refund separately.", 409, "INVOICE_ALREADY_PAID");
   const outstanding = current.invoice.totalAmount.minus(current.paid);
@@ -95,11 +98,14 @@ export async function reversePayment(tx: TenantDb, input: { schoolId: string; ac
   if (reason.length < 2) throw new AppError("A reason is required when reversing a payment.", 400, "REVERSAL_REASON_REQUIRED");
   const payment = await tx.payment.findFirst({ where: { id: input.paymentId, schoolId: input.schoolId }, include: { reversals: true } });
   if (!payment) throw new AppError("Payment not found.", 404, "NOT_FOUND");
-  const reversed = payment.reversals.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-payment:${input.schoolId}:${payment.invoiceId}`}))`;
+  const currentPayment = await tx.payment.findFirst({ where: { id: input.paymentId, schoolId: input.schoolId }, include: { reversals: true } });
+  if (!currentPayment) throw new AppError("Payment not found.", 404, "NOT_FOUND");
+  const reversed = currentPayment.reversals.reduce((sum, row) => sum.plus(row.amount), new Prisma.Decimal(0));
   const amount = new Prisma.Decimal(input.amount);
-  if (amount.lessThanOrEqualTo(0) || reversed.plus(amount).greaterThan(payment.amount)) throw new AppError("Reversal exceeds the unreversed payment balance.", 400, "INVALID_REVERSAL");
-  const reversal = await tx.paymentReversal.create({ data: { schoolId: input.schoolId, paymentId: payment.id, amount, reason, reversedBy: input.actorId } });
-  await refreshInvoiceStatus(tx, payment.invoiceId, input.schoolId);
+  if (amount.lessThanOrEqualTo(0) || reversed.plus(amount).greaterThan(currentPayment.amount)) throw new AppError("Reversal exceeds the unreversed payment balance.", 400, "INVALID_REVERSAL");
+  const reversal = await tx.paymentReversal.create({ data: { schoolId: input.schoolId, paymentId: currentPayment.id, amount, reason, reversedBy: input.actorId } });
+  await refreshInvoiceStatus(tx, currentPayment.invoiceId, input.schoolId);
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "payment.reversed", entityType: "PaymentReversal", entityId: reversal.id, after: reversal });
   return reversal;
 }

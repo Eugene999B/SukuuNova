@@ -28,7 +28,7 @@ export async function matchDeviceIdentityAttendance(input: MatchInput) {
   }
 
   const identity = await input.tx.deviceIdentity.findFirst({
-    where: { deviceKind: input.kind, externalId },
+    where: { schoolId: input.schoolId, deviceKind: input.kind, externalId },
     select: { studentId: true, staffId: true }
   });
   if (!identity?.studentId && !identity?.staffId) {

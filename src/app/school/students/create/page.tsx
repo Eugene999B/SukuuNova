@@ -5,6 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { requirePermission } from "@/lib/rbac";
 import { withTenant } from "@/lib/db";
+import { ensureIdentityCardsForSchool } from "@/lib/identity-card-service";
 import "@/app/school/students/students-workspace.css";
 import "@/components/students/add-student-dialog.css";
 import "@/app/school/students/students-light-overrides.css";
@@ -54,7 +55,11 @@ async function createStudent(formData: FormData) {
     const house = leastFilledHouse[0] ?? null;
     if (house) await tx.$executeRaw`UPDATE "Student" SET "houseId"=${house.id} WHERE "id"=${student.id} AND "schoolId"=${session.schoolId}`;
 
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, houseId: house?.id ?? null, houseName: house?.name ?? null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
+    const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
+    if (!school?.uniqueCode) throw new Error("School identity configuration is incomplete.");
+    await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
+
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, houseId: house?.id ?? null, houseName: house?.name ?? null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } });
   });
   redirect("/school/students");
 }
