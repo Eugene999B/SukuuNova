@@ -22,7 +22,7 @@ async function saveAttendance(formData: FormData) {
     if (!student?.classId) throw new Error("Student is not assigned to a class.");
     const assigned = await tx.class.findFirst({ where: { id: student.classId, OR: [{ classTeacherId: session.userId }, { subjectAssignments: { some: { teacherId: session.userId } } }] }, select: { id: true } });
     if (!assigned) throw new Error("That student is outside your teaching scope.");
-    await recordAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, target: { studentId }, type, method: "manual", timestamp: new Date(`${attendanceDate}T08:00:00.000Z`) });
+    await recordAttendance(tx, { schoolId: session.schoolId, actorId: session.userId, target: { studentId }, type, method: "manual" });
   });
   redirect(`/teacher/attendance?date=${attendanceDate}`);
 }
