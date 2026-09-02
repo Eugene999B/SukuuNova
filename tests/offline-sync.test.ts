@@ -19,17 +19,20 @@ describe("offline sync state machine", () => {
     });
   });
 
-  it("applies an attendance operation and returns ALREADY_APPLIED on the exact retry", async () => {
+  it("applies an attendance operation, preserves its capture timestamp, and returns ALREADY_APPLIED on retry", async () => {
     const createdAt = new Date();
+    const capturedAt = new Date(createdAt.getTime() - 30 * 60 * 1000);
     const operation = {
       clientOperationId: "offline-op-001", clientVersion: 1, baseEntityVersion: 0, entityId: studentId,
       operationType: "ATTENDANCE_RECORD" as const,
-      payload: { studentId, type: "in" as const, method: "card" as const, attendanceDate: createdAt.toISOString() },
+      payload: { studentId, type: "in" as const, method: "card" as const, attendanceDate: createdAt.toISOString(), timestamp: capturedAt.toISOString() },
       createdAt: createdAt.toISOString()
     };
     await withTenant(fixture.schoolId, async (tx) => {
       const first = await processOfflineSync(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, deviceId, operations: [operation] });
       expect(first.results[0]).toMatchObject({ status: "APPLIED" });
+      const event = await tx.attendanceEvent.findFirst({ where: { studentId, method: "card" }, orderBy: { timestamp: "desc" } });
+      expect(event?.timestamp.toISOString()).toBe(capturedAt.toISOString());
       const retry = await processOfflineSync(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, deviceId, operations: [operation] });
       expect(retry.results[0]).toMatchObject({ status: "ALREADY_APPLIED" });
       const ledgerCount = await tx.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM "SyncOperation" WHERE "schoolId" = ${fixture.schoolId} AND "clientOperationId" = ${operation.clientOperationId}`;
