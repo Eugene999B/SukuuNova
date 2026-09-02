@@ -19,14 +19,15 @@ function attendanceDate(value: Date, timezone: string) {
   return new Date(localParts(value, timezone).dateKey + "T00:00:00.000Z");
 }
 
-export async function isAttendanceBlocked(tx: TenantDb, day: Date) {
+export async function isAttendanceBlocked(tx: TenantDb, schoolId: string, day: Date) {
   const settings = await tx.schoolSettings.findFirst({ select: { timezone: true } });
   const timezone = settings?.timezone || "Africa/Accra";
   const targetDate = day.toISOString().slice(0, 10);
   const rows = await tx.$queryRaw<Array<{ id: string }>>`
     SELECT "id"
     FROM "CalendarEvent"
-    WHERE "affectsAttendance" = true
+    WHERE "schoolId" = ${schoolId}
+      AND "affectsAttendance" = true
       AND ("startDate" AT TIME ZONE 'UTC' AT TIME ZONE ${timezone})::date <= ${targetDate}::date
       AND ("endDate" AT TIME ZONE 'UTC' AT TIME ZONE ${timezone})::date >= ${targetDate}::date
     LIMIT 1
@@ -72,7 +73,7 @@ async function validateStudentState(tx: TenantDb, schoolId: string, studentId: s
   if (type === "out" && current?.type !== "in") throw new AppError("The student must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
 }
 
-export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; type: "in" | "out"; verification: string; verificationMeta?: Record<string, unknown> }) {
+export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; type: "in" | "out"; method?: "manual" | "qr" | "face" | "fingerprint" | "card"; verification: string; verificationMeta?: Record<string, unknown> }) {
   await requirePermission(tx, input.actorId, "attendance:staff_scan", input.schoolId);
   const staff = await tx.user.findFirst({ where: { id: input.actorId, schoolId: input.schoolId, status: "active" }, select: { id: true, schoolId: true, name: true } });
   if (!staff) throw new ForbiddenError("Only an active staff account in this school can use staff check-in.");
@@ -80,7 +81,7 @@ export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId:
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
   const timestamp = new Date();
   const day = attendanceDate(timestamp, settings.timezone);
-  if (await isAttendanceBlocked(tx, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
+  if (await isAttendanceBlocked(tx, input.schoolId, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   const periodSetting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
   const periodId: string = periodSetting[0]?.value?.trim() || "DAILY";
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
@@ -88,7 +89,7 @@ export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId:
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
   await validateStaffState(tx, input.schoolId, input.actorId, day, input.type);
-  const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, staffId: input.actorId, type: input.type, method: "qr", timestamp, attendanceDate: day, isLate, recordedBy: input.actorId } });
+  const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, staffId: input.actorId, type: input.type, method: input.method ?? "qr", timestamp, attendanceDate: day, isLate, recordedBy: input.actorId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: input.type === "in" ? "attendance.staff.checked_in" : "attendance.staff.checked_out", entityType: "AttendanceEvent", entityId: event.id, after: { event, verification: input.verification, ...(input.verificationMeta ? { verificationMeta: input.verificationMeta } : {}) } });
   return event;
 }
@@ -128,13 +129,13 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   if (Number.isNaN(timestamp.getTime())) throw new AppError("Invalid attendance timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
   if (timestamp.getTime() > Date.now() + 5 * 60 * 1000) throw new AppError("Attendance timestamp cannot be more than 5 minutes in the future.", 400, "ATTENDANCE_TIMESTAMP_IN_FUTURE");
   const day = attendanceDate(timestamp, settings.timezone);
-  if (await isAttendanceBlocked(tx, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
+  if (await isAttendanceBlocked(tx, input.schoolId, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   let periodId = input.periodId?.trim();
   if (!periodId) {
     const setting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
     periodId = setting[0]?.value?.trim() || "DAILY";
   }
-  const validatedPeriodId = validatePeriodId(periodId);
+  const validatedPeriodId: string = validatePeriodId(periodId);
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${validatedPeriodId}, true)`;
   const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
@@ -162,10 +163,10 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   return event;
 }
 
-export async function attendanceSummary(tx: TenantDb, input: { actorId: string; day: Date; classId?: string; periodId?: string }) {
+export async function attendanceSummary(tx: TenantDb, input: { actorId: string; day: Date; classId?: string; periodId?: string; schoolId: string }) {
   await requirePermission(tx, input.actorId, "attendance:record");
   const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
-  if (await isAttendanceBlocked(tx, input.day)) return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
+  if (await isAttendanceBlocked(tx, input.schoolId, input.day)) return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
   const students = await tx.student.findMany({ where: { status: "active", ...classFilter }, select: { id: true } });
   const studentIds = students.map((student) => student.id);
   if (!studentIds.length) return { calendarBlocked: false, present: 0, late: 0, absent: 0 };
@@ -173,7 +174,8 @@ export async function attendanceSummary(tx: TenantDb, input: { actorId: string; 
   const events = await tx.$queryRaw<Array<{ studentId: string; isLate: boolean | null }>>`
     SELECT "studentId", "isLate"
     FROM "AttendanceEvent"
-    WHERE "attendanceDate" = ${input.day}
+    WHERE "schoolId" = ${input.schoolId}
+      AND "attendanceDate" = ${input.day}
       AND "type" = 'in'
       AND "studentId" IN (${Prisma.join(studentIds)})
       ${periodId ? Prisma.sql`AND "periodId" = ${periodId}` : Prisma.empty}
@@ -187,7 +189,7 @@ export async function attendanceSummary(tx: TenantDb, input: { actorId: string; 
 export async function finalizeStudentAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; day: Date; classId?: string }) {
   await requirePermission(tx, input.actorId, "attendance:record", input.schoolId);
   const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
-  if (await isAttendanceBlocked(tx, input.day)) return { queued: 0, calendarBlocked: true };
+  if (await isAttendanceBlocked(tx, input.schoolId, input.day)) return { queued: 0, calendarBlocked: true };
   const students = await tx.student.findMany({ where: { status: "active", ...classFilter }, include: { attendanceEvents: { where: { attendanceDate: input.day, type: "in" }, select: { id: true } }, guardians: { where: { isPrimary: true }, include: { guardian: true } } } });
   let queued = 0;
   for (const student of students) {
