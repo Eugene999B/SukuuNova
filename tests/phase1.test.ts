@@ -236,7 +236,7 @@ describe("Phase 1 MVP security and workflow gates", () => {
         ).rejects.toMatchObject({ code: "CALENDAR_BLOCKS_ATTENDANCE" });
 
         await expect(
-          attendanceSummary(tx, { actorId: fixture.ownerId, day: holiday, classId })
+          attendanceSummary(tx, { actorId: fixture.ownerId, day: holiday, classId, schoolId: fixture.schoolId })
         ).resolves.toEqual({
           calendarBlocked: true,
           present: 0,
@@ -345,9 +345,6 @@ describe("Phase 1 MVP security and workflow gates", () => {
       messageId = messages[0].id;
     });
 
-    // Earlier workflow tests may have legitimately queued an SMS for this school.
-    // Process enough of the queue to reach the message created by this test instead
-    // of relying on queue ordering.
     expect(await processMessageBatchOnce({ sms: sender }, 20, fixture.schoolId)).toBeGreaterThan(0);
 
     await withTenant(fixture.schoolId, async (tx) => {
