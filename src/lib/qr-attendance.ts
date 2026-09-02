@@ -145,7 +145,7 @@ export async function consumeStaffAttendanceQr(
   tx: TenantDb,
   input: { schoolId: string; actorId: string; challengeId: string; nonce: string; verification: string; meta?: Record<string, unknown> }
 ) {
-  const id = hashQrSecret(`staff-qr-consumption:${input.schoolId}:${input.challengeId}:${input.actorId}`);
+  const id = hashQrSecret(`staff-qr-consumption:${input.schoolId}:${input.challengeId}:${input.nonce}:${input.actorId}`);
   const result = await tx.auditLogSchool.createMany({
     data: [{
       id,
