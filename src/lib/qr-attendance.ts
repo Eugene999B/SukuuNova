@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
+import type { Prisma } from "@prisma/client";
 import { AppError } from "./errors";
 import type { TenantDb } from "./db";
 
@@ -189,11 +190,11 @@ export async function consumeStaffAttendanceQr(
       action: "attendance.qr.consumed",
       entityType: "StaffAttendanceQrChallenge",
       entityId: input.challengeId,
-      after: {
+      after: ({
         verification: input.verification,
         ...(displayIpHash ? { displayIpHash } : {}),
         ...(input.meta ? { meta: input.meta } : {})
-      }
+      } as Prisma.InputJsonValue)
     }],
     skipDuplicates: true
   });
