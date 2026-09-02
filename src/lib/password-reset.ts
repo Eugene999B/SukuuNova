@@ -40,7 +40,22 @@ export async function confirmSchoolPasswordReset(input: { uniqueCode: string; to
   if (!directory || directory.status !== "active") throw new UnauthorizedError("Invalid or expired reset token.");
   await withTenant(directory.schoolId, async (tx) => {
     const now = new Date();
-    const reset = await tx.schoolPasswordResetToken.findFirst({ where: { schoolId: directory.schoolId, tokenHash: tokenHash(input.token), usedAt: null, expiresAt: { gt: now }, user: { status: "active" } } });
+    const claimed = await tx.$queryRaw<Array<{ id: string; userId: string }>>`
+      UPDATE "SchoolPasswordResetToken"
+      SET "usedAt" = ${now}
+      WHERE "schoolId" = ${directory.schoolId}
+        AND "tokenHash" = ${tokenHash(input.token)}
+        AND "usedAt" IS NULL
+        AND "expiresAt" > ${now}
+        AND EXISTS (
+          SELECT 1 FROM "User" u
+          WHERE u."id" = "SchoolPasswordResetToken"."userId"
+            AND u."schoolId" = ${directory.schoolId}
+            AND u."status" = 'active'
+        )
+      RETURNING "id", "userId"
+    `;
+    const reset = claimed[0];
     if (!reset) throw new UnauthorizedError("Invalid or expired reset token.");
     const passwordHash = await hash(input.newPassword, 12);
     await tx.user.update({ where: { id: reset.userId }, data: { passwordHash } });
@@ -65,7 +80,20 @@ export async function confirmPlatformPasswordReset(input: { token: string; newPa
   validateNewPassword(input.newPassword);
   await db.$transaction(async (tx) => {
     const now = new Date();
-    const reset = await tx.platformPasswordResetToken.findFirst({ where: { tokenHash: tokenHash(input.token), usedAt: null, expiresAt: { gt: now }, admin: { status: "active" } } });
+    const claimed = await tx.$queryRaw<Array<{ id: string; adminId: string }>>`
+      UPDATE "PlatformPasswordResetToken"
+      SET "usedAt" = ${now}
+      WHERE "tokenHash" = ${tokenHash(input.token)}
+        AND "usedAt" IS NULL
+        AND "expiresAt" > ${now}
+        AND EXISTS (
+          SELECT 1 FROM "PlatformAdmin" a
+          WHERE a."id" = "PlatformPasswordResetToken"."adminId"
+            AND a."status" = 'active'
+        )
+      RETURNING "id", "adminId"
+    `;
+    const reset = claimed[0];
     if (!reset) throw new UnauthorizedError("Invalid or expired reset token.");
     await tx.platformAdmin.update({ where: { id: reset.adminId }, data: { passwordHash: await hash(input.newPassword, 12) } });
     await tx.platformPasswordResetToken.updateMany({ where: { adminId: reset.adminId, usedAt: null }, data: { usedAt: now } });
