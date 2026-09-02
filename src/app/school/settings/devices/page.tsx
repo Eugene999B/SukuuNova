@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 
 type Device = {
@@ -39,14 +39,14 @@ export default function DevicesPage() {
   const [targetId, setTargetId] = useState("");
   const [message, setMessage] = useState("");
 
-  async function loadDevices() {
+  const loadDevices = useCallback(async () => {
     const response = await fetch("/api/school/devices");
     const data = await response.json();
     if (!response.ok) return setMessage(data.message ?? "Could not load devices.");
     setDevices(data.devices ?? []);
-  }
+  }, []);
 
-  async function loadIdentities() {
+  const loadIdentities = useCallback(async () => {
     const response = await fetch("/api/school/devices/identities");
     const data = await response.json();
     if (!response.ok) return setMessage(data.message ?? "Could not load hardware identities.");
@@ -54,12 +54,12 @@ export default function DevicesPage() {
     setStudents(data.students ?? []);
     setStaff(data.staff ?? []);
     setTargetId((current) => current || (targetType === "student" ? data.students?.[0]?.id : data.staff?.[0]?.id) || "");
-  }
+  }, [targetType]);
 
   useEffect(() => {
     void loadDevices();
     void loadIdentities();
-  }, []);
+  }, [loadDevices, loadIdentities]);
 
   async function registerDevice() {
     setMessage("");
