@@ -38,8 +38,9 @@ export async function POST(request: Request) {
       if (input.action === "reissue") return { kind: "json" as const, value: await reissueIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
       if (input.action === "revoke") return { kind: "json" as const, value: await revokeIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
       const scope: IdentityCardScope = input.scope === "students" ? "student" : input.scope === "staff" ? "staff" : input.scope;
-      const cards = await getIdentityCardsByScope(tx, session.schoolId, school.uniqueCode, scope, input.ids ?? [], session.userId);
-      if (!cards.length) throw new AppError("No identity cards matched this selection.", 404, "NO_CARDS");
+      const cards = (await getIdentityCardsByScope(tx, session.schoolId, school.uniqueCode, scope, input.ids ?? [], session.userId))
+        .filter((card) => card.status === "active" && !card.isExpired);
+      if (!cards.length) throw new AppError("No current identity cards matched this selection.", 404, "NO_CARDS");
       return { kind: "pdf" as const, pdf: await buildIdentityCardPdf(cards, school, new URL(request.url).origin) };
     });
     if (result.kind === "json") return NextResponse.json({ ok: true, result: result.value });
