@@ -5,7 +5,7 @@ import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
 import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/academic-engine";
 import GradebookEntryGrid from "@/components/GradebookEntryGrid";
-import "../../module-workspace.css";
+import "@/app/school/module-workspace.css";
 
 export default async function TeacherGradebookContextPage({ params }: { params: Promise<{ context: string }> }) {
   const session = await requireSchoolSession();
@@ -24,7 +24,7 @@ export default async function TeacherGradebookContextPage({ params }: { params: 
     const selectedTerm = config.terms[0];
     if (!selectedTerm) throw new Error("No academic term is configured.");
     const performance = await getClassSubjectPerformance(tx, classId, subjectId, selectedTerm.id);
-    return { school, config, assignment, selectedTerm, performance };
+    return { school, assignment, selectedTerm, performance };
   });
 
   return <AppShell universe="teacher" title="My gradebook" subtitle="Enter and review marks only for your assigned class and subject." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role="Teacher">
