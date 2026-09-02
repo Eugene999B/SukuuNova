@@ -1,6 +1,6 @@
 import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
-import { AppError } from "./errors";
+import { AppError, ForbiddenError } from "./errors";
 import { requirePermission } from "./rbac";
 import { encryptEmbeddingRef } from "./face-crypto";
 import {
@@ -40,6 +40,7 @@ export async function enrollFace(
   if (input.target.studentId) {
     const consent = await tx.studentGuardian.findFirst({
       where: {
+        schoolId: input.schoolId,
         studentId: input.target.studentId,
         guardianId: input.target.consentByGuardianId
       },
@@ -53,11 +54,11 @@ export async function enrollFace(
       );
     }
   } else {
-    const staff = await tx.user.findUnique({
-      where: { id: input.target.staffId },
+    const staff = await tx.user.findFirst({
+      where: { id: input.target.staffId, schoolId: input.schoolId, status: "active" },
       select: { id: true }
     });
-    if (!staff) throw new AppError("Staff account not found.", 404, "NOT_FOUND");
+    if (!staff) throw new AppError("Staff account not found in this school.", 404, "NOT_FOUND");
   }
 
   const externalId = input.target.studentId
@@ -71,8 +72,8 @@ export async function enrollFace(
   const embeddingRef = encryptEmbeddingRef(indexed.faceId);
   const existing = await tx.faceEnrollment.findFirst({
     where: input.target.studentId
-      ? { studentId: input.target.studentId }
-      : { staffId: input.target.staffId }
+      ? { schoolId: input.schoolId, studentId: input.target.studentId }
+      : { schoolId: input.schoolId, staffId: input.target.staffId }
   });
   const enrollment = existing
     ? await tx.faceEnrollment.update({
@@ -148,9 +149,9 @@ export async function matchFaceAttendance(
   const enrollment = candidateId
     ? await tx.faceEnrollment.findFirst({
         where: kind === "student"
-          ? { studentId: candidateId }
+          ? { schoolId: input.schoolId, studentId: candidateId }
           : kind === "staff"
-            ? { staffId: candidateId }
+            ? { schoolId: input.schoolId, staffId: candidateId }
             : { id: "__invalid__" },
         select: { id: true, studentId: true, staffId: true }
       })
@@ -202,15 +203,15 @@ export async function reviewFaceMatch(
   }
 ) {
   await requirePermission(tx, input.actorId, "attendance:record");
-  const review = await tx.faceMatchReview.findUnique({
-    where: { id: input.reviewId }
+  const review = await tx.faceMatchReview.findFirst({
+    where: { id: input.reviewId, schoolId: input.schoolId }
   });
   if (!review) throw new AppError("Face review not found.", 404, "NOT_FOUND");
   if (review.status !== "pending") {
     throw new AppError("Face review is already complete.", 409, "INVALID_STATE");
   }
   if (input.decision === "rejected") {
-    return tx.faceMatchReview.update({
+    const rejected = await tx.faceMatchReview.update({
       where: { id: review.id },
       data: {
         status: "rejected",
@@ -218,6 +219,16 @@ export async function reviewFaceMatch(
         reviewedAt: new Date()
       }
     });
+    await appendSchoolAudit(tx, {
+      schoolId: input.schoolId,
+      actorId: input.actorId,
+      action: "face.match_rejected",
+      entityType: "FaceMatchReview",
+      entityId: review.id,
+      before: { status: review.status },
+      after: { status: rejected.status, candidateStudentId: review.candidateStudentId, candidateStaffId: review.candidateStaffId }
+    });
+    return rejected;
   }
   if (!review.candidateStudentId && !review.candidateStaffId) {
     throw new AppError(
@@ -239,13 +250,22 @@ export async function reviewFaceMatch(
       : undefined,
     deviceId: review.deviceId ?? undefined
   });
-  await tx.faceMatchReview.update({
+  const confirmed = await tx.faceMatchReview.update({
     where: { id: review.id },
     data: {
       status: "confirmed",
       reviewedBy: input.actorId,
       reviewedAt: new Date()
     }
+  });
+  await appendSchoolAudit(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    action: "face.match_confirmed",
+    entityType: "FaceMatchReview",
+    entityId: review.id,
+    before: { status: review.status },
+    after: { status: confirmed.status, eventId: event.id }
   });
   return { reviewId: review.id, event };
 }
