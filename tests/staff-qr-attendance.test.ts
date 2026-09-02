@@ -45,7 +45,7 @@ describe("staff attendance QR", () => {
 
     await expect(verifyStaffAttendanceQr(token, "school-b")).rejects.toMatchObject({
       code: "INVALID_STAFF_QR",
-      statusCode: 400
+      status: 400
     });
   });
 
@@ -60,7 +60,7 @@ describe("staff attendance QR", () => {
     process.env.SCHOOL_AUTH_SECRET = "another-test-secret-012345678901234567890";
     await expect(verifyStaffAttendanceQr(token, "school-a")).rejects.toMatchObject({
       code: "INVALID_STAFF_QR",
-      statusCode: 400
+      status: 400
     });
   });
 
@@ -74,7 +74,7 @@ describe("staff attendance QR", () => {
 
     await expect(verifyStaffAttendanceQr(token, "school-a")).rejects.toMatchObject({
       code: "INVALID_STAFF_QR",
-      statusCode: 400
+      status: 400
     });
   });
 });
