@@ -19,6 +19,7 @@ describe("school identity cards", () => {
       await tx.userPermissionOverride.create({ data: { schoolId: fixture.schoolId, userId: fixture.memberId, permissionId: fixture.permissionIds.get("identity_cards:manage")!, granted: true } });
       studentId = (await tx.student.create({ data: { schoolId: fixture.schoolId, admissionNo: `IC-${fixture.schoolId}`, name: "Identity Card Student" } })).id;
       staffId = (await tx.user.create({ data: { schoolId: fixture.schoolId, name: "Identity Card Staff", email: `id-card-staff-${fixture.schoolId}@test.invalid`, passwordHash: "test-only" } })).id;
+      await tx.userRole.create({ data: { schoolId: fixture.schoolId, userId: staffId, roleId: fixture.testRoleId } });
       await tx.userPermissionOverride.create({ data: { schoolId: fixture.schoolId, userId: staffId, permissionId: fixture.permissionIds.get("identity_cards:manage")!, granted: true } });
     });
     await withTenant(other.schoolId, async (tx) => {
