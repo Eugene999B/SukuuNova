@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./staff-attendance.css";
 
 type Staff = { id:string; name:string };
@@ -20,7 +20,7 @@ export default function StaffAttendanceDesk(){
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState("");
 
- async function load(){
+ const load=useCallback(async()=>{
   setLoading(true); setError("");
   try{
    const params=new URLSearchParams({start,end}); if(staffId) params.set("staffId",staffId);
@@ -30,9 +30,9 @@ export default function StaffAttendanceDesk(){
    setData(body);
   }catch(err){ setError(err instanceof Error?err.message:"Unable to load staff attendance."); }
   finally{ setLoading(false); }
- }
+ },[start,end,staffId]);
 
- useEffect(()=>{ void load(); },[start,end,staffId]);
+ useEffect(()=>{ void load(); },[load]);
  const latest=data?.trends.at(-1);
  const rate=useMemo(()=>{
   const population=(data?.staff.length??0)*(data?.trends.length??0);
