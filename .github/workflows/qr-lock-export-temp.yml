@@ -6,7 +6,7 @@ on:
       - feat/staff-qr-checkin
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   export-lock:
@@ -15,15 +15,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Generate lockfile
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-      - name: Upload generated lockfile
-        uses: actions/upload-artifact@v4
-        with:
-          name: sukuunova-qr-package-lock
-          path: package-lock.json
-          retention-days: 1
+      - name: Generate and commit lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git rm .github/workflows/qr-lock-export-temp.yml
+          if git diff --cached --quiet; then
+            echo "No lockfile changes required."
+            exit 0
+          fi
+          git commit -m "fix(qr): sync npm lockfile"
+          git push origin HEAD:feat/staff-qr-checkin
