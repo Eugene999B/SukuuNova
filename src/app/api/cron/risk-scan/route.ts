@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 function authorized(request: NextRequest) {
   const expected = process.env.RISK_SCAN_CRON_SECRET;
   const provided = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!expected || !provided) return false;
-  const expectedBuffer = Buffer.from(expected);
-  const providedBuffer = Buffer.from(provided);
+  if (!expected || expected.length < 32 || !provided) return false;
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  const providedBuffer = Buffer.from(provided, "utf8");
   return expectedBuffer.length === providedBuffer.length && timingSafeEqual(expectedBuffer, providedBuffer);
 }
 
