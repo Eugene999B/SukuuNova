@@ -59,7 +59,24 @@ async function createStudent(formData: FormData) {
     if (!school?.uniqueCode) throw new Error("School identity configuration is incomplete.");
     await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
 
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, houseId: house?.id ?? null, houseName: house?.name ?? null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } });
+    await tx.auditLogSchool.create({
+      data: {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        action: "student.created",
+        entityType: "Student",
+        entityId: student.id,
+        after: {
+          name,
+          indexNumber,
+          classId: classId || null,
+          houseId: house?.id ?? null,
+          houseName: house?.name ?? null,
+          guardianLinked: Boolean(guardianName && guardianPhone),
+          photoCaptured: Boolean(photoData),
+        },
+      },
+    });
   });
   redirect("/school/students");
 }
