@@ -5,8 +5,8 @@ import { withTenant } from "@/lib/db";
 import { ForbiddenError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { hasPermission } from "@/lib/rbac";
-import { generateReportCard, submitReportCard, approveReportCard } from "@/lib/report-card-service";
-import { sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
+import { generateReportCard, submitReportCard } from "@/lib/report-card-service";
+import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("generate"), studentId: z.string(), termId: z.string(), remarks: z.string().optional() }),
@@ -14,6 +14,14 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("approve"), reportCardId: z.string() }),
   z.object({ action: z.literal("send"), reportCardId: z.string() })
 ]);
+
+function requestOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  if (origin) return origin;
+  const host = request.headers.get("host");
+  if (host) return `${request.headers.get("x-forwarded-proto") || "https"}://${host}`;
+  return process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+}
 
 export async function GET() {
   try {
@@ -41,11 +49,8 @@ export async function POST(request: Request) {
       switch (input.action) {
         case "generate": return await generateReportCard(tx, { ...common, ...input });
         case "submit": return await submitReportCard(tx, { ...common, ...input });
-        case "approve": return await approveReportCard(tx, { ...common, ...input });
-        case "send": {
-          const origin = request.headers.get("origin") || request.headers.get("x-forwarded-proto") && request.headers.get("host") ? `${request.headers.get("x-forwarded-proto") || "https"}://${request.headers.get("host")}` : process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-          return await sendApprovedReportCardPublic(tx, { ...common, ...input, origin });
-        }
+        case "approve": return await approveAndQueuePublicReportCard(tx, { ...common, ...input, origin: requestOrigin(request) });
+        case "send": return await sendApprovedReportCardPublic(tx, { ...common, ...input, origin: requestOrigin(request) });
       }
     });
     return NextResponse.json({ ok: true, result });
