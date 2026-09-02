@@ -192,7 +192,7 @@ export async function consumeStaffAttendanceQr(
       entityId: input.challengeId,
       after: {
         verification: input.verification,
-        displayIpHash,
+        ...(displayIpHash ? { displayIpHash } : {}),
         ...(input.meta ? { meta: input.meta } : {})
       }
     }],
