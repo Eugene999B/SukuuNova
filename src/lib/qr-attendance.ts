@@ -178,13 +178,12 @@ export async function consumeStaffAttendanceQr(
     throw new AppError("This attendance code is invalid or expired.", 409, "CHALLENGE_INVALID_OR_EXPIRED");
   }
 
-  // The challenge identifier is the one-time consumption key. Do not include
-  // actorId here: a school-wide challenge must be consumable by at most one
-  // authenticated staff account, even when concurrent scans race.
-  const id = hashQrSecret(`staff-qr-consumption:${input.schoolId}:${input.challengeId}`);
+  // challengeId deliberately defines the global one-time key. Actor identity
+  // must not be part of it because a school-wide challenge can be consumed only once.
+  const consumptionId = hashQrSecret(`staff-qr-consumption:${input.schoolId}:${input.challengeId}`);
   const result = await tx.auditLogSchool.createMany({
     data: [{
-      id,
+      id: consumptionId,
       schoolId: input.schoolId,
       actorId: input.actorId,
       action: "attendance.qr.consumed",
