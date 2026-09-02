@@ -15,6 +15,12 @@ export default [
     }
   },
   {
+    files: ["**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off"
+    }
+  },
+  {
     files: ["src/components/FinanceWorkspace.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off"
