@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
 import { decryptEmbeddingRef } from "../src/lib/face-crypto";
 import { enrollFace } from "../src/lib/face-service";
@@ -30,7 +30,7 @@ describe("Phase 2 differentiator safety gates", () => {
   let otherClassId: string;
   let subjectId: string;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     process.env.FACE_EMBEDDING_ENCRYPTION_KEY = randomBytes(32).toString("base64");
     fixture = await createTenantFixture();
     other = await createTenantFixture();
@@ -71,6 +71,19 @@ describe("Phase 2 differentiator safety gates", () => {
           passwordHash: "test-only"
         }
       })).id;
+      const teacherRole = await tx.role.create({
+        data: {
+          schoolId: fixture.schoolId,
+          name: "Teacher",
+          key: "teacher"
+        }
+      });
+      await tx.userRole.createMany({
+        data: [
+          { schoolId: fixture.schoolId, userId: staffId, roleId: teacherRole.id },
+          { schoolId: fixture.schoolId, userId: otherStaffId, roleId: teacherRole.id }
+        ]
+      });
       for (const userId of [staffId, otherStaffId]) {
         await tx.userPermissionOverride.create({
           data: {
@@ -130,7 +143,7 @@ describe("Phase 2 differentiator safety gates", () => {
       async indexFace() { return { faceId: "provider-face-id-must-not-be-plain" }; },
       async searchFace() { return {}; }
     };
-    const image = Buffer.alloc(256, 7).toString("base64");
+    const image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
 
     await withTenant(fixture.schoolId, async (tx) => {
       await expect(enrollFace(tx, {
