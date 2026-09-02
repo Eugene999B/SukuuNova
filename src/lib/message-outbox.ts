@@ -13,6 +13,7 @@ const MAX_ATTEMPTS=5;
 const BASE_RETRY_DELAY_MS=30_000;
 const MAX_RETRY_DELAY_MS=2*60*60_000;
 const JITTER_MAX_MS=5_000;
+const CLAIM_LEASE_MS=10*60_000;
 
 function configuredChannels(value:Prisma.JsonValue|null|undefined):Channel[]{
   const candidate = !Array.isArray(value) && value && typeof value === "object" ? (value as Record<string,Prisma.JsonValue>).channels : value;
@@ -61,16 +62,17 @@ function nextRetryAt(attempt:number){ const exponent=Math.max(attempt-1,0); cons
 function deterministicIdempotencyKey(input:NotificationInput,channel:Channel){ const explicit=input.idempotencyKey?.trim(); if(explicit)return `${explicit}:${channel}`; if(!input.templateKey)return `manual:${randomBytes(16).toString("hex")}:${channel}`; const digest=createHash("sha256").update(input.schoolId+"|"+input.templateKey+"|"+input.recipientId+"|"+input.body+"|"+JSON.stringify(input.templateVariables??{})).digest("hex"); return `${input.schoolId}:${input.templateKey}:${input.recipientId}:v1:${digest}:${channel}`; }
 
 async function deliverCreatedMessage(tx:Prisma.TransactionClient,message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null;attempts:number},settings:{smsSenderId?:string|null;whatsappTemplateConfig?:Prisma.JsonValue|null}|null|undefined,senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}){
+  const claimedAttempt=message.attempts;
   try{
     if(message.channel==="sms"){if(!senders.sms)throw new Error("SMS sender is unavailable."); await senders.sms({phone:message.recipientPhone,body:message.body,senderId:settings?.smsSenderId||undefined});}
     else if(message.channel==="whatsapp"){if(!senders.whatsapp)throw new Error("WhatsApp sender is unavailable."); if(!message.templateKey)throw new Error("WhatsApp job has no approved template key."); const sid=contentSid(settings?.whatsappTemplateConfig,message.templateKey); if(!sid)throw new Error("No Twilio ContentSid is configured for "+message.templateKey+"."); const messageVariables=variables(message.templateVariables); if(message.mediaUrl)messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig,message.templateKey)]=message.mediaUrl; await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:messageVariables,mediaUrl:message.mediaUrl||undefined});}
     else throw new Error("Unsupported message channel: "+message.channel);
-    return tx.message.update({where:{id:message.id},data:{status:"sent",sentAt:new Date(),lastError:null,nextAttemptAt:new Date()}});
+    await tx.message.updateMany({where:{id:message.id,status:"sending",attempts:claimedAttempt},data:{status:"sent",sentAt:new Date(),lastError:null,nextAttemptAt:new Date()}});
   }catch(error){
     const lastError=error instanceof Error?error.message.slice(0,500):"Unknown message error";
-    console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.schoolId,lastError,attempts:message.attempts});
-    if(permanentFailure(lastError)||message.attempts>=MAX_ATTEMPTS)return tx.message.update({where:{id:message.id},data:{status:"failed",lastError}});
-    return tx.message.update({where:{id:message.id},data:{status:"queued",lastError,nextAttemptAt:nextRetryAt(message.attempts)}});
+    console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.schoolId,lastError,attempts:claimedAttempt});
+    if(permanentFailure(lastError)||claimedAttempt>=MAX_ATTEMPTS){await tx.message.updateMany({where:{id:message.id,status:"sending",attempts:claimedAttempt},data:{status:"failed",lastError,nextAttemptAt:new Date()}});}
+    else {await tx.message.updateMany({where:{id:message.id,status:"sending",attempts:claimedAttempt},data:{status:"queued",lastError,nextAttemptAt:nextRetryAt(claimedAttempt)}});}
   }
 }
 
@@ -85,9 +87,12 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
   const directories=await db.schoolLoginDirectory.findMany({where:{status:"active",...(schoolIdFilter?{schoolId:schoolIdFilter}:{})}}); let processed=0;
   for(const directory of directories){
     if(processed>=batchSize)break;
-    const jobs=await withTenant(directory.schoolId,tx=>tx.message.findMany({where:{status:"queued",nextAttemptAt:{lte:new Date()}},orderBy:{createdAt:"asc"},take:batchSize-processed}));
+    const now=new Date();
+    const jobs=await withTenant(directory.schoolId,tx=>tx.message.findMany({where:{OR:[{status:"queued",nextAttemptAt:{lte:now}},{status:"sending",nextAttemptAt:{lte:now}}]},orderBy:{createdAt:"asc"},take:batchSize-processed}));
     for(const job of jobs){
-      const claimed=await withTenant(directory.schoolId,tx=>tx.message.updateMany({where:{id:job.id,status:"queued"},data:{status:"sending",attempts:{increment:1}}}));
+      const leaseUntil=new Date(Date.now()+CLAIM_LEASE_MS);
+      const claimableStatus=job.status==="queued" ? {status:"queued",nextAttemptAt:{lte:new Date()}} : {status:"sending",nextAttemptAt:{lte:new Date()}};
+      const claimed=await withTenant(directory.schoolId,tx=>tx.message.updateMany({where:{id:job.id,...claimableStatus},data:{status:"sending",attempts:{increment:1},nextAttemptAt:leaseUntil}}));
       if(claimed.count===0)continue;
       const settings=await withTenant(directory.schoolId,tx=>tx.schoolSettings.findUnique({where:{schoolId:directory.schoolId}}));
       const claimedJob={...job,schoolId:directory.schoolId,attempts:job.attempts+1};
