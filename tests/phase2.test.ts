@@ -143,7 +143,7 @@ describe("Phase 2 differentiator safety gates", () => {
       async indexFace() { return { faceId: "provider-face-id-must-not-be-plain" }; },
       async searchFace() { return {}; }
     };
-    const image = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+    const image = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD4yooooA//2Q==";
 
     await withTenant(fixture.schoolId, async (tx) => {
       await expect(enrollFace(tx, {
@@ -151,9 +151,7 @@ describe("Phase 2 differentiator safety gates", () => {
         actorId: fixture.ownerId,
         target: { studentId, consentByGuardianId: unlinkedGuardianId },
         image
-      }, provider)).rejects.toMatchObject({
-        code: "FACE_CONSENT_REQUIRED"
-      });
+      }, provider)).rejects.toMatchObject({ code: "FACE_CONSENT_REQUIRED" });
 
       const result = await enrollFace(tx, {
         schoolId: fixture.schoolId,
@@ -170,87 +168,26 @@ describe("Phase 2 differentiator safety gates", () => {
 
   it("never logs an unapproved pickup until a different authorized user approves it", async () => {
     await withTenant(fixture.schoolId, async (tx) => {
-      const attempted = await attemptPickup(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.memberId,
-        studentId,
-        guardianId: unlinkedGuardianId
-      });
+      const attempted = await attemptPickup(tx, { schoolId: fixture.schoolId, actorId: fixture.memberId, studentId, guardianId: unlinkedGuardianId });
       expect(attempted.status).toBe("approval_required");
-      if (attempted.status !== "approval_required") {
-        throw new Error("Expected unscheduled pickup approval request.");
-      }
-      expect(await tx.pickupEvent.count({
-        where: { studentId, collectedByGuardianId: unlinkedGuardianId }
-      })).toBe(0);
-
-      await expect(reviewPickupRequest(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.memberId,
-        requestId: attempted.request.id,
-        decision: "approved"
-      })).rejects.toMatchObject({ status: 403 });
-
-      await reviewPickupRequest(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        requestId: attempted.request.id,
-        decision: "approved"
-      });
-      expect(await tx.pickupEvent.count({
-        where: { studentId, collectedByGuardianId: unlinkedGuardianId }
-      })).toBe(1);
-
-      await addApprovedPickup(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        studentId,
-        guardianId
-      });
-      await expect(attemptPickup(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.memberId,
-        studentId,
-        guardianId
-      })).resolves.toMatchObject({ status: "completed" });
+      if (attempted.status !== "approval_required") throw new Error("Expected unscheduled pickup approval request.");
+      expect(await tx.pickupEvent.count({ where: { studentId, collectedByGuardianId: unlinkedGuardianId } })).toBe(0);
+      await expect(reviewPickupRequest(tx, { schoolId: fixture.schoolId, actorId: fixture.memberId, requestId: attempted.request.id, decision: "approved" })).rejects.toMatchObject({ status: 403 });
+      await reviewPickupRequest(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, requestId: attempted.request.id, decision: "approved" });
+      expect(await tx.pickupEvent.count({ where: { studentId, collectedByGuardianId: unlinkedGuardianId } })).toBe(1);
+      await addApprovedPickup(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, studentId, guardianId });
+      await expect(attemptPickup(tx, { schoolId: fixture.schoolId, actorId: fixture.memberId, studentId, guardianId })).resolves.toMatchObject({ status: "completed" });
     });
   });
 
   it("scopes staff payslip lists and guessed PDF IDs to the signed-in staff member", async () => {
     await withTenant(fixture.schoolId, async (tx) => {
-      const run = await tx.payrollRun.create({
-        data: { schoolId: fixture.schoolId, period: "2026-08" }
-      });
-      const own = await tx.payslip.create({
-        data: {
-          schoolId: fixture.schoolId,
-          payrollRunId: run.id,
-          staffId,
-          gross: 2000,
-          deductions: [],
-          net: 2000,
-          pdfData: Buffer.from("own-payslip")
-        }
-      });
-      const someoneElses = await tx.payslip.create({
-        data: {
-          schoolId: fixture.schoolId,
-          payrollRunId: run.id,
-          staffId: otherStaffId,
-          gross: 3000,
-          deductions: [],
-          net: 3000,
-          pdfData: Buffer.from("other-payslip")
-        }
-      });
-
+      const run = await tx.payrollRun.create({ data: { schoolId: fixture.schoolId, period: "2026-08" } });
+      const own = await tx.payslip.create({ data: { schoolId: fixture.schoolId, payrollRunId: run.id, staffId, gross: 2000, deductions: [], net: 2000, pdfData: Buffer.from("own-payslip") } });
+      const someoneElses = await tx.payslip.create({ data: { schoolId: fixture.schoolId, payrollRunId: run.id, staffId: otherStaffId, gross: 3000, deductions: [], net: 3000, pdfData: Buffer.from("other-payslip") } });
       const visible = await visiblePayslips(tx, { schoolId: fixture.schoolId, userId: staffId });
       expect(visible.map((row) => row.id)).toEqual([own.id]);
-      await expect(getVisiblePayslipPdf(tx, {
-        schoolId: fixture.schoolId,
-        actorId: staffId,
-        payslipId: someoneElses.id
-      })).rejects.toMatchObject({ status: 403 });
+      await expect(getVisiblePayslipPdf(tx, { schoolId: fixture.schoolId, actorId: staffId, payslipId: someoneElses.id })).rejects.toMatchObject({ status: 403 });
     });
   });
 
@@ -258,107 +195,38 @@ describe("Phase 2 differentiator safety gates", () => {
     let otherStaffSalaryId = "";
     let otherRunId = "";
     let otherPayslipId = "";
-
     await withTenant(other.schoolId, async (tx) => {
-      otherStaffSalaryId = (await tx.salaryStructure.create({
-        data: {
-          schoolId: other.schoolId,
-          staffId: other.ownerId,
-          grossSalary: 5000,
-          deductions: []
-        }
-      })).id;
-      otherRunId = (await tx.payrollRun.create({
-        data: { schoolId: other.schoolId, period: "2026-09" }
-      })).id;
-      otherPayslipId = (await tx.payslip.create({
-        data: {
-          schoolId: other.schoolId,
-          payrollRunId: otherRunId,
-          staffId: other.ownerId,
-          gross: 5000,
-          deductions: [],
-          net: 5000,
-          pdfData: Buffer.from("other-school-payslip")
-        }
-      })).id;
+      otherStaffSalaryId = (await tx.salaryStructure.create({ data: { schoolId: other.schoolId, staffId: other.ownerId, grossSalary: 5000, deductions: [] } })).id;
+      otherRunId = (await tx.payrollRun.create({ data: { schoolId: other.schoolId, period: "2026-09" } })).id;
+      otherPayslipId = (await tx.payslip.create({ data: { schoolId: other.schoolId, payrollRunId: otherRunId, staffId: other.ownerId, gross: 5000, deductions: [], net: 5000, pdfData: Buffer.from("other-school-payslip") } })).id;
     });
-
     await withTenant(fixture.schoolId, async (tx) => {
       expect(otherStaffSalaryId).toBeTruthy();
       expect(await tx.salaryStructure.findMany({ where: { schoolId: fixture.schoolId } })).toHaveLength(0);
       expect(await visiblePayslips(tx, { schoolId: fixture.schoolId, userId: fixture.ownerId })).toHaveLength(0);
-      await expect(getVisiblePayslipPdf(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        payslipId: otherPayslipId
-      })).rejects.toMatchObject({ status: 404 });
-
+      await expect(getVisiblePayslipPdf(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, payslipId: otherPayslipId })).rejects.toMatchObject({ status: 404 });
       await expect(tx.payrollRun.findFirst({ where: { id: otherRunId, schoolId: fixture.schoolId } })).resolves.toBeNull();
     });
   });
 
   it("keeps custom roles inside one tenant even when another tenant guesses the ID", async () => {
-    const role = await withTenant(fixture.schoolId, (tx) => createCustomRole(tx, {
-      schoolId: fixture.schoolId,
-      actorId: fixture.ownerId,
-      name: "Safety Reviewer",
-      permissionKeys: ["attendance:record", "visitors:log"]
-    }));
-
+    const role = await withTenant(fixture.schoolId, (tx) => createCustomRole(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, name: "Safety Reviewer", permissionKeys: ["attendance:record", "visitors:log"] }));
     await withTenant(other.schoolId, async (tx) => {
       const data = await customRoleBuilderData(tx, other.ownerId);
       expect(data.roles.some((row) => row.id === role.id)).toBe(false);
-      await expect(updateCustomRole(tx, {
-        schoolId: other.schoolId,
-        actorId: other.ownerId,
-        roleId: role.id,
-        name: "Cross-tenant attempt",
-        permissionKeys: []
-      })).rejects.toMatchObject({ status: 404 });
+      await expect(updateCustomRole(tx, { schoolId: other.schoolId, actorId: other.ownerId, roleId: role.id, name: "Cross-tenant attempt", permissionKeys: [] })).rejects.toMatchObject({ status: 404 });
     });
   });
 
   it("suggests substitutes without writing an assignment until explicit confirmation", async () => {
     const day = new Date("2026-08-17T00:00:00.000Z");
     await withTenant(fixture.schoolId, async (tx) => {
-      const absentSlot = await createTimetableSlot(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        classId,
-        subjectId,
-        teacherId: staffId,
-        dayOfWeek: 1,
-        period: 1
-      });
-      await createTimetableSlot(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        classId: otherClassId,
-        subjectId,
-        teacherId: otherStaffId,
-        dayOfWeek: 2,
-        period: 2
-      });
-
-      const result = await suggestSubstitutes(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        absentTeacherId: staffId,
-        day,
-        period: 1,
-        asOf: new Date("2026-08-17T10:00:00.000Z")
-      });
+      const absentSlot = await createTimetableSlot(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, classId, subjectId, teacherId: staffId, dayOfWeek: 1, period: 1 });
+      await createTimetableSlot(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, classId: otherClassId, subjectId, teacherId: otherStaffId, dayOfWeek: 2, period: 2 });
+      const result = await suggestSubstitutes(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, absentTeacherId: staffId, day, period: 1, asOf: new Date("2026-08-17T10:00:00.000Z") });
       expect(result.suggestions.map((row) => row.id)).toContain(otherStaffId);
       expect(await tx.substituteAssignment.count()).toBe(0);
-
-      const confirmed = await confirmSubstitute(tx, {
-        schoolId: fixture.schoolId,
-        actorId: fixture.ownerId,
-        timetableSlotId: absentSlot.id,
-        substituteTeacherId: otherStaffId,
-        assignmentDate: day
-      });
+      const confirmed = await confirmSubstitute(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, timetableSlotId: absentSlot.id, substituteTeacherId: otherStaffId, assignmentDate: day });
       expect(confirmed.substituteTeacherId).toBe(otherStaffId);
       expect(await tx.substituteAssignment.count()).toBe(1);
     });
