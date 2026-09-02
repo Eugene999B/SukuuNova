@@ -5,7 +5,8 @@ import { withTenant } from "@/lib/db";
 import { ForbiddenError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { hasPermission } from "@/lib/rbac";
-import { generateReportCard, submitReportCard, approveReportCard, sendReportCard } from "@/lib/report-card-service";
+import { generateReportCard, submitReportCard, approveReportCard } from "@/lib/report-card-service";
+import { sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("generate"), studentId: z.string(), termId: z.string(), remarks: z.string().optional() }),
@@ -19,15 +20,10 @@ export async function GET() {
     const session = await requireSchoolSession();
     const reports = await withTenant(session.schoolId, async (tx) => {
       const canView = await hasPermission(tx, session.userId, "report_cards:view");
-      if (!canView) {
-        throw new ForbiddenError("Report-card access is not permitted.");
-      }
+      if (!canView) throw new ForbiddenError("Report-card access is not permitted.");
       const parent = await hasPermission(tx, session.userId, "parents:read_linked");
       return tx.reportCard.findMany({
-        where: parent ? {
-          status: "sent",
-          student: { guardians: { some: { guardian: { userId: session.userId } } } }
-        } : {},
+        where: parent ? { status: "sent", student: { guardians: { some: { guardian: { userId: session.userId } } } } } : {},
         include: { student: true, term: true },
         orderBy: { createdAt: "desc" }
       });
@@ -46,7 +42,10 @@ export async function POST(request: Request) {
         case "generate": return await generateReportCard(tx, { ...common, ...input });
         case "submit": return await submitReportCard(tx, { ...common, ...input });
         case "approve": return await approveReportCard(tx, { ...common, ...input });
-        case "send": return await sendReportCard(tx, { ...common, ...input });
+        case "send": {
+          const origin = request.headers.get("origin") || request.headers.get("x-forwarded-proto") && request.headers.get("host") ? `${request.headers.get("x-forwarded-proto") || "https"}://${request.headers.get("host")}` : process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+          return await sendApprovedReportCardPublic(tx, { ...common, ...input, origin });
+        }
       }
     });
     return NextResponse.json({ ok: true, result });
