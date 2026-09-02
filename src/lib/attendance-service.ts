@@ -141,11 +141,12 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   return event;
 }
 
-export async function attendanceSummary(tx: TenantDb, input: { actorId: string; day: Date; classId?: string }) {
+export async function attendanceSummary(tx: TenantDb, input: { actorId: string; day: Date; classId?: string; periodId?: string }) {
   await requirePermission(tx, input.actorId, "attendance:record");
   const classFilter = await authorizedSummaryClassFilter(tx, input.actorId, input.classId);
   if (await isAttendanceBlocked(tx, input.day)) return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
-  const events = await tx.attendanceEvent.findMany({ where: { attendanceDate: input.day, type: "in", student: classFilter }, select: { studentId: true, isLate: true } });
+  const periodFilter = input.periodId ? { periodId: input.periodId.trim() } : {};
+  const events = await tx.attendanceEvent.findMany({ where: { attendanceDate: input.day, type: "in", ...periodFilter, student: classFilter }, select: { studentId: true, isLate: true } });
   const total = await tx.student.count({ where: { status: "active", ...classFilter } });
   const presentIds = new Set(events.flatMap((event) => event.studentId ? [event.studentId] : []));
   const lateIds = new Set(events.flatMap((event) => event.studentId && event.isLate ? [event.studentId] : []));
