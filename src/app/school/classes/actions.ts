@@ -1,6 +1,5 @@
 "use server";
 
-import { createId } from "@paralleldrive/cuid2";
 import { withTenant } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { requirePermission } from "@/lib/rbac";
@@ -36,45 +35,65 @@ export async function createClass(input: { level: string; name: string; classTea
 }
 
 export async function createHouse(input: { name: string; code: string; color?: string; description?: string }): Promise<ActionResult> {
-  const session = await requireSchoolSession(); const name = input.name.trim(); const code = input.code.trim().toUpperCase(); const color = input.color || HOUSE_COLORS[0]; const description = input.description?.trim() || null;
+  const session = await requireSchoolSession();
+  const name = input.name.trim(); const code = input.code.trim().toUpperCase(); const color = input.color || HOUSE_COLORS[0]; const description = input.description?.trim() || null;
   if (!name || !code) return { ok: false, message: "Enter a house name and code." };
   return withTenant(session.schoolId, async (tx) => {
-    try { await requirePermission(tx, session.userId, "classes:manage");
-      const duplicate = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "House" WHERE "schoolId"=${session.schoolId} AND (LOWER("name")=LOWER(${name}) OR UPPER("code")=UPPER(${code})) LIMIT 1`;
-      if (duplicate.length) return { ok: false, message: "A house with that name or code already exists." };
-      const id = createId();
-      await tx.$executeRaw`INSERT INTO "House" ("id","schoolId","name","code","color","description","isActive") VALUES (${id},${session.schoolId},${name},${code},${color},${description},true)`;
-      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "house.created", entityType: "House", entityId: id, after: { name, code, color, description } });
+    try {
+      await requirePermission(tx, session.userId, "classes:manage");
+      const duplicate = await tx.house.findFirst({ where: { OR: [{ name: { equals: name, mode: "insensitive" } }, { code: { equals: code, mode: "insensitive" } }] }, select: { id: true } });
+      if (duplicate) return { ok: false, message: "A house with that name or code already exists." };
+      const house = await tx.house.create({ data: { schoolId: session.schoolId, name, code, color, description, isActive: true }, select: { id: true, name: true, code: true, color: true, description: true } });
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "house.created", entityType: "House", entityId: house.id, after: house });
       return { ok: true, message: `${name} was added to the house system.` };
-    } catch (error) { return { ok: false, message: error instanceof Error ? error.message : "We could not create the house." }; }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "We could not create the house." };
+    }
   });
 }
 
 export async function assignHouse(input: { studentId: string; houseId: string }): Promise<ActionResult> {
   const session = await requireSchoolSession();
   return withTenant(session.schoolId, async (tx) => {
-    try { await requirePermission(tx, session.userId, "students:write");
-      const [house, student] = await Promise.all([tx.$queryRaw<Array<{ id: string; name: string }>>`SELECT "id","name" FROM "House" WHERE "id"=${input.houseId} AND "schoolId"=${session.schoolId} AND "isActive"=true LIMIT 1`, tx.student.findFirst({ where: { id: input.studentId }, select: { id: true, name: true } })]);
-      if (!house[0] || !student) return { ok: false, message: "Student or house could not be found." };
-      const previous = await tx.$queryRaw<Array<{ houseId: string | null }>>`SELECT "houseId" FROM "Student" WHERE "id"=${input.studentId} AND "schoolId"=${session.schoolId} LIMIT 1`;
-      await tx.$executeRaw`UPDATE "Student" SET "houseId"=${input.houseId} WHERE "id"=${input.studentId} AND "schoolId"=${session.schoolId}`;
-      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "student.house_assigned", entityType: "Student", entityId: student.id, before: { houseId: previous[0]?.houseId ?? null }, after: { houseId: input.houseId, houseName: house[0].name } });
-      return { ok: true, message: `${student.name} is now in ${house[0].name}.` };
-    } catch (error) { return { ok: false, message: error instanceof Error ? error.message : "We could not assign the house." }; }
+    try {
+      await requirePermission(tx, session.userId, "students:write");
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`house-assignment:${session.schoolId}:${input.studentId}`}))`;
+      const [house, student] = await Promise.all([
+        tx.house.findFirst({ where: { id: input.houseId, isActive: true }, select: { id: true, name: true } }),
+        tx.student.findFirst({ where: { id: input.studentId }, select: { id: true, name: true, houseId: true } })
+      ]);
+      if (!house || !student) return { ok: false, message: "Student or house could not be found." };
+      await tx.student.update({ where: { id: student.id }, data: { houseId: house.id } });
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "student.house_assigned", entityType: "Student", entityId: student.id, before: { houseId: student.houseId }, after: { houseId: house.id, houseName: house.name } });
+      return { ok: true, message: `${student.name} is now in ${house.name}.` };
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "We could not assign the house." };
+    }
   });
 }
 
 export async function autoBalanceHouses(): Promise<ActionResult> {
   const session = await requireSchoolSession();
   return withTenant(session.schoolId, async (tx) => {
-    try { await requirePermission(tx, session.userId, "students:write");
-      const houses = await tx.$queryRaw<Array<{id:string;name:string;studentCount:number}>>`SELECT h."id",h."name",COUNT(s."id")::int AS "studentCount" FROM "House" h LEFT JOIN "Student" s ON s."houseId"=h."id" AND s."schoolId"=h."schoolId" AND s."status"='active' WHERE h."schoolId"=${session.schoolId} AND h."isActive"=true GROUP BY h."id",h."name" ORDER BY COUNT(s."id") ASC,h."name" ASC`;
+    try {
+      await requirePermission(tx, session.userId, "students:write");
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`houses-auto-balance:${session.schoolId}`}))`;
+      const houses = await tx.house.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
       if (!houses.length) return { ok: false, message: "Create at least one active house first." };
-      const students = await tx.$queryRaw<Array<{id:string}>>`SELECT "id" FROM "Student" WHERE "schoolId"=${session.schoolId} AND "status"='active' AND "houseId" IS NULL ORDER BY "name" ASC`;
-      const counts = new Map(houses.map((h) => [h.id, h.studentCount])); let changed = 0;
-      for (const student of students) { const target = [...houses].sort((a,b)=>(counts.get(a.id)!-counts.get(b.id)!) || a.name.localeCompare(b.name))[0]; await tx.$executeRaw`UPDATE "Student" SET "houseId"=${target.id} WHERE "id"=${student.id} AND "schoolId"=${session.schoolId}`; counts.set(target.id, counts.get(target.id)! + 1); changed++; }
+      const grouped = await tx.student.groupBy({ by: ["houseId"], where: { status: "active", houseId: { not: null } }, _count: { _all: true } });
+      const counts = new Map(houses.map((house) => [house.id, grouped.find((row) => row.houseId === house.id)?._count._all ?? 0]));
+      const students = await tx.student.findMany({ where: { status: "active", houseId: null }, select: { id: true, name: true, admissionNo: true }, orderBy: [{ admissionNo: "asc" }, { id: "asc" }] });
+      let changed = 0;
+      for (const student of students) {
+        const target = [...houses].sort((a, b) => (counts.get(a.id)! - counts.get(b.id)!) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))[0];
+        await tx.student.update({ where: { id: student.id }, data: { houseId: target.id } });
+        counts.set(target.id, counts.get(target.id)! + 1);
+        changed += 1;
+      }
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "houses.auto_assigned", entityType: "House", entityId: houses[0].id, after: { houseCount: houses.length, studentCount: students.length, changed } });
       return { ok: true, message: changed ? `${changed} unassigned learners were distributed across the active houses.` : "All active learners are already assigned to a house." };
-    } catch (error) { return { ok: false, message: error instanceof Error ? error.message : "We could not assign the houses." }; }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : "We could not assign the houses." };
+    }
   });
 }
