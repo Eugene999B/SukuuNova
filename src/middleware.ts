@@ -29,18 +29,50 @@ async function hasLiveSession(cookieValue: string | undefined, kind: SessionKind
   }
 }
 
+function protectedApiKind(pathname: string): SessionKind | null {
+  if (
+    pathname.startsWith("/api/platform/") ||
+    pathname === "/api/platform"
+  ) return "platform";
+  if (
+    pathname.startsWith("/api/school/") ||
+    pathname === "/api/school" ||
+    pathname.startsWith("/api/mvp/") ||
+    pathname.startsWith("/api/phase2/") ||
+    pathname.startsWith("/api/phase3/") ||
+    pathname.startsWith("/api/phase4") ||
+    pathname.startsWith("/api/protected/") ||
+    pathname === "/api/sync"
+  ) return "school";
+  return null;
+}
+
+function isPublicOrSpecialApi(pathname: string) {
+  return (
+    pathname === "/api/health" ||
+    pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/api/public/") ||
+    pathname.startsWith("/api/devices/") ||
+    pathname.startsWith("/api/cron/")
+  );
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  const protectedSchool = pathname.startsWith("/school");
-  const protectedPlatform = pathname.startsWith("/platform");
+  const protectedSchool = pathname.startsWith("/school") || protectedApiKind(pathname) === "school";
+  const protectedPlatform = pathname.startsWith("/platform") || protectedApiKind(pathname) === "platform";
   const protectedTeacher = pathname.startsWith("/teacher");
   const protectedGuardian = pathname.startsWith("/guardian");
 
+  if (isPublicOrSpecialApi(pathname)) return NextResponse.next();
   if (!protectedSchool && !protectedPlatform && !protectedTeacher && !protectedGuardian) return NextResponse.next();
 
-  const kind: SessionKind = protectedPlatform ? "platform" : protectedGuardian ? "guardian" : "school";
-  const cookieName = protectedPlatform ? PLATFORM_COOKIE : protectedGuardian ? GUARDIAN_COOKIE : SCHOOL_COOKIE;
+  const apiKind = protectedApiKind(pathname);
+  const kind: SessionKind = apiKind ?? (protectedPlatform ? "platform" : protectedGuardian ? "guardian" : "school");
+  const cookieName = kind === "platform" ? PLATFORM_COOKIE : kind === "guardian" ? GUARDIAN_COOKIE : SCHOOL_COOKIE;
   if (await hasLiveSession(request.cookies.get(cookieName)?.value, kind)) return NextResponse.next();
+
+  if (apiKind) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const loginPath = protectedPlatform ? "/login/platform" : protectedGuardian ? "/login/guardian" : "/login/school";
   const loginUrl = new URL(loginPath, request.url);
@@ -50,5 +82,18 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/school/:path*", "/platform/:path*", "/teacher/:path*", "/guardian/:path*"],
+  matcher: [
+    "/school/:path*",
+    "/platform/:path*",
+    "/teacher/:path*",
+    "/guardian/:path*",
+    "/api/platform/:path*",
+    "/api/school/:path*",
+    "/api/mvp/:path*",
+    "/api/phase2/:path*",
+    "/api/phase3/:path*",
+    "/api/phase4/:path*",
+    "/api/protected/:path*",
+    "/api/sync",
+  ],
 };
