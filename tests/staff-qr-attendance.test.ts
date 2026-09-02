@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createStaffAttendanceQr, freshChallengeId, freshNonce, verifyStaffAttendanceQr } from "@/lib/qr-attendance";
+import { createStaffAttendanceQr, consumeStaffAttendanceQr, freshChallengeId, freshNonce, hashQrSecret, verifyStaffAttendanceQr } from "@/lib/qr-attendance";
 import { jwtVerify } from "jose";
 
 const TEST_SECRET = "qr-attendance-test-secret-01234567890123456789";
@@ -75,6 +75,47 @@ describe("staff attendance QR", () => {
     await expect(verifyStaffAttendanceQr(token, "school-a")).rejects.toMatchObject({
       code: "INVALID_STAFF_QR",
       status: 400
+    });
+  });
+
+  it("consumes a challenge once and rejects replay", async () => {
+    const challengeId = freshChallengeId();
+    const nonce = freshNonce();
+    const findFirst = async () => ({
+      after: {
+        nonceHash: hashQrSecret(nonce),
+        expiresAt: new Date(Date.now() + 45_000).toISOString(),
+        displayIpHash: "display-ip-hash"
+      }
+    });
+    let createCount = 0;
+    const tx = {
+      auditLogSchool: {
+        findFirst,
+        createMany: async () => {
+          createCount += 1;
+          return { count: createCount === 1 ? 1 : 0 };
+        }
+      }
+    } as unknown as Parameters<typeof consumeStaffAttendanceQr>[0];
+
+    await expect(consumeStaffAttendanceQr(tx, {
+      schoolId: "school-a",
+      actorId: "teacher-a",
+      challengeId,
+      nonce,
+      verification: "qr+network"
+    })).resolves.toBeUndefined();
+
+    await expect(consumeStaffAttendanceQr(tx, {
+      schoolId: "school-a",
+      actorId: "teacher-b",
+      challengeId,
+      nonce,
+      verification: "qr+network"
+    })).rejects.toMatchObject({
+      code: "QR_REPLAY",
+      status: 409
     });
   });
 });
