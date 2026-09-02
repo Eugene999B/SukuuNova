@@ -320,6 +320,7 @@ describe("Phase 2 differentiator safety gates", () => {
       });
       await createTimetableSlot(tx, {
         schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
         classId: otherClassId,
         subjectId,
         teacherId: otherStaffId,
