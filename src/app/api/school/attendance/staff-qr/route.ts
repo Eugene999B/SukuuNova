@@ -6,14 +6,14 @@ import { AppError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { syncDefaultRbac } from "@/lib/role-builder-service";
-import { createStaffAttendanceQr, consumeStaffAttendanceQr, freshChallengeId, freshNonce, hashClientIp, clientIpFromHeaders, verifyStaffAttendanceQr } from "@/lib/qr-attendance";
+import { clientIpFromHeaders, consumeStaffAttendanceQr, createStaffAttendanceQr, displayIpHashFromChallenge, displayLocationFromChallenge, freshChallengeId, freshNonce, hashClientIp, issueStaffAttendanceChallenge, verifyStaffAttendanceQr } from "@/lib/qr-attendance";
 import { recordStaffSelfAttendance } from "@/lib/attendance-service";
 
 const locationSchema = z.object({
   latitude: z.number().finite().min(-90).max(90),
   longitude: z.number().finite().min(-180).max(180),
   accuracyM: z.number().finite().positive().max(5000).optional()
-}).optional();
+}).nullable().optional();
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("challenge"), displayLocation: locationSchema }),
@@ -45,7 +45,17 @@ export async function POST(request: Request) {
         const expiresAt = new Date(issuedAt.getTime() + 45_000);
         const challengeId = freshChallengeId();
         const nonce = freshNonce();
-        const token = await createStaffAttendanceQr(session.schoolId, challengeId, nonce, expiresAt, ipHash, input.displayLocation);
+        await issueStaffAttendanceChallenge(tx, {
+          schoolId: session.schoolId,
+          actorId: session.userId,
+          challengeId,
+          nonce,
+          issuedAt,
+          expiresAt,
+          displayIpHash: ipHash,
+          displayLocation: input.displayLocation ?? undefined
+        });
+        const token = await createStaffAttendanceQr(session.schoolId, challengeId, nonce, expiresAt);
         return { token, challengeId, issuedAt: issuedAt.toISOString(), expiresAt: expiresAt.toISOString() };
       });
       return NextResponse.json({ ok: true, result, refreshAfterSeconds: 30 });
@@ -54,17 +64,29 @@ export async function POST(request: Request) {
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "attendance:view_own");
       const verified = await verifyStaffAttendanceQr(input.token, session.schoolId);
-      const unknownIpHash = hashClientIp("unknown");
-      const sameNetwork = ipHash !== unknownIpHash && ipHash === verified.displayIpHash;
+      const challenge = await tx.auditLogSchool.findFirst({
+        where: {
+          schoolId: session.schoolId,
+          action: "attendance.qr.issued",
+          entityType: "StaffAttendanceQrChallenge",
+          entityId: verified.challengeId
+        },
+        orderBy: { createdAt: "desc" },
+        select: { after: true }
+      });
+      const displayIpHash = displayIpHashFromChallenge(challenge?.after);
+      const displayLocation = displayLocationFromChallenge(challenge?.after);
+      if (!displayIpHash) throw new AppError("This school check-in code is no longer valid.", 409, "CHALLENGE_NOT_FOUND");
 
+      const sameNetwork = ipHash !== hashClientIp("unknown") && ipHash === displayIpHash;
       let geoVerified = false;
       let distanceM: number | undefined;
       let geoReason = "unavailable";
-      if (verified.displayLocation && input.location) {
-        const displayAccuracy = verified.displayLocation.accuracyM ?? 9999;
+      if (displayLocation && input.location) {
+        const displayAccuracy = displayLocation.accuracyM ?? 9999;
         const scanAccuracy = input.location.accuracyM ?? 9999;
         if (displayAccuracy <= 250 && scanAccuracy <= 250) {
-          distanceM = distanceMeters(verified.displayLocation, input.location);
+          distanceM = distanceMeters(displayLocation, input.location);
           const accuracyAllowance = Math.min(250, displayAccuracy + scanAccuracy);
           geoVerified = distanceM <= Math.max(150, accuracyAllowance);
           geoReason = geoVerified ? "within_display_radius" : "outside_display_radius";
