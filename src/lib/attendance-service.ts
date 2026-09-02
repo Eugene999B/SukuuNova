@@ -73,7 +73,7 @@ async function validateStudentState(tx: TenantDb, schoolId: string, studentId: s
   if (type === "out" && current?.type !== "in") throw new AppError("The student must check in before checking out.", 409, "INVALID_CHECKOUT_STATE");
 }
 
-export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; type: "in" | "out"; method?: "manual" | "qr" | "face" | "fingerprint" | "card"; verification: string; verificationMeta?: Record<string, unknown> }) {
+export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; type: "in" | "out"; method: "manual" | "qr" | "face" | "fingerprint" | "card"; verification: string; verificationMeta?: Record<string, unknown> }) {
   await requirePermission(tx, input.actorId, "attendance:staff_scan", input.schoolId);
   const staff = await tx.user.findFirst({ where: { id: input.actorId, schoolId: input.schoolId, status: "active" }, select: { id: true, schoolId: true, name: true } });
   if (!staff) throw new ForbiddenError("Only an active staff account in this school can use staff check-in.");
@@ -89,7 +89,7 @@ export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId:
   if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
   const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
   await validateStaffState(tx, input.schoolId, input.actorId, day, input.type);
-  const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, staffId: input.actorId, type: input.type, method: input.method ?? "qr", timestamp, attendanceDate: day, isLate, recordedBy: input.actorId } });
+  const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, staffId: input.actorId, type: input.type, method: input.method, timestamp, attendanceDate: day, isLate, recordedBy: input.actorId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: input.type === "in" ? "attendance.staff.checked_in" : "attendance.staff.checked_out", entityType: "AttendanceEvent", entityId: event.id, after: { event, verification: input.verification, ...(input.verificationMeta ? { verificationMeta: input.verificationMeta } : {}) } });
   return event;
 }
