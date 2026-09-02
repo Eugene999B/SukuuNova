@@ -27,13 +27,19 @@ async function consume(tx: Prisma.TransactionClient, identityHash: string, now: 
   return blockedUntil ? Math.ceil(BLOCK_MS / 1000) : 0;
 }
 
-export async function enforceDeviceAttendanceRateLimit(ip: string, deviceSerial?: string): Promise<void> {
+export async function enforceDeviceAttendanceRateLimit(
+  ip: string,
+  deviceSerial?: string,
+  options?: { skipIp?: boolean }
+): Promise<void> {
   const now = new Date();
   const ipHash = hash("device-attendance:ip", ip || "unknown");
   const deviceHash = deviceSerial ? hash("device-attendance:device", deviceSerial) : undefined;
   const retryAfter = await rawDb.$transaction(async (tx) => {
-    const ipRetry = await consume(tx, ipHash, now);
-    if (ipRetry > 0) return ipRetry;
+    if (!options?.skipIp) {
+      const ipRetry = await consume(tx, ipHash, now);
+      if (ipRetry > 0) return ipRetry;
+    }
     if (!deviceHash) return 0;
     return consume(tx, deviceHash, now);
   });
