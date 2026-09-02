@@ -104,7 +104,8 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   }
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
-  const timestamp = new Date();
+  const timestamp = input.timestamp ?? new Date();
+  if (Number.isNaN(timestamp.getTime())) throw new AppError("Invalid attendance timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
   const day = attendanceDate(timestamp, settings.timezone);
   if (await isAttendanceBlocked(tx, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   let periodId = input.periodId?.trim();
