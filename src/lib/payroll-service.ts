@@ -12,25 +12,31 @@ export type DeductionInput = {
   value: number;
 };
 
+function money(value: number | string | Prisma.Decimal) {
+  return new Prisma.Decimal(value.toString()).toDecimalPlaces(2);
+}
+
 function deductionSnapshot(gross: number, deductions: DeductionInput[]) {
+  const grossAmount = money(gross);
   return deductions.map((row) => {
-    if (!row.label.trim() || row.value < 0) {
+    if (!row.label.trim() || row.value < 0 || !Number.isFinite(row.value)) {
       throw new AppError("Invalid payroll deduction.", 400, "INVALID_DEDUCTION");
     }
     if (row.type === "percent" && row.value > 100) {
       throw new AppError("Percentage deductions cannot exceed 100%.", 400, "INVALID_DEDUCTION");
     }
+    const value = new Prisma.Decimal(row.value.toString());
     const amount = row.type === "percent"
-      ? gross * row.value / 100
-      : row.value;
-    if (amount > gross) {
+      ? grossAmount.mul(value).div(100).toDecimalPlaces(2)
+      : value.toDecimalPlaces(2);
+    if (amount.gt(grossAmount)) {
       throw new AppError("A payroll deduction cannot exceed gross salary.", 400, "INVALID_DEDUCTION");
     }
     return {
       label: row.label.trim(),
       type: row.type,
-      value: row.value,
-      amount: Math.round(amount * 100) / 100
+      value: Number(value.toString()),
+      amount: Number(amount.toString())
     };
   });
 }
@@ -75,7 +81,7 @@ export async function setSalaryStructure(
   }
 ) {
   await requirePermission(tx, input.actorId, "payroll:manage");
-  if (input.grossSalary <= 0) {
+  if (input.grossSalary <= 0 || !Number.isFinite(input.grossSalary)) {
     throw new AppError("Gross salary must be positive.", 400, "INVALID_SALARY");
   }
   const staff = await tx.user.findFirst({
@@ -84,6 +90,7 @@ export async function setSalaryStructure(
   });
   if (!staff) throw new AppError("Staff account not found in this school.", 404, "STAFF_NOT_FOUND");
 
+  const grossSalary = money(input.grossSalary);
   const snapshot = deductionSnapshot(input.grossSalary, input.deductions);
   const before = await tx.salaryStructure.findUnique({
     where: { schoolId_staffId: { schoolId: input.schoolId, staffId: input.staffId } }
@@ -91,13 +98,13 @@ export async function setSalaryStructure(
   const structure = await tx.salaryStructure.upsert({
     where: { schoolId_staffId: { schoolId: input.schoolId, staffId: input.staffId } },
     update: {
-      grossSalary: new Prisma.Decimal(input.grossSalary),
+      grossSalary,
       deductions: snapshot
     },
     create: {
       schoolId: input.schoolId,
       staffId: input.staffId,
-      grossSalary: new Prisma.Decimal(input.grossSalary),
+      grossSalary,
       deductions: snapshot
     }
   });
@@ -177,19 +184,20 @@ export async function processPayrollRun(
 
   for (const structure of structures) {
     if (structure.staff.schoolId !== input.schoolId || structure.staff.status !== "active") continue;
-    const gross = Number(structure.grossSalary);
+    const grossAmount = money(structure.grossSalary);
     const source = Array.isArray(structure.deductions) ? structure.deductions as unknown as DeductionInput[] : [];
-    const deductions = deductionSnapshot(gross, source);
-    const totalDeductions = deductions.reduce((sum, row) => sum + row.amount, 0);
-    const net = Math.max(0, Math.round((gross - totalDeductions) * 100) / 100);
+    const deductions = deductionSnapshot(Number(grossAmount.toString()), source);
+    const totalDeductions = deductions.reduce((sum, row) => sum.plus(money(row.amount)), new Prisma.Decimal(0)).toDecimalPlaces(2);
+    const netAmount = grossAmount.minus(totalDeductions);
+    const net = netAmount.lt(0) ? new Prisma.Decimal(0) : netAmount.toDecimalPlaces(2);
     const id = createId();
     const pdfData = await payslipPdf({
       schoolName: school.name,
       staffName: structure.staff.name,
       period: run.period,
-      gross,
+      gross: Number(grossAmount.toString()),
       deductions,
-      net
+      net: Number(net.toString())
     });
     await tx.payslip.create({
       data: {
@@ -197,9 +205,9 @@ export async function processPayrollRun(
         schoolId: input.schoolId,
         payrollRunId: run.id,
         staffId: structure.staffId,
-        gross: new Prisma.Decimal(gross),
+        gross: grossAmount,
         deductions,
-        net: new Prisma.Decimal(net),
+        net,
         pdfUrl: "/api/phase2/payroll/payslips/" + id + "/pdf",
         pdfData
       }
