@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
-import { processOfflineSync } from "../src/lib/offline-sync-service";
+import { MAX_OFFLINE_SYNC_OPERATIONS, processOfflineSync } from "../src/lib/offline-sync-service";
 
 describe("offline sync state machine", () => {
   let fixture: Awaited<ReturnType<typeof createTenantFixture>>;
@@ -86,6 +86,23 @@ describe("offline sync state machine", () => {
         operations: [{ clientOperationId: "offline-op-003", clientVersion: 1, baseEntityVersion: 0, entityId: studentId, operationType: "ATTENDANCE_RECORD", payload: { studentId, type: "in", method: "card", attendanceDate: expired }, createdAt: expired }]
       });
       expect(result.results[0]).toMatchObject({ status: "EXPIRED" });
+    });
+  });
+
+  it("rejects oversized batches before doing transaction work for each operation", async () => {
+    await withTenant(fixture.schoolId, async (tx) => {
+      const operation = {
+        clientOperationId: "offline-batch-cap-001", clientVersion: 1, entityId: studentId,
+        operationType: "ATTENDANCE_RECORD" as const,
+        payload: { studentId, type: "in" as const, method: "card" as const, attendanceDate: new Date().toISOString() },
+        createdAt: new Date().toISOString()
+      };
+      await expect(processOfflineSync(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        deviceId,
+        operations: Array.from({ length: MAX_OFFLINE_SYNC_OPERATIONS + 1 }, (_, index) => ({ ...operation, clientOperationId: operation.clientOperationId + "-" + index }))
+      })).rejects.toMatchObject({ code: "SYNC_BATCH_TOO_LARGE", status: 400 });
     });
   });
 });
