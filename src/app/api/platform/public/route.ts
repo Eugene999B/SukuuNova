@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { routeError } from "@/lib/errors";
-import { requirePlatformPermission } from "@/lib/platform-permissions";
+import { hasPlatformPermission, requirePlatformPermission } from "@/lib/platform-permissions";
 import { appendPlatformAudit } from "@/lib/audit";
 
 const settingsSchema = z.object({
@@ -19,8 +19,10 @@ export async function GET() {
     const session = await requirePlatformSession();
     await requirePlatformPermission(session, "support.view");
     const [settings, inquiries] = await Promise.all([
-      db.$queryRawUnsafe<Array<Record<string,unknown>>>(`SELECT * FROM "PlatformPublicSettings" WHERE "id"='default' LIMIT 1`),
-      db.$queryRawUnsafe<Array<Record<string,unknown>>>(`SELECT "id","name","email","phone","channel","subject","message","status","createdAt","repliedAt","repliedVia" FROM "PublicInquiry" ORDER BY "createdAt" DESC LIMIT 100`)
+      hasPlatformPermission(session, "settings.manage")
+        ? db.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT * FROM "PlatformPublicSettings" WHERE "id"='default' LIMIT 1`)
+        : Promise.resolve([]),
+      db.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT "id","name","email","phone","channel","subject","message","status","createdAt","repliedAt","repliedVia" FROM "PublicInquiry" ORDER BY "createdAt" DESC LIMIT 100`)
     ]);
     return NextResponse.json({ settings: settings[0] ?? null, inquiries });
   } catch (error) { return routeError(error); }
