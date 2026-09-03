@@ -17,6 +17,20 @@ export default async function PlatformPage() {
     : overview.schools.filter((school) => schoolScope.includes(String(school.id)));
   const scopedOverview = schoolScope === null
     ? overview
-    : { ...overview, totals: { ...overview.totals, schools: scopedSchools.length }, schools: scopedSchools };
+    : {
+        ...overview,
+        totals: {
+          schools: scopedSchools.length,
+          activeSchools: scopedSchools.filter((school) => school.status !== "suspended").length,
+          suspendedSchools: scopedSchools.filter((school) => school.status === "suspended").length,
+          students: scopedSchools.reduce((sum, school) => sum + Number(school.studentCount || 0), 0),
+          users: scopedSchools.reduce((sum, school) => sum + Number(school.userCount || 0), 0),
+          classes: scopedSchools.reduce((sum, school) => sum + Number(school.classCount || 0), 0),
+          invoices: scopedSchools.reduce((sum, school) => sum + Number(school.invoices || 0), 0),
+          unpaidInvoices: scopedSchools.reduce((sum, school) => sum + Number(school.unpaidInvoices || 0), 0),
+          collected: scopedSchools.reduce((sum, school) => sum + Number(school.collected || 0), 0),
+        },
+        schools: scopedSchools,
+      };
   return <PlatformControlCenter overview={scopedOverview} health={health} audit={audit} />;
 }
