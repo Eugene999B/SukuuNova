@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
-import { routeError } from "@/lib/errors";
+import { ForbiddenError, routeError } from "@/lib/errors";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
 import { appendPlatformAudit } from "@/lib/audit";
 import { db, withTenant } from "@/lib/db";
@@ -41,7 +41,7 @@ export async function GET() {
       db.subscriptionPlan.findMany({ orderBy: [{ price: "asc" }, { name: "asc" }] }),
       visibleSchools(session.adminId, session.role),
     ]);
-    return NextResponse.json({ plans, schools });
+    return NextResponse.json({ plans, schools, canEditCatalog: session.role === "super_admin" });
   } catch (error) {
     return routeError(error);
   }
@@ -54,6 +54,7 @@ export async function POST(request: Request) {
     await requirePlatformPermission(session, "plans.manage");
 
     if (input.action === "create") {
+      if (session.role !== "super_admin") throw new ForbiddenError("Only a Super Admin can create platform plans.");
       const normalizedFlags = [...new Set(input.featureFlags.map((value) => value.trim()).filter(Boolean))];
       const plan = await db.subscriptionPlan.create({ data: { name: input.name, price: input.price, featureFlags: normalizedFlags } });
       await appendPlatformAudit({ actorId: session.adminId, action: "subscription.plan_created", targetEntity: `SubscriptionPlan:${plan.id}`, meta: { name: plan.name, price: input.price, featureCount: normalizedFlags.length } });
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
     }
 
     if (input.action === "update") {
+      if (session.role !== "super_admin") throw new ForbiddenError("Only a Super Admin can update platform plans.");
       const current = await db.subscriptionPlan.findUnique({ where: { id: input.planId }, select: { id: true, name: true, price: true, featureFlags: true } });
       if (!current) return NextResponse.json({ error: "NOT_FOUND", message: "Plan not found." }, { status: 404 });
       const normalizedFlags = [...new Set(input.featureFlags.map((value) => value.trim()).filter(Boolean))];
