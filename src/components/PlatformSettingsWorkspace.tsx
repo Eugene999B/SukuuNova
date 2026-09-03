@@ -20,9 +20,12 @@ import {
   Workflow,
 } from "lucide-react";
 import { PublicPresenceConsole } from "@/components/PublicPresenceConsole";
+import { usePlatformNavigationAccess } from "@/components/PlatformNavigationContext";
 import "./platform-settings.css";
 
 type Section = "overview" | "public" | "access" | "operations";
+
+type WorkflowLink = { href:string; icon:typeof Settings2; title:string; body:string; permission:string };
 
 const navigation: Array<{ id: Section; label: string; description: string; icon: typeof Settings2 }> = [
   { id: "overview", label: "Overview", description: "Understand what each control governs", icon: Settings2 },
@@ -31,22 +34,25 @@ const navigation: Array<{ id: Section; label: string; description: string; icon:
   { id: "operations", label: "Operations", description: "Health, billing and support workflows", icon: SlidersHorizontal },
 ];
 
-const links = {
+const links: { access:WorkflowLink[]; operations:WorkflowLink[] } = {
   access: [
-    { href: "/platform/admins", icon: UsersRound, title: "Workers & permissions", body: "Manage platform operators and least-privilege capabilities." },
-    { href: "/platform/admins/access", icon: Workflow, title: "Worker school scope", body: "Control which school tenants each operator can access." },
-    { href: "/platform/audit", icon: History, title: "Audit log", body: "Review sensitive administrative actions and investigation context." },
+    { href: "/platform/admins", icon: UsersRound, title: "Workers & permissions", body: "Inspect platform operators and least-privilege capabilities.", permission: "admins.view" },
+    { href: "/platform/admins/access", icon: Workflow, title: "Worker school scope", body: "Control which school tenants each operator can access.", permission: "admins.manage" },
+    { href: "/platform/audit", icon: History, title: "Audit log", body: "Review sensitive administrative actions and investigation context.", permission: "audit.view" },
   ],
   operations: [
-    { href: "/platform/health", icon: Activity, title: "System health", body: "Inspect service health and operational signals before making changes." },
-    { href: "/platform/billing", icon: WalletCards, title: "Platform billing", body: "Manage invoices, payments and commercial status for schools." },
-    { href: "/platform/support", icon: Headset, title: "Support", body: "Work tenant-scoped cases and record operator replies." },
+    { href: "/platform/health", icon: Activity, title: "System health", body: "Inspect service health and operational signals before making changes.", permission: "security.manage" },
+    { href: "/platform/billing", icon: WalletCards, title: "Platform billing", body: "Review invoices, payments and commercial status for schools.", permission: "billing.view" },
+    { href: "/platform/support", icon: Headset, title: "Support", body: "Work tenant-scoped cases and record operator replies.", permission: "support.view" },
   ],
 };
 
 export function PlatformSettingsWorkspace() {
+  const access = usePlatformNavigationAccess();
   const [section, setSection] = useState<Section>("overview");
   const current = useMemo(() => navigation.find((item) => item.id === section) ?? navigation[0], [section]);
+  const visibleAccessLinks = useMemo(() => links.access.filter((link) => !access || access[link.permission]), [access]);
+  const visibleOperationLinks = useMemo(() => links.operations.filter((link) => !access || access[link.permission]), [access]);
 
   return (
     <div className="platform-settings-workspace">
@@ -68,74 +74,34 @@ export function PlatformSettingsWorkspace() {
           {navigation.map((item) => {
             const Icon = item.icon;
             const selected = item.id === section;
-            return (
-              <button key={item.id} type="button" className={`platform-settings-nav-item ${selected ? "is-active" : ""}`} onClick={() => setSection(item.id)} aria-current={selected ? "page" : undefined}>
-                <span className="platform-settings-nav-icon"><Icon size={16} aria-hidden="true" /></span>
-                <span><strong>{item.label}</strong><small>{item.description}</small></span>
-                <ArrowRight size={14} aria-hidden="true" />
-              </button>
-            );
+            return <button key={item.id} type="button" className={`platform-settings-nav-item ${selected ? "is-active" : ""}`} onClick={() => setSection(item.id)} aria-current={selected ? "page" : undefined}>
+              <span className="platform-settings-nav-icon"><Icon size={16} aria-hidden="true" /></span>
+              <span><strong>{item.label}</strong><small>{item.description}</small></span>
+              <ArrowRight size={14} aria-hidden="true" />
+            </button>;
           })}
-          <div className="platform-settings-nav-foot">
-            <CircleHelp size={14} aria-hidden="true" />
-            <span>High-impact controls live in their dedicated workflow so permissions and audit context are visible.</span>
-          </div>
+          <div className="platform-settings-nav-foot"><CircleHelp size={14} aria-hidden="true" /><span>High-impact controls live in their dedicated workflow so permissions and audit context are visible.</span></div>
         </nav>
 
         <div className="platform-settings-main">
-          {section === "overview" && (
-            <>
-              <section className="app-dashboard-grid platform-settings-overview-grid">
-                <div className="app-card app-panel platform-settings-summary-card">
-                  <div className="app-card-head"><div><span className="app-eyebrow">SAFE DEFAULT</span><h3>Public configuration</h3><p>Manage the public-facing SukuuNova identity without mixing it with internal platform administration.</p></div><Globe2 size={20} aria-hidden="true" /></div>
-                  <div className="platform-settings-action-row"><button type="button" className="app-action" onClick={() => setSection("public")}><strong>Open public presence</strong>Brand, contact and homepage controls</button></div>
-                </div>
-                <div className="app-card app-panel platform-settings-summary-card">
-                  <div className="app-card-head"><div><span className="app-eyebrow">PRIVILEGED</span><h3>Access governance</h3><p>Do not configure operator permissions from a generic settings form. Use the dedicated scope and audit workflows.</p></div><LockKeyhole size={20} aria-hidden="true" /></div>
-                  <div className="platform-settings-action-row"><button type="button" className="app-action" onClick={() => setSection("access")}><strong>Review governance</strong>Workers, school scope and audit</button></div>
-                </div>
-                <div className="app-card app-panel platform-settings-summary-card">
-                  <div className="app-card-head"><div><span className="app-eyebrow">OPERATIONS</span><h3>Operational controls</h3><p>Keep health, commercial, and support actions close to the workflow where their impact can be verified.</p></div><SlidersHorizontal size={20} aria-hidden="true" /></div>
-                  <div className="platform-settings-action-row"><button type="button" className="app-action" onClick={() => setSection("operations")}><strong>Open operations</strong>Health, billing and support</button></div>
-                </div>
-              </section>
-
-              <section className="app-card app-panel platform-settings-principles">
-                <div className="app-card-head"><div><span className="app-eyebrow">DESIGN PRINCIPLES</span><h3>How this control center behaves</h3><p>Common decisions are close to the task; advanced decisions are disclosed only when needed.</p></div></div>
-                <div className="platform-settings-principle-grid">
-                  <div><Search size={16} aria-hidden="true" /><strong>Find first</strong><span>Use global search and school workflows to locate the object before acting.</span></div>
-                  <div><ShieldCheck size={16} aria-hidden="true" /><strong>Scope always visible</strong><span>Tenant access and privileged actions remain explicitly school-scoped.</span></div>
-                  <div><History size={16} aria-hidden="true" /><strong>Verify after acting</strong><span>Audits, health checks and workflow states provide a traceable result.</span></div>
-                </div>
-              </section>
-            </>
-          )}
+          {section === "overview" && <>
+            <section className="app-dashboard-grid platform-settings-overview-grid">
+              <div className="app-card app-panel platform-settings-summary-card"><div className="app-card-head"><div><span className="app-eyebrow">SAFE DEFAULT</span><h3>Public configuration</h3><p>Manage the public-facing SukuuNova identity without mixing it with internal platform administration.</p></div><Globe2 size={20} aria-hidden="true" /></div><div className="platform-settings-action-row"><button type="button" className="app-action" onClick={() => setSection("public")}><strong>Open public presence</strong>Brand, contact and homepage controls</button></div></div>
+              <div className="app-card app-panel platform-settings-summary-card"><div className="app-card-head"><div><span className="app-eyebrow">PRIVILEGED</span><h3>Access governance</h3><p>Do not configure operator permissions from a generic settings form. Use the dedicated scope and audit workflows.</p></div><LockKeyhole size={20} aria-hidden="true" /></div><div className="platform-settings-action-row"><button type="button" className="app-action" onClick={() => setSection("access")}><strong>Review governance</strong>Workers, school scope and audit</button></div></div>
+              <div className="app-card app-panel platform-settings-summary-card"><div className="app-card-head"><div><span className="app-eyebrow">OPERATIONS</span><h3>Operational controls</h3><p>Keep health, commercial, and support actions close to the workflow where their impact can be verified.</p></div><SlidersHorizontal size={20} aria-hidden="true" /></div><div className="platform-settings-action-row"><button type="button" className="app-action" onClick={() => setSection("operations")}><strong>Open operations</strong>Health, billing and support</button></div></div>
+            </section>
+            <section className="app-card app-panel platform-settings-principles"><div className="app-card-head"><div><span className="app-eyebrow">DESIGN PRINCIPLES</span><h3>How this control center behaves</h3><p>Common decisions are close to the task; advanced decisions are disclosed only when needed.</p></div></div><div className="platform-settings-principle-grid"><div><Search size={16} aria-hidden="true" /><strong>Find first</strong><span>Use global search and school workflows to locate the object before acting.</span></div><div><ShieldCheck size={16} aria-hidden="true" /><strong>Scope always visible</strong><span>Tenant access and privileged actions remain explicitly school-scoped.</span></div><div><History size={16} aria-hidden="true" /><strong>Verify after acting</strong><span>Audits, health checks and workflow states provide a traceable result.</span></div></div></section>
+          </>}
 
           {section === "public" && <PublicPresenceConsole />}
 
-          {section === "access" && (
-            <section className="app-dashboard-grid">
-              {links.access.map(({ href, icon: Icon, title, body }) => (
-                <Link key={href} href={href} className="app-card app-panel platform-settings-link-card">
-                  <div className="platform-settings-link-icon"><Icon size={18} aria-hidden="true" /></div>
-                  <div><span className="app-eyebrow">GOVERNANCE WORKFLOW</span><h3>{title}</h3><p>{body}</p></div>
-                  <ArrowRight size={16} aria-hidden="true" />
-                </Link>
-              ))}
-            </section>
-          )}
+          {section === "access" && <section className="app-dashboard-grid">
+            {visibleAccessLinks.length ? visibleAccessLinks.map(({ href, icon: Icon, title, body }) => <Link key={href} href={href} className="app-card app-panel platform-settings-link-card"><div className="platform-settings-link-icon"><Icon size={18} aria-hidden="true" /></div><div><span className="app-eyebrow">GOVERNANCE WORKFLOW</span><h3>{title}</h3><p>{body}</p></div><ArrowRight size={16} aria-hidden="true" /></Link>) : <div className="app-card app-panel platform-empty"><strong>No governance workflows are assigned to this operator.</strong><span>Request the required platform permission or use an already-assigned workspace.</span></div>}
+          </section>}
 
-          {section === "operations" && (
-            <section className="app-dashboard-grid">
-              {links.operations.map(({ href, icon: Icon, title, body }) => (
-                <Link key={href} href={href} className="app-card app-panel platform-settings-link-card">
-                  <div className="platform-settings-link-icon"><Icon size={18} aria-hidden="true" /></div>
-                  <div><span className="app-eyebrow">OPERATIONAL WORKFLOW</span><h3>{title}</h3><p>{body}</p></div>
-                  <ArrowRight size={16} aria-hidden="true" />
-                </Link>
-              ))}
-            </section>
-          )}
+          {section === "operations" && <section className="app-dashboard-grid">
+            {visibleOperationLinks.length ? visibleOperationLinks.map(({ href, icon: Icon, title, body }) => <Link key={href} href={href} className="app-card app-panel platform-settings-link-card"><div className="platform-settings-link-icon"><Icon size={18} aria-hidden="true" /></div><div><span className="app-eyebrow">OPERATIONAL WORKFLOW</span><h3>{title}</h3><p>{body}</p></div><ArrowRight size={16} aria-hidden="true" /></Link>) : <div className="app-card app-panel platform-empty"><strong>No operational workflows are assigned to this operator.</strong><span>Only permitted operational surfaces are shown here.</span></div>}
+          </section>}
         </div>
       </div>
     </div>
