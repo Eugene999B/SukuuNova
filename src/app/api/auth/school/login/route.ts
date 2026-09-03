@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { PLATFORM_COOKIE, SCHOOL_COOKIE, createSchoolSessionToken, sessionCookieOptions } from "@/lib/auth";
+import { PLATFORM_COOKIE, SCHOOL_COOKIE, createSchoolSessionTokenFromAuthorizationVersion, sessionCookieOptions } from "@/lib/auth";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { authenticateSchoolUser } from "@/lib/login-service";
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     const account = await authenticateSchoolUser(input);
     await clearLoginAttempts(rateKey);
     const response = NextResponse.json({ ok: true, user: { name: account.name, schoolName: account.schoolName, portal: account.portal, roles: account.roles, needsPasswordChange: account.needsPasswordChange } });
-    response.cookies.set(SCHOOL_COOKIE, await createSchoolSessionToken({ kind: "school", userId: account.userId, schoolId: account.schoolId, name: account.name }), sessionCookieOptions());
+    response.cookies.set(SCHOOL_COOKIE, await createSchoolSessionTokenFromAuthorizationVersion({ kind: "school", userId: account.userId, schoolId: account.schoolId, name: account.name }, account.authorizationVersion), sessionCookieOptions());
     response.cookies.delete(PLATFORM_COOKIE);
     return response;
   } catch (error) {
