@@ -62,3 +62,25 @@ export async function impersonatePlatformUser(input: {
     return { id, userId: user.id, userName: user.name, reason };
   });
 }
+
+export async function endPlatformImpersonation(schoolId: string, impersonationId: string, adminId: string) {
+  return withTenant(schoolId, async (tx) => {
+    const changed = await tx.$executeRawUnsafe(
+      `UPDATE "ImpersonationLog" SET "endedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "schoolId"=$2 AND "platformAdminId"=$3 AND "endedAt" IS NULL`,
+      impersonationId,
+      schoolId,
+      adminId,
+    );
+    if (changed !== 1) throw new AppError("Impersonation session not found or already ended.", 409, "IMPERSONATION_CLOSED");
+    await appendPlatformAudit({ actorId: adminId, action: "impersonation.ended", targetSchoolId: schoolId, targetEntity: `ImpersonationLog:${impersonationId}`, meta: { impersonationId } });
+    return { ok: true };
+  });
+}
+
+export async function listSchoolImpersonationHistory(schoolId: string, userId: string) {
+  return withTenant(schoolId, (tx) => tx.$queryRawUnsafe<unknown[]>(
+    `SELECT "id","reason","startedAt","endedAt" FROM "ImpersonationLog" WHERE "schoolId"=$1 AND "impersonatedUserId"=$2 ORDER BY "startedAt" DESC LIMIT 20`,
+    schoolId,
+    userId,
+  ));
+}
