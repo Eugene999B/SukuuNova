@@ -26,41 +26,45 @@ process.env.DATABASE_URL = databaseUrl;
 const prisma = new PrismaClient();
 
 async function main() {
-  const directory = await prisma.schoolLoginDirectory.findUnique({
-    where: { uniqueCode: code },
-    select: { schoolId: true, status: true }
-  });
-  if (!directory) throw new Error(`Test school ${code} does not exist.`);
-  if (directory.status !== "active") throw new Error(`Test school ${code} is not active.`);
+  const result = await prisma.$transaction(async (tx) => {
+    const directory = await tx.schoolLoginDirectory.findUnique({
+      where: { uniqueCode: code },
+      select: { schoolId: true, status: true }
+    });
+    if (!directory) throw new Error(`Test school ${code} does not exist.`);
+    if (directory.status !== "active") throw new Error(`Test school ${code} is not active.`);
 
-  await prisma.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
+    await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
 
-  const passwordHash = await hash(password, 12);
-  const result = await prisma.user.updateMany({
-    where: {
-      schoolId: directory.schoolId,
-      email: { endsWith: "@test.sukuunova.local" }
-    },
-    data: {
-      passwordHash,
-      status: "active",
-      needsPasswordChange: false
+    const passwordHash = await hash(password, 12);
+    const reset = await tx.user.updateMany({
+      where: {
+        schoolId: directory.schoolId,
+        email: { endsWith: "@test.sukuunova.local" }
+      },
+      data: {
+        passwordHash,
+        status: "active",
+        needsPasswordChange: false
+      }
+    });
+
+    if (reset.count === 0) {
+      throw new Error(`No synthetic test users found for ${code}.`);
     }
+
+    const owner = await tx.user.findUnique({
+      where: { schoolId_email: { schoolId: directory.schoolId, email: `owner.${code}@test.sukuunova.local` } },
+      select: { email: true, passwordHash: true, status: true, needsPasswordChange: true }
+    });
+    if (!owner || owner.status !== "active" || owner.needsPasswordChange || !(await compare(password, owner.passwordHash))) {
+      throw new Error("Owner credential verification failed after reset.");
+    }
+
+    return { count: reset.count, ownerEmail: owner.email };
   });
 
-  if (result.count === 0) {
-    throw new Error(`No synthetic test users found for ${code}.`);
-  }
-
-  const owner = await prisma.user.findUnique({
-    where: { schoolId_email: { schoolId: directory.schoolId, email: `owner.${code}@test.sukuunova.local` } },
-    select: { email: true, passwordHash: true, status: true, needsPasswordChange: true }
-  });
-  if (!owner || owner.status !== "active" || owner.needsPasswordChange || !(await compare(password, owner.passwordHash))) {
-    throw new Error("Owner credential verification failed after reset.");
-  }
-
-  console.log(`[test-credential-reset] reset and verified ${result.count} synthetic users for ${code}`);
+  console.log(`[test-credential-reset] reset and verified ${result.count} synthetic users for ${code}; owner=${result.ownerEmail}`);
 }
 
 main()
