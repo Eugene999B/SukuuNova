@@ -18,8 +18,9 @@ export async function GET() {
   try {
     const session = await requirePlatformSession();
     await requirePlatformPermission(session, "support.view");
+    const canViewSettings = await hasPlatformPermission(session, "settings.manage");
     const [settings, inquiries] = await Promise.all([
-      hasPlatformPermission(session, "settings.manage")
+      canViewSettings
         ? db.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT * FROM "PlatformPublicSettings" WHERE "id"='default' LIMIT 1`)
         : Promise.resolve([]),
       db.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT "id","name","email","phone","channel","subject","message","status","createdAt","repliedAt","repliedVia" FROM "PublicInquiry" ORDER BY "createdAt" DESC LIMIT 100`)
