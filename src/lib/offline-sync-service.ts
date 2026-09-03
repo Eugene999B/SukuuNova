@@ -23,6 +23,7 @@ export type SyncInput = {
   createdAt: string;
 };
 
+export const MAX_OFFLINE_SYNC_OPERATIONS = 25;
 const MAX_OFFLINE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function payloadHash(payload: Record<string, unknown>) {
@@ -47,6 +48,9 @@ export async function processOfflineSync(
   tx: TenantDb,
   input: { schoolId: string; actorId: string; deviceId: string; operations: SyncInput[] }
 ) {
+  if (input.operations.length > MAX_OFFLINE_SYNC_OPERATIONS) {
+    throw new AppError(`Offline sync accepts at most ${MAX_OFFLINE_SYNC_OPERATIONS} operations per transaction.`, 400, "SYNC_BATCH_TOO_LARGE");
+  }
   await assertDevice(tx, input.deviceId);
   const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { timezone: true } });
   const timezone = settings?.timezone || "Africa/Accra";
