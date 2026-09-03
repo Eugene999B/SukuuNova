@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
   PLATFORM_COOKIE,
+  PLATFORM_SESSION_SECONDS,
   SCHOOL_COOKIE,
   createPlatformSessionToken,
   sessionCookieOptions
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
         name: account.name,
         role: account.role
       }),
-      sessionCookieOptions()
+      sessionCookieOptions(PLATFORM_SESSION_SECONDS)
     );
     response.cookies.delete(SCHOOL_COOKIE);
     return response;
