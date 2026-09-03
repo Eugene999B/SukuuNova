@@ -896,3 +896,77 @@ model DeviceAttendanceReceipt {
   @@index([schoolId])
   @@index([schoolId, deviceId, createdAt])
 }
+
+model SyncOperation {
+  id                String   @id
+  schoolId          String
+  deviceId          String
+  clientOperationId String
+  clientVersion     Int
+  entityId          String?
+  operationType     String
+  payload           Json
+  payloadHash       String
+  status            String   @default("QUEUED")
+  result            Json?
+  reason            String?
+  createdAt         DateTime
+  processedAt       DateTime?
+  @@unique([schoolId, deviceId, clientOperationId])
+  @@index([schoolId, status, createdAt])
+  @@index([schoolId, deviceId, createdAt])
+}
+
+model AttendanceRecord {
+  id               String   @id
+  schoolId         String
+  studentId        String
+  classId          String?
+  attendanceDate   DateTime @db.Date
+  periodId         String   @default("DAILY")
+  status           String
+  source           String
+  recordedBy       String?
+  recordedAt       DateTime @default(now())
+  deviceId         String?
+  reason           String?
+  eventIds         Json     @default("[]")
+  resolvedBy       String?
+  resolvedAt       DateTime?
+  resolutionReason String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now())
+  @@unique([schoolId, studentId, attendanceDate, periodId])
+  @@index([schoolId, status, attendanceDate])
+  @@index([schoolId, studentId, attendanceDate])
+}
+
+model StudentRiskFlag {
+  id          String   @id
+  schoolId    String
+  studentId   String
+  reason      String
+  detail      Json
+  flaggedAt   DateTime @default(now())
+  resolvedAt  DateTime?
+  severity    String   @default("MEDIUM")
+  expiresAt   DateTime?
+  reviewStatus String  @default("OPEN")
+  assignedTo  String?
+  resolution  String?
+  @@index([schoolId, studentId, reason])
+  @@index([schoolId, resolvedAt])
+  @@index([schoolId, severity, flaggedAt])
+  @@index([schoolId, reviewStatus, expiresAt])
+}
+
+model ImpersonationLog {
+  id                  String   @id
+  platformAdminId     String
+  schoolId            String
+  impersonatedUserId  String
+  reason              String
+  startedAt           DateTime @default(now())
+  endedAt             DateTime?
+  @@index([schoolId, startedAt])
+}
