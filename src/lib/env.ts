@@ -14,6 +14,8 @@ const productionSchema = z.object({
   NODE_ENV: z.literal("production"),
   DATABASE_URL: z.string().trim().min(1, "DATABASE_URL is required."),
   SCHOOL_AUTH_SECRET: z.string().min(32, "SCHOOL_AUTH_SECRET must be at least 32 characters."),
+  GUARDIAN_AUTH_SECRET: z.string().min(32, "GUARDIAN_AUTH_SECRET must be at least 32 characters."),
+  QR_AUTH_SECRET: z.string().min(32, "QR_AUTH_SECRET must be at least 32 characters."),
   PLATFORM_AUTH_SECRET: z.string().min(32, "PLATFORM_AUTH_SECRET must be at least 32 characters."),
 });
 
