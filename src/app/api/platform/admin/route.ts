@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError, UnauthorizedError } from "@/lib/errors";
-import { requirePlatformPermission, getPlatformSchoolScope } from "@/lib/platform-permissions";
+import { getPlatformSchoolScope, requirePlatformPermission } from "@/lib/platform-permissions";
 import { requireSchoolScope } from "@/lib/platform-school-scope";
+import { listScopedPlatformAudit } from "@/lib/platform-scoped-audit";
 import { getPlatformOverview, listPlatformAdmins, createPlatformAdmin, updatePlatformAdmin, listPlatformAudit, getPlatformHealth, getSchoolSnapshot, ADMIN_PERMISSIONS } from "@/lib/platform-admin-service";
 
 const schema = z.discriminatedUnion("action", [
@@ -48,14 +49,17 @@ export async function GET(request: Request) {
     }
     if (view === "audit") {
       await requirePlatformPermission(session, "audit.view");
-      const page = await listPlatformAudit({
-        role: session.role,
+      const input = {
         limit: Number(u.searchParams.get("limit") || 50),
         cursor: u.searchParams.get("cursor") || undefined,
         query: u.searchParams.get("q") || undefined,
         action: u.searchParams.get("action") || undefined,
         sensitiveOnly: optionalBoolean(u.searchParams.get("sensitive")),
-      });
+      };
+      const schoolScope = await getPlatformSchoolScope(session);
+      const page = schoolScope === null
+        ? await listPlatformAudit({ role: session.role, ...input })
+        : await listScopedPlatformAudit(schoolScope, input);
       return NextResponse.json(page);
     }
     if (view === "health") {
