@@ -214,9 +214,71 @@ export async function updatePlatformAdmin(input: {
   return (await listPlatformAdmins(input.actorRole)).find((admin) => admin.id === input.adminId);
 }
 
-export async function listPlatformAudit(role: string, limit = 100) {
-  if (!["super_admin", "platform_admin", "support_admin"].includes(role)) throw new ForbiddenError("Audit permission required.");
-  return db.auditLogPlatform.findMany({ orderBy: { createdAt: "desc" }, take: Math.min(Math.max(limit, 1), 200) });
+export type PlatformAuditPage = {
+  events: Array<{
+    id: string;
+    actorId: string;
+    actorName: string | null;
+    actorEmail: string | null;
+    action: string;
+    targetSchoolId: string | null;
+    targetEntity: string | null;
+    createdAt: Date;
+    meta: unknown;
+  }>;
+  nextCursor: string | null;
+};
+
+export async function listPlatformAudit(input: {
+  role: string;
+  limit?: number;
+  cursor?: string;
+  query?: string;
+  action?: string;
+  sensitiveOnly?: boolean;
+}): Promise<PlatformAuditPage> {
+  if (!["super_admin", "platform_admin", "support_admin"].includes(input.role)) throw new ForbiddenError("Audit permission required.");
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
+  const query = input.query?.trim().toLowerCase() ?? "";
+  const action = input.action?.trim() ?? "";
+  const sensitiveOnly = Boolean(input.sensitiveOnly);
+  let cursorDate: Date | null = null;
+  let cursorId: string | null = null;
+
+  if (input.cursor) {
+    const separator = input.cursor.lastIndexOf("_");
+    if (separator <= 0) throw new AppError("Invalid audit cursor.", 400, "INVALID_CURSOR");
+    const dateText = input.cursor.slice(0, separator);
+    const idText = input.cursor.slice(separator + 1);
+    const parsedDate = new Date(dateText);
+    if (!idText || Number.isNaN(parsedDate.getTime())) throw new AppError("Invalid audit cursor.", 400, "INVALID_CURSOR");
+    cursorDate = parsedDate;
+    cursorId = idText;
+  }
+
+  const rows = await db.$queryRawUnsafe<PlatformAuditPage["events"]>(
+    `SELECT l."id", l."actorId", a."name" AS "actorName", a."email" AS "actorEmail", l."action", l."targetSchoolId", l."targetEntity", l."createdAt", l."meta"
+     FROM "AuditLogPlatform" l
+     LEFT JOIN "PlatformAdmin" a ON a."id"=l."actorId"
+     WHERE ($1='' OR LOWER(l."action") LIKE '%' || $1 || '%' OR LOWER(COALESCE(a."name",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(a."email",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(l."targetEntity",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(l."targetSchoolId",'')) LIKE '%' || $1 || '%')
+       AND ($2='' OR l."action"=$2)
+       AND ($3=false OR LOWER(l."action") ~ '(imperson|delete|suspend|permission|password|role|setting|billing)')
+       AND ($4::timestamptz IS NULL OR (l."createdAt",l."id") < ($4::timestamptz,$5))
+     ORDER BY l."createdAt" DESC, l."id" DESC
+     LIMIT $6`,
+    query,
+    action,
+    sensitiveOnly,
+    cursorDate,
+    cursorId,
+    limit + 1,
+  );
+
+  const hasMore = rows.length > limit;
+  const events = hasMore ? rows.slice(0, limit) : rows;
+  const last = events.at(-1);
+  const nextCursor = hasMore && last ? `${last.createdAt.toISOString()}_${last.id}` : null;
+  return { events, nextCursor };
 }
 
 export async function getPlatformHealth() {
