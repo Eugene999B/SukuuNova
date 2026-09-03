@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { createId } from "@paralleldrive/cuid2";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError } from "@/lib/errors";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
@@ -32,7 +33,7 @@ export async function GET() {
       const paidByInvoice = new Map<string, number>();
       for (const payment of payments) paidByInvoice.set(payment.platformInvoiceId, (paidByInvoice.get(payment.platformInvoiceId) ?? 0) + Number(payment.amount));
       const normalizedInvoices = invoices.map((invoice) => { const due = Number(invoice.amount); const paid = paidByInvoice.get(invoice.id) ?? 0; return { ...invoice, amount: due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), effectiveStatus: paid >= due ? "paid" : invoice.status }; });
-      return { school, invoices: normalizedInvoices, payments, totals: { invoiced: normalizedInvoices.reduce((n, i) => n + i.amount, 0), paid: normalizedInvoices.reduce((n, i) => n + i.paid, 0), outstanding: normalizedInvoices.reduce((n, i) => n + i.outstanding, 0) } };
+      return { school, invoices: normalizedInvoices, payments, totals: { invoiced: normalizedInvoices.reduce((n, i) => n + i.amount, 0), paid: normalizedInvoices.reduce((n, i) => n + i.paid, 0), outstanding: normalizedInvoices.reduce((n, i) => n + i.outstanding, 0), overpaid: normalizedInvoices.reduce((n, i) => n + i.overpaid, 0) } };
     }));
     return NextResponse.json({ schools: summaries.filter(Boolean) });
   } catch (error) { return routeError(error); }
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
       const result = await withTenant(input.schoolId, async (tx) => {
         const school = await tx.school.findUnique({ where: { id: input.schoolId }, select: { subscriptionPlan: { select: { name: true, price: true } } } });
         if (!school?.subscriptionPlan) return null;
-        const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(`INSERT INTO "PlatformInvoice" ("id","schoolId","period","amount") VALUES (cuid(),$1,$2,$3) ON CONFLICT ("schoolId","period") DO UPDATE SET "amount"=EXCLUDED."amount" RETURNING "id"`, input.schoolId, input.period, Number(school.subscriptionPlan.price));
+        const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(`INSERT INTO "PlatformInvoice" ("id","schoolId","period","amount") VALUES ($1,$2,$3,$4) ON CONFLICT ("schoolId","period") DO UPDATE SET "amount"=EXCLUDED."amount","status"='unpaid' RETURNING "id"`, createId(), input.schoolId, input.period, Number(school.subscriptionPlan.price));
         return { id: rows[0].id, period: input.period, amount: Number(school.subscriptionPlan.price), planName: school.subscriptionPlan.name };
       });
       if (!result) return NextResponse.json({ error: "PLAN_REQUIRED", message: "Assign a subscription plan before generating an invoice." }, { status: 409 });
@@ -61,9 +62,11 @@ export async function POST(request: Request) {
     const result = await withTenant(input.schoolId, async (tx) => {
       const invoice = (await tx.$queryRawUnsafe<Array<{ id: string; amount: string }>>(`SELECT "id","amount"::text FROM "PlatformInvoice" WHERE "id"=$1 AND "schoolId"=$2 FOR UPDATE`, input.invoiceId, input.schoolId))[0];
       if (!invoice) return null;
-      const existingReference = input.reference ? await tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "PlatformPayment" WHERE "schoolId"=$1 AND "reference"=$2 LIMIT 1`, input.schoolId, input.reference) : [];
-      if (existingReference.length) throw new Error("Payment reference already exists for this school.");
-      const paymentId = `pay_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
+      if (input.reference) {
+        const existing = await tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "PlatformPayment" WHERE "schoolId"=$1 AND "reference"=$2 LIMIT 1`, input.schoolId, input.reference);
+        if (existing.length) return { duplicateReference: true } as const;
+      }
+      const paymentId = createId();
       await tx.$executeRawUnsafe(`INSERT INTO "PlatformPayment" ("id","schoolId","platformInvoiceId","amount","method","reference","reconciledBy") VALUES ($1,$2,$3,$4,$5,$6,$7)`, paymentId, input.schoolId, input.invoiceId, input.amount, input.method, input.reference ?? null, session.adminId);
       const paid = Number((await tx.$queryRawUnsafe<Array<{ paid: string }>>(`SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`, input.schoolId, input.invoiceId))[0]?.paid ?? 0);
       const due = Number(invoice.amount);
@@ -72,6 +75,7 @@ export async function POST(request: Request) {
       return { paymentId, invoiceId: input.invoiceId, due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), status };
     });
     if (!result) return NextResponse.json({ error: "NOT_FOUND", message: "Platform invoice not found." }, { status: 404 });
+    if ("duplicateReference" in result) return NextResponse.json({ error: "DUPLICATE_REFERENCE", message: "That payment reference is already recorded for this school." }, { status: 409 });
     await appendPlatformAudit({ actorId: session.adminId, action: "platform.billing.payment_recorded", targetSchoolId: input.schoolId, targetEntity: `PlatformInvoice:${input.invoiceId}`, meta: { ...result, method: input.method } });
     return NextResponse.json({ ok: true, reconciliation: result });
   } catch (error) { return routeError(error); }
