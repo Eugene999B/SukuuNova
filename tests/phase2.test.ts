@@ -29,6 +29,7 @@ describe("Phase 2 differentiator safety gates", () => {
   let classId: string;
   let otherClassId: string;
   let subjectId: string;
+  let deviceId: string;
 
   beforeEach(async () => {
     process.env.FACE_EMBEDDING_ENCRYPTION_KEY = randomBytes(32).toString("base64");
@@ -95,6 +96,16 @@ describe("Phase 2 differentiator safety gates", () => {
         });
       }
 
+      deviceId = (await tx.device.create({
+        data: {
+          schoolId: fixture.schoolId,
+          deviceSerial: "phase2-face-" + fixture.schoolId,
+          kind: "face",
+          label: "Phase 2 Face Test Device",
+          apiKeyHash: "a".repeat(64)
+        }
+      })).id;
+
       classId = (await tx.class.create({
         data: { schoolId: fixture.schoolId, name: "Phase 2 Class " + fixture.schoolId }
       })).id;
@@ -143,7 +154,7 @@ describe("Phase 2 differentiator safety gates", () => {
       async indexFace() { return { faceId: "provider-face-id-must-not-be-plain" }; },
       async searchFace() { return {}; }
     };
-    const image = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD4yooooA//2Q==";
+    const image = Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"), Buffer.alloc(100)]).toString("base64");
 
     await withTenant(fixture.schoolId, async (tx) => {
       await expect(enrollFace(tx, {
@@ -174,7 +185,7 @@ describe("Phase 2 differentiator safety gates", () => {
           schoolId: fixture.schoolId,
           candidateStudentId: studentId,
           confidenceScore: 90,
-          deviceId: "phase2-device",
+          deviceId,
           periodId: "DAILY",
           capturedAt: new Date("2026-08-17T08:00:00.000Z")
         }
