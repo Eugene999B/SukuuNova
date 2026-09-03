@@ -4,8 +4,8 @@ import { createId } from "@paralleldrive/cuid2";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError } from "@/lib/errors";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
-import { withTenant, db } from "@/lib/db";
 import { appendPlatformAudit } from "@/lib/audit";
+import { db, withTenant } from "@/lib/db";
 
 const postSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("generate"), schoolId: z.string().min(1), period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }),
@@ -32,7 +32,11 @@ export async function GET() {
       ]));
       const paidByInvoice = new Map<string, number>();
       for (const payment of payments) paidByInvoice.set(payment.platformInvoiceId, (paidByInvoice.get(payment.platformInvoiceId) ?? 0) + Number(payment.amount));
-      const normalizedInvoices = invoices.map((invoice) => { const due = Number(invoice.amount); const paid = paidByInvoice.get(invoice.id) ?? 0; return { ...invoice, amount: due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), effectiveStatus: paid >= due ? "paid" : invoice.status }; });
+      const normalizedInvoices = invoices.map((invoice) => {
+        const due = Number(invoice.amount);
+        const paid = paidByInvoice.get(invoice.id) ?? 0;
+        return { ...invoice, amount: due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), effectiveStatus: paid >= due ? "paid" : invoice.status };
+      });
       return { school, invoices: normalizedInvoices, payments, totals: { invoiced: normalizedInvoices.reduce((n, i) => n + i.amount, 0), paid: normalizedInvoices.reduce((n, i) => n + i.paid, 0), outstanding: normalizedInvoices.reduce((n, i) => n + i.outstanding, 0), overpaid: normalizedInvoices.reduce((n, i) => n + i.overpaid, 0) } };
     }));
     return NextResponse.json({ schools: summaries.filter(Boolean) });
@@ -51,12 +55,33 @@ export async function POST(request: Request) {
       const result = await withTenant(input.schoolId, async (tx) => {
         const school = await tx.school.findUnique({ where: { id: input.schoolId }, select: { subscriptionPlan: { select: { name: true, price: true } } } });
         if (!school?.subscriptionPlan) return null;
-        const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(`INSERT INTO "PlatformInvoice" ("id","schoolId","period","amount") VALUES ($1,$2,$3,$4) ON CONFLICT ("schoolId","period") DO UPDATE SET "amount"=EXCLUDED."amount","status"='unpaid' RETURNING "id"`, createId(), input.schoolId, input.period, Number(school.subscriptionPlan.price));
-        return { id: rows[0].id, period: input.period, amount: Number(school.subscriptionPlan.price), planName: school.subscriptionPlan.name };
+
+        const existing = (await tx.$queryRawUnsafe<Array<{ id: string; amount: string; status: string }>>(
+          `SELECT "id","amount"::text,"status" FROM "PlatformInvoice" WHERE "schoolId"=$1 AND "period"=$2 LIMIT 1`,
+          input.schoolId,
+          input.period,
+        ))[0];
+        if (existing) {
+          const payments = (await tx.$queryRawUnsafe<Array<{ paid: string }>>(
+            `SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`,
+            input.schoolId,
+            existing.id,
+          ))[0];
+          return { id: existing.id, period: input.period, amount: Number(existing.amount), planName: school.subscriptionPlan.name, status: existing.status, existing: true, paid: Number(payments?.paid ?? 0) };
+        }
+
+        const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+          `INSERT INTO "PlatformInvoice" ("id","schoolId","period","amount","status") VALUES ($1,$2,$3,$4,'unpaid') RETURNING "id"`,
+          createId(),
+          input.schoolId,
+          input.period,
+          Number(school.subscriptionPlan.price),
+        );
+        return { id: rows[0].id, period: input.period, amount: Number(school.subscriptionPlan.price), planName: school.subscriptionPlan.name, status: "unpaid", existing: false, paid: 0 };
       });
       if (!result) return NextResponse.json({ error: "PLAN_REQUIRED", message: "Assign a subscription plan before generating an invoice." }, { status: 409 });
-      await appendPlatformAudit({ actorId: session.adminId, action: "platform.billing.invoice_generated", targetSchoolId: input.schoolId, targetEntity: `PlatformInvoice:${result.id}`, meta: result });
-      return NextResponse.json({ ok: true, invoice: result });
+      await appendPlatformAudit({ actorId: session.adminId, action: result.existing ? "platform.billing.invoice_already_exists" : "platform.billing.invoice_generated", targetSchoolId: input.schoolId, targetEntity: `PlatformInvoice:${result.id}`, meta: result });
+      return NextResponse.json({ ok: true, invoice: result, idempotent: result.existing });
     }
 
     const result = await withTenant(input.schoolId, async (tx) => {
