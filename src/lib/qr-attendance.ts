@@ -14,9 +14,9 @@ export type StaffAttendanceQrPayload = {
 };
 
 function secret() {
-  const value = process.env.SCHOOL_AUTH_SECRET;
+  const value = process.env.QR_AUTH_SECRET;
   if (!value || value.length < 32) {
-    throw new Error("SCHOOL_AUTH_SECRET must be configured with at least 32 characters.");
+    throw new Error("QR_AUTH_SECRET must be configured with at least 32 characters.");
   }
   return new TextEncoder().encode(value);
 }
@@ -35,7 +35,7 @@ export function clientIpFromHeaders(headers: Headers) {
 }
 
 export function hashClientIp(ip: string) {
-  return hashQrSecret(`${process.env.SCHOOL_AUTH_SECRET ?? ""}:attendance-ip:${ip}`);
+  return hashQrSecret(`${process.env.QR_AUTH_SECRET ?? ""}:attendance-ip:${ip}`);
 }
 
 export function freshChallengeId() {
