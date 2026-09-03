@@ -1,25 +1,43 @@
 import { PrismaClient } from "@prisma/client";
 import { compare } from "bcryptjs";
+import { createHash } from "crypto";
 import { UnauthorizedError } from "./errors";
 import { roleKeyForName } from "./authorization";
 import { authorizationVersion } from "./auth";
 
 const LOGIN_FAILURE = "Invalid credentials or inactive account.";
 const MIN_PASSWORD_LENGTH = 12;
+const SYNTHETIC_TEST_SCHOOL = "sn-test-2026";
 const globalForAuthPrisma = globalThis as unknown as { sukuunovaAuthPrisma?: PrismaClient };
 const authDb = globalForAuthPrisma.sukuunovaAuthPrisma ?? new PrismaClient({ log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"] });
 if (process.env.NODE_ENV !== "production") globalForAuthPrisma.sukuunovaAuthPrisma = authDb;
 function normalizedIdentifier(value: string): string { const trimmed = value.trim(); return trimmed.includes("@") ? trimmed.toLowerCase() : trimmed; }
+function isSyntheticTestSchool(uniqueCode: string): boolean { return uniqueCode === SYNTHETIC_TEST_SCHOOL; }
+function diagnosticIdentifier(value: string) {
+  const trimmed = value.trim();
+  return { kind: trimmed.includes("@") ? "email" : /^\\+?[0-9 ()-]+$/.test(trimmed) ? "phone" : "other", length: trimmed.length, sha256: createHash("sha256").update(trimmed).digest("hex").slice(0, 12) };
+}
+function logSyntheticLoginDiagnostic(stage: string, data: Record<string, unknown>) {
+  console.error("[school-login-diagnostic]", JSON.stringify({ stage, ...data }));
+}
 
 export async function authenticateSchoolUser(input: { uniqueCode: string; identifier: string; password: string }) {
   const uniqueCode = input.uniqueCode.trim().toLowerCase();
+  const synthetic = isSyntheticTestSchool(uniqueCode);
   const directory = await authDb.schoolLoginDirectory.findUnique({ where: { uniqueCode }, select: { schoolId: true, status: true } });
-  if (!directory || directory.status !== "active") throw new UnauthorizedError(LOGIN_FAILURE);
+  if (!directory || directory.status !== "active") {
+    if (synthetic) logSyntheticLoginDiagnostic("directory_failure", { uniqueCode, found: Boolean(directory), status: directory?.status ?? null });
+    throw new UnauthorizedError(LOGIN_FAILURE);
+  }
   if (input.password.length < MIN_PASSWORD_LENGTH) throw new UnauthorizedError("This password is too short. Use the password reset flow to secure the account.");
   return authDb.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
-    const schoolRows = await tx.$queryRaw<{ id: string; name: string; status: string }[]>`SELECT "id", "name", "status" FROM "School" WHERE "id" = ${directory.schoolId} LIMIT 1`;
+    const [contextRows, schoolRows] = await Promise.all([
+      tx.$queryRaw<{ currentSchoolId: string | null }[]>`SELECT current_setting('app.current_school_id', true) AS "currentSchoolId"`,
+      tx.$queryRaw<{ id: string; name: string; status: string }[]>`SELECT "id", "name", "status" FROM "School" WHERE "id" = ${directory.schoolId} LIMIT 1`
+    ]);
     const school = schoolRows[0];
+    if (synthetic) logSyntheticLoginDiagnostic("directory_ok", { uniqueCode, schoolId: directory.schoolId, directoryStatus: directory.status, currentSchoolId: contextRows[0]?.currentSchoolId ?? null, schoolFound: Boolean(school), schoolStatus: school?.status ?? null, identifier: diagnosticIdentifier(input.identifier) });
     if (!school || school.status !== "active") throw new UnauthorizedError(LOGIN_FAILURE);
     const identifier = normalizedIdentifier(input.identifier);
     const userRows = await tx.$queryRaw<{ id: string; schoolId: string; name: string; passwordHash: string; status: string; needsPasswordChange: boolean }[]>`
@@ -31,7 +49,27 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
         AND NOT EXISTS (SELECT 1 FROM "Guardian" g WHERE g."userId" = u."id" AND g."schoolId" = u."schoolId")
       LIMIT 1`;
     const user = userRows[0];
-    if (!user || !(await compare(input.password, user.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
+    if (!user) {
+      if (synthetic) {
+        const candidateRows = await tx.$queryRaw<{ id: string; status: string; email: string | null; phone: string | null }[]>`
+          SELECT u."id", u."status", u."email", u."phone"
+          FROM "User" u
+          WHERE u."schoolId" = ${directory.schoolId}
+            AND (u."email" = ${identifier} OR u."phone" = ${identifier})
+          LIMIT 1`;
+        const candidate = candidateRows[0];
+        const guardianRows = candidate ? await tx.$queryRaw<{ id: string }[]>`
+          SELECT g."id" FROM "Guardian" g WHERE g."userId" = ${candidate.id} AND g."schoolId" = ${directory.schoolId} LIMIT 1` : [];
+        logSyntheticLoginDiagnostic("user_failure", { uniqueCode, identifier: diagnosticIdentifier(input.identifier), activeCandidate: candidate ? candidate.status : null, candidateFound: Boolean(candidate), candidateEmailMatch: candidate?.email?.toLowerCase() === identifier, candidatePhoneMatch: candidate?.phone === identifier, candidateIsGuardian: guardianRows.length > 0 });
+      }
+      throw new UnauthorizedError(LOGIN_FAILURE);
+    }
+    const passwordMatches = await compare(input.password, user.passwordHash);
+    if (!passwordMatches) {
+      if (synthetic) logSyntheticLoginDiagnostic("password_failure", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier), passwordLength: input.password.length, passwordHashPrefix: user.passwordHash.slice(0, 7) });
+      throw new UnauthorizedError(LOGIN_FAILURE);
+    }
+    if (synthetic) logSyntheticLoginDiagnostic("credentials_ok", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier) });
 
     const [roles, permissionOverrides] = await Promise.all([
       tx.userRole.findMany({ where: { userId: user.id }, select: { role: { select: { id: true, name: true, key: true, rolePermissions: { select: { permissionId: true } } } } } }),
