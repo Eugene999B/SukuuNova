@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createId } from "@paralleldrive/cuid2";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError } from "@/lib/errors";
-import { requirePlatformPermission } from "@/lib/platform-permissions";
+import { getPlatformSchoolScope, requirePlatformPermission } from "@/lib/platform-permissions";
 import { appendPlatformAudit } from "@/lib/audit";
 import { db, withTenant } from "@/lib/db";
 
@@ -48,8 +48,8 @@ export async function POST(request: Request) {
     const session = await requirePlatformSession();
     const input = postSchema.parse(await request.json());
     await requirePlatformPermission(session, "billing.manage");
-    const accessibleIds = (await scopedSchools(session)).map((school) => school?.id).filter(Boolean) as string[];
-    if (!accessibleIds.includes(input.schoolId)) return NextResponse.json({ error: "FORBIDDEN", message: "This worker is not assigned to manage this school." }, { status: 403 });
+    const schoolScope = await getPlatformSchoolScope(session);
+    if (schoolScope !== null && !schoolScope.includes(input.schoolId)) return NextResponse.json({ error: "FORBIDDEN", message: "This worker is not assigned to manage this school." }, { status: 403 });
 
     if (input.action === "generate") {
       const result = await withTenant(input.schoolId, async (tx) => {
