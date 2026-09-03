@@ -6,6 +6,7 @@ import { getPlatformSchoolScope, requirePlatformPermission } from "@/lib/platfor
 import { requireSchoolScope } from "@/lib/platform-school-scope";
 import { listScopedPlatformAudit } from "@/lib/platform-scoped-audit";
 import { getPlatformOverview, listPlatformAdmins, createPlatformAdmin, updatePlatformAdmin, listPlatformAudit, getPlatformHealth, getSchoolSnapshot, ADMIN_PERMISSIONS } from "@/lib/platform-admin-service";
+import { getScopedPlatformOverview } from "@/lib/platform-scoped-overview";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("createWorker"), name: z.string().min(2).max(160), email: z.string().email(), password: z.string().min(12).max(256), role: z.enum(["platform_admin", "support_admin", "billing_admin", "analytics_admin"]), permissions: z.array(z.string()).max(30) }),
@@ -24,24 +25,8 @@ export async function GET(request: Request) {
     const schoolId = u.searchParams.get("schoolId") || "";
     if (view === "overview") {
       await requirePlatformPermission(session, "analytics.view");
-      const [overview, schoolScope] = await Promise.all([getPlatformOverview(), getPlatformSchoolScope(session)]);
-      if (schoolScope === null) return NextResponse.json(overview);
-      const schools = overview.schools.filter((school) => schoolScope.includes(String(school.id)));
-      return NextResponse.json({
-        ...overview,
-        totals: {
-          schools: schools.length,
-          activeSchools: schools.filter((school) => school.status !== "suspended").length,
-          suspendedSchools: schools.filter((school) => school.status === "suspended").length,
-          students: schools.reduce((sum, school) => sum + Number(school.studentCount || 0), 0),
-          users: schools.reduce((sum, school) => sum + Number(school.userCount || 0), 0),
-          classes: schools.reduce((sum, school) => sum + Number(school.classCount || 0), 0),
-          invoices: schools.reduce((sum, school) => sum + Number(school.invoices || 0), 0),
-          unpaidInvoices: schools.reduce((sum, school) => sum + Number(school.unpaidInvoices || 0), 0),
-          collected: schools.reduce((sum, school) => sum + Number(school.collected || 0), 0),
-        },
-        schools,
-      });
+      const schoolScope = await getPlatformSchoolScope(session);
+      return NextResponse.json(schoolScope === null ? await getPlatformOverview() : await getScopedPlatformOverview(session));
     }
     if (view === "admins") {
       await requirePlatformPermission(session, "admins.view");
