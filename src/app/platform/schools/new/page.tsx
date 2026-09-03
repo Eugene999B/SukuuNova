@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
-import { getPlatformSession } from "@/lib/auth";
+import { requirePlatformSession } from "@/lib/auth";
+import { requirePlatformPermission } from "@/lib/platform-permissions";
 import { SchoolOnboardingForm } from "@/components/SchoolOnboardingForm";
 
 export default async function NewSchoolPage() {
-  if (!(await getPlatformSession())) redirect("/login/platform");
+  const session = await requirePlatformSession();
+  await requirePlatformPermission(session, "schools.manage");
+  if (session.role !== "super_admin") redirect("/platform/schools");
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-6 py-16">
       <a className="text-sm font-semibold text-nova" href="/platform">← Platform</a>
