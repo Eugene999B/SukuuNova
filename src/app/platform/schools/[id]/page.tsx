@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { getPlatformSession } from "@/lib/auth";
+import { requirePlatformSession } from "@/lib/auth";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
 import { requireSchoolScope } from "@/lib/platform-school-scope";
 import { db, withTenant } from "@/lib/db";
 
 export default async function PlatformSchool360Page({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getPlatformSession();
-  if (!session) throw new Error("Unauthorized");
+  const session = await requirePlatformSession();
   await requirePlatformPermission(session, "schools.view");
   const { id } = await params;
   await requireSchoolScope(session, id);
