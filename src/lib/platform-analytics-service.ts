@@ -64,6 +64,7 @@ function median(values: number[]) {
 export async function getPlatformAnalytics(
   role: Role,
   days = 28,
+  schoolScope: string[] | null = null,
 ): Promise<{
   generatedAt: string;
   windowDays: number;
@@ -76,7 +77,10 @@ export async function getPlatformAnalytics(
 
   const windowDays = Math.min(Math.max(Math.floor(days), 7), 90);
   const directories = await db.schoolLoginDirectory.findMany({
-    where: { status: "active" },
+    where: {
+      status: "active",
+      ...(schoolScope === null ? {} : { schoolId: { in: schoolScope } }),
+    },
     select: { schoolId: true },
     orderBy: { createdAt: "desc" },
   });
@@ -184,9 +188,6 @@ export async function getPlatformAnalytics(
           activeUsers: Number(row.activeUsers),
         }));
 
-        // Coverage is student-days observed divided by student-days on days when
-        // the school actually recorded attendance. This avoids treating every
-        // weekend/no-entry day as a failed attendance day.
         const observedAttendanceDays = series.filter((row) => row.attendance > 0).length;
         const observedStudentDays = series.reduce((sum, row) => sum + row.activeStudents, 0);
         const expectedObservedStudentDays = students * observedAttendanceDays;
@@ -194,9 +195,6 @@ export async function getPlatformAnalytics(
           ? clamp((observedStudentDays / expectedObservedStudentDays) * 100)
           : 0;
 
-        // Activity is based on actual operator audit evidence rather than User.createdAt.
-        // It is the average daily share of active users who generated at least one
-        // tenant audit event during the selected window.
         const activityUserDays = series.reduce((sum, row) => sum + Math.min(row.activeUsers, users), 0);
         const activityRate = users
           ? clamp((activityUserDays / Math.max(series.length, 1) / users) * 100)
