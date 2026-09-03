@@ -19,11 +19,10 @@ jobs:
     steps:
       - name: Trigger risk scan
         env:
-          APP_URL: ${{ secrets.SUKUUNOVA_APP_URL }}
+          APP_URL: https://sukuunova-production.up.railway.app
           CRON_SECRET: ${{ secrets.RISK_SCAN_CRON_SECRET }}
         run: |
           set -euo pipefail
-          test -n "$APP_URL" || { echo "SUKUUUNOVA_APP_URL secret is missing" >&2; exit 1; }
           test -n "$CRON_SECRET" || { echo "RISK_SCAN_CRON_SECRET secret is missing" >&2; exit 1; }
           APP_URL="${APP_URL%/}"
           status="$(curl -sS -o /tmp/risk-scan-response.json -w "%{http_code}" \
