@@ -11,7 +11,6 @@ type Worker = { id: string; name: string; email: string; role: string; status: s
 type School = { id: string; name: string; uniqueCode: string; status: string };
 type AccessRow = { adminId: string; schoolId: string; schoolName: string | null; uniqueCode: string | null; status: string | null };
 
-action:
 export async function GET() {
   try {
     const session = await requirePlatformSession();
@@ -63,7 +62,8 @@ export async function PUT(request: Request) {
           session.adminId,
         );
       }
-      const changed = JSON.stringify(beforeRows.map(row => row.schoolId)) !== JSON.stringify(schoolIds);
+      const beforeSchoolIds = beforeRows.map(row => row.schoolId);
+      const changed = JSON.stringify(beforeSchoolIds) !== JSON.stringify(schoolIds);
       if (changed) {
         await tx.$executeRawUnsafe(
           `INSERT INTO "AuditLogPlatform" ("id","actorId","action","targetEntity","meta") VALUES (gen_random_uuid()::text,$1,'platform_worker.scope_updated',$2,$3)`,
@@ -73,10 +73,10 @@ export async function PUT(request: Request) {
             workerId: input.adminId,
             workerName: target.name,
             workerRole: target.role,
-            beforeSchoolIds: beforeRows.map(row => row.schoolId),
+            beforeSchoolIds,
             afterSchoolIds: schoolIds,
-            addedSchoolCount: schoolIds.filter(id => !beforeRows.some(row => row.schoolId === id)).length,
-            removedSchoolCount: beforeRows.filter(row => !schoolIds.includes(row.schoolId)).length,
+            addedSchoolCount: schoolIds.filter(id => !beforeSchoolIds.includes(id)).length,
+            removedSchoolCount: beforeSchoolIds.filter(id => !schoolIds.includes(id)).length,
           }),
         );
       }
