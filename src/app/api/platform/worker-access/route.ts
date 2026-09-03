@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { routeError, ForbiddenError, AppError } from "@/lib/errors";
-import { requirePlatformPermission } from "@/lib/platform-permissions";
+import { getPlatformSchoolScope, requirePlatformPermission } from "@/lib/platform-permissions";
 
 const schema = z.object({ adminId: z.string().min(1), schoolIds: z.array(z.string().min(1)).max(200) });
 
@@ -15,10 +14,15 @@ export async function GET() {
   try {
     const session = await requirePlatformSession();
     await requirePlatformPermission(session, "admins.view");
+    const schoolScope = await getPlatformSchoolScope(session);
     const [workers, schools, accessRows, permissionRows] = await Promise.all([
       db.$queryRawUnsafe<Array<Omit<Worker, "permissions">>>(`SELECT "id","name","email","role","status" FROM "PlatformAdmin" ORDER BY "name" ASC`),
-      db.$queryRawUnsafe<School[]>(`SELECT "id","name","uniqueCode","status" FROM "School" ORDER BY "name" ASC`),
-      db.$queryRawUnsafe<AccessRow[]>(`SELECT a."adminId",a."schoolId",s."name" AS "schoolName",s."uniqueCode",s."status" FROM "PlatformAdminSchoolAccess" a LEFT JOIN "School" s ON s."id"=a."schoolId" ORDER BY s."name" ASC`),
+      schoolScope === null
+        ? db.$queryRawUnsafe<School[]>(`SELECT "id","name","uniqueCode","status" FROM "School" ORDER BY "name" ASC`)
+        : db.$queryRawUnsafe<School[]>(`SELECT "id","name","uniqueCode","status" FROM "School" WHERE "id" = ANY($1::text[]) ORDER BY "name" ASC`, schoolScope),
+      schoolScope === null
+        ? db.$queryRawUnsafe<AccessRow[]>(`SELECT a."adminId",a."schoolId",s."name" AS "schoolName",s."uniqueCode",s."status" FROM "PlatformAdminSchoolAccess" a LEFT JOIN "School" s ON s."id"=a."schoolId" ORDER BY s."name" ASC`)
+        : db.$queryRawUnsafe<AccessRow[]>(`SELECT a."adminId",a."schoolId",s."name" AS "schoolName",s."uniqueCode",s."status" FROM "PlatformAdminSchoolAccess" a INNER JOIN "School" s ON s."id"=a."schoolId" WHERE a."schoolId" = ANY($1::text[]) ORDER BY s."name" ASC`, schoolScope),
       db.$queryRawUnsafe<Array<{ adminId: string; permission: string }>>(`SELECT "adminId","permission" FROM "PlatformAdminPermission" ORDER BY "permission" ASC`),
     ]);
     const permissionMap: Record<string, string[]> = {};
