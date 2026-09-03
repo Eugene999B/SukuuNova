@@ -15,15 +15,11 @@ export async function GET() {
   try {
     const session = await requirePlatformSession();
     await requirePlatformPermission(session, "admins.view");
-    const schoolScope = await getPlatformSchoolScope(session);
+    if (session.role !== "super_admin") throw new ForbiddenError("Only Super Admin can inspect and manage the platform worker access directory.");
     const [workers, schools, accessRows, permissionRows] = await Promise.all([
       db.$queryRawUnsafe<Array<Omit<Worker, "permissions">>>(`SELECT "id","name","email","role","status" FROM "PlatformAdmin" ORDER BY "name" ASC`),
-      schoolScope === null
-        ? db.$queryRawUnsafe<School[]>(`SELECT "id","name","uniqueCode","status" FROM "School" ORDER BY "name" ASC`)
-        : db.$queryRawUnsafe<School[]>(`SELECT "id","name","uniqueCode","status" FROM "School" WHERE "id" = ANY($1::text[]) ORDER BY "name" ASC`, schoolScope),
-      schoolScope === null
-        ? db.$queryRawUnsafe<AccessRow[]>(`SELECT a."adminId",a."schoolId",s."name" AS "schoolName",s."uniqueCode",s."status" FROM "PlatformAdminSchoolAccess" a LEFT JOIN "School" s ON s."id"=a."schoolId" ORDER BY s."name" ASC`)
-        : db.$queryRawUnsafe<AccessRow[]>(`SELECT a."adminId",a."schoolId",s."name" AS "schoolName",s."uniqueCode",s."status" FROM "PlatformAdminSchoolAccess" a INNER JOIN "School" s ON s."id"=a."schoolId" WHERE a."schoolId" = ANY($1::text[]) ORDER BY s."name" ASC`, schoolScope),
+      db.$queryRawUnsafe<School[]>(`SELECT "id","name","uniqueCode","status" FROM "School" ORDER BY "name" ASC`),
+      db.$queryRawUnsafe<AccessRow[]>(`SELECT a."adminId",a."schoolId",s."name" AS "schoolName",s."uniqueCode",s."status" FROM "PlatformAdminSchoolAccess" a LEFT JOIN "School" s ON s."id"=a."schoolId" ORDER BY s."name" ASC`),
       db.$queryRawUnsafe<Array<{ adminId: string; permission: string }>>(`SELECT "adminId","permission" FROM "PlatformAdminPermission" ORDER BY "permission" ASC`),
     ]);
     const permissionMap: Record<string, string[]> = {};
