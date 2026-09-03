@@ -3,9 +3,7 @@ import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
-import { processOfflineSync } from "@/lib/offline-sync-service";
-
-export const MAX_OFFLINE_SYNC_OPERATIONS = 25;
+import { MAX_OFFLINE_SYNC_OPERATIONS, processOfflineSync } from "@/lib/offline-sync-service";
 
 const operationSchema = z.object({
   clientOperationId: z.string().trim().min(8).max(200),
