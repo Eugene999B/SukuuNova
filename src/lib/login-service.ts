@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { compare } from "bcryptjs";
 import { UnauthorizedError } from "./errors";
 import { roleKeyForName } from "./authorization";
+import { authorizationVersion } from "./auth";
 
 const LOGIN_FAILURE = "Invalid credentials or inactive account.";
 const MIN_PASSWORD_LENGTH = 12;
@@ -31,9 +32,22 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
       LIMIT 1`;
     const user = userRows[0];
     if (!user || !(await compare(input.password, user.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
-    const roles = await tx.userRole.findMany({ where: { userId: user.id }, select: { role: { select: { name: true, key: true } } } });
+
+    const [roles, permissionOverrides] = await Promise.all([
+      tx.userRole.findMany({ where: { userId: user.id }, select: { role: { select: { id: true, name: true, key: true, rolePermissions: { select: { permissionId: true } } } } } }),
+      tx.userPermissionOverride.findMany({ where: { userId: user.id }, select: { permissionId: true, granted: true } })
+    ]);
     const roleEntries = roles.map(({ role }) => ({ name: role.name, key: role.key?.trim() || roleKeyForName(role.name) }));
     const roleKeys = roleEntries.map((role) => role.key);
+    const authVersion = authorizationVersion({
+      id: user.id,
+      schoolId: user.schoolId,
+      name: user.name,
+      status: user.status,
+      passwordHash: user.passwordHash,
+      userRoles: roles,
+      permissionOverrides
+    });
 
     const schoolWorkspaceRoles = new Set([
       "owner",
@@ -52,7 +66,7 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     const hasSchoolWorkspaceRole = roleKeys.some((key) => schoolWorkspaceRoles.has(key));
     const hasTeacherWorkspaceRole = roleKeys.some((key) => teacherWorkspaceRoles.has(key));
     const portal = hasSchoolWorkspaceRole ? "school" : hasTeacherWorkspaceRole ? "teacher" : "school";
-    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleEntries.map((role) => role.name), roleKeys, needsPasswordChange: Boolean(user.needsPasswordChange) };
+    return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleEntries.map((role) => role.name), roleKeys, needsPasswordChange: Boolean(user.needsPasswordChange), authorizationVersion: authVersion };
   });
 }
 
