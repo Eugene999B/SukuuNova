@@ -17,3 +17,22 @@ export async function requirePlatformPermission(session: PlatformSession, permis
     throw new ForbiddenError(`Missing platform permission: ${permission}`);
   }
 }
+
+export async function getPlatformSchoolScope(session: PlatformSession): Promise<string[] | null> {
+  if (session.role === "super_admin") return null;
+  const rows = await db.$queryRawUnsafe<Array<{ schoolId: string }>>(
+    `SELECT "schoolId" FROM "PlatformAdminSchoolAccess" WHERE "adminId"=$1 ORDER BY "schoolId" ASC`,
+    session.adminId,
+  );
+  return rows.map((row) => row.schoolId);
+}
+
+export async function requirePlatformSchoolScope(session: PlatformSession, schoolIds: string[]): Promise<void> {
+  if (session.role === "super_admin") return;
+  const allowed = await getPlatformSchoolScope(session);
+  const allowedSet = new Set(allowed ?? []);
+  const unauthorized = schoolIds.find((schoolId) => !allowedSet.has(schoolId));
+  if (unauthorized) {
+    throw new ForbiddenError("This worker is not assigned to one or more requested schools.");
+  }
+}
