@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import PlatformControlCenter from "@/components/PlatformControlCenter";
 import { requirePlatformSession } from "@/lib/auth";
+import { ForbiddenError } from "@/lib/errors";
 import { getPlatformSchoolScope, hasPlatformPermission, requirePlatformPermission } from "@/lib/platform-permissions";
 import { getPlatformHealth, getPlatformOverview, listPlatformAudit } from "@/lib/platform-admin-service";
 import { listScopedPlatformAudit } from "@/lib/platform-scoped-audit";
@@ -23,7 +24,7 @@ export default async function PlatformPage() {
     for (const [permission, href] of PLATFORM_LANDING_ROUTES.slice(1)) {
       if (await hasPlatformPermission(session, permission)) redirect(href);
     }
-    throw new Error("No platform workspace permission is assigned to this account.");
+    throw new ForbiddenError("No platform workspace permission is assigned to this account.");
   }
   await requirePlatformPermission(session, "analytics.view");
   const schoolScope = await getPlatformSchoolScope(session);
