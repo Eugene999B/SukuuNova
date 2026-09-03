@@ -102,7 +102,6 @@ export async function getPlatformAnalytics(
             users: string;
             classes: string;
             attendance: string;
-            attendedStudents: string;
             late: string;
             invoices: string;
             outstanding: string;
@@ -113,7 +112,6 @@ export async function getPlatformAnalytics(
               (SELECT COUNT(*)::text FROM "User" WHERE "schoolId"=$1 AND "status"='active') AS users,
               (SELECT COUNT(*)::text FROM "Class" WHERE "schoolId"=$1) AS classes,
               (SELECT COUNT(*)::text FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3 AND "type"='in') AS attendance,
-              (SELECT COUNT(DISTINCT "studentId")::text FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3 AND "type"='in' AND "studentId" IS NOT NULL) AS "attendedStudents",
               (SELECT COUNT(*)::text FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3 AND "type"='in' AND COALESCE("isLate",false)=true) AS late,
               (SELECT COUNT(*)::text FROM "PlatformInvoice" WHERE "schoolId"=$1) AS invoices,
               (SELECT COALESCE(SUM(GREATEST("amount"-COALESCE((SELECT SUM(p."amount") FROM "PlatformPayment" p WHERE p."platformInvoiceId"=i."id"),0),0)),0)::text FROM "PlatformInvoice" i WHERE i."schoolId"=$1) AS outstanding,
@@ -137,13 +135,23 @@ export async function getPlatformAnalytics(
               FROM "AttendanceEvent"
               WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3
               GROUP BY "attendanceDate"::date
+            ), audit_activity AS (
+              SELECT "createdAt"::date AS day,
+                COUNT(DISTINCT "actorId")::text AS "activeUsers"
+              FROM "AuditLogSchool"
+              WHERE "schoolId"=$1
+                AND "createdAt" >= $2
+                AND "createdAt" < ($3::date + interval '1 day')
+                AND "actorId" IS NOT NULL
+              GROUP BY "createdAt"::date
             )
             SELECT to_char(days.day,'YYYY-MM-DD') AS day,
               COALESCE(attendance.attendance,'0') AS attendance,
               COALESCE(attendance."activeStudents",'0') AS "activeStudents",
-              (SELECT COUNT(*)::text FROM "User" WHERE "schoolId"=$1 AND "status"='active' AND "createdAt" < days.day+interval '1 day') AS "activeUsers"
+              COALESCE(audit_activity."activeUsers",'0') AS "activeUsers"
             FROM days
             LEFT JOIN attendance ON attendance.day=days.day
+            LEFT JOIN audit_activity ON audit_activity.day=days.day
             ORDER BY days.day ASC`,
             schoolId,
             start,
@@ -156,7 +164,6 @@ export async function getPlatformAnalytics(
           users: "0",
           classes: "0",
           attendance: "0",
-          attendedStudents: "0",
           late: "0",
           invoices: "0",
           outstanding: "0",
@@ -166,7 +173,6 @@ export async function getPlatformAnalytics(
         const students = Number(aggregate.students);
         const users = Number(aggregate.users);
         const attendance = Number(aggregate.attendance);
-        const attendedStudents = Number(aggregate.attendedStudents);
         const late = Number(aggregate.late);
         const invoices = Number(aggregate.invoices);
         const outstanding = Number(aggregate.outstanding);
@@ -178,15 +184,31 @@ export async function getPlatformAnalytics(
           activeUsers: Number(row.activeUsers),
         }));
 
-        const coverage = students ? clamp((attendedStudents / students) * 100) : 0;
-        const activityRate = users
-          ? clamp((series.reduce((sum, row) => sum + Math.min(row.activeUsers, users), 0) / Math.max(series.length, 1) / users) * 100)
+        // Coverage is student-days observed divided by student-days on days when
+        // the school actually recorded attendance. This avoids treating every
+        // weekend/no-entry day as a failed attendance day.
+        const observedAttendanceDays = series.filter((row) => row.attendance > 0).length;
+        const observedStudentDays = series.reduce((sum, row) => sum + row.activeStudents, 0);
+        const expectedObservedStudentDays = students * observedAttendanceDays;
+        const coverage = expectedObservedStudentDays
+          ? clamp((observedStudentDays / expectedObservedStudentDays) * 100)
           : 0;
-        const attendanceRatios = series.map((row) => (students ? (row.activeStudents / students) * 100 : 0));
+
+        // Activity is based on actual operator audit evidence rather than User.createdAt.
+        // It is the average daily share of active users who generated at least one
+        // tenant audit event during the selected window.
+        const activityUserDays = series.reduce((sum, row) => sum + Math.min(row.activeUsers, users), 0);
+        const activityRate = users
+          ? clamp((activityUserDays / Math.max(series.length, 1) / users) * 100)
+          : 0;
+
+        const attendanceRatios = series
+          .filter((row) => row.attendance > 0)
+          .map((row) => (students ? (row.activeStudents / students) * 100 : 0));
         const activityRatios = series.map((row) => (users ? (Math.min(row.activeUsers, users) / users) * 100 : 0));
         const recentAttendance = ewma(attendanceRatios.slice(-7));
         const priorAttendance = ewma(attendanceRatios.slice(-14, -7));
-        const attendanceTrend = recentAttendance - priorAttendance;
+        const attendanceTrend = attendanceRatios.length >= 2 ? recentAttendance - priorAttendance : 0;
         const activityTrend = trendSlope(activityRatios.slice(-14));
         const collectionRate = collections + outstanding
           ? clamp((collections / (collections + outstanding)) * 100)
@@ -199,10 +221,10 @@ export async function getPlatformAnalytics(
           risk += 55;
           riskReasons.push("School account is not active");
         }
-        if (students > 0 && coverage < 35) {
+        if (students > 0 && observedAttendanceDays > 0 && coverage < 35) {
           risk += 25;
           riskReasons.push("Attendance coverage is low");
-        } else if (students > 0 && coverage < 65) {
+        } else if (students > 0 && observedAttendanceDays > 0 && coverage < 65) {
           risk += 12;
           riskReasons.push("Attendance coverage needs review");
         }
