@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
 import { decryptEmbeddingRef } from "../src/lib/face-crypto";
-import { enrollFace } from "../src/lib/face-service";
+import { enrollFace, reviewFaceMatch } from "../src/lib/face-service";
 import type { FaceProvider } from "../src/lib/face-provider";
 import { addApprovedPickup, attemptPickup, reviewPickupRequest } from "../src/lib/pickup-service";
 import { getVisiblePayslipPdf, visiblePayslips } from "../src/lib/payroll-service";
@@ -143,7 +143,7 @@ describe("Phase 2 differentiator safety gates", () => {
       async indexFace() { return { faceId: "provider-face-id-must-not-be-plain" }; },
       async searchFace() { return {}; }
     };
-    const image = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD4yooooA//2Q==";
+    const image = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBgUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD4yooooA//2Q==";
 
     await withTenant(fixture.schoolId, async (tx) => {
       await expect(enrollFace(tx, {
@@ -163,6 +163,36 @@ describe("Phase 2 differentiator safety gates", () => {
       expect(stored?.embeddingRef).not.toContain("provider-face-id-must-not-be-plain");
       expect(decryptEmbeddingRef(stored!.embeddingRef)).toBe("provider-face-id-must-not-be-plain");
       expect(stored?.consentByGuardianId).toBe(guardianId);
+    });
+  });
+
+  it("serializes concurrent face review confirmations so attendance is recorded once", async () => {
+    let reviewId = "";
+    await withTenant(fixture.schoolId, async (tx) => {
+      reviewId = (await tx.faceMatchReview.create({
+        data: {
+          schoolId: fixture.schoolId,
+          candidateStudentId: studentId,
+          confidenceScore: 90,
+          deviceId: "phase2-device",
+          periodId: "DAILY",
+          capturedAt: new Date("2026-08-17T08:00:00.000Z")
+        }
+      })).id;
+    });
+
+    const results = await Promise.allSettled([
+      withTenant(fixture.schoolId, (tx) => reviewFaceMatch(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, reviewId, decision: "confirmed", type: "in" })),
+      withTenant(fixture.schoolId, (tx) => reviewFaceMatch(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, reviewId, decision: "confirmed", type: "in" }))
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const rejected = results.find((result) => result.status === "rejected");
+    expect(rejected?.status === "rejected" ? rejected.reason : null).toMatchObject({ code: "INVALID_STATE" });
+    await withTenant(fixture.schoolId, async (tx) => {
+      expect(await tx.attendanceEvent.count({ where: { studentId, type: "in", periodId: "DAILY" } })).toBe(1);
+      expect(await tx.faceMatchReview.count({ where: { id: reviewId, status: "confirmed" } })).toBe(1);
     });
   });
 
