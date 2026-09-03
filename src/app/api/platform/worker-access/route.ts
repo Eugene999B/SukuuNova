@@ -11,6 +11,7 @@ type Worker = { id: string; name: string; email: string; role: string; status: s
 type School = { id: string; name: string; uniqueCode: string; status: string };
 type AccessRow = { adminId: string; schoolId: string; schoolName: string | null; uniqueCode: string | null; status: string | null };
 
+action:
 export async function GET() {
   try {
     const session = await requirePlatformSession();
@@ -34,17 +35,53 @@ export async function PUT(request: Request) {
     if (session.role !== "super_admin") throw new ForbiddenError("Only Super Admin can change worker school scope.");
     const input = schema.parse(await request.json());
     const schoolIds = [...new Set(input.schoolIds)];
-    const admin = await db.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "PlatformAdmin" WHERE "id"=$1 LIMIT 1`, input.adminId);
-    if (!admin[0]) throw new AppError("Worker account was not found.", 404, "WORKER_NOT_FOUND");
+    if (input.adminId === session.adminId) throw new ForbiddenError("You cannot change your own school scope.");
+
+    const targetRows = await db.$queryRawUnsafe<Array<{ id: string; name: string; role: string; status: string }>>(
+      `SELECT "id","name","role","status" FROM "PlatformAdmin" WHERE "id"=$1 LIMIT 1`,
+      input.adminId,
+    );
+    const target = targetRows[0];
+    if (!target) throw new AppError("Worker account was not found.", 404, "WORKER_NOT_FOUND");
+    if (target.role === "super_admin") throw new ForbiddenError("Super Admin accounts are not assigned routine school scope.");
+    if (target.status !== "active") throw new AppError("Only active worker accounts can receive school scope.", 400, "WORKER_NOT_ACTIVE");
+
     const validSchools = await db.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "School" WHERE "id" = ANY($1::text[])`, schoolIds);
     if (validSchools.length !== schoolIds.length) throw new AppError("One or more selected schools do not exist.", 400, "INVALID_SCHOOL_SCOPE");
+
     await db.$transaction(async tx => {
+      const beforeRows = await tx.$queryRawUnsafe<Array<{ schoolId: string }>>(
+        `SELECT "schoolId" FROM "PlatformAdminSchoolAccess" WHERE "adminId"=$1 ORDER BY "schoolId" ASC`,
+        input.adminId,
+      );
       await tx.$executeRawUnsafe(`DELETE FROM "PlatformAdminSchoolAccess" WHERE "adminId"=$1`, input.adminId);
       for (const schoolId of schoolIds) {
-        await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminSchoolAccess" ("adminId","schoolId","createdById") VALUES ($1,$2,$3)`, input.adminId, schoolId, session.adminId);
+        await tx.$executeRawUnsafe(
+          `INSERT INTO "PlatformAdminSchoolAccess" ("adminId","schoolId","createdById") VALUES ($1,$2,$3)`,
+          input.adminId,
+          schoolId,
+          session.adminId,
+        );
+      }
+      const changed = JSON.stringify(beforeRows.map(row => row.schoolId)) !== JSON.stringify(schoolIds);
+      if (changed) {
+        await tx.$executeRawUnsafe(
+          `INSERT INTO "AuditLogPlatform" ("id","actorId","action","targetEntity","meta") VALUES (gen_random_uuid()::text,$1,'platform_worker.scope_updated',$2,$3)`,
+          session.adminId,
+          `PlatformAdmin:${input.adminId}`,
+          JSON.stringify({
+            workerId: input.adminId,
+            workerName: target.name,
+            workerRole: target.role,
+            beforeSchoolIds: beforeRows.map(row => row.schoolId),
+            afterSchoolIds: schoolIds,
+            addedSchoolCount: schoolIds.filter(id => !beforeRows.some(row => row.schoolId === id)).length,
+            removedSchoolCount: beforeRows.filter(row => !schoolIds.includes(row.schoolId)).length,
+          }),
+        );
       }
     });
-    await db.$executeRawUnsafe(`INSERT INTO "AuditLogPlatform" ("id","actorId","action","targetEntity","meta") VALUES (gen_random_uuid()::text,$1,'platform_worker.scope_updated',$2,$3)`, session.adminId, `PlatformAdmin:${input.adminId}`, JSON.stringify({ schoolIds, workerId: input.adminId }));
+
     return NextResponse.json({ ok: true, access: schoolIds });
   } catch (error) { return routeError(error); }
 }
