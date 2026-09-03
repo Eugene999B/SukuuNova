@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError, UnauthorizedError } from "@/lib/errors";
-import { requirePlatformPermission } from "@/lib/platform-permissions";
+import { requirePlatformPermission, getPlatformSchoolScope } from "@/lib/platform-permissions";
 import { requireSchoolScope } from "@/lib/platform-school-scope";
 import { getPlatformOverview, listPlatformAdmins, createPlatformAdmin, updatePlatformAdmin, listPlatformAudit, getPlatformHealth, getSchoolSnapshot, ADMIN_PERMISSIONS } from "@/lib/platform-admin-service";
 
@@ -23,7 +23,10 @@ export async function GET(request: Request) {
     const schoolId = u.searchParams.get("schoolId") || "";
     if (view === "overview") {
       await requirePlatformPermission(session, "analytics.view");
-      return NextResponse.json(await getPlatformOverview());
+      const [overview, schoolScope] = await Promise.all([getPlatformOverview(), getPlatformSchoolScope(session)]);
+      if (schoolScope === null) return NextResponse.json(overview);
+      const schools = overview.schools.filter((school) => schoolScope.includes(String(school.id)));
+      return NextResponse.json({ ...overview, totals: { ...overview.totals, schools }, schools });
     }
     if (view === "admins") {
       await requirePlatformPermission(session, "admins.view");
