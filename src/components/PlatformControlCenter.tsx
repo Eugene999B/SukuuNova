@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Activity, ArrowRight, BadgeAlert, CreditCard, Gauge, GraduationCap, LifeBuoy, School, Search, ShieldCheck, Users } from "lucide-react";
+import { Activity, ArrowRight, CreditCard, Gauge, GraduationCap, LifeBuoy, School, Search, ShieldCheck, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import type { getPlatformOverview, getPlatformHealth, listPlatformAudit } from "@/lib/platform-admin-service";
 
@@ -125,7 +125,7 @@ export default function PlatformControlCenter({ overview, health, audit }: Props
 
     <div className="platform-lower-grid">
       <section className="app-card app-panel"><div className="app-card-head"><div><h2>Network snapshot</h2><p>Scale and commercial context without burying the operator in charts.</p></div><Link className="app-pill" href="/platform/analytics">Open analytics</Link></div><div className="platform-metric-row"><div><b>{Number(overview.totals.users).toLocaleString()}</b><small>Users</small></div><div><b>{Number(overview.totals.classes).toLocaleString()}</b><small>Classes</small></div><div><b>{overview.totals.invoices.toLocaleString()}</b><small>Invoices</small></div><div><b>{overview.totals.unpaidInvoices.toLocaleString()}</b><small>Unpaid</small></div></div></section>
-      <section className="app-card app-panel"><div className="app-card-head"><div><h2>Recent platform activity</h2><p>Most recent audited control-plane actions.</p></div><Link className="app-pill" href="/platform/audit">View audit</Link></div>{audit.slice(0,5).map((event) => <div className="platform-activity-row" key={event.id}><div><b>{event.action}</b><small>{event.targetEntity || (event.targetSchoolId ? `School ${event.targetSchoolId}` : "Platform")}</small></div><time>{new Date(event.createdAt).toLocaleDateString()}</time></div>)}{audit.length===0&&<div className="platform-empty">No platform activity has been recorded yet.</div>}</section>
+      <section className="app-card app-panel"><div className="app-card-head"><div><h2>Recent platform activity</h2><p>Most recent audited control-plane actions.</p></div><Link className="app-pill" href="/platform/audit">View audit</Link></div>{audit.events.slice(0,5).map((event) => <div className="platform-activity-row" key={event.id}><div><b>{event.action}</b><small>{event.targetEntity || (event.targetSchoolId ? `School ${event.targetSchoolId}` : "Platform")}</small></div><time>{new Date(event.createdAt).toLocaleDateString()}</time></div>)}{audit.events.length===0&&<div className="platform-empty">No platform activity has been recorded yet.</div>}</section>
     </div>
   </AppShell>;
 }
