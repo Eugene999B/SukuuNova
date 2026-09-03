@@ -67,16 +67,7 @@ export async function getPlatformOverview() {
           tx.$queryRawUnsafe<Array<{ amount: string }>>(`SELECT "amount"::text amount FROM "PlatformPayment" WHERE "schoolId"=$1`, dir.schoolId),
         ]);
         const paid = paymentRows.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-        return {
-          school,
-          studentCount,
-          userCount,
-          classCount,
-          attendanceToday,
-          invoices: invoiceRows.length,
-          unpaidInvoices: invoiceRows.filter((invoice) => invoice.status !== "paid").length,
-          collected: paid,
-        };
+        return { school, studentCount, userCount, classCount, attendanceToday, invoices: invoiceRows.length, unpaidInvoices: invoiceRows.filter((invoice) => invoice.status !== "paid").length, collected: paid };
       });
       if (!stats.school) continue;
       if (stats.school.status === "suspended") suspendedSchools++; else activeSchools++;
@@ -91,8 +82,7 @@ export async function getPlatformOverview() {
   return { totals: { schools: dirs.length, activeSchools, suspendedSchools, students, users, classes, invoices, unpaidInvoices, collected }, schools: schoolStats };
 }
 
-export async function listPlatformAdmins(role: string): Promise<PlatformAdminView[]> {
-  if (!["super_admin", "platform_admin"].includes(role)) throw new ForbiddenError("Admin management permission required.");
+export async function listPlatformAdmins(_role: string): Promise<PlatformAdminView[]> {
   const admins = await db.$queryRawUnsafe<Array<PlatformAdminListRow & { permissions: unknown }>>(
     `SELECT a."id",a."name",a."email",a."role",a."status",a."createdAt",m."createdById",
             COALESCE(json_agg(p."permission") FILTER (WHERE p."permission" IS NOT NULL),'[]') AS "permissions"
@@ -106,197 +96,92 @@ export async function listPlatformAdmins(role: string): Promise<PlatformAdminVie
 }
 
 export async function createPlatformAdmin(input: {
-  actorId: string;
-  actorRole: string;
-  name: string;
-  email: string;
-  password: string;
-  role: string;
-  permissions: string[];
+  actorId: string; actorRole: string; name: string; email: string; password: string; role: string; permissions: string[];
 }) {
   superOnly(input.actorRole);
   validateWorkerRole(input.role);
-  if (!/^(?=.*[A-Za-z])(?=.*\d).{12,}$/.test(input.password)) {
-    throw new AppError("Worker password must be at least 12 characters and contain letters and numbers.", 400, "WEAK_PASSWORD");
-  }
+  if (!/^(?=.*[A-Za-z])(?=.*\d).{12,}$/.test(input.password)) throw new AppError("Worker password must be at least 12 characters and contain letters and numbers.", 400, "WEAK_PASSWORD");
   const permissions = validatePermissions(input.permissions);
-  const name = input.name.trim();
-  const email = input.email.trim().toLowerCase();
+  const name = input.name.trim(); const email = input.email.trim().toLowerCase();
   if (name.length < 2 || email.length < 3) throw new AppError("Worker identity is incomplete.", 400, "INVALID_INPUT");
-
   const id = await db.$transaction(async (tx) => {
-    const a = await tx.platformAdmin.create({
-      data: { name, email, passwordHash: await hash(input.password, 12), role: input.role, status: "active" },
-    });
+    const a = await tx.platformAdmin.create({ data: { name, email, passwordHash: await hash(input.password, 12), role: input.role, status: "active" } });
     await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminMeta" ("adminId","createdById") VALUES ($1,$2)`, a.id, input.actorId);
-    for (const permission of permissions) {
-      await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, a.id, permission);
-    }
+    for (const permission of permissions) await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, a.id, permission);
     return a.id;
   });
-
   await appendPlatformAudit({ actorId: input.actorId, action: "platform_admin.created", targetEntity: `PlatformAdmin:${id}`, meta: { role: input.role, permissions } });
   return { id, name, email, role: input.role, status: "active", permissions };
 }
 
 export async function updatePlatformAdmin(input: {
-  actorId: string;
-  actorRole: string;
-  adminId: string;
-  status?: string;
-  role?: string;
-  permissions?: string[];
+  actorId: string; actorRole: string; adminId: string; status?: string; role?: string; permissions?: string[];
 }) {
   superOnly(input.actorRole);
-  if (input.actorId === input.adminId) {
-    throw new ForbiddenError("You cannot change your own platform role, permissions or account status.");
-  }
+  if (input.actorId === input.adminId) throw new ForbiddenError("You cannot change your own platform role, permissions or account status.");
   if (input.status && !["active", "suspended"].includes(input.status)) throw new AppError("Invalid worker status.", 400, "INVALID_STATUS");
   if (input.role) validateWorkerRole(input.role);
   const permissions = input.permissions ? validatePermissions(input.permissions) : undefined;
-
   const beforeAfter = await db.$transaction(async (tx) => {
     await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext('sukuunova.platform-admin-governance'))`);
-    const target = await tx.platformAdmin.findUnique({
-      where: { id: input.adminId },
-      select: { id: true, name: true, email: true, role: true, status: true },
-    });
+    const target = await tx.platformAdmin.findUnique({ where: { id: input.adminId }, select: { id: true, name: true, email: true, role: true, status: true } });
     if (!target) throw new AppError("Worker account was not found.", 404, "WORKER_NOT_FOUND");
-    if (target.role === "super_admin" || input.role === "super_admin") {
-      throw new ForbiddenError("Super Admin accounts are protected from routine worker edits.");
-    }
-
-    const nextRole = input.role ?? target.role;
-    const nextStatus = input.status ?? target.status;
-    const changedFields: Record<string, unknown> = {};
+    if (target.role === "super_admin" || input.role === "super_admin") throw new ForbiddenError("Super Admin accounts are protected from routine worker edits.");
+    const nextRole = input.role ?? target.role; const nextStatus = input.status ?? target.status; const changedFields: Record<string, unknown> = {};
     if (target.role !== nextRole) changedFields.role = { before: target.role, after: nextRole };
     if (target.status !== nextStatus) changedFields.status = { before: target.status, after: nextStatus };
-    if (Object.keys(changedFields).length) {
-      await tx.platformAdmin.update({ where: { id: target.id }, data: { role: nextRole, status: nextStatus } });
-    }
-
-    let previousPermissions: string[] | undefined;
-    let permissionsChanged = false;
+    if (Object.keys(changedFields).length) await tx.platformAdmin.update({ where: { id: target.id }, data: { role: nextRole, status: nextStatus } });
+    let previousPermissions: string[] | undefined; let permissionsChanged = false;
     if (permissions) {
       const rows = await tx.$queryRawUnsafe<Array<{ permission: string }>>(`SELECT "permission" FROM "PlatformAdminPermission" WHERE "adminId"=$1 ORDER BY "permission" ASC`, target.id);
       previousPermissions = rows.map((row) => row.permission);
       permissionsChanged = previousPermissions.length !== permissions.length || previousPermissions.some((permission, index) => permission !== permissions[index]);
       if (permissionsChanged) {
         await tx.$executeRawUnsafe(`DELETE FROM "PlatformAdminPermission" WHERE "adminId"=$1`, target.id);
-        for (const permission of permissions) {
-          await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, target.id, permission);
-        }
+        for (const permission of permissions) await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, target.id, permission);
       }
     }
-
-    return {
-      target,
-      next: { ...target, role: nextRole, status: nextStatus },
-      permissions: permissions ?? previousPermissions,
-      previousPermissions,
-      changedFields,
-      permissionsChanged,
-    };
+    return { target, next: { ...target, role: nextRole, status: nextStatus }, permissions: permissions ?? previousPermissions, previousPermissions, changedFields, permissionsChanged };
   });
-
-  await appendPlatformAudit({
-    actorId: input.actorId,
-    action: "platform_admin.updated",
-    targetEntity: `PlatformAdmin:${input.adminId}`,
-    meta: {
-      before: { role: beforeAfter.target.role, status: beforeAfter.target.status, permissions: beforeAfter.previousPermissions },
-      after: { role: beforeAfter.next.role, status: beforeAfter.next.status, permissions: beforeAfter.permissions },
-      changedFields: beforeAfter.changedFields,
-      permissionsChanged: beforeAfter.permissionsChanged,
-    },
-  });
-
+  await appendPlatformAudit({ actorId: input.actorId, action: "platform_admin.updated", targetEntity: `PlatformAdmin:${input.adminId}`, meta: { before: { role: beforeAfter.target.role, status: beforeAfter.target.status, permissions: beforeAfter.previousPermissions }, after: { role: beforeAfter.next.role, status: beforeAfter.next.status, permissions: beforeAfter.permissions }, changedFields: beforeAfter.changedFields, permissionsChanged: beforeAfter.permissionsChanged } });
   return (await listPlatformAdmins(input.actorRole)).find((admin) => admin.id === input.adminId);
 }
 
-export type PlatformAuditPage = {
-  events: Array<{
-    id: string;
-    actorId: string;
-    actorName: string | null;
-    actorEmail: string | null;
-    action: string;
-    targetSchoolId: string | null;
-    targetEntity: string | null;
-    createdAt: Date;
-    meta: unknown;
-  }>;
-  nextCursor: string | null;
-};
+export type PlatformAuditPage = { events: Array<{ id:string; actorId:string; actorName:string|null; actorEmail:string|null; action:string; targetSchoolId:string|null; targetEntity:string|null; createdAt:Date; meta:unknown }>; nextCursor:string|null };
 
-export async function listPlatformAudit(input: {
-  role: string;
-  limit?: number;
-  cursor?: string;
-  query?: string;
-  action?: string;
-  sensitiveOnly?: boolean;
+export async function listPlatformAudit(_input: {
+  role: string; limit?: number; cursor?: string; query?: string; action?: string; sensitiveOnly?: boolean;
 }): Promise<PlatformAuditPage> {
-  if (!["super_admin", "platform_admin", "support_admin"].includes(input.role)) throw new ForbiddenError("Audit permission required.");
-  const limit = Math.min(Math.max(input.limit ?? 50, 1), 100);
-  const query = input.query?.trim().toLowerCase() ?? "";
-  const action = input.action?.trim() ?? "";
-  const sensitiveOnly = Boolean(input.sensitiveOnly);
-  let cursorDate: Date | null = null;
-  let cursorId: string | null = null;
-
-  if (input.cursor) {
-    const separator = input.cursor.lastIndexOf("_");
+  const limit = Math.min(Math.max(_input.limit ?? 50, 1), 100);
+  const query = _input.query?.trim().toLowerCase() ?? ""; const action = _input.action?.trim() ?? ""; const sensitiveOnly = Boolean(_input.sensitiveOnly);
+  let cursorDate: Date | null = null; let cursorId: string | null = null;
+  if (_input.cursor) {
+    const separator = _input.cursor.lastIndexOf("_");
     if (separator <= 0) throw new AppError("Invalid audit cursor.", 400, "INVALID_CURSOR");
-    const dateText = input.cursor.slice(0, separator);
-    const idText = input.cursor.slice(separator + 1);
-    const parsedDate = new Date(dateText);
+    const dateText = _input.cursor.slice(0, separator); const idText = _input.cursor.slice(separator + 1); const parsedDate = new Date(dateText);
     if (!idText || Number.isNaN(parsedDate.getTime())) throw new AppError("Invalid audit cursor.", 400, "INVALID_CURSOR");
-    cursorDate = parsedDate;
-    cursorId = idText;
+    cursorDate = parsedDate; cursorId = idText;
   }
-
   const rows = await db.$queryRawUnsafe<PlatformAuditPage["events"]>(
     `SELECT l."id", l."actorId", a."name" AS "actorName", a."email" AS "actorEmail", l."action", l."targetSchoolId", l."targetEntity", l."createdAt", l."meta"
-     FROM "AuditLogPlatform" l
-     LEFT JOIN "PlatformAdmin" a ON a."id"=l."actorId"
+     FROM "AuditLogPlatform" l LEFT JOIN "PlatformAdmin" a ON a."id"=l."actorId"
      WHERE ($1='' OR LOWER(l."action") LIKE '%' || $1 || '%' OR LOWER(COALESCE(a."name",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(a."email",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(l."targetEntity",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(l."targetSchoolId",'')) LIKE '%' || $1 || '%')
        AND ($2='' OR l."action"=$2)
        AND ($3=false OR LOWER(l."action") ~ '(imperson|delete|suspend|permission|password|role|setting|billing)')
        AND ($4::timestamptz IS NULL OR (l."createdAt",l."id") < ($4::timestamptz,$5))
-     ORDER BY l."createdAt" DESC, l."id" DESC
-     LIMIT $6`,
-    query,
-    action,
-    sensitiveOnly,
-    cursorDate,
-    cursorId,
-    limit + 1,
+     ORDER BY l."createdAt" DESC, l."id" DESC LIMIT $6`, query, action, sensitiveOnly, cursorDate, cursorId, limit + 1,
   );
-
-  const hasMore = rows.length > limit;
-  const events = hasMore ? rows.slice(0, limit) : rows;
-  const last = events.at(-1);
-  const nextCursor = hasMore && last ? `${last.createdAt.toISOString()}_${last.id}` : null;
+  const hasMore = rows.length > limit; const events = hasMore ? rows.slice(0, limit) : rows; const last = events.at(-1); const nextCursor = hasMore && last ? `${last.createdAt.toISOString()}_${last.id}` : null;
   return { events, nextCursor };
 }
 
 export async function getPlatformHealth() {
-  const started = Date.now();
-  let database = "operational";
-  let migrations = "operational";
-  try {
-    await db.$queryRaw`SELECT 1`;
-    await db.$queryRaw`SELECT 1 FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL LIMIT 1`;
-  } catch {
-    database = "degraded";
-    migrations = "degraded";
-  }
+  const started = Date.now(); let database = "operational"; let migrations = "operational";
+  try { await db.$queryRaw`SELECT 1`; await db.$queryRaw`SELECT 1 FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL LIMIT 1`; } catch { database = "degraded"; migrations = "degraded"; }
   return { database, migrations, latencyMs: Date.now() - started, checkedAt: new Date().toISOString(), nextjs: "self", api: "self" };
 }
 
-export async function getSchoolSnapshot(role: string, schoolId: string) {
-  if (!["super_admin", "platform_admin", "support_admin"].includes(role)) throw new ForbiddenError("School visibility permission required.");
+export async function getSchoolSnapshot(_role: string, schoolId: string) {
   return withTenant(schoolId, async (tx) => {
     const today = new Date(new Date().toISOString().slice(0, 10));
     const [school, students, users, classes, subjects, attendanceToday, recentAudit] = await Promise.all([
