@@ -4,63 +4,319 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Check, ChevronRight, KeyRound, LockKeyhole, RefreshCw, Search, ShieldCheck, UserPlus, Users } from "lucide-react";
 
-type Worker={id:string;name:string;email:string;role:string;status:string;permissions:string[]};
-type Payload={admins:Worker[];permissions:string[]};
-type Role="platform_admin"|"support_admin"|"billing_admin"|"analytics_admin";
-
-const GROUPS: Record<string,{label:string;description:string;permissions:string[]}> = {
-  Network:{label:"Network operations",description:"School account lifecycle and controlled customer access.",permissions:["schools.view","schools.manage","schools.suspend","schools.impersonate"]},
-  Finance:{label:"Finance",description:"Subscription, invoice and payment administration.",permissions:["billing.view","billing.manage","plans.manage"]},
-  Insight:{label:"Analytics & evidence",description:"Cross-school reporting and historical evidence review.",permissions:["analytics.view","audit.view"]},
-  Operations:{label:"Support operations",description:"Case handling and support workflow controls.",permissions:["support.view","support.manage"]},
-  Security:{label:"Security & administration",description:"Internal operators, platform security and settings.",permissions:["admins.view","admins.manage","security.manage","settings.manage"]},
+type Worker = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  permissions: string[];
 };
 
-function labelPermission(value:string){return value.replace(/\./g," · ").replace(/_/g," ").replace(/(^| )\S/g,(letter)=>letter.toUpperCase());}
-function roleLabel(value:string){return value.replace(/_/g," ").replace(/(^| )\S/g,(letter)=>letter.toUpperCase());}
+type Payload = { admins: Worker[]; permissions: string[] };
+type EditableRole = "platform_admin" | "support_admin" | "billing_admin" | "analytics_admin";
 
-export default function PlatformWorkersConsole(){
-  const [data,setData]=useState<Payload|null>(null),[query,setQuery]=useState(""),[selectedId,setSelectedId]=useState(""),[message,setMessage]=useState(""),[loading,setLoading]=useState(false);
-  const [draftName,setDraftName]=useState(""),[draftEmail,setDraftEmail]=useState(""),[draftPassword,setDraftPassword]=useState(""),[draftRole,setDraftRole]=useState<Role>("support_admin"),[draftPermissions,setDraftPermissions]=useState<string[]>(["support.view","support.manage"]),[createMode,setCreateMode]=useState(false);
+const GROUPS: Record<string, { label: string; description: string; permissions: string[] }> = {
+  Network: {
+    label: "Network operations",
+    description: "School account lifecycle and controlled customer access.",
+    permissions: ["schools.view", "schools.manage", "schools.suspend", "schools.impersonate"],
+  },
+  Finance: {
+    label: "Finance",
+    description: "Subscription, invoice and payment administration.",
+    permissions: ["billing.view", "billing.manage", "plans.manage"],
+  },
+  Insight: {
+    label: "Analytics & evidence",
+    description: "Cross-school reporting and historical evidence review.",
+    permissions: ["analytics.view", "audit.view"],
+  },
+  Operations: {
+    label: "Support operations",
+    description: "Case handling and support workflow controls.",
+    permissions: ["support.view", "support.manage"],
+  },
+  Security: {
+    label: "Security & administration",
+    description: "Internal operators, platform security and settings.",
+    permissions: ["admins.view", "admins.manage", "security.manage", "settings.manage"],
+  },
+};
 
-  async function load(){setLoading(true);try{const response=await fetch("/api/platform/admin?view=admins",{cache:"no-store"});const payload=await response.json() as Payload & {error?:string;message?:string};if(!response.ok){setMessage(payload.message??payload.error??"Unable to load platform workers.");return;}setData(payload);setSelectedId((current)=>current&&payload.admins.some((admin)=>admin.id===current)?current:payload.admins[0]?.id??"");setMessage("");}finally{setLoading(false);}}
-  useEffect(()=>{void load()},[]);
-  const selected=data?.admins.find((admin)=>admin.id===selectedId)??null;
-  const workers=useMemo(()=>{const q=query.trim().toLowerCase();return (data?.admins??[]).filter((admin)=>!q||admin.name.toLowerCase().includes(q)||admin.email.toLowerCase().includes(q)||admin.role.toLowerCase().includes(q));},[data,query]);
-  const counts=useMemo(()=>({active:(data?.admins??[]).filter((admin)=>admin.status==="active").length,suspended:(data?.admins??[]).filter((admin)=>admin.status!=="active").length}),[data]);
+function labelPermission(value: string) {
+  return value
+    .replace(/\./g, " · ")
+    .replace(/_/g, " ")
+    .replace(/(^| )\S/g, (letter) => letter.toUpperCase());
+}
 
-  function beginCreate(){setCreateMode(true);setSelectedId("");setDraftName("");setDraftEmail("");setDraftPassword("");setDraftRole("support_admin");setDraftPermissions(["support.view","support.manage"]);setMessage("");}
-  function loadWorker(admin:Worker){setCreateMode(false);setSelectedId(admin.id);setDraftName(admin.name);setDraftEmail(admin.email);setDraftRole((admin.role as Role) === "super_admin" ? "platform_admin" : admin.role as Role);setDraftPermissions(admin.permissions);setMessage("");}
-  function togglePermission(permission:string){setDraftPermissions((current)=>current.includes(permission)?current.filter((item)=>item!==permission):[...current,permission]);}
-  function toggleGroup(permissions:string[]){const has=permissions.every((permission)=>draftPermissions.includes(permission));setDraftPermissions((current)=>has?current.filter((permission)=>!permissions.includes(permission)):[...new Set([...current,...permissions])]);}
-  async function save(){
-    setLoading(true);setMessage("");try{
-      const payload=createMode?{action:"createWorker",name:draftName.trim(),email:draftEmail.trim(),password:draftPassword,role:draftRole,permissions:draftPermissions}:{action:"updateWorker",adminId:selectedId,status:selected?.status==="active"?"active":"suspended",role:draftRole,permissions:draftPermissions};
-      if(!createMode && !selectedId)return;
-      const response=await fetch("/api/platform/admin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});const result=await response.json() as {error?:string;message?:string};
-      if(!response.ok){setMessage(result.message??result.error??"Could not save worker.");return;}
-      setMessage(createMode?"Worker created and audited.":"Worker permissions updated and audited.");setCreateMode(false);await load();
-    }finally{setLoading(false);}
+function roleLabel(value: string) {
+  return value.replace(/_/g, " ").replace(/(^| )\S/g, (letter) => letter.toUpperCase());
+}
+
+function editableRole(value: string): EditableRole {
+  if (value === "platform_admin" || value === "support_admin" || value === "billing_admin" || value === "analytics_admin") return value;
+  return "support_admin";
+}
+
+export default function PlatformWorkersConsole() {
+  const [data, setData] = useState<Payload | null>(null);
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftEmail, setDraftEmail] = useState("");
+  const [draftPassword, setDraftPassword] = useState("");
+  const [draftRole, setDraftRole] = useState<EditableRole>("support_admin");
+  const [draftPermissions, setDraftPermissions] = useState<string[]>(["support.view", "support.manage"]);
+  const [createMode, setCreateMode] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/platform/admin?view=admins", { cache: "no-store" });
+      const payload = (await response.json()) as Payload & { error?: string; message?: string };
+      if (!response.ok) {
+        setMessage(payload.message ?? payload.error ?? "Unable to load platform workers.");
+        return;
+      }
+      setData(payload);
+      setSelectedId((current) => (current && payload.admins.some((admin) => admin.id === current) ? current : payload.admins[0]?.id ?? ""));
+      setMessage("");
+    } catch {
+      setMessage("Unable to load platform workers.");
+    } finally {
+      setLoading(false);
+    }
   }
-  async function setStatus(status:"active"|"suspended"){
-    if(!selectedId)return;setLoading(true);try{const response=await fetch("/api/platform/admin",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"updateWorker",adminId:selectedId,status,permissions:draftPermissions,role:draftRole})});const result=await response.json() as {error?:string;message?:string};setMessage(response.ok?`Worker ${status===`active`?"reactivated":"suspended"} and audited.`:(result.message??result.error??"Could not update worker."));if(response.ok)await load();}finally{setLoading(false);}}
 
-  return <div className="workers-page-stack">
-    <section className="platform-page-header"><div><span className="platform-eyebrow">Governance</span><h2>Workers & Permissions</h2><p>Separate identity, capability and school scope. A worker should only receive the controls required for their job.</p></div><div className="platform-header-actions"><button type="button" className="app-pill" onClick={()=>void load()} disabled={loading}><RefreshCw size={14}/> Refresh</button><button type="button" className="app-action" onClick={beginCreate}><UserPlus size={14}/><strong>New worker</strong></button></div></section>
-    {message&&<div className="app-banner" role="status"><div><h3>{message}</h3><p>Administrative changes are permission-checked and recorded in the platform audit trail.</p></div><span className="app-pill">Audited</span></div>}
-    <div className="app-grid kpis platform-kpis"><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Operators</span><span className="app-kpi-icon"><Users size={17}/></span></div><div className="app-kpi-value">{data?.admins.length??0}</div><div className="app-kpi-meta">Internal platform identities</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Active</span><span className="app-kpi-icon"><Check size={17}/></span></div><div className="app-kpi-value">{counts.active}</div><div className="app-kpi-meta">Allowed to operate</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Suspended</span><span className="app-kpi-icon"><LockKeyhole size={17}/></span></div><div className="app-kpi-value">{counts.suspended}</div><div className="app-kpi-meta">Blocked pending review</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">School scope</span><span className="app-kpi-icon"><KeyRound size={17}/></span></div><div className="app-kpi-value" style={{fontSize:18}}>Separate</div><div className="app-kpi-meta">Configure access per worker</div></div></div>
+  useEffect(() => {
+    void load();
+  }, []);
 
-    <div className="workers-layout">
-      <section className="app-card app-panel workers-list"><div className="workers-panel-head"><div><h2>Platform operators</h2><p>Search identity first, then inspect capabilities.</p></div></div><label className="workers-search"><Search size={15}/><input aria-label="Search workers" value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Name, email or role"/></label><div className="workers-list-body">{workers.map((worker)=><button type="button" className={`worker-row ${selectedId===worker.id&&!createMode?"is-selected":""}`} key={worker.id} onClick={()=>loadWorker(worker)}><span className="worker-avatar">{worker.name.trim().slice(0,2).toUpperCase()}</span><span className="worker-copy"><b>{worker.name}</b><small>{worker.email}</small></span><span className={`worker-state worker-state-${worker.status}`}>{worker.status}</span><ChevronRight size={14}/></button>)}{workers.length===0&&<div className="platform-empty">No operators match this search.</div>}</div></section>
+  const selected = data?.admins.find((admin) => admin.id === selectedId) ?? null;
+  const isProtectedSuperAdmin = selected?.role === "super_admin";
 
-      <section className="app-card app-panel worker-editor"><div className="workers-panel-head"><div><h2>{createMode?"Create platform worker":selected?selected.name:"Worker details"}</h2><p>{createMode?"Create the identity, then assign capability groups. School scope is configured separately.":selected?`${selected.email} · ${roleLabel(selected.role)} · ${selected.status}`:"Choose an operator from the list."}</p></div>{selected&&!createMode&&<Link className="app-pill" href={`/platform/admins/access?workerId=${encodeURIComponent(selected.id)}`}>Configure school scope</Link>}</div>{selected||createMode?<div className="worker-editor-body">
-        <div className="worker-form-grid"><label><span>Full name</span><input value={draftName} onChange={(event)=>setDraftName(event.target.value)} placeholder="e.g. Customer Support Lead" disabled={!createMode}/></label><label><span>Email</span><input type="email" value={draftEmail} onChange={(event)=>setDraftEmail(event.target.value)} placeholder="operator@sukuunova.com" disabled={!createMode}/></label>{createMode&&<label><span>Temporary password</span><input type="password" value={draftPassword} onChange={(event)=>setDraftPassword(event.target.value)} placeholder="12+ characters"/></label>}<label><span>Role</span><select value={draftRole} onChange={(event)=>setDraftRole(event.target.value as Role)}><option value="platform_admin">Platform Admin</option><option value="support_admin">Support Admin</option><option value="billing_admin">Billing Admin</option><option value="analytics_admin">Analytics Admin</option></select></label></div>
-        <div className="permission-title"><div><h3>Capability groups</h3><p>Turn groups on or off, then review the exact permissions selected below.</p></div><ShieldCheck size={18}/></div>
-        <div className="permission-groups">{Object.entries(GROUPS).map(([key,group])=>{const complete=group.permissions.every((permission)=>draftPermissions.includes(permission));return <div className={`permission-group ${complete?"is-enabled":""}`} key={key}><button type="button" className="permission-group-head" onClick={()=>toggleGroup(group.permissions)}><span><b>{group.label}</b><small>{group.description}</small></span><span className={`permission-toggle ${complete?"is-on":""}`}>{complete?"Enabled":"Off"}</span></button><div className="permission-items">{group.permissions.map((permission)=><label key={permission}><input type="checkbox" checked={draftPermissions.includes(permission)} onChange={()=>togglePermission(permission)}/><span>{labelPermission(permission)}</span></label>)}</div></div>})}</div>
-        <div className="selected-permissions"><span>{draftPermissions.length} permissions selected</span>{draftPermissions.slice(0,8).map((permission)=><code key={permission}>{permission}</code>)}{draftPermissions.length>8&&<em>+{draftPermissions.length-8} more</em>}</div>
-        <div className="worker-editor-actions">{createMode?<button type="button" className="app-action" disabled={loading||draftName.trim().length<2||draftEmail.trim().length<3||draftPassword.length<12} onClick={()=>void save()}><UserPlus size={14}/><strong>Create worker</strong>Save & audit</button>:<><button type="button" className="app-action" disabled={loading} onClick={()=>void save()}><Check size={14}/><strong>Save permissions</strong>Audit changes</button>{selected?.status==="active"?<button type="button" className="app-pill" disabled={loading} onClick={()=>void setStatus("suspended")}>Suspend worker</button>:<button type="button" className="app-pill" disabled={loading} onClick={()=>void setStatus("active")}>Reactivate worker</button>}</>}</div>
-      </div>:<div className="platform-empty large">Select a worker to inspect or edit capability. School scope remains a separate control so role permissions cannot accidentally grant customer-school access.</div>}</section>
+  const workers = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    return (data?.admins ?? []).filter((admin) =>
+      !normalized ||
+      admin.name.toLowerCase().includes(normalized) ||
+      admin.email.toLowerCase().includes(normalized) ||
+      admin.role.toLowerCase().includes(normalized),
+    );
+  }, [data, query]);
+
+  const counts = useMemo(() => ({
+    active: (data?.admins ?? []).filter((admin) => admin.status === "active").length,
+    suspended: (data?.admins ?? []).filter((admin) => admin.status !== "active").length,
+  }), [data]);
+
+  function beginCreate() {
+    setCreateMode(true);
+    setSelectedId("");
+    setDraftName("");
+    setDraftEmail("");
+    setDraftPassword("");
+    setDraftRole("support_admin");
+    setDraftPermissions(["support.view", "support.manage"]);
+    setMessage("");
+  }
+
+  function loadWorker(admin: Worker) {
+    setCreateMode(false);
+    setSelectedId(admin.id);
+    setDraftName(admin.name);
+    setDraftEmail(admin.email);
+    setDraftRole(editableRole(admin.role));
+    setDraftPermissions(admin.permissions);
+    setMessage("");
+  }
+
+  function togglePermission(permission: string) {
+    if (isProtectedSuperAdmin) return;
+    setDraftPermissions((current) => current.includes(permission)
+      ? current.filter((item) => item !== permission)
+      : [...current, permission]);
+  }
+
+  function toggleGroup(permissions: string[]) {
+    if (isProtectedSuperAdmin) return;
+    const complete = permissions.every((permission) => draftPermissions.includes(permission));
+    setDraftPermissions((current) => complete
+      ? current.filter((permission) => !permissions.includes(permission))
+      : [...new Set([...current, ...permissions])]);
+  }
+
+  async function save() {
+    if (!createMode && (!selectedId || isProtectedSuperAdmin)) return;
+    setLoading(true);
+    setMessage("");
+    try {
+      const payload = createMode
+        ? { action: "createWorker", name: draftName.trim(), email: draftEmail.trim(), password: draftPassword, role: draftRole, permissions: draftPermissions }
+        : { action: "updateWorker", adminId: selectedId, status: selected?.status === "active" ? "active" : "suspended", role: draftRole, permissions: draftPermissions };
+      const response = await fetch("/api/platform/admin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json()) as { error?: string; message?: string };
+      if (!response.ok) {
+        setMessage(result.message ?? result.error ?? "Could not save worker.");
+        return;
+      }
+      setMessage(createMode ? "Worker created and audited." : "Worker permissions updated and audited.");
+      setCreateMode(false);
+      await load();
+    } catch {
+      setMessage("Could not save worker.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function setStatus(status: "active" | "suspended") {
+    if (!selectedId || isProtectedSuperAdmin) return;
+    setLoading(true);
+    try {
+      const response = await fetch("/api/platform/admin", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "updateWorker", adminId: selectedId, status, role: draftRole, permissions: draftPermissions }),
+      });
+      const result = (await response.json()) as { error?: string; message?: string };
+      setMessage(response.ok
+        ? `Worker ${status === "active" ? "reactivated" : "suspended"} and audited.`
+        : (result.message ?? result.error ?? "Could not update worker."));
+      if (response.ok) await load();
+    } catch {
+      setMessage("Could not update worker.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="workers-page-stack">
+      <section className="platform-page-header">
+        <div>
+          <span className="platform-eyebrow">Governance</span>
+          <h2>Workers & Permissions</h2>
+          <p>Separate identity, capability and school scope. Privileged identities are protected from accidental self-lockout or demotion.</p>
+        </div>
+        <div className="platform-header-actions">
+          <button type="button" className="app-pill" onClick={() => void load()} disabled={loading} aria-label="Refresh workers"><RefreshCw size={14} /> Refresh</button>
+          <button type="button" className="app-action" onClick={beginCreate}><UserPlus size={14} /><strong>New worker</strong></button>
+        </div>
+      </section>
+
+      {message && (
+        <div className="app-banner" role="status">
+          <div><h3>{message}</h3><p>Administrative changes are permission-checked and recorded in the platform audit trail.</p></div>
+          <span className="app-pill">Audited</span>
+        </div>
+      )}
+
+      <div className="app-grid kpis platform-kpis">
+        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Operators</span><span className="app-kpi-icon"><Users size={17} /></span></div><div className="app-kpi-value">{data?.admins.length ?? 0}</div><div className="app-kpi-meta">Internal platform identities</div></div>
+        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Active</span><span className="app-kpi-icon"><Check size={17} /></span></div><div className="app-kpi-value">{counts.active}</div><div className="app-kpi-meta">Allowed to operate</div></div>
+        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Suspended</span><span className="app-kpi-icon"><LockKeyhole size={17} /></span></div><div className="app-kpi-value">{counts.suspended}</div><div className="app-kpi-meta">Blocked pending review</div></div>
+        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Tenant scope</span><span className="app-kpi-icon"><KeyRound size={17} /></span></div><div className="app-kpi-value">Separate</div><div className="app-kpi-meta">Role permissions do not grant school reach</div></div>
+      </div>
+
+      <div className="workers-layout">
+        <section className="app-card app-panel workers-list">
+          <div className="workers-panel-head"><div><h2>Platform operators</h2><p>Search identity first, then inspect effective capabilities.</p></div></div>
+          <label className="workers-search"><Search size={16} /><span className="sr-only">Search workers</span><input aria-label="Search workers" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, email or role" /></label>
+          <div className="workers-list-body">
+            {workers.map((worker) => (
+              <button type="button" className={`worker-row ${selectedId === worker.id && !createMode ? "is-selected" : ""}`} key={worker.id} onClick={() => loadWorker(worker)}>
+                <span className="worker-avatar" aria-hidden="true">{worker.name.trim().slice(0, 2).toUpperCase()}</span>
+                <span className="worker-copy"><b>{worker.name}</b><small>{worker.email}</small></span>
+                <span className={`worker-state worker-state-${worker.status}`}>{worker.status}</span>
+                <ChevronRight size={15} aria-hidden="true" />
+              </button>
+            ))}
+            {workers.length === 0 && <div className="platform-empty">No operators match this search.</div>}
+          </div>
+        </section>
+
+        <section className="app-card app-panel worker-editor">
+          <div className="workers-panel-head">
+            <div>
+              <h2>{createMode ? "Create platform worker" : selected ? selected.name : "Worker details"}</h2>
+              <p>{createMode ? "Create the identity, then assign capability groups. School scope is configured separately." : selected ? `${selected.email} · ${roleLabel(selected.role)} · ${selected.status}` : "Choose an operator from the list."}</p>
+            </div>
+            {selected && !createMode && <Link className="app-pill" href={`/platform/admins/access?workerId=${encodeURIComponent(selected.id)}`}>Configure school scope</Link>}
+          </div>
+
+          {isProtectedSuperAdmin && !createMode && (
+            <div className="worker-protected-notice" role="note">
+              <ShieldCheck size={18} />
+              <div><strong>Protected Super Admin</strong><p>This identity is intentionally read-only here. Role, permissions and suspension require a dedicated break-glass governance workflow.</p></div>
+            </div>
+          )}
+
+          {(selected && !createMode || createMode) ? (
+            <div className="worker-editor-body">
+              <div className="worker-form-grid">
+                <label><span>Full name</span><input value={draftName} onChange={(event) => setDraftName(event.target.value)} placeholder="e.g. Customer Support Lead" disabled={!createMode} /></label>
+                <label><span>Email</span><input type="email" value={draftEmail} onChange={(event) => setDraftEmail(event.target.value)} placeholder="operator@sukuunova.com" disabled={!createMode} /></label>
+                {createMode && <label><span>Temporary password</span><input type="password" value={draftPassword} onChange={(event) => setDraftPassword(event.target.value)} placeholder="12+ characters" /></label>}
+                <label><span>Role</span><select value={isProtectedSuperAdmin ? "platform_admin" : draftRole} onChange={(event) => setDraftRole(event.target.value as EditableRole)} disabled={isProtectedSuperAdmin}><option value="platform_admin">Platform Admin</option><option value="support_admin">Support Admin</option><option value="billing_admin">Billing Admin</option><option value="analytics_admin">Analytics Admin</option></select></label>
+              </div>
+
+              <div className="permission-title"><div><h3>Capability groups</h3><p>Groups make common operator profiles understandable; the exact permission set is still visible.</p></div><ShieldCheck size={18} aria-hidden="true" /></div>
+              <div className="permission-groups" aria-disabled={isProtectedSuperAdmin}>
+                {Object.entries(GROUPS).map(([key, group]) => {
+                  const complete = group.permissions.every((permission) => draftPermissions.includes(permission));
+                  return (
+                    <div className={`permission-group ${complete ? "is-enabled" : ""}`} key={key}>
+                      <button type="button" className="permission-group-head" onClick={() => toggleGroup(group.permissions)} disabled={isProtectedSuperAdmin}>
+                        <span><b>{group.label}</b><small>{group.description}</small></span>
+                        <span className={`permission-toggle ${complete ? "is-on" : ""}`}>{complete ? "Enabled" : "Off"}</span>
+                      </button>
+                      <div className="permission-items">
+                        {group.permissions.map((permission) => <label key={permission}><input type="checkbox" checked={draftPermissions.includes(permission)} onChange={() => togglePermission(permission)} disabled={isProtectedSuperAdmin} /><span>{labelPermission(permission)}</span></label>)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="selected-permissions"><span>{draftPermissions.length} permissions selected</span>{draftPermissions.slice(0, 8).map((permission) => <code key={permission}>{permission}</code>)}{draftPermissions.length > 8 && <em>+{draftPermissions.length - 8} more</em>}</div>
+
+              <div className="worker-editor-actions">
+                {createMode ? (
+                  <button type="button" className="app-action" disabled={loading || draftName.trim().length < 2 || draftEmail.trim().length < 3 || draftPassword.length < 12} onClick={() => void save()}><UserPlus size={14} /><strong>Create worker</strong>Save & audit</button>
+                ) : (
+                  <>
+                    <button type="button" className="app-action" disabled={loading || isProtectedSuperAdmin} onClick={() => void save()}><Check size={14} /><strong>Save permissions</strong>Audit changes</button>
+                    {selected?.status === "active" ? <button type="button" className="app-pill" disabled={loading || isProtectedSuperAdmin} onClick={() => void setStatus("suspended")}>Suspend worker</button> : <button type="button" className="app-pill" disabled={loading || isProtectedSuperAdmin} onClick={() => void setStatus("active")}>Reactivate worker</button>}
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="platform-empty large">Select an operator to inspect effective access. Super Admin identities are protected from routine role and permission edits.</div>
+          )}
+        </section>
+      </div>
+
+      <style jsx global>{`
+        .workers-page-stack{display:grid;gap:16px;margin-top:22px}
+        .workers-layout{display:grid;grid-template-columns:minmax(320px,.78fr) minmax(0,1.22fr);gap:16px;align-items:start}
+        .workers-list,.worker-editor{overflow:hidden}.workers-panel-head{padding:20px 22px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+        .workers-panel-head h2{margin:0;font-size:16px;line-height:1.25;color:#253648}.workers-panel-head p{margin:5px 0 0;color:#718092;font-size:12px;line-height:1.5}
+        .workers-search{display:flex;align-items:center;gap:9px;height:42px;margin:0 22px 14px;border:1px solid #dbe3ec;border-radius:10px;background:#fff;padding:0 11px;color:#8190a0}.workers-search input{border:0;outline:0;background:transparent;min-width:0;flex:1;font:inherit;font-size:13px;color:#30465a}
+        .workers-list-body{border-top:1px solid #edf1f5}.worker-row{display:grid;grid-template-columns:36px minmax(0,1fr) auto 16px;gap:10px;align-items:center;width:100%;padding:13px 22px;border:0;border-bottom:1px solid #edf1f5;background:#fff;text-align:left;color:inherit;cursor:pointer}.worker-row:hover{background:#fafcfe}.worker-row:focus-visible{outline:3px solid rgba(42,107,155,.25);outline-offset:-3px}.worker-row.is-selected{background:#eff5fa;box-shadow:inset 3px 0 0 #577d9e}.worker-avatar{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:#eff4f8;color:#54708a;font-size:11px;font-weight:900}.worker-copy{min-width:0}.worker-copy b{display:block;font-size:13px;color:#26394b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.worker-copy small{display:block;margin-top:3px;color:#7f8d9c;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.worker-state{padding:5px 8px;border-radius:999px;font-size:10px;font-weight:850;text-transform:capitalize}.worker-state-active{background:#edf9f2;color:#267a4e}.worker-state-suspended{background:#fff0ee;color:#aa4d44}
+        .worker-editor-body{padding:0 22px 22px}.worker-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:6px 0 18px}.worker-form-grid label{display:grid;gap:6px}.worker-form-grid label>span,.permission-title h3{font-size:11px;font-weight:850;color:#5f7285;text-transform:uppercase;letter-spacing:.07em}.worker-form-grid input,.worker-form-grid select{box-sizing:border-box;height:42px;border:1px solid #dbe3ec;border-radius:9px;background:#fff;color:#314558;font:inherit;font-size:13px;padding:0 11px}.permission-title{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:16px 0 11px;border-top:1px solid #e8edf2}.permission-title h3{margin:0;color:#536679}.permission-title p{margin:4px 0 0;color:#788898;font-size:12px;line-height:1.45}.permission-title>svg{color:#7f92a4}.permission-groups{display:grid;gap:9px}.permission-group{border:1px solid #e1e7ee;border-radius:11px;overflow:hidden;background:#fbfcfd}.permission-group.is-enabled{border-color:#ccdae7}.permission-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:12px;border:0;background:#f8fafc;text-align:left;cursor:pointer}.permission-group-head:disabled{cursor:not-allowed;opacity:.75}.permission-group-head b{display:block;font-size:13px;color:#2f4254}.permission-group-head small{display:block;margin-top:3px;color:#7c8b9a;font-size:11px;line-height:1.35}.permission-toggle{padding:5px 8px;border-radius:999px;background:#eef1f4;color:#728293;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}.permission-toggle.is-on{background:#e9f5ee;color:#27784c}.permission-items{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:10px}.permission-items label{display:flex;align-items:center;gap:7px;padding:8px 9px;border:1px solid #e4e9ee;border-radius:8px;background:#fff;color:#596a7b;font-size:11px;line-height:1.3}.permission-items input{accent-color:#567d9f}.selected-permissions{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:12px 0;color:#7c8998;font-size:11px}.selected-permissions code{padding:5px 7px;border-radius:6px;background:#f1f4f7;color:#53677a;font-size:10px}.selected-permissions em{font-size:10px;font-style:normal}.worker-editor-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:8px}.worker-editor-actions .app-action{min-height:40px}.worker-protected-notice{display:flex;gap:11px;align-items:flex-start;margin:0 22px 18px;padding:13px 14px;border:1px solid #d9e3ec;border-radius:11px;background:#f5f8fb;color:#496176}.worker-protected-notice svg{flex:none;margin-top:1px}.worker-protected-notice strong{display:block;font-size:13px}.worker-protected-notice p{margin:3px 0 0;font-size:11px;line-height:1.45;color:#738392}
+        .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+        @media(max-width:1050px){.workers-layout{grid-template-columns:1fr}.workers-list-body{max-height:420px;overflow:auto}}@media(max-width:760px){.worker-form-grid{grid-template-columns:1fr}.permission-items{grid-template-columns:1fr}.workers-panel-head{flex-direction:column}.worker-protected-notice{margin-inline:14px}}
+      `}</style>
     </div>
-    <style jsx global>{`\n      .workers-page-stack{display:grid;gap:16px;margin-top:22px}.workers-layout{display:grid;grid-template-columns:minmax(330px,.78fr) minmax(0,1.22fr);gap:16px;align-items:start}.workers-list,.worker-editor{overflow:hidden}.workers-panel-head{padding:18px 20px 13px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.workers-panel-head h2{margin:0;font-size:15px;color:#253648}.workers-panel-head p{margin:4px 0 0;color:#7f8d9c;font-size:10px;line-height:1.45}.workers-search{display:flex;align-items:center;gap:8px;height:36px;margin:0 20px 12px;border:1px solid #dbe3ec;border-radius:9px;background:#fff;padding:0 10px;color:#8190a0}.workers-search input{border:0;outline:0;background:transparent;min-width:0;flex:1;font:inherit;font-size:10px}.workers-list-body{border-top:1px solid #edf1f5}.worker-row{display:grid;grid-template-columns:31px minmax(0,1fr) auto 14px;gap:9px;align-items:center;width:100%;padding:11px 20px;border:0;border-bottom:1px solid #edf1f5;background:#fff;text-align:left;color:inherit;cursor:pointer}.worker-row:hover{background:#fafcfe}.worker-row.is-selected{background:#eff5fa;box-shadow:inset 3px 0 0 #577d9e}.worker-avatar{display:grid;place-items:center;width:31px;height:31px;border-radius:9px;background:#eff4f8;color:#54708a;font-size:8px;font-weight:900}.worker-copy{min-width:0}.worker-copy b{display:block;font-size:10.5px;color:#26394b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.worker-copy small{display:block;margin-top:2px;color:#8693a1;font-size:8.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.worker-state{padding:4px 6px;border-radius:999px;font-size:7.5px;font-weight:850;text-transform:capitalize}.worker-state-active{background:#edf9f2;color:#267a4e}.worker-state-suspended{background:#fff0ee;color:#aa4d44}.worker-editor-body{padding:0 20px 20px}.worker-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:5px 0 16px}.worker-form-grid label{display:grid;gap:5px}.worker-form-grid label>span,.permission-title h3{font-size:9px;font-weight:850;color:#647587;text-transform:uppercase;letter-spacing:.07em}.worker-form-grid input,.worker-form-grid select{box-sizing:border-box;height:38px;border:1px solid #dbe3ec;border-radius:9px;background:#fff;color:#314558;font:inherit;font-size:10px;padding:0 10px}.permission-title{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:15px 0 10px;border-top:1px solid #e8edf2}.permission-title h3{margin:0;color:#536679}.permission-title p{margin:3px 0 0;color:#8592a0;font-size:9px}.permission-title>svg{color:#7f92a4}.permission-groups{display:grid;gap:8px}.permission-group{border:1px solid #e1e7ee;border-radius:11px;overflow:hidden;background:#fbfcfd}.permission-group.is-enabled{border-color:#ccdae7}.permission-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:10px 11px;border:0;background:#f8fafc;text-align:left;cursor:pointer}.permission-group-head b{display:block;font-size:10px;color:#2f4254}.permission-group-head small{display:block;margin-top:2px;color:#83919f;font-size:8.5px;line-height:1.35}.permission-toggle{padding:4px 7px;border-radius:999px;background:#eef1f4;color:#768596;font-size:7.5px;font-weight:900;text-transform:uppercase;letter-spacing:.06em}.permission-toggle.is-on{background:#e9f5ee;color:#27784c}.permission-items{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:9px}.permission-items label{display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid #e4e9ee;border-radius:8px;background:#fff;color:#596a7b;font-size:8.5px}.permission-items input{accent-color:#567d9f}.selected-permissions{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:10px 0;color:#84919f;font-size:8.5px}.selected-permissions code{padding:4px 6px;border-radius:6px;background:#f1f4f7;color:#53677a;font-size:7.5px}.selected-permissions em{font-size:8px;font-style:normal}.worker-editor-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:7px}.worker-editor-actions .app-action{min-height:36px}.worker-form-grid label:nth-child(3){grid-column:1/-1}@media(max-width:1050px){.workers-layout{grid-template-columns:1fr}.workers-list-body{max-height:420px;overflow:auto}}@media(max-width:760px){.worker-form-grid{grid-template-columns:1fr}.worker-form-grid label:nth-child(3){grid-column:auto}.permission-items{grid-template-columns:1fr}.workers-panel-head{flex-direction:column}}\n    `}</style>
-  </div>;
+  );
 }
