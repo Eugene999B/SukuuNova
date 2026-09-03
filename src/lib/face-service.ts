@@ -108,6 +108,7 @@ export async function reviewFaceMatch(
   input: { schoolId: string; actorId: string; reviewId: string; decision: "confirmed" | "rejected"; type?: "in" | "out" }
 ) {
   await requirePermission(tx, input.actorId, "attendance:record");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`face-review:${input.schoolId}:${input.reviewId}`}))`;
   const review = await tx.faceMatchReview.findFirst({ where: { id: input.reviewId, schoolId: input.schoolId } });
   if (!review) throw new AppError("Face review not found.", 404, "NOT_FOUND");
   if (review.status !== "pending") throw new AppError("Face review is already complete.", 409, "INVALID_STATE");
