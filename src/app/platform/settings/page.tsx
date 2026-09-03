@@ -1,4 +1,15 @@
 import { AppShell } from "@/components/AppShell";
-import { PublicPresenceConsole } from "@/components/PublicPresenceConsole";
+import { PlatformSettingsWorkspace } from "@/components/PlatformSettingsWorkspace";
 
-export default function SettingsPage(){return <AppShell universe="platform" title="Platform Settings" subtitle="Set the public voice, contact paths and website presence for SukuuNova."><PublicPresenceConsole /></AppShell>;}
+export default function SettingsPage() {
+  return (
+    <AppShell
+      universe="platform"
+      active="Platform Settings"
+      title="Platform Settings"
+      subtitle="Configure SukuuNova’s public presence and reach the governed workflows that control access and operations."
+    >
+      <PlatformSettingsWorkspace />
+    </AppShell>
+  );
+}
