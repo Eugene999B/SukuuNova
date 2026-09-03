@@ -9,7 +9,7 @@ export default async function PlatformPage() {
   const [overview, health, audit] = await Promise.all([
     getPlatformOverview(),
     getPlatformHealth(),
-    listPlatformAudit(session.role, 10),
+    listPlatformAudit({ role: session.role, limit: 10 }),
   ]);
   return <PlatformControlCenter overview={overview} health={health} audit={audit} />;
 }
