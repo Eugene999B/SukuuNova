@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Activity, ArrowRight, CreditCard, Gauge, GraduationCap, LifeBuoy, School, Search, ShieldCheck, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { usePlatformNavigationAccess } from "@/components/PlatformNavigationContext";
 import type { getPlatformOverview, getPlatformHealth, listPlatformAudit } from "@/lib/platform-admin-service";
 
 type Overview = Awaited<ReturnType<typeof getPlatformOverview>>;
@@ -62,12 +63,14 @@ function Stat({ icon: Icon, label, value, meta }: { icon: typeof School; label: 
 }
 
 export default function PlatformControlCenter({ overview, health, audit }: Props) {
+  const access = usePlatformNavigationAccess();
   const schools = schoolRecords(overview);
   const attention = [...schools].map((school) => ({ school, score: scoreSchool(school) })).sort((a, b) => b.score - a.score);
   const critical = attention.filter((item) => item.score >= 60).length;
   const watch = attention.filter((item) => item.score >= 25 && item.score < 60).length;
   const activeRate = overview.totals.schools ? Math.round((overview.totals.activeSchools / overview.totals.schools) * 100) : 0;
   const averageAttention = attention.length ? Math.round(attention.reduce((sum, item) => sum + item.score, 0) / attention.length) : 0;
+  const healthGood = health.database === "operational" && health.migrations === "operational";
 
   return <AppShell universe="platform" title="Control Center" subtitle="Operate the SukuuNova network from one accountable command surface.">
     <section className="platform-hero">
@@ -77,8 +80,8 @@ export default function PlatformControlCenter({ overview, health, audit }: Props
         <p>Find an account, understand its state, take the next permitted action, and leave an auditable trail.</p>
       </div>
       <div className="platform-hero-actions">
-        <Link href="/platform/schools" className="app-action"><Search size={14}/><strong>Find a school</strong><ArrowRight size={14}/></Link>
-        <Link href="/platform/support" className="app-pill"><LifeBuoy size={14}/> Open support</Link>
+        {access?.["schools.view"] ? <Link href="/platform/schools" className="app-action"><Search size={14}/><strong>Find a school</strong><ArrowRight size={14}/></Link> : null}
+        {access?.["support.view"] ? <Link href="/platform/support" className="app-pill"><LifeBuoy size={14}/> Open support</Link> : null}
       </div>
     </section>
 
@@ -91,7 +94,7 @@ export default function PlatformControlCenter({ overview, health, audit }: Props
 
     <div className="platform-command-grid">
       <section className="app-card app-panel platform-queue">
-        <div className="app-card-head"><div><h2>Attention queue</h2><p>Priority is explainable: suspension, finance pressure, missing setup, and operating inactivity.</p></div><Link className="app-pill" href="/platform/schools">All schools</Link></div>
+        <div className="app-card-head"><div><h2>Attention queue</h2><p>Priority is explainable: suspension, finance pressure, missing setup, and operating inactivity.</p></div>{access?.["schools.view"] ? <Link className="app-pill" href="/platform/schools">All schools</Link> : null}</div>
         <div className="platform-table-head"><span>School</span><span>Signal</span><span>Reason</span><span>Next step</span></div>
         <div className="platform-table-body">
           {attention.slice(0, 10).map(({ school, score }) => {
@@ -101,7 +104,7 @@ export default function PlatformControlCenter({ overview, health, audit }: Props
               <div className="platform-school-cell"><span className="platform-school-avatar"><School size={16}/></span><div><b>{school.name}</b><small>{school.uniqueCode} · {school.studentCount.toLocaleString()} students · {school.subscriptionPlan?.name || "No plan"}</small></div></div>
               <div><span className={`platform-status ${state.className}`}>{state.label}</span><small className="platform-score">{score}/100</small></div>
               <div className="platform-reasons">{why.length ? why.map((reason) => <span key={reason}>{reason}</span>) : <span>No issue detected</span>}</div>
-              <div><Link href={`/platform/schools/${school.id}`} className="app-action"><strong>Inspect</strong><ArrowRight size={13}/></Link></div>
+              <div>{access?.["schools.view"] ? <Link href={`/platform/schools/${school.id}`} className="app-action"><strong>Inspect</strong><ArrowRight size={13}/></Link> : <span className="app-pill">No action</span>}</div>
             </div>;
           })}
           {attention.length === 0 && <div className="platform-empty">No schools are currently visible to this administrator.</div>}
@@ -111,21 +114,22 @@ export default function PlatformControlCenter({ overview, health, audit }: Props
       <aside className="platform-side-stack">
         <section className="app-card app-panel"><div className="app-card-head"><div><h2>Control posture</h2><p>System signals that affect every school.</p></div></div>
           <div className="platform-signal"><span className="platform-signal-icon"><ShieldCheck size={15}/></span><div><b>Access control</b><small>Role-based permissions are enforced</small></div><span className="platform-dot is-good"/></div>
-          <div className="platform-signal"><span className="platform-signal-icon"><Activity size={15}/></span><div><b>Database</b><small>{health.database} · {health.latencyMs}ms</small></div><span className="platform-dot is-good"/></div>
-          <div className="platform-signal"><span className="platform-signal-icon"><Users size={15}/></span><div><b>School coverage</b><small>{overview.totals.activeSchools} active · {overview.totals.suspendedSchools} suspended</small></div><Link className="app-pill" href="/platform/schools">Review</Link></div>
+          <div className="platform-signal"><span className="platform-signal-icon"><Activity size={15}/></span><div><b>Database</b><small>{health.database} · {health.latencyMs}ms</small></div><span className={`platform-dot ${healthGood ? "is-good" : "is-alert"}`}/></div>
+          <div className="platform-signal"><span className="platform-signal-icon"><Users size={15}/></span><div><b>School coverage</b><small>{overview.totals.activeSchools} active · {overview.totals.suspendedSchools} suspended</small></div>{access?.["schools.view"] ? <Link className="app-pill" href="/platform/schools">Review</Link> : null}</div>
         </section>
-        <section className="app-card app-panel"><div className="app-card-head"><div><h2>Operator shortcuts</h2><p>Common decisions should not require hunting through menus.</p></div></div>
-          <Link className="platform-shortcut" href="/platform/schools"><span><School size={15}/></span><div><b>Manage schools</b><small>Open accounts, statuses, plans and school 360</small></div><ArrowRight size={14}/></Link>
-          <Link className="platform-shortcut" href="/platform/billing"><span><CreditCard size={15}/></span><div><b>Resolve billing</b><small>Invoices, collections and reconciliation</small></div><ArrowRight size={14}/></Link>
-          <Link className="platform-shortcut" href="/platform/admins"><span><Users size={15}/></span><div><b>Review operators</b><small>Least-privilege roles and school scope</small></div><ArrowRight size={14}/></Link>
-          <Link className="platform-shortcut" href="/platform/audit"><span><ShieldCheck size={15}/></span><div><b>Investigate activity</b><small>Search sensitive actions and change history</small></div><ArrowRight size={14}/></Link>
+        <section className="app-card app-panel"><div className="app-card-head"><div><h2>Operator shortcuts</h2><p>Only show actions this operator can actually execute.</p></div></div>
+          {access?.["schools.view"] ? <Link className="platform-shortcut" href="/platform/schools"><span><School size={15}/></span><div><b>Manage schools</b><small>Open accounts, statuses, plans and school 360</small></div><ArrowRight size={14}/></Link> : null}
+          {access?.["billing.view"] ? <Link className="platform-shortcut" href="/platform/billing"><span><CreditCard size={15}/></span><div><b>Resolve billing</b><small>Invoices, collections and reconciliation</small></div><ArrowRight size={14}/></Link> : null}
+          {access?.["admins.view"] ? <Link className="platform-shortcut" href="/platform/admins"><span><Users size={15}/></span><div><b>Review operators</b><small>Least-privilege roles and school scope</small></div><ArrowRight size={14}/></Link> : null}
+          {access?.["audit.view"] ? <Link className="platform-shortcut" href="/platform/audit"><span><ShieldCheck size={15}/></span><div><b>Investigate activity</b><small>Search sensitive actions and change history</small></div><ArrowRight size={14}/></Link> : null}
+          {!access?.["schools.view"] && !access?.["billing.view"] && !access?.["admins.view"] && !access?.["audit.view"] ? <div className="platform-empty">No operator shortcuts are assigned to this account.</div> : null}
         </section>
       </aside>
     </div>
 
     <div className="platform-lower-grid">
       <section className="app-card app-panel"><div className="app-card-head"><div><h2>Network snapshot</h2><p>Scale and commercial context without burying the operator in charts.</p></div><Link className="app-pill" href="/platform/analytics">Open analytics</Link></div><div className="platform-metric-row"><div><b>{Number(overview.totals.users).toLocaleString()}</b><small>Users</small></div><div><b>{Number(overview.totals.classes).toLocaleString()}</b><small>Classes</small></div><div><b>{overview.totals.invoices.toLocaleString()}</b><small>Invoices</small></div><div><b>{overview.totals.unpaidInvoices.toLocaleString()}</b><small>Unpaid</small></div></div></section>
-      <section className="app-card app-panel"><div className="app-card-head"><div><h2>Recent platform activity</h2><p>Most recent audited control-plane actions.</p></div><Link className="app-pill" href="/platform/audit">View audit</Link></div>{audit.events.slice(0,5).map((event) => <div className="platform-activity-row" key={event.id}><div><b>{event.action}</b><small>{event.targetEntity || (event.targetSchoolId ? `School ${event.targetSchoolId}` : "Platform")}</small></div><time>{new Date(event.createdAt).toLocaleDateString()}</time></div>)}{audit.events.length===0&&<div className="platform-empty">No platform activity has been recorded yet.</div>}</section>
+      {access?.["audit.view"] ? <section className="app-card app-panel"><div className="app-card-head"><div><h2>Recent platform activity</h2><p>Most recent audited control-plane actions.</p></div><Link className="app-pill" href="/platform/audit">View audit</Link></div>{audit.events.slice(0,5).map((event) => <div className="platform-activity-row" key={event.id}><div><b>{event.action}</b><small>{event.targetEntity || (event.targetSchoolId ? `School ${event.targetSchoolId}` : "Platform")}</small></div><time>{new Date(event.createdAt).toLocaleDateString()}</time></div>)}{audit.events.length===0&&<div className="platform-empty">No platform activity has been recorded yet.</div>}</section> : null}
     </div>
   </AppShell>;
 }
