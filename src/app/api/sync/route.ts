@@ -5,6 +5,8 @@ import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { processOfflineSync } from "@/lib/offline-sync-service";
 
+export const MAX_OFFLINE_SYNC_OPERATIONS = 25;
+
 const operationSchema = z.object({
   clientOperationId: z.string().trim().min(8).max(200),
   clientVersion: z.number().int().min(1),
@@ -17,7 +19,7 @@ const operationSchema = z.object({
 
 const schema = z.object({
   deviceId: z.string().trim().min(1).max(120),
-  operations: z.array(operationSchema).min(1).max(100)
+  operations: z.array(operationSchema).min(1).max(MAX_OFFLINE_SYNC_OPERATIONS)
 });
 
 export async function POST(request: Request) {
