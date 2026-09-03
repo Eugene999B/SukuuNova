@@ -54,6 +54,7 @@ export type PlatformAuthorizationState = {
   role: string;
   status: string;
   passwordHash: string;
+  sessionVersion: number;
 };
 
 export function authorizationVersion(state: SchoolAuthorizationState): string {
@@ -73,7 +74,7 @@ export function authorizationVersion(state: SchoolAuthorizationState): string {
 }
 
 export function platformAuthorizationVersion(state: PlatformAuthorizationState): string {
-  return createHash("sha256").update(JSON.stringify({ id: state.id, name: state.name, role: state.role, status: state.status, passwordHash: state.passwordHash })).digest("hex");
+  return createHash("sha256").update(JSON.stringify({ id: state.id, name: state.name, role: state.role, status: state.status, passwordHash: state.passwordHash, sessionVersion: state.sessionVersion })).digest("hex");
 }
 
 export async function getSchoolAuthorizationState(userId: string, schoolId: string): Promise<SchoolAuthorizationState | null> {
@@ -84,7 +85,13 @@ export async function getSchoolAuthorizationState(userId: string, schoolId: stri
 }
 
 export async function getPlatformAuthorizationState(adminId: string): Promise<PlatformAuthorizationState | null> {
-  return rawDb.platformAdmin.findUnique({ where: { id: adminId }, select: { id: true, name: true, role: true, status: true, passwordHash: true } });
+  const rows = await rawDb.$queryRawUnsafe<PlatformAuthorizationState[]>(
+    `SELECT a."id", a."name", a."role", a."status", a."passwordHash", COALESCE(m."sessionVersion",0)::int AS "sessionVersion"
+     FROM "PlatformAdmin" a LEFT JOIN "PlatformAdminMeta" m ON m."adminId"=a."id"
+     WHERE a."id"=$1 LIMIT 1`,
+    adminId,
+  );
+  return rows[0] ?? null;
 }
 
 function signSchoolSessionToken(session: Omit<SchoolSession, "authorizationVersion"> & { authorizationVersion: string }, expiresInSeconds = SESSION_SECONDS): Promise<string> {
