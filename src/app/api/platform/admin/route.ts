@@ -26,7 +26,21 @@ export async function GET(request: Request) {
       const [overview, schoolScope] = await Promise.all([getPlatformOverview(), getPlatformSchoolScope(session)]);
       if (schoolScope === null) return NextResponse.json(overview);
       const schools = overview.schools.filter((school) => schoolScope.includes(String(school.id)));
-      return NextResponse.json({ ...overview, totals: { ...overview.totals, schools }, schools });
+      return NextResponse.json({
+        ...overview,
+        totals: {
+          schools: schools.length,
+          activeSchools: schools.filter((school) => school.status !== "suspended").length,
+          suspendedSchools: schools.filter((school) => school.status === "suspended").length,
+          students: schools.reduce((sum, school) => sum + Number(school.studentCount || 0), 0),
+          users: schools.reduce((sum, school) => sum + Number(school.userCount || 0), 0),
+          classes: schools.reduce((sum, school) => sum + Number(school.classCount || 0), 0),
+          invoices: schools.reduce((sum, school) => sum + Number(school.invoices || 0), 0),
+          unpaidInvoices: schools.reduce((sum, school) => sum + Number(school.unpaidInvoices || 0), 0),
+          collected: schools.reduce((sum, school) => sum + Number(school.collected || 0), 0),
+        },
+        schools,
+      });
     }
     if (view === "admins") {
       await requirePlatformPermission(session, "admins.view");
