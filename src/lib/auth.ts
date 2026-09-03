@@ -122,21 +122,43 @@ export async function getPlatformAuthorizationState(adminId: string): Promise<Pl
   });
 }
 
+function signSchoolSessionToken(session: Omit<SchoolSession, "authorizationVersion"> & { authorizationVersion: string }, expiresInSeconds = SESSION_SECONDS): Promise<string> {
+  const payload: Record<string, string> = {
+    kind: "school",
+    schoolId: session.schoolId,
+    name: session.name,
+    authorizationVersion: session.authorizationVersion
+  };
+  if (session.impersonationId) payload.impersonationId = session.impersonationId;
+  if (session.impersonatedByAdminId) payload.impersonatedByAdminId = session.impersonatedByAdminId;
+  return new SignJWT(payload)
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .setSubject(session.userId)
+    .setIssuer("sukuunova-school")
+    .setAudience("sukuunova-school")
+    .setIssuedAt()
+    .setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds)
+    .sign(secret("SCHOOL_AUTH_SECRET"));
+}
+
 export async function createSchoolSessionToken(session: Omit<SchoolSession, "authorizationVersion"> | SchoolSession, expiresInSeconds = SESSION_SECONDS): Promise<string> {
   const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) {
     throw new UnauthorizedError("This school account is no longer active.");
   }
-  const currentAuthorizationVersion = authorizationVersion(state);
-  const payload: Record<string, string> = {
-    kind: "school",
-    schoolId: session.schoolId,
+  return signSchoolSessionToken({
+    ...session,
     name: state.name,
-    authorizationVersion: currentAuthorizationVersion
-  };
-  if (session.impersonationId) payload.impersonationId = session.impersonationId;
-  if (session.impersonatedByAdminId) payload.impersonatedByAdminId = session.impersonatedByAdminId;
-  return new SignJWT(payload).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setSubject(session.userId).setIssuer("sukuunova-school").setAudience("sukuunova-school").setIssuedAt().setExpirationTime(Math.floor(Date.now() / 1000) + expiresInSeconds).sign(secret("SCHOOL_AUTH_SECRET"));
+    authorizationVersion: authorizationVersion(state)
+  }, expiresInSeconds);
+}
+
+export function createSchoolSessionTokenFromAuthorizationVersion(session: Omit<SchoolSession, "authorizationVersion"> | SchoolSession, authorizationVersionValue: string, expiresInSeconds = SESSION_SECONDS): Promise<string> {
+  if (!authorizationVersionValue) throw new UnauthorizedError("Invalid school authorization state.");
+  return signSchoolSessionToken({
+    ...session,
+    authorizationVersion: authorizationVersionValue
+  }, expiresInSeconds);
 }
 
 export async function createPlatformSessionToken(session: Omit<PlatformSession, "authorizationVersion"> | PlatformSession): Promise<string> {
