@@ -20,6 +20,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { PublicPresenceConsole } from "@/components/PublicPresenceConsole";
+import "./platform-settings.css";
 
 type Section = "overview" | "public" | "access" | "operations";
 
