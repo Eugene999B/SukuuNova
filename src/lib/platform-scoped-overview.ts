@@ -80,7 +80,7 @@ export async function getScopedPlatformOverview(session: PlatformSession): Promi
       } satisfies OverviewSchool;
     }).catch(() => null),
   ));
-  const schools = schoolResults.filter((school): school is OverviewSchool => Boolean(school));
+  const schools = schoolResults.filter((school): school is NonNullable<typeof school> => Boolean(school));
   return {
     totals: {
       schools: schools.length,
