@@ -9,7 +9,8 @@ export async function listSupportTicketsForPlatform(session: PlatformSession, sc
       `SELECT t."id",t."schoolId",t."raisedByUserId",t."subject",t."status",t."createdAt",t."updatedAt"
        FROM "SupportTicket" t
        WHERE t."schoolId"=$1
-       ORDER BY t."createdAt" DESC`,
+       ORDER BY t."createdAt" DESC
+       LIMIT 100`,
       schoolId,
     ),
   );
