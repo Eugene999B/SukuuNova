@@ -37,6 +37,21 @@ export async function assignCanonicalPlatformPlan(session: PlatformSession, scho
   return result;
 }
 
+export async function listCanonicalPlatformBilling(session: PlatformSession, schoolId: string) {
+  await requirePlatformPermission(session, "billing.view");
+  const scope = await getPlatformSchoolScope(session);
+  if (scope !== null && !scope.includes(schoolId)) throw new AppError("School is outside your assigned platform scope.", 403, "FORBIDDEN");
+  return withTenant(schoolId, async (tx) => {
+    const school = await tx.school.findUnique({ where: { id: schoolId }, select: { id: true, name: true, subscriptionPlan: { select: { id: true, name: true, price: true } } } });
+    if (!school) throw new AppError("School not found.", 404, "NOT_FOUND");
+    const [invoices, payments] = await Promise.all([
+      tx.$queryRawUnsafe<unknown[]>(`SELECT * FROM "PlatformInvoice" WHERE "schoolId"=$1 ORDER BY "period" DESC`, schoolId),
+      tx.$queryRawUnsafe<unknown[]>(`SELECT * FROM "PlatformPayment" WHERE "schoolId"=$1 ORDER BY "createdAt" DESC`, schoolId),
+    ]);
+    return { school, invoices, payments };
+  });
+}
+
 export async function searchCanonicalPlatform(session: PlatformSession, query: string) {
   await requirePlatformPermission(session, "schools.view");
   const q = query.trim().toLowerCase();
