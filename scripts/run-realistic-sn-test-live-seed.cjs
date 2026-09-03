@@ -51,6 +51,9 @@ let patchedSource = originalSource
   .replace(/type:\s*[\"']EXAM[\"']/g, "type: 'exam'")
   .replace(/classId:\s*null/g, "classId: classes[0].id")
   .replace(/method:\s*[\"']bank_transfer[\"']/g, "method: 'momo'")
+  // The dedicated conflict pair is outside the rolling 30-day fixture window,
+  // so it does not collide with the normal daily attendance rows.
+  .replace(/d\("2026-08-31"\)/g, "d(\"2026-07-31\")")
   .replace(
     /timeOut:\s*i%2\s*\?\s*new Date\(now\.getTime\(\)-\(i\*3600000\)-1800000\)\s*:\s*null/g,
     "timeOut: i%2 ? new Date(now.getTime()-(i*3600000)+1800000) : null"
