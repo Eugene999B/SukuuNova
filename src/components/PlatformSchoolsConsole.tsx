@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BadgeAlert, Building2, CreditCard, GraduationCap, Plus, Search, Users } from "lucide-react";
 import type { getPlatformOverview } from "@/lib/platform-admin-service";
+import { usePlatformNavigationAccess } from "@/components/PlatformNavigationContext";
 
 type Overview = Awaited<ReturnType<typeof getPlatformOverview>>;
 type SchoolRecord = { id:string; name:string; uniqueCode:string; status:string; createdAt:string | Date; studentCount:number; userCount:number; classCount:number; attendanceToday:number; invoices:number; unpaidInvoices:number; collected:number; subscriptionPlan?: { id:string; name:string; price:number|string } | null };
@@ -49,6 +50,7 @@ function attentionTone(score:number) {
 }
 
 export default function PlatformSchoolsConsole({ overview }: { overview: Overview }) {
+  const platformAccess = usePlatformNavigationAccess();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [sort, setSort] = useState<Sort>("attention");
@@ -62,6 +64,7 @@ export default function PlatformSchoolsConsole({ overview }: { overview: Overvie
   }, [allSchools, filter, query, sort]);
   const critical = allSchools.filter((school) => attentionScore(school) >= 60).length;
   const needsAttention = allSchools.filter((school) => attentionScore(school) >= 25).length;
+  const canOnboard = platformAccess?.["schools.manage"] === true;
 
   const resetFilters = () => { setQuery(""); setFilter("all"); setSort("attention"); };
 
@@ -72,7 +75,10 @@ export default function PlatformSchoolsConsole({ overview }: { overview: Overvie
         <h2>Schools</h2>
         <p>One account directory for discovery, inspection, support, finance and controlled lifecycle actions.</p>
       </div>
-      <div className="platform-header-actions"><Link href="/platform/search" className="app-pill"><Search size={14}/> Global search</Link><Link href="/platform/schools/new" className="app-action"><Plus size={14}/><strong>Onboard school</strong></Link></div>
+      <div className="platform-header-actions">
+        <Link href="/platform/search" className="app-pill"><Search size={14}/> Global search</Link>
+        {canOnboard && <Link href="/platform/schools/new" className="app-action"><Plus size={14}/><strong>Onboard school</strong></Link>}
+      </div>
     </section>
 
     <div className="app-grid kpis platform-kpis">
