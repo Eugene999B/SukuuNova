@@ -1,7 +1,7 @@
 import PlatformControlCenter from "@/components/PlatformControlCenter";
+import { requirePlatformSession } from "@/lib/auth";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
-import { requirePlatformSession, getPlatformHealth } from "@/lib/auth";
-import { getPlatformOverview, listPlatformAudit } from "@/lib/platform-admin-service";
+import { getPlatformHealth, getPlatformOverview, listPlatformAudit } from "@/lib/platform-admin-service";
 
 export default async function PlatformPage() {
   const session = await requirePlatformSession();
