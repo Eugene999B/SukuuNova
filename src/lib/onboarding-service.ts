@@ -18,8 +18,8 @@ export async function onboardSchool(input: {
   ownerEmail: string;
   ownerPassword: string;
 }) {
-  if (!["super_admin", "platform_admin"].includes(input.adminRole)) {
-    throw new ForbiddenError("Platform school onboarding is not permitted.");
+  if (input.adminRole !== "super_admin") {
+    throw new ForbiddenError("Only Super Admin can create new platform schools.");
   }
   const uniqueCode = input.uniqueCode.trim().toLowerCase();
   if (!/^[a-z0-9-]{3,40}$/.test(uniqueCode)) {
