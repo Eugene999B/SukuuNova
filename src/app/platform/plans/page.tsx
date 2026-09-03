@@ -1,3 +1,15 @@
-import PlatformAdminShell from "@/components/PlatformAdminWorkspace";
+import { AppShell } from "@/components/AppShell";
 import PlanManager from "./PlanManager";
-export default function PlansPage(){return <><PlatformAdminShell section="overview"/><div style={{maxWidth:1480,margin:"-10px auto 0",padding:"0 0 40px"}}><PlanManager/></div></>}
+
+export default function PlansPage() {
+  return (
+    <AppShell
+      universe="platform"
+      title="Plans & Entitlements"
+      subtitle="Design subscription packaging, review feature access, and assign the right operating capability to each school."
+      active="Plans & Entitlements"
+    >
+      <PlanManager />
+    </AppShell>
+  );
+}
