@@ -88,7 +88,7 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
   for(const directory of directories){
     if(processed>=batchSize)break;
     const now=new Date();
-    const jobs=await withTenant(directory.schoolId,tx=>tx.message.findMany({where:{OR:[{status:"queued",nextAttemptAt:{lte:now}},{status:"sending",nextAttemptAt:{lte:now}}]},orderBy:{createdAt:"asc"},take:batchSize-processed}));
+    const jobs=await withTenant(directory.schoolId,tx=>tx.message.findMany({where:{OR:[{status:"queued",nextAttemptAt:{lte:now}},{status:"sending",nextAttemptAt:{lte:now}}]},orderBy:[{nextAttemptAt:"asc"},{createdAt:"asc"}],take:batchSize-processed}));
     for(const job of jobs){
       const leaseUntil=new Date(Date.now()+CLAIM_LEASE_MS);
       const claimableStatus=job.status==="queued" ? {status:"queued",nextAttemptAt:{lte:new Date()}} : {status:"sending",nextAttemptAt:{lte:new Date()}};
