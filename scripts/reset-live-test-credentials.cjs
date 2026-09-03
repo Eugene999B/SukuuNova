@@ -8,19 +8,19 @@
  * - Uses the real DATABASE_URL explicitly.
  * - Only updates synthetic fixture users whose email ends with
  *   @test.sukuunova.local; existing real-school accounts are untouched.
+ * - Uses the documented synthetic test password so manual test login is deterministic.
  */
 const { PrismaClient } = require("@prisma/client");
 const { hash } = require("bcryptjs");
 
 const allow = String(process.env.ALLOW_REAL_APP_TEST_SEED || "").trim();
 const code = String(process.env.TEST_SCHOOL_CODE || "").trim().toLowerCase();
-const password = String(process.env.TEST_SEED_PASSWORD || "").trim();
+const password = "SukuuTest!2026";
 const databaseUrl = String(process.env.DATABASE_URL || "").trim();
 
 if (allow !== "YES") throw new Error("Refusing test credential reset: ALLOW_REAL_APP_TEST_SEED must be YES.");
 if (code !== "sn-test-2026") throw new Error("Refusing test credential reset: TEST_SCHOOL_CODE must be sn-test-2026.");
 if (!databaseUrl) throw new Error("DATABASE_URL is required.");
-if (password.length < 12) throw new Error("TEST_SEED_PASSWORD must be at least 12 characters.");
 
 process.env.DATABASE_URL = databaseUrl;
 const prisma = new PrismaClient();
