@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { createId } from "@paralleldrive/cuid2";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError } from "@/lib/errors";
 import { getPlatformSchoolScope, requirePlatformPermission } from "@/lib/platform-permissions";
 import { appendPlatformAudit } from "@/lib/audit";
 import { db, withTenant } from "@/lib/db";
+import { z } from "zod";
 
 const postSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("generate"), schoolId: z.string().min(1), period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }),
@@ -88,8 +88,22 @@ export async function POST(request: Request) {
       const invoice = (await tx.$queryRawUnsafe<Array<{ id: string; amount: string }>>(`SELECT "id","amount"::text FROM "PlatformInvoice" WHERE "id"=$1 AND "schoolId"=$2 FOR UPDATE`, input.invoiceId, input.schoolId))[0];
       if (!invoice) return null;
       if (input.reference) {
-        const existing = await tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "PlatformPayment" WHERE "schoolId"=$1 AND "reference"=$2 LIMIT 1`, input.schoolId, input.reference);
-        if (existing.length) return { duplicateReference: true } as const;
+        const existing = (await tx.$queryRawUnsafe<Array<{ id: string; platformInvoiceId: string; amount: string; method: string }>>(
+          `SELECT "id","platformInvoiceId","amount"::text,"method" FROM "PlatformPayment" WHERE "schoolId"=$1 AND "reference"=$2 LIMIT 1`,
+          input.schoolId,
+          input.reference,
+        ))[0];
+        if (existing) {
+          if (existing.platformInvoiceId !== input.invoiceId) return { duplicateReference: true } as const;
+          const paid = Number((await tx.$queryRawUnsafe<Array<{ paid: string }>>(
+            `SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`,
+            input.schoolId,
+            input.invoiceId,
+          ))[0]?.paid ?? 0);
+          const due = Number(invoice.amount);
+          const status = paid >= due ? "paid" : "unpaid";
+          return { paymentId: existing.id, invoiceId: input.invoiceId, due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), status, method: existing.method, idempotent: true } as const;
+        }
       }
       const paymentId = createId();
       await tx.$executeRawUnsafe(`INSERT INTO "PlatformPayment" ("id","schoolId","platformInvoiceId","amount","method","reference","reconciledBy") VALUES ($1,$2,$3,$4,$5,$6,$7)`, paymentId, input.schoolId, input.invoiceId, input.amount, input.method, input.reference ?? null, session.adminId);
@@ -97,10 +111,11 @@ export async function POST(request: Request) {
       const due = Number(invoice.amount);
       const status = paid >= due ? "paid" : "unpaid";
       await tx.$executeRawUnsafe(`UPDATE "PlatformInvoice" SET "status"=$1 WHERE "id"=$2 AND "schoolId"=$3`, status, input.invoiceId, input.schoolId);
-      return { paymentId, invoiceId: input.invoiceId, due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), status };
+      return { paymentId, invoiceId: input.invoiceId, due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), status } as const;
     });
     if (!result) return NextResponse.json({ error: "NOT_FOUND", message: "Platform invoice not found." }, { status: 404 });
-    if ("duplicateReference" in result) return NextResponse.json({ error: "DUPLICATE_REFERENCE", message: "That payment reference is already recorded for this school." }, { status: 409 });
+    if ("duplicateReference" in result) return NextResponse.json({ error: "DUPLICATE_REFERENCE", message: "That payment reference is already recorded for another invoice in this school." }, { status: 409 });
+    if ("idempotent" in result) return NextResponse.json({ ok: true, reconciliation: result, idempotent: true });
     await appendPlatformAudit({ actorId: session.adminId, action: "platform.billing.payment_recorded", targetSchoolId: input.schoolId, targetEntity: `PlatformInvoice:${input.invoiceId}`, meta: { ...result, method: input.method } });
     return NextResponse.json({ ok: true, reconciliation: result });
   } catch (error) { return routeError(error); }
