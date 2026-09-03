@@ -16,6 +16,8 @@ export default async function SchoolsPage() {
       title="Schools"
       subtitle={schoolScope === null ? "Find, inspect, support and manage every school account from a single network directory." : "Find and manage only the school accounts assigned to your platform role."}
       active="Schools"
+      userName={session.name}
+      role={session.role}
     >
       <PlatformSchoolsConsole overview={overview} />
     </AppShell>
