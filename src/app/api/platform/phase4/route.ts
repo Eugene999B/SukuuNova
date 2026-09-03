@@ -10,7 +10,7 @@ import { createPlatformSchool, searchCrossSchool, listPlans, createPlan, assignP
 import { listSupportTicketsForPlatform } from "@/lib/phase4-platform-support";
 import { impersonatePlatformUser } from "@/lib/platform-impersonation-service";
 import { appendPlatformAudit } from "@/lib/audit";
-import { db, withTenant } from "@/lib/db";
+import { withTenant } from "@/lib/db";
 
 const postSchema=z.discriminatedUnion("action",[
  z.object({action:z.literal("createSchool"),uniqueCode:z.string().min(3).max(40),schoolName:z.string().min(2).max(160),ownerName:z.string().min(2).max(160),ownerEmail:z.string().email(),ownerPassword:z.string().min(12).max(256)}),
@@ -64,18 +64,17 @@ async function hardenedRecordPayment(schoolId:string,invoiceId:string,paymentAmo
 }
 
 async function hardenedSuspendSchool(schoolId:string,suspended:boolean,adminId:string){
-  const status=suspended?"suspended":"active";
+  const targetStatus=suspended?"suspended":"active";
   const result=await withTenant(schoolId,async(tx)=>{
     const school=await tx.school.findUnique({where:{id:schoolId},select:{id:true,name:true,status:true}});
     if(!school) return null;
-    if(school.status===status) return {...school,status,changed:false};
-    await tx.school.update({where:{id:schoolId},data:{status}});
-    await tx.schoolLoginDirectory.update({where:{schoolId},data:{status}});
-    await tx.$executeRawUnsafe(`SELECT 1`);
-    return {...school,status,changed:true};
+    if(school.status===targetStatus) return { ...school, status: targetStatus, changed: false, beforeStatus: school.status };
+    await tx.school.update({where:{id:schoolId},data:{status:targetStatus}});
+    await tx.schoolLoginDirectory.update({where:{schoolId},data:{status:targetStatus}});
+    return { ...school, status: targetStatus, changed: true, beforeStatus: school.status };
   });
   if(!result) return null;
-  await appendPlatformAudit({actorId:adminId,action:suspended?"school.suspended":"school.reactivated",targetSchoolId:schoolId,targetEntity:"School",meta:{before:result.status===status?undefined:result.status,status,changed:result.changed}});
+  await appendPlatformAudit({actorId:adminId,action:suspended?"school.suspended":"school.reactivated",targetSchoolId:schoolId,targetEntity:"School",meta:{beforeStatus:result.beforeStatus,status:result.status,changed:result.changed}});
   return result;
 }
 
