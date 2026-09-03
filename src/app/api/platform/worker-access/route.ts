@@ -7,7 +7,7 @@ import { requirePlatformPermission } from "@/lib/platform-permissions";
 
 const schema = z.object({ adminId: z.string().min(1), schoolIds: z.array(z.string().min(1)).max(200) });
 
-type Worker = { id: string; name: string; email: string; role: string; status: string };
+type Worker = { id: string; name: string; email: string; role: string; status: string; permissions: string[] };
 type School = { id: string; name: string; uniqueCode: string; status: string };
 type AccessRow = { adminId: string; schoolId: string; schoolName: string | null; uniqueCode: string | null; status: string | null };
 
@@ -15,15 +15,19 @@ export async function GET() {
   try {
     const session = await requirePlatformSession();
     await requirePlatformPermission(session, "admins.view");
-    const [workers, schools, accessRows] = await Promise.all([
-      db.$queryRawUnsafe<Worker[]>(`SELECT "id","name","email","role","status" FROM "PlatformAdmin" ORDER BY "name" ASC`),
+    const [workers, schools, accessRows, permissionRows] = await Promise.all([
+      db.$queryRawUnsafe<Array<Omit<Worker, "permissions">>>(`SELECT "id","name","email","role","status" FROM "PlatformAdmin" ORDER BY "name" ASC`),
       db.$queryRawUnsafe<School[]>(`SELECT "id","name","uniqueCode","status" FROM "School" ORDER BY "name" ASC`),
       db.$queryRawUnsafe<AccessRow[]>(`SELECT a."adminId",a."schoolId",s."name" AS "schoolName",s."uniqueCode",s."status" FROM "PlatformAdminSchoolAccess" a LEFT JOIN "School" s ON s."id"=a."schoolId" ORDER BY s."name" ASC`),
+      db.$queryRawUnsafe<Array<{ adminId: string; permission: string }>>(`SELECT "adminId","permission" FROM "PlatformAdminPermission" ORDER BY "permission" ASC`),
     ]);
+    const permissionMap: Record<string, string[]> = {};
+    for (const row of permissionRows) (permissionMap[row.adminId] ??= []).push(row.permission);
+    const enrichedWorkers: Worker[] = workers.map(worker => ({ ...worker, permissions: permissionMap[worker.id] ?? [] }));
     const access: Record<string, Array<{ schoolId: string; schoolName: string | null; uniqueCode: string | null; status: string | null }>> = {};
-    for (const worker of workers) access[worker.id] = [];
+    for (const worker of enrichedWorkers) access[worker.id] = [];
     for (const row of accessRows) access[row.adminId]?.push({ schoolId: row.schoolId, schoolName: row.schoolName, uniqueCode: row.uniqueCode, status: row.status });
-    return NextResponse.json({ workers, schools, access });
+    return NextResponse.json({ workers: enrichedWorkers, schools, access });
   } catch (error) { return routeError(error); }
 }
 
