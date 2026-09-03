@@ -1,3 +1,11 @@
-import Link from "next/link";
-import PlatformAdminWorkspace from "@/components/PlatformAdminWorkspace";
-export default function SchoolsPage(){return <><div style={{maxWidth:1480,margin:"0 auto",padding:"0 0 14px"}}><Link href="/platform/schools/new" className="app-action"><strong>＋ Create school</strong>Onboard a new school account</Link></div><PlatformAdminWorkspace section="schools"/></>;}
+import { requirePlatformSession } from "@/lib/auth";
+import { requirePlatformPermission } from "@/lib/platform-permissions";
+import { getPlatformOverview } from "@/lib/platform-admin-service";
+import PlatformSchoolsConsole from "@/components/PlatformSchoolsConsole";
+
+export default async function SchoolsPage() {
+  const session = await requirePlatformSession();
+  await requirePlatformPermission(session, "schools.view");
+  const overview = await getPlatformOverview();
+  return <PlatformSchoolsConsole overview={overview} />;
+}
