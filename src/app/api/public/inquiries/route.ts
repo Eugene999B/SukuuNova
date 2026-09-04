@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { randomUUID } from "node:crypto";
+import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 
 const schema = z.object({
   name: z.string().min(2).max(120),
@@ -15,6 +16,8 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const input = schema.parse(await request.json());
+    const ip = requestIp(request.headers);
+    await recordLoginAttempt("public-inquiry", ip, ip);
     if (!input.email && !input.phone) return NextResponse.json({ error: "Please provide an email address or phone number so we can reply." }, { status: 400 });
     const id = randomUUID();
     await db.$executeRawUnsafe(
