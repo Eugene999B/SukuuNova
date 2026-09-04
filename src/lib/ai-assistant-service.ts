@@ -1,12 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
-import { z } from "zod";
-import type { TenantDb } from "./db";
+import type { Prisma } from "@prisma/client";
 import { AppError, ForbiddenError } from "./errors";
 import { hasPermission } from "./rbac";
 import { withTenant } from "./db";
 import { generateReportCard } from "./report-card-service";
 
-const PROMPT_VERSION = "sukuu-ai-v2";
+const PROMPT_VERSION = "sukuu-ai-v3";
+const AI_TIMEOUT_MS = 15_000;
 
 export const AiDraftSchema = z.object({
   draft: z.string().min(1).max(1000),
@@ -28,14 +28,31 @@ function optionalText(value: unknown, max = 500) {
 function inputHash(value: unknown) { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
 function providerModel() { return process.env.OPENAI_MODEL || "gpt-5.6-luna"; }
 
+function providerUrl() {
+  const raw = process.env.OPENAI_RESPONSES_URL || "https://api.openai.com/v1/responses";
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { throw new AppError("AI provider URL is invalid.", 503, "AI_NOT_CONFIGURED"); }
+  if (parsed.protocol !== "https:") throw new AppError("AI provider URL must use HTTPS.", 503, "AI_NOT_CONFIGURED");
+  if (process.env.NODE_ENV === "production" && parsed.hostname !== "api.openai.com") {
+    throw new AppError("Unapproved AI provider endpoint.", 503, "AI_PROVIDER_NOT_ALLOWED");
+  }
+  return parsed.toString();
+}
+
 async function callStructuredAi(prompt: string, allowedEvidence: string[], system: string) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new AppError("AI provider is not configured.", 503, "AI_NOT_CONFIGURED");
-  const response = await fetch(process.env.OPENAI_RESPONSES_URL || "https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: "Bearer " + key },
-    body: JSON.stringify({ model: providerModel(), input: [{ role: "system", content: system }, { role: "user", content: prompt }], max_output_tokens: 1200 })
-  });
+  let response: Response;
+  try {
+    response = await fetch(providerUrl(), {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: "Bearer " + key },
+      body: JSON.stringify({ model: providerModel(), input: [{ role: "system", content: system }, { role: "user", content: prompt }], max_output_tokens: 1200 }),
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS)
+    });
+  } catch {
+    throw new AppError("AI provider request timed out or could not be reached.", 504, "AI_PROVIDER_TIMEOUT");
+  }
   if (!response.ok) throw new AppError("AI provider request failed.", 502, "AI_PROVIDER_ERROR");
   const data = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ text?: string }> }> };
   const direct = typeof data.output_text === "string" ? data.output_text : "";
@@ -61,8 +78,8 @@ export async function createStructuredAiDraft(input: { schoolId: string; actorId
       const scores = await tx.score.findMany({ where: { studentId }, select: { id: true, value: true, assessment: { select: { maxScore: true } } }, orderBy: { enteredAt: "desc" }, take: 8 });
       const attendance = await tx.attendanceEvent.count({ where: { studentId, type: "in" } });
       const recentAverage = scores.length ? Number((scores.reduce((sum, row) => sum + Number(row.value) / Number(row.assessment.maxScore) * 100, 0) / scores.length).toFixed(1)) : null;
-      evidence = [`Student: ${student.name}`, `Class: ${student.class?.name ?? "Unassigned"}`, `Recent score average: ${recentAverage === null ? "no scored assessments" : recentAverage + "%"}`, `Recorded attendance check-ins: ${attendance}`];
-      safe = { studentId, termId, studentName: student.name.slice(0, 120), className: student.class?.name ?? "", recentScoreAverage: recentAverage, attendanceCheckIns: attendance };
+      evidence = [`Learner: ${student.id.slice(0, 12)}`, `Recent score average: ${recentAverage === null ? "no scored assessments" : recentAverage + "%"}`, `Recorded attendance check-ins: ${attendance}`];
+      safe = { learnerRef: student.id.slice(0, 12), termId, recentScoreAverage: recentAverage, attendanceCheckIns: attendance };
       recordIds = [studentId, termId, ...scores.map((row) => row.id)];
     } else {
       const scoreId = optionalText(input.context.scoreId, 100);
@@ -70,7 +87,7 @@ export async function createStructuredAiDraft(input: { schoolId: string; actorId
       evidence = [`Subject: ${safe.subject ?? "unspecified"}`, `Topic: ${safe.topic}`, `Class: ${safe.className ?? "unspecified"}`];
       recordIds = scoreId ? [scoreId] : [];
     }
-    const system = "Return JSON only with exactly {draft,evidence,cautions}. draft is the proposed language only. evidence must contain only exact strings from the supplied deterministic evidence list. Do not invent school facts, diagnoses, grades, attendance, or events. cautions should state uncertainty when the evidence is incomplete.";
+    const system = "Return JSON only with exactly {draft,evidence,cautions}. draft is the proposed language only. evidence must contain only exact strings from the supplied deterministic evidence list. Do not invent school facts, diagnoses, grades, attendance, or events. Never request or expose personal data. cautions should state uncertainty when the evidence is incomplete.";
     const structured = await callStructuredAi(JSON.stringify({ data: safe, evidence }), evidence, system);
     const requestId = randomBytes(16).toString("hex"); const hash = inputHash(safe);
     await tx.$executeRaw`INSERT INTO "AiRequest" ("id","schoolId","userId","featureName","promptVersion","model","inputRecordIds","inputDataHash","output","approvalStatus") VALUES (${requestId},${input.schoolId},${input.actorId},${input.type},${PROMPT_VERSION},${providerModel()},${JSON.stringify(recordIds)}::jsonb,${hash},${JSON.stringify(structured)}::jsonb,'SUGGESTED')`;
