@@ -5,6 +5,7 @@ import { getPlatformOverview } from "@/lib/platform-admin-service";
 import { getScopedPlatformOverview } from "@/lib/platform-scoped-overview";
 import BillingConsole from "./BillingConsole";
 import PlatformBillingStudio from "@/components/PlatformBillingStudio";
+import PlatformMessagingInventoryStudio from "@/components/PlatformMessagingInventoryStudio";
 import PlatformInvoiceActions from "@/components/PlatformInvoiceActions";
 import PlatformAdvancedBillingRules from "@/components/PlatformAdvancedBillingRules";
 import "@/components/platform-control-plane.css";
@@ -18,6 +19,7 @@ export default async function BillingPage() {
   return (
     <AppShell universe="platform" title="Platform Billing" subtitle="Configure school pricing, calculate per-student bills, manage flat-rate subscriptions, control due terms and automation, and run a separate SMS/WhatsApp credit business." active="Platform Billing" userName={session.name} role={session.role}>
       <PlatformBillingStudio />
+      <PlatformMessagingInventoryStudio />
       <PlatformAdvancedBillingRules schools={schools} />
       <PlatformInvoiceActions schools={schools} />
       <section className="app-card app-panel" style={{ marginTop: 24, padding: 22 }}>
