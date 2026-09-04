@@ -17,7 +17,6 @@ const fs = require("fs");
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 const { hash } = require("bcryptjs");
-const { PDFDocument, StandardFonts } = require("pdf-lib");
 
 const allow = String(process.env.ALLOW_EUGENE_ACADEMY_TRIAL_SEED || "").trim();
 const code = String(process.env.TEST_SCHOOL_CODE || "").trim().toLowerCase();
@@ -60,6 +59,7 @@ const endMarker = 'main().catch((err) => { console.error(err); process.exitCode 
 const extension = String.raw`
 async function extendEugeneAcademy() {
   const prisma = new PrismaClient();
+  const { PDFDocument: TrialPDFDocument, StandardFonts: TrialStandardFonts } = require("pdf-lib");
   try {
     const school = await prisma.school.findUnique({ where: { uniqueCode: "eug123" } });
     if (!school) throw new Error("Eugene Academy was not created by the base fixture.");
@@ -145,9 +145,9 @@ async function extendEugeneAcademy() {
     const sampleStudent = (await prisma.student.findMany({ where: { schoolId }, orderBy: { admissionNo: "asc" }, take: 1 }))[0];
     const pastTerm = await prisma.term.findFirst({ where: { schoolId, name: "Term 2" }, orderBy: { startDate: "desc" } });
     if (sampleStudent && pastTerm) {
-      const pdfDoc = await PDFDocument.create();
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+      const pdfDoc = await TrialPDFDocument.create();
+      const font = await pdfDoc.embedFont(TrialStandardFonts.Helvetica);
+      const boldFont = await pdfDoc.embedFont(TrialStandardFonts.HelveticaBold);
       const page = pdfDoc.addPage([595, 842]);
       let y = 790;
       page.drawText("EUGENE ACADEMY", { x: 48, y, size: 20, font: boldFont }); y -= 30;
