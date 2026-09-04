@@ -56,28 +56,22 @@ export async function POST(request: Request) {
         const school = await tx.school.findUnique({ where: { id: input.schoolId }, select: { subscriptionPlan: { select: { name: true, price: true } } } });
         if (!school?.subscriptionPlan) return null;
 
-        const existing = (await tx.$queryRawUnsafe<Array<{ id: string; amount: string; status: string }>>(
-          `SELECT "id","amount"::text,"status" FROM "PlatformInvoice" WHERE "schoolId"=$1 AND "period"=$2 LIMIT 1`,
-          input.schoolId,
-          input.period,
+        let invoice = (await tx.$queryRawUnsafe<Array<{ id: string; amount: string; status: string }>>(
+          `INSERT INTO "PlatformInvoice" ("id","schoolId","period","amount","status") VALUES ($1,$2,$3,$4,'unpaid') ON CONFLICT ("schoolId","period") DO NOTHING RETURNING "id","amount"::text,"status"`,
+          createId(), input.schoolId, input.period, Number(school.subscriptionPlan.price),
         ))[0];
-        if (existing) {
-          const payments = (await tx.$queryRawUnsafe<Array<{ paid: string }>>(
-            `SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`,
-            input.schoolId,
-            existing.id,
-          ))[0];
-          return { id: existing.id, period: input.period, amount: Number(existing.amount), planName: school.subscriptionPlan.name, status: existing.status, existing: true, paid: Number(payments?.paid ?? 0) };
-        }
+        const existing = !invoice;
+        invoice = invoice ?? (await tx.$queryRawUnsafe<Array<{ id: string; amount: string; status: string }>>(
+          `SELECT "id","amount"::text,"status" FROM "PlatformInvoice" WHERE "schoolId"=$1 AND "period"=$2 LIMIT 1`,
+          input.schoolId, input.period,
+        ))[0];
+        if (!invoice) throw new Error("Invoice generation did not create or locate an invoice.");
 
-        const rows = await tx.$queryRawUnsafe<Array<{ id: string }>>(
-          `INSERT INTO "PlatformInvoice" ("id","schoolId","period","amount","status") VALUES ($1,$2,$3,$4,'unpaid') RETURNING "id"`,
-          createId(),
-          input.schoolId,
-          input.period,
-          Number(school.subscriptionPlan.price),
-        );
-        return { id: rows[0].id, period: input.period, amount: Number(school.subscriptionPlan.price), planName: school.subscriptionPlan.name, status: "unpaid", existing: false, paid: 0 };
+        const payments = (await tx.$queryRawUnsafe<Array<{ paid: string }>>(
+          `SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`,
+          input.schoolId, invoice.id,
+        ))[0];
+        return { id: invoice.id, period: input.period, amount: Number(invoice.amount), planName: school.subscriptionPlan.name, status: invoice.status, existing, paid: Number(payments?.paid ?? 0) };
       });
       if (!result) return NextResponse.json({ error: "PLAN_REQUIRED", message: "Assign a subscription plan before generating an invoice." }, { status: 409 });
       await appendPlatformAudit({ actorId: session.adminId, action: result.existing ? "platform.billing.invoice_already_exists" : "platform.billing.invoice_generated", targetSchoolId: input.schoolId, targetEntity: `PlatformInvoice:${result.id}`, meta: result });
@@ -90,15 +84,12 @@ export async function POST(request: Request) {
       if (input.reference) {
         const existing = (await tx.$queryRawUnsafe<Array<{ id: string; platformInvoiceId: string; amount: string; method: string }>>(
           `SELECT "id","platformInvoiceId","amount"::text,"method" FROM "PlatformPayment" WHERE "schoolId"=$1 AND "reference"=$2 LIMIT 1`,
-          input.schoolId,
-          input.reference,
+          input.schoolId, input.reference,
         ))[0];
         if (existing) {
           if (existing.platformInvoiceId !== input.invoiceId) return { duplicateReference: true } as const;
           const paid = Number((await tx.$queryRawUnsafe<Array<{ paid: string }>>(
-            `SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`,
-            input.schoolId,
-            input.invoiceId,
+            `SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`, input.schoolId, input.invoiceId,
           ))[0]?.paid ?? 0);
           const due = Number(invoice.amount);
           const status = paid >= due ? "paid" : "unpaid";
