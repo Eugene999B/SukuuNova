@@ -7,7 +7,7 @@ const RESET_TTL_MS = 30 * 60 * 1000;
 const MIN_PASSWORD_LENGTH = 12;
 
 export type ResetDeliveryEnvelope = {
-  universe: "school" | "platform";
+  universe: "school" | "guardian" | "platform";
   recipient: string;
   token: string;
   expiresAt: Date;
@@ -19,7 +19,7 @@ function newToken(): string { return randomBytes(32).toString("base64url"); }
 function normalizeIdentifier(value: string): string { const trimmed = value.trim(); return trimmed.includes("@") ? trimmed.toLowerCase() : trimmed; }
 function validateNewPassword(password: string) { if (password.length < MIN_PASSWORD_LENGTH) throw new AppError(`New password must contain at least ${MIN_PASSWORD_LENGTH} characters.`, 400, "WEAK_PASSWORD"); }
 
-export async function issueSchoolPasswordReset(input: { uniqueCode: string; identifier: string }): Promise<ResetDeliveryEnvelope | null> {
+export async function issueSchoolPasswordReset(input: { uniqueCode: string; identifier: string; universe?: "school" | "guardian" }): Promise<ResetDeliveryEnvelope | null> {
   const uniqueCode = input.uniqueCode.trim().toLowerCase();
   const directory = await db.schoolLoginDirectory.findUnique({ where: { uniqueCode } });
   if (!directory || directory.status !== "active") return null;
@@ -30,7 +30,7 @@ export async function issueSchoolPasswordReset(input: { uniqueCode: string; iden
     const token = newToken(); const expiresAt = new Date(Date.now() + RESET_TTL_MS);
     await tx.schoolPasswordResetToken.create({ data: { schoolId: directory.schoolId, userId: user.id, tokenHash: tokenHash(token), expiresAt } });
     await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: user.id, action: "password_reset.requested", entityType: "User", entityId: user.id, after: { expiresAt: expiresAt.toISOString() } } });
-    return { universe: "school", recipient: user.email || user.phone || identifier, token, expiresAt, schoolCode: uniqueCode };
+    return { universe: input.universe ?? "school", recipient: user.email || user.phone || identifier, token, expiresAt, schoolCode: uniqueCode };
   });
 }
 
@@ -60,7 +60,7 @@ export async function confirmSchoolPasswordReset(input: { uniqueCode: string; to
     const passwordHash = await hash(input.newPassword, 12);
     await tx.user.update({ where: { id: reset.userId }, data: { passwordHash } });
     await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: directory.schoolId, userId: reset.userId, usedAt: null }, data: { usedAt: now } });
-    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: reset.userId, action: "password_reset.completed", entityType: "User", entityId: reset.userId, after: { completedAt: now.toISOString() } } });
+    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: reset.userId, action: "password_reset.completed", entityType: "User", entityId: reset.userId, after: { completedAt: now.toISOString() } });
   });
 }
 
