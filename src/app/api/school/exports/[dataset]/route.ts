@@ -17,7 +17,9 @@ const MAX_GRADEBOOK_EXPORT_ROWS = 50000;
 
 function csvCell(value: unknown) {
   const text = value == null ? "" : String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  // Prevent spreadsheet applications from evaluating exported user content as formulas.
+  const safe = /^[=+\-@\t\r]/.test(text) ? `\'${text}` : text;
+  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function csv(headers: string[], rows: unknown[][]) {
@@ -197,7 +199,7 @@ export async function GET(
                 class: { select: { name: true } },
               },
             },
-            payments: { select: { amount: true } },
+            payments: { select: { amount: true, reversals: { select: { amount: true } } } },
           },
         });
         assertWithinExportLimit(rows.length);
@@ -215,7 +217,7 @@ export async function GET(
               "Status",
             ],
             rows.map((r) => {
-              const paid = r.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+              const paid = r.payments.reduce((sum, p) => sum + Number(p.amount) - p.reversals.reduce((reversed, reversal) => reversed + Number(reversal.amount), 0), 0);
               const total = Number(r.totalAmount);
               return [
                 r.createdAt.toISOString().slice(0, 10),
@@ -224,7 +226,7 @@ export async function GET(
                 r.student.class?.name ?? "",
                 total.toFixed(2),
                 paid.toFixed(2),
-                Math.max(0, total - paid).toFixed(2),
+                Math.max(0, total - Math.max(0, paid)).toFixed(2),
                 r.status,
               ];
             }),

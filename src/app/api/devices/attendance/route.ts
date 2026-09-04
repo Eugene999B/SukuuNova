@@ -65,7 +65,8 @@ export async function POST(request: Request) {
     const timestamp = request.headers.get("x-device-timestamp") ?? "";
     const nonce = request.headers.get("x-device-nonce") ?? "";
     const signature = request.headers.get("x-device-signature") ?? "";
-    if (!timestamp || !nonce || !signature) {
+    const deviceSecret = request.headers.get("x-device-secret") ?? "";
+    if (!timestamp || !nonce || !signature || !deviceSecret) {
       throw new UnauthorizedError("Missing device authentication headers.");
     }
 
@@ -93,6 +94,7 @@ export async function POST(request: Request) {
 
       verifyDeviceSignature({
         apiKeyHash: device.apiKeyHash,
+        deviceSecret,
         timestamp,
         nonce,
         rawBody,

@@ -23,7 +23,7 @@ export async function GET() {
     const session = await getPlatformSession();
     if (!session) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     const admin = await db.platformAdmin.findUnique({ where: { id: session.adminId }, select: { id: true, name: true, email: true, role: true, status: true } });
-    if (!admin) return NextResponse.json({ error: "NOT_FOUND" }, { status: 404 });
+    if (!admin || admin.status !== "active") return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     const rows = await db.$queryRawUnsafe<Array<{ preferences: Record<string, unknown> }>>(`SELECT "preferences" FROM "PlatformAdminMeta" WHERE "adminId"=$1 LIMIT 1`, session.adminId);
     return NextResponse.json({ admin, preferences: rows[0]?.preferences ?? { defaultLanding: "/platform", timezone: "Africa/Accra", dateFormat: "DD/MM/YYYY", timeFormat: "24h", compactInterface: false, reduceMotion: false, notifySecurity: true, notifyBilling: true, notifySupport: true, notifySystem: true } });
   } catch (error) { return routeError(error); }

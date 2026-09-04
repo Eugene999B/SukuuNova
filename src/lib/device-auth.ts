@@ -6,26 +6,27 @@ export function generateDeviceSecret(): string {
 }
 
 /**
- * The raw registration secret is never stored. We store SHA-256(secret),
- * then use that deterministic derived value as the HMAC key for device calls.
+ * The raw registration secret is never stored. Its SHA-256 digest verifies the
+ * device secret; HMAC signatures are made with the raw secret supplied by the device.
  */
 export function hashDeviceSecret(secret: string): string {
   return createHash("sha256").update(secret, "utf8").digest("hex");
 }
 
 export function signDevicePayload(
-  apiKeyHash: string,
+  deviceSecret: string,
   timestamp: string,
   nonce: string,
   rawBody: string
 ): string {
-  return createHmac("sha256", apiKeyHash)
+  return createHmac("sha256", deviceSecret)
     .update(timestamp + "\n" + nonce + "\n" + rawBody, "utf8")
     .digest("hex");
 }
 
 export function verifyDeviceSignature(input: {
   apiKeyHash: string;
+  deviceSecret: string;
   timestamp: string;
   nonce: string;
   rawBody: string;
@@ -52,8 +53,14 @@ export function verifyDeviceSignature(input: {
     throw new AppError("Invalid device signature.", 401, "INVALID_DEVICE_SIGNATURE");
   }
 
+  const storedHash = Buffer.from(input.apiKeyHash, "hex");
+  const suppliedHash = Buffer.from(hashDeviceSecret(input.deviceSecret), "hex");
+  if (storedHash.length !== suppliedHash.length || !timingSafeEqual(storedHash, suppliedHash)) {
+    throw new AppError("Invalid device signature.", 401, "INVALID_DEVICE_SIGNATURE");
+  }
+
   const expected = Buffer.from(
-    signDevicePayload(input.apiKeyHash, input.timestamp, input.nonce, input.rawBody),
+    signDevicePayload(input.deviceSecret, input.timestamp, input.nonce, input.rawBody),
     "hex"
   );
   const received = Buffer.from(input.signature, "hex");
