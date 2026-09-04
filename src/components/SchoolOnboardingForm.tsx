@@ -1,73 +1,48 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 
-type CreatedSchool = { name: string; uniqueCode: string; ownerEmail: string; ownerPassword: string };
+type CreatedSchool = { name: string; uniqueCode: string; ownerEmail: string; ownerPassword: string; billing: string };
+
+const sections = ["School identity", "Owner & access", "Commercial setup", "Operational defaults"] as const;
 
 export function SchoolOnboardingForm() {
-  const [notice, setNotice] = useState("Create a tenant with all default school roles and permissions.");
-  const [created, setCreated] = useState<CreatedSchool | null>(null);
+  const [notice, setNotice] = useState("Provision a complete school tenant, not just a login account."), [created, setCreated] = useState<CreatedSchool | null>(null), [busy, setBusy] = useState(false);
+  const [billingMode, setBillingMode] = useState("flat");
+  const selectedDescription = useMemo(() => billingMode === "per_student" ? "The invoice engine multiplies active students by the rate you set." : "The invoice engine uses one recurring amount for the school.", [billingMode]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const input = Object.fromEntries(new FormData(form).entries());
-    setCreated(null);
-    setNotice("Creating school…");
-
+    setCreated(null); setBusy(true); setNotice("Creating the tenant, baseline roles, access and commercial rules…");
     try {
-      const response = await fetch("/api/platform/schools", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        setNotice(result.message ?? "Onboarding failed.");
-        return;
-      }
+      const response = await fetch("/api/platform/schools", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...input, billingMode }) });
+      const result = await response.json() as { message?: string; result?: { school?: { name?: string; uniqueCode?: string }; billing?: { billingMode?: string; studentRate?: number; flatRate?: number } } };
+      if (!response.ok) { setNotice(result.message ?? "Onboarding failed."); return; }
       const school = result.result?.school;
-      setCreated({
-        name: school?.name ?? String(input.schoolName),
-        uniqueCode: school?.uniqueCode ?? String(input.uniqueCode),
-        ownerEmail: String(input.ownerEmail),
-        ownerPassword: String(input.ownerPassword),
-      });
-      setNotice("School created successfully. The owner can now use the school login.");
-      form.reset();
-    } catch {
-      setNotice("Onboarding failed. Please try again.");
-    }
+      setCreated({ name: school?.name ?? String(input.schoolName), uniqueCode: school?.uniqueCode ?? String(input.uniqueCode), ownerEmail: String(input.ownerEmail), ownerPassword: String(input.ownerPassword), billing: billingMode === "per_student" ? `₵${input.studentRate || 0} per active student` : `₵${input.flatRate || 0} flat monthly rate` });
+      setNotice("School created. The tenant is ready for its first operational setup pass.");
+      form.reset(); setBillingMode("flat");
+    } catch { setNotice("Onboarding failed. Please try again."); }
+    finally { setBusy(false); }
   }
 
-  const field = "rounded-xl border border-slate-300 px-4 py-3";
-  return (
-    <div>
-      {created ? (
-        <section className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-slate-900" role="status" aria-live="polite">
-          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">School ready</p>
-          <h2 className="mt-1 text-xl font-bold">{created.name}</h2>
-          <p className="mt-2 text-sm text-slate-600">Here is the owner login handoff. Share these details securely with the school owner.</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl bg-white p-3"><span className="block text-xs text-slate-500">School login code</span><strong>{created.uniqueCode}</strong></div>
-            <div className="rounded-xl bg-white p-3"><span className="block text-xs text-slate-500">Owner email</span><strong className="break-all">{created.ownerEmail}</strong></div>
-            <div className="rounded-xl bg-white p-3"><span className="block text-xs text-slate-500">School login</span><strong>/login/school</strong></div>
-            <div className="rounded-xl bg-white p-3"><span className="block text-xs text-slate-500">Initial password</span><strong className="break-all">{created.ownerPassword}</strong><small className="mt-1 block text-slate-500">Shown here once; SukuuNova does not re-display it later.</small></div>
-          </div>
-          <p className="mt-3 text-sm text-slate-600">This is the password you set during onboarding. There is no forced password change on first login, so treat it as the owner’s real login password and change it later through account security when appropriate.</p>
-        </section>
-      ) : (
-        <div className="mt-8 rounded-xl bg-slate-100 p-4 text-sm" role="status">{notice}</div>
-      )}
+  const field = "mt-1 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100";
+  const label = "text-xs font-bold uppercase tracking-[0.08em] text-slate-500";
+  return <div>
+    {created ? <section className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-slate-900" role="status" aria-live="polite"><p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">School ready</p><h2 className="mt-1 text-2xl font-black tracking-tight">{created.name}</h2><p className="mt-2 text-sm text-slate-600">The initial handoff is shown once. The owner must change this password on first login.</p><div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-white p-4"><span className="block text-xs text-slate-500">School code</span><strong>{created.uniqueCode}</strong></div><div className="rounded-xl bg-white p-4"><span className="block text-xs text-slate-500">Owner email</span><strong className="break-all">{created.ownerEmail}</strong></div><div className="rounded-xl bg-white p-4"><span className="block text-xs text-slate-500">Initial password</span><strong className="break-all">{created.ownerPassword}</strong></div><div className="rounded-xl bg-white p-4"><span className="block text-xs text-slate-500">Billing rule</span><strong>{created.billing}</strong></div></div><div className="mt-5 flex flex-wrap gap-2"><a href={`/platform/schools`} className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white">Open school network</a><a href={`/login/school`} className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700">School login</a></div></section> : <div className="mt-7 rounded-xl bg-slate-100 p-4 text-sm text-slate-700" role="status">{notice}</div>}
 
-      <form className="mt-8 grid gap-4" onSubmit={submit}>
-        <input className={field} name="uniqueCode" placeholder="School login code" required />
-        <input className={field} name="schoolName" placeholder="School name" required />
-        <input className={field} name="ownerName" placeholder="Owner name" required />
-        <input className={field} name="ownerEmail" type="email" placeholder="Owner email" required />
-        <input className={field} name="ownerPassword" type="password" minLength={12} placeholder="Initial password (12+ characters)" required />
-        <button className="rounded-xl bg-nova px-5 py-3 font-semibold text-white">Create school securely</button>
-      </form>
-    </div>
-  );
+    <form className="mt-8 grid gap-5" onSubmit={submit}>
+      <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5"><div className="mb-4"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">01 · {sections[0]}</p><h2 className="mt-1 text-lg font-black text-slate-900">Identify the tenant clearly</h2><p className="mt-1 text-xs leading-5 text-slate-500">These details become the school’s operating identity.</p></div><div className="grid gap-4 md:grid-cols-2"><label><span className={label}>School name</span><input className={field} name="schoolName" placeholder="e.g. Accra Academy" required /></label><label><span className={label}>School login code</span><input className={field} name="uniqueCode" placeholder="e.g. accra-academy" pattern="[a-z0-9-]{3,40}" title="3–40 lowercase letters, numbers, or hyphens" required /></label><label><span className={label}>School type</span><select className={field} name="schoolType" defaultValue="basic_school"><option value="basic_school">Basic school</option><option value="senior_high">Senior high school</option><option value="private_school">Private school</option><option value="international">International school</option><option value="other">Other</option></select></label><label><span className={label}>Country</span><input className={field} name="country" defaultValue="Ghana" /></label><label><span className={label}>Region / state</span><input className={field} name="region" placeholder="e.g. Greater Accra" /></label><label><span className={label}>City / district</span><input className={field} name="city" placeholder="e.g. Accra" /></label><label className="md:col-span-2"><span className={label}>School address</span><input className={field} name="address" placeholder="Street address or postal address" /></label><label><span className={label}>School phone</span><input className={field} name="schoolPhone" placeholder="+233 …" /></label><label><span className={label}>School email</span><input className={field} name="schoolEmail" type="email" placeholder="office@school.example" /></label></div></section>
+
+      <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5"><div className="mb-4"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">02 · {sections[1]}</p><h2 className="mt-1 text-lg font-black text-slate-900">Create the first accountable operator</h2><p className="mt-1 text-xs leading-5 text-slate-500">The owner starts with the system Owner role and a forced password change.</p></div><div className="grid gap-4 md:grid-cols-2"><label><span className={label}>Owner name</span><input className={field} name="ownerName" placeholder="Full name" required /></label><label><span className={label}>Owner email</span><input className={field} name="ownerEmail" type="email" placeholder="owner@school.example" required /></label><label><span className={label}>Initial password</span><input className={field} name="ownerPassword" type="password" minLength={12} placeholder="12+ characters" required /></label><label><span className={label}>Owner phone</span><input className={field} name="ownerPhone" placeholder="Optional" /></label></div></section>
+
+      <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5"><div className="mb-4"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">03 · {sections[2]}</p><h2 className="mt-1 text-lg font-black text-slate-900">Choose how this school is billed</h2><p className="mt-1 text-xs leading-5 text-slate-500">Subscription billing is separate from SMS/WhatsApp credit resale.</p></div><div className="grid gap-3 md:grid-cols-2"><button type="button" onClick={() => setBillingMode("per_student")} className={`rounded-2xl border p-5 text-left ${billingMode === "per_student" ? "border-sky-500 bg-white ring-2 ring-sky-100" : "border-slate-200 bg-white"}`}><strong className="block text-sm text-slate-900">Per student</strong><span className="mt-1 block text-xs leading-5 text-slate-500">{selectedDescription}</span></button><button type="button" onClick={() => setBillingMode("flat")} className={`rounded-2xl border p-5 text-left ${billingMode === "flat" ? "border-sky-500 bg-white ring-2 ring-sky-100" : "border-slate-200 bg-white"}`}><strong className="block text-sm text-slate-900">Flat rate</strong><span className="mt-1 block text-xs leading-5 text-slate-500">One predictable recurring subscription amount.</span></button></div><div className="mt-4 grid gap-4 md:grid-cols-2"><label><span className={label}>Currency</span><input className={field} name="currency" defaultValue="GHS" /></label><label><span className={label}>Student rate</span><input className={field} name="studentRate" type="number" min="0" step="0.01" defaultValue="0" disabled={billingMode !== "per_student"} /></label><label><span className={label}>Flat monthly rate</span><input className={field} name="flatRate" type="number" min="0" step="0.01" defaultValue="0" disabled={billingMode !== "flat"} /></label><label><span className={label}>Grace period (days)</span><input className={field} name="graceDays" type="number" min="0" max="90" defaultValue="7" /></label><label><span className={label}>Trial (days)</span><input className={field} name="trialDays" type="number" min="0" max="365" defaultValue="0" /></label></div></section>
+
+      <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5"><div className="mb-4"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-sky-700">04 · {sections[3]}</p><h2 className="mt-1 text-lg font-black text-slate-900">Set the operating baseline</h2><p className="mt-1 text-xs leading-5 text-slate-500">Keep defaults explicit so the new school does not start with unexplained hidden assumptions.</p></div><div className="grid gap-4 md:grid-cols-2"><label><span className={label}>Timezone</span><input className={field} name="timezone" defaultValue="Africa/Accra" /></label><label><span className={label}>Billing day</span><input className={field} name="billingDay" type="number" min="1" max="28" defaultValue="1" /></label></div></section>
+
+      <button disabled={busy} className="rounded-2xl bg-slate-900 px-5 py-4 text-sm font-black text-white shadow-lg shadow-slate-200 disabled:cursor-not-allowed disabled:opacity-60">{busy ? "Provisioning school…" : "Create & provision school"}</button>
+    </form>
+  </div>;
 }

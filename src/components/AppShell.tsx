@@ -207,7 +207,7 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
   const isTeacher = universe === "teacher";
   const isGuardian = universe === "guardian";
   const visiblePlatformItems = universe === "platform" ? groups.flatMap((group) => group.items) : [];
-  const firstPlatformHref = visiblePlatformItems[0]?.href || "/account/security";
+  const firstPlatformHref = visiblePlatformItems[0]?.href || "/account/settings";
   const utilityHref = universe === "platform" ? platformAccess?.["support.view"] ? "/platform/inbox" : firstPlatformHref : isGuardian ? "/guardian/messages" : isTeacher ? "/teacher/module?view=My%20Messages" : "/school/communications/alerts";
   const utilityLabel = universe === "platform" ? platformAccess?.["support.view"] ? "Open visitor inbox" : "Open platform workspace" : "Open notifications";
 
@@ -230,7 +230,7 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
       <div className="app-sidebar-bottom">
         <div className="app-help"><Link href={universe === "platform" ? utilityHref : isGuardian ? "/guardian/messages" : "/school/help"}><CircleHelp size={15} aria-hidden="true" /><span>Help & Support</span></Link></div>
         <div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div>
-        <div className="app-account-actions"><Link href="/account/security" className="app-account-link"><Settings size={14} aria-hidden="true" /><span>Account security</span></Link><LogoutButton universe={universe === "platform" ? "platform" : universe === "guardian" ? "guardian" : "school"} /></div>
+        <div className="app-account-actions"><Link href={universe === "platform" ? "/account/settings" : "/account/security"} className="app-account-link"><Settings size={14} aria-hidden="true" /><span>{universe === "platform" ? "Account settings" : "Account security"}</span></Link><LogoutButton universe={universe === "platform" ? "platform" : universe === "guardian" ? "guardian" : "school"} /></div>
         <button type="button" className="app-collapse-button" onClick={toggleCompact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}>{compact ? <Settings2 size={14} aria-hidden="true" /> : <span>Collapse sidebar</span>}</button>
       </div>
     </aside>
