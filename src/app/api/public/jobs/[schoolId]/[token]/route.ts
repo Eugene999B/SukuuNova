@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createId } from "@paralleldrive/cuid2";
 import { withTenant } from "@/lib/db";
 import { AppError, routeError } from "@/lib/errors";
+import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 
 function text(value: unknown, field: string, max = 500) {
   if (typeof value !== "string" || !value.trim() || value.length > max) throw new AppError(`${field} is required.`, 400, "INVALID_INPUT");
@@ -35,6 +36,7 @@ export async function GET(_request: Request, context: { params: Promise<{ school
 export async function POST(request: Request, context: { params: Promise<{ schoolId: string; token: string }> }) {
   try {
     const { schoolId, token } = await context.params;
+    await recordLoginAttempt("public-job:" + schoolId + ":" + token, requestIp(request.headers), requestIp(request.headers));
     const posting = await loadPosting(schoolId, token);
     const body = await request.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new AppError("Request body must be an object.", 400, "INVALID_INPUT");
