@@ -27,7 +27,7 @@ function optionalText(value: unknown, max = 500) {
 }
 
 function inputHash(value: unknown) { return createHash("sha256").update(JSON.stringify(value)).digest("hex"); }
-function providerModel() { return process.env.OPENAI_MODEL || "gpt-5.6-luna"; }
+function providerModel() { return process.env.OPENAI_MODEL || "gpt-4o-mini"; }
 
 function providerUrl() {
   const raw = process.env.OPENAI_RESPONSES_URL || "https://api.openai.com/v1/responses";
