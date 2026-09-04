@@ -23,7 +23,7 @@ export default function PlatformSchoolPeopleConsole({ schoolId, people, canImper
     setBusy(true); setMessage("");
     try {
       const response = await fetch("/api/platform/phase4", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "impersonate", schoolId, userId: selected.id, reason: reason.trim() }) });
-      const payload = await response.json() as { message?: string; error?: string; result?: { userName: string }; expiresInSeconds?: number };
+      const payload = await response.json() as { message?: string; error?: string };
       if (!response.ok) { setMessage(payload.message ?? payload.error ?? "Unable to start support session."); return; }
       window.location.href = "/school/students";
     } catch {
@@ -46,5 +46,18 @@ export default function PlatformSchoolPeopleConsole({ schoolId, people, canImper
       </> : <div className="platform-empty large"><strong>No user selected.</strong><span>The People directory gives platform operators a safe bridge from School 360 into tenant-scoped support.</span></div>}
       {message ? <div className="app-banner" role="status"><div><h3>{message}</h3><p>Support access was not started.</p></div></div> : null}
     </aside>
+    <style jsx global>{`
+      .school-people-console{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr);gap:16px;margin-top:18px;align-items:start}
+      .school-people-console section,.people-support-panel{min-width:0}
+      .people-toolbar{display:flex;gap:10px;align-items:center;padding:0 22px 14px}
+      .people-toolbar label{display:block;flex:1}.people-toolbar input{width:100%;min-height:42px;border:1px solid var(--sn-line);border-radius:11px;padding:9px 11px;font:inherit;font-size:12px;color:var(--sn-ink);background:#fff;outline:none}.people-toolbar input:focus{border-color:#9bbbd8;box-shadow:0 0 0 3px rgba(68,120,166,.1)}
+      .people-table{border-top:1px solid var(--sn-line)}
+      .people-row{display:grid;grid-template-columns:36px minmax(0,1fr) minmax(100px,.5fr) auto 16px;gap:11px;align-items:center;width:100%;padding:13px 22px;border:0;border-bottom:1px solid var(--sn-line);background:#fff;text-align:left;cursor:pointer;color:var(--sn-ink)}
+      .people-row:hover{background:#fafcfe}.people-row.is-selected{background:#eff5fa;box-shadow:inset 3px 0 0 #547e9f}.people-avatar{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:#eef4f8;color:#54708a;font-weight:900;font-size:10px}.people-primary{min-width:0;display:grid;gap:3px}.people-primary strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.people-primary small,.people-role{font-size:10px;color:var(--sn-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.people-status{padding:4px 8px;border-radius:999px;font-size:9px;font-weight:900;text-transform:capitalize;background:#f1f4f7;color:#657382}.people-status-active{background:#edf7f2;color:#167047}.people-status-suspended,.people-status-inactive{background:#fff5e8;color:#8c5a14}
+      .people-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 18px}.people-detail-grid>div{display:grid;gap:4px;padding:11px 12px;border:1px solid var(--sn-line);border-radius:11px;background:#f8fafc;min-width:0}.people-detail-grid span{font-size:8px;text-transform:uppercase;letter-spacing:.08em;color:var(--sn-muted);font-weight:900}.people-detail-grid strong{font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .people-impersonation{display:grid;gap:12px;padding:15px;border:1px solid #edd7a0;border-radius:13px;background:#fffaf0}.people-impersonation h3{margin:4px 0;font-size:13px}.people-impersonation p{margin:0;font-size:10px;line-height:1.5;color:var(--sn-muted)}.people-impersonation label{display:grid;gap:6px;font-size:9px;font-weight:900;color:#506174}.people-impersonation textarea{min-height:92px;resize:vertical;border:1px solid #e1d7c2;border-radius:10px;padding:10px;font:inherit;font-size:11px;outline:none;background:#fff}.people-impersonation textarea:focus{border-color:#c9ae70;box-shadow:0 0 0 3px rgba(194,161,90,.1)}
+      @media(max-width:900px){.school-people-console{grid-template-columns:1fr}.people-row{grid-template-columns:36px minmax(0,1fr) auto 16px}.people-role{display:none}}
+      @media(max-width:600px){.people-toolbar{padding:0 17px 14px}.people-row{padding:12px 17px}.people-detail-grid{grid-template-columns:1fr}.people-support-panel{padding:17px!important}}
+    `}</style>
   </div>;
 }
