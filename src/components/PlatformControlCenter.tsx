@@ -44,8 +44,7 @@ function scoreSchool(s: SchoolRecord): number {
 
 function attentionState(score: number) {
   if (score >= 60) return { label: "Critical", className: "platform-status-critical" };
-  if (score >= 25) return { label: "Watch", className: "platform-status-watch" };
-  return { label: "Healthy", className: "platform-status-healthy" };
+  return { label: "Watch", className: "platform-status-watch" };
 }
 
 function reasons(s: SchoolRecord): string[] {
@@ -65,7 +64,7 @@ function Stat({ icon: Icon, label, value, meta }: { icon: typeof School; label: 
 export default function PlatformControlCenter({ overview, health, audit }: Props) {
   const access = usePlatformNavigationAccess();
   const schools = schoolRecords(overview);
-  const attention = [...schools].map((school) => ({ school, score: scoreSchool(school) })).sort((a, b) => b.score - a.score);
+  const attention = [...schools].map((school) => ({ school, score: scoreSchool(school) })).filter((item) => item.score >= 25).sort((a, b) => b.score - a.score);
   const critical = attention.filter((item) => item.score >= 60).length;
   const watch = attention.filter((item) => item.score >= 25 && item.score < 60).length;
   const activeRate = overview.totals.schools ? Math.round((overview.totals.activeSchools / overview.totals.schools) * 100) : 0;
@@ -94,7 +93,7 @@ export default function PlatformControlCenter({ overview, health, audit }: Props
 
     <div className="platform-command-grid">
       <section className="app-card app-panel platform-queue">
-        <div className="app-card-head"><div><h2>Attention queue</h2><p>Priority is explainable: suspension, finance pressure, missing setup, and operating inactivity.</p></div>{access?.["schools.view"] ? <Link className="app-pill" href="/platform/schools">All schools</Link> : null}</div>
+        <div className="app-card-head"><div><h2>Attention queue</h2><p>Only schools requiring operator attention appear here: suspension, finance pressure, missing setup, or operating inactivity.</p></div>{access?.["schools.view"] ? <Link className="app-pill" href="/platform/schools">All schools</Link> : null}</div>
         <div className="platform-table-head"><span>School</span><span>Signal</span><span>Reason</span><span>Next step</span></div>
         <div className="platform-table-body">
           {attention.slice(0, 10).map(({ school, score }) => {
@@ -103,11 +102,11 @@ export default function PlatformControlCenter({ overview, health, audit }: Props
             return <div key={school.id} className="platform-table-row">
               <div className="platform-school-cell"><span className="platform-school-avatar"><School size={16}/></span><div><b>{school.name}</b><small>{school.uniqueCode} · {school.studentCount.toLocaleString()} students · {school.subscriptionPlan?.name || "No plan"}</small></div></div>
               <div><span className={`platform-status ${state.className}`}>{state.label}</span><small className="platform-score">{score}/100</small></div>
-              <div className="platform-reasons">{why.length ? why.map((reason) => <span key={reason}>{reason}</span>) : <span>No issue detected</span>}</div>
+              <div className="platform-reasons">{why.map((reason) => <span key={reason}>{reason}</span>)}</div>
               <div>{access?.["schools.view"] ? <Link href={`/platform/schools/${school.id}`} className="app-action"><strong>Inspect</strong><ArrowRight size={13}/></Link> : <span className="app-pill">No action</span>}</div>
             </div>;
           })}
-          {attention.length === 0 && <div className="platform-empty">No schools are currently visible to this administrator.</div>}
+          {attention.length === 0 && <div className="platform-empty">No schools currently require operator attention.</div>}
         </div>
       </section>
 
