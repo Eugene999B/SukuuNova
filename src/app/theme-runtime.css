@@ -1,70 +1,20 @@
-/* Canonical runtime theme bridge. Keeps the existing light/dark preference authoritative. */
-:root[data-theme="light"]{
-  --bg:#f5f7fa;
-  --panel:#ffffff;
-  --muted:#6a7888;
-  color-scheme:light;
-}
-:root[data-theme="dark"]{
-  --bg:#071321;
-  --panel:#0e1b2b;
-  --muted:#9babbc;
-  color-scheme:dark;
+/* Runtime bridge: ThemeProvider owns mode selection; this file only maps legacy tokens. */
+:root[data-theme="light"] {
+  --bg: var(--ui-bg);
+  --panel: var(--ui-surface);
+  --muted: var(--ui-text-muted);
+  color-scheme: light;
 }
 
-html,body{background:var(--bg)!important;color:var(--sn-ink)!important}
-
-/* The public homepage previously had an old dark base layer that overrode the theme provider. */
-:root[data-theme="light"] .home-shell{
-  background:#f5f7fa!important;color:#071321!important;
+:root[data-theme="dark"] {
+  --bg: var(--ui-bg);
+  --panel: var(--ui-surface);
+  --muted: var(--ui-text-muted);
+  color-scheme: dark;
 }
-:root[data-theme="light"] .home-shell:before{
-  background:radial-gradient(circle at 14% 10%,rgba(37,102,125,.08),transparent 28%),radial-gradient(circle at 83% 18%,rgba(72,87,165,.07),transparent 26%),linear-gradient(180deg,#ffffff 0%,#f7f9fb 58%,#f3f6f9 100%)!important;
+
+html,
+body {
+  background: var(--ui-bg) !important;
+  color: var(--ui-text) !important;
 }
-:root[data-theme="light"] .topbar{border-color:#e1e7ee!important}
-:root[data-theme="light"] .brand{color:#071321!important}
-:root[data-theme="light"] .topnav a,:root[data-theme="light"] .top-link{color:#607285!important}
-:root[data-theme="light"] .topnav a:hover,:root[data-theme="light"] .top-link:hover{color:#071321!important}
-:root[data-theme="light"] .top-button,:root[data-theme="light"] .secondary-cta{background:#fff!important;border-color:#dbe4eb!important;color:#233b50!important}
-:root[data-theme="light"] .hero h1,:root[data-theme="light"] .section-head h2,:root[data-theme="light"] .closing-cta h2{color:#071321!important}
-:root[data-theme="light"] .hero h1 span{background:none!important;color:#0b3f75!important;-webkit-text-fill-color:#0b3f75!important}
-:root[data-theme="light"] .hero-copy,:root[data-theme="light"] .section-head p,:root[data-theme="light"] .closing-cta p{color:#687788!important}
-:root[data-theme="light"] .eyebrow{background:#eef6f8!important;border-color:#d5e7eb!important;color:#25667d!important}
-:root[data-theme="light"] .primary-cta{background:#0b3f75!important;color:#fff!important;box-shadow:0 12px 30px rgba(11,63,117,.16)!important}
-:root[data-theme="light"] .dashboard-window,:root[data-theme="light"] .hero-float{background:#fff!important;border-color:#dbe4eb!important;box-shadow:0 28px 70px rgba(9,26,49,.12)!important}
-:root[data-theme="light"] .window-top{border-color:#e6edf2!important;color:#718293!important}
-:root[data-theme="light"] .window-main,:root[data-theme="light"] .window-heading h3,:root[data-theme="light"] .window-kpis strong,:root[data-theme="light"] .hero-float strong{color:#071321!important}
-:root[data-theme="light"] .window-kpis>div,:root[data-theme="light"] .fake-chart,:root[data-theme="light"] .fake-list,:root[data-theme="light"] .stats-strip>div{background:#f8fafc!important;border-color:#e4ebf0!important}
-:root[data-theme="light"] .window-kpis small,:root[data-theme="light"] .window-heading small,:root[data-theme="light"] .fake-head span,:root[data-theme="light"] .fake-list small,:root[data-theme="light"] .stats-strip span{color:#718293!important}
-:root[data-theme="light"] .module-card{background:#fff!important;border-color:#e1e7ee!important;color:#071321!important}
-:root[data-theme="light"] .module-card p{color:#6a7888!important}
-:root[data-theme="light"] .closing-cta{background:#fff!important;border-color:#e1e7ee!important}
-:root[data-theme="light"] .footer{color:#718293!important}
-:root[data-theme="light"] .footer a{color:#52697c!important}
-
-/* School/platform login pages share the same semantic theme tokens. */
-:root[data-theme="light"] .auth-role-card,
-:root[data-theme="light"] .auth-school-chip{background:#fff!important;border-color:#dbe4eb!important;color:#071321!important}
-:root[data-theme="light"] .auth-role-card small,:root[data-theme="light"] .auth-role-heading p,:root[data-theme="light"] .auth-help-text,:root[data-theme="light"] .auth-safety-link{color:#718293!important}
-:root[data-theme="light"] .auth-stepper span{background:#f7fafc!important;border-color:#dbe4eb!important;color:#708191!important}
-:root[data-theme="light"] .auth-stepper span.is-active{background:var(--auth-accent)!important;color:#fff!important}
-:root[data-theme="light"] .auth-stepper span.is-complete{background:var(--auth-tint)!important;color:var(--auth-accent)!important}
-:root[data-theme="light"] .auth-stepper i{background:#dbe4eb!important}
-
-/* Explicit dark overrides are kept after the light canonical layer so the preference always wins. */
-:root[data-theme="dark"] .app-sidebar{background:#0b1725!important;border-right-color:#22364b!important;box-shadow:10px 0 30px rgba(0,0,0,.18)!important}
-:root[data-theme="dark"] .app-nav-item{color:#9babbc!important}
-:root[data-theme="dark"] .app-nav-item:hover{background:#102236!important;color:#f6f8fb!important;border-color:#29445e!important}
-:root[data-theme="dark"] .app-nav-item.is-active{background:#132a42!important;color:#dbeaff!important;box-shadow:inset 3px 0 0 var(--portal-accent,var(--sn-primary))!important}
-:root[data-theme="dark"] .app-main{background:linear-gradient(180deg,#081523 0%,#071321 100%)!important}
-:root[data-theme="dark"] .app-topbar{background:rgba(9,23,36,.92)!important;border-bottom-color:#22364b!important;color:#f6f8fb!important}
-:root[data-theme="dark"] .app-card,:root[data-theme="dark"] .module-card,:root[data-theme="dark"] .module-table-wrap,:root[data-theme="dark"] .module-metrics article,:root[data-theme="dark"] .sn-data-card,:root[data-theme="dark"] .sn-list-card,:root[data-theme="dark"] .sn-action-card{background:#0e1b2b!important;border-color:#293d54!important;color:#f6f8fb!important;box-shadow:0 14px 38px rgba(0,0,0,.18)!important}
-:root[data-theme="dark"] input,:root[data-theme="dark"] textarea,:root[data-theme="dark"] select{background:#0b1725!important;color:#f6f8fb!important;border-color:#293d54!important;color-scheme:dark!important}
-:root[data-theme="dark"] [role="dialog"],:root[data-theme="dark"] dialog,:root[data-theme="dark"] .modal,:root[data-theme="dark"] .dialog{background:#0e1b2b!important;color:#f6f8fb!important;border-color:#293d54!important}
-:root[data-theme="dark"] .auth-form-pane{background:#091725!important}
-:root[data-theme="dark"] .auth-panel{background:#0e1b2b!important;border-color:#293d54!important;color:#f6f8fb!important}
-:root[data-theme="dark"] .auth-role-card,:root[data-theme="dark"] .auth-school-chip{background:#13243a!important;border-color:#334a63!important;color:#f6f8fb!important}
-:root[data-theme="dark"] .auth-role-card small,:root[data-theme="dark"] .auth-role-heading p,:root[data-theme="dark"] .auth-help-text,:root[data-theme="dark"] .auth-safety-link{color:#9babbc!important}
-
-/* Preserve the existing dark homepage skin when dark mode is deliberately selected. */
-:root[data-theme="dark"] .home-shell{background:#071321!important;color:#f6f8fb!important}
