@@ -38,7 +38,9 @@ function buildResetUrl(envelope: ResetDeliveryEnvelope): string {
     : envelope.universe === "guardian"
       ? "/login/guardian/password-reset"
       : "/login/school/password-reset";
-  return base + path + "?token=" + encodeURIComponent(envelope.token);
+  const params = new URLSearchParams({ token: envelope.token });
+  if (envelope.schoolCode) params.set("schoolCode", envelope.schoolCode);
+  return base + path + "?" + params.toString();
 }
 
 // Sends the reset token out-of-band (email or SMS depending on the recipient
@@ -74,10 +76,6 @@ export async function deliverResetToken(envelope: ResetDeliveryEnvelope): Promis
   }
 
   if (DEV_TOKEN_ECHO_ENABLED) {
-    // Local-development convenience only. Requires NODE_ENV !== "production"
-    // AND an explicit ALLOW_DEV_TOKEN_ECHO=true env var — never on by default,
-    // never reachable in production regardless of env var misconfiguration
-    // because of the NODE_ENV check above.
     console.warn("[DEV ONLY] Password reset link (never sent to any client response):", resetUrl);
   }
 }
