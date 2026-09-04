@@ -4,7 +4,7 @@ import { compare, hash } from "bcryptjs";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { GUARDIAN_COOKIE, getGuardianSession, createGuardianSessionToken } from "@/lib/guardian-auth";
-import { getPlatformSession, getSchoolSession, createPlatformSessionToken, createSchoolSessionToken, PLATFORM_COOKIE, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { getPlatformSession, getSchoolSession, createPlatformSessionToken, createSchoolSessionToken, PLATFORM_COOKIE, PLATFORM_SESSION_SECONDS, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
 import "./security.css";
 
@@ -47,7 +47,7 @@ async function changePassword(formData: FormData) {
     if (!admin || !(await compare(current, admin.passwordHash))) throw new Error("Current password is incorrect.");
     await db.platformAdmin.update({ where: { id: platform.adminId }, data: { passwordHash: await hash(next, 12) } });
     const responseCookies = await cookies();
-    responseCookies.set(PLATFORM_COOKIE, await createPlatformSessionToken(platform), sessionCookieOptions());
+    responseCookies.set(PLATFORM_COOKIE, await createPlatformSessionToken(platform), sessionCookieOptions(PLATFORM_SESSION_SECONDS));
     responseCookies.delete(SCHOOL_COOKIE);
     redirect("/platform");
   }

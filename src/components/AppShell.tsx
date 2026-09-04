@@ -1,23 +1,77 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  Activity, ArrowDownLeft, BellRing, BookOpen, Building2, CalendarClock, CalendarDays,
-  ChartNoAxesCombined, CircleCheckBig, CircleHelp, ClipboardCheck, ClipboardList,
-  ClipboardPenLine, Download, FileCheck2, FileText, GraduationCap, Headset, Inbox,
-  LayoutDashboard, Mail, Megaphone, MessageSquarePlus, MessagesSquare, NotebookPen,
-  ReceiptText, School, Search, Settings, Settings2, ShieldCheck, Table2, TriangleAlert,
-  UserCog, Users, UsersRound, Wallet, WalletCards, Workflow, type LucideIcon
+  Activity,
+  ArrowDownLeft,
+  BellRing,
+  BookOpen,
+  Building2,
+  CalendarClock,
+  CalendarDays,
+  ChartNoAxesCombined,
+  CircleCheckBig,
+  CircleHelp,
+  ClipboardList,
+  ClipboardPenLine,
+  Download,
+  FileText,
+  GraduationCap,
+  Headset,
+  Inbox,
+  LayoutDashboard,
+  Mail,
+  Megaphone,
+  MessageSquarePlus,
+  MessagesSquare,
+  NotebookPen,
+  ReceiptText,
+  School,
+  Search,
+  Settings,
+  Settings2,
+  ShieldCheck,
+  Table2,
+  TriangleAlert,
+  UserCog,
+  Users,
+  UsersRound,
+  Wallet,
+  WalletCards,
+  Workflow,
+  type LucideIcon,
 } from "lucide-react";
 import { LogoutButton } from "./LogoutButton";
 import { SidebarNav, type NavGroup } from "./SidebarNav";
 import { CommandPalette, type CommandItem } from "./CommandPalette";
+import { usePlatformNavigationAccess } from "./PlatformNavigationContext";
 import "./app-shell.css";
 
 type Universe = "school" | "platform" | "teacher" | "guardian";
-type Props = { universe: Universe; title: string; subtitle: string; active?: string; schoolName?: string; schoolCode?: string; userName?: string; role?: string; children: React.ReactNode };
-type Group = { label: string; items: Array<{ icon: LucideIcon; label: string; href: string; primary?: boolean }> };
+
+type Props = {
+  universe: Universe;
+  title: string;
+  subtitle: string;
+  active?: string;
+  schoolName?: string;
+  schoolCode?: string;
+  userName?: string;
+  role?: string;
+  children: ReactNode;
+};
+
+type Group = {
+  label: string;
+  items: Array<{
+    icon: LucideIcon;
+    label: string;
+    href: string;
+    primary?: boolean;
+    permission?: string;
+  }>;
+};
 
 const schoolGroups: Group[] = [
   { label: "Home", items: [
@@ -116,26 +170,26 @@ const guardianGroups: Group[] = [
 ];
 
 const platformGroups: Group[] = [
-  { label: "Control Center", items: [
-    { icon: LayoutDashboard, label: "Overview", href: "/platform", primary: true },
-    { icon: Search, label: "Global Search", href: "/platform/search", primary: true },
-    { icon: Activity, label: "System Health", href: "/platform/health" },
+  { label: "Command", items: [
+    { icon: LayoutDashboard, label: "Overview", href: "/platform", primary: true, permission: "analytics.view" },
+    { icon: Search, label: "Global Search", href: "/platform/search", primary: true, permission: "schools.view" },
+    { icon: Activity, label: "System Health", href: "/platform/health", permission: "security.manage" },
   ] },
-  { label: "Schools & Plans", items: [
-    { icon: School, label: "Schools", href: "/platform/schools", primary: true },
-    { icon: Workflow, label: "Plans & Entitlements", href: "/platform/plans" },
-    { icon: WalletCards, label: "Platform Billing", href: "/platform/billing" },
-    { icon: ChartNoAxesCombined, label: "Network Analytics", href: "/platform/analytics" },
+  { label: "Network", items: [
+    { icon: School, label: "Schools", href: "/platform/schools", primary: true, permission: "schools.view" },
+    { icon: ChartNoAxesCombined, label: "Network Analytics", href: "/platform/analytics", primary: true, permission: "analytics.view" },
+    { icon: Workflow, label: "Plans & Entitlements", href: "/platform/plans", permission: "plans.manage" },
+    { icon: WalletCards, label: "Platform Billing", href: "/platform/billing", permission: "billing.view" },
   ] },
   { label: "Operations", items: [
-    { icon: Headset, label: "Support", href: "/platform/support", primary: true },
-    { icon: Inbox, label: "Visitor Inbox", href: "/platform/inbox" },
+    { icon: Headset, label: "Support", href: "/platform/support", primary: true, permission: "support.view" },
+    { icon: Inbox, label: "Visitor Inbox", href: "/platform/inbox", permission: "support.view" },
   ] },
-  { label: "Security & Control", items: [
-    { icon: UserCog, label: "Workers & Permissions", href: "/platform/admins" },
-    { icon: Workflow, label: "Worker School Scope", href: "/platform/admins/access" },
-    { icon: ShieldCheck, label: "Audit Log", href: "/platform/audit" },
-    { icon: Settings2, label: "Platform Settings", href: "/platform/settings" },
+  { label: "Governance", items: [
+    { icon: UserCog, label: "Workers & Permissions", href: "/platform/admins", permission: "admins.view" },
+    { icon: Workflow, label: "Worker School Scope", href: "/platform/admins/access", permission: "admins.manage" },
+    { icon: ShieldCheck, label: "Audit Log", href: "/platform/audit", permission: "audit.view" },
+    { icon: Settings2, label: "Platform Settings", href: "/platform/settings", permission: "settings.manage" },
   ] },
 ];
 
@@ -144,34 +198,46 @@ function commandItems(groups: Group[]): CommandItem[] { return groups.flatMap((g
 function initials(value: string) { return value.trim().split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "S"; }
 
 export function AppShell({ universe, title, subtitle, active = "Overview", schoolName = "School Workspace", schoolCode = "", userName = universe === "platform" ? "Platform Administrator" : universe === "guardian" ? "Guardian" : universe === "teacher" ? "Teacher" : "School Administrator", role = universe === "platform" ? "Super Admin" : universe === "guardian" ? "Guardian" : universe === "teacher" ? "Teacher" : "Administrator", children }: Props) {
-  const groups = universe === "platform" ? platformGroups : universe === "teacher" ? teacherGroups : universe === "guardian" ? guardianGroups : schoolGroups;
+  const platformAccess = usePlatformNavigationAccess();
+  const baseGroups = universe === "platform" ? platformGroups : universe === "teacher" ? teacherGroups : universe === "guardian" ? guardianGroups : schoolGroups;
+  const groups = universe === "platform" && platformAccess ? baseGroups.map((group) => ({ ...group, items: group.items.filter((item) => !item.permission || platformAccess[item.permission]) })).filter((group) => group.items.length > 0) : baseGroups;
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const preferenceScope = `${universe}:${schoolCode || "platform"}:${userName || "user"}`.replace(/\s+/g, "_").toLowerCase();
   const isTeacher = universe === "teacher";
   const isGuardian = universe === "guardian";
+  const visiblePlatformItems = universe === "platform" ? groups.flatMap((group) => group.items) : [];
+  const firstPlatformHref = visiblePlatformItems[0]?.href || "/account/security";
+  const utilityHref = universe === "platform" ? platformAccess?.["support.view"] ? "/platform/inbox" : firstPlatformHref : isGuardian ? "/guardian/messages" : isTeacher ? "/teacher/module?view=My%20Messages" : "/school/communications/alerts";
+  const utilityLabel = universe === "platform" ? platformAccess?.["support.view"] ? "Open visitor inbox" : "Open platform workspace" : "Open notifications";
 
   useEffect(() => {
     try { setCompact(localStorage.getItem(`sukuunova-sidebar-compact:${preferenceScope}`) === "true"); } catch { setCompact(false); }
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen(true); }
-    };
+    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen(true); } };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [preferenceScope]);
 
   const paletteItems = useMemo(() => commandItems(groups), [groups]);
   const avatar = initials(userName);
-  const toggleCompact = () => setCompact((value) => { const next = !value; try { localStorage.setItem(`sukuunova-sidebar-compact:${preferenceScope}`, String(next)); } catch {} return next; });
+  const toggleCompact = () => { setCompact((value) => { const next = !value; try { localStorage.setItem(`sukuunova-sidebar-compact:${preferenceScope}`, String(next)); } catch {} return next; }); };
 
   return <div className={`app-shell app-shell-${universe} ${compact ? "is-compact" : ""}`}>
     <aside className="app-sidebar">
       <Link href="/" className="app-brand"><span className="app-brand-mark">S</span><span className="app-brand-copy"><strong>SukuuNova</strong><small>{universe === "platform" ? "Platform Control" : isGuardian ? "Guardian Portal" : isTeacher ? "Teacher Workspace" : "School Workspace"}</small></span></Link>
-      <div className="app-school-chip"><span className="app-chip-avatar">{avatar}</span><span><b>{universe === "platform" ? "SukuuNova Network" : schoolName}</b><small>{universe === "platform" ? "All schools" : `${schoolCode}${schoolCode ? " · " : ""}School account`}</small></span></div>
+      <div className="app-school-chip"><span className="app-chip-avatar">{avatar}</span><span><b>{universe === "platform" ? "SukuuNova Network" : schoolName}</b><small>{universe === "platform" ? "Operator workspace" : `${schoolCode}${schoolCode ? " · " : ""}School account`}</small></span></div>
       <SidebarNav groups={normalize(groups)} active={active} storageScope={preferenceScope} />
-      <div className="app-sidebar-bottom"><div className="app-help"><Link href={universe === "platform" ? "/platform/support" : isGuardian ? "/guardian/messages" : "/school/help"}><CircleHelp size={15} aria-hidden="true" /><span>Help & Support</span></Link></div><div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div><div className="app-account-actions"><Link href="/account/security" className="app-account-link"><Settings size={14} aria-hidden="true" /><span>Account security</span></Link><LogoutButton universe={universe === "platform" ? "platform" : universe === "guardian" ? "guardian" : "school"} /></div><button type="button" className="app-collapse-button" onClick={toggleCompact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}>{compact ? <Settings2 size={14} aria-hidden="true" /> : <span>Collapse sidebar</span>}</button></div>
+      <div className="app-sidebar-bottom">
+        <div className="app-help"><Link href={universe === "platform" ? utilityHref : isGuardian ? "/guardian/messages" : "/school/help"}><CircleHelp size={15} aria-hidden="true" /><span>Help & Support</span></Link></div>
+        <div className="app-user-mini"><span className="app-user-avatar">{avatar}</span><span><b>{userName}</b><small>{role}</small></span></div>
+        <div className="app-account-actions"><Link href="/account/security" className="app-account-link"><Settings size={14} aria-hidden="true" /><span>Account security</span></Link><LogoutButton universe={universe === "platform" ? "platform" : universe === "guardian" ? "guardian" : "school"} /></div>
+        <button type="button" className="app-collapse-button" onClick={toggleCompact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}>{compact ? <Settings2 size={14} aria-hidden="true" /> : <span>Collapse sidebar</span>}</button>
+      </div>
     </aside>
-    <main className="app-main"><header className="app-topbar"><div><div className="app-breadcrumb">SukuuNova <span>›</span> {universe === "platform" ? "Platform Control" : schoolName}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="app-top-actions"><button type="button" className="app-search" onClick={() => setPaletteOpen(true)} aria-label="Open command palette"><Search size={16} aria-hidden="true" /><span>Search anything</span><kbd>⌘ K</kbd></button><Link className="app-icon-button" href={universe === "platform" ? "/platform/inbox" : isGuardian ? "/guardian/messages" : isTeacher ? "/teacher/module?view=My%20Messages" : "/school/communications/alerts"} aria-label="Notifications"><BellRing size={17} aria-hidden="true" /><i /></Link></div></header><div className="app-content">{children}</div></main>
+    <main className="app-main">
+      <header className="app-topbar"><div className="app-topbar-title"><div className="app-breadcrumb">SukuuNova <span>›</span>{" "}{universe === "platform" ? "Platform Control" : schoolName}</div><h1>{title}</h1><p>{subtitle}</p></div><div className="app-top-actions"><button type="button" className="app-search" onClick={() => setPaletteOpen(true)} aria-label="Open command palette"><Search size={16} aria-hidden="true" /><span>{universe === "platform" ? "Search schools, people, logs…" : "Search anything"}</span><kbd>⌘ K</kbd></button><Link className="app-icon-button" href={utilityHref} aria-label={utilityLabel}><BellRing size={17} aria-hidden="true" /><i /></Link></div></header>
+      <div className="app-content">{children}</div>
+    </main>
     <CommandPalette items={paletteItems} open={paletteOpen} onClose={() => setPaletteOpen(false)} liveSearchEndpoint={universe === "school" ? "/api/search" : undefined} />
   </div>;
 }

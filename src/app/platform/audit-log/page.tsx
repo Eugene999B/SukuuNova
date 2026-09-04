@@ -1,2 +1,5 @@
-import PlatformAdminWorkspace from "@/components/PlatformAdminWorkspace";
-export default function AuditLogPage(){return <PlatformAdminWorkspace section="audit"/>;}
+import { redirect } from "next/navigation";
+
+export default function AuditLogAliasPage() {
+  redirect("/platform/audit");
+}

@@ -6,6 +6,8 @@ function toJson(value: unknown): Prisma.InputJsonValue | undefined {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
+type AuditClient = TenantDb | typeof db;
+
 export async function appendSchoolAudit(
   tx: TenantDb,
   entry: {
@@ -37,8 +39,9 @@ export async function appendPlatformAudit(entry: {
   targetSchoolId?: string;
   targetEntity?: string;
   meta?: unknown;
-}) {
-  return db.auditLogPlatform.create({
+}, tx?: AuditClient) {
+  const client = tx ?? db;
+  return client.auditLogPlatform.create({
     data: {
       actorId: entry.actorId,
       action: entry.action,

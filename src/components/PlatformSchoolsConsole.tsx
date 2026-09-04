@@ -3,28 +3,115 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, BadgeAlert, Building2, CreditCard, GraduationCap, Plus, Search, Users } from "lucide-react";
 import type { getPlatformOverview } from "@/lib/platform-admin-service";
+import { usePlatformNavigationAccess } from "@/components/PlatformNavigationContext";
 
 type Overview = Awaited<ReturnType<typeof getPlatformOverview>>;
 type SchoolRecord = { id:string; name:string; uniqueCode:string; status:string; createdAt:string | Date; studentCount:number; userCount:number; classCount:number; attendanceToday:number; invoices:number; unpaidInvoices:number; collected:number; subscriptionPlan?: { id:string; name:string; price:number|string } | null };
 type Filter = "all" | "attention" | "active" | "suspended";
+type Sort = "attention" | "name" | "students" | "collected";
 
 function schoolRecords(overview: Overview): SchoolRecord[] {
   return overview.schools.flatMap((value) => {
     if (!value || typeof value !== "object") return [];
     const row = value as Record<string, unknown>;
     if (typeof row.id !== "string" || typeof row.name !== "string" || typeof row.uniqueCode !== "string") return [];
-    return [{ id: row.id, name: row.name, uniqueCode: row.uniqueCode, status: typeof row.status === "string" ? row.status : "unknown", createdAt: typeof row.createdAt === "string" || row.createdAt instanceof Date ? row.createdAt : new Date(0), studentCount:Number(row.studentCount||0), userCount:Number(row.userCount||0), classCount:Number(row.classCount||0), attendanceToday:Number(row.attendanceToday||0), invoices:Number(row.invoices||0), unpaidInvoices:Number(row.unpaidInvoices||0), collected:Number(row.collected||0), subscriptionPlan: row.subscriptionPlan && typeof row.subscriptionPlan === "object" ? row.subscriptionPlan as SchoolRecord["subscriptionPlan"] : null }];
+    return [{
+      id: row.id,
+      name: row.name,
+      uniqueCode: row.uniqueCode,
+      status: typeof row.status === "string" ? row.status : "unknown",
+      createdAt: typeof row.createdAt === "string" || row.createdAt instanceof Date ? row.createdAt : new Date(0),
+      studentCount: Number(row.studentCount || 0),
+      userCount: Number(row.userCount || 0),
+      classCount: Number(row.classCount || 0),
+      attendanceToday: Number(row.attendanceToday || 0),
+      invoices: Number(row.invoices || 0),
+      unpaidInvoices: Number(row.unpaidInvoices || 0),
+      collected: Number(row.collected || 0),
+      subscriptionPlan: row.subscriptionPlan && typeof row.subscriptionPlan === "object" ? row.subscriptionPlan as SchoolRecord["subscriptionPlan"] : null,
+    }];
   });
 }
-function attentionScore(s: SchoolRecord) { const invoicePressure=Number(s.invoices)?Number(s.unpaidInvoices)/Number(s.invoices):0; let score=Math.min(30,Math.round(invoicePressure*30)); if(s.status!=="active")score+=55; if(s.studentCount>0&&s.userCount===0)score+=14; if(s.studentCount>0&&s.classCount===0)score+=12; if(s.studentCount>0&&s.attendanceToday===0)score+=18; return Math.min(100,score); }
+
+function attentionScore(s: SchoolRecord) {
+  const invoicePressure = s.invoices ? s.unpaidInvoices / s.invoices : 0;
+  let score = Math.min(30, Math.round(invoicePressure * 30));
+  if (s.status !== "active") score += 55;
+  if (s.studentCount > 0 && s.userCount === 0) score += 14;
+  if (s.studentCount > 0 && s.classCount === 0) score += 12;
+  if (s.studentCount > 0 && s.attendanceToday === 0) score += 18;
+  return Math.min(100, score);
+}
+
+function attentionTone(score:number) {
+  if (score >= 60) return "critical";
+  if (score >= 25) return "watch";
+  return "healthy";
+}
 
 export default function PlatformSchoolsConsole({ overview }: { overview: Overview }) {
-  const [query,setQuery]=useState(""),[filter,setFilter]=useState<Filter>("all"),[sort,setSort]=useState<"attention"|"name"|"students"|"collected">("attention");
-  const schools=useMemo(()=>{const q=query.trim().toLowerCase();return schoolRecords(overview).filter(s=>!q||s.name.toLowerCase().includes(q)||s.uniqueCode.toLowerCase().includes(q)).filter(s=>filter==="all"||(filter==="attention"&&attentionScore(s)>=25)||(filter==="active"&&s.status==="active")||(filter==="suspended"&&s.status==="suspended")).sort((a,b)=>sort==="name"?a.name.localeCompare(b.name):sort==="students"?b.studentCount-a.studentCount:sort==="collected"?b.collected-a.collected:attentionScore(b)-attentionScore(a));},[filter,overview,query,sort]);
-  return <>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:16,flexWrap:"wrap",marginTop:20,marginBottom:16}}><div><div style={{fontSize:11,fontWeight:850,color:"var(--sn-primary-deep)",textTransform:"uppercase",letterSpacing:".12em"}}>Network directory</div><h2 style={{margin:"5px 0 3px",fontSize:24,letterSpacing:"-.035em"}}>Schools</h2><p style={{margin:0,color:"var(--sn-muted)",fontSize:12}}>Find, inspect, support and manage every school account.</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><Link href="/platform/search" className="app-pill"><Search size={14}/> Global search</Link><Link href="/platform/schools/new" className="app-action"><Plus size={14}/><strong>Create school</strong></Link></div></div>
-    <div className="app-grid kpis"><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">All schools</span><span className="app-kpi-icon"><Building2 size={17}/></span></div><div className="app-kpi-value">{overview.totals.schools}</div><div className="app-kpi-meta">{overview.totals.activeSchools} active · {overview.totals.suspendedSchools} suspended</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Students</span><span className="app-kpi-icon"><GraduationCap size={17}/></span></div><div className="app-kpi-value">{Number(overview.totals.students).toLocaleString()}</div><div className="app-kpi-meta">Across all school accounts</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Accounts</span><span className="app-kpi-icon"><Users size={17}/></span></div><div className="app-kpi-value">{Number(overview.totals.users).toLocaleString()}</div><div className="app-kpi-meta">Staff, teachers and operators</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Financial signal</span><span className="app-kpi-icon"><CreditCard size={17}/></span></div><div className="app-kpi-value">{overview.totals.unpaidInvoices}</div><div className="app-kpi-meta">Invoices currently unpaid</div></div></div>
-    <section className="app-card app-panel" style={{marginTop:18,padding:18}}><div style={{display:"grid",gridTemplateColumns:"minmax(260px,1fr) auto auto",gap:10,alignItems:"center"}}><label style={{display:"flex",alignItems:"center",gap:9,border:"1px solid var(--sn-line)",borderRadius:12,padding:"10px 12px",background:"var(--sn-surface)"}}><Search size={15} color="var(--sn-muted)"/><input aria-label="Search schools" placeholder="Search by school name or code" value={query} onChange={(e)=>setQuery(e.target.value)} style={{border:0,outline:0,background:"transparent",width:"100%",font:"inherit"}}/></label><select aria-label="Filter schools" value={filter} onChange={(e)=>setFilter(e.target.value as Filter)} style={{minHeight:40,border:"1px solid var(--sn-line)",borderRadius:12,padding:"0 10px",background:"var(--sn-surface)"}}><option value="all">All schools</option><option value="attention">Needs attention</option><option value="active">Active</option><option value="suspended">Suspended</option></select><select aria-label="Sort schools" value={sort} onChange={(e)=>setSort(e.target.value as typeof sort)} style={{minHeight:40,border:"1px solid var(--sn-line)",borderRadius:12,padding:"0 10px",background:"var(--sn-surface)"}}><option value="attention">Sort: attention</option><option value="name">Sort: name</option><option value="students">Sort: students</option><option value="collected">Sort: collected</option></select></div></section>
-    <section className="app-card app-panel" style={{marginTop:14,overflow:"hidden"}}><div style={{display:"grid",gridTemplateColumns:"minmax(280px,2fr) 120px 120px 150px 130px 100px",gap:12,padding:"12px 16px",borderBottom:"1px solid var(--sn-line)",color:"var(--sn-muted)",fontSize:9,fontWeight:850,textTransform:"uppercase",letterSpacing:".08em"}}><span>School</span><span>Status</span><span>Plan</span><span>People</span><span>Finance</span><span>Action</span></div>{schools.map(school=>{const score=attentionScore(school);return <div key={school.id} style={{display:"grid",gridTemplateColumns:"minmax(280px,2fr) 120px 120px 150px 130px 100px",gap:12,alignItems:"center",padding:"15px 16px",borderBottom:"1px solid var(--sn-line)",background:score>=60?"#fffafa":"var(--sn-surface)"}}><div style={{minWidth:0,display:"flex",gap:10,alignItems:"center"}}><span style={{width:34,height:34,borderRadius:10,display:"grid",placeItems:"center",background:"var(--sn-surface-2)",color:"var(--sn-primary-deep)",flex:"0 0 auto"}}><Building2 size={16}/></span><div style={{minWidth:0}}><b style={{display:"block",fontSize:12}}>{school.name}</b><span style={{display:"block",fontSize:10,color:"var(--sn-muted)",marginTop:2}}>{school.uniqueCode} · created {new Date(school.createdAt).toLocaleDateString()}</span></div></div><span className="app-pill" style={{justifySelf:"start"}}>{school.status}</span><span style={{fontSize:11}}>{school.subscriptionPlan?.name||"No plan"}</span><span style={{fontSize:11}}>{school.studentCount} students · {school.userCount} users</span><span style={{fontSize:11,color:school.unpaidInvoices?"#9a6700":"var(--sn-ink)"}}>{school.unpaidInvoices}/{school.invoices} unpaid</span><Link href={`/platform/schools/${school.id}`} className="app-action" style={{justifyContent:"center"}}><strong>Open</strong><ArrowRight size={13}/></Link></div>})}{schools.length===0&&<div style={{padding:40,textAlign:"center",color:"var(--sn-muted)"}}><BadgeAlert size={20} style={{marginBottom:8}}/><div style={{fontWeight:750,color:"var(--sn-ink)"}}>No matching schools</div><div style={{fontSize:11,marginTop:3}}>Try a different search or filter.</div></div>}</section>
-  </>;
+  const platformAccess = usePlatformNavigationAccess();
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [sort, setSort] = useState<Sort>("attention");
+  const allSchools = useMemo(() => schoolRecords(overview), [overview]);
+  const schools = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return allSchools
+      .filter((school) => !q || school.name.toLowerCase().includes(q) || school.uniqueCode.toLowerCase().includes(q))
+      .filter((school) => filter === "all" || (filter === "attention" && attentionScore(school) >= 25) || (filter === "active" && school.status === "active") || (filter === "suspended" && school.status === "suspended"))
+      .sort((a, b) => sort === "name" ? a.name.localeCompare(b.name) : sort === "students" ? b.studentCount - a.studentCount : sort === "collected" ? b.collected - a.collected : attentionScore(b) - attentionScore(a));
+  }, [allSchools, filter, query, sort]);
+  const critical = allSchools.filter((school) => attentionScore(school) >= 60).length;
+  const needsAttention = allSchools.filter((school) => attentionScore(school) >= 25).length;
+  const canOnboard = platformAccess?.["schools.manage"] === true;
+
+  const resetFilters = () => { setQuery(""); setFilter("all"); setSort("attention"); };
+
+  return <div className="platform-page-stack">
+    <section className="platform-page-header">
+      <div>
+        <span className="platform-eyebrow">Network directory</span>
+        <h2>Schools</h2>
+        <p>One account directory for discovery, inspection, support, finance and controlled lifecycle actions.</p>
+      </div>
+      <div className="platform-header-actions">
+        <Link href="/platform/search" className="app-pill"><Search size={14}/> Global search</Link>
+        {canOnboard && <Link href="/platform/schools/new" className="app-action"><Plus size={14}/><strong>Onboard school</strong></Link>}
+      </div>
+    </section>
+
+    <div className="app-grid kpis platform-kpis">
+      <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">School accounts</span><span className="app-kpi-icon"><Building2 size={17}/></span></div><div className="app-kpi-value">{overview.totals.schools.toLocaleString()}</div><div className="app-kpi-meta">{overview.totals.activeSchools} active · {overview.totals.suspendedSchools} suspended</div></div>
+      <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Students</span><span className="app-kpi-icon"><GraduationCap size={17}/></span></div><div className="app-kpi-value">{Number(overview.totals.students).toLocaleString()}</div><div className="app-kpi-meta">Across every school tenant</div></div>
+      <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">School users</span><span className="app-kpi-icon"><Users size={17}/></span></div><div className="app-kpi-value">{Number(overview.totals.users).toLocaleString()}</div><div className="app-kpi-meta">Staff, teachers and operators</div></div>
+      <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Attention queue</span><span className="app-kpi-icon"><BadgeAlert size={17}/></span></div><div className="app-kpi-value">{needsAttention}</div><div className="app-kpi-meta">{critical} critical · {Math.max(0, needsAttention - critical)} watch</div></div>
+    </div>
+
+    <section className="app-card app-panel platform-filter-bar">
+      <div className="platform-filter-search"><Search size={16}/><input aria-label="Search schools" placeholder="Search by school name or unique code" value={query} onChange={(event) => setQuery(event.target.value)}/>{query && <button type="button" onClick={() => setQuery("")} aria-label="Clear search">Clear</button>}</div>
+      <div className="platform-filter-chips" aria-label="School filters">
+        {([['all','All'],['attention','Needs attention'],['active','Active'],['suspended','Suspended']] as const).map(([value,label]) => <button type="button" key={value} className={`platform-filter-chip ${filter === value ? 'is-active' : ''}`} onClick={() => setFilter(value)}>{label}<span>{value==='all'?allSchools.length:value==='attention'?needsAttention:value==='active'?overview.totals.activeSchools:overview.totals.suspendedSchools}</span></button>)}
+      </div>
+      <div className="platform-filter-tools"><label><span>Sort</span><select aria-label="Sort schools" value={sort} onChange={(event) => setSort(event.target.value as Sort)}><option value="attention">Attention</option><option value="name">Name</option><option value="students">Students</option><option value="collected">Collections</option></select></label>{(query || filter !== 'all' || sort !== 'attention') && <button type="button" className="app-pill" onClick={resetFilters}>Reset</button>}</div>
+    </section>
+
+    <section className="app-card app-panel platform-school-table" aria-label="School accounts">
+      <div className="platform-table-toolbar"><div><b>{schools.length.toLocaleString()}</b><span>matching school accounts</span></div><span>Open a school to continue the workflow.</span></div>
+      <div className="platform-school-grid platform-school-grid-head"><span>School</span><span>State</span><span>Plan</span><span>People</span><span>Finance</span><span>Open</span></div>
+      {schools.map((school) => {
+        const score = attentionScore(school);
+        const tone = attentionTone(score);
+        return <div key={school.id} className={`platform-school-grid platform-school-row platform-tone-${tone}`}>
+          <div className="platform-school-primary"><span className="platform-school-avatar"><Building2 size={16}/></span><div><b>{school.name}</b><small>{school.uniqueCode} · created {new Date(school.createdAt).toLocaleDateString()}</small></div></div>
+          <div><span className={`platform-status platform-status-${tone}`}>{score >= 60 ? "Critical" : score >= 25 ? "Watch" : school.status}</span></div>
+          <div><span className="platform-table-value">{school.subscriptionPlan?.name || "No plan"}</span><small className="platform-table-muted">{school.subscriptionPlan ? `₵${Number(school.subscriptionPlan.price || 0).toLocaleString()} / month` : "Needs assignment"}</small></div>
+          <div><span className="platform-table-value">{school.studentCount.toLocaleString()} students</span><small className="platform-table-muted">{school.userCount.toLocaleString()} users · {school.classCount.toLocaleString()} classes</small></div>
+          <div><span className={`platform-table-value ${school.unpaidInvoices ? 'is-warning' : ''}`}>{school.unpaidInvoices}/{school.invoices} unpaid</span><small className="platform-table-muted">₵{Number(school.collected || 0).toLocaleString()} collected</small></div>
+          <div><Link href={`/platform/schools/${school.id}`} className="app-action"><strong>Open</strong><ArrowRight size={13}/></Link></div>
+        </div>;
+      })}
+      {schools.length === 0 && <div className="platform-empty"><BadgeAlert size={22}/><b>No schools match the current view.</b><span>Change the search or filters to continue.</span><button type="button" className="app-action" onClick={resetFilters}><strong>Reset view</strong></button></div>}
+    </section>
+  </div>;
 }

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
-import { routeError } from "@/lib/errors";
+import { ForbiddenError, routeError } from "@/lib/errors";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
+import { requireSchoolScope } from "@/lib/platform-school-scope";
 import { appendPlatformAudit } from "@/lib/audit";
 import { db, withTenant } from "@/lib/db";
 
@@ -41,7 +42,7 @@ export async function GET() {
       db.subscriptionPlan.findMany({ orderBy: [{ price: "asc" }, { name: "asc" }] }),
       visibleSchools(session.adminId, session.role),
     ]);
-    return NextResponse.json({ plans, schools });
+    return NextResponse.json({ plans, schools, canEditCatalog: session.role === "super_admin" });
   } catch (error) {
     return routeError(error);
   }
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
     await requirePlatformPermission(session, "plans.manage");
 
     if (input.action === "create") {
+      if (session.role !== "super_admin") throw new ForbiddenError("Only a Super Admin can create platform plans.");
       const normalizedFlags = [...new Set(input.featureFlags.map((value) => value.trim()).filter(Boolean))];
       const plan = await db.subscriptionPlan.create({ data: { name: input.name, price: input.price, featureFlags: normalizedFlags } });
       await appendPlatformAudit({ actorId: session.adminId, action: "subscription.plan_created", targetEntity: `SubscriptionPlan:${plan.id}`, meta: { name: plan.name, price: input.price, featureCount: normalizedFlags.length } });
@@ -61,6 +63,7 @@ export async function POST(request: Request) {
     }
 
     if (input.action === "update") {
+      if (session.role !== "super_admin") throw new ForbiddenError("Only a Super Admin can update platform plans.");
       const current = await db.subscriptionPlan.findUnique({ where: { id: input.planId }, select: { id: true, name: true, price: true, featureFlags: true } });
       if (!current) return NextResponse.json({ error: "NOT_FOUND", message: "Plan not found." }, { status: 404 });
       const normalizedFlags = [...new Set(input.featureFlags.map((value) => value.trim()).filter(Boolean))];
@@ -69,16 +72,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, plan });
     }
 
-    const visibleIds = await visibleSchoolIds(session.adminId, session.role);
-    if (!visibleIds.includes(input.schoolId)) return NextResponse.json({ error: "FORBIDDEN", message: "This worker is not assigned to manage this school." }, { status: 403 });
+    await requireSchoolScope(session, input.schoolId);
     const plan = await db.subscriptionPlan.findUnique({ where: { id: input.planId }, select: { id: true, name: true, price: true, featureFlags: true } });
     if (!plan) return NextResponse.json({ error: "NOT_FOUND", message: "Plan not found." }, { status: 404 });
     const result = await withTenant(input.schoolId, async (tx) => {
-      const school = await tx.school.update({ where: { id: input.schoolId }, data: { subscriptionPlanId: plan.id }, select: { id: true, name: true, uniqueCode: true } });
-      return { school, plan };
+      const school = await tx.school.findUnique({ where: { id: input.schoolId }, select: { id: true, name: true, uniqueCode: true, subscriptionPlanId: true } });
+      if (!school) return null;
+      if (school.subscriptionPlanId === plan.id) return { school, plan, changed: false, beforePlanId: school.subscriptionPlanId };
+      const updated = await tx.school.update({ where: { id: input.schoolId }, data: { subscriptionPlanId: plan.id }, select: { id: true, name: true, uniqueCode: true, subscriptionPlanId: true } });
+      return { school: updated, plan, changed: true, beforePlanId: school.subscriptionPlanId };
     });
-    await appendPlatformAudit({ actorId: session.adminId, action: "subscription.plan_assigned", targetSchoolId: input.schoolId, targetEntity: "School", meta: { planId: plan.id, planName: plan.name } });
-    return NextResponse.json({ ok: true, result });
+    if (!result) return NextResponse.json({ error: "NOT_FOUND", message: "School not found." }, { status: 404 });
+    await appendPlatformAudit({ actorId: session.adminId, action: result.changed ? "subscription.plan_assigned" : "subscription.plan_already_assigned", targetSchoolId: input.schoolId, targetEntity: "School", meta: { beforePlanId: result.beforePlanId, afterPlanId: result.plan.id, planName: result.plan.name, changed: result.changed } });
+    return NextResponse.json({ ok: true, result, idempotent: !result.changed });
   } catch (error) {
     return routeError(error);
   }
