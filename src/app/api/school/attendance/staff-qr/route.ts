@@ -46,7 +46,6 @@ export async function POST(request: Request) {
 
     if (input.action === "challenge") {
       const result = await withTenant(session.schoolId, async (tx) => {
-        await syncDefaultRbac(tx, session.schoolId);
         await requirePermission(tx, session.userId, "attendance:display");
         const issuedAt = new Date();
         const expiresAt = new Date(issuedAt.getTime() + 45_000);
