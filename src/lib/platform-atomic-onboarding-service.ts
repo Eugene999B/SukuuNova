@@ -1,6 +1,6 @@
 import { hash } from "bcryptjs";
 import { createId } from "@paralleldrive/cuid2";
-import { db, withTenant } from "./db";
+import { db, rawDb, withTenant } from "./db";
 import { appendPlatformAudit, appendSchoolAudit } from "./audit";
 import { AppError, ForbiddenError } from "./errors";
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } from "./default-rbac";
@@ -39,18 +39,18 @@ export async function onboardPlatformSchool(input: Input) {
   if (input.studentRate < 0 || input.flatRate < 0) throw new AppError("Billing rates cannot be negative.", 400, "INVALID_BILLING_RATE");
 
   const [schoolDuplicate, directoryDuplicate] = await Promise.all([
-    db.school.findUnique({ where: { uniqueCode }, select: { id: true, name: true, status: true } }),
-    db.schoolLoginDirectory.findUnique({ where: { uniqueCode }, select: { schoolId: true } }),
+    rawDb.school.findUnique({ where: { uniqueCode }, select: { id: true, name: true, status: true } }),
+    rawDb.schoolLoginDirectory.findUnique({ where: { uniqueCode }, select: { schoolId: true } }),
   ]);
   if (schoolDuplicate) {
     throw new AppError(`School login code “${uniqueCode}” is already assigned to “${schoolDuplicate.name}”. Choose a different code.`, 409, "DUPLICATE_SCHOOL_CODE");
   }
   if (directoryDuplicate) {
-    const directorySchool = await db.school.findUnique({ where: { id: directoryDuplicate.schoolId }, select: { id: true, name: true, status: true } });
+    const directorySchool = await rawDb.school.findUnique({ where: { id: directoryDuplicate.schoolId }, select: { id: true, name: true, status: true } });
     if (directorySchool) {
       throw new AppError(`School login code “${uniqueCode}” is already reserved by “${directorySchool.name}”. Choose a different code.`, 409, "DUPLICATE_SCHOOL_CODE");
     }
-    await db.schoolLoginDirectory.delete({ where: { schoolId: directoryDuplicate.schoolId } });
+    await rawDb.schoolLoginDirectory.delete({ where: { schoolId: directoryDuplicate.schoolId } });
   }
 
   const permissionIds = new Map<string, string>();
