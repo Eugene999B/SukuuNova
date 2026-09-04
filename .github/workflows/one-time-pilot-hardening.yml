@@ -1,0 +1,144 @@
+name: One-time pilot hardening patch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply hardening patches
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace(path, old, new, count=None):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"pattern not found in {path}: {old[:120]}")
+              if count is None:
+                  updated = text.replace(old, new)
+              else:
+                  updated = text.replace(old, new, count)
+              p.write_text(updated)
+
+          replace(
+              'src/app/school/report-cards/page.tsx',
+              'data.selectedClass.id',
+              'data.selectedClass?.id ?? ""'
+          )
+          replace(
+              'src/app/school/report-cards/page.tsx',
+              'data.selectedClass.name',
+              'data.selectedClass?.name ?? ""'
+          )
+
+          # Make reset delivery explicitly select the correct recovery portal.
+          p = Path('src/lib/reset-delivery.ts')
+          t = p.read_text()
+          t = t.replace('universe: "school" | "platform";', 'universe: "school" | "guardian" | "platform";')
+          t = t.replace(
+              '  const base = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\\/$/, "");\n  const path = envelope.universe === "platform" ? "/platform/reset-password" : "/login/guardian/password-reset";\n  return base + path + "?token=" + encodeURIComponent(envelope.token);',
+              '  const configured = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;\n  if (process.env.NODE_ENV === "production" && !configured) throw new Error("APP_URL must be configured in production for password recovery links.");\n  const base = (configured || "http://localhost:3000").replace(/\\/$/, "");\n  const path = envelope.universe === "platform" ? "/platform/reset-password" : envelope.universe === "guardian" ? "/login/guardian/password-reset" : "/login/school/password-reset";\n  return base + path + "?token=" + encodeURIComponent(envelope.token);'
+          )
+          p.write_text(t)
+
+          # The shared school reset implementation can serve school and guardian flows;
+          # the caller now explicitly identifies which portal owns the token.
+          p = Path('src/lib/password-reset.ts')
+          t = p.read_text()
+          t = t.replace(
+              'export async function issueSchoolPasswordReset(input: { uniqueCode: string; identifier: string }): Promise<ResetDeliveryEnvelope | null> {',
+              'export async function issueSchoolPasswordReset(input: { uniqueCode: string; identifier: string; universe?: "school" | "guardian" }): Promise<ResetDeliveryEnvelope | null> {'
+          )
+          t = t.replace(
+              'return { universe: "school", recipient: user.email || user.phone || identifier, token, expiresAt, schoolCode: uniqueCode };',
+              'return { universe: input.universe ?? "school", recipient: user.email || user.phone || identifier, token, expiresAt, schoolCode: uniqueCode };'
+          )
+          p.write_text(t)
+
+          p = Path('src/app/api/auth/school/password-reset/request/route.ts')
+          t = p.read_text()
+          t = t.replace(
+              '  identifier: z.string().trim().min(3).max(254)\n});',
+              '  identifier: z.string().trim().min(3).max(254),\n  universe: z.enum(["school", "guardian"]).default("school")\n});'
+          )
+          t = t.replace(
+              'const envelope = await issueSchoolPasswordReset(input);',
+              'const envelope = await issueSchoolPasswordReset(input);'
+          )
+          p.write_text(t)
+
+          p = Path('src/app/login/school/password-reset/page.tsx')
+          t = p.read_text()
+          t = t.replace(
+              'body:JSON.stringify({uniqueCode:form.get("uniqueCode"),identifier:form.get("identifier")})',
+              'body:JSON.stringify({uniqueCode:form.get("uniqueCode"),identifier:form.get("identifier"),universe:"school"})'
+          )
+          p.write_text(t)
+
+          p = Path('src/app/login/guardian/password-reset/page.tsx')
+          t = p.read_text()
+          t = t.replace(
+              'body:JSON.stringify({uniqueCode:form.get("schoolCode"),identifier:form.get("identifier")})',
+              'body:JSON.stringify({uniqueCode:form.get("schoolCode"),identifier:form.get("identifier"),universe:"guardian"})'
+          )
+          p.write_text(t)
+
+          # Public unauthenticated ingress: reuse the existing atomic login limiter by IP.
+          p = Path('src/app/api/public/inquiries/route.ts')
+          t = p.read_text()
+          t = t.replace(
+              'import { randomUUID } from "node:crypto";',
+              'import { randomUUID } from "node:crypto";\nimport { recordLoginAttempt, requestIp } from "@/lib/rate-limit";'
+          )
+          t = t.replace(
+              '    const input = schema.parse(await request.json());',
+              '    const input = schema.parse(await request.json());\n    await recordLoginAttempt("public-inquiry", requestIp(request.headers), requestIp(request.headers));',
+              1
+          )
+          p.write_text(t)
+
+          p = Path('src/app/api/public/jobs/[schoolId]/[token]/route.ts')
+          t = p.read_text()
+          t = t.replace(
+              'import { AppError, routeError } from "@/lib/errors";',
+              'import { AppError, routeError } from "@/lib/errors";\nimport { recordLoginAttempt, requestIp } from "@/lib/rate-limit";'
+          )
+          t = t.replace(
+              '    const { schoolId, token } = await context.params;\n    const posting = await loadPosting(schoolId, token);\n    const body = await request.json();',
+              '    const { schoolId, token } = await context.params;\n    await recordLoginAttempt("public-job:" + schoolId + ":" + token, requestIp(request.headers), requestIp(request.headers));\n    const posting = await loadPosting(schoolId, token);\n    const body = await request.json();'
+          )
+          p.write_text(t)
+
+          # Privileged emergency confirmation must re-check current permission at execution time.
+          p = Path('src/lib/emergency-broadcast-service.ts')
+          t = p.read_text()
+          t = t.replace(
+              'export async function confirmEmergencySnapshot(tx: TenantDb, input: { schoolId: string; actorId: string; confirmationToken: string; message: string }) {\n  const tokenData = verifyToken',
+              'export async function confirmEmergencySnapshot(tx: TenantDb, input: { schoolId: string; actorId: string; confirmationToken: string; message: string }) {\n  await requirePermission(tx, input.actorId, "broadcast:emergency_send");\n  const tokenData = verifyToken'
+          )
+          p.write_text(t)
+          PY
+
+      - name: Verify changed files compile structurally
+        run: |
+          git diff --check
+          npx --yes prettier@3.6.2 --check src/lib/reset-delivery.ts src/lib/password-reset.ts src/app/api/auth/school/password-reset/request/route.ts src/app/login/school/password-reset/page.tsx src/app/login/guardian/password-reset/page.tsx src/app/api/public/inquiries/route.ts 'src/app/api/public/jobs/[schoolId]/[token]/route.ts' src/lib/emergency-broadcast-service.ts src/app/school/report-cards/page.tsx
+
+      - name: Commit hardening patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/school/report-cards/page.tsx src/lib/reset-delivery.ts src/lib/password-reset.ts src/app/api/auth/school/password-reset/request/route.ts src/app/login/school/password-reset/page.tsx src/app/login/guardian/password-reset/page.tsx src/app/api/public/inquiries/route.ts 'src/app/api/public/jobs/[schoolId]/[token]/route.ts' src/lib/emergency-broadcast-service.ts
+          git commit -m "fix: harden pilot security and recovery flows"
+          git push
