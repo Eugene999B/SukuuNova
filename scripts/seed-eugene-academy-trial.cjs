@@ -48,6 +48,7 @@ let patchedSource = originalSource
   .replace('name: "Ama Mensah"', 'name: process.env.EUGENE_ACADEMY_OWNER_NAME')
   .replaceAll('https://raw.githubusercontent.com/Eugene999B/SukuuNova/main/icon.svg', '/branding/eugene-academy.svg')
   .replaceAll('SukuuNova Academy', 'Eugene Academy')
+  .replace("VALUES ($1,$2,$3,'in','device'", "VALUES ($1,$2,$3,'in','qr'")
   .replace(
     'console.log(JSON.stringify(report, null, 2));',
     'console.log(JSON.stringify({ generatedAt: report.generatedAt, school: report.school, summary: report.summary }));',
@@ -174,7 +175,7 @@ async function extendEugeneAcademy() {
 `;
 
 if (!patchedSource.includes(endMarker)) throw new Error("Base fixture completion marker not found.");
-patchedSource = patchedSource.replace(endMarker, extension + '\n' + 'main().then(() => extendEugeneAcademy()).catch((err) => { console.error(err); process.exitCode = 1; });');
+patchedSource = patchedSource.replace(endMarker, extension + "\n" + "main().then(() => extendEugeneAcademy()).catch((err) => { console.error(err); process.exitCode = 1; });");
 
 const temp = path.join(__dirname, ".eugene-academy-trial-runtime-" + process.pid + ".cjs");
 fs.writeFileSync(temp, patchedSource, "utf8");
