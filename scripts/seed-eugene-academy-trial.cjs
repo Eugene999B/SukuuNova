@@ -175,7 +175,7 @@ async function extendEugeneAcademy() {
 `;
 
 if (!patchedSource.includes(endMarker)) throw new Error("Base fixture completion marker not found.");
-patchedSource = patchedSource.replace(endMarker, extension + "\n" + "main().then(() => extendEugeneAcademy()).catch((err) => { console.error(err); process.exitCode = 1; });");
+patchedSource = patchedSource.replace(endMarker, extension + "\n" + "main().then(async () => { await prisma.$disconnect(); return extendEugeneAcademy(); }).catch((err) => { console.error(err); process.exitCode = 1; }).finally(async () => { try { await prisma.$disconnect(); } catch {} });");
 
 const temp = path.join(__dirname, ".eugene-academy-trial-runtime-" + process.pid + ".cjs");
 fs.writeFileSync(temp, patchedSource, "utf8");
@@ -186,7 +186,7 @@ process.on("SIGTERM", () => { cleanup(); process.exit(143); });
 
 const originalTransaction = PrismaClient.prototype.$transaction;
 PrismaClient.prototype.$transaction = function patchedTransaction(arg, options, ...rest) {
-  if (typeof arg === "function") return originalTransaction.call(this, arg, { maxWait: 15000, timeout: 300000, ...(options || {}) });
+  if (typeof arg === "function") return originalTransaction.call(this, arg, { maxWait: 60000, timeout: 300000, ...(options || {}) });
   return originalTransaction.call(this, arg, options, ...rest);
 };
 
