@@ -21,7 +21,9 @@ Only configure these when the corresponding service is enabled:
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
 - `OPENAI_RESPONSES_URL`
-- `WHATSAPP_WEBHOOK_SECRET`
+- `WHATSAPP_WEBHOOK_SECRET` (legacy shared-secret adapter, 32+ characters)
+- `WHATSAPP_APP_SECRET` (Meta app secret for `X-Hub-Signature-256`, 32+ characters)
+- `WHATSAPP_VERIFY_TOKEN` (Meta subscription challenge token, 16+ characters)
 - `TWILIO_ACCOUNT_SID`
 - `TWILIO_AUTH_TOKEN`
 - `TWILIO_WHATSAPP_FROM`
