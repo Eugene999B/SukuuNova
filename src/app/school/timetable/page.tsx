@@ -13,7 +13,7 @@ type Period = { period: number; start: string; end: string };
 type Day = { dayOfWeek: number; name: string; enabled: boolean; start: string; end: string; periods?: Period[] };
 type TimetableConfig = { days: Day[]; periodMinutes: number; breaks: { name: string; start: string; end: string }[]; periodsPerDay: number; periods?: Period[]; published: boolean };
 
-aSync function saveSlot(formData: FormData) {
+async function saveSlot(formData: FormData) {
   "use server";
   const session = await requireSchoolSession();
   const classId = String(formData.get("classId") ?? "").trim();
@@ -69,8 +69,12 @@ function formatTime(value: string) {
 function formatMinutes(value: number) {
   const h = Math.floor(value / 60) % 24;
   const m = value % 60;
-  const suffix = h >= 12 ? "PM" : "AM";
-  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+  return formatTime(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+}
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
 }
 
 export default async function TimetablePage({ searchParams }: { searchParams: Promise<{ classId?: string; edit?: string }> }) {
@@ -119,7 +123,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
             <p>Choose a class to work on, place lessons into the fixed periods from Academic Setup, and keep the finished timetable ready for print or publication.</p>
           </div>
           <div className="timetable-intro-actions">
-            <Link className="tt-button primary" href={`/school/timetable?edit=new:1:${periods[0]?.period ?? 1}${selectedClassId ? `&classId=${encodeURIComponent(selectedClassId)}` : ""}`}><CalendarPlus size={15} /> Add lesson</Link>
+            <Link className="tt-button primary" href={`/school/timetable?edit=new:${enabledDays[0]?.dayOfWeek ?? 1}:${periods[0]?.period ?? 1}${selectedClassId ? `&classId=${encodeURIComponent(selectedClassId)}` : ""}`}><CalendarPlus size={15} /> Add lesson</Link>
             <Link className="tt-button secondary" href="/school/timetable/print"><Printer size={15} /> Print timetable</Link>
           </div>
         </section>
@@ -166,7 +170,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
             </div>
           ) : (
             <div className="tt-grid-scroll">
-              <div className="tt-grid" style={{ gridTemplateColumns: gridTemplateColumns }}>
+              <div className="tt-grid" style={{ gridTemplateColumns }}>
                 <div className="tt-grid-corner"><span>TIME</span><small>LESSON PERIOD</small></div>
                 {enabledDays.map((day) => <div className="tt-day-head" key={day.dayOfWeek}><strong>{day.name.slice(0, 3).toUpperCase()}</strong><span>{day.name}</span></div>)}
                 {periods.map((period) => (
@@ -268,7 +272,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
                   </label>
                   <label>Lesson period
                     <select name="period" required defaultValue={editSlot?.period ?? (newParts[2] || periods[0]?.period || 1)}>
-                      {periods.map((period) => <option key={period.period} value={period.period}>P{period.period} · {formatMinutes(Math.floor(period.start.split(":").reduce((acc, value, index) => acc + Number(value) * (index === 0 ? 60 : 1), 0)))} – {formatTime(period.end)}</option>)}
+                      {periods.map((item) => <option key={item.period} value={item.period}>P{item.period} · {formatMinutes(timeToMinutes(item.start))} – {formatTime(item.end)}</option>)}
                     </select>
                   </label>
                 </div>
