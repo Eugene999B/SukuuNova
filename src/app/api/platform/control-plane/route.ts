@@ -4,7 +4,7 @@ import { requirePlatformSession } from "@/lib/auth";
 import { routeError, AppError, UnauthorizedError } from "@/lib/errors";
 import { requirePlatformPermission, getPlatformSchoolScope } from "@/lib/platform-permissions";
 import { getMessagingWallet, getPlatformControlSettings, getSchoolBillingConfig, saveSchoolBillingConfig, updateMessagingRates, adjustMessagingBalance, updatePlatformControlSettings } from "@/lib/platform-control-plane-service";
-import { generateConfiguredPlatformInvoice } from "@/lib/platform-configured-invoice-service";
+import { generateBillingRulesInvoice } from "@/lib/platform-billing-rules-service";
 import { performSchoolLifecycle } from "@/lib/platform-school-lifecycle-service";
 import { listScopedPlatformSchools } from "@/lib/platform-scoped-schools";
 import { listPlatformSchools } from "@/lib/phase4-service";
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     if (input.action === "saveSchoolBilling") return NextResponse.json(await saveSchoolBillingConfig(session, input));
     if (input.action === "updateMessagingRates") return NextResponse.json(await updateMessagingRates(session, input));
     if (input.action === "allocateMessaging") return NextResponse.json(await adjustMessagingBalance(session, input));
-    if (input.action === "generateInvoice") return NextResponse.json({ ok: true, invoice: await generateConfiguredPlatformInvoice(session, input.schoolId, input.period) });
+    if (input.action === "generateInvoice") return NextResponse.json({ ok: true, invoice: await generateBillingRulesInvoice(session, input.schoolId, input.period) });
     if (input.lifecycle === "delete" && session.role !== "super_admin") throw new AppError("Only Super Admin can decommission a school.", 403, "FORBIDDEN");
     return NextResponse.json({ ok: true, result: await performSchoolLifecycle(session, input.schoolId, input.lifecycle) });
   } catch (error) {
