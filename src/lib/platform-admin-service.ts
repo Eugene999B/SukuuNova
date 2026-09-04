@@ -35,6 +35,10 @@ function validateWorkerRole(role: string): asserts role is WorkerRole {
   }
 }
 
+function escapeLike(value: string) {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
 type PlatformAdminListRow = {
   id: string;
   name: string;
@@ -48,7 +52,7 @@ type PlatformAdminView = PlatformAdminListRow & { permissions: string[] };
 
 export async function getPlatformOverview() {
   const dirs = await db.schoolLoginDirectory.findMany({ orderBy: { createdAt: "desc" } });
-  let activeSchools = 0, suspendedSchools = 0, students = 0, users = 0, classes = 0, invoices = 0, unpaidInvoices = 0, collected = 0;
+  let activeSchools = 0, suspendedSchools = 0, schools = 0, students = 0, users = 0, classes = 0, invoices = 0, unpaidInvoices = 0, collected = 0;
   const schoolStats: Record<string, unknown>[] = [];
   const today = new Date(new Date().toISOString().slice(0, 10));
 
@@ -71,6 +75,7 @@ export async function getPlatformOverview() {
         return { school, studentCount, userCount, classCount, attendanceToday, invoices: invoiceRows.length, unpaidInvoices: invoiceRows.filter((invoice) => invoice.status !== "paid").length, collected: paid };
       });
       if (!stats.school) continue;
+      schools++;
       if (stats.school.status === "suspended") suspendedSchools++; else activeSchools++;
       students += stats.studentCount; users += stats.userCount; classes += stats.classCount;
       invoices += stats.invoices; unpaidInvoices += stats.unpaidInvoices; collected += stats.collected;
@@ -80,7 +85,7 @@ export async function getPlatformOverview() {
     }
   }
 
-  return { totals: { schools: dirs.length, activeSchools, suspendedSchools, students, users, classes, invoices, unpaidInvoices, collected }, schools: schoolStats };
+  return { totals: { schools, activeSchools, suspendedSchools, students, users, classes, invoices, unpaidInvoices, collected }, schools: schoolStats };
 }
 
 export async function listPlatformAdmins(_role: string): Promise<PlatformAdminView[]> {
@@ -166,7 +171,7 @@ export async function listPlatformAudit(_input: {
   role: string; limit?: number; cursor?: string; query?: string; action?: string; sensitiveOnly?: boolean;
 }): Promise<PlatformAuditPage> {
   const limit = Math.min(Math.max(_input.limit ?? 50, 1), 100);
-  const query = _input.query?.trim().toLowerCase() ?? ""; const action = _input.action?.trim() ?? ""; const sensitiveOnly = Boolean(_input.sensitiveOnly);
+  const query = escapeLike(_input.query?.trim().toLowerCase() ?? ""); const action = _input.action?.trim() ?? ""; const sensitiveOnly = Boolean(_input.sensitiveOnly);
   let cursorDate: Date | null = null; let cursorId: string | null = null;
   if (_input.cursor) {
     const separator = _input.cursor.lastIndexOf("_");
@@ -178,7 +183,7 @@ export async function listPlatformAudit(_input: {
   const rows = await db.$queryRawUnsafe<PlatformAuditPage["events"]>(
     `SELECT l."id", l."actorId", a."name" AS "actorName", a."email" AS "actorEmail", l."action", l."targetSchoolId", l."targetEntity", l."createdAt", l."meta"
      FROM "AuditLogPlatform" l LEFT JOIN "PlatformAdmin" a ON a."id"=l."actorId"
-     WHERE ($1='' OR LOWER(l."action") LIKE '%' || $1 || '%' OR LOWER(COALESCE(a."name",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(a."email",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(l."targetEntity",'')) LIKE '%' || $1 || '%' OR LOWER(COALESCE(l."targetSchoolId",'')) LIKE '%' || $1 || '%')
+     WHERE ($1='' OR LOWER(l."action") LIKE '%' || $1 || '%' ESCAPE '\\' OR LOWER(COALESCE(a."name",'')) LIKE '%' || $1 || '%' ESCAPE '\\' OR LOWER(COALESCE(a."email",'')) LIKE '%' || $1 || '%' ESCAPE '\\' OR LOWER(COALESCE(l."targetEntity",'')) LIKE '%' || $1 || '%' ESCAPE '\\' OR LOWER(COALESCE(l."targetSchoolId",'')) LIKE '%' || $1 || '%' ESCAPE '\\')
        AND ($2='' OR l."action"=$2)
        AND ($3=false OR LOWER(l."action") ~ '(imperson|delete|suspend|permission|password|role|setting|billing)')
        AND ($4::timestamptz IS NULL OR (l."createdAt",l."id") < ($4::timestamptz,$5))
@@ -189,8 +194,11 @@ export async function listPlatformAudit(_input: {
 }
 
 export async function getPlatformHealth() {
-  const started = Date.now(); let database = "operational"; let migrations = "operational";
-  try { await db.$queryRaw`SELECT 1`; await db.$queryRaw`SELECT 1 FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL LIMIT 1`; } catch { database = "degraded"; migrations = "degraded"; }
+  const started = Date.now();
+  let database = "operational";
+  let migrations = "operational";
+  try { await db.$queryRaw`SELECT 1`; } catch { database = "degraded"; }
+  try { const rows = await db.$queryRaw<Array<{ count: bigint }>>`SELECT COUNT(*)::bigint AS count FROM "_prisma_migrations" WHERE "finished_at" IS NOT NULL`; if (!rows[0] || rows[0].count === 0n) migrations = "degraded"; } catch { migrations = "degraded"; }
   return { database, migrations, latencyMs: Date.now() - started, checkedAt: new Date().toISOString(), nextjs: "self", api: "self" };
 }
 
