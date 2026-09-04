@@ -24,7 +24,7 @@ const guardStart = `    const optionalTables = new Set();
     const optionalTableNames = ["LessonPlan", "Homework"];
     for (const tableName of optionalTableNames) {
       const rows = await prisma.$queryRawUnsafe(
-        'SELECT to_regclass($1) AS "name"',
+        'SELECT to_regclass($1)::text AS "name"',
         'public."' + tableName + '"',
       );
       if (rows[0] && rows[0].name) optionalTables.add(tableName);
@@ -41,10 +41,9 @@ source = source.replace(
   '    if (optionalTables.has("Homework")) for (let i = 0; i < homeworks.length; i++) {'
 );
 
-// Report-card template support is also optional on an older live schema.
 const templateMarker = '    const template = await prisma.reportCardTemplate.upsert({';
 const templateGuard = `    const reportCardTemplateRows = await prisma.$queryRawUnsafe(
-      'SELECT to_regclass($1) AS "name"',
+      'SELECT to_regclass($1)::text AS "name"',
       'public."ReportCardTemplate"',
     );
     if (!reportCardTemplateRows[0]?.name) return;
