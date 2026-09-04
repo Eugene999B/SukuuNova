@@ -6,7 +6,11 @@ function toJson(value: unknown): Prisma.InputJsonValue | undefined {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
-type PlatformAuditClient = Pick<typeof db, "auditLogPlatform">;
+type PlatformAuditClient = {
+  auditLogPlatform: {
+    create: (args: Prisma.AuditLogPlatformCreateArgs) => ReturnType<typeof db.auditLogPlatform.create>;
+  };
+};
 
 export async function appendSchoolAudit(
   tx: TenantDb,
