@@ -1,0 +1,243 @@
+/* SukuuNova Global Theme
+   One design language with exactly two visual modes: light and dark.
+   Page/module styles may control layout, but this layer owns the visual language.
+*/
+
+:root {
+  --ui-bg: #f7f9fb;
+  --ui-surface: #ffffff;
+  --ui-surface-raised: #ffffff;
+  --ui-surface-soft: #eef4f7;
+  --ui-text: #102a43;
+  --ui-text-secondary: #34495e;
+  --ui-text-muted: #60758a;
+  --ui-text-disabled: #8a9aaa;
+  --ui-border: #d9e2ea;
+  --ui-border-strong: #b9c8d5;
+  --ui-primary: #116b68;
+  --ui-primary-hover: #0d5755;
+  --ui-primary-soft: #e5f4f1;
+  --ui-success: #16734a;
+  --ui-success-soft: #e7f5ee;
+  --ui-warning: #9a5b00;
+  --ui-warning-soft: #fff3dc;
+  --ui-danger: #b42318;
+  --ui-danger-soft: #fde9e7;
+  --ui-info: #175cd3;
+  --ui-info-soft: #eaf2ff;
+  --ui-focus: 0 0 0 3px rgba(17, 107, 104, .22);
+  --ui-shadow-sm: 0 1px 2px rgba(16, 42, 67, .06);
+  --ui-shadow-md: 0 8px 24px rgba(16, 42, 67, .08);
+  --ui-radius-sm: 6px;
+  --ui-radius-md: 10px;
+  --ui-radius-lg: 14px;
+}
+
+:root[data-theme="dark"] {
+  --ui-bg: #0b1217;
+  --ui-surface: #121c23;
+  --ui-surface-raised: #19262e;
+  --ui-surface-soft: #15232a;
+  --ui-text: #f4f8fa;
+  --ui-text-secondary: #d2dce1;
+  --ui-text-muted: #a3b2ba;
+  --ui-text-disabled: #73838c;
+  --ui-border: #2a3b45;
+  --ui-border-strong: #405460;
+  --ui-primary: #56d2b5;
+  --ui-primary-hover: #78e0c9;
+  --ui-primary-soft: #173c36;
+  --ui-success: #69d99e;
+  --ui-success-soft: #123526;
+  --ui-warning: #f5bd5b;
+  --ui-warning-soft: #3a2a12;
+  --ui-danger: #ff8178;
+  --ui-danger-soft: #3f1d1b;
+  --ui-info: #89b3ff;
+  --ui-info-soft: #182d4a;
+  --ui-focus: 0 0 0 3px rgba(86, 210, 181, .30);
+  --ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, .28);
+  --ui-shadow-md: 0 12px 28px rgba(0, 0, 0, .28);
+}
+
+html { background: var(--ui-bg) !important; color-scheme: light; }
+html[data-theme="dark"] { color-scheme: dark; }
+body {
+  background: var(--ui-bg) !important;
+  color: var(--ui-text) !important;
+  font-family: var(--sn-font-family, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Typography */
+:where(h1, h2, h3, h4, h5, h6, strong, b) { color: var(--ui-text); }
+:where(p, label, dt, dd) { color: var(--ui-text-secondary); }
+:where(small, .muted, .text-muted, [data-muted="true"]) { color: var(--ui-text-muted); }
+:where(a) { color: var(--ui-primary); }
+:where(a:hover) { color: var(--ui-primary-hover); }
+
+/* Core surfaces. These intentionally use solid colours; no glass/gradient surfaces. */
+:where(.app-main, .app-content, .page-shell, .page-content, .module-workspace, .dashboard-shell) {
+  background: var(--ui-bg) !important;
+  color: var(--ui-text) !important;
+}
+:where(.app-card, .module-card, .module-metrics article, .sn-data-card, .sn-list-card, .sn-action-card, .sn-empty-state, .card, .panel) {
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  border: 1px solid var(--ui-border) !important;
+  box-shadow: var(--ui-shadow-sm) !important;
+}
+:where(.module-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) {
+  border-radius: var(--ui-radius-lg);
+}
+:where(.module-metrics article) { border-radius: var(--ui-radius-lg); }
+
+/* Header/navigation */
+:where(.app-sidebar, .app-topbar, .topbar) {
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  border-color: var(--ui-border) !important;
+}
+:where(.app-brand, .app-topbar h1, .app-school-chip b, .app-user-mini b) { color: var(--ui-text) !important; }
+:where(.app-nav-item, .topnav a, .top-link) {
+  color: var(--ui-text-secondary) !important;
+}
+:where(.app-nav-item:hover, .topnav a:hover, .top-link:hover) {
+  color: var(--ui-text) !important;
+  background: var(--ui-surface-soft) !important;
+}
+:where(.app-nav-item.is-active) {
+  color: var(--ui-primary) !important;
+  background: var(--ui-primary-soft) !important;
+  border-color: var(--ui-border) !important;
+  box-shadow: inset 3px 0 0 var(--ui-primary) !important;
+}
+
+/* Buttons */
+:where(button, .button, .btn, a[role="button"]) {
+  border-radius: var(--ui-radius-md);
+}
+:where(button, .button, .btn):not([data-variant="ghost"]):not(.secondary):not(.module-secondary-button):not(.app-nav-item) {
+  border-color: var(--ui-border-strong);
+}
+:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]) {
+  background: var(--ui-primary) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--ui-primary) !important;
+  box-shadow: none !important;
+}
+:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]):hover {
+  background: var(--ui-primary-hover) !important;
+  border-color: var(--ui-primary-hover) !important;
+  color: #ffffff !important;
+}
+:where(.module-secondary-button, .module-action-secondary, .secondary-cta, .btn-secondary, .button-secondary, button[data-variant="secondary"]) {
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  border: 1px solid var(--ui-border) !important;
+}
+:where(.module-secondary-button, .module-action-secondary, .secondary-cta, .btn-secondary, .button-secondary, button[data-variant="secondary"]):hover {
+  background: var(--ui-surface-soft) !important;
+  border-color: var(--ui-border-strong) !important;
+}
+
+/* Forms */
+:where(input, textarea, select) {
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  border: 1px solid var(--ui-border-strong) !important;
+  border-radius: var(--ui-radius-sm) !important;
+}
+:where(input, textarea, select)::placeholder { color: var(--ui-text-muted) !important; opacity: 1; }
+:where(input, textarea, select):disabled { background: var(--ui-surface-soft) !important; color: var(--ui-text-disabled) !important; }
+:where(input, textarea, select):focus {
+  border-color: var(--ui-primary) !important;
+  box-shadow: var(--ui-focus) !important;
+}
+:where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--ui-primary); }
+
+/* Tables */
+:where(.module-table-wrap, .data-table, .table-wrap) {
+  background: var(--ui-surface) !important;
+  border: 1px solid var(--ui-border) !important;
+}
+:where(table) { color: var(--ui-text); }
+:where(th) {
+  color: var(--ui-text-secondary) !important;
+  background: var(--ui-surface-soft) !important;
+  border-color: var(--ui-border) !important;
+}
+:where(td) {
+  color: var(--ui-text-secondary);
+  border-color: var(--ui-border) !important;
+}
+:where(tbody tr:hover) { background: var(--ui-surface-soft) !important; }
+
+/* Tabs, filter controls, list items */
+:where(.module-tabbar, .tabs) {
+  background: var(--ui-surface) !important;
+  border: 1px solid var(--ui-border) !important;
+}
+:where(.module-tabbar a, .tabs a, .tabs button) { color: var(--ui-text-secondary) !important; }
+:where(.module-tabbar a.is-active, .tabs .is-active) {
+  background: var(--ui-primary-soft) !important;
+  color: var(--ui-primary) !important;
+}
+:where(.module-workflow-step, .module-linked-grid a, .module-setup-list a, .module-command-flow > div, .module-feature-actions a, .module-admin-actions a, .module-audience-grid button, .sn-list-item) {
+  background: var(--ui-surface-soft) !important;
+  color: var(--ui-text-secondary) !important;
+  border-color: var(--ui-border) !important;
+}
+:where(.module-workflow-step strong, .module-feature-actions strong, .module-admin-actions strong) { color: var(--ui-text) !important; }
+
+/* Empty states and subtle UI */
+:where(.module-empty, .module-register-empty, .sn-empty-state) {
+  background: var(--ui-surface) !important;
+  border-color: var(--ui-border-strong) !important;
+}
+:where(.module-empty p, .module-register-empty p, .module-section-title p, .module-topline p) { color: var(--ui-text-secondary) !important; }
+:where(.module-empty-mark, .module-register-icon) {
+  background: var(--ui-primary-soft) !important;
+  border-color: var(--ui-border) !important;
+  color: var(--ui-primary) !important;
+}
+
+/* Remove the old decorative colour wash from core operating surfaces. */
+:where(.module-action-primary, .module-action-secondary, .module-card, .module-metrics article, .module-setup-card, .module-compose-preview, .module-feature-actions a) {
+  background-image: none !important;
+}
+
+/* Status semantics */
+:where(.status-success, [data-status="success"], .is-success) { color: var(--ui-success) !important; background: var(--ui-success-soft); }
+:where(.status-warning, [data-status="warning"], .is-warning) { color: var(--ui-warning) !important; background: var(--ui-warning-soft); }
+:where(.status-danger, [data-status="danger"], .is-danger) { color: var(--ui-danger) !important; background: var(--ui-danger-soft); }
+:where(.status-info, [data-status="info"], .is-info) { color: var(--ui-info) !important; background: var(--ui-info-soft); }
+
+/* Dialog/drawer consistency */
+:where(dialog, [role="dialog"], .modal, .dialog, .drawer) {
+  background: var(--ui-surface) !important;
+  color: var(--ui-text) !important;
+  border-color: var(--ui-border) !important;
+  box-shadow: var(--ui-shadow-md) !important;
+}
+
+/* Accessibility */
+:where(button, a, input, textarea, select, summary):focus-visible {
+  outline: 0 !important;
+  box-shadow: var(--ui-focus) !important;
+}
+
+/* Kill the old accent system without breaking stored preferences. */
+:root[data-accent] {
+  --color-brand: var(--ui-primary);
+  --color-brand-hover: var(--ui-primary-hover);
+  --color-brand-soft: var(--ui-primary-soft);
+  --sn-primary: var(--ui-primary);
+  --sn-primary-deep: var(--ui-primary-hover);
+  --sn-primary-soft: var(--ui-primary-soft);
+  --sn-accent: var(--ui-primary);
+  --sn-school-accent: var(--ui-primary);
+  --sn-teacher-accent: var(--ui-primary);
+  --sn-guardian-accent: var(--ui-primary);
+  --sn-platform-accent: var(--ui-primary);
+}
