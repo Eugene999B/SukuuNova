@@ -59,4 +59,4 @@ const replacement = `async function exec(tx, sql, ...params) {
 const next = source.slice(0, start) + replacement + source.slice(end + 4);
 if (next === source) throw new Error("Savepoint patch made no changes.");
 fs.writeFileSync(fixturePath, next, "utf8");
-console.log("[eugene-academy-trial] raw fixture savepoint guard applied");
+console.log("[eugene-academy-trial] raw fixture savepoint guard applied v2");
