@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import PlatformControlCenter from "@/components/PlatformControlCenter";
+import PlatformControlCenterClient from "@/components/PlatformControlCenterClient";
 import { requirePlatformSession } from "@/lib/auth";
 import { ForbiddenError } from "@/lib/errors";
 import { getPlatformSchoolScope, hasPlatformPermission, requirePlatformPermission } from "@/lib/platform-permissions";
@@ -35,5 +35,5 @@ export default async function PlatformPage() {
   const audit = schoolScope === null
     ? await listPlatformAudit({ role: session.role, limit: 10 })
     : await listScopedPlatformAudit(schoolScope, { limit: 10 });
-  return <PlatformControlCenter overview={overview} health={health} audit={audit} />;
+  return <PlatformControlCenterClient overview={overview} health={health} audit={audit} />;
 }
