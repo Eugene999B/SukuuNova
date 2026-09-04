@@ -107,7 +107,7 @@ const compatibleExec = `async function exec(tx, sql, ...params) {
     return 0;
   }
 }`;
-if (!output.includes(rawExec)) {
+if (!output.includes(rawExec) && !output.includes("const compatibleExec")) {
   throw new Error("Eugene trial fixture exec helper changed unexpectedly; refusing to continue.");
 }
 output = output.replace(rawExec, compatibleExec);
@@ -116,7 +116,8 @@ output = output.replace(rawExec, compatibleExec);
 // .catch(() => {}). That leaves PostgreSQL's outer transaction aborted, so the
 // next query fails with 25P02. Wrap those optional rows in explicit savepoints
 // so an incompatible row is rolled back cleanly while the rest of the fixture
-// can continue.
+// can continue. These blocks are now best-effort: if the canonical fixture no
+// longer contains an optional row, preparation continues without failing.
 const reportCardPattern = /    const highLoad = students\[0\];\n    await tx\.reportCard\.create\(\{ data: \{[\s\S]*?\} \}\)\.catch\(\(\) => \{\}\);/;
 const reportCardReplacement = `    const highLoad = students[0];
     const reportCardSavepoint = "eugene_report_card";
@@ -129,10 +130,9 @@ const reportCardReplacement = `    const highLoad = students[0];
       await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT "' + reportCardSavepoint + '"');
       await tx.$executeRawUnsafe('RELEASE SAVEPOINT "' + reportCardSavepoint + '"');
     }`;
-if (!reportCardPattern.test(output)) {
-  throw new Error("Could not locate optional Eugene report card fixture write.");
+if (reportCardPattern.test(output)) {
+  output = output.replace(reportCardPattern, reportCardReplacement);
 }
-output = output.replace(reportCardPattern, reportCardReplacement);
 
 const pickupPattern = /    await tx\.pickupApprovalRequest\.create\(\{ data: \{[\s\S]*?\} \}\)\.catch\(\(\)=>\{\}\);/;
 const pickupReplacement = `    const pickupApprovalSavepoint = "eugene_pickup_approval";
@@ -145,10 +145,9 @@ const pickupReplacement = `    const pickupApprovalSavepoint = "eugene_pickup_ap
       await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT "' + pickupApprovalSavepoint + '"');
       await tx.$executeRawUnsafe('RELEASE SAVEPOINT "' + pickupApprovalSavepoint + '"');
     }`;
-if (!pickupPattern.test(output)) {
-  throw new Error("Could not locate optional Eugene pickup approval fixture write.");
+if (pickupPattern.test(output)) {
+  output = output.replace(pickupPattern, pickupReplacement);
 }
-output = output.replace(pickupPattern, pickupReplacement);
 
 // Remove the deliberately hard-coded attendance conflict scenario. The
 // realistic rolling attendance history already exercises attendance flows,
