@@ -7,7 +7,7 @@ const GUARDIAN_COOKIE = "sukuunova_guardian_session";
 
 type SessionKind = "school" | "platform" | "guardian";
 
-function authSecret(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET") {
+function authSecret(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET" | "GUARDIAN_AUTH_SECRET") {
   const value = process.env[name];
   if (!value || value.length < 32) return null;
   return new TextEncoder().encode(value);
@@ -18,7 +18,7 @@ async function hasLiveSession(cookieValue: string | undefined, kind: SessionKind
   const config = kind === "platform"
     ? { secret: authSecret("PLATFORM_AUTH_SECRET"), issuer: "sukuunova-platform", audience: "sukuunova-platform" }
     : kind === "guardian"
-      ? { secret: authSecret("SCHOOL_AUTH_SECRET"), issuer: "sukuunova-guardian", audience: "sukuunova-guardian" }
+      ? { secret: authSecret("GUARDIAN_AUTH_SECRET"), issuer: "sukuunova-guardian", audience: "sukuunova-guardian" }
       : { secret: authSecret("SCHOOL_AUTH_SECRET"), issuer: "sukuunova-school", audience: "sukuunova-school" };
   if (!config.secret) return false;
   try {
@@ -44,6 +44,7 @@ function protectedApiKind(pathname: string): SessionKind | null {
     pathname.startsWith("/api/protected/") ||
     pathname === "/api/sync"
   ) return "school";
+  if (pathname.startsWith("/api/account/") || pathname === "/api/account") return "platform";
   return null;
 }
 
@@ -95,5 +96,6 @@ export const config = {
     "/api/phase4/:path*",
     "/api/protected/:path*",
     "/api/sync",
+    "/api/account/:path*",
   ],
 };
