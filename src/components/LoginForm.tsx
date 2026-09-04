@@ -13,10 +13,46 @@ export function LoginForm(props: Props) {
   const router = useRouter();
   const [schoolStage, setSchoolStage] = useState<SchoolStage>(props.universe === "school" ? "school" : "credentials");
   const [schoolCode, setSchoolCode] = useState("");
+  const [schoolName, setSchoolName] = useState("");
   const [schoolRole, setSchoolRole] = useState<SchoolRole | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  async function resolveSchoolCode(code: string) {
+    const response = await fetch("/api/auth/school/resolve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ uniqueCode: code }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || "We could not verify that school code.");
+    return result.school as { uniqueCode: string; name: string };
+  }
+
+  async function submitSchoolCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPending(true);
+    setError("");
+    const form = new FormData(event.currentTarget);
+    const code = String(form.get("schoolCode") ?? "").trim();
+    if (!code) {
+      setError("Enter your school code to continue.");
+      setPending(false);
+      return;
+    }
+    try {
+      const school = await resolveSchoolCode(code);
+      setSchoolCode(school.uniqueCode.toUpperCase());
+      setSchoolName(school.name);
+      setError("");
+      setSchoolStage("role");
+    } catch (verificationError) {
+      setError(verificationError instanceof Error ? verificationError.message : "We could not verify that school code.");
+    } finally {
+      setPending(false);
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setPending(true); setError("");
@@ -40,16 +76,17 @@ export function LoginForm(props: Props) {
   }
 
   if (props.universe === "school") {
-    if (schoolStage === "school") return <form className="auth-form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); const code = String(form.get("schoolCode") ?? "").trim(); if (!code) { setError("Enter your school code to continue."); return; } setSchoolCode(code.toUpperCase()); setError(""); setSchoolStage("role"); }}>
+    if (schoolStage === "school") return <form className="auth-form" onSubmit={submitSchoolCode}>
       <div className="auth-stepper" aria-label="Sign-in step 1 of 3"><span className="is-active">1</span><i /><span>2</span><i /><span>3</span></div>
-      <div className="auth-field"><label htmlFor="schoolCode">School code</label><input id="schoolCode" name="schoolCode" autoComplete="organization" placeholder="e.g. TEST001" autoFocus required /></div>
-      <p className="auth-help-text">Use the code provided by your school. We’ll take you to the right access type next.</p>
+      <div className="auth-field"><label htmlFor="schoolCode">School code</label><input id="schoolCode" name="schoolCode" autoComplete="organization" placeholder="e.g. EUG123" autoFocus required /></div>
+      <p className="auth-help-text">Use the code provided by your school. We’ll verify it before showing the available access types.</p>
       {error ? <p className="auth-error" role="alert">{error}</p> : null}
-      <button className="auth-submit" type="submit">Continue <span>→</span></button>
+      <button className="auth-submit" disabled={pending} type="submit">{pending ? "Checking school…" : "Continue"}{!pending ? <span>→</span> : null}</button>
     </form>;
     if (schoolStage === "role") return <div className="auth-form">
       <div className="auth-stepper" aria-label="Sign-in step 2 of 3"><span className="is-complete">✓</span><i className="is-complete" /><span className="is-active">2</span><i /><span>3</span></div>
-      <div className="auth-school-chip"><span>School</span><strong>{schoolCode}</strong><button type="button" onClick={() => setSchoolStage("school")} aria-label="Change school code">Change</button></div>
+      <div className="auth-school-chip"><span>School</span><strong>{schoolCode}</strong><button type="button" onClick={() => { setSchoolStage("school"); setSchoolName(""); }} aria-label="Change school code">Change</button></div>
+      {schoolName ? <p className="auth-help-text">{schoolName}</p> : null}
       <div className="auth-role-heading"><span className="auth-context">Choose your access</span><h2>How are you signing in?</h2><p>Select the account type provided by your school.</p></div>
       <div className="auth-role-grid">
         <button type="button" className="auth-role-card" onClick={() => { setSchoolRole("staff"); setSchoolStage("credentials"); }}><span className="auth-role-icon"><UsersRoundIcon /></span><strong>Staff</strong><small>Teachers, leadership, finance, administration and school support staff.</small><em>Continue as Staff →</em></button>
