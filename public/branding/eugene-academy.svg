@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Eugene Academy</title>
+  <desc id="desc">A clean academic monogram logo for Eugene Academy.</desc>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#173f5f"/>
+      <stop offset="1" stop-color="#20639b"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#f7fafc"/>
+  <path d="M256 64 412 126v116c0 101-64 166-156 207-92-41-156-106-156-207V126z" fill="url(#g)"/>
+  <path d="M143 192h226v28H143zm18 52h190v26H161zm39 48h112v24H200z" fill="#fff" opacity=".92"/>
+  <path d="M178 156h156l-78-35z" fill="#f4c95d"/>
+  <text x="256" y="368" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="76" font-weight="700" fill="#fff">EA</text>
+  <circle cx="256" cy="430" r="10" fill="#f4c95d"/>
+</svg>
