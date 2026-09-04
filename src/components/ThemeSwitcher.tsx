@@ -6,16 +6,15 @@ import { getThemePreferences, saveThemePreferences, themePresets, type ThemePres
 
 export function ThemeSwitcher() {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<ThemePreset>("paper");
+  const [selected, setSelected] = useState<ThemePreset>("light");
 
   useEffect(() => {
     const value = getThemePreferences();
-    const match = themePresets.find((preset) => preset.mode === value.mode && preset.accent === value.accent);
-    setSelected(match?.id ?? (value.mode === "dark" ? "midnight" : "paper"));
+    setSelected(value.mode);
   }, []);
 
   const choose = (preset: (typeof themePresets)[number]) => {
-    saveThemePreferences({ mode: preset.mode, accent: preset.accent });
+    saveThemePreferences({ mode: preset.mode });
     setSelected(preset.id);
     setOpen(false);
   };
@@ -25,7 +24,7 @@ export function ThemeSwitcher() {
       {open && (
         <div className="sn-theme-popover" role="dialog" aria-label="Choose SukuuNova theme">
           <div className="sn-theme-popover-head">
-            <div><strong>Choose a look</strong><span>Changes apply straight away.</span></div>
+            <div><strong>Choose theme</strong><span>One clear light mode and one clear dark mode.</span></div>
             <Palette size={16} aria-hidden="true" />
           </div>
           <div className="sn-theme-grid">
@@ -40,7 +39,7 @@ export function ThemeSwitcher() {
         </div>
       )}
       <button type="button" className="sn-theme-button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label="Change SukuuNova theme">
-        {selected === "midnight" || selected === "slate" ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
+        {selected === "dark" ? <Moon size={16} aria-hidden="true" /> : <Sun size={16} aria-hidden="true" />}
         <span>Theme</span>
       </button>
     </div>
