@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /*
- * Final compatibility pass for the Eugene Academy live fixture.
- * It converts fixture writes that would UPDATE append-only records into
- * create-if-missing operations and makes immutable payment scenarios replayable.
+ * Compatibility pass for the Eugene Academy live fixture.
+ * Converts InvoiceLine upsert to create-if-missing and makes the synthetic
+ * payment/reversal scenario safe to replay. Payslips remain create-only in
+ * practice because the guarded seed is transactional and one-shot.
  */
 const fs = require("fs");
 
@@ -29,15 +30,5 @@ source = source.slice(0, paymentStart) + `        const paymentReference = \`TES
           await tx.paymentReversal.create({ data: { schoolId, paymentId: payment.id, amount: new Prisma.Decimal(250), reason: "Test reversal of an incorrectly allocated portion", reversedBy: users.accountant.id, createdAt: d("2026-01-16") } });
         }` + source.slice(paymentEnd);
 
-const payslipStart = source.indexOf("    for (const key of [\"principal\",\"accountant\",\"class.teacher\",\"subject.teacher\",\"hr\"]) await tx.payslip.upsert({");
-const payslipEnd = payslipStart >= 0 ? source.indexOf("\n\n    for (const [n,key]", payslipStart) : -1;
-if (payslipStart < 0 || payslipEnd < 0) throw new Error("Could not locate Payslip fixture write.");
-source = source.slice(0, payslipStart) + `    for (const key of ["principal","accountant","class.teacher","subject.teacher","hr"]) {
-      const existingPayslip = await tx.payslip.findFirst({ where: { schoolId, payrollRunId: payroll.id, staffId: users[key].id } });
-      if (!existingPayslip) {
-        await tx.payslip.create({ data: { schoolId, payrollRunId: payroll.id, staffId: users[key].id, gross: new Prisma.Decimal(5000), deductions: { ssnit: 300, tax: 450 }, net: new Prisma.Decimal(4250) } });
-      }
-    }` + source.slice(payslipEnd);
-
 fs.writeFileSync(path, source, "utf8");
-console.log("[eugene-academy-trial] append-only fixture compatibility prepared");
+console.log("[eugene-academy-trial] immutable ledger compatibility prepared");
