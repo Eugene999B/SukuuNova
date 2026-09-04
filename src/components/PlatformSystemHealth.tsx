@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, CheckCircle2, Clock3, Database, RefreshCw, ServerCog, ShieldCheck, XCircle } from "lucide-react";
 
 type Health={database:string;api:string;nextjs:string;latencyMs:number;checkedAt:string};
@@ -9,13 +9,20 @@ function State({value}:{value:string}){const good=value.toLowerCase()==="operati
 
 export default function PlatformSystemHealth(){
  const [health,setHealth]=useState<Health|null>(null),[loading,setLoading]=useState(true),[message,setMessage]=useState(""),[auto,setAuto]=useState(true);
- async function load(){setLoading(true);try{const r=await fetch("/api/platform/admin?view=health",{cache:"no-store"});const d=await r.json() as Health & {error?:string;message?:string};if(!r.ok){setMessage(d.message??d.error??"Health check failed.");return;}setHealth(d);setMessage("");}catch{setMessage("Unable to reach the health endpoint.")}finally{setLoading(false)}}
- useEffect(()=>{void load()},[]);
+ const requestRef=useRef<AbortController|null>(null);
+ const load=async()=>{
+  if(requestRef.current)return;
+  const controller=new AbortController();requestRef.current=controller;setLoading(true);
+  try{const r=await fetch("/api/platform/admin?view=health",{cache:"no-store",signal:controller.signal});const d=await r.json() as Health & {error?:string;message?:string};if(!r.ok){setMessage(d.message??d.error??"Health check failed.");return;}setHealth(d);setMessage("");}
+  catch(error){if(error instanceof DOMException&&error.name==="AbortError")return;setMessage("Unable to reach the health endpoint.")}
+  finally{if(requestRef.current===controller){requestRef.current=null;setLoading(false)}}
+ };
+ useEffect(()=>{void load();return()=>requestRef.current?.abort()},[]);
  useEffect(()=>{if(!auto)return;const id=window.setInterval(()=>void load(),30000);return()=>window.clearInterval(id)},[auto]);
  const checked=health?new Date(health.checkedAt).toLocaleString():"Not checked";
  return <div className="health-page-stack">
   <section className="platform-page-header"><div><span className="platform-eyebrow">Operations telemetry</span><h2>System Health</h2><p>See whether the control plane, API and database are responsive before an incident becomes a school-facing problem.</p></div><div className="platform-header-actions"><label className="health-auto"><input type="checkbox" checked={auto} onChange={(e)=>setAuto(e.target.checked)}/> Auto-refresh</label><button className="app-pill" onClick={()=>void load()} disabled={loading}><RefreshCw size={14}/> {loading?"Checking":"Run check"}</button></div></section>
-  {message&&<div className="app-banner" role="status"><div><h3>{message}</h3><p>The health page is read-only and safe to refresh.</p></div></div>}
+  {message&&<div className="app-banner" role="alert"><div><h3>{message}</h3><p>The health page is read-only and safe to refresh.</p></div></div>}
   <div className="health-summary app-card"> <div className="health-summary-main"><span className="health-pulse"><Activity size={18}/></span><div><b>{health&&health.database==="operational"&&health.api==="operational"&&health.nextjs==="operational"?"All reported systems operational":"Review system state"}</b><small>Last checked {checked}</small></div></div><div className="health-latency"><span>Database latency</span><strong>{health?`${health.latencyMs}ms`:"—"}</strong><small>Round-trip SELECT 1</small></div></div>
   <div className="health-grid">
    <section className="app-card app-panel"><div className="app-card-head"><div><h2>Service checks</h2><p>Core dependencies used by the platform control plane.</p></div><ShieldCheck size={18} color="var(--sn-muted)"/></div><div className="health-check-row"><span className="health-icon"><Database size={15}/></span><div><b>PostgreSQL</b><small>Database connectivity and query responsiveness</small></div><State value={health?.database??"Not checked"}/></div><div className="health-check-row"><span className="health-icon"><ServerCog size={15}/></span><div><b>API routes</b><small>Server route availability and request handling</small></div><State value={health?.api??"Not checked"}/></div><div className="health-check-row"><span className="health-icon"><Activity size={15}/></span><div><b>Next.js application</b><small>Application process health</small></div><State value={health?.nextjs??"Not checked"}/></div></section>
