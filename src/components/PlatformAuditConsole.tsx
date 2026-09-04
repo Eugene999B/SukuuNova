@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Clock3, ExternalLink, Filter, RefreshCw, Search, ShieldCheck } from "lucide-react";
 
@@ -31,10 +31,12 @@ export default function PlatformAuditConsole() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const requestRef = useRef(0);
 
   const actionOptions = useMemo(() => Array.from(new Set(events.map((event) => event.action))).sort(), [events]);
 
   const load = useCallback(async (requestedCursor?: string | null) => {
+    const requestId = ++requestRef.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({ view: "audit", limit: "50" });
@@ -44,6 +46,7 @@ export default function PlatformAuditConsole() {
       if (requestedCursor) params.set("cursor", requestedCursor);
       const response = await fetch(`/api/platform/admin?${params.toString()}`, { cache: "no-store" });
       const data = (await response.json()) as Payload;
+      if (requestId !== requestRef.current) return;
       if (!response.ok) {
         setMessage(data.message ?? data.error ?? "Unable to load audit history.");
         return;
@@ -53,8 +56,10 @@ export default function PlatformAuditConsole() {
       setNextCursor(data.nextCursor ?? null);
       setMessage("");
       setExpanded(null);
+    } catch {
+      if (requestId === requestRef.current) setMessage("Audit history could not be loaded.");
     } finally {
-      setLoading(false);
+      if (requestId === requestRef.current) setLoading(false);
     }
   }, [action, query, sensitive]);
 
@@ -77,7 +82,7 @@ export default function PlatformAuditConsole() {
         </button>
       </section>
 
-      {message && <div className="app-banner" role="status"><div><h3>{message}</h3><p>The audit reader is permission-scoped and read-only.</p></div></div>}
+      {message && <div className="app-banner" role="alert"><div><h3>{message}</h3><p>The audit reader is permission-scoped and read-only.</p></div></div>}
 
       <div className="app-grid kpis platform-kpis">
         <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Events</span><span className="app-kpi-icon"><ShieldCheck size={17} /></span></div><div className="app-kpi-value">{events.length.toLocaleString()}</div><div className="app-kpi-meta">Current result page</div></div>
@@ -94,7 +99,8 @@ export default function PlatformAuditConsole() {
 
       <section className="app-card app-panel audit-table">
         <div className="audit-table-head"><span>Event</span><span>Operator</span><span>Target</span><span>Timestamp</span><span></span></div>
-        {events.map((event) => {
+        {loading && events.length === 0 && <div className="platform-empty" role="status">Loading audit history…</div>}
+        {!loading && events.map((event) => {
           const isOpen = expanded === event.id;
           return <div className="audit-event" key={event.id}>
             <button type="button" className="audit-row" onClick={() => setExpanded(isOpen ? null : event.id)} aria-expanded={isOpen}>
@@ -112,7 +118,7 @@ export default function PlatformAuditConsole() {
             </div>}
           </div>;
         })}
-        {events.length === 0 && <div className="platform-empty">No audit events match the current investigation.</div>}
+        {!loading && events.length === 0 && <div className="platform-empty">No audit events match the current investigation.</div>}
       </section>
 
       <div className="audit-pagination">
