@@ -4,14 +4,15 @@ import { useState } from "react";
 import { Archive, CheckCircle2, LockKeyhole, Play, Power, ShieldAlert, Trash2 } from "lucide-react";
 
 export default function PlatformSchoolLifecycle({ schoolId, status }: { schoolId: string; status: string }) {
-  const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [confirm, setConfirm] = useState<"archive" | "delete" | null>(null);
+  const [busy, setBusy] = useState(false), [message, setMessage] = useState(""), [confirm, setConfirm] = useState<"archive" | "delete" | null>(null), [phrase, setPhrase] = useState("");
   const run = async (lifecycle: "lock" | "suspend" | "reactivate" | "archive" | "delete") => {
+    if (lifecycle === "delete" && phrase.trim() !== "DELETE SCHOOL") { setMessage("Type DELETE SCHOOL to confirm decommissioning."); return; }
     setBusy(true); setMessage("");
     try {
-      const response = await fetch("/api/platform/control-plane", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "lifecycle", schoolId, lifecycle }) });
+      const response = await fetch("/api/platform/control-plane", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "lifecycle", schoolId, lifecycle, confirmationPhrase: lifecycle === "delete" ? phrase : undefined }) });
       const data = await response.json() as { message?: string; error?: string };
       setMessage(response.ok ? `${lifecycle === "reactivate" ? "School reactivated" : `School ${lifecycle}ed`}.` : (data.message ?? data.error ?? "Unable to change school state."));
-      if (response.ok) { setConfirm(null); window.setTimeout(() => window.location.reload(), 350); }
+      if (response.ok) { setConfirm(null); setPhrase(""); window.setTimeout(() => window.location.reload(), 350); }
     } finally { setBusy(false); }
   };
   const normal = String(status).toLowerCase() === "active";
@@ -24,7 +25,7 @@ export default function PlatformSchoolLifecycle({ schoolId, status }: { schoolId
       <button type="button" className="is-danger" onClick={() => setConfirm("delete")} disabled={busy}><Trash2 size={15}/><strong>Decommission</strong><span>Disable permanently</span></button>
     </div>
     {message && <div className="lifecycle-message" role="status"><CheckCircle2 size={15}/>{message}</div>}
-    {confirm && <div className="lifecycle-confirm" role="dialog" aria-modal="true"><div><h3>{confirm === "delete" ? "Decommission this school?" : "Archive this school?"}</h3><p>{confirm === "delete" ? "This marks the tenant as deleted and removes it from active access. Historical records remain preserved by the current retention model; permanent physical erasure is deliberately not performed by this workflow." : "The tenant will leave normal operations while its history remains available for investigation and reporting."}</p></div><div><button type="button" className="app-pill" onClick={() => setConfirm(null)} disabled={busy}>Cancel</button><button type="button" className={confirm === "delete" ? "app-action is-danger" : "app-action"} onClick={() => void run(confirm)} disabled={busy}>{confirm === "delete" ? "Decommission school" : "Archive school"}</button></div></div>}
+    {confirm && <div className="lifecycle-confirm" role="dialog" aria-modal="true"><div><h3>{confirm === "delete" ? "Decommission this school?" : "Archive this school?"}</h3><p>{confirm === "delete" ? "This marks the tenant as deleted and removes it from active access. Historical records remain preserved by the current retention model; permanent physical erasure is deliberately not performed by this workflow." : "The tenant will leave normal operations while its history remains available for investigation and reporting."}</p>{confirm === "delete" && <label style={{ display: "grid", gap: 6, marginTop: 12 }}><span style={{ fontSize: 9, fontWeight: 800 }}>Confirmation phrase</span><input value={phrase} onChange={(event) => setPhrase(event.target.value)} placeholder="DELETE SCHOOL" autoComplete="off" /></label>}</div><div><button type="button" className="app-pill" onClick={() => { setConfirm(null); setPhrase(""); }} disabled={busy}>Cancel</button><button type="button" className={confirm === "delete" ? "app-action is-danger" : "app-action"} onClick={() => void run(confirm)} disabled={busy}>{confirm === "delete" ? "Decommission school" : "Archive school"}</button></div></div>}
     <div className="lifecycle-note"><Power size={14}/><span>Use <b>Lock</b> for temporary access freezes, <b>Suspend</b> for account-level service stops, and <b>Archive</b> when the school should leave the active network.</span></div>
   </section>;
 }
