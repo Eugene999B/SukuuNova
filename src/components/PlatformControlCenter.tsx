@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { Activity, ArrowRight, CreditCard, Gauge, GraduationCap, LifeBuoy, School, Search, ShieldCheck, Users } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
