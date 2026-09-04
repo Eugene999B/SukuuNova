@@ -6,7 +6,7 @@ export async function requireActorOwnsSchool(schoolId: string, actorId: string) 
     const row = await tx.userRole.findFirst({
       where: {
         userId: actorId,
-        role: { key: "owner" },
+        role: { OR: [{ key: "owner" }, { name: "Owner" }] },
       },
       select: { userId: true },
     });
