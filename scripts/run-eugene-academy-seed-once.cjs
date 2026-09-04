@@ -1,14 +1,30 @@
 #!/usr/bin/env node
 /*
  * Runs the guarded Eugene Academy live fixture once at application startup.
- * The seed itself remains fail-closed and idempotent. A completion marker is
- * stored in SchoolSettings so routine app restarts do not rerun the fixture.
+ * Preparation is intentionally done in this same runtime container because
+ * Railway pre-deploy runs in a separate filesystem that is not persisted.
  */
 const { spawn } = require("child_process");
+const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 
-const SEED_REVISION = "2026-09-04-eugene-r5";
+const SEED_REVISION = "2026-09-04-eugene-r6";
 const prisma = new PrismaClient();
+
+function runScript(file) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(__dirname, file)], {
+      stdio: "inherit",
+      env: process.env,
+    });
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (signal) return reject(new Error(`${file} terminated by ${signal}.`));
+      if (code !== 0) return reject(new Error(`${file} exited with code ${code}.`));
+      resolve();
+    });
+  });
+}
 
 async function hasCompleted() {
   const school = await prisma.school.findUnique({ where: { uniqueCode: "eug123" } });
@@ -36,18 +52,14 @@ async function run() {
     return;
   }
 
+  // These scripts rewrite/prepare the exact runtime fixture and therefore
+  // must execute in the same container that will run the seed.
+  await runScript("prepare-eugene-academy-trial-fixture.cjs");
+  await runScript("prepare-eugene-append-only-fixture.cjs");
+  await runScript("prepare-eugene-extension-fixture.cjs");
+
   console.log(`[eugene-academy-trial] launching guarded seed ${SEED_REVISION}`);
-  const child = spawn(process.execPath, [require("path").join(__dirname, "seed-eugene-academy-trial.cjs")], {
-    stdio: "inherit",
-    env: process.env,
-  });
-
-  const exitCode = await new Promise((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", (code, signal) => resolve(signal ? 143 : (code == null ? 1 : code)));
-  });
-
-  if (exitCode !== 0) throw new Error(`Eugene Academy seed exited with code ${exitCode}.`);
+  await runScript("seed-eugene-academy-trial.cjs");
   await markCompleted();
   console.log(`[eugene-academy-trial] seed ${SEED_REVISION} completed`);
 }
