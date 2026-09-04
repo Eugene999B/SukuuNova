@@ -28,8 +28,16 @@ function isEmail(value: string): boolean {
 }
 
 function buildResetUrl(envelope: ResetDeliveryEnvelope): string {
-  const base = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
-  const path = envelope.universe === "platform" ? "/platform/reset-password" : "/login/guardian/password-reset";
+  const configured = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.NODE_ENV === "production" && !configured) {
+    throw new Error("APP_URL must be configured in production for password recovery links.");
+  }
+  const base = (configured || "http://localhost:3000").replace(/\/$/, "");
+  const path = envelope.universe === "platform"
+    ? "/platform/reset-password"
+    : envelope.universe === "guardian"
+      ? "/login/guardian/password-reset"
+      : "/login/school/password-reset";
   return base + path + "?token=" + encodeURIComponent(envelope.token);
 }
 
