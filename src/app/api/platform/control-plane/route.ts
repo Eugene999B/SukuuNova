@@ -3,20 +3,42 @@ import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError, AppError, UnauthorizedError } from "@/lib/errors";
 import { requirePlatformPermission, getPlatformSchoolScope } from "@/lib/platform-permissions";
-import { changeSchoolLifecycle, getMessagingWallet, getPlatformControlSettings, getSchoolBillingConfig, saveSchoolBillingConfig, updateMessagingRates, adjustMessagingBalance, updatePlatformControlSettings } from "@/lib/platform-control-plane-service";
+import { getMessagingWallet, getPlatformControlSettings, getSchoolBillingConfig, saveSchoolBillingConfig, updateMessagingRates, adjustMessagingBalance, updatePlatformControlSettings } from "@/lib/platform-control-plane-service";
 import { generateConfiguredPlatformInvoice } from "@/lib/platform-configured-invoice-service";
 import { performSchoolLifecycle } from "@/lib/platform-school-lifecycle-service";
 import { listScopedPlatformSchools } from "@/lib/platform-scoped-schools";
 import { listPlatformSchools } from "@/lib/phase4-service";
 
+const schoolSelectorSchema = z.object({
+  id: z.unknown(), name: z.unknown(), uniqueCode: z.unknown(), status: z.unknown(), studentCount: z.unknown().optional(), subscriptionPlan: z.unknown().optional(),
+});
+
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("savePlatformSettings"), key: z.enum(["platform.defaults", "platform.security", "platform.lifecycle", "platform.messaging"]), value: z.record(z.string(), z.unknown()) }),
   z.object({ action: z.literal("saveSchoolBilling"), schoolId: z.string().min(1), billingMode: z.enum(["flat", "per_student"]), currency: z.string().min(3).max(8), studentRate: z.number().min(0), flatRate: z.number().min(0), billingDay: z.number().int().min(1).max(28), graceDays: z.number().int().min(0).max(90), trialDays: z.number().int().min(0).max(365), minimumCharge: z.number().min(0), maximumCharge: z.number().min(0).nullable(), active: z.boolean() }),
   z.object({ action: z.literal("updateMessagingRates"), schoolId: z.string().min(1), channel: z.enum(["sms", "whatsapp"]), sellRate: z.number().min(0), costRate: z.number().min(0), lowBalanceThreshold: z.number().int().min(0) }),
-  z.object({ action: z.literal("allocateMessaging"), schoolId: z.string().min(1), channel: z.enum(["sms", "whatsapp"]), quantity: z.number().int().nonzero(), unitCost: z.number().min(0).optional(), unitPrice: z.number().min(0).optional(), reference: z.string().max(160).optional(), notes: z.string().max(500).optional() }),
+  z.object({ action: z.literal("allocateMessaging"), schoolId: z.string().min(1), channel: z.enum(["sms", "whatsapp"]), quantity: z.number().int().refine((value) => value !== 0, "Quantity cannot be zero."), unitCost: z.number().min(0).optional(), unitPrice: z.number().min(0).optional(), reference: z.string().max(160).optional(), notes: z.string().max(500).optional() }),
   z.object({ action: z.literal("generateInvoice"), schoolId: z.string().min(1), period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }),
   z.object({ action: z.literal("lifecycle"), schoolId: z.string().min(1), lifecycle: z.enum(["lock", "suspend", "reactivate", "archive", "delete"]) }),
 ]);
+
+type SchoolSelectorRow = {
+  id: unknown; name: unknown; uniqueCode: unknown; status: unknown; studentCount?: unknown;
+  subscriptionPlan?: unknown;
+};
+
+function normalizeSchoolRow(row: SchoolSelectorRow) {
+  const candidate = schoolSelectorSchema.parse(row);
+  const plan = candidate.subscriptionPlan && typeof candidate.subscriptionPlan === "object" ? candidate.subscriptionPlan as Record<string, unknown> : null;
+  return {
+    id: String(candidate.id),
+    name: String(candidate.name),
+    uniqueCode: String(candidate.uniqueCode),
+    status: String(candidate.status),
+    studentCount: Number(candidate.studentCount ?? 0),
+    subscriptionPlan: plan ? { name: String(plan.name ?? ""), price: Number(plan.price ?? 0) } : null,
+  };
+}
 
 export async function GET(request: Request) {
   try {
@@ -28,8 +50,8 @@ export async function GET(request: Request) {
     if (view === "schools") {
       await requirePlatformPermission(session, "billing.view");
       const scope = await getPlatformSchoolScope(session);
-      const rows = scope === null ? await listPlatformSchools() : await listScopedPlatformSchools(session);
-      return NextResponse.json({ schools: rows.map((row) => ({ id: String(row.id), name: String(row.name), uniqueCode: String(row.uniqueCode), status: String(row.status), studentCount: Number(row.studentCount || 0), subscriptionPlan: row.subscriptionPlan ? { name: String(row.subscriptionPlan.name), price: Number(row.subscriptionPlan.price || 0) } : null })) });
+      const rows = (scope === null ? await listPlatformSchools() : await listScopedPlatformSchools(session)) as SchoolSelectorRow[];
+      return NextResponse.json({ schools: rows.map(normalizeSchoolRow) });
     }
     if (view === "billing") {
       if (!schoolId) throw new UnauthorizedError("schoolId is required");
