@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, CalendarPlus, X } from "lucide-react";
+import { ArrowRight, CalendarPlus, CheckCircle2, Clock3, ExternalLink, Printer, Users, X } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -9,11 +9,287 @@ import { getAcademicEngineConfig } from "@/lib/academic-engine";
 import { dayBlocks } from "@/lib/timetable-engine-v2";
 import "./timetable.css";
 
-type Period={period:number;start:string;end:string};
-type Day = { dayOfWeek:number; name:string; enabled:boolean; start:string; end:string; periods?:Period[] };
-type TimetableConfig = { days:Day[]; periodMinutes:number; breaks:{name:string;start:string;end:string}[]; periodsPerDay:number; periods?:Period[]; published:boolean };
-async function saveSlot(formData:FormData){"use server";const session=await requireSchoolSession();const classId=String(formData.get("classId")??"").trim(),subjectId=String(formData.get("subjectId")??"").trim(),teacherId=String(formData.get("teacherId")??"").trim();const dayOfWeek=Number(formData.get("dayOfWeek")),period=Number(formData.get("period")),slotId=String(formData.get("slotId")??"").trim();if(!classId||!subjectId||!teacherId||!Number.isInteger(dayOfWeek)||dayOfWeek<1||dayOfWeek>6||!Number.isInteger(period)||period<1)throw new Error("Complete the lesson details.");await withTenant(session.schoolId,async tx=>{await requirePermission(tx,session.userId,"calendar:manage");const [schoolClass,subject,teacher]=await Promise.all([tx.class.findFirst({where:{id:classId,schoolId:session.schoolId},select:{id:true}}),tx.subject.findFirst({where:{id:subjectId,schoolId:session.schoolId},select:{id:true}}),tx.user.findFirst({where:{id:teacherId,schoolId:session.schoolId,status:"active"},select:{id:true}})]);if(!schoolClass||!subject||!teacher)throw new Error("Selected records do not belong to this school.");const clash=await tx.timetableSlot.findFirst({where:{schoolId:session.schoolId,dayOfWeek,period,OR:[{classId},{teacherId}],...(slotId?{NOT:{id:slotId}}:{})},select:{id:true,classId:true}});if(clash)throw new Error(clash.classId===classId?"That class already has a lesson at this time.":"That teacher is already scheduled at this time.");if(slotId)await tx.timetableSlot.update({where:{id:slotId},data:{classId,subjectId,teacherId,dayOfWeek,period}});else await tx.timetableSlot.create({data:{schoolId:session.schoolId,classId,subjectId,teacherId,dayOfWeek,period}});});redirect(`/school/timetable?classId=${encodeURIComponent(classId)}`);}
-async function deleteSlot(formData:FormData){"use server";const session=await requireSchoolSession();const slotId=String(formData.get("slotId")??"").trim();if(!slotId)return;await withTenant(session.schoolId,async tx=>{await requirePermission(tx,session.userId,"calendar:manage");await tx.timetableSlot.deleteMany({where:{id:slotId,schoolId:session.schoolId}});});redirect("/school/timetable");}
-function formatTime(v:string){const [h,m]=v.split(":").map(Number);const suffix=h>=12?"PM":"AM";const hh=h%12||12;return `${hh}:${String(m).padStart(2,"0")} ${suffix}`;}
-function formatMinutes(v:number){const h=Math.floor(v/60)%24,m=v%60,suffix=h>=12?"PM":"AM";return `${h%12||12}:${String(m).padStart(2,"0")} ${suffix}`;}
-export default async function TimetablePage({searchParams}:{searchParams:Promise<{classId?:string;edit?:string}>}){const session=await requireSchoolSession(),params=await searchParams;const selectedClassId=String(params.classId??"").trim(),editId=String(params.edit??"").trim();const data=await withTenant(session.schoolId,async tx=>{await requirePermission(tx,session.userId,"calendar:manage");const [school,classes,subjects,teachers,slots,academic]=await Promise.all([tx.school.findUnique({where:{id:session.schoolId},select:{name:true,uniqueCode:true,logoUrl:true}}),tx.class.findMany({where:{schoolId:session.schoolId},orderBy:[{level:"asc"},{name:"asc"}],select:{id:true,name:true,level:true}}),tx.subject.findMany({where:{schoolId:session.schoolId},orderBy:{name:"asc"},select:{id:true,name:true}}),tx.user.findMany({where:{schoolId:session.schoolId,status:"active"},orderBy:{name:"asc"},select:{id:true,name:true}}),tx.timetableSlot.findMany({where:{schoolId:session.schoolId,...(selectedClassId?{classId:selectedClassId}:{})},orderBy:[{dayOfWeek:"asc"},{period:"asc"}],include:{class:{select:{id:true,name:true,level:true}},subject:{select:{id:true,name:true}},teacher:{select:{id:true,name:true}}}}),getAcademicEngineConfig(tx)]);return {school,classes,subjects,teachers,slots,config:academic.timetable as TimetableConfig};});const enabledDays=data.config.days.filter(d=>d.enabled&&d.dayOfWeek>=1&&d.dayOfWeek<=6);const anchor=enabledDays[0]??{dayOfWeek:1,name:"Monday",enabled:true,start:"08:00",end:"15:00",periods:[]};const columns=dayBlocks(anchor,data.config).blocks;const selectedClassName=data.classes.find(c=>c.id===selectedClassId)?.name??"All classes";const editSlot=data.slots.find(s=>s.id===editId)??null;const gridTemplateColumns=`132px ${columns.map(c=>c.kind==="break"?"62px":"minmax(144px,1fr)").join(" ")}`;return <AppShell universe="school" title="Timetable" subtitle="Build the weekly teaching schedule. Printing and distribution have their own workspace." active="Timetable" schoolName={data.school?.name??"School Workspace"} schoolCode={data.school?.uniqueCode??""} userName={session.name}><main className="timetable-page"><section className="timetable-hero"><div><span className="timetable-eyebrow">ACADEMICS / SCHEDULE</span><h1>Your school week, clearly arranged.</h1><p>Days run down the left. Real lesson times run across the top. The ranges below come directly from Academic Setup.</p></div><div className="timetable-actions"><Link href={`/school/timetable?edit=new:1:1&classId=${encodeURIComponent(selectedClassId)}`} className="primary-action">Add lesson <CalendarPlus size={14} aria-hidden="true" /></Link></div></section><section className="timetable-commandbar"><form method="get" className="class-picker"><label>Class view</label><select name="classId" defaultValue={selectedClassId}><option value="">All classes</option>{data.classes.map(c=><option key={c.id} value={c.id}>{c.level?`${c.level} · `:""}{c.name}</option>)}</select><button type="submit" className="class-picker-submit">View</button></form><div className="command-metrics"><div><span>Lessons</span><strong>{data.slots.length}</strong></div><div><span>Classes</span><strong>{new Set(data.slots.map(s=>s.classId)).size}</strong></div><div><span>Teachers</span><strong>{new Set(data.slots.map(s=>s.teacherId)).size}</strong></div><div><span>Schedule</span><strong className={data.config.published?"good":"neutral"}>{data.config.published?"Live":"Draft"}</strong></div></div></section><section className="schedule-card"><div className="schedule-head"><div><span className="timetable-eyebrow">WEEKLY GRID</span><h2>{selectedClassName}</h2></div><div className="schedule-time-summary">{columns.filter(c=>c.kind==="lesson").map(c=><span key={`${c.period}`}>P{c.period}: {formatTime(c.start)}–{formatTime(c.end)}</span>)}</div></div><div className="schedule-scroll"><div className="schedule-grid" style={{gridTemplateColumns}}><div className="schedule-corner"><span>DAY</span><small>TIME →</small></div>{columns.map((c,i)=><div key={`${c.kind}-${c.start}-${i}`} className={`schedule-time ${c.kind==="break"?"break-band":""}`}>{c.kind==="break"?<span>{c.name}</span>:<><strong>{formatTime(c.start)}</strong><small>{formatTime(c.end)}</small></>}</div>)}{enabledDays.map(day=>{const dayMap=new Map(data.slots.filter(s=>s.dayOfWeek===day.dayOfWeek).map(s=>[s.period,s]));const blocks=dayBlocks(day,data.config).blocks;return <div key={day.dayOfWeek} style={{display:"contents"}}><div className="schedule-day"><strong>{day.name.slice(0,3).toUpperCase()}</strong><span>{day.name}</span></div>{columns.map((column,i)=>{if(column.kind==="break")return <div key={`${day.dayOfWeek}-b-${i}`} className="schedule-cell break-cell"><span>{column.name}</span></div>;const b=blocks.find(x=>x.kind==="lesson"&&x.period===column.period);const slot=b?.period?dayMap.get(b.period):undefined;return <div key={`${day.dayOfWeek}-${i}`} className={`schedule-cell ${slot?"has-lesson":"open-slot"}`}>{slot?<Link href={`/school/timetable?classId=${encodeURIComponent(slot.classId)}&edit=${encodeURIComponent(slot.id)}`} className="lesson-card"><strong>{slot.subject.name}</strong><span>{slot.teacher.name}</span>{!selectedClassId?<small>{slot.class.name}</small>:null}</Link>:<Link href={`/school/timetable?classId=${encodeURIComponent(selectedClassId)}&edit=new:${day.dayOfWeek}:${b?.period??1}`} className="add-slot" aria-label={`Add lesson on ${day.name}`}><CalendarPlus size={15} aria-hidden="true" /></Link>}</div>})}</div>})}</div></div><div className="schedule-legend"><span><i className="lesson-dot"/> Lesson</span><span><i className="break-dot"/> Break / lunch</span><span><i className="empty-dot"/> Open</span></div></section><section className="timetable-lower"><div className="workload-panel"><div className="section-head"><div><span className="timetable-eyebrow">TEACHER LOAD</span><h3>Teaching periods</h3></div><Link href="/school/staff">Staff</Link></div>{data.teachers.slice(0,10).map(t=>{const count=data.slots.filter(s=>s.teacherId===t.id).length;return <div className="load-item" key={t.id}><div><strong>{t.name}</strong><span>{count} periods</span></div><div className="load-track"><i style={{width:`${Math.min(100,count*8)}%`}}/></div></div>})}</div><div className="smart-panel"><div className="section-head"><div><span className="timetable-eyebrow">QUICK TOOLS</span><h3>Keep scheduling moving</h3></div></div><Link href="/school/academics/setup">Change days, hours or lesson times <ArrowRight size={13} aria-hidden="true" /></Link><Link href="/school/timetable/print">Open Print Timetable <ArrowRight size={13} aria-hidden="true" /></Link><Link href="/school/staff">Review staff <ArrowRight size={13} aria-hidden="true" /></Link></div></section>{editId?<div className="edit-drawer"><div className="edit-panel"><div className="edit-panel-head"><div><span className="timetable-eyebrow">{editSlot?"EDIT LESSON":"NEW LESSON"}</span><h2>{editSlot?editSlot.subject.name:"Add a lesson"}</h2></div><Link href={`/school/timetable${selectedClassId?`?classId=${encodeURIComponent(selectedClassId)}`:""}`} aria-label="Close"><X size={18} aria-hidden="true" /></Link></div><form action={saveSlot}>{editSlot?<input type="hidden" name="slotId" value={editSlot.id}/>:null}<label>Class<select name="classId" required defaultValue={editSlot?.classId??selectedClassId}><option value="">Choose class</option>{data.classes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label>Subject<select name="subjectId" required defaultValue={editSlot?.subjectId??""}><option value="">Choose subject</option>{data.subjects.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label><label>Teacher<select name="teacherId" required defaultValue={editSlot?.teacherId??""}><option value="">Choose teacher</option>{data.teachers.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label><div className="edit-two"><label>Day<select name="dayOfWeek" required defaultValue={editSlot?.dayOfWeek??(editId.startsWith("new:")?editId.split(":")[1]:"1")}>{enabledDays.map(d=><option key={d.dayOfWeek} value={d.dayOfWeek}>{d.name}</option>)}</select></label><label>Lesson time<select name="period" required defaultValue={editSlot?.period??(editId.startsWith("new:")?editId.split(":")[2]:"1")}>{dayBlocks(anchor,data.config).periods.map(p=><option key={p.period} value={p.period}>P{p.period} · {formatMinutes(p.start)} – {formatMinutes(p.end)}</option>)}</select></label></div><div className="edit-help">These times are defined in <Link href="/school/academics/setup">Academic Setup</Link>. Editing a lesson chooses the time block; it does not invent a new clock time.</div><div className="edit-actions"><Link href={`/school/timetable${selectedClassId?`?classId=${encodeURIComponent(selectedClassId)}`:""}`} className="secondary-action">Cancel</Link><button className="primary-action" type="submit">Save lesson</button></div></form>{editSlot?<form action={deleteSlot} className="delete-slot"><input type="hidden" name="slotId" value={editSlot.id}/><button type="submit">Delete lesson</button></form>:null}</div></div>:null}</main></AppShell>;}
+type Period = { period: number; start: string; end: string };
+type Day = { dayOfWeek: number; name: string; enabled: boolean; start: string; end: string; periods?: Period[] };
+type TimetableConfig = { days: Day[]; periodMinutes: number; breaks: { name: string; start: string; end: string }[]; periodsPerDay: number; periods?: Period[]; published: boolean };
+
+aSync function saveSlot(formData: FormData) {
+  "use server";
+  const session = await requireSchoolSession();
+  const classId = String(formData.get("classId") ?? "").trim();
+  const subjectId = String(formData.get("subjectId") ?? "").trim();
+  const teacherId = String(formData.get("teacherId") ?? "").trim();
+  const dayOfWeek = Number(formData.get("dayOfWeek"));
+  const period = Number(formData.get("period"));
+  const slotId = String(formData.get("slotId") ?? "").trim();
+  if (!classId || !subjectId || !teacherId || !Number.isInteger(dayOfWeek) || dayOfWeek < 1 || dayOfWeek > 6 || !Number.isInteger(period) || period < 1) {
+    throw new Error("Choose a class, subject, teacher and lesson time.");
+  }
+  await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "calendar:manage");
+    const [schoolClass, subject, teacher] = await Promise.all([
+      tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } }),
+      tx.subject.findFirst({ where: { id: subjectId, schoolId: session.schoolId }, select: { id: true } }),
+      tx.user.findFirst({ where: { id: teacherId, schoolId: session.schoolId, status: "active" }, select: { id: true } }),
+    ]);
+    if (!schoolClass || !subject || !teacher) throw new Error("The selected records do not belong to this school.");
+    const clash = await tx.timetableSlot.findFirst({
+      where: { schoolId: session.schoolId, dayOfWeek, period, OR: [{ classId }, { teacherId }], ...(slotId ? { NOT: { id: slotId } } : {}) },
+      select: { id: true, classId: true },
+    });
+    if (clash) throw new Error(clash.classId === classId ? "That class already has a lesson at this time." : "That teacher is already scheduled at this time.");
+    if (slotId) {
+      await tx.timetableSlot.update({ where: { id: slotId }, data: { classId, subjectId, teacherId, dayOfWeek, period } });
+    } else {
+      await tx.timetableSlot.create({ data: { schoolId: session.schoolId, classId, subjectId, teacherId, dayOfWeek, period } });
+    }
+  });
+  redirect(`/school/timetable?classId=${encodeURIComponent(classId)}`);
+}
+
+async function deleteSlot(formData: FormData) {
+  "use server";
+  const session = await requireSchoolSession();
+  const slotId = String(formData.get("slotId") ?? "").trim();
+  const classId = String(formData.get("classId") ?? "").trim();
+  if (!slotId) return;
+  await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "calendar:manage");
+    await tx.timetableSlot.deleteMany({ where: { id: slotId, schoolId: session.schoolId } });
+  });
+  redirect(`/school/timetable${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`);
+}
+
+function formatTime(value: string) {
+  const [h, m] = value.split(":").map(Number);
+  const suffix = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+}
+
+function formatMinutes(value: number) {
+  const h = Math.floor(value / 60) % 24;
+  const m = value % 60;
+  const suffix = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
+}
+
+export default async function TimetablePage({ searchParams }: { searchParams: Promise<{ classId?: string; edit?: string }> }) {
+  const session = await requireSchoolSession();
+  const params = await searchParams;
+  const selectedClassId = String(params.classId ?? "").trim();
+  const editId = String(params.edit ?? "").trim();
+
+  const data = await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "calendar:manage");
+    const [school, classes, subjects, teachers, slots, academic] = await Promise.all([
+      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
+      tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true } }),
+      tx.subject.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      tx.timetableSlot.findMany({
+        where: { schoolId: session.schoolId, ...(selectedClassId ? { classId: selectedClassId } : {}) },
+        orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }],
+        include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } }, teacher: { select: { id: true, name: true } } },
+      }),
+      getAcademicEngineConfig(tx),
+    ]);
+    return { school, classes, subjects, teachers, slots, config: academic.timetable as TimetableConfig };
+  });
+
+  const enabledDays = data.config.days.filter((day) => day.enabled && day.dayOfWeek >= 1 && day.dayOfWeek <= 6);
+  const anchor = enabledDays[0] ?? { dayOfWeek: 1, name: "Monday", enabled: true, start: "08:00", end: "15:00", periods: [] };
+  const schedule = dayBlocks(anchor, data.config);
+  const periods = schedule.periods.length ? schedule.periods : (data.config.periods ?? []);
+  const selectedClass = data.classes.find((schoolClass) => schoolClass.id === selectedClassId) ?? null;
+  const selectedClassName = selectedClass ? `${selectedClass.level ? `${selectedClass.level} · ` : ""}${selectedClass.name}` : "All classes";
+  const editSlot = data.slots.find((slot) => slot.id === editId) ?? null;
+  const newParts = editId.startsWith("new:") ? editId.split(":") : [];
+  const openSlots = Math.max(0, enabledDays.length * periods.length - data.slots.length);
+  const classesCovered = new Set(data.slots.map((slot) => slot.classId)).size;
+  const teachersScheduled = new Set(data.slots.map((slot) => slot.teacherId)).size;
+  const gridTemplateColumns = `112px repeat(${Math.max(enabledDays.length, 1)}, minmax(190px, 1fr))`;
+
+  return (
+    <AppShell universe="school" title="Timetable" subtitle="Build the weekly teaching schedule, then print or publish it from a dedicated output workspace." active="Timetable" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+      <main className="timetable-page">
+        <section className="timetable-intro">
+          <div className="timetable-intro-copy">
+            <span className="timetable-kicker">ACADEMIC SCHEDULE</span>
+            <h1>One clear view of the school week.</h1>
+            <p>Choose a class to work on, place lessons into the fixed periods from Academic Setup, and keep the finished timetable ready for print or publication.</p>
+          </div>
+          <div className="timetable-intro-actions">
+            <Link className="tt-button primary" href={`/school/timetable?edit=new:1:${periods[0]?.period ?? 1}${selectedClassId ? `&classId=${encodeURIComponent(selectedClassId)}` : ""}`}><CalendarPlus size={15} /> Add lesson</Link>
+            <Link className="tt-button secondary" href="/school/timetable/print"><Printer size={15} /> Print timetable</Link>
+          </div>
+        </section>
+
+        <section className="timetable-toolbar">
+          <div className="tt-context">
+            <div className="tt-context-label">WORKING VIEW</div>
+            <div className="tt-context-row">
+              <form method="get" className="tt-class-form">
+                <label htmlFor="classId">Class</label>
+                <select id="classId" name="classId" defaultValue={selectedClassId}>
+                  <option value="">All classes</option>
+                  {data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</option>)}
+                </select>
+                <button className="tt-button secondary compact" type="submit">View</button>
+              </form>
+              <Link className="tt-text-link" href="/school/academics/setup">Schedule setup <ArrowRight size={13} /></Link>
+            </div>
+          </div>
+          <div className="tt-summary">
+            <div><span>Lessons</span><strong>{data.slots.length}</strong></div>
+            <div><span>Classes</span><strong>{classesCovered}</strong></div>
+            <div><span>Teachers</span><strong>{teachersScheduled}</strong></div>
+            <div className="tt-summary-status"><span>Publication</span><strong className={data.config.published ? "is-live" : "is-draft"}>{data.config.published ? "Live" : "Draft"}</strong></div>
+          </div>
+        </section>
+
+        <section className="timetable-surface">
+          <div className="timetable-surface-head">
+            <div>
+              <span className="timetable-kicker">WEEKLY TIMETABLE</span>
+              <h2>{selectedClassName}</h2>
+              <p>{enabledDays.length ? `${enabledDays.length} school days · ${periods.length} teaching periods per day` : "No school days are enabled yet."}</p>
+            </div>
+            <div className="tt-head-note"><Clock3 size={14} /> Times are controlled by Academic Setup</div>
+          </div>
+
+          {!enabledDays.length || !periods.length ? (
+            <div className="tt-empty-state">
+              <div className="tt-empty-icon"><Clock3 size={18} /></div>
+              <strong>Set the school day before scheduling lessons.</strong>
+              <span>Turn on school days and define lesson periods in Academic Setup. The timetable will use those times automatically.</span>
+              <Link className="tt-button secondary" href="/school/academics/setup">Open Academic Setup <ExternalLink size={14} /></Link>
+            </div>
+          ) : (
+            <div className="tt-grid-scroll">
+              <div className="tt-grid" style={{ gridTemplateColumns: gridTemplateColumns }}>
+                <div className="tt-grid-corner"><span>TIME</span><small>LESSON PERIOD</small></div>
+                {enabledDays.map((day) => <div className="tt-day-head" key={day.dayOfWeek}><strong>{day.name.slice(0, 3).toUpperCase()}</strong><span>{day.name}</span></div>)}
+                {periods.map((period) => (
+                  <div className="tt-grid-row" key={`p-${period.period}`} style={{ display: "contents" }}>
+                    <div className="tt-time-cell"><strong>P{period.period}</strong><span>{formatTime(period.start)} – {formatTime(period.end)}</span></div>
+                    {enabledDays.map((day) => {
+                      const slot = data.slots.find((item) => item.dayOfWeek === day.dayOfWeek && item.period === period.period);
+                      return (
+                        <div className={`tt-lesson-cell ${slot ? "filled" : "open"}`} key={`${day.dayOfWeek}-${period.period}`}>
+                          {slot ? (
+                            <Link className="tt-lesson" href={`/school/timetable?classId=${encodeURIComponent(slot.classId)}&edit=${encodeURIComponent(slot.id)}`}>
+                              <span className="tt-lesson-subject">{slot.subject.name}</span>
+                              <span className="tt-lesson-teacher">{slot.teacher.name}</span>
+                              {!selectedClassId ? <span className="tt-lesson-class">{slot.class.name}</span> : null}
+                              <ArrowRight className="tt-lesson-arrow" size={14} aria-hidden="true" />
+                            </Link>
+                          ) : (
+                            <Link className="tt-open-slot" href={`/school/timetable?edit=new:${day.dayOfWeek}:${period.period}${selectedClassId ? `&classId=${encodeURIComponent(selectedClassId)}` : ""}`} aria-label={`Add lesson on ${day.name}, period ${period.period}`}>
+                              <CalendarPlus size={15} />
+                              <span>Add lesson</span>
+                            </Link>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.config.breaks.length ? (
+            <div className="tt-breaks">
+              <span className="tt-break-label">NON-TEACHING TIME</span>
+              {data.config.breaks.map((item) => <span className="tt-break" key={`${item.name}-${item.start}`}>{item.name} · {formatTime(item.start)}–{formatTime(item.end)}</span>)}
+            </div>
+          ) : null}
+        </section>
+
+        <section className="tt-support-grid">
+          <article className="tt-support-card">
+            <div className="tt-support-icon"><CheckCircle2 size={17} /></div>
+            <div>
+              <span className="timetable-kicker">SCHEDULE HEALTH</span>
+              <h3>{openSlots ? `${openSlots} open teaching slots` : "The weekly grid is fully booked"}</h3>
+              <p>{data.slots.length ? "Open cells are genuine scheduling opportunities. Click one to place a lesson, or open an existing lesson to edit it." : "Start by placing the first lesson. The timetable will build itself around the periods already defined for the school."}</p>
+            </div>
+          </article>
+          <article className="tt-support-card">
+            <div className="tt-support-icon"><Users size={17} /></div>
+            <div>
+              <span className="timetable-kicker">NEXT TOOLS</span>
+              <h3>Finish, then distribute</h3>
+              <div className="tt-tool-links">
+                <Link href="/school/academics/setup">Adjust school days & lesson times <ArrowRight size={13} /></Link>
+                <Link href="/school/timetable/print">Design & print the timetable <ArrowRight size={13} /></Link>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        {editId ? (
+          <div className="tt-drawer" role="dialog" aria-modal="true" aria-label={editSlot ? "Edit lesson" : "Add lesson"}>
+            <div className="tt-drawer-panel">
+              <div className="tt-drawer-head">
+                <div>
+                  <span className="timetable-kicker">{editSlot ? "EDIT LESSON" : "NEW LESSON"}</span>
+                  <h2>{editSlot ? editSlot.subject.name : "Add a lesson"}</h2>
+                  <p>{editSlot ? "Change the lesson details without changing the school time structure." : "Choose who, what and when. The lesson time comes from Academic Setup."}</p>
+                </div>
+                <Link className="tt-close" href={`/school/timetable${selectedClassId ? `?classId=${encodeURIComponent(selectedClassId)}` : ""}`} aria-label="Close"><X size={18} /></Link>
+              </div>
+
+              <form action={saveSlot} className="tt-form">
+                {editSlot ? <input type="hidden" name="slotId" value={editSlot.id} /> : null}
+                <label>Class
+                  <select name="classId" required defaultValue={editSlot?.classId ?? selectedClassId}>
+                    <option value="">Choose class</option>
+                    {data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</option>)}
+                  </select>
+                </label>
+                <label>Subject
+                  <select name="subjectId" required defaultValue={editSlot?.subjectId ?? ""}>
+                    <option value="">Choose subject</option>
+                    {data.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+                  </select>
+                </label>
+                <label>Teacher
+                  <select name="teacherId" required defaultValue={editSlot?.teacherId ?? ""}>
+                    <option value="">Choose teacher</option>
+                    {data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
+                  </select>
+                </label>
+                <div className="tt-form-two">
+                  <label>Day
+                    <select name="dayOfWeek" required defaultValue={editSlot?.dayOfWeek ?? (newParts[1] || enabledDays[0]?.dayOfWeek || 1)}>
+                      {enabledDays.map((day) => <option key={day.dayOfWeek} value={day.dayOfWeek}>{day.name}</option>)}
+                    </select>
+                  </label>
+                  <label>Lesson period
+                    <select name="period" required defaultValue={editSlot?.period ?? (newParts[2] || periods[0]?.period || 1)}>
+                      {periods.map((period) => <option key={period.period} value={period.period}>P{period.period} · {formatMinutes(Math.floor(period.start.split(":").reduce((acc, value, index) => acc + Number(value) * (index === 0 ? 60 : 1), 0)))} – {formatTime(period.end)}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="tt-form-note"><Clock3 size={14} /><span>Lesson times are managed in <Link href="/school/academics/setup">Academic Setup</Link>, so every class stays on the same school-day structure.</span></div>
+                <div className="tt-form-actions">
+                  <Link className="tt-button secondary" href={`/school/timetable${selectedClassId ? `?classId=${encodeURIComponent(selectedClassId)}` : ""}`}>Cancel</Link>
+                  <button className="tt-button primary" type="submit">Save lesson</button>
+                </div>
+              </form>
+
+              {editSlot ? (
+                <form action={deleteSlot} className="tt-delete-form">
+                  <input type="hidden" name="slotId" value={editSlot.id} />
+                  <input type="hidden" name="classId" value={selectedClassId} />
+                  <button type="submit">Delete this lesson</button>
+                </form>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </main>
+    </AppShell>
+  );
+}
