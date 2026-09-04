@@ -17,7 +17,7 @@ output = output
   .replaceAll('type: "EXAM"', 'type: "exam"')
   .replaceAll('type: "device"', 'type: "qr"')
   .replaceAll('classId: null, name', 'classId: classes[0].id, name')
-  .replaceAll('method: "bank_transfer"', 'method: "bank"');
+  .replaceAll('method: "bank_transfer"', 'method: "cash"');
 
 // Remove the deliberately hard-coded attendance conflict scenario. The
 // realistic rolling attendance history already exercises attendance flows,
