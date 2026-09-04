@@ -5,8 +5,9 @@ import type { PlatformSession } from "./auth";
 import { AppError } from "./errors";
 
 const ACTION_TO_POLICY = { lock: "allowLock", suspend: "allowSuspend", archive: "allowArchive", delete: "allowDelete", reactivate: null } as const;
+type LifecycleInput = "lock" | "suspend" | "reactivate" | "archive" | "delete";
 
-export async function performSchoolLifecycle(session: PlatformSession, schoolId: string, action: "lock" | "suspend" | "reactivate" | "archive" | "delete") {
+export async function performSchoolLifecycle(session: PlatformSession, schoolId: string, action: LifecycleInput, confirmationPhrase?: string) {
   await requirePlatformPermission(session, "schools.suspend");
   if (action === "delete" && session.role !== "super_admin") throw new AppError("Only Super Admin can decommission a school.", 403, "FORBIDDEN");
   const scope = await getPlatformSchoolScope(session);
@@ -16,6 +17,10 @@ export async function performSchoolLifecycle(session: PlatformSession, schoolId:
     const config = await db.$queryRawUnsafe<Array<{ value: Record<string, unknown> }>>(`SELECT "value" FROM "PlatformConfiguration" WHERE "key"='platform.lifecycle' LIMIT 1`);
     const policy = config[0]?.value ?? {};
     if (policy[policyKey] === false) throw new AppError(`The platform lifecycle policy currently disables ${action}.`, 403, "LIFECYCLE_ACTION_DISABLED");
+    if (action === "delete") {
+      const requiredPhrase = typeof policy.requireDeletePhrase === "string" ? policy.requireDeletePhrase.trim() : "DELETE SCHOOL";
+      if (!confirmationPhrase || confirmationPhrase.trim() !== requiredPhrase) throw new AppError("The decommission confirmation phrase is incorrect.", 400, "DELETE_CONFIRMATION_REQUIRED");
+    }
   }
   return withTenant(schoolId, async (tx) => {
     const school = await tx.school.findUnique({ where: { id: schoolId }, select: { id: true, name: true, status: true } });
