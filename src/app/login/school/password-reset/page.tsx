@@ -1,14 +1,12 @@
 "use client";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import "../../login.css";
 
 export default function SchoolPasswordResetPage(){
- const searchParams=useSearchParams();
- const token=searchParams.get("token") ?? "";
- const initialSchoolCode=searchParams.get("schoolCode") ?? "";
+ const [token,setToken]=useState(""); const [initialSchoolCode,setInitialSchoolCode]=useState("");
  const [message,setMessage]=useState(""); const [pending,setPending]=useState(false);
+ useEffect(()=>{const params=new URLSearchParams(window.location.search);setToken(params.get("token")??"");setInitialSchoolCode(params.get("schoolCode")??"");},[]);
  async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setPending(true);setMessage("");const form=new FormData(e.currentTarget);try{
    if(token){
      const newPassword=String(form.get("newPassword")??"");
