@@ -5,10 +5,11 @@
  * Railway pre-deploy runs in a separate filesystem that is not persisted.
  */
 const { spawn } = require("child_process");
+const fs = require("fs");
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 
-const SEED_REVISION = "2026-09-04-eugene-r7";
+const SEED_REVISION = "2026-09-04-eugene-r8";
 const prisma = new PrismaClient();
 
 function runScript(file) {
@@ -46,6 +47,20 @@ async function markCompleted() {
   });
 }
 
+function prepareSeedForLiveSchema() {
+  const seedPath = path.join(__dirname, "seed-realistic-test-school.cjs");
+  const source = fs.readFileSync(seedPath, "utf8");
+  const patched = source.replace(
+    /create:\s*\{\s*schoolId,\s*name,\s*description:\s*`\$\{name\} role`\s*\}/,
+    "create: { schoolId, name }",
+  );
+  if (patched === source) {
+    throw new Error("Eugene role schema compatibility patch was not applied; refusing to continue.");
+  }
+  fs.writeFileSync(seedPath, patched, "utf8");
+  console.log("[eugene-academy-trial] role schema compatibility prepared");
+}
+
 async function run() {
   if (await hasCompleted()) {
     console.log(`[eugene-academy-trial] seed ${SEED_REVISION} already completed; skipping`);
@@ -57,6 +72,7 @@ async function run() {
   await runScript("prepare-eugene-academy-trial-fixture.cjs");
   await runScript("prepare-eugene-append-only-fixture.cjs");
   await runScript("prepare-eugene-extension-fixture.cjs");
+  prepareSeedForLiveSchema();
 
   console.log(`[eugene-academy-trial] launching guarded seed ${SEED_REVISION}`);
   await runScript("seed-eugene-academy-trial.cjs");
@@ -73,4 +89,4 @@ run()
     await prisma.$disconnect().catch(() => {});
   });
 
-// r7 is intentionally a one-time fixture credential refresh; later startups skip once marked complete.
+// r8 is a one-time fixture credential refresh with compatibility for the live Role schema.
