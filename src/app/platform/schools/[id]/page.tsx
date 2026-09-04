@@ -13,7 +13,7 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
   await requirePlatformPermission(session, "schools.view");
   const { id } = await params;
   await requireSchoolScope(session, id);
-  const [canSupport, canBilling, canAudit, canImpersonate] = await Promise.all([hasPlatformPermission(session, "support.view"), hasPlatformPermission(session, "billing.view"), hasPlatformPermission(session, "audit.view"), hasPlatformPermission(session, "schools.impersonate")]);
+  const [canSupport, canBilling, canAudit] = await Promise.all([hasPlatformPermission(session, "support.view"), hasPlatformPermission(session, "billing.view"), hasPlatformPermission(session, "audit.view")]);
   const data = await withTenant(id, async (tx) => {
     const school = await tx.school.findUnique({ where: { id }, select: { id:true,name:true,uniqueCode:true,status:true,createdAt:true,subscriptionPlan:{select:{id:true,name:true,price:true,featureFlags:true}},settings:{select:{timezone:true,gradeCaWeight:true,gradeExamWeight:true}} } });
     if (!school) return null;
