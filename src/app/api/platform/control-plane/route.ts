@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError, AppError, UnauthorizedError } from "@/lib/errors";
 import { requirePlatformPermission, getPlatformSchoolScope } from "@/lib/platform-permissions";
-import { getMessagingWallet, getPlatformControlSettings, getSchoolBillingConfig, saveSchoolBillingConfig, updateMessagingRates, adjustMessagingBalance, updatePlatformControlSettings } from "@/lib/platform-control-plane-service";
+import { getMessagingWallet, getPlatformControlSettings, getSchoolBillingConfig, saveSchoolBillingConfig, updateMessagingRates, adjustMessagingBalance, updatePlatformControlSettings } from "@/lib/platform-control-plane-safe-service";
 import { generateBillingRulesInvoice } from "@/lib/platform-billing-rules-service";
 import { performSchoolLifecycle } from "@/lib/platform-school-lifecycle-service";
 import { listScopedPlatformSchools } from "@/lib/platform-scoped-schools";
