@@ -8,7 +8,8 @@ import { deliverResetToken } from "@/lib/reset-delivery";
 
 const schema = z.object({
   uniqueCode: z.string().trim().min(2).max(80),
-  identifier: z.string().trim().min(3).max(254)
+  identifier: z.string().trim().min(3).max(254),
+  universe: z.enum(["school", "guardian"]).default("school")
 });
 
 export async function POST(request: Request) {
