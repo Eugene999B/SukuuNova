@@ -34,6 +34,9 @@ const optionalSchema = z.object({
   TWILIO_ACCOUNT_SID: optionalString,
   TWILIO_AUTH_TOKEN: optionalString,
   TWILIO_WHATSAPP_FROM: optionalString,
+  WHATSAPP_WEBHOOK_SECRET: optionalString,
+  WHATSAPP_APP_SECRET: optionalString,
+  WHATSAPP_VERIFY_TOKEN: optionalString,
 });
 
 export function validateRuntimeEnv() {
@@ -58,6 +61,10 @@ export function validateRuntimeEnv() {
 
   if (optional.SMS_PROVIDER_TOKEN && !optional.SMS_PROVIDER_URL) {
     throw new Error("Invalid production environment configuration: SMS_PROVIDER_URL is required when SMS_PROVIDER_TOKEN is configured.");
+  }
+
+  if ((optional.WHATSAPP_APP_SECRET && optional.WHATSAPP_APP_SECRET.length < 32) || (optional.WHATSAPP_WEBHOOK_SECRET && optional.WHATSAPP_WEBHOOK_SECRET.length < 32) || (optional.WHATSAPP_VERIFY_TOKEN && optional.WHATSAPP_VERIFY_TOKEN.length < 16)) {
+    throw new Error("Invalid production environment configuration: WhatsApp webhook secrets are too short.");
   }
 
   if (optional.TWILIO_ACCOUNT_SID || optional.TWILIO_AUTH_TOKEN || optional.TWILIO_WHATSAPP_FROM) {
