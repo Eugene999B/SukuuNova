@@ -3,8 +3,8 @@ import { cookies } from "next/headers";
 import { compare, hash } from "bcryptjs";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { GUARDIAN_COOKIE, getGuardianSession, createGuardianSessionToken } from "@/lib/guardian-auth";
-import { getPlatformSession, getSchoolSession, createPlatformSessionToken, createSchoolSessionToken, PLATFORM_COOKIE, PLATFORM_SESSION_SECONDS, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { GUARDIAN_COOKIE, getGuardianSession, createGuardianSessionToken, requireGuardianSession } from "@/lib/guardian-auth";
+import { getPlatformSession, getSchoolSession, requirePlatformSession, requireSchoolSession, createPlatformSessionToken, createSchoolSessionToken, PLATFORM_COOKIE, PLATFORM_SESSION_SECONDS, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
 import "./security.css";
 
@@ -18,36 +18,39 @@ async function changePassword(formData: FormData) {
 
   const guardian = await getGuardianSession();
   if (guardian) {
-    await withTenant(guardian.schoolId, async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: guardian.userId }, select: { passwordHash: true } });
+    const currentGuardian = await requireGuardianSession();
+    await withTenant(currentGuardian.schoolId, async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: currentGuardian.userId }, select: { passwordHash: true } });
       if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
-      await tx.user.update({ where: { id: guardian.userId }, data: { passwordHash: await hash(next, 12) } });
+      await tx.user.update({ where: { id: currentGuardian.userId }, data: { passwordHash: await hash(next, 12) } });
     });
     const responseCookies = await cookies();
-    responseCookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ ...guardian, needsPasswordChange: false }), sessionCookieOptions());
+    responseCookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ ...currentGuardian, needsPasswordChange: false }), sessionCookieOptions());
     redirect("/guardian");
   }
 
   const school = await getSchoolSession();
   if (school) {
-    await withTenant(school.schoolId, async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: school.userId }, select: { passwordHash: true } });
+    const currentSchool = await requireSchoolSession();
+    await withTenant(currentSchool.schoolId, async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: currentSchool.userId }, select: { passwordHash: true } });
       if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
-      await tx.user.update({ where: { id: school.userId }, data: { passwordHash: await hash(next, 12) } });
+      await tx.user.update({ where: { id: currentSchool.userId }, data: { passwordHash: await hash(next, 12) } });
     });
     const responseCookies = await cookies();
-    const token = await createSchoolSessionToken({ kind: "school", userId: school.userId, schoolId: school.schoolId, name: school.name, authorizationVersion: school.authorizationVersion, impersonationId: school.impersonationId, impersonatedByAdminId: school.impersonatedByAdminId });
+    const token = await createSchoolSessionToken({ kind: "school", userId: currentSchool.userId, schoolId: currentSchool.schoolId, name: currentSchool.name, authorizationVersion: currentSchool.authorizationVersion, impersonationId: currentSchool.impersonationId, impersonatedByAdminId: currentSchool.impersonatedByAdminId });
     responseCookies.set(SCHOOL_COOKIE, token, sessionCookieOptions());
     redirect("/dashboard");
   }
 
   const platform = await getPlatformSession();
   if (platform) {
-    const admin = await db.platformAdmin.findUnique({ where: { id: platform.adminId }, select: { passwordHash: true } });
+    const currentPlatform = await requirePlatformSession();
+    const admin = await db.platformAdmin.findUnique({ where: { id: currentPlatform.adminId }, select: { passwordHash: true } });
     if (!admin || !(await compare(current, admin.passwordHash))) throw new Error("Current password is incorrect.");
-    await db.platformAdmin.update({ where: { id: platform.adminId }, data: { passwordHash: await hash(next, 12) } });
+    await db.platformAdmin.update({ where: { id: currentPlatform.adminId }, data: { passwordHash: await hash(next, 12) } });
     const responseCookies = await cookies();
-    responseCookies.set(PLATFORM_COOKIE, await createPlatformSessionToken(platform), sessionCookieOptions(PLATFORM_SESSION_SECONDS));
+    responseCookies.set(PLATFORM_COOKIE, await createPlatformSessionToken(currentPlatform), sessionCookieOptions(PLATFORM_SESSION_SECONDS));
     responseCookies.delete(SCHOOL_COOKIE);
     redirect("/platform");
   }
