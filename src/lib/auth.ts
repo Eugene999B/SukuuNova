@@ -122,7 +122,22 @@ export async function createPlatformSessionToken(session: Omit<PlatformSession, 
 export async function verifySchoolSessionToken(token: string): Promise<SchoolSession> {
   const { payload } = await jwtVerify(token, secret("SCHOOL_AUTH_SECRET"), { issuer: "sukuunova-school", audience: "sukuunova-school" });
   if (payload.kind !== "school" || typeof payload.sub !== "string" || typeof payload.schoolId !== "string" || typeof payload.name !== "string" || typeof payload.authorizationVersion !== "string") throw new UnauthorizedError("Invalid school session.");
-  return { kind: "school", userId: payload.sub, schoolId: payload.schoolId, name: payload.name, authorizationVersion: payload.authorizationVersion, impersonationId: typeof payload.impersonationId === "string" ? payload.impersonationId : undefined, impersonatedByAdminId: typeof payload.impersonatedByAdminId === "string" ? payload.impersonatedByAdminId : undefined };
+  const impersonationId = typeof payload.impersonationId === "string" ? payload.impersonationId : undefined;
+  const impersonatedByAdminId = typeof payload.impersonatedByAdminId === "string" ? payload.impersonatedByAdminId : undefined;
+  if (impersonationId || impersonatedByAdminId) {
+    if (!impersonationId || !impersonatedByAdminId) throw new UnauthorizedError("Invalid impersonation session.");
+    const active = await rawDb.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT "id" FROM "ImpersonationLog"
+       WHERE "id"=$1 AND "platformAdminId"=$2 AND "schoolId"=$3 AND "impersonatedUserId"=$4 AND "endedAt" IS NULL
+       LIMIT 1`,
+      impersonationId,
+      impersonatedByAdminId,
+      payload.schoolId,
+      payload.sub,
+    );
+    if (!active.length) throw new UnauthorizedError("This impersonation session has ended.");
+  }
+  return { kind: "school", userId: payload.sub, schoolId: payload.schoolId, name: payload.name, authorizationVersion: payload.authorizationVersion, impersonationId, impersonatedByAdminId };
 }
 
 export async function verifyPlatformSessionToken(token: string): Promise<PlatformSession> {
