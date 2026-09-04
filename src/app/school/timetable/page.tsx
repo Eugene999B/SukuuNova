@@ -154,7 +154,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
                 {enabledDays.map((day) => <div className="tt-day-head" key={day.dayOfWeek}><strong>{day.name.slice(0, 3).toUpperCase()}</strong><span>{day.name}</span></div>)}
                 {periods.map((period) => (
                   <div key={`p-${period.period}`} style={{ display: "contents" }}>
-                    <div className="tt-time-cell"><strong>P{period.period}</strong><span>{formatTime(period.start)} – {formatTime(period.end)}</span></div>
+                    <div className="tt-time-cell"><strong>P{period.period}</strong><span>{formatTime(String(period.start))} – {formatTime(String(period.end))}</span></div>
                     {enabledDays.map((day) => {
                       const slot = data.slots.find((item) => item.dayOfWeek === day.dayOfWeek && item.period === period.period);
                       return <div className={`tt-lesson-cell ${slot ? "filled" : "open"}`} key={`${day.dayOfWeek}-${period.period}`}>
@@ -182,11 +182,10 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
               <label>Class<select name="classId" required defaultValue={editSlot?.classId ?? selectedClassId}><option value="">Choose class</option>{data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</option>)}</select></label>
               <label>Subject<select name="subjectId" required defaultValue={editSlot?.subjectId ?? ""}><option value="">Choose subject</option>{data.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
               <label>Teacher<select name="teacherId" required defaultValue={editSlot?.teacherId ?? ""}><option value="">Choose teacher</option>{data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</select></label>
-              <div className="tt-form-two"><label>Day<select name="dayOfWeek" required defaultValue={editSlot?.dayOfWeek ?? (newParts[1] || enabledDays[0]?.dayOfWeek || 1)}>{enabledDays.map((day) => <option key={day.dayOfWeek} value={day.dayOfWeek}>{day.name}</option>)}</select></label><label>Lesson period<select name="period" required defaultValue={editSlot?.period ?? (newParts[2] || periods[0]?.period || 1)}>{periods.map((item) => <option key={item.period} value={item.period}>P{item.period} · {formatMinutes(timeToMinutes(item.start))} – {formatTime(item.end)}</option>)}</select></label></div>
-              <div className="tt-form-note"><Clock3 size={14} /><span>Lesson times are managed in <Link href="/school/academics/setup">Academic Setup</Link>, so every class stays on the same school-day structure.</span></div>
-              <div className="tt-form-actions"><Link className="tt-button secondary" href={`/school/timetable${selectedClassId ? `?classId=${encodeURIComponent(selectedClassId)}` : ""}`}>Cancel</Link><button className="tt-button primary" type="submit">Save lesson</button></div>
+              <div className="tt-form-two"><label>Day<select name="dayOfWeek" required defaultValue={editSlot?.dayOfWeek ?? (newParts[1] || enabledDays[0]?.dayOfWeek ?? 1)}>{enabledDays.map((day) => <option key={day.dayOfWeek} value={day.dayOfWeek}>{day.name}</option>)}</select></label><label>Period<select name="period" required defaultValue={String(editSlot?.period ?? (newParts[2] || periods[0]?.period ?? 1))}>{periods.map((period) => <option key={period.period} value={period.period}>P{period.period} · {formatTime(String(period.start))} – {formatTime(String(period.end))}</option>)}</select></label></div>
+              <div className="tt-form-actions"><Link className="tt-button secondary" href={`/school/timetable${selectedClassId ? `?classId=${encodeURIComponent(selectedClassId)}` : ""}`}>Cancel</Link><button className="tt-button primary" type="submit">{editSlot ? "Save lesson" : "Add lesson"}</button></div>
             </form>
-            {editSlot ? <form action={deleteSlot} className="tt-delete-form"><input type="hidden" name="slotId" value={editSlot.id} /><input type="hidden" name="classId" value={selectedClassId} /><button type="submit">Delete this lesson</button></form> : null}
+            {editSlot ? <form action={deleteSlot} className="tt-delete-form"><input type="hidden" name="slotId" value={editSlot.id} /><input type="hidden" name="classId" value={selectedClassId || editSlot.classId} /><button type="submit" className="tt-delete-button">Delete this lesson</button></form> : null}
           </div>
         </div> : null}
       </main>
