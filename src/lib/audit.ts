@@ -37,8 +37,9 @@ export async function appendPlatformAudit(entry: {
   targetSchoolId?: string;
   targetEntity?: string;
   meta?: unknown;
-}) {
-  return db.auditLogPlatform.create({
+}, tx?: TenantDb) {
+  const client = tx ?? db;
+  return client.auditLogPlatform.create({
     data: {
       actorId: entry.actorId,
       action: entry.action,
