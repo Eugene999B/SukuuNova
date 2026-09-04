@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Calculator, CheckCircle2, CreditCard, MessageSquare, RefreshCw, WalletCards } from "lucide-react";
 
 type School = { id: string; name: string; uniqueCode: string; status: string; studentCount: number; subscriptionPlan?: { name: string; price: number | string } | null };
-type Overview = { schools: School[] };
 type Billing = { activeStudents: number; calculatedTotal: number; school: School; billing: { billingMode: "flat" | "per_student"; currency: string; studentRate: number; flatRate: number; billingDay: number; graceDays: number; trialDays: number; minimumCharge: number; maximumCharge: number | null; active: boolean } };
 type Messaging = { school: { id: string; name: string; uniqueCode: string }; wallet: { smsBalance: number; whatsappBalance: number; smsSellRate: string | number; whatsappSellRate: string | number; smsCostRate: string | number; whatsappCostRate: string | number; lowBalanceThreshold: number }; ledger: Array<{ id: string; channel: string; entryType: string; quantity: number; balanceAfter: number; unitPrice: string | null; notes: string | null; createdAt: string }> };
 
@@ -18,9 +17,9 @@ export default function PlatformBillingStudio() {
   const [allocation, setAllocation] = useState({ quantity: 0, unitCost: 0, unitPrice: 0, reference: "", notes: "" });
 
   async function loadSchools() {
-    const response = await fetch("/api/platform/admin?view=overview", { cache: "no-store" });
+    const response = await fetch("/api/platform/control-plane?view=schools", { cache: "no-store" });
     if (!response.ok) return;
-    const data = await response.json() as Overview;
+    const data = await response.json() as { schools: School[] };
     setSchools(data.schools ?? []);
     if (!schoolId && data.schools?.[0]) setSchoolId(data.schools[0].id);
   }
@@ -50,6 +49,11 @@ export default function PlatformBillingStudio() {
   useEffect(() => { if (!messaging) return; const w = messaging.wallet; setRates({ sellRate: channel === "sms" ? Number(w.smsSellRate) : Number(w.whatsappSellRate), costRate: channel === "sms" ? Number(w.smsCostRate) : Number(w.whatsappCostRate), lowBalanceThreshold: w.lowBalanceThreshold }); }, [channel, messaging]);
 
   const selectedSchool = useMemo(() => schools.find((s) => s.id === schoolId) ?? null, [schoolId, schools]);
+  const estimatedTotal = useMemo(() => {
+    if (!billing) return 0;
+    const base = draft.billingMode === "per_student" ? billing.activeStudents * Number(draft.studentRate) : Number(draft.flatRate);
+    return Math.min(draft.maximumCharge == null ? Number.POSITIVE_INFINITY : Number(draft.maximumCharge), Math.max(Number(draft.minimumCharge) || 0, base));
+  }, [billing, draft]);
   const saveBilling = async () => {
     setBusy(true); setMessage("");
     try {
@@ -90,7 +94,7 @@ export default function PlatformBillingStudio() {
       <section className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">HOW THE SCHOOL PAYS</span><h2>{billing.school.name}</h2><p>Choose a flat recurring amount or automatically calculate billing from active students.</p></div><WalletCards size={20}/></div>
         <div className="platform-choice-grid"><button type="button" className={draft.billingMode === "per_student" ? "is-selected" : ""} onClick={() => setDraft({ ...draft, billingMode: "per_student" })}><Calculator size={17}/><strong>Per student</strong><span>Active students × your configured rate.</span></button><button type="button" className={draft.billingMode === "flat" ? "is-selected" : ""} onClick={() => setDraft({ ...draft, billingMode: "flat" })}><CreditCard size={17}/><strong>Flat rate</strong><span>One recurring amount regardless of headcount.</span></button></div>
         <div className="platform-form-grid"><label><span>Currency</span><input value={draft.currency} onChange={(e) => setDraft({ ...draft, currency: e.target.value.toUpperCase() })}/></label><label><span>Student rate</span><input type="number" min="0" step="0.01" disabled={draft.billingMode !== "per_student"} value={draft.studentRate} onChange={(e) => setDraft({ ...draft, studentRate: Number(e.target.value) })}/></label><label><span>Flat monthly rate</span><input type="number" min="0" step="0.01" disabled={draft.billingMode !== "flat"} value={draft.flatRate} onChange={(e) => setDraft({ ...draft, flatRate: Number(e.target.value) })}/></label><label><span>Billing day</span><input type="number" min="1" max="28" value={draft.billingDay} onChange={(e) => setDraft({ ...draft, billingDay: Number(e.target.value) })}/></label><label><span>Grace period (days)</span><input type="number" min="0" max="90" value={draft.graceDays} onChange={(e) => setDraft({ ...draft, graceDays: Number(e.target.value) })}/></label><label><span>Trial (days)</span><input type="number" min="0" max="365" value={draft.trialDays} onChange={(e) => setDraft({ ...draft, trialDays: Number(e.target.value) })}/></label><label><span>Minimum charge</span><input type="number" min="0" step="0.01" value={draft.minimumCharge} onChange={(e) => setDraft({ ...draft, minimumCharge: Number(e.target.value) })}/></label><label><span>Maximum charge <em>optional cap</em></span><input type="number" min="0" step="0.01" value={draft.maximumCharge ?? ""} onChange={(e) => setDraft({ ...draft, maximumCharge: e.target.value === "" ? null : Number(e.target.value) })}/></label></div>
-        <div className="platform-calculation-card"><div><span className="platform-calculation-label">Live invoice estimate</span><strong>{money(draft.currency, billing.calculatedTotal)}</strong><small>{billing.activeStudents.toLocaleString()} active students · {draft.billingMode === "per_student" ? money(draft.currency, draft.studentRate) + " each" : "flat recurring charge"}</small></div><CheckCircle2 size={22}/></div>
+        <div className="platform-calculation-card"><div><span className="platform-calculation-label">Live invoice estimate</span><strong>{money(draft.currency, estimatedTotal)}</strong><small>{billing.activeStudents.toLocaleString()} active students · {draft.billingMode === "per_student" ? money(draft.currency, draft.studentRate) + " each" : "flat recurring charge"}</small></div><CheckCircle2 size={22}/></div>
         <button type="button" className="app-action" onClick={() => void saveBilling()} disabled={busy}><CreditCard size={14}/><strong>Save school billing rules</strong></button>
       </section>
       <aside className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">BILLING BEHAVIOUR</span><h2>Operator controls</h2><p>Predictable settings that make invoices easy to explain and review.</p></div></div><div className="platform-rule-list"><div><strong>Automatically count students</strong><span>The invoice engine reads the current active-student count at generation time.</span></div><div><strong>Protect the floor</strong><span>Use a minimum charge when a per-student school has a contracted baseline.</span></div><div><strong>Optional ceiling</strong><span>Cap unexpectedly large bills when you have a commercial commitment.</span></div><div><strong>Separate lifecycle</strong><span>Suspending a school does not delete its billing history.</span></div></div>{selectedSchool && <div className="platform-side-summary"><span>Current plan</span><strong>{selectedSchool.subscriptionPlan?.name ?? "Custom billing"}</strong><small>{selectedSchool.studentCount.toLocaleString()} active students in directory</small></div>}</aside>
