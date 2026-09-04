@@ -71,6 +71,7 @@ export async function prepareEmergencySnapshot(tx: TenantDb, input: { schoolId: 
 }
 
 export async function confirmEmergencySnapshot(tx: TenantDb, input: { schoolId: string; actorId: string; confirmationToken: string; message: string }) {
+  await requirePermission(tx, input.actorId, "broadcast:emergency_send");
   const tokenData = verifyToken(input.confirmationToken, input.schoolId, input.actorId);
   const rows = await tx.$queryRaw<Array<{ id: string; message: string; recipientSnapshot: Prisma.JsonValue; status: string; confirmationExpiresAt: Date; recipientCount: number }>>`
     SELECT "id", "message", "recipientSnapshot", "status", "confirmationExpiresAt", "recipientCount"
