@@ -93,7 +93,7 @@ const compatibleExec = `async function exec(tx, sql, ...params) {
   // generated id. Live trial reruns can legitimately hit composite unique
   // keys (notably AttendanceEvent's school/student/date/period/type key).
   // Ignore any existing unique row instead of failing the entire seed.
-  normalizedSql = normalizedSql.replaceAll("ON CONFLICT (\"id\") DO NOTHING", "ON CONFLICT DO NOTHING");
+  normalizedSql = normalizedSql.replaceAll('ON CONFLICT ("id") DO NOTHING', 'ON CONFLICT DO NOTHING');
 
   return tx.$executeRawUnsafe(normalizedSql, ...normalizedParams);
 }`;
