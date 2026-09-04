@@ -42,16 +42,16 @@ const replacement = `async function exec(tx, sql, ...params) {
     }
   }
   normalizedSql = normalizedSql.replaceAll('ON CONFLICT ("id") DO NOTHING', 'ON CONFLICT DO NOTHING');
-  const savepoint = `eugene_raw_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  await tx.$executeRawUnsafe(`SAVEPOINT \\"${savepoint}\\"`);
+  const savepoint = 'eugene_raw_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  await tx.$executeRawUnsafe('SAVEPOINT "' + savepoint + '"');
   try {
     const result = await tx.$executeRawUnsafe(normalizedSql, ...normalizedParams);
-    await tx.$executeRawUnsafe(`RELEASE SAVEPOINT \\"${savepoint}\\"`);
+    await tx.$executeRawUnsafe('RELEASE SAVEPOINT "' + savepoint + '"');
     return result;
   } catch (error) {
     console.error("[eugene-academy-trial] raw fixture row skipped", { message: error?.message, sql: normalizedSql });
-    await tx.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT \\"${savepoint}\\"`);
-    await tx.$executeRawUnsafe(`RELEASE SAVEPOINT \\"${savepoint}\\"`);
+    await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT "' + savepoint + '"');
+    await tx.$executeRawUnsafe('RELEASE SAVEPOINT "' + savepoint + '"');
     return 0;
   }
 }`;
@@ -59,4 +59,4 @@ const replacement = `async function exec(tx, sql, ...params) {
 const next = source.slice(0, start) + replacement + source.slice(end + 4);
 if (next === source) throw new Error("Savepoint patch made no changes.");
 fs.writeFileSync(fixturePath, next, "utf8");
-console.log("[eugene-academy-trial] raw fixture savepoint guard applied v2");
+console.log("[eugene-academy-trial] raw fixture savepoint guard applied v3");
