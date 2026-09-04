@@ -63,14 +63,14 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         tx.reportCard.count({ where: { termId: id } }),
         tx.attendanceEvent.findMany({ where: { attendanceDate: { gte: term.startDate, lte: term.endDate } }, select: { type: true, isLate: true } }),
         tx.invoice.findMany({ where: { termId: id }, select: { id: true, totalAmount: true } }),
-        tx.payment.findMany({ where: { invoice: { termId: id } }, select: { amount: true } })
+        tx.payment.findMany({ where: { invoice: { termId: id } }, select: { amount: true, reversals: { select: { amount: true } } } })
       ]);
       const scorePct = scores.length ? scores.reduce((sum, s) => sum + Number(s.value) / Math.max(Number(s.assessment.maxScore), 1) * 100, 0) / scores.length : null;
       const present = attendance.filter((a) => a.type === "in").length;
       const late = attendance.filter((a) => Boolean(a.isLate)).length;
       const absent = attendance.filter((a) => a.type === "absence" || a.type === "absent").length;
       const invoiced = invoices.reduce((sum, i) => sum + Number(i.totalAmount), 0);
-      const collected = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const collected = payments.reduce((sum, p) => sum + Number(p.amount) - p.reversals.reduce((reversed, reversal) => reversed + Number(reversal.amount), 0), 0);
       return { term, status: termStatus(term.startDate, term.endDate), students, assessments, scores: scores.length, scorePct, reportCards, attendance: { records: attendance.length, present, late, absent }, finance: { invoiceCount: invoices.length, invoiced, collected, outstanding: Math.max(invoiced - collected, 0) } };
     });
     return NextResponse.json(result);
