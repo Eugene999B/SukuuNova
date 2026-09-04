@@ -5,13 +5,13 @@ import { Check } from "lucide-react";
 import { getThemePreferences, saveThemePreferences, themePresets, type Density, type ThemePreset } from "@/components/ThemeProvider";
 
 export default function ThemePreferences() {
-  const [selected, setSelected] = useState<ThemePreset>("paper");
+  const [selected, setSelected] = useState<ThemePreset>("light");
   const [density, setDensity] = useState<Density>("comfortable");
 
   useEffect(() => {
     const value = getThemePreferences();
     const match = themePresets.find((preset) => preset.mode === value.mode && preset.accent === value.accent);
-    setSelected(match?.id ?? "paper");
+    setSelected(match?.id ?? "light");
     setDensity(value.density);
   }, []);
 
