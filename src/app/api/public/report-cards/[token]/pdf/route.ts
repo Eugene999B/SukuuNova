@@ -20,7 +20,9 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'inline; filename="sukuunova-report-card.pdf"',
-        "Cache-Control": "private, max-age=300, must-revalidate",
+        "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+        "Pragma": "no-cache",
+        "Referrer-Policy": "no-referrer",
         "X-Content-Type-Options": "nosniff"
       }
     });
