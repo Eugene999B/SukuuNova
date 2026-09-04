@@ -12,7 +12,7 @@ export default function GuardianPasswordResetPage(){
     setPending(true); setMessage("");
     const form=new FormData(e.currentTarget);
     try{
-      const response=await fetch("/api/auth/school/password-reset/request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uniqueCode:form.get("schoolCode"),identifier:form.get("identifier")})});
+      const response=await fetch("/api/auth/school/password-reset/request",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({uniqueCode:form.get("schoolCode"),identifier:form.get("identifier"),universe:"guardian"})});
       const data=await response.json();
       setMessage(data.message||"If the guardian account exists, reset instructions will be delivered.");
     }catch{setMessage("Unable to reach SukuuNova right now. Please try again.");}
