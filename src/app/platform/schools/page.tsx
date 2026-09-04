@@ -5,6 +5,8 @@ import { getPlatformOverview } from "@/lib/platform-admin-service";
 import { getScopedPlatformOverview } from "@/lib/platform-scoped-overview";
 import PlatformSchoolsConsole from "@/components/PlatformSchoolsConsole";
 
+export const dynamic = "force-dynamic";
+
 export default async function SchoolsPage() {
   const session = await requirePlatformSession();
   await requirePlatformPermission(session, "schools.view");
