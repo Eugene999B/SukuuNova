@@ -51,13 +51,11 @@ export async function PATCH(request: Request) {
       const beforeSettings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId } });
       let school = beforeSchool;
       if (input.school) {
-        const uniqueCode = input.school.uniqueCode.trim().toLowerCase();
-        school = await tx.school.update({ where: { id: session.schoolId }, data: { name: input.school.name, uniqueCode } });
-        await tx.schoolLoginDirectory.upsert({
-          where: { schoolId: session.schoolId },
-          update: { uniqueCode, status: school.status === "active" ? "active" : "inactive" },
-          create: { schoolId: session.schoolId, uniqueCode, status: school.status === "active" ? "active" : "inactive" },
-        });
+        const requestedCode = input.school.uniqueCode.trim().toLowerCase();
+        if (requestedCode !== beforeSchool?.uniqueCode) {
+          throw new AppError("School code cannot be changed after provisioning because it anchors guardian links, IDs, and QR codes.", 409, "SCHOOL_CODE_IMMUTABLE");
+        }
+        school = await tx.school.update({ where: { id: session.schoolId }, data: { name: input.school.name } });
       }
       const settings = input.settings ? await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: input.settings }) : beforeSettings;
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "settings.school_workspace_updated", entityType: "SchoolSettings", entityId: session.schoolId, before: { school: beforeSchool, settings: beforeSettings }, after: { school, settings } });
