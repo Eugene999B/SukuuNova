@@ -33,8 +33,10 @@ export async function POST(request: Request) {
   try {
     const session = await requirePlatformSession();
     const preferences = preferencesSchema.parse(await request.json());
-    await db.$executeRawUnsafe(`INSERT INTO "PlatformAdminMeta" ("adminId","preferences") VALUES ($1,$2::jsonb) ON CONFLICT ("adminId") DO UPDATE SET "preferences"=EXCLUDED."preferences"`, session.adminId, JSON.stringify(preferences));
-    await appendPlatformAudit({ actorId: session.adminId, action: "platform_admin.preferences.updated", targetEntity: `PlatformAdmin:${session.adminId}`, meta: preferences });
+    await db.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminMeta" ("adminId","preferences") VALUES ($1,$2::jsonb) ON CONFLICT ("adminId") DO UPDATE SET "preferences"=EXCLUDED."preferences"`, session.adminId, JSON.stringify(preferences));
+      await appendPlatformAudit({ actorId: session.adminId, action: "platform_admin.preferences.updated", targetEntity: `PlatformAdmin:${session.adminId}`, meta: preferences }, tx);
+    });
     return NextResponse.json({ ok: true, preferences });
   } catch (error) { return routeError(error); }
 }
