@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const days = Number(url.searchParams.get("days") ?? 28);
     const schoolScope = await getPlatformSchoolScope(session);
     const analytics = await getPlatformAnalytics(session.role, Number.isFinite(days) ? days : 28, schoolScope);
-    return NextResponse.json(analytics);
+    return NextResponse.json(analytics, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return routeError(error);
   }
