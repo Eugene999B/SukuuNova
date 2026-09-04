@@ -12,6 +12,40 @@ type Preferences = { mode: ThemeMode; accent: AccentName; density: Density };
 const DEFAULTS: Preferences = { mode: "light", accent: "teal", density: "comfortable" };
 const KEY = "sukuunova-theme-preferences";
 
+function greetingForDate(date: Date) {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function syncTimeBasedGreetings() {
+  if (typeof document === "undefined") return;
+
+  const greeting = greetingForDate(new Date());
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const nodes: Text[] = [];
+
+  while (walker.nextNode()) {
+    nodes.push(walker.currentNode as Text);
+  }
+
+  for (const node of nodes) {
+    const value = node.nodeValue ?? "";
+    const trimmed = value.trim();
+    const match = trimmed.match(/^Good (?:morning|afternoon|evening),\s+(.+?)([.!?])?$/);
+    if (!match) continue;
+
+    const leadingWhitespace = value.match(/^\s*/)?.[0] ?? "";
+    const trailingWhitespace = value.match(/\s*$/)?.[0] ?? "";
+    const nextValue = `${leadingWhitespace}${greeting}, ${match[1]}${match[2] ?? ""}${trailingWhitespace}`;
+
+    if (nextValue !== value) {
+      node.nodeValue = nextValue;
+    }
+  }
+}
+
 function applyPreferences(value: Preferences) {
   const root = document.documentElement;
   root.dataset.theme = value.mode;
@@ -36,8 +70,46 @@ export function getThemePreferences(): Preferences {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState<Preferences>(DEFAULTS);
-  useEffect(() => { const value = getThemePreferences(); setPreferences(value); applyPreferences(value); }, []);
-  useEffect(() => { applyPreferences(preferences); localStorage.setItem(KEY, JSON.stringify(preferences)); }, [preferences]);
+
+  useEffect(() => {
+    const value = getThemePreferences();
+    setPreferences(value);
+    applyPreferences(value);
+  }, []);
+
+  useEffect(() => {
+    applyPreferences(preferences);
+    localStorage.setItem(KEY, JSON.stringify(preferences));
+  }, [preferences]);
+
+  useEffect(() => {
+    syncTimeBasedGreetings();
+
+    let framePending = false;
+    const scheduleSync = () => {
+      if (framePending) return;
+      framePending = true;
+      window.requestAnimationFrame(() => {
+        framePending = false;
+        syncTimeBasedGreetings();
+      });
+    };
+
+    const observer = new MutationObserver(scheduleSync);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    const interval = window.setInterval(syncTimeBasedGreetings, 60_000);
+
+    return () => {
+      observer.disconnect();
+      window.clearInterval(interval);
+    };
+  }, []);
+
   return <><ThemeSwitcher />{children}</>;
 }
 
