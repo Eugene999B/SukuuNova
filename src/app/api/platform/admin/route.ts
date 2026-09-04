@@ -20,6 +20,15 @@ function optionalBoolean(value: string | null) {
   return value === "true" || value === "1";
 }
 
+function parseAuditLimit(value: string | null) {
+  if (value === null || value === "") return 50;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+    throw new AppError("Audit limit must be an integer between 1 and 100.", 400, "INVALID_LIMIT");
+  }
+  return parsed;
+}
+
 export async function GET(request: Request) {
   try {
     const session = await requirePlatformSession();
@@ -38,7 +47,7 @@ export async function GET(request: Request) {
     if (view === "audit") {
       await requirePlatformPermission(session, "audit.view");
       const input = {
-        limit: Number(u.searchParams.get("limit") || 50),
+        limit: parseAuditLimit(u.searchParams.get("limit")),
         cursor: u.searchParams.get("cursor") || undefined,
         query: u.searchParams.get("q") || undefined,
         action: u.searchParams.get("action") || undefined,
