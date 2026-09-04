@@ -13,14 +13,23 @@ export async function POST(request: Request) {
     const uniqueCode = parsed.data.uniqueCode.toLowerCase();
     const directory = await authDb.schoolLoginDirectory.findUnique({
       where: { uniqueCode },
-      select: { status: true, school: { select: { name: true, status: true } } },
+      select: { schoolId: true, status: true },
     });
 
-    if (!directory || directory.status !== "active" || directory.school.status !== "active") {
+    if (!directory || directory.status !== "active") {
       return NextResponse.json({ ok: false, message: "We could not find an active school with that code." }, { status: 404 });
     }
 
-    return NextResponse.json({ ok: true, school: { name: directory.school.name, uniqueCode } });
+    const school = await authDb.school.findUnique({
+      where: { id: directory.schoolId },
+      select: { name: true, status: true },
+    });
+
+    if (!school || school.status !== "active") {
+      return NextResponse.json({ ok: false, message: "We could not find an active school with that code." }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true, school: { name: school.name, uniqueCode } });
   } catch {
     return NextResponse.json({ ok: false, message: "Unable to verify that school code right now." }, { status: 500 });
   } finally {
