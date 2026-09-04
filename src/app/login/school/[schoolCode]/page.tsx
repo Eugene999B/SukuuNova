@@ -6,7 +6,7 @@ import { PrismaClient } from "@prisma/client";
 import { LoginForm } from "@/components/LoginForm";
 import "../../login.css";
 import "../gateway.css";
-import "../login-photo.css";
+import "../../login-photo.css";
 
 export default async function SchoolCodeLoginPage({ params }: { params: Promise<{ schoolCode: string }> }) {
   const { schoolCode: rawCode } = await params;
