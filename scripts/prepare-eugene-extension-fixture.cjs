@@ -51,11 +51,34 @@ const templateGuard = `    const reportCardTemplateRows = await prisma.$queryRaw
 `;
 source = source.replace(templateMarker, templateGuard + templateMarker);
 
+// The live database trigger requires submittedBy/submittedAt and forbids the
+// submitter from being the approver. Patch the generated Eugene extension so
+// the existing report-card row can be safely upserted on retries as well.
+const submitterMarker = '    const sampleStudent = (await prisma.student.findMany({ where: { schoolId }, orderBy: { admissionNo: "asc" }, take: 1 }))[0];';
+const submitterReplacement = `    const reportCardSubmitter = await prisma.user.findFirst({
+      where: { schoolId, id: { not: owner.id }, email: { endsWith: ".eug123@test.sukuunova.local" } },
+      orderBy: { createdAt: "asc" },
+    }) || await prisma.user.findFirst({
+      where: { schoolId, id: { not: owner.id } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!reportCardSubmitter) throw new Error("Need a distinct Eugene Academy report-card submitter.");
+
+    const sampleStudent = (await prisma.student.findMany({ where: { schoolId }, orderBy: { admissionNo: "asc" }, take: 1 }))[0];`;
+source = source.replace(submitterMarker, submitterReplacement);
+
+const reportCardUpsert = /await prisma\.reportCard\.upsert\(\{ where: \{ studentId_termId: \{ studentId: sampleStudent\.id, termId: pastTerm\.id \} \}, update: \{[\s\S]*?\}, create: \{[\s\S]*?\} \}\);/;
+const reportCardReplacement = `await prisma.reportCard.upsert({ where: { studentId_termId: { studentId: sampleStudent.id, termId: pastTerm.id } }, update: { templateId: template.id, pdfData, status: "approved", submittedBy: reportCardSubmitter.id, submittedAt: new Date("2026-03-31T00:00:00.000Z"), approvedBy: owner.id, approvedAt: new Date("2026-04-01T00:00:00.000Z"), sentAt: new Date("2026-04-02T00:00:00.000Z"), remarks: "Official synthetic trial report card ready for download." }, create: { schoolId, studentId: sampleStudent.id, termId: pastTerm.id, templateId: template.id, pdfData, status: "approved", submittedBy: reportCardSubmitter.id, submittedAt: new Date("2026-03-31T00:00:00.000Z"), approvedBy: owner.id, approvedAt: new Date("2026-04-01T00:00:00.000Z"), sentAt: new Date("2026-04-02T00:00:00.000Z"), remarks: "Official synthetic trial report card ready for download." } });`;
+if (!reportCardUpsert.test(source)) throw new Error("Could not locate Eugene report-card extension upsert.");
+source = source.replace(reportCardUpsert, reportCardReplacement);
+
 if (replacements.some(([from]) => source.includes(from))) {
   throw new Error("Eugene calendar compatibility patch did not apply completely.");
 }
 if (!source.includes('optionalTables.has("LessonPlan")')) throw new Error("LessonPlan optional guard was not applied.");
 if (!source.includes('optionalTables.has("Homework")')) throw new Error("Homework optional guard was not applied.");
+if (!source.includes('const reportCardSubmitter = await prisma.user.findFirst')) throw new Error("Report-card submitter patch was not applied.");
+if (!source.includes('submittedBy: reportCardSubmitter.id')) throw new Error("Report-card submittedBy patch was not applied.");
 
 fs.writeFileSync(path, source, "utf8");
 console.log("[eugene-academy-trial] extension fixture compatibility prepared");
