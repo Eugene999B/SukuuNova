@@ -15,6 +15,7 @@ export type PlatformAnalyticsSchool = {
   attendanceToday: number;
   lateRate: number;
   collections: number;
+  billed: number;
   invoices: number;
   outstanding: number;
   collectionRate: number;
@@ -25,6 +26,19 @@ export type PlatformAnalyticsSchool = {
   riskLevel: "critical" | "watch" | "stable";
   riskReasons: string[];
   series: Array<{ day: string; attendance: number; activeStudents: number; activeUsers: number }>;
+};
+
+export type PlatformAnalyticsNetwork = {
+  schools: number;
+  students: number;
+  users: number;
+  classes: number;
+  attendanceCoverage: number;
+  collectionRate: number;
+  outstanding: number;
+  medianRisk: number;
+  critical: number;
+  watch: number;
 };
 
 function clamp(value: number, min = 0, max = 100) {
@@ -68,7 +82,7 @@ export async function getPlatformAnalytics(
 ): Promise<{
   generatedAt: string;
   windowDays: number;
-  network: Record<string, number>;
+  network: PlatformAnalyticsNetwork;
   schools: PlatformAnalyticsSchool[];
 }> {
   if (!["super_admin", "platform_admin", "analytics_admin"].includes(role)) {
@@ -91,198 +105,212 @@ export async function getPlatformAnalytics(
   start.setDate(start.getDate() - windowDays + 1);
   start.setHours(0, 0, 0, 0);
 
-  const schoolResults = await Promise.all(
-    directories.map(({ schoolId }) =>
-      withTenant(schoolId, async (tx) => {
-        const school = await tx.school.findUnique({
-          where: { id: schoolId },
-          select: { id: true, name: true, uniqueCode: true, status: true },
-        });
-        if (!school) return null;
+  const CONCURRENCY = 8;
+  const schoolResults: Array<PlatformAnalyticsSchool | null> = [];
+  for (let offset = 0; offset < directories.length; offset += CONCURRENCY) {
+    const batch = await Promise.allSettled(
+      directories.slice(offset, offset + CONCURRENCY).map(({ schoolId }) =>
+        withTenant(schoolId, async (tx) => {
+          const school = await tx.school.findUnique({
+            where: { id: schoolId },
+            select: { id: true, name: true, uniqueCode: true, status: true },
+          });
+          if (!school) return null;
 
-        const [aggregateRows, dailyRows] = await Promise.all([
-          tx.$queryRawUnsafe<Array<{
-            students: string;
-            users: string;
-            classes: string;
-            attendance: string;
-            late: string;
-            invoices: string;
-            outstanding: string;
-            collections: string;
-          }>>(
-            `SELECT
-              (SELECT COUNT(*)::text FROM "Student" WHERE "schoolId"=$1 AND "status"='active') AS students,
-              (SELECT COUNT(*)::text FROM "User" WHERE "schoolId"=$1 AND "status"='active') AS users,
-              (SELECT COUNT(*)::text FROM "Class" WHERE "schoolId"=$1) AS classes,
-              (SELECT COUNT(*)::text FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3 AND "type"='in') AS attendance,
-              (SELECT COUNT(*)::text FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3 AND "type"='in' AND COALESCE("isLate",false)=true) AS late,
-              (SELECT COUNT(*)::text FROM "PlatformInvoice" WHERE "schoolId"=$1) AS invoices,
-              (SELECT COALESCE(SUM(GREATEST("amount"-COALESCE((SELECT SUM(p."amount") FROM "PlatformPayment" p WHERE p."platformInvoiceId"=i."id"),0),0)),0)::text FROM "PlatformInvoice" i WHERE i."schoolId"=$1) AS outstanding,
-              (SELECT COALESCE(SUM("amount"),0)::text FROM "PlatformPayment" WHERE "schoolId"=$1) AS collections`,
-            schoolId,
-            start,
-            end,
-          ),
-          tx.$queryRawUnsafe<Array<{
-            day: string;
-            attendance: string;
-            activeStudents: string;
-            activeUsers: string;
-          }>>(
-            `WITH days AS (
-              SELECT generate_series($2::date,$3::date,interval '1 day')::date AS day
-            ), attendance AS (
-              SELECT "attendanceDate"::date AS day,
-                COUNT(*) FILTER (WHERE "type"='in')::text AS attendance,
-                COUNT(DISTINCT "studentId") FILTER (WHERE "type"='in' AND "studentId" IS NOT NULL)::text AS "activeStudents"
-              FROM "AttendanceEvent"
-              WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3
-              GROUP BY "attendanceDate"::date
-            ), audit_activity AS (
-              SELECT "createdAt"::date AS day,
-                COUNT(DISTINCT "actorId")::text AS "activeUsers"
-              FROM "AuditLogSchool"
-              WHERE "schoolId"=$1
-                AND "createdAt" >= $2
-                AND "createdAt" < ($3::date + interval '1 day')
-                AND "actorId" IS NOT NULL
-              GROUP BY "createdAt"::date
-            )
-            SELECT to_char(days.day,'YYYY-MM-DD') AS day,
-              COALESCE(attendance.attendance,'0') AS attendance,
-              COALESCE(attendance."activeStudents",'0') AS "activeStudents",
-              COALESCE(audit_activity."activeUsers",'0') AS "activeUsers"
-            FROM days
-            LEFT JOIN attendance ON attendance.day=days.day
-            LEFT JOIN audit_activity ON audit_activity.day=days.day
-            ORDER BY days.day ASC`,
-            schoolId,
-            start,
-            end,
-          ),
-        ]);
+          const [aggregateRows, dailyRows] = await Promise.all([
+            tx.$queryRawUnsafe<Array<{
+              students: string;
+              users: string;
+              classes: string;
+              attendance: string;
+              late: string;
+              invoices: string;
+              billed: string;
+              outstanding: string;
+              collections: string;
+            }>>(
+              `SELECT
+                (SELECT COUNT(*)::text FROM "Student" WHERE "schoolId"=$1 AND "status"='active') AS students,
+                (SELECT COUNT(*)::text FROM "User" WHERE "schoolId"=$1 AND "status"='active') AS users,
+                (SELECT COUNT(*)::text FROM "Class" WHERE "schoolId"=$1) AS classes,
+                (SELECT COUNT(*)::text FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3 AND "type"='in') AS attendance,
+                (SELECT COUNT(*)::text FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3 AND "type"='in' AND COALESCE("isLate",false)=true) AS late,
+                (SELECT COUNT(*)::text FROM "PlatformInvoice" WHERE "schoolId"=$1) AS invoices,
+                (SELECT COALESCE(SUM("amount"),0)::text FROM "PlatformInvoice" WHERE "schoolId"=$1) AS billed,
+                (SELECT COALESCE(SUM(GREATEST("amount"-COALESCE((SELECT SUM(p."amount") FROM "PlatformPayment" p WHERE p."platformInvoiceId"=i."id"),0),0)),0)::text FROM "PlatformInvoice" i WHERE i."schoolId"=$1) AS outstanding,
+                (SELECT COALESCE(SUM("amount"),0)::text FROM "PlatformPayment" WHERE "schoolId"=$1) AS collections`,
+              schoolId,
+              start,
+              end,
+            ),
+            tx.$queryRawUnsafe<Array<{
+              day: string;
+              attendance: string;
+              activeStudents: string;
+              activeUsers: string;
+            }>>(
+              `WITH days AS (
+                SELECT generate_series($2::date,$3::date,interval '1 day')::date AS day
+              ), attendance AS (
+                SELECT "attendanceDate"::date AS day,
+                  COUNT(*) FILTER (WHERE "type"='in')::text AS attendance,
+                  COUNT(DISTINCT "studentId") FILTER (WHERE "type"='in' AND "studentId" IS NOT NULL)::text AS "activeStudents"
+                FROM "AttendanceEvent"
+                WHERE "schoolId"=$1 AND "attendanceDate" BETWEEN $2 AND $3
+                GROUP BY "attendanceDate"::date
+              ), audit_activity AS (
+                SELECT "createdAt"::date AS day,
+                  COUNT(DISTINCT "actorId")::text AS "activeUsers"
+                FROM "AuditLogSchool"
+                WHERE "schoolId"=$1
+                  AND "createdAt" >= $2
+                  AND "createdAt" < ($3::date + interval '1 day')
+                  AND "actorId" IS NOT NULL
+                GROUP BY "createdAt"::date
+              )
+              SELECT to_char(days.day,'YYYY-MM-DD') AS day,
+                COALESCE(attendance.attendance,'0') AS attendance,
+                COALESCE(attendance."activeStudents",'0') AS "activeStudents",
+                COALESCE(audit_activity."activeUsers",'0') AS "activeUsers"
+              FROM days
+              LEFT JOIN attendance ON attendance.day=days.day
+              LEFT JOIN audit_activity ON audit_activity.day=days.day
+              ORDER BY days.day ASC`,
+              schoolId,
+              start,
+              end,
+            ),
+          ]);
 
-        const aggregate = aggregateRows[0] ?? {
-          students: "0",
-          users: "0",
-          classes: "0",
-          attendance: "0",
-          late: "0",
-          invoices: "0",
-          outstanding: "0",
-          collections: "0",
-        };
+          const aggregate = aggregateRows[0] ?? {
+            students: "0",
+            users: "0",
+            classes: "0",
+            attendance: "0",
+            late: "0",
+            invoices: "0",
+            billed: "0",
+            outstanding: "0",
+            collections: "0",
+          };
 
-        const students = Number(aggregate.students);
-        const users = Number(aggregate.users);
-        const attendance = Number(aggregate.attendance);
-        const late = Number(aggregate.late);
-        const invoices = Number(aggregate.invoices);
-        const outstanding = Number(aggregate.outstanding);
-        const collections = Number(aggregate.collections);
-        const series = dailyRows.map((row) => ({
-          day: row.day,
-          attendance: Number(row.attendance),
-          activeStudents: Number(row.activeStudents),
-          activeUsers: Number(row.activeUsers),
-        }));
+          const students = Number(aggregate.students);
+          const users = Number(aggregate.users);
+          const attendance = Number(aggregate.attendance);
+          const late = Number(aggregate.late);
+          const invoices = Number(aggregate.invoices);
+          const billed = Number(aggregate.billed);
+          const outstanding = Number(aggregate.outstanding);
+          const collections = Number(aggregate.collections);
+          const series = dailyRows.map((row) => ({
+            day: row.day,
+            attendance: Number(row.attendance),
+            activeStudents: Number(row.activeStudents),
+            activeUsers: Number(row.activeUsers),
+          }));
 
-        const observedAttendanceDays = series.filter((row) => row.attendance > 0).length;
-        const observedStudentDays = series.reduce((sum, row) => sum + row.activeStudents, 0);
-        const expectedObservedStudentDays = students * observedAttendanceDays;
-        const coverage = expectedObservedStudentDays
-          ? clamp((observedStudentDays / expectedObservedStudentDays) * 100)
-          : 0;
+          const observedAttendanceDays = series.filter((row) => row.attendance > 0).length;
+          const observedStudentDays = series.reduce((sum, row) => sum + row.activeStudents, 0);
+          const expectedObservedStudentDays = students * observedAttendanceDays;
+          const coverage = expectedObservedStudentDays
+            ? clamp((observedStudentDays / expectedObservedStudentDays) * 100)
+            : 0;
 
-        const activityUserDays = series.reduce((sum, row) => sum + Math.min(row.activeUsers, users), 0);
-        const activityRate = users
-          ? clamp((activityUserDays / Math.max(series.length, 1) / users) * 100)
-          : 0;
+          const activityUserDays = series.reduce((sum, row) => sum + Math.min(row.activeUsers, users), 0);
+          const activityRate = users
+            ? clamp((activityUserDays / Math.max(series.length, 1) / users) * 100)
+            : 0;
 
-        const attendanceRatios = series
-          .filter((row) => row.attendance > 0)
-          .map((row) => (students ? (row.activeStudents / students) * 100 : 0));
-        const activityRatios = series.map((row) => (users ? (Math.min(row.activeUsers, users) / users) * 100 : 0));
-        const recentAttendance = ewma(attendanceRatios.slice(-7));
-        const priorAttendance = ewma(attendanceRatios.slice(-14, -7));
-        const attendanceTrend = attendanceRatios.length >= 2 ? recentAttendance - priorAttendance : 0;
-        const activityTrend = trendSlope(activityRatios.slice(-14));
-        const collectionRate = collections + outstanding
-          ? clamp((collections / (collections + outstanding)) * 100)
-          : 100;
-        const lateRate = attendance ? clamp((late / attendance) * 100) : 0;
+          const attendanceRatios = series
+            .filter((row) => row.attendance > 0)
+            .map((row) => (students ? (row.activeStudents / students) * 100 : 0));
+          const activityRatios = series.map((row) => (users ? (Math.min(row.activeUsers, users) / users) * 100 : 0));
+          const recentAttendance = ewma(attendanceRatios.slice(-7));
+          const priorAttendanceWindow = attendanceRatios.slice(-14, -7);
+          const attendanceTrend = priorAttendanceWindow.length
+            ? recentAttendance - ewma(priorAttendanceWindow)
+            : 0;
+          const activityTrend = trendSlope(activityRatios.slice(-14));
+          const collectionRate = billed > 0
+            ? clamp((collections / billed) * 100)
+            : 0;
+          const lateRate = attendance ? clamp((late / attendance) * 100) : 0;
 
-        const riskReasons: string[] = [];
-        let risk = 0;
-        if (school.status !== "active") {
-          risk += 55;
-          riskReasons.push("School account is not active");
-        }
-        if (students > 0 && observedAttendanceDays > 0 && coverage < 35) {
-          risk += 25;
-          riskReasons.push("Attendance coverage is low");
-        } else if (students > 0 && observedAttendanceDays > 0 && coverage < 65) {
-          risk += 12;
-          riskReasons.push("Attendance coverage needs review");
-        }
-        if (users > 0 && activityRate < 25) {
-          risk += 18;
-          riskReasons.push("Low operator activity");
-        }
-        if (attendanceTrend < -10) {
-          risk += 18;
-          riskReasons.push("Attendance trend is declining");
-        } else if (attendanceTrend < -4) {
-          risk += 9;
-          riskReasons.push("Attendance trend softened");
-        }
-        if (collectionRate < 50) {
-          risk += 18;
-          riskReasons.push("Collection rate is below 50%");
-        } else if (collectionRate < 80) {
-          risk += 8;
-          riskReasons.push("Collection rate below target");
-        }
-        if (lateRate > 25) {
-          risk += 8;
-          riskReasons.push("Late attendance is elevated");
-        }
+          const riskReasons: string[] = [];
+          let risk = 0;
+          if (school.status !== "active") {
+            risk += 55;
+            riskReasons.push("School account is not active");
+          }
+          if (students > 0 && observedAttendanceDays > 0 && coverage < 35) {
+            risk += 25;
+            riskReasons.push("Attendance coverage is low");
+          } else if (students > 0 && observedAttendanceDays > 0 && coverage < 65) {
+            risk += 12;
+            riskReasons.push("Attendance coverage needs review");
+          }
+          if (users > 0 && activityRate < 25) {
+            risk += 18;
+            riskReasons.push("Low operator activity");
+          }
+          if (attendanceTrend < -10) {
+            risk += 18;
+            riskReasons.push("Attendance trend is declining");
+          } else if (attendanceTrend < -4) {
+            risk += 9;
+            riskReasons.push("Attendance trend softened");
+          }
+          if (collectionRate < 50) {
+            risk += 18;
+            riskReasons.push("Collection rate is below 50%");
+          } else if (collectionRate < 80) {
+            risk += 8;
+            riskReasons.push("Collection rate below target");
+          }
+          if (lateRate > 25) {
+            risk += 8;
+            riskReasons.push("Late attendance is elevated");
+          }
 
-        const riskScore = Math.round(clamp(risk));
-        const riskLevel = riskScore >= 60 ? "critical" : riskScore >= 25 ? "watch" : "stable";
+          const riskScore = Math.round(clamp(risk));
+          const riskLevel = riskScore >= 60 ? "critical" : riskScore >= 25 ? "watch" : "stable";
 
-        return {
-          id: school.id,
-          name: school.name,
-          uniqueCode: school.uniqueCode,
-          status: school.status,
-          students,
-          users,
-          classes: Number(aggregate.classes),
-          attendanceCoverage: Math.round(coverage),
-          attendanceToday: Number(series.at(-1)?.activeStudents ?? 0),
-          lateRate: Math.round(lateRate),
-          collections,
-          invoices,
-          outstanding,
-          collectionRate: Math.round(collectionRate),
-          activityRate: Math.round(activityRate),
-          attendanceTrend: Math.round(attendanceTrend * 10) / 10,
-          activityTrend: Math.round(activityTrend * 10) / 10,
-          riskScore,
-          riskLevel,
-          riskReasons: riskReasons.slice(0, 3),
-          series,
-        } satisfies PlatformAnalyticsSchool;
-      }),
-    ),
-  );
+          return {
+            id: school.id,
+            name: school.name,
+            uniqueCode: school.uniqueCode,
+            status: school.status,
+            students,
+            users,
+            classes: Number(aggregate.classes),
+            attendanceCoverage: Math.round(coverage),
+            attendanceToday: Number(series.at(-1)?.activeStudents ?? 0),
+            lateRate: Math.round(lateRate),
+            collections,
+            billed,
+            invoices,
+            outstanding,
+            collectionRate: Math.round(collectionRate),
+            activityRate: Math.round(activityRate),
+            attendanceTrend: Math.round(attendanceTrend * 10) / 10,
+            activityTrend: Math.round(activityTrend * 10) / 10,
+            riskScore,
+            riskLevel,
+            riskReasons: riskReasons.slice(0, 3),
+            series,
+          } satisfies PlatformAnalyticsSchool;
+        }),
+      ),
+    );
+    for (const entry of batch) schoolResults.push(entry.status === "fulfilled" ? entry.value : null);
+  }
 
   const schools = schoolResults.filter((school): school is PlatformAnalyticsSchool => Boolean(school));
   const riskValues = schools.map((school) => school.riskScore);
   const medianRisk = median(riskValues);
   const networkStudents = schools.reduce((sum, school) => sum + school.students, 0);
+  const networkBilled = schools.reduce((sum, school) => sum + school.billed, 0);
+  const networkCollected = schools.reduce((sum, school) => sum + school.collections, 0);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -295,8 +323,8 @@ export async function getPlatformAnalytics(
       attendanceCoverage: networkStudents
         ? Math.round(schools.reduce((sum, school) => sum + school.attendanceCoverage * school.students, 0) / networkStudents)
         : 0,
-      collectionRate: schools.length
-        ? Math.round(schools.reduce((sum, school) => sum + school.collectionRate, 0) / schools.length)
+      collectionRate: networkBilled > 0
+        ? Math.round(clamp((networkCollected / networkBilled) * 100))
         : 0,
       outstanding: schools.reduce((sum, school) => sum + school.outstanding, 0),
       medianRisk: Math.round(medianRisk),
