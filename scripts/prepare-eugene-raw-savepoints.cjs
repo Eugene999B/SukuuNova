@@ -9,12 +9,9 @@ const fs = require("fs");
 
 const fixturePath = "scripts/seed-realistic-test-school.cjs";
 const source = fs.readFileSync(fixturePath, "utf8");
-const marker = "async function exec(tx, sql, ...params) {";
+const marker = "async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }";
 const start = source.indexOf(marker);
 if (start < 0) throw new Error("Could not locate Eugene fixture exec helper.");
-const bodyStart = source.indexOf("\n", start) + 1;
-const end = source.indexOf("\n}`;", bodyStart);
-if (end < 0) throw new Error("Could not locate Eugene fixture exec helper end.");
 
 const replacement = `async function exec(tx, sql, ...params) {
   let normalizedSql = sql;
@@ -56,7 +53,7 @@ const replacement = `async function exec(tx, sql, ...params) {
   }
 }`;
 
-const next = source.slice(0, start) + replacement + source.slice(end + 4);
+const next = source.replace(marker, replacement);
 if (next === source) throw new Error("Savepoint patch made no changes.");
 fs.writeFileSync(fixturePath, next, "utf8");
-console.log("[eugene-academy-trial] raw fixture savepoint guard applied v3");
+console.log("[eugene-academy-trial] raw fixture savepoint guard applied v4");
