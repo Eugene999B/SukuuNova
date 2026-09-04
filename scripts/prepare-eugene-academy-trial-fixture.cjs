@@ -112,6 +112,44 @@ if (!output.includes(rawExec)) {
 }
 output = output.replace(rawExec, compatibleExec);
 
+// Some optional Prisma fixture rows historically swallowed an error with
+// .catch(() => {}). That leaves PostgreSQL's outer transaction aborted, so the
+// next query fails with 25P02. Wrap those optional rows in explicit savepoints
+// so an incompatible row is rolled back cleanly while the rest of the fixture
+// can continue.
+const reportCardPattern = /    const highLoad = students\[0\];\n    await tx\.reportCard\.create\(\{ data: \{[\s\S]*?\} \}\)\.catch\(\(\) => \{\}\);/;
+const reportCardReplacement = `    const highLoad = students[0];
+    const reportCardSavepoint = "eugene_report_card";
+    await tx.$executeRawUnsafe('SAVEPOINT "' + reportCardSavepoint + '"');
+    try {
+      await tx.reportCard.create({ data: { schoolId, studentId: highLoad.id, termId: termMap["Term 2"].id, status: "approved", approvedBy: users.principal.id, approvedAt: d("2026-04-01"), calculationSnapshot: { calculationVersion: 1, subjects: subjects.map(s => s.name) }, calculationVersion: 1, remarks: "Consistent effort across a broad subject load." } });
+      await tx.$executeRawUnsafe('RELEASE SAVEPOINT "' + reportCardSavepoint + '"');
+    } catch (error) {
+      console.error('[eugene-academy-trial] optional report card skipped', { message: error?.message });
+      await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT "' + reportCardSavepoint + '"');
+      await tx.$executeRawUnsafe('RELEASE SAVEPOINT "' + reportCardSavepoint + '"');
+    }`;
+if (!reportCardPattern.test(output)) {
+  throw new Error("Could not locate optional Eugene report card fixture write.");
+}
+output = output.replace(reportCardPattern, reportCardReplacement);
+
+const pickupPattern = /    await tx\.pickupApprovalRequest\.create\(\{ data: \{[\s\S]*?\} \}\)\.catch\(\(\)=>\{\}\);/;
+const pickupReplacement = `    const pickupApprovalSavepoint = "eugene_pickup_approval";
+    await tx.$executeRawUnsafe('SAVEPOINT "' + pickupApprovalSavepoint + '"');
+    try {
+      await tx.pickupApprovalRequest.create({ data: { schoolId, studentId: students[0].id, collectedByGuardianId: guardians[0].id, requestedByUserId: users["frontdesk"].id, status: "approved", approvedByUserId: users.principal.id, reviewedAt: now } });
+      await tx.$executeRawUnsafe('RELEASE SAVEPOINT "' + pickupApprovalSavepoint + '"');
+    } catch (error) {
+      console.error('[eugene-academy-trial] optional pickup approval skipped', { message: error?.message });
+      await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT "' + pickupApprovalSavepoint + '"');
+      await tx.$executeRawUnsafe('RELEASE SAVEPOINT "' + pickupApprovalSavepoint + '"');
+    }`;
+if (!pickupPattern.test(output)) {
+  throw new Error("Could not locate optional Eugene pickup approval fixture write.");
+}
+output = output.replace(pickupPattern, pickupReplacement);
+
 // Remove the deliberately hard-coded attendance conflict scenario. The
 // realistic rolling attendance history already exercises attendance flows,
 // while the conflict rows are not part of the Eugene Academy data model.
