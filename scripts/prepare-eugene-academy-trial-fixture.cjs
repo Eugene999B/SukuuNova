@@ -10,13 +10,14 @@ const path = "scripts/seed-realistic-test-school.cjs";
 const source = fs.readFileSync(path, "utf8");
 let output = source;
 
-// Current database constraints use lower-case assessment types and require a
+// Current database constraints use lower-case operational values and require a
 // concrete class on every FeeItem.
 output = output
   .replaceAll('type: "CA"', 'type: "ca"')
   .replaceAll('type: "EXAM"', 'type: "exam"')
   .replaceAll('type: "device"', 'type: "qr"')
-  .replaceAll('classId: null, name', 'classId: classes[0].id, name');
+  .replaceAll('classId: null, name', 'classId: classes[0].id, name')
+  .replaceAll('method: "bank_transfer"', 'method: "bank"');
 
 // Remove the deliberately hard-coded attendance conflict scenario. The
 // realistic rolling attendance history already exercises attendance flows,
