@@ -1,4 +1,5 @@
 import { hash } from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { db, withTenant } from "./db";
 import { ForbiddenError, AppError } from "./errors";
 import { appendPlatformAudit } from "./audit";
@@ -108,7 +109,7 @@ export async function createPlatformAdmin(input: {
     const a = await tx.platformAdmin.create({ data: { name, email, passwordHash: await hash(input.password, 12), role: input.role, status: "active" } });
     await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminMeta" ("adminId","createdById") VALUES ($1,$2)`, a.id, input.actorId);
     for (const permission of permissions) await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, a.id, permission);
-    await appendPlatformAudit({ actorId: input.actorId, action: "platform_admin.created", targetEntity: `PlatformAdmin:${a.id}`, meta: { role: input.role, permissions } }, tx);
+    await appendPlatformAudit({ actorId: input.actorId, action: "platform_admin.created", targetEntity: `PlatformAdmin:${a.id}`, meta: { role: input.role, permissions } }, tx as unknown as Prisma.TransactionClient);
     return a.id;
   });
   return { id: result, name, email, role: input.role, status: "active", permissions };
@@ -143,8 +144,6 @@ export async function updatePlatformAdmin(input: {
         await tx.$executeRawUnsafe(`DELETE FROM "PlatformAdminPermission" WHERE "adminId"=$1`, target.id);
         for (const permission of nextPermissions) await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, target.id, permission);
       }
-    } else {
-      nextPermissions = previousPermissions;
     }
     await appendPlatformAudit({
       actorId: input.actorId,
@@ -156,7 +155,7 @@ export async function updatePlatformAdmin(input: {
         changedFields,
         permissionsChanged,
       },
-    }, tx);
+    }, tx as unknown as Prisma.TransactionClient);
   });
   return (await listPlatformAdmins(input.actorRole)).find((admin) => admin.id === input.adminId);
 }
