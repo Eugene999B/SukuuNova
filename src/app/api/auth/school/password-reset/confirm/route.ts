@@ -8,7 +8,8 @@ import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 const schema = z.object({
   uniqueCode: z.string().trim().min(2).max(80),
   token: z.string().min(32).max(256),
-  newPassword: z.string().min(12).max(256)
+  newPassword: z.string().min(12).max(256),
+  universe: z.enum(["school", "guardian"]).default("school")
 });
 
 export async function POST(request: Request) {
