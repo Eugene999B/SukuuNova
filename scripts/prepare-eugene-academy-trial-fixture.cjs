@@ -45,19 +45,19 @@ const compatibleExec = `async function exec(tx, sql, ...params) {
   let normalizedSql = sql;
   let normalizedParams = params;
   if (normalizedSql.includes('"P3FeedingMenu"') && normalizedSql.includes('"items"')) {
-    normalizedSql = normalizedSql.replace(",\\$4,520,\\$5)", ",\\$4::jsonb,520,\\$5)");
+    normalizedSql = normalizedSql.replace(",\$4,520,\$5)", ",\$4::jsonb,520,\$5)");
   }
   if (normalizedSql.includes('"P3ExamQuestion"') && normalizedSql.includes('"options"')) {
-    normalizedSql = normalizedSql.replace(",\\$4,\\$5,1,5,\\$6)", ",\\$4,\\$5::jsonb,1,5,\\$6)");
+    normalizedSql = normalizedSql.replace(",\$4,\$5,1,5,\$6)", ",\$4,\$5::jsonb,1,5,\$6)");
   }
   if (normalizedSql.includes('"P3ExamAttempt"') && normalizedSql.includes('"answers"')) {
-    normalizedSql = normalizedSql.replace(",\\$7,'submitted',22.5,\\$8)", ",\\$7,'submitted',22.5,\\$8::jsonb)");
+    normalizedSql = normalizedSql.replace(",\$7,'submitted',22.5,\$8)", ",\$7,'submitted',22.5,\$8::jsonb)");
   }
   if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"payload"')) {
-    normalizedSql = normalizedSql.replace(",'attendance',\\$4,'pending'", ",'attendance',\\$4::jsonb,'pending'");
+    normalizedSql = normalizedSql.replace(",'attendance',\$4,'pending'", ",'attendance',\$4::jsonb,'pending'");
   }
   if (normalizedSql.includes('"P3FinanceAdjustment"') && normalizedSql.includes('"approvedAt"')) {
-    normalizedSql = normalizedSql.replace(",\\$5,\\$6,\\$7)", ",\\$5,\\$6,\\$7::timestamp)");
+    normalizedSql = normalizedSql.replace(",\$5,\$6,\$7)", ",\$5,\$6,\$7::timestamp)");
 
     // The canonical fixture historically passed an extra runtime value
     // before approvedAt. Rebuild the arguments from the actual tenant users.
