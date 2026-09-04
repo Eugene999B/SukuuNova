@@ -38,53 +38,51 @@ export async function PUT(request: Request) {
     await requirePlatformPermission(session, "admins.manage");
     if (session.role !== "super_admin") throw new ForbiddenError("Only Super Admin can change worker school scope.");
     const input = schema.parse(await request.json());
-    const schoolIds = [...new Set(input.schoolIds)];
+    const schoolIds = [...new Set(input.schoolIds)].sort();
     if (input.adminId === session.adminId) throw new ForbiddenError("You cannot change your own school scope.");
 
-    const targetRows = await db.$queryRawUnsafe<Array<{ id: string; name: string; role: string; status: string }>>(
-      `SELECT "id","name","role","status" FROM "PlatformAdmin" WHERE "id"=$1 LIMIT 1`,
-      input.adminId,
-    );
-    const target = targetRows[0];
-    if (!target) throw new AppError("Worker account was not found.", 404, "WORKER_NOT_FOUND");
-    if (target.role === "super_admin") throw new ForbiddenError("Super Admin accounts are not assigned routine school scope.");
-    if (target.status !== "active") throw new AppError("Only active worker accounts can receive school scope.", 400, "WORKER_NOT_ACTIVE");
-
-    const validSchools = await db.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "School" WHERE "id" = ANY($1::text[])`, schoolIds);
-    if (validSchools.length !== schoolIds.length) throw new AppError("One or more selected schools do not exist.", 400, "INVALID_SCHOOL_SCOPE");
-
     await db.$transaction(async tx => {
-      const beforeRows = await tx.$queryRawUnsafe<Array<{ schoolId: string }>>(
-        `SELECT "schoolId" FROM "PlatformAdminSchoolAccess" WHERE "adminId"=$1 ORDER BY "schoolId" ASC`,
-        input.adminId,
+      await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext('sukuunova.platform-admin-governance'))`);
+      const targetRows = await tx.$queryRawUnsafe<Array<{ id: string; name: string; role: string; status: string }>>(
+        `SELECT "id","name","role","status" FROM "PlatformAdmin" WHERE "id"=$1 LIMIT 1`, input.adminId,
       );
+      const target = targetRows[0];
+      if (!target) throw new AppError("Worker account was not found.", 404, "WORKER_NOT_FOUND");
+      if (target.role === "super_admin") throw new ForbiddenError("Super Admin accounts are not assigned routine school scope.");
+      if (target.status !== "active") throw new AppError("Only active worker accounts can receive school scope.", 400, "WORKER_NOT_ACTIVE");
+
+      const validSchools = await tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "School" WHERE "id" = ANY($1::text[])`, schoolIds);
+      if (validSchools.length !== schoolIds.length) throw new AppError("One or more selected schools do not exist.", 400, "INVALID_SCHOOL_SCOPE");
+
+      const beforeRows = await tx.$queryRawUnsafe<Array<{ schoolId: string }>>(
+        `SELECT "schoolId" FROM "PlatformAdminSchoolAccess" WHERE "adminId"=$1 ORDER BY "schoolId" ASC`, input.adminId,
+      );
+      const beforeSchoolIds = beforeRows.map(row => row.schoolId).sort();
+      const changed = beforeSchoolIds.length !== schoolIds.length || beforeSchoolIds.some((id, index) => id !== schoolIds[index]);
+      if (!changed) return;
+
       await tx.$executeRawUnsafe(`DELETE FROM "PlatformAdminSchoolAccess" WHERE "adminId"=$1`, input.adminId);
-      for (const schoolId of schoolIds) {
+      if (schoolIds.length) {
+        const values = schoolIds.map((_, index) => `($1,$${index + 2},$${schoolIds.length + 2})`).join(",");
         await tx.$executeRawUnsafe(
-          `INSERT INTO "PlatformAdminSchoolAccess" ("adminId","schoolId","createdById") VALUES ($1,$2,$3)`,
-          input.adminId,
-          schoolId,
-          session.adminId,
+          `INSERT INTO "PlatformAdminSchoolAccess" ("adminId","schoolId","createdById") VALUES ${values}`,
+          input.adminId, ...schoolIds, session.adminId,
         );
       }
-      const beforeSchoolIds = beforeRows.map(row => row.schoolId);
-      const changed = JSON.stringify(beforeSchoolIds) !== JSON.stringify(schoolIds);
-      if (changed) {
-        await tx.$executeRawUnsafe(
-          `INSERT INTO "AuditLogPlatform" ("id","actorId","action","targetEntity","meta") VALUES (gen_random_uuid()::text,$1,'platform_worker.scope_updated',$2,$3)`,
-          session.adminId,
-          `PlatformAdmin:${input.adminId}`,
-          JSON.stringify({
-            workerId: input.adminId,
-            workerName: target.name,
-            workerRole: target.role,
-            beforeSchoolIds,
-            afterSchoolIds: schoolIds,
-            addedSchoolCount: schoolIds.filter(id => !beforeSchoolIds.includes(id)).length,
-            removedSchoolCount: beforeSchoolIds.filter(id => !schoolIds.includes(id)).length,
-          }),
-        );
-      }
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "AuditLogPlatform" ("id","actorId","action","targetEntity","meta") VALUES (gen_random_uuid()::text,$1,'platform_worker.scope_updated',$2,$3)`,
+        session.adminId,
+        `PlatformAdmin:${input.adminId}`,
+        JSON.stringify({
+          workerId: input.adminId,
+          workerName: target.name,
+          workerRole: target.role,
+          beforeSchoolIds,
+          afterSchoolIds: schoolIds,
+          addedSchoolCount: schoolIds.filter(id => !beforeSchoolIds.includes(id)).length,
+          removedSchoolCount: beforeSchoolIds.filter(id => !schoolIds.includes(id)).length,
+        }),
+      );
     });
 
     return NextResponse.json({ ok: true, access: schoolIds });
