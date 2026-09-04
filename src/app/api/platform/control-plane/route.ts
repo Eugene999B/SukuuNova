@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError, AppError, UnauthorizedError } from "@/lib/errors";
-import { requirePlatformPermission } from "@/lib/platform-permissions";
+import { requirePlatformPermission, getPlatformSchoolScope } from "@/lib/platform-permissions";
 import { changeSchoolLifecycle, getMessagingWallet, getPlatformControlSettings, getSchoolBillingConfig, saveSchoolBillingConfig, updateMessagingRates, adjustMessagingBalance, updatePlatformControlSettings } from "@/lib/platform-control-plane-service";
 import { generateConfiguredPlatformInvoice } from "@/lib/platform-configured-invoice-service";
 import { performSchoolLifecycle } from "@/lib/platform-school-lifecycle-service";
+import { listScopedPlatformSchools } from "@/lib/platform-scoped-schools";
+import { listPlatformSchools } from "@/lib/phase4-service";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("savePlatformSettings"), key: z.enum(["platform.defaults", "platform.security", "platform.lifecycle", "platform.messaging"]), value: z.record(z.string(), z.unknown()) }),
@@ -23,6 +25,12 @@ export async function GET(request: Request) {
     const view = url.searchParams.get("view") || "settings";
     const schoolId = url.searchParams.get("schoolId") || "";
     if (view === "settings") return NextResponse.json(await getPlatformControlSettings(session));
+    if (view === "schools") {
+      await requirePlatformPermission(session, "billing.view");
+      const scope = await getPlatformSchoolScope(session);
+      const rows = scope === null ? await listPlatformSchools() : await listScopedPlatformSchools(session);
+      return NextResponse.json({ schools: rows.map((row) => ({ id: String(row.id), name: String(row.name), uniqueCode: String(row.uniqueCode), status: String(row.status), studentCount: Number(row.studentCount || 0), subscriptionPlan: row.subscriptionPlan ? { name: String(row.subscriptionPlan.name), price: Number(row.subscriptionPlan.price || 0) } : null })) });
+    }
     if (view === "billing") {
       if (!schoolId) throw new UnauthorizedError("schoolId is required");
       return NextResponse.json(await getSchoolBillingConfig(session, schoolId));
