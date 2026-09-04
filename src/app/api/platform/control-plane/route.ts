@@ -5,6 +5,7 @@ import { routeError, AppError, UnauthorizedError } from "@/lib/errors";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
 import { changeSchoolLifecycle, getMessagingWallet, getPlatformControlSettings, getSchoolBillingConfig, saveSchoolBillingConfig, updateMessagingRates, adjustMessagingBalance, updatePlatformControlSettings } from "@/lib/platform-control-plane-service";
 import { generateConfiguredPlatformInvoice } from "@/lib/platform-configured-invoice-service";
+import { performSchoolLifecycle } from "@/lib/platform-school-lifecycle-service";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("savePlatformSettings"), key: z.enum(["platform.defaults", "platform.security", "platform.lifecycle", "platform.messaging"]), value: z.record(z.string(), z.unknown()) }),
@@ -45,9 +46,8 @@ export async function POST(request: Request) {
     if (input.action === "updateMessagingRates") return NextResponse.json(await updateMessagingRates(session, input));
     if (input.action === "allocateMessaging") return NextResponse.json(await adjustMessagingBalance(session, input));
     if (input.action === "generateInvoice") return NextResponse.json({ ok: true, invoice: await generateConfiguredPlatformInvoice(session, input.schoolId, input.period) });
-    await requirePlatformPermission(session, "schools.suspend");
     if (input.lifecycle === "delete" && session.role !== "super_admin") throw new AppError("Only Super Admin can decommission a school.", 403, "FORBIDDEN");
-    return NextResponse.json({ ok: true, result: await changeSchoolLifecycle(session, { schoolId: input.schoolId, action: input.lifecycle }) });
+    return NextResponse.json({ ok: true, result: await performSchoolLifecycle(session, input.schoolId, input.lifecycle) });
   } catch (error) {
     return routeError(error);
   }
