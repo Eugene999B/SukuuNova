@@ -1,20 +1,14 @@
 #!/usr/bin/env node
 /*
- * One-shot REAL DATABASE fixture for a named Eugene Academy trial.
+ * One-shot REAL DATABASE fixture for Eugene Academy.
  *
- * This wraps the existing realistic synthetic-school fixture instead of
- * maintaining a second data generator. It is deliberately fail-closed:
- * - ALLOW_EUGENE_ACADEMY_TRIAL_SEED must be YES.
- * - TEST_SCHOOL_CODE must be exactly eug123.
- * - TEST_SCHOOL_NAME must be exactly Eugene Academy.
- * - DATABASE_URL is required.
- * - The owner credentials are supplied through environment variables and are
- *   never committed to source control.
+ * Safety gates are intentionally narrow. The runner can only execute when
+ * explicitly enabled for the eug123 trial school, and credentials arrive via
+ * Railway environment variables rather than source control.
  *
- * The existing fixture is patched only in-memory, then executed against the
- * live database using an application_name query parameter so its normal
- * isolation guard still passes. Extra academic/operational records are
- * injected for the newer workflows the original fixture predates.
+ * The mature realistic fixture is reused and patched in-memory. This keeps
+ * the fixture aligned with SukuuNova's established data model while adding
+ * newer lesson-planning, homework, report-card, device and readiness records.
  */
 const fs = require("fs");
 const path = require("path");
@@ -22,13 +16,13 @@ const { PrismaClient } = require("@prisma/client");
 
 const allow = String(process.env.ALLOW_EUGENE_ACADEMY_TRIAL_SEED || "").trim();
 const code = String(process.env.TEST_SCHOOL_CODE || "").trim().toLowerCase();
+const schoolName = String(process.env.TEST_SCHOOL_NAME || "").trim();
 const databaseUrl = String(process.env.DATABASE_URL || "").trim();
 const ownerEmail = String(process.env.EUGENE_ACADEMY_OWNER_EMAIL || "").trim().toLowerCase();
 const ownerPassword = String(process.env.EUGENE_ACADEMY_OWNER_PASSWORD || "");
 const ownerName = String(process.env.EUGENE_ACADEMY_OWNER_NAME || "Eugene Academy Owner").trim();
-const schoolName = String(process.env.TEST_SCHOOL_NAME || "").trim();
 
-if (allow !== "YES") throw new Error("Refusing Eugene Academy live seed: ALLOW_EUGENE_ACADEMY_TRIAL_SEED must be YES.");
+if (allow !== "YES") throw new Error("Refusing Eugene Academy live seed: explicit enable flag is required.");
 if (code !== "eug123") throw new Error("Refusing Eugene Academy live seed: TEST_SCHOOL_CODE must be eug123.");
 if (schoolName !== "Eugene Academy") throw new Error("Refusing Eugene Academy live seed: TEST_SCHOOL_NAME must be Eugene Academy.");
 if (!databaseUrl) throw new Error("DATABASE_URL is required.");
@@ -37,27 +31,21 @@ if (!ownerEmail || !ownerPassword) throw new Error("EUGENE_ACADEMY_OWNER_EMAIL a
 process.env.TEST_SCHOOL_CODE = code;
 process.env.TEST_SCHOOL_NAME = schoolName;
 process.env.TEST_SEED_PASSWORD = ownerPassword;
-process.env.TEST_DATABASE_URL = `${databaseUrl}${databaseUrl.includes("?") ? "&" : "?"}application_name=sukuunova-eugene-academy-trial`;
+process.env.TEST_DATABASE_URL = databaseUrl + (databaseUrl.includes("?") ? "&" : "?") + "application_name=sukuunova-eugene-academy-trial";
 
 const fixturePath = path.join(__dirname, "seed-realistic-test-school.cjs");
 const originalSource = fs.readFileSync(fixturePath, "utf8");
 
 let patchedSource = originalSource
-  .replace(
-    'if (PASSWORD.length < 12) throw new Error("TEST_SEED_PASSWORD must be at least 12 characters.");',
-    'if (PASSWORD.length < 12 && TEST_CODE !== "eug123") throw new Error("TEST_SEED_PASSWORD must be at least 12 characters.");',
-  )
-  .replace(
-    'function email(slug) { return `${slug}.${TEST_CODE}@test.sukuunova.local`; }',
-    'function email(slug) { if (slug === "owner") return process.env.EUGENE_ACADEMY_OWNER_EMAIL; return `${slug}.${TEST_CODE}@test.sukuunova.local`; }',
-  )
+  .replace('if (PASSWORD.length < 12) throw new Error("TEST_SEED_PASSWORD must be at least 12 characters.");', 'if (PASSWORD.length < 12 && TEST_CODE !== "eug123") throw new Error("TEST_SEED_PASSWORD must be at least 12 characters.");')
+  .replace('function email(slug) { return `${slug}.${TEST_CODE}@test.sukuunova.local`; }', 'function email(slug) { if (slug === "owner") return process.env.EUGENE_ACADEMY_OWNER_EMAIL; return `${slug}.${TEST_CODE}@test.sukuunova.local`; }')
   .replaceAll('name: "Ama Mensah"', 'name: process.env.EUGENE_ACADEMY_OWNER_NAME')
   .replaceAll('https://raw.githubusercontent.com/Eugene999B/SukuuNova/main/icon.svg', '/branding/eugene-academy.svg')
   .replaceAll('SukuuNova Academy', 'Eugene Academy');
 
 const anchor = '    // Fees, invoices, partial payment and reversal scenario.';
 const injection = String.raw`
-    // Eugene Academy extension: populate newer academic/operational workflows.
+    // Eugene Academy extension: populate newer academic and operational workflows.
     const { PDFDocument, StandardFonts } = require("pdf-lib");
 
     const currentYear = yearsMap["2026/2027"];
@@ -75,13 +63,18 @@ const injection = String.raw`
 
     for (let i = 0; i < 12; i++) {
       const student = students[i];
-      const studentEmail = email(`student${i + 1}`);
+      const studentEmail = email("student" + (i + 1));
+      const portalName = student.name + " Portal";
       const studentUser = await tx.user.upsert({
         where: { schoolId_email: { schoolId, email: studentEmail } },
-        update: { name: `${student.name} Portal`, passwordHash: passwordsHash, status: "active", needsPasswordChange: false },
-        create: { schoolId, name: `${student.name} Portal`, email: studentEmail, phone: phone(300 + i), passwordHash: passwordsHash, status: "active", needsPasswordChange: false }
+        update: { name: portalName, passwordHash: passwordsHash, status: "active", needsPasswordChange: false },
+        create: { schoolId, name: portalName, email: studentEmail, phone: phone(300 + i), passwordHash: passwordsHash, status: "active", needsPasswordChange: false }
       });
-      await tx.userRole.upsert({ where: { userId_roleId: { userId: studentUser.id, roleId: roleIds.get("Student") } }, update: { schoolId }, create: { schoolId, userId: studentUser.id, roleId: roleIds.get("Student") } });
+      await tx.userRole.upsert({
+        where: { userId_roleId: { userId: studentUser.id, roleId: roleIds.get("Student") } },
+        update: { schoolId },
+        create: { schoolId, userId: studentUser.id, roleId: roleIds.get("Student") }
+      });
       credentials.push({ type: "student", role: "Student", name: studentUser.name, email: studentUser.email, password: PASSWORD, schoolCode: TEST_CODE, admissionNo: student.admissionNo });
     }
 
@@ -97,8 +90,10 @@ const injection = String.raw`
       const subject = subjects[i % subjects.length];
       const cls = classes[i % classes.length];
       const teacher = i % 2 === 0 ? users["class.teacher"] : users["subject.teacher"];
-      const [title, objective, content, plannedDate, status, reviewerId] = lessonPlans[i];
-      await exec(tx, `INSERT INTO "LessonPlan" ("id","schoolId","teacherId","classId","subjectId","termId","title","objective","content","plannedDate","status","reviewerId","reviewNote","reviewedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT ("id") DO NOTHING`, uid(), schoolId, teacher.id, cls.id, subject.id, termMap["Term 3"].id, title, objective, content, d(plannedDate), status, reviewerId, status === "approved" ? "Reviewed and approved for classroom delivery." : status === "submitted" ? "Ready for academic review." : null, reviewerId ? new Date() : null);
+      const item = lessonPlans[i];
+      const plannedStatus = item[4];
+      const reviewerId = item[5];
+      await exec(tx, 'INSERT INTO "LessonPlan" ("id","schoolId","teacherId","classId","subjectId","termId","title","objective","content","plannedDate","status","reviewerId","reviewNote","reviewedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT ("id") DO NOTHING', uid(), schoolId, teacher.id, cls.id, subject.id, termMap["Term 3"].id, item[0], item[1], item[2], d(item[3]), plannedStatus, reviewerId, plannedStatus === "approved" ? "Reviewed and approved for classroom delivery." : plannedStatus === "submitted" ? "Ready for academic review." : null, reviewerId ? new Date() : null);
     }
 
     const homeworks = [
@@ -115,8 +110,9 @@ const injection = String.raw`
       const subject = subjects[i % subjects.length];
       const cls = classes[(i + 1) % classes.length];
       const teacher = i % 2 === 0 ? users["class.teacher"] : users["subject.teacher"];
-      const [title, instructions, dueDate, points, assignmentStatus, reviewStatus] = homeworks[i];
-      await exec(tx, `INSERT INTO "Homework" ("id","schoolId","teacherId","classId","subjectId","termId","title","instructions","dueDate","points","assignmentStatus","reviewStatus","reviewerId","reviewNote","reviewedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT ("id") DO NOTHING`, uid(), schoolId, teacher.id, cls.id, subject.id, termMap["Term 3"].id, title, instructions, d(dueDate), points, assignmentStatus, reviewStatus, reviewStatus === "approved" ? users.academic.id : null, reviewStatus === "approved" ? "Academic review completed." : null, reviewStatus === "approved" ? new Date() : null);
+      const item = homeworks[i];
+      const reviewStatus = item[5];
+      await exec(tx, 'INSERT INTO "Homework" ("id","schoolId","teacherId","classId","subjectId","termId","title","instructions","dueDate","points","assignmentStatus","reviewStatus","reviewerId","reviewNote","reviewedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) ON CONFLICT ("id") DO NOTHING', uid(), schoolId, teacher.id, cls.id, subject.id, termMap["Term 3"].id, item[0], item[1], d(item[2]), item[3], item[4], reviewStatus, reviewStatus === "approved" ? users.academic.id : null, reviewStatus === "approved" ? "Academic review completed." : null, reviewStatus === "approved" ? new Date() : null);
     }
 
     const templateId = "eug-rct-20260904";
@@ -130,11 +126,11 @@ const injection = String.raw`
     let y = 792;
     pdfPage.drawText("EUGENE ACADEMY", { x: 48, y, size: 20, font: boldFont }); y -= 28;
     pdfPage.drawText("OFFICIAL STUDENT REPORT CARD · TERM 2 · 2025/2026", { x: 48, y, size: 10, font }); y -= 24;
-    pdfPage.drawText(`Student: ${highLoad.name}`, { x: 48, y, size: 11, font: boldFont }); y -= 18;
-    pdfPage.drawText(`Admission No: ${highLoad.admissionNo}`, { x: 48, y, size: 10, font }); y -= 28;
+    pdfPage.drawText("Student: " + highLoad.name, { x: 48, y, size: 11, font: boldFont }); y -= 18;
+    pdfPage.drawText("Admission No: " + highLoad.admissionNo, { x: 48, y, size: 10, font }); y -= 28;
     for (const subject of subjects) {
       const scoreRow = await tx.score.findFirst({ where: { schoolId, studentId: highLoad.id, subjectId: subject.id }, orderBy: { enteredAt: "desc" } });
-      pdfPage.drawText(`${subject.name}: ${scoreRow ? Number(scoreRow.value).toFixed(1) : "—"}`, { x: 60, y, size: 9.5, font });
+      pdfPage.drawText(subject.name + ": " + (scoreRow ? Number(scoreRow.value).toFixed(1) : "—"), { x: 60, y, size: 9.5, font });
       y -= 15;
     }
     y -= 6;
@@ -150,27 +146,29 @@ const injection = String.raw`
     const firstDay = d("2026-09-01");
     for (let i = 0; i < 8; i++) {
       const student = students[i];
+      const status = i % 7 === 0 ? "LATE" : "PRESENT";
       await tx.attendanceRecord.upsert({
         where: { schoolId_studentId_attendanceDate_periodId: { schoolId, studentId: student.id, attendanceDate: firstDay, periodId: "DAILY" } },
-        update: { classId: student.classId, status: i % 7 === 0 ? "LATE" : "PRESENT", source: "device", recordedBy: users["frontdesk"].id, reason: i % 7 === 0 ? "Traffic delay" : null, eventIds: [] },
-        create: { id: `eug-att-${i + 1}-20260901`, schoolId, studentId: student.id, classId: student.classId, attendanceDate: firstDay, periodId: "DAILY", status: i % 7 === 0 ? "LATE" : "PRESENT", source: "device", recordedBy: users["frontdesk"].id, eventIds: [] }
+        update: { classId: student.classId, status, source: "device", recordedBy: users["frontdesk"].id, reason: status === "LATE" ? "Traffic delay" : null, eventIds: [] },
+        create: { id: `eug-att-${i + 1}-20260901`, schoolId, studentId: student.id, classId: student.classId, attendanceDate: firstDay, periodId: "DAILY", status, source: "device", recordedBy: users["frontdesk"].id, eventIds: [] }
       });
     }
+
     const riskSamples = [
       ["attendance_pattern", "MEDIUM", "OPEN", students[3], { trigger: "three late arrivals in a rolling window", recommendedAction: "guardian follow-up" }],
       ["fee_balance", "LOW", "OPEN", students[1], { trigger: "partial term balance", recommendedAction: "billing reminder" }],
       ["academic_support", "HIGH", "OPEN", students[6], { trigger: "below-target mathematics performance", recommendedAction: "academic intervention plan" }]
     ];
     for (let i = 0; i < riskSamples.length; i++) {
-      const [reason, severity, reviewStatus, student, detail] = riskSamples[i];
-      await tx.studentRiskFlag.upsert({ where: { id: `eug-risk-${i + 1}` }, update: { schoolId, studentId: student.id, reason, detail, severity, reviewStatus }, create: { id: `eug-risk-${i + 1}`, schoolId, studentId: student.id, reason, detail, severity, reviewStatus } });
+      const item = riskSamples[i];
+      await tx.studentRiskFlag.upsert({ where: { id: `eug-risk-${i + 1}` }, update: { schoolId, studentId: item[3].id, reason: item[0], detail: item[4], severity: item[1], reviewStatus: item[2] }, create: { id: `eug-risk-${i + 1}`, schoolId, studentId: item[3].id, reason: item[0], detail: item[4], severity: item[1], reviewStatus: item[2] } });
     }
 
     const deviceApiHash = await hash("eugene-academy-device-key-2026", 12);
     const scanner = await tx.device.upsert({ where: { schoolId_deviceSerial: { schoolId, deviceSerial: "EUG-QR-001" } }, update: { kind: "qr", label: "Main Gate QR Scanner", apiKeyHash: deviceApiHash, status: "active", lastSeenAt: new Date() }, create: { schoolId, deviceSerial: "EUG-QR-001", kind: "qr", label: "Main Gate QR Scanner", apiKeyHash: deviceApiHash, status: "active", lastSeenAt: new Date() } });
     const adminDevice = await tx.device.upsert({ where: { schoolId_deviceSerial: { schoolId, deviceSerial: "EUG-ADMIN-001" } }, update: { kind: "admin", label: "Attendance Office Console", apiKeyHash: deviceApiHash, status: "active", lastSeenAt: new Date() }, create: { schoolId, deviceSerial: "EUG-ADMIN-001", kind: "admin", label: "Attendance Office Console", apiKeyHash: deviceApiHash, status: "active", lastSeenAt: new Date() } });
-    for (let i = 0; i < 4; i++) await tx.deviceIdentity.upsert({ where: { schoolId_deviceKind_externalId: { schoolId, deviceKind: "qr", externalId: `EUG-STUDENT-${i + 1}` } }, update: { studentId: students[i].id, staffId: null }, create: { schoolId, deviceKind: "qr", externalId: `EUG-STUDENT-${i + 1}`, studentId: students[i].id } });
-    for (let i = 0; i < 2; i++) { const staffKey = i === 0 ? "frontdesk" : "transport"; await tx.deviceIdentity.upsert({ where: { schoolId_deviceKind_externalId: { schoolId, deviceKind: "admin", externalId: `EUG-STAFF-${i + 1}` } }, update: { staffId: users[staffKey].id, studentId: null }, create: { schoolId, deviceKind: "admin", externalId: `EUG-STAFF-${i + 1}`, staffId: users[staffKey].id } }); }
+    for (let i = 0; i < 4; i++) await tx.deviceIdentity.upsert({ where: { schoolId_deviceKind_externalId: { schoolId, deviceKind: "qr", externalId: "EUG-STUDENT-" + (i + 1) } }, update: { studentId: students[i].id, staffId: null }, create: { schoolId, deviceKind: "qr", externalId: "EUG-STUDENT-" + (i + 1), studentId: students[i].id } });
+    for (let i = 0; i < 2; i++) { const staffKey = i === 0 ? "frontdesk" : "transport"; await tx.deviceIdentity.upsert({ where: { schoolId_deviceKind_externalId: { schoolId, deviceKind: "admin", externalId: "EUG-STAFF-" + (i + 1) } }, update: { staffId: users[staffKey].id, studentId: null }, create: { schoolId, deviceKind: "admin", externalId: "EUG-STAFF-" + (i + 1), staffId: users[staffKey].id } }); }
     await tx.deviceAttendanceReceipt.upsert({ where: { schoolId_deviceId_idempotencyKey: { schoolId, deviceId: scanner.id, idempotencyKey: "eug-receipt-20260901-0001" } }, update: { processedAt: new Date(), capturedAt: firstDay, nonce: "eug-nonce-0001" }, create: { schoolId, deviceId: scanner.id, idempotencyKey: "eug-receipt-20260901-0001", nonce: "eug-nonce-0001", capturedAt: firstDay, processedAt: new Date() } });
     await tx.deviceAttendanceReceipt.upsert({ where: { schoolId_deviceId_idempotencyKey: { schoolId, deviceId: adminDevice.id, idempotencyKey: "eug-receipt-20260901-0002" } }, update: { processedAt: new Date(), capturedAt: firstDay, nonce: "eug-nonce-0002" }, create: { schoolId, deviceId: adminDevice.id, idempotencyKey: "eug-receipt-20260901-0002", nonce: "eug-nonce-0002", capturedAt: firstDay, processedAt: new Date() } });
 `;
@@ -178,7 +176,7 @@ const injection = String.raw`
 if (!patchedSource.includes(anchor)) throw new Error("Fixture anchor not found; refusing unsafe live seed patch.");
 patchedSource = patchedSource.replace(anchor, injection + "\n" + anchor);
 
-const platformAnchor = '  const report = {\n';
+const platformAnchor = "  const report = {\n";
 const platformInjection = String.raw`  await prisma.impersonationLog.upsert({
     where: { id: "eug-impersonation-20260904" },
     update: { platformAdminId: platform.id, schoolId, impersonatedUserId: platform.id, reason: "Synthetic Eugene Academy owner-account support trial", endedAt: new Date() },
