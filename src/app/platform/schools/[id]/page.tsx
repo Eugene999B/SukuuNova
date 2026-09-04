@@ -13,46 +13,31 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
   await requirePlatformPermission(session, "schools.view");
   const { id } = await params;
   await requireSchoolScope(session, id);
-  const [canSupport, canBilling, canAudit] = await Promise.all([
-    hasPlatformPermission(session, "support.view"),
-    hasPlatformPermission(session, "billing.view"),
-    hasPlatformPermission(session, "audit.view"),
-  ]);
-
+  const [canSupport, canBilling, canAudit] = await Promise.all([hasPlatformPermission(session, "support.view"), hasPlatformPermission(session, "billing.view"), hasPlatformPermission(session, "audit.view")]);
   const data = await withTenant(id, async (tx) => {
     const school = await tx.school.findUnique({ where: { id }, select: { id:true,name:true,uniqueCode:true,status:true,createdAt:true,subscriptionPlan:{select:{id:true,name:true,price:true,featureFlags:true}},settings:{select:{timezone:true,gradeCaWeight:true,gradeExamWeight:true}} } });
     if (!school) return null;
     const [students, users, classes, subjects, invoices, payments] = await Promise.all([
-      tx.student.count({ where: { status: "active" } }),
-      tx.user.count(),
-      tx.class.count(),
-      tx.subject.count(),
+      tx.student.count({ where: { status: "active" } }), tx.user.count(), tx.class.count(), tx.subject.count(),
       tx.invoice.findMany({ orderBy: { createdAt: "desc" }, take: 20, select: { id:true,totalAmount:true,status:true,createdAt:true,student:{select:{name:true}} } }),
-      tx.payment.findMany({ orderBy: { createdAt: "desc" }, take: 20, select: { id:true,amount:true,method:true,reference:true,createdAt:true } })
+      tx.payment.findMany({ orderBy: { createdAt: "desc" }, take: 20, select: { id:true,amount:true,method:true,reference:true,createdAt:true } }),
     ]);
     const recentMessages = await tx.message.count({ where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } });
     const failedMessages = await tx.message.count({ where: { status: "failed", createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } });
     return { school, students, users, classes, subjects, invoices, payments, recentMessages, failedMessages };
   });
   if (!data) notFound();
-
-  const audits = canAudit ? await db.$queryRawUnsafe<Array<{ id:string; actorId:string|null; actorName:string|null; actorEmail:string|null; action:string; targetEntity:string|null; createdAt:Date }>>(
-    `SELECT l."id",l."actorId",a."name" AS "actorName",a."email" AS "actorEmail",l."action",l."targetEntity",l."createdAt"
-     FROM "AuditLogPlatform" l LEFT JOIN "PlatformAdmin" a ON a."id"=l."actorId"
-     WHERE l."targetSchoolId"=$1 ORDER BY l."createdAt" DESC LIMIT 40`, id,
-  ) : [];
+  const audits = canAudit ? await db.$queryRawUnsafe<Array<{ id:string; actorId:string|null; actorName:string|null; actorEmail:string|null; action:string; targetEntity:string|null; createdAt:Date }>>(`SELECT l."id",l."actorId",a."name" AS "actorName",a."email" AS "actorEmail",l."action",l."targetEntity",l."createdAt" FROM "AuditLogPlatform" l LEFT JOIN "PlatformAdmin" a ON a."id"=l."actorId" WHERE l."targetSchoolId"=$1 ORDER BY l."createdAt" DESC LIMIT 40`, id) : [];
   const unpaid = data.invoices.filter((invoice) => invoice.status !== "paid").length;
   const collected = data.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
-  const flags = Array.isArray(data.school.subscriptionPlan?.featureFlags) ? data.school.subscriptionPlan.featureFlags.filter((value): value is string => typeof value === "string") : [];
   const quickLinks = [
     ["People", `/platform/search?q=${encodeURIComponent(data.school.name)}`, "Search people and tenant records"],
     ["Academics", "/school/academics/setup", "Open the school academic workspace"],
     ["Attendance", "/school/attendance", "Inspect operational attendance"],
     ["Finance", `/platform/billing?schoolId=${encodeURIComponent(id)}`, "Review billing configuration and ledger"],
-    ["Activity", "/platform/audit", "Investigate audited control activity"],
-    ["Security", "/platform/admins/access", "Review delegated access controls"],
+    ["Activity", `/platform/schools/${id}/activity`, "Investigate school and platform activity"],
+    ["Security", `/platform/schools/${id}/activity?sensitive=1`, "Review sensitive access and control events"],
   ];
-
   return <AppShell universe="platform" title={data.school.name} subtitle="School 360 · account, people, academics, attendance, finance, support, security and platform activity." active="Schools">
     <div className="app-banner"><div><span className="app-eyebrow">SCHOOL 360</span><h3>{data.school.name}</h3><p>{data.school.uniqueCode} · {data.school.status} · {data.school.subscriptionPlan?.name ?? "No plan assigned"} · created {new Date(data.school.createdAt).toLocaleDateString()}</p></div><div style={{display:"flex",gap:8,flexWrap:"wrap"}}><Link className="app-pill" href="/platform/schools">Back to schools</Link>{canSupport ? <Link className="app-action" href={`/platform/support?schoolId=${encodeURIComponent(id)}`}><strong>Support</strong>Open case queue</Link> : null}{canBilling ? <Link className="app-pill" href={`/platform/billing?schoolId=${encodeURIComponent(id)}`}>Billing</Link> : null}</div></div>
     <PlatformSchoolLifecycle schoolId={id} status={data.school.status} />
@@ -67,6 +52,6 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
       <section className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">OPERATING POSTURE</span><h2>What is happening here?</h2><p>Fast signals for support and investigation.</p></div></div><div className="app-list-row"><div><b>Subscription</b><span>{data.school.subscriptionPlan?.name ?? "No plan"}</span></div><span className="app-pill">Commercial</span></div><div className="app-list-row"><div><b>Subjects</b><span>{data.subjects.toLocaleString()} configured</span></div></div><div className="app-list-row"><div><b>Unpaid invoices</b><span>{unpaid.toLocaleString()} of recent invoices</span></div><span className="app-pill">Finance</span></div><div className="app-list-row"><div><b>Messages</b><span>{data.recentMessages.toLocaleString()} created in last 24 hours</span></div><span className={`app-pill ${data.failedMessages ? "is-warning" : ""}`}>{data.failedMessages.toLocaleString()} failed in 7 days</span></div><div className="app-list-row"><div><b>Grade configuration</b><span>{Number(data.school.settings?.gradeCaWeight ?? 0)}% continuous · {Number(data.school.settings?.gradeExamWeight ?? 0)}% exam</span></div></div></section>
       <section className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">COMMERCIAL ACTIVITY</span><h2>Recent invoices</h2><p>Amounts remain separate from communications-credit balances.</p></div>{canBilling ? <Link className="app-pill" href={`/platform/billing?schoolId=${encodeURIComponent(id)}`}>Configure billing</Link> : null}</div>{data.invoices.slice(0,8).map((invoice)=><div className="app-list-row" key={invoice.id}><div><b>{invoice.student.name}</b><span>₵{Number(invoice.totalAmount).toLocaleString()} · {invoice.status}</span></div><small>{new Date(invoice.createdAt).toLocaleDateString()}</small></div>)}{data.invoices.length===0&&<div className="platform-empty"><strong>No invoices yet.</strong><span>Configure the school’s billing rule before generating the first invoice.</span></div>}</section>
     </div>
-    {canAudit ? <section className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">INVESTIGATION</span><h2>Recent audited activity</h2><p>Use the full audit workspace when you need filters, sensitive events or historical context.</p></div><Link className="app-pill" href={`/platform/audit?q=${encodeURIComponent(data.school.name)}`}>Open audit workspace</Link></div>{audits.length===0?<div className="platform-empty"><strong>No platform audit events are recorded for this school yet.</strong><span>That does not imply no school activity exists; use the school workspace audit tools for tenant-level records.</span></div>:audits.map((event)=><div className="app-list-row" key={event.id}><div><b>{event.action}</b><span>{event.targetEntity ?? "School"} · {event.actorName ? `${event.actorName}${event.actorEmail ? ` · ${event.actorEmail}` : ""}` : event.actorId ? `actor ${event.actorId}` : "system"}</span></div><small>{new Date(event.createdAt).toLocaleString()}</small></div>)}</section> : null}
+    {canAudit ? <section className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">INVESTIGATION</span><h2>Recent audited platform activity</h2><p>Use the School Activity Center to reconstruct the full tenant timeline, including school-level records.</p></div><Link className="app-action" href={`/platform/schools/${id}/activity`}><strong>Open Activity Center</strong></Link></div>{audits.length===0?<div className="platform-empty"><strong>No platform audit events are recorded for this school yet.</strong><span>That does not imply no school activity exists.</span></div>:audits.slice(0,6).map((event)=><div className="app-list-row" key={event.id}><div><b>{event.action}</b><span>{event.targetEntity ?? "School"} · {event.actorName ? `${event.actorName}${event.actorEmail ? ` · ${event.actorEmail}` : ""}` : event.actorId ? `actor ${event.actorId}` : "system"}</span></div><small>{new Date(event.createdAt).toLocaleString()}</small></div>)}</section> : null}
   </AppShell>;
 }
