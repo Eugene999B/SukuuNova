@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getPlatformSession, requirePlatformSession } from "@/lib/auth";
+import { requirePlatformSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { appendPlatformAudit } from "@/lib/audit";
@@ -20,8 +20,7 @@ const preferencesSchema = z.object({
 
 export async function GET() {
   try {
-    const session = await getPlatformSession();
-    if (!session) return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
+    const session = await requirePlatformSession();
     const admin = await db.platformAdmin.findUnique({ where: { id: session.adminId }, select: { id: true, name: true, email: true, role: true, status: true } });
     if (!admin || admin.status !== "active") return NextResponse.json({ error: "UNAUTHORIZED" }, { status: 401 });
     const rows = await db.$queryRawUnsafe<Array<{ preferences: Record<string, unknown> }>>(`SELECT "preferences" FROM "PlatformAdminMeta" WHERE "adminId"=$1 LIMIT 1`, session.adminId);
