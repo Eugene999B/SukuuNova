@@ -19,6 +19,73 @@ output = output
   .replaceAll('classId: null, name', 'classId: classes[0].id, name')
   .replaceAll('method: "bank_transfer"', 'method: "cash"');
 
+// The mature fixture contains a historical VisitorLog sample whose timeout
+// was before its timeout start. Keep the production CHECK constraint intact
+// and normalize that synthetic row to end after it begins.
+output = output.replace(
+  /timeOut:\s*i%2\s*\?\s*new Date\(now\.getTime\(\)-\(i\*3600000\)-1800000\)\s*:\s*null/g,
+  "timeOut: i%2 ? new Date(now.getTime()-(i*3600000)+1800000) : null",
+);
+
+// Raw fixture inserts for Phase 3 JSON fields pass JSON.stringify(...) as a
+// text parameter. Cast those parameters to jsonb instead of weakening the
+// schema. This mirrors the compatibility treatment already proven by the
+// older realistic live-seed runner.
+const rawExec = "async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }";
+const compatibleExec = `async function exec(tx, sql, ...params) {
+  let normalizedSql = sql;
+  let normalizedParams = params;
+  if (normalizedSql.includes('"P3FeedingMenu"') && normalizedSql.includes('"items"')) {
+    normalizedSql = normalizedSql.replace(",\$4,520,\$5)", ",\$4::jsonb,520,\$5)");
+  }
+  if (normalizedSql.includes('"P3ExamQuestion"') && normalizedSql.includes('"options"')) {
+    normalizedSql = normalizedSql.replace(",\$4,\$5,1,5,\$6)", ",\$4,\$5::jsonb,1,5,\$6)");
+  }
+  if (normalizedSql.includes('"P3ExamAttempt"') && normalizedSql.includes('"answers"')) {
+    normalizedSql = normalizedSql.replace(",\$7,'submitted',22.5,\$8)", ",\$7,'submitted',22.5,\$8::jsonb)");
+  }
+  if (normalizedSql.includes('"P3OfflineSyncQueue"') && normalizedSql.includes('"payload"')) {
+    normalizedSql = normalizedSql.replace(",'attendance',\$4,'pending'", ",'attendance',\$4::jsonb,'pending'");
+  }
+  if (normalizedSql.includes('"P3FinanceAdjustment"') && normalizedSql.includes('"approvedAt"')) {
+    normalizedSql = normalizedSql.replace(",\$5,\$6,\$7)", ",\$5,\$6,\$7::timestamp)");
+
+    // The canonical fixture historically passed an extra runtime value
+    // before approvedAt. Rebuild the arguments from the actual tenant users.
+    const dateIndex = normalizedParams.findIndex((value) =>
+      value instanceof Date || (typeof value === "string" && !Number.isNaN(Date.parse(value)) && /^\\d{4}-\\d{2}-\\d{2}/.test(value))
+    );
+    if (normalizedParams.length >= 7 && dateIndex >= 0) {
+      const candidateIds = normalizedParams.filter((value, index) =>
+        index !== dateIndex && typeof value === "string" && value.length >= 16
+      );
+      const userCandidates = candidateIds.length
+        ? await tx.user.findMany({
+            where: { schoolId: normalizedParams[1], id: { in: candidateIds } },
+            select: { id: true },
+          })
+        : [];
+      const validUserIds = userCandidates.map((user) => user.id);
+      if (validUserIds.length >= 2) {
+        normalizedParams = [
+          normalizedParams[0],
+          normalizedParams[1],
+          normalizedParams[2],
+          normalizedParams[3],
+          validUserIds[0],
+          validUserIds[1],
+          normalizedParams[dateIndex],
+        ];
+      }
+    }
+  }
+  return tx.$executeRawUnsafe(normalizedSql, ...normalizedParams);
+}`;
+if (!output.includes(rawExec)) {
+  throw new Error("Eugene trial fixture exec helper changed unexpectedly; refusing to continue.");
+}
+output = output.replace(rawExec, compatibleExec);
+
 // Remove the deliberately hard-coded attendance conflict scenario. The
 // realistic rolling attendance history already exercises attendance flows,
 // while the conflict rows are not part of the Eugene Academy data model.
