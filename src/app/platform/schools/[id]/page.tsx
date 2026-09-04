@@ -7,6 +7,7 @@ import { hasPlatformPermission, requirePlatformPermission } from "@/lib/platform
 import { requireSchoolScope } from "@/lib/platform-school-scope";
 import { db, withTenant } from "@/lib/db";
 import "@/components/platform-control-plane.css";
+import "@/components/platform-school360.css";
 
 export default async function PlatformSchool360Page({ params }: { params: Promise<{ id: string }> }) {
   const session = await requirePlatformSession();
@@ -18,7 +19,6 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
     hasPlatformPermission(session, "billing.view"),
     hasPlatformPermission(session, "audit.view"),
   ]);
-
   const data = await withTenant(id, async (tx) => {
     const school = await tx.school.findUnique({
       where: { id },
@@ -46,14 +46,12 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
     return { school, students, users, classes, subjects, invoices, payments, recentMessages, failedMessages };
   });
   if (!data) notFound();
-
   const audits = canAudit
     ? await db.$queryRawUnsafe<Array<{ id: string; actorId: string | null; actorName: string | null; actorEmail: string | null; action: string; targetEntity: string | null; createdAt: Date }>>(
         `SELECT l."id",l."actorId",a."name" AS "actorName",a."email" AS "actorEmail",l."action",l."targetEntity",l."createdAt" FROM "AuditLogPlatform" l LEFT JOIN "PlatformAdmin" a ON a."id"=l."actorId" WHERE l."targetSchoolId"=$1 ORDER BY l."createdAt" DESC LIMIT 40`,
         id,
       )
     : [];
-
   const unpaid = data.invoices.filter((invoice) => invoice.status !== "paid").length;
   const collected = data.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
 
@@ -68,7 +66,6 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
       failedMessages={data.failedMessages}
       unpaid={unpaid}
       collected={collected}
-      invoices={data.invoices}
       audits={audits}
       canSupport={canSupport}
       canBilling={canBilling}
