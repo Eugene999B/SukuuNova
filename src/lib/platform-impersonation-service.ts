@@ -43,20 +43,20 @@ export async function impersonatePlatformUser(input: {
     );
 
     await appendPlatformAudit({
-      actorId: input.adminId,
+      actorId: `platform:${input.adminId}`,
       action: "impersonation.started",
       targetSchoolId: input.schoolId,
-      targetEntity: `User:${input.userId}`,
+      targetEntity: `ImpersonationLog:${id}`,
       meta: { impersonationId: id, impersonatedUserId: input.userId, reason },
-    });
+    }, tx);
 
     await appendSchoolAudit(tx, {
       schoolId: input.schoolId,
-      actorId: input.userId,
+      actorId: `platform:${input.adminId}`,
       action: "platform.impersonation_started",
       entityType: "ImpersonationLog",
       entityId: id,
-      after: { platformAdminId: input.adminId, reason, visibleToSchool: true },
+      after: { platformAdminId: input.adminId, impersonatedUserId: input.userId, reason, visibleToSchool: true },
     });
 
     return { id, userId: user.id, userName: user.name, reason };
@@ -65,14 +65,31 @@ export async function impersonatePlatformUser(input: {
 
 export async function endPlatformImpersonation(schoolId: string, impersonationId: string, adminId: string) {
   return withTenant(schoolId, async (tx) => {
+    const endedAt = new Date();
     const changed = await tx.$executeRawUnsafe(
-      `UPDATE "ImpersonationLog" SET "endedAt"=CURRENT_TIMESTAMP WHERE "id"=$1 AND "schoolId"=$2 AND "platformAdminId"=$3 AND "endedAt" IS NULL`,
+      `UPDATE "ImpersonationLog" SET "endedAt"=$1 WHERE "id"=$2 AND "schoolId"=$3 AND "platformAdminId"=$4 AND "endedAt" IS NULL`,
+      endedAt,
       impersonationId,
       schoolId,
       adminId,
     );
     if (changed !== 1) throw new AppError("Impersonation session not found or already ended.", 409, "IMPERSONATION_CLOSED");
-    await appendPlatformAudit({ actorId: adminId, action: "impersonation.ended", targetSchoolId: schoolId, targetEntity: `ImpersonationLog:${impersonationId}`, meta: { impersonationId } });
+
+    await appendPlatformAudit({
+      actorId: `platform:${adminId}`,
+      action: "impersonation.ended",
+      targetSchoolId: schoolId,
+      targetEntity: `ImpersonationLog:${impersonationId}`,
+      meta: { impersonationId, endedAt: endedAt.toISOString() },
+    }, tx);
+    await appendSchoolAudit(tx, {
+      schoolId,
+      actorId: `platform:${adminId}`,
+      action: "platform.impersonation_ended",
+      entityType: "ImpersonationLog",
+      entityId: impersonationId,
+      after: { platformAdminId: adminId, impersonationId, endedAt: endedAt.toISOString(), visibleToSchool: true },
+    });
     return { ok: true };
   });
 }
