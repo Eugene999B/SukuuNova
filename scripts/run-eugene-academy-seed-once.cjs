@@ -8,7 +8,7 @@ const { spawn } = require("child_process");
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 
-const SEED_REVISION = "2026-09-04-eugene-r6";
+const SEED_REVISION = "2026-09-04-eugene-r7";
 const prisma = new PrismaClient();
 
 function runScript(file) {
