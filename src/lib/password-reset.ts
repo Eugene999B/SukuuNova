@@ -25,17 +25,35 @@ export async function issueSchoolPasswordReset(input: { uniqueCode: string; iden
   if (!directory || directory.status !== "active") return null;
   return withTenant(directory.schoolId, async (tx) => {
     const identifier = normalizeIdentifier(input.identifier);
-    const user = await tx.user.findFirst({ where: { status: "active", OR: [{ email: identifier }, { phone: identifier }] } });
+    const users = await tx.$queryRaw<Array<{ id: string; email: string | null; phone: string | null }>>`
+      SELECT u."id", u."email", u."phone"
+      FROM "User" u
+      WHERE u."schoolId"=${directory.schoolId}
+        AND u."status"='active'
+        AND (u."email"=${identifier} OR u."phone"=${identifier})
+        AND (
+          (${input.universe ?? "school"} = 'guardian' AND EXISTS (
+            SELECT 1 FROM "Guardian" g WHERE g."userId"=u."id" AND g."schoolId"=u."schoolId"
+          ))
+          OR
+          (${input.universe ?? "school"} = 'school' AND NOT EXISTS (
+            SELECT 1 FROM "Guardian" g WHERE g."userId"=u."id" AND g."schoolId"=u."schoolId"
+          ))
+        )
+      LIMIT 1
+    `;
+    const user = users[0];
     if (!user) return null;
     const token = newToken(); const expiresAt = new Date(Date.now() + RESET_TTL_MS);
     await tx.schoolPasswordResetToken.create({ data: { schoolId: directory.schoolId, userId: user.id, tokenHash: tokenHash(token), expiresAt } });
-    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: user.id, action: "password_reset.requested", entityType: "User", entityId: user.id, after: { expiresAt: expiresAt.toISOString() } } });
+    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: user.id, action: "password_reset.requested", entityType: "User", entityId: user.id, after: { expiresAt: expiresAt.toISOString(), universe: input.universe ?? "school" } } });
     return { universe: input.universe ?? "school", recipient: user.email || user.phone || identifier, token, expiresAt, schoolCode: uniqueCode };
   });
 }
 
-export async function confirmSchoolPasswordReset(input: { uniqueCode: string; token: string; newPassword: string }): Promise<void> {
+export async function confirmSchoolPasswordReset(input: { uniqueCode: string; token: string; newPassword: string; universe?: "school" | "guardian" }): Promise<void> {
   validateNewPassword(input.newPassword);
+  const universe = input.universe ?? "school";
   const directory = await db.schoolLoginDirectory.findUnique({ where: { uniqueCode: input.uniqueCode.trim().toLowerCase() } });
   if (!directory || directory.status !== "active") throw new UnauthorizedError("Invalid or expired reset token.");
   await withTenant(directory.schoolId, async (tx) => {
@@ -52,6 +70,11 @@ export async function confirmSchoolPasswordReset(input: { uniqueCode: string; to
           WHERE u."id" = "SchoolPasswordResetToken"."userId"
             AND u."schoolId" = ${directory.schoolId}
             AND u."status" = 'active'
+            AND (
+              (${universe} = 'guardian' AND EXISTS (SELECT 1 FROM "Guardian" g WHERE g."userId"=u."id" AND g."schoolId"=u."schoolId"))
+              OR
+              (${universe} = 'school' AND NOT EXISTS (SELECT 1 FROM "Guardian" g WHERE g."userId"=u."id" AND g."schoolId"=u."schoolId"))
+            )
         )
       RETURNING "id", "userId"
     `;
@@ -60,7 +83,7 @@ export async function confirmSchoolPasswordReset(input: { uniqueCode: string; to
     const passwordHash = await hash(input.newPassword, 12);
     await tx.user.update({ where: { id: reset.userId }, data: { passwordHash } });
     await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: directory.schoolId, userId: reset.userId, usedAt: null }, data: { usedAt: now } });
-    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: reset.userId, action: "password_reset.completed", entityType: "User", entityId: reset.userId, after: { completedAt: now.toISOString() } } });
+    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: reset.userId, action: "password_reset.completed", entityType: "User", entityId: reset.userId, after: { completedAt: now.toISOString(), universe } } });
   });
 }
 
