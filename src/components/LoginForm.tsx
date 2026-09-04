@@ -1,22 +1,23 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, LockKeyhole, Mail } from "lucide-react";
 
-type Props = { universe: "school" } | { universe: "platform" };
+type Props = { universe: "school"; initialSchoolCode?: string } | { universe: "platform"; initialSchoolCode?: never };
 type SchoolStage = "school" | "role" | "credentials";
 type SchoolRole = "staff" | "guardian";
 
 export function LoginForm(props: Props) {
   const router = useRouter();
-  const [schoolStage, setSchoolStage] = useState<SchoolStage>(props.universe === "school" ? "school" : "credentials");
-  const [schoolCode, setSchoolCode] = useState("");
+  const pathSchoolCode = props.universe === "school" ? String(props.initialSchoolCode ?? "").trim().toLowerCase() : "";
+  const [schoolStage, setSchoolStage] = useState<SchoolStage>(props.universe === "school" ? (pathSchoolCode ? "role" : "school") : "credentials");
+  const [schoolCode, setSchoolCode] = useState(pathSchoolCode.toUpperCase());
   const [schoolName, setSchoolName] = useState("");
   const [schoolRole, setSchoolRole] = useState<SchoolRole | null>(null);
   const [error, setError] = useState("");
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState(Boolean(pathSchoolCode));
   const [showPassword, setShowPassword] = useState(false);
 
   async function resolveSchoolCode(code: string) {
@@ -29,6 +30,27 @@ export function LoginForm(props: Props) {
     if (!response.ok) throw new Error(result.message || "We could not verify that school code.");
     return result.school as { uniqueCode: string; name: string };
   }
+
+  useEffect(() => {
+    if (!pathSchoolCode || props.universe !== "school") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const school = await resolveSchoolCode(pathSchoolCode);
+        if (cancelled) return;
+        setSchoolCode(school.uniqueCode.toUpperCase());
+        setSchoolName(school.name);
+        setSchoolStage("role");
+      } catch (verificationError) {
+        if (cancelled) return;
+        setError(verificationError instanceof Error ? verificationError.message : "We could not verify that school code.");
+        setSchoolStage("school");
+      } finally {
+        if (!cancelled) setPending(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pathSchoolCode, props.universe]);
 
   async function submitSchoolCode(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -47,6 +69,8 @@ export function LoginForm(props: Props) {
       setSchoolName(school.name);
       setError("");
       setSchoolStage("role");
+      const normalizedPath = `/login/school/${encodeURIComponent(school.uniqueCode.toLowerCase())}`;
+      if (window.location.pathname !== normalizedPath) router.replace(normalizedPath);
     } catch (verificationError) {
       setError(verificationError instanceof Error ? verificationError.message : "We could not verify that school code.");
     } finally {
@@ -78,7 +102,7 @@ export function LoginForm(props: Props) {
   if (props.universe === "school") {
     if (schoolStage === "school") return <form className="auth-form" onSubmit={submitSchoolCode}>
       <div className="auth-stepper" aria-label="Sign-in step 1 of 3"><span className="is-active">1</span><i /><span>2</span><i /><span>3</span></div>
-      <div className="auth-field"><label htmlFor="schoolCode">School code</label><input id="schoolCode" name="schoolCode" autoComplete="organization" placeholder="e.g. EUG123" autoFocus required /></div>
+      <div className="auth-field"><label htmlFor="schoolCode">School code</label><input id="schoolCode" name="schoolCode" defaultValue={pathSchoolCode.toUpperCase()} autoComplete="organization" placeholder="e.g. EUG123" autoFocus required /></div>
       <p className="auth-help-text">Use the code provided by your school. We’ll verify it before showing the available access types.</p>
       {error ? <p className="auth-error" role="alert">{error}</p> : null}
       <button className="auth-submit" disabled={pending} type="submit">{pending ? "Checking school…" : "Continue"}{!pending ? <span>→</span> : null}</button>
