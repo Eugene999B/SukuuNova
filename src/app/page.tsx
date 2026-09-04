@@ -43,7 +43,7 @@ export default function HomePage() {
           </div>
         </header>
 
-        <section className="hero" id="platform">
+        <section className="hero hero-reframed" id="platform">
           <div className="hero-copy-wrap">
             <div className="eyebrow"><span className="eyebrow-dot" /> School management, made simpler</div>
             <h1>Keep the whole school <span>in one place.</span></h1>
@@ -54,14 +54,23 @@ export default function HomePage() {
             </div>
             <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={33} height={33} /><div><strong>Made for everyday school work.</strong><span>Keep people, classes, attendance, communication and finance together without making the job harder.</span></div></div>
           </div>
-          <HomeProductPreview />
+
+          <div className="home-hero-visual" aria-label="SukuuNova in the real school day">
+            <div className="home-hero-photo home-hero-photo-main">
+              <Image src={`/brand/${photoItems[0][0]}`} alt={photoItems[0][1]} fill sizes="(max-width: 900px) 100vw, 58vw" priority />
+              <div className="home-hero-photo-caption"><span>THE SCHOOL DAY</span><strong>Built around real people and real work.</strong></div>
+            </div>
+            <div className="home-hero-photo home-hero-photo-secondary">
+              <Image src={`/brand/${photoItems[1][0]}`} alt={photoItems[1][1]} fill sizes="(max-width: 900px) 42vw, 28vw" />
+              <div className="home-hero-photo-badge"><span>CONNECTED</span><strong>People stay in the loop.</strong></div>
+            </div>
+            <div className="home-hero-float"><span className="home-hero-float-dot" /><span>One secure school workspace</span></div>
+          </div>
         </section>
 
-        <section className="photo-showcase" aria-label="SukuuNova in the real school day">
-          <div className="photo-showcase-copy"><span className="section-kicker">A PLATFORM WITH A HUMAN FEEL</span><h2>Technology that still feels like school.</h2><p>Use the real school day as the centre of the experience — from classrooms and people to communication, attendance and family connection.</p></div>
-          <div className="photo-grid">
-            {photoItems.map(([src, alt]) => <div className="photo-card" key={src}><Image src={`/brand/${src}`} alt={alt} fill sizes="(max-width: 760px) 100vw, 50vw" /></div>)}
-          </div>
+        <section className="product-story" aria-label="How SukuuNova brings school work together">
+          <div className="product-story-head"><div><span className="section-kicker">SEE THE PLATFORM IN CONTEXT</span><h2>One school. Four everyday workstreams.</h2></div><p>Move from the real school day into the product without losing the human side of the story.</p></div>
+          <HomeProductPreview />
         </section>
 
         <section className="intent-grid" id="how-it-works" aria-label="Who SukuuNova is for">
