@@ -7,7 +7,11 @@ import { getClassSubjectPerformance } from "@/lib/academic-engine";
 import { gradeForPercentage } from "@/lib/assessment-engine";
 
 const query = z.object({ classId: z.string().min(1), subjectId: z.string().min(1), termId: z.string().min(1) });
-const csv = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+const csv = (value: unknown) => {
+  const text = String(value ?? "");
+  const safe = /^[=+\-@\t\r]/.test(text) ? `\'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
+};
 
 export async function GET(request: Request) {
   try {
