@@ -10,6 +10,15 @@ const path = "scripts/seed-realistic-test-school.cjs";
 const source = fs.readFileSync(path, "utf8");
 let output = source;
 
+// Keep Eugene Academy broad and realistic while avoiding an unnecessarily
+// expensive 225-student row-by-row seed during Railway predeploy. The fixture
+// retains 9 classes, 50 guardians, full fee/academic modules, and 90 students
+// (10 per class), which is enough to exercise all role and class workflows.
+output = output.replace(
+  "for (let i = 0; i < 75 * 3; i++) {",
+  "for (let i = 0; i < 30 * 3; i++) {",
+);
+
 // Current database constraints use lower-case operational values and require a
 // concrete class on every FeeItem.
 output = output
