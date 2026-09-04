@@ -22,7 +22,7 @@ function isKnownPermission(value: string): value is typeof ADMIN_PERMISSIONS[num
 }
 
 function validatePermissions(values: string[]) {
-  const permissions = [...new Set(values)];
+  const permissions = [...new Set(values)].sort();
   const invalid = permissions.filter((permission) => !isKnownPermission(permission));
   if (invalid.length) throw new AppError(`Unknown platform permission: ${invalid[0]}`, 400, "INVALID_PERMISSION");
   return permissions;
@@ -92,7 +92,7 @@ export async function listPlatformAdmins(_role: string): Promise<PlatformAdminVi
      GROUP BY a."id",m."createdById"
      ORDER BY a."createdAt" DESC`,
   );
-  return admins.map((admin) => ({ ...admin, permissions: Array.isArray(admin.permissions) ? admin.permissions.filter((value): value is string => typeof value === "string") : [] }));
+  return admins.map((admin) => ({ ...admin, permissions: Array.isArray(admin.permissions) ? admin.permissions.filter((value): value is string => typeof value === "string").sort() : [] }));
 }
 
 export async function createPlatformAdmin(input: {
@@ -104,14 +104,14 @@ export async function createPlatformAdmin(input: {
   const permissions = validatePermissions(input.permissions);
   const name = input.name.trim(); const email = input.email.trim().toLowerCase();
   if (name.length < 2 || email.length < 3) throw new AppError("Worker identity is incomplete.", 400, "INVALID_INPUT");
-  const id = await db.$transaction(async (tx) => {
+  const result = await db.$transaction(async (tx) => {
     const a = await tx.platformAdmin.create({ data: { name, email, passwordHash: await hash(input.password, 12), role: input.role, status: "active" } });
     await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminMeta" ("adminId","createdById") VALUES ($1,$2)`, a.id, input.actorId);
     for (const permission of permissions) await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, a.id, permission);
+    await appendPlatformAudit({ actorId: input.actorId, action: "platform_admin.created", targetEntity: `PlatformAdmin:${a.id}`, meta: { role: input.role, permissions } }, tx);
     return a.id;
   });
-  await appendPlatformAudit({ actorId: input.actorId, action: "platform_admin.created", targetEntity: `PlatformAdmin:${id}`, meta: { role: input.role, permissions } });
-  return { id, name, email, role: input.role, status: "active", permissions };
+  return { id: result, name, email, role: input.role, status: "active", permissions };
 }
 
 export async function updatePlatformAdmin(input: {
@@ -122,7 +122,7 @@ export async function updatePlatformAdmin(input: {
   if (input.status && !["active", "suspended"].includes(input.status)) throw new AppError("Invalid worker status.", 400, "INVALID_STATUS");
   if (input.role) validateWorkerRole(input.role);
   const permissions = input.permissions ? validatePermissions(input.permissions) : undefined;
-  const beforeAfter = await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext('sukuunova.platform-admin-governance'))`);
     const target = await tx.platformAdmin.findUnique({ where: { id: input.adminId }, select: { id: true, name: true, email: true, role: true, status: true } });
     if (!target) throw new AppError("Worker account was not found.", 404, "WORKER_NOT_FOUND");
@@ -131,19 +131,33 @@ export async function updatePlatformAdmin(input: {
     if (target.role !== nextRole) changedFields.role = { before: target.role, after: nextRole };
     if (target.status !== nextStatus) changedFields.status = { before: target.status, after: nextStatus };
     if (Object.keys(changedFields).length) await tx.platformAdmin.update({ where: { id: target.id }, data: { role: nextRole, status: nextStatus } });
-    let previousPermissions: string[] | undefined; let permissionsChanged = false;
+    let previousPermissions: string[] = [];
+    let nextPermissions: string[] = [];
+    let permissionsChanged = false;
     if (permissions) {
       const rows = await tx.$queryRawUnsafe<Array<{ permission: string }>>(`SELECT "permission" FROM "PlatformAdminPermission" WHERE "adminId"=$1 ORDER BY "permission" ASC`, target.id);
-      previousPermissions = rows.map((row) => row.permission);
-      permissionsChanged = previousPermissions.length !== permissions.length || previousPermissions.some((permission, index) => permission !== permissions[index]);
+      previousPermissions = rows.map((row) => row.permission).sort();
+      nextPermissions = permissions;
+      permissionsChanged = previousPermissions.length !== nextPermissions.length || previousPermissions.some((permission, index) => permission !== nextPermissions[index]);
       if (permissionsChanged) {
         await tx.$executeRawUnsafe(`DELETE FROM "PlatformAdminPermission" WHERE "adminId"=$1`, target.id);
-        for (const permission of permissions) await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, target.id, permission);
+        for (const permission of nextPermissions) await tx.$executeRawUnsafe(`INSERT INTO "PlatformAdminPermission" ("adminId","permission") VALUES ($1,$2) ON CONFLICT DO NOTHING`, target.id, permission);
       }
+    } else {
+      nextPermissions = previousPermissions;
     }
-    return { target, next: { ...target, role: nextRole, status: nextStatus }, permissions: permissions ?? previousPermissions, previousPermissions, changedFields, permissionsChanged };
+    await appendPlatformAudit({
+      actorId: input.actorId,
+      action: "platform_admin.updated",
+      targetEntity: `PlatformAdmin:${input.adminId}`,
+      meta: {
+        before: { role: target.role, status: target.status, permissions: input.permissions ? previousPermissions : undefined },
+        after: { role: nextRole, status: nextStatus, permissions: input.permissions ? nextPermissions : undefined },
+        changedFields,
+        permissionsChanged,
+      },
+    }, tx);
   });
-  await appendPlatformAudit({ actorId: input.actorId, action: "platform_admin.updated", targetEntity: `PlatformAdmin:${input.adminId}`, meta: { before: { role: beforeAfter.target.role, status: beforeAfter.target.status, permissions: beforeAfter.previousPermissions }, after: { role: beforeAfter.next.role, status: beforeAfter.next.status, permissions: beforeAfter.permissions }, changedFields: beforeAfter.changedFields, permissionsChanged: beforeAfter.permissionsChanged } });
   return (await listPlatformAdmins(input.actorRole)).find((admin) => admin.id === input.adminId);
 }
 
