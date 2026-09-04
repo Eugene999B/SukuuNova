@@ -44,25 +44,25 @@ DECLARE
   current_balance INTEGER;
   next_balance INTEGER;
 BEGIN
-  IF NEW.entryType NOT IN ('allocation','refund') THEN RETURN NEW; END IF;
-  IF NEW.schoolId IS NULL THEN RETURN NEW; END IF;
-  SELECT "balance" INTO current_balance FROM "PlatformMessagingInventory" WHERE "channel" = NEW.channel FOR UPDATE;
+  IF NEW."entryType" NOT IN ('allocation','refund') THEN RETURN NEW; END IF;
+  IF NEW."schoolId" IS NULL THEN RETURN NEW; END IF;
+  SELECT "balance" INTO current_balance FROM "PlatformMessagingInventory" WHERE "channel" = NEW."channel" FOR UPDATE;
   IF current_balance IS NULL THEN
-    RAISE EXCEPTION 'MESSAGING_INVENTORY_CHANNEL_NOT_INITIALIZED:%', NEW.channel USING ERRCODE='P0001';
+    RAISE EXCEPTION 'MESSAGING_INVENTORY_CHANNEL_NOT_INITIALIZED:%', NEW."channel" USING ERRCODE='P0001';
   END IF;
-  IF NEW.entryType = 'allocation' THEN
-    next_balance := current_balance - NEW.quantity;
-    IF NEW.quantity <= 0 THEN
+  IF NEW."entryType" = 'allocation' THEN
+    next_balance := current_balance - NEW."quantity";
+    IF NEW."quantity" <= 0 THEN
       RAISE EXCEPTION 'MESSAGING_ALLOCATION_MUST_BE_POSITIVE' USING ERRCODE='P0001';
     END IF;
   ELSE
-    next_balance := current_balance + abs(NEW.quantity);
+    next_balance := current_balance + abs(NEW."quantity");
   END IF;
   IF next_balance < 0 THEN
-    RAISE EXCEPTION 'INSUFFICIENT_PLATFORM_MESSAGING_INVENTORY:%', NEW.channel USING ERRCODE='P0001';
+    RAISE EXCEPTION 'INSUFFICIENT_PLATFORM_MESSAGING_INVENTORY:%', NEW."channel" USING ERRCODE='P0001';
   END IF;
-  UPDATE "PlatformMessagingInventory" SET "balance" = next_balance, "updatedAt" = CURRENT_TIMESTAMP WHERE "channel" = NEW.channel;
-  NEW.balanceAfter := next_balance;
+  UPDATE "PlatformMessagingInventory" SET "balance" = next_balance, "updatedAt" = CURRENT_TIMESTAMP WHERE "channel" = NEW."channel";
+  NEW."balanceAfter" := next_balance;
   RETURN NEW;
 END;
 $$;
