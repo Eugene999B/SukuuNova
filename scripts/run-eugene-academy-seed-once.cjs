@@ -72,3 +72,5 @@ run()
   .finally(async () => {
     await prisma.$disconnect().catch(() => {});
   });
+
+// r7 is intentionally a one-time fixture credential refresh; later startups skip once marked complete.
