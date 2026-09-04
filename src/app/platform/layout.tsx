@@ -6,6 +6,7 @@ import { hasPlatformPermission } from "@/lib/platform-permissions";
 const PLATFORM_NAV_PERMISSIONS = [
   "analytics.view",
   "schools.view",
+  "schools.manage",
   "plans.manage",
   "billing.view",
   "support.view",
