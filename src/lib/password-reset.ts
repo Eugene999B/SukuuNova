@@ -60,7 +60,7 @@ export async function confirmSchoolPasswordReset(input: { uniqueCode: string; to
     const passwordHash = await hash(input.newPassword, 12);
     await tx.user.update({ where: { id: reset.userId }, data: { passwordHash } });
     await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: directory.schoolId, userId: reset.userId, usedAt: null }, data: { usedAt: now } });
-    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: reset.userId, action: "password_reset.completed", entityType: "User", entityId: reset.userId, after: { completedAt: now.toISOString() } });
+    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: reset.userId, action: "password_reset.completed", entityType: "User", entityId: reset.userId, after: { completedAt: now.toISOString() } } });
   });
 }
 
