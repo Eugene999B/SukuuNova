@@ -66,7 +66,7 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     }
     const passwordMatches = await compare(input.password, user.passwordHash);
     if (!passwordMatches) {
-      if (synthetic) logSyntheticLoginDiagnostic("password_failure", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier), passwordLength: input.password.length, passwordHashPrefix: user.passwordHash.slice(0, 7) });
+      if (synthetic) logSyntheticLoginDiagnostic("password_failure", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier), passwordLength: input.password.length });
       throw new UnauthorizedError(LOGIN_FAILURE);
     }
     if (synthetic) logSyntheticLoginDiagnostic("credentials_ok", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier) });
