@@ -143,11 +143,13 @@ model SchoolSettings {
   assessmentConfig         Json?
   reportCardConfig         Json?
   showOverallPosition      Boolean @default(true)
+  showSubjectPosition      Boolean @default(true)
   positionScope            String  @default("class")
   remarkSource             String  @default("grade_band")
   positionBandLabels       Json?
   behaviorRatingFields     Json?
   promotionRule            String  @default("manual")
+  positionPromotionCutoffPercent Int @default(50)
   school                   School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 }
 
@@ -535,6 +537,7 @@ model ReportCard {
   calculationSnapshot Json?
   calculationVersion  Int      @default(1)
   remarks              String?
+  headRemark           String?
   status              String   @default("draft")
   submittedBy         String?
   submittedAt         DateTime?
@@ -667,6 +670,7 @@ model TimetableSlot {
   teacherId String
   dayOfWeek Int
   period Int
+  venue String?
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   class Class @relation(fields: [classId, schoolId], references: [id, schoolId], onDelete: Cascade)
   subject Subject @relation(fields: [subjectId, schoolId], references: [id, schoolId], onDelete: Cascade)
@@ -676,6 +680,7 @@ model TimetableSlot {
   @@unique([schoolId, classId, dayOfWeek, period])
   @@index([schoolId])
   @@index([schoolId, teacherId, dayOfWeek, period])
+  @@index([schoolId, venue, dayOfWeek, period])
 }
 
 model SubstituteAssignment {

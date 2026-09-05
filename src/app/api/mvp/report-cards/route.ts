@@ -11,7 +11,7 @@ import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("generate"), studentId: z.string(), termId: z.string(), remarks: z.string().optional() }),
   z.object({ action: z.literal("submit"), reportCardId: z.string() }),
-  z.object({ action: z.literal("approve"), reportCardId: z.string() }),
+  z.object({ action: z.literal("approve"), reportCardId: z.string(), headRemark: z.string().trim().max(2000).optional() }),
   z.object({ action: z.literal("send"), reportCardId: z.string() })
 ]);
 

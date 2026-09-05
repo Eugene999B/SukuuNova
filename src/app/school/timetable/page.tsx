@@ -7,7 +7,8 @@ import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
 import { dayBlocks } from "@/lib/timetable-engine-v2";
-import { createTimetableSlot, deleteTimetableSlot, updateTimetableSlot } from "@/lib/timetable-service";
+import { createTimetableSlot, deleteTimetableSlot, moveTimetableSlot, updateTimetableSlot } from "@/lib/timetable-service";
+import { TimetableConstraintsPanel } from "@/components/TimetableConstraintsPanel";
 import "./timetable.css";
 
 type Period = { period: number; start: string; end: string };
@@ -23,13 +24,15 @@ async function saveSlot(formData: FormData) {
   const dayOfWeek = Number(formData.get("dayOfWeek"));
   const period = Number(formData.get("period"));
   const slotId = String(formData.get("slotId") ?? "").trim();
+  const venueRaw = String(formData.get("venue") ?? "").trim();
+  const venue = venueRaw ? venueRaw.slice(0, 60) : null;
   if (!classId || !subjectId || !teacherId || !Number.isInteger(dayOfWeek) || !Number.isInteger(period)) throw new Error("Choose a class, subject, teacher and lesson time.");
 
   await withTenant(session.schoolId, async (tx) => {
     if (slotId) {
-      await updateTimetableSlot(tx, { schoolId: session.schoolId, actorId: session.userId, slotId, classId, subjectId, teacherId, dayOfWeek, period });
+      await updateTimetableSlot(tx, { schoolId: session.schoolId, actorId: session.userId, slotId, classId, subjectId, teacherId, dayOfWeek, period, venue });
     } else {
-      await createTimetableSlot(tx, { schoolId: session.schoolId, actorId: session.userId, classId, subjectId, teacherId, dayOfWeek, period });
+      await createTimetableSlot(tx, { schoolId: session.schoolId, actorId: session.userId, classId, subjectId, teacherId, dayOfWeek, period, venue });
     }
   });
   redirect(`/school/timetable?classId=${encodeURIComponent(classId)}`);
@@ -45,16 +48,30 @@ async function deleteSlot(formData: FormData) {
   redirect(`/school/timetable${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`);
 }
 
+async function moveSlot(formData: FormData) {
+  "use server";
+  const session = await requireSchoolSession();
+  const slotId = String(formData.get("slotId") ?? "").trim();
+  const classId = String(formData.get("classId") ?? "").trim();
+  const dayOfWeek = Number(formData.get("dayOfWeek"));
+  const period = Number(formData.get("period"));
+  if (!slotId || !Number.isInteger(dayOfWeek) || !Number.isInteger(period)) throw new Error("Choose a lesson and its new time.");
+  await withTenant(session.schoolId, async (tx) => moveTimetableSlot(tx, { schoolId: session.schoolId, actorId: session.userId, slotId, dayOfWeek, period }));
+  redirect(`/school/timetable${classId ? `?classId=${encodeURIComponent(classId)}` : ""}`);
+}
+
 function formatTime(value: string) {
   const [h, m] = value.split(":").map(Number);
   const suffix = h >= 12 ? "PM" : "AM";
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
 }
 
-export default async function TimetablePage({ searchParams }: { searchParams: Promise<{ classId?: string; edit?: string }> }) {
+export default async function TimetablePage({ searchParams }: { searchParams: Promise<{ classId?: string; edit?: string; teacherId?: string; view?: string }> }) {
   const session = await requireSchoolSession();
   const params = await searchParams;
   const selectedClassId = String(params.classId ?? "").trim();
+  const teacherId = String(params.teacherId ?? "").trim();
+  const view = params.view === "teacher" ? "teacher" : "class";
   const editId = String(params.edit ?? "").trim();
 
   const data = await withTenant(session.schoolId, async (tx) => {
@@ -65,7 +82,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
       tx.subject.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
       tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
       tx.timetableSlot.findMany({
-        where: { schoolId: session.schoolId, ...(selectedClassId ? { classId: selectedClassId } : {}) },
+        where: { schoolId: session.schoolId, ...(view === "teacher" && teacherId ? { teacherId } : selectedClassId ? { classId: selectedClassId } : {}) },
         orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }],
         include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } }, teacher: { select: { id: true, name: true } } },
       }),
@@ -105,7 +122,22 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
         <section className="timetable-toolbar">
           <div className="tt-context">
             <div className="tt-context-label">WORKING VIEW</div>
+            <div className="tt-view-tabs" role="tablist" aria-label="Timetable view">
+              <Link href="/school/timetable" aria-current={view === "class" && !teacherId ? "page" : undefined} className={view === "class" && !teacherId ? "active" : ""}>Class week</Link>
+              <Link href="/school/timetable?view=teacher" aria-current={view === "teacher" ? "page" : undefined} className={view === "teacher" ? "active" : ""}>Teacher week</Link>
+            </div>
             <div className="tt-context-row">
+              {view === "teacher" ? (
+                <form method="get" className="tt-class-form">
+                  <input type="hidden" name="view" value="teacher" />
+                  <label htmlFor="teacherId">Teacher</label>
+                  <select id="teacherId" name="teacherId" defaultValue={teacherId}>
+                    <option value="">Choose teacher</option>
+                    {data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}
+                  </select>
+                  <button className="tt-button secondary compact" type="submit">View</button>
+                </form>
+              ) : (
               <form method="get" className="tt-class-form">
                 <label htmlFor="classId">Class</label>
                 <select id="classId" name="classId" defaultValue={selectedClassId}>
@@ -114,6 +146,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
                 </select>
                 <button className="tt-button secondary compact" type="submit">View</button>
               </form>
+              )}
               <Link className="tt-text-link" href="/school/academics/setup">Schedule setup <ArrowRight size={13} /></Link>
             </div>
           </div>
@@ -160,6 +193,17 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
           <article className="tt-support-card"><div className="tt-support-icon"><Users size={17} /></div><div><span className="timetable-kicker">NEXT TOOLS</span><h3>Finish, then distribute</h3><div className="tt-tool-links"><Link href="/school/academics/setup">Adjust school days & lesson times <ArrowRight size={13} /></Link><Link href="/school/timetable/print">Design & print the timetable <ArrowRight size={13} /></Link></div></div></article>
         </section>
 
+        <TimetableConstraintsPanel
+          teachers={data.teachers}
+          subjects={data.subjects}
+          initial={{
+            rooms: (data.config as { rooms?: Array<{ id: string; name: string; type?: string }> }).rooms ?? [],
+            teacherUnavailability: (data.config as { teacherUnavailability?: Record<string, string[]> }).teacherUnavailability ?? {},
+            roomRequirements: (data.config as { roomRequirements?: Record<string, { roomType?: string; room?: string }> }).roomRequirements ?? {},
+            doublePeriodSubjects: (data.config as { doublePeriodSubjects?: Record<string, number> }).doublePeriodSubjects ?? {},
+          }}
+        />
+
         {editId ? <div className="tt-drawer" role="dialog" aria-modal="true" aria-label={editSlot ? "Edit lesson" : "Add lesson"}>
           <div className="tt-drawer-panel">
             <div className="tt-drawer-head"><div><span className="timetable-kicker">{editSlot ? "EDIT LESSON" : "NEW LESSON"}</span><h2>{editSlot ? editSlot.subject.name : "Add a lesson"}</h2><p>{editSlot ? "Change the lesson details without changing the school time structure." : "Choose who, what and when. The lesson time comes from Academic Setup."}</p></div><Link className="tt-close" href={`/school/timetable${selectedClassId ? `?classId=${encodeURIComponent(selectedClassId)}` : ""}`} aria-label="Close"><X size={18} /></Link></div>
@@ -168,9 +212,11 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
               <label>Class<select name="classId" required defaultValue={editSlot?.classId ?? selectedClassId}><option value="">Choose class</option>{data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</option>)}</select></label>
               <label>Subject<select name="subjectId" required defaultValue={editSlot?.subjectId ?? ""}><option value="">Choose subject</option>{data.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
               <label>Teacher<select name="teacherId" required defaultValue={editSlot?.teacherId ?? ""}><option value="">Choose teacher</option>{data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</select></label>
+              <label>Room / venue (optional)<input name="venue" defaultValue={(editSlot as { venue?: string | null } | null)?.venue ?? ""} placeholder="e.g. Science Lab" maxLength={60} /></label>
               <div className="tt-form-two"><label>Day<select name="dayOfWeek" required defaultValue={editSlot?.dayOfWeek ?? newParts[1] ?? enabledDays[0]?.dayOfWeek ?? 1}>{enabledDays.map((day) => <option key={day.dayOfWeek} value={day.dayOfWeek}>{day.name}</option>)}</select></label><label>Period<select name="period" required defaultValue={String(editSlot?.period ?? newParts[2] ?? periods[0]?.period ?? 1)}>{periods.map((period) => <option key={period.period} value={period.period}>P{period.period} · {formatTime(String(period.start))} – {formatTime(String(period.end))}</option>)}</select></label></div>
               <div className="tt-form-actions"><Link className="tt-button secondary" href={`/school/timetable${selectedClassId ? `?classId=${encodeURIComponent(selectedClassId)}` : ""}`}>Cancel</Link><button className="tt-button primary" type="submit">{editSlot ? "Save lesson" : "Add lesson"}</button></div>
             </form>
+            {editSlot ? <form action={moveSlot} className="tt-move-form"><input type="hidden" name="slotId" value={editSlot.id} /><input type="hidden" name="classId" value={selectedClassId || editSlot.classId} /><div className="tt-form-two"><label>Move to day<select name="dayOfWeek" required defaultValue={editSlot.dayOfWeek}>{enabledDays.map((day) => <option key={day.dayOfWeek} value={day.dayOfWeek}>{day.name}</option>)}</select></label><label>Move to period<select name="period" required defaultValue={String(editSlot.period)}>{periods.map((period) => <option key={period.period} value={period.period}>P{period.period}</option>)}</select></label></div><button type="submit" className="tt-button secondary">Move lesson (re-validated)</button></form> : null}
             {editSlot ? <form action={deleteSlot} className="tt-delete-form"><input type="hidden" name="slotId" value={editSlot.id} /><input type="hidden" name="classId" value={selectedClassId || editSlot.classId} /><button type="submit" className="tt-delete-button">Delete this lesson</button></form> : null}
           </div>
         </div> : null}

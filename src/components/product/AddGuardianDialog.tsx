@@ -120,7 +120,7 @@ export function AddGuardianDialog(props: {
             <button type="button" className="button secondary" onClick={() => setOpen(false)} disabled={pending}>
               Cancel
             </button>
-            <button type="submit" className="button primary" disabled={pending || !studentId || complete} aria-busy={pending}>
+            <button type="submit" className="button primary" disabled={pending || !studentId || complete === true} aria-busy={pending}>
               {pending ? "Saving…" : "5 · Confirm & link guardian"}
             </button>
           </div>

@@ -7,7 +7,7 @@ function asObject(value: Prisma.JsonValue | null | undefined): Record<string, Pr
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.JsonValue> : {};
 }
 
-function gradeScale(value: Prisma.JsonValue | null | undefined): GradeBand[] {
+export function gradeScale(value: Prisma.JsonValue | null | undefined): GradeBand[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry) => {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
@@ -19,7 +19,7 @@ function gradeScale(value: Prisma.JsonValue | null | undefined): GradeBand[] {
   });
 }
 
-function rulesFor(settings: { gradeCaWeight: Prisma.Decimal | number; gradeExamWeight: Prisma.Decimal | number; gradingScale: Prisma.JsonValue | null; assessmentConfig: Prisma.JsonValue | null }): AssessmentRules {
+export function rulesFor(settings: { gradeCaWeight: Prisma.Decimal | number; gradeExamWeight: Prisma.Decimal | number; gradingScale: Prisma.JsonValue | null; assessmentConfig: Prisma.JsonValue | null }): AssessmentRules {
   const configured = asObject(settings.assessmentConfig);
   const categories = Array.isArray(configured.categories)
     ? configured.categories.filter((entry): entry is { name: string; weight: number } => Boolean(entry) && typeof entry === "object" && typeof (entry as Record<string, Prisma.JsonValue>).name === "string" && Number.isFinite(Number((entry as Record<string, Prisma.JsonValue>).weight))).map((entry) => ({ name: entry.name, weight: Number(entry.weight) }))
@@ -53,6 +53,35 @@ export function rankTotals(entries: Array<{ id: string; name?: string; total: nu
   return positions;
 }
 
+export type ScopeTotals = { totals: Map<string, number>; names: Map<string, string> };
+
+export async function overallTotalsForScope(
+  tx: TenantDb,
+  input: { schoolId: string; termId: string; classIds: string[]; rules: AssessmentRules }
+): Promise<ScopeTotals> {
+  const students = await tx.student.findMany({ where: { schoolId: input.schoolId, classId: { in: input.classIds }, status: "active" }, select: { id: true, name: true, classId: true }, orderBy: { id: "asc" } });
+  const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: input.termId, classId: { in: input.classIds } }, select: { id: true, classId: true, subjectId: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true } }, subject: { select: { id: true, name: true } } } });
+  const totals = new Map<string, number>();
+  const names = new Map<string, string>();
+  for (const student of students) {
+    names.set(student.id, student.name);
+    const subjects = new Map<string, typeof assessments>();
+    for (const assessment of assessments) {
+      if (assessment.classId !== student.classId) continue;
+      const rows = subjects.get(assessment.subjectId) ?? [];
+      rows.push(assessment);
+      subjects.set(assessment.subjectId, rows);
+    }
+    const subjectTotals: number[] = [];
+    for (const rows of subjects.values()) {
+      const result = calculateSubjectResult(rows.map((assessment) => ({ id: assessment.id, name: assessment.subject.name, type: assessment.type, maxScore: assessment.maxScore, weight: assessment.weight, score: assessment.scores.find((score) => score.studentId === student.id)?.value ?? null })), input.rules);
+      if (result.total != null) subjectTotals.push(result.total);
+    }
+    if (subjectTotals.length) totals.set(student.id, subjectTotals.reduce((sum, value) => sum + value, 0) / subjectTotals.length);
+  }
+  return { totals, names };
+}
+
 export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: string; reportCardId: string }) {
   const report = await tx.reportCard.findFirst({ where: { id: input.reportCardId, schoolId: input.schoolId }, select: { id: true, studentId: true, termId: true, calculationSnapshot: true, student: { select: { classId: true, class: { select: { id: true, level: true } } } } } });
   if (!report?.student.classId || !report.student.class) return;
@@ -72,24 +101,9 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
   const students = await tx.student.findMany({ where: { schoolId: input.schoolId, classId: { in: classIds }, status: "active" }, select: { id: true, name: true, classId: true }, orderBy: { id: "asc" } });
   const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: report.termId, classId: { in: classIds } }, select: { id: true, classId: true, subjectId: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true } }, subject: { select: { id: true, name: true } } } });
   const rules = rulesFor(settings);
-  const totals = new Map<string, number>();
-  for (const student of students) {
-    const subjects = new Map<string, typeof assessments>();
-    for (const assessment of assessments) {
-      if (assessment.classId !== student.classId) continue;
-      const rows = subjects.get(assessment.subjectId) ?? [];
-      rows.push(assessment);
-      subjects.set(assessment.subjectId, rows);
-    }
-    const subjectTotals: number[] = [];
-    for (const rows of subjects.values()) {
-      const result = calculateSubjectResult(rows.map((assessment) => ({ id: assessment.id, name: assessment.subject.name, type: assessment.type, maxScore: assessment.maxScore, weight: assessment.weight, score: assessment.scores.find((score) => score.studentId === student.id)?.value ?? null })), rules);
-      if (result.total != null) subjectTotals.push(result.total);
-    }
-    if (subjectTotals.length) totals.set(student.id, subjectTotals.reduce((sum, value) => sum + value, 0) / subjectTotals.length);
-  }
+  const { totals, names } = await overallTotalsForScope(tx, { schoolId: input.schoolId, termId: report.termId, classIds, rules });
   const rankedPositions = rankTotals(
-    [...totals.entries()].map(([id, total]) => ({ id, name: students.find((s) => s.id === id)?.name ?? "", total }))
+    [...totals.entries()].map(([id, total]) => ({ id, name: names.get(id) ?? "", total }))
   );
   const overallPosition = rankedPositions.get(report.studentId) ?? null;
   const rankedCount = totals.size;
