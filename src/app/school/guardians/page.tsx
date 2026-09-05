@@ -1,12 +1,16 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { randomBytes } from "crypto";
 import { hash } from "bcryptjs";
+import { HeartHandshake } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import Link from "next/link";
-import "./guardians.css";
+import { DetailGrid, ProductEmpty, ProductPageHeader, ProductSection } from "@/components/product/ProductWorkspace";
+import { AddGuardianDialog } from "@/components/product/AddGuardianDialog";
+import { GuardianDirectory } from "@/components/product/GuardianDirectory";
+import "@/components/product/product-workspace.css";
 
 async function createGuardian(formData: FormData) {
   "use server";
@@ -17,6 +21,7 @@ async function createGuardian(formData: FormData) {
   const relationship = String(formData.get("relationship") ?? "Parent").trim() || "Parent";
   const studentIds = [...new Set(formData.getAll("studentIds").map(String).filter(Boolean))];
   if (!name || !phone) throw new Error("Guardian name and phone are required.");
+  if (studentIds.length === 0) throw new Error("Choose at least one learner to link.");
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:write");
     const existingGuardian = await tx.guardian.findUnique({ where: { schoolId_phone: { schoolId: session.schoolId, phone } }, select: { id: true, userId: true } });
@@ -51,18 +56,86 @@ export default async function GuardiansPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:read");
-    const [school, guardians, students] = await Promise.all([
+    const [school, guardians, students, links] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.guardian.findMany({ orderBy: { name: "asc" }, include: { user: { select: { email: true, status: true } }, students: { include: { student: { select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } } } } } }),
-      tx.student.findMany({ where: { status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } })
+      tx.guardian.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, phone: true, email: true, userId: true, user: { select: { status: true } } } }),
+      tx.student.findMany({ where: { status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } }),
+      tx.studentGuardian.findMany({ select: { guardianId: true, studentId: true } }),
     ]);
-    return { school, guardians, students };
+    const guardianCounts = new Map<string, number>();
+    for (const l of links) guardianCounts.set(l.studentId, (guardianCounts.get(l.studentId) ?? 0) + 1);
+    const linksByGuardian = new Map<string, Array<{ id: string; name: string; className: string | null }>>();
+    const byStudent = new Map(students.map((s) => [s.id, s]));
+    for (const l of links) {
+      const s = byStudent.get(l.studentId);
+      if (!s) continue;
+      const arr = linksByGuardian.get(l.guardianId) ?? [];
+      arr.push({ id: s.id, name: s.name, className: s.class?.name ?? null });
+      linksByGuardian.set(l.guardianId, arr);
+    }
+    return { school, guardians, students, guardianCounts, linksByGuardian };
   });
-  const portalEnabled = data.guardians.filter((guardian) => guardian.user?.status === "active").length;
-  const linkedChildren = data.guardians.reduce((total, guardian) => total + guardian.students.length, 0);
-  const familiesNeedingChildren = data.guardians.filter((guardian) => guardian.students.length === 0).length;
-  const pendingAccess = data.guardians.filter((guardian) => guardian.userId && guardian.user?.status !== "active").length;
-  return <AppShell universe="school" title="Guardians" subtitle="Manage family contacts, children and secure guardian access." active="Guardians" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
-    <div className="guardians-page"><section className="guardians-hero"><div><span className="eyebrow">People · Family directory</span><h2>Keep every family relationship clear.</h2><p>Find a guardian, see the children they are connected to, and manage portal access without mixing family records with login administration.</p></div><div className="guardians-hero-actions"><Link href="/school/communications/messages" className="button secondary">Message families</Link><a href="#create-guardian" className="button primary">+ Add guardian</a></div></section><section className="guardian-metrics" aria-label="Guardian overview"><article><span>Total guardians</span><strong>{data.guardians.length}</strong><small>Family contacts on record</small></article><article><span>Portal active</span><strong>{portalEnabled}</strong><small>{data.guardians.length ? `${Math.round((portalEnabled / data.guardians.length) * 100)}% active` : "No accounts yet"}</small></article><article><span>Children linked</span><strong>{linkedChildren}</strong><small>Connected learner relationships</small></article><article className={familiesNeedingChildren || pendingAccess ? "attention" : "ok"}><span>Needs attention</span><strong>{familiesNeedingChildren + pendingAccess}</strong><small>{pendingAccess ? `${pendingAccess} awaiting access activation` : familiesNeedingChildren ? "Family records need a child link" : "All family records are connected"}</small></article></section><section className="guardian-workspace"><div className="guardian-directory-panel"><div className="section-heading"><div><span className="eyebrow">Family register</span><h3>Guardians & linked children</h3><p>Open a family row to work with the relationship and portal access.</p></div></div><div className="guardian-toolbar"><input aria-label="Search guardians" placeholder="Search name, phone or email" /><select aria-label="Portal access filter" defaultValue="all"><option value="all">All portal states</option><option value="enabled">Portal active</option><option value="pending">Access pending</option></select><select aria-label="Family links filter" defaultValue="all"><option value="all">All family links</option><option value="linked">Has children</option><option value="missing">Needs child link</option></select><button type="button" className="button secondary">Filter</button></div>{data.guardians.length ? <div className="guardian-table-wrap"><table className="guardian-table"><thead><tr><th>Guardian</th><th>Children</th><th>Portal</th><th>Status</th><th /></tr></thead><tbody>{data.guardians.map((guardian) => <tr key={guardian.id}><td><div className="guardian-name-cell"><span className="guardian-avatar">{guardian.name.slice(0, 2).toUpperCase()}</span><div><strong>{guardian.name}</strong><span>{guardian.phone}{guardian.user?.email ? ` · ${guardian.user.email}` : ""}</span></div></div></td><td><div className="children-cell">{guardian.students.length ? guardian.students.map((link) => <span key={link.student.id}>{link.student.name}<small>{link.student.class?.name ?? "Needs placement"}</small></span>) : <em>No children linked</em>}</div></td><td><span className={`status-chip ${guardian.user?.status === "active" ? "good" : "neutral"}`}>{guardian.user?.status === "active" ? "Active" : "Pending"}</span></td><td><span className={`status-chip ${guardian.user?.status === "active" ? "good" : "neutral"}`}>{guardian.user?.status === "active" ? "Ready" : "Access setup"}</span></td><td><Link className="row-action" href={`/school/guardians/${guardian.id}`}>Open →</Link></td></tr>)}</tbody></table></div> : <div className="guardian-empty"><div className="empty-mark">♧</div><strong>No guardians yet</strong><p>Create the first family record and connect their child in the same workflow.</p><a href="#create-guardian" className="button primary">Add first guardian</a></div>}</div><aside className="guardian-create-panel" id="create-guardian"><div className="section-heading"><div><span className="eyebrow">New family</span><h3>Add guardian</h3><p>Create the family record and connect one or more learners. Login activation is handled separately.</p></div></div><form action={createGuardian} className="guardian-form"><label>Full name<input name="name" required placeholder="e.g. Ama Mensah" /></label><label>Phone / WhatsApp<input name="phone" required inputMode="tel" placeholder="024 000 0000" /></label><label>Email <span className="optional">Optional</span><input name="email" type="email" placeholder="guardian@example.com" /></label><label>Relationship<select name="relationship" defaultValue="Parent"><option>Parent</option><option>Mother</option><option>Father</option><option>Guardian</option><option>Other</option></select></label><div className="child-picker"><div className="child-picker-head"><strong>Connect children</strong><span>{data.students.length} active learners</span></div><div className="child-list">{data.students.map((student) => <label key={student.id}><input type="checkbox" name="studentIds" value={student.id} /><span><b>{student.name}</b><small>{student.admissionNo} · {student.class?.name ?? "Unassigned"}</small></span></label>)}</div></div><div className="portal-note"><strong>Portal access is separate</strong><span>The guardian profile is created first. An authorised administrator activates a login from Sub-accounts & Access and sets the initial password there.</span></div><button className="button primary" type="submit">Create guardian & connect →</button></form></aside></section></div>
-  </AppShell>;
+
+  const portalEnabled = data.guardians.filter((g) => g.user?.status === "active").length;
+  const pendingAccess = data.guardians.filter((g) => g.userId && g.user?.status !== "active").length;
+
+  return (
+    <AppShell universe="school" title="Guardians" subtitle="Family directory — relationships, contact truth and portal access." active="Guardians" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+      <div className="product-workspace">
+        <ProductPageHeader
+          eyebrow="People · Family directory"
+          title="Every family relationship, clear"
+          description="Find a guardian, see linked learners and portal state, then act. Backend enforces portal uniqueness; the dialog surfaces those errors plainly."
+          stats={[
+            { label: "Guardians", value: String(data.guardians.length) },
+            { label: "Portal active", value: String(portalEnabled) },
+            { label: "Pending activation", value: String(pendingAccess) },
+          ]}
+          actions={
+            <>
+              <Link className="button secondary" href="/school/communications/messages">
+                Message families
+              </Link>
+              <AddGuardianDialog
+                students={data.students.map((s) => ({
+                  id: s.id,
+                  name: s.name,
+                  admissionNo: s.admissionNo,
+                  className: s.class ? `${s.class.level ? `${s.class.level} · ` : ""}${s.class.name}` : null,
+                  guardianCount: data.guardianCounts.get(s.id) ?? 0,
+                }))}
+                action={createGuardian}
+              />
+            </>
+          }
+        />
+        <ProductSection eyebrow="Overview" title="Attention queue" description="What needs a family admin next?">
+          <DetailGrid
+            items={[
+              { label: "Children linked", value: String([...data.linksByGuardian.values()].reduce((n, arr) => n + arr.length, 0)) },
+              { label: "Pending portal", value: String(pendingAccess), hint: pendingAccess ? "Activate on first sign-in" : "All clear" },
+              { label: "Active learners", value: String(data.students.length), hint: "Searchable in the dialog" },
+            ]}
+          />
+        </ProductSection>
+        <ProductSection eyebrow="Family register" title="Guardians & linked children" description="Fast search replaces scrolling hundreds of rows. Open any guardian for the full workspace.">
+          <GuardianDirectory
+            guardians={data.guardians.map((g) => ({
+              id: g.id,
+              name: g.name,
+              phone: g.phone,
+              email: g.email,
+              portal: g.user?.status ?? null,
+              students: data.linksByGuardian.get(g.id) ?? [],
+            }))}
+          />
+        </ProductSection>
+        {data.guardians.length === 0 ? (
+          <ProductSection eyebrow="Empty" title="No family records" description="Create the first guardian to connect learners to families.">
+            <ProductEmpty icon={HeartHandshake} title="Start the family directory" description="No invented records are shown. The dialog creates a real guardian, links a real learner, and provisions pending portal access." />
+          </ProductSection>
+        ) : null}
+      </div>
+    </AppShell>
+  );
 }
