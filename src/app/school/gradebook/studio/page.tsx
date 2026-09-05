@@ -23,7 +23,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
     const selectedSubject = params.subject || "";
     const selectedTerm = config.terms.find((item) => item.id === params.term) ?? config.terms[0];
     const matching = assignments.filter((item) => (!selectedClass || item.classId === selectedClass) && (!selectedSubject || item.subjectId === selectedSubject));
-    const assignment = matching.find((item) => selectedClass && selectedSubject) ?? null;
+    const assignment = matching.find((_item) => selectedClass && selectedSubject) ?? null;
     let performance = null;
     if (assignment && selectedTerm) performance = await getClassSubjectPerformance(tx, assignment.classId, assignment.subjectId, selectedTerm.id);
     return { school, config, assignments, assignment, selectedTerm, performance, canWriteAll };

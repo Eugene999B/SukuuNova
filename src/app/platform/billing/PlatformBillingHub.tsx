@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Boxes, Calculator, CreditCard, FileCog, FilePlus2, LayoutList, MessageSquare, ReceiptText, ServerCog, WalletCards } from "lucide-react";
+import { ArrowRight, Boxes, CreditCard, FileCog, FilePlus2, LayoutList, MessageSquare, ReceiptText, ServerCog, WalletCards } from "lucide-react";
 import PlatformAdvancedBillingRules from "@/components/PlatformAdvancedBillingRules";
 import PlatformBillingStudio from "@/components/PlatformBillingStudio";
 import PlatformInvoiceActions from "@/components/PlatformInvoiceActions";

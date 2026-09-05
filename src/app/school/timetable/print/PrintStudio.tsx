@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -27,7 +28,6 @@ const pastelPalette=["#edf4ff","#f3edff","#eaf8f1","#fff2e5","#f9ecf3","#e9f6fa"
 const boldPalette=["#2563eb","#7c3aed","#059669","#ea580c","#db2777","#0891b2"];
 function mins(v:string){const [h,m]=v.split(":").map(Number);return h*60+m;}
 function hourLabel(v:string){const [h,m]=v.split(":").map(Number);return `${h%12||12}:${String(m).padStart(2,"0")} ${h>=12?"PM":"AM"}`;}
-function safeName(v:string){return v.replace(/[^a-z0-9]+/gi,"-").replace(/^-|-$/g,"").toLowerCase()||"timetable";}
 function indexFor(value:string){let h=0;for(let i=0;i<value.length;i++)h=(h*31+value.charCodeAt(i))>>>0;return h;}
 function themeColours(subject:string){const i=indexFor(subject);return {pastel:pastelPalette[i%pastelPalette.length],bold:boldPalette[i%boldPalette.length]};}
 function columnsFor(day:Day,config:Config):Column[]{const periods=day.periods?.length?day.periods:(config.periods?.length?config.periods:[]);const out:Column[]=[];for(const p of periods.slice(0,config.periodsPerDay)){out.push({kind:"lesson",period:p.period,start:p.start,end:p.end});const b=config.breaks.find(x=>mins(x.start)===mins(p.end));if(b)out.push({kind:"break",name:b.name,start:b.start,end:b.end});}return out;}
@@ -41,8 +41,10 @@ export default function PrintStudio({data}:{data:Data}){
  const identity=getSchoolDocumentIdentity(data.school??{name:"School",uniqueCode:"",logoUrl:null,brandColors:null});
  const documentStyle={"--school-primary":identity.primary,"--school-accent":identity.accent} as CSSProperties;
  const days=useMemo(()=>data.timetableConfig.days.filter(d=>d.enabled&&d.dayOfWeek>=1&&d.dayOfWeek<=6),[data.timetableConfig.days]);
- const anchor=days[0]??{dayOfWeek:1,name:"Monday",enabled:true,start:"08:00",end:"15:00",periods:[]};
- const columns=useMemo(()=>columnsFor(anchor,data.timetableConfig),[anchor,data.timetableConfig]);
+ const columns=useMemo(()=>{
+   const anchor=days[0]??{dayOfWeek:1,name:"Monday",enabled:true,start:"08:00",end:"15:00",periods:[]};
+   return columnsFor(anchor,data.timetableConfig);
+ },[days,data.timetableConfig]);
  const pages=useMemo(()=>{
    if(audience==="teacher"){const t=data.teachers.find(x=>x.id===selectedId);return t?[{id:t.id,title:`${t.name} · Teacher timetable`,mode:"teacher" as const,slots:data.slots.filter(s=>s.teacherId===t.id)}]:[];}
    if(audience==="class"){const c=data.classes.find(x=>x.id===selectedId);return c?[{id:c.id,title:c.name,mode:"class" as const,slots:data.slots.filter(s=>s.classId===c.id)}]:[];}

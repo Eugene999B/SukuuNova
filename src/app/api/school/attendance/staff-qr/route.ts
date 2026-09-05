@@ -5,7 +5,6 @@ import { withTenant } from "@/lib/db";
 import { AppError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
-import { syncDefaultRbac } from "@/lib/role-builder-service";
 import { clientIpFromHeaders, consumeStaffAttendanceQr, createStaffAttendanceQr, displayIpHashFromChallenge, displayLocationFromChallenge, freshChallengeId, freshNonce, hashClientIp, issueStaffAttendanceChallenge, verifyStaffAttendanceQr } from "@/lib/qr-attendance";
 import { recordStaffSelfAttendance } from "@/lib/attendance-service";
 

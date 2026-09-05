@@ -38,6 +38,7 @@ export default function PlatformNetworkAnalytics() {
     } catch { setMessage("Network analytics could not be loaded."); }
     finally { setLoading(false); }
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void load(28); }, []);
 
   const schools = useMemo(() => {

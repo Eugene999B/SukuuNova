@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
@@ -17,8 +17,8 @@ export default function WorkerAccessPage(){
  const searchParams=useSearchParams();
  const requestedWorkerId=searchParams.get("workerId")??"";
  const [data,setData]=useState<Payload|null>(null),[workerId,setWorkerId]=useState(""),[selected,setSelected]=useState<string[]>([]),[workerQuery,setWorkerQuery]=useState(""),[schoolQuery,setSchoolQuery]=useState(""),[schoolFilter,setSchoolFilter]=useState("all"),[message,setMessage]=useState(""),[saving,setSaving]=useState(false);
- const load=()=>fetch("/api/platform/worker-access").then(async r=>{if(!r.ok)throw new Error((await r.json() as {error?:string}).error||"Could not load worker access.");return r.json() as Promise<Payload>}).then(d=>{setData(d);setWorkerId(current=>requestedWorkerId&&d.workers.some(w=>w.id===requestedWorkerId)?requestedWorkerId:(current&&d.workers.some(w=>w.id===current)?current:d.workers[0]?.id||""));}).catch(e=>setMessage(e instanceof Error?e.message:"Could not load worker access."));
- useEffect(()=>{void load()},[requestedWorkerId]);
+ const load=useCallback(()=>fetch("/api/platform/worker-access").then(async r=>{if(!r.ok)throw new Error((await r.json() as {error?:string}).error||"Could not load worker access.");return r.json() as Promise<Payload>}).then(d=>{setData(d);setWorkerId(current=>requestedWorkerId&&d.workers.some(w=>w.id===requestedWorkerId)?requestedWorkerId:(current&&d.workers.some(w=>w.id===current)?current:d.workers[0]?.id||""));}).catch(e=>setMessage(e instanceof Error?e.message:"Could not load worker access.")),[requestedWorkerId]);
+ useEffect(()=>{void load()},[load]);
  const currentAccess=useMemo(()=>data?.access?.[workerId]??[],[data,workerId]);
  useEffect(()=>{setSelected(currentAccess.map(x=>x.schoolId))},[workerId,currentAccess]);
  const worker=data?.workers.find(w=>w.id===workerId);
