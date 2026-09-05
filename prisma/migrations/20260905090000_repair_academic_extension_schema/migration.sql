@@ -68,7 +68,7 @@ SET "timetableConfig" =
   '{"days":[{"dayOfWeek":1,"name":"Monday","enabled":true,"start":"08:00","end":"15:00"},{"dayOfWeek":2,"name":"Tuesday","enabled":true,"start":"08:00","end":"15:00"},{"dayOfWeek":3,"name":"Wednesday","enabled":true,"start":"08:00","end":"15:00"},{"dayOfWeek":4,"name":"Thursday","enabled":true,"start":"08:00","end":"15:00"},{"dayOfWeek":5,"name":"Friday","enabled":true,"start":"08:00","end":"14:00"}],"periodMinutes":40,"breaks":[{"name":"Break","start":"10:00","end":"10:20"},{"name":"Lunch","start":"12:20","end":"13:00"}],"periodsPerDay":8,"published":false}'::jsonb
   || COALESCE("timetableConfig", '{}'::jsonb)
 WHERE "timetableConfig" IS NULL
-   OR jsonb_typeof("timetableConfig") <> 'object'
-   OR jsonb_typeof("timetableConfig"->'days') <> 'array'
-   OR jsonb_typeof("timetableConfig"->'breaks') <> 'array'
-   OR jsonb_typeof("timetableConfig"->'periodsPerDay') <> 'number';
+   OR COALESCE(jsonb_typeof("timetableConfig"), 'null') <> 'object'
+   OR COALESCE(jsonb_typeof("timetableConfig"->'days'), 'null') <> 'array'
+   OR COALESCE(jsonb_typeof("timetableConfig"->'breaks'), 'null') <> 'array'
+   OR COALESCE(jsonb_typeof("timetableConfig"->'periodsPerDay'), 'null') <> 'number';
