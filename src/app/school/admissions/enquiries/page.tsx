@@ -57,11 +57,19 @@ async function updateEnquiry(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   const stage = String(formData.get("stage") ?? "new");
   const followUp = dateValue(formData.get("nextFollowUpAt"));
-  const validStage = STAGES.some(([key]) => key === stage) ? stage : "new";
+  if (!STAGES.some(([key]) => key === stage)) throw new Error("Invalid enquiry stage.");
+  if (stage === "converted") throw new Error("Use Enrol student to convert an application. Stages cannot jump directly to enrolled.");
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:write");
-    await tx.$executeRawUnsafe(`UPDATE "AdmissionEnquiry" SET "stage"=$1,"nextFollowUpAt"=$2,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$3 AND "schoolId"=$4`, validStage, followUp, id, session.schoolId);
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "admission_enquiry.updated", entityType: "AdmissionEnquiry", entityId: id, after: { stage: validStage, nextFollowUpAt: followUp?.toISOString() ?? null } } });
+    await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, `admission-enquiry:${session.schoolId}:${id}`);
+    const current = await tx.$queryRawUnsafe<Array<{ stage: string; convertedStudentId: string | null }>>(`SELECT "stage","convertedStudentId" FROM "AdmissionEnquiry" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, id, session.schoolId);
+    const from = current[0]?.stage;
+    if (!from) throw new Error("Enquiry not found.");
+    if (from === "converted" || current[0]?.convertedStudentId) throw new Error("Converted enquiries cannot be moved back.");
+    const allowed: Record<string, string[]> = { new: ["contacted", "interested", "visit", "applied"], contacted: ["interested", "visit", "applied"], interested: ["visit", "applied"], visit: ["applied"], applied: [] };
+    if (from !== stage && !(allowed[from] ?? []).includes(stage)) throw new Error(`Cannot move an enquiry from ${from} to ${stage}.`);
+    await tx.$executeRawUnsafe(`UPDATE "AdmissionEnquiry" SET "stage"=$1,"nextFollowUpAt"=$2,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$3 AND "schoolId"=$4`, stage, followUp, id, session.schoolId);
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "admission_enquiry.updated", entityType: "AdmissionEnquiry", entityId: id, before: { stage: from }, after: { stage, nextFollowUpAt: followUp?.toISOString() ?? null } } });
   });
   redirect("/school/admissions/enquiries");
 }
@@ -72,25 +80,34 @@ async function convertEnquiry(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:write");
-    const rows = await tx.$queryRawUnsafe<Array<{ id:string; studentName:string; guardianName:string|null; phone:string|null; email:string|null; convertedStudentId:string|null }>>(`SELECT "id","studentName","guardianName","phone","email","convertedStudentId" FROM "AdmissionEnquiry" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, id, session.schoolId);
+    await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, `admission-enquiry:${session.schoolId}:${id}`);
+    const rows = await tx.$queryRawUnsafe<Array<{ id:string; studentName:string; guardianName:string|null; phone:string|null; email:string|null; stage:string; convertedStudentId:string|null }>>(`SELECT "id","studentName","guardianName","phone","email","stage","convertedStudentId" FROM "AdmissionEnquiry" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1 FOR UPDATE`, id, session.schoolId);
     const enquiry = rows[0];
     if (!enquiry) throw new Error("Enquiry not found.");
-    if (enquiry.convertedStudentId) return;
+    if (enquiry.convertedStudentId) throw new Error("This enquiry has already been converted. Open the linked student instead.");
+    if (enquiry.stage !== "applied") throw new Error("Only applications at Applied stage can be enrolled. Move the enquiry to Applied first.");
     let admissionNo = `ADM-${new Date().getFullYear()}-${randomInt(1000, 9999)}`;
     for (let i = 0; i < 6; i++) {
       const hit = await tx.student.findUnique({ where: { schoolId_admissionNo: { schoolId: session.schoolId, admissionNo } }, select: { id: true } });
       if (!hit) break;
       admissionNo = `ADM-${new Date().getFullYear()}-${randomInt(1000, 9999)}`;
     }
-    const student = await tx.student.create({ data: { schoolId: session.schoolId, name: enquiry.studentName, admissionNo, status: "active" } });
+    let student;
+    try {
+      student = await tx.student.create({ data: { schoolId: session.schoolId, name: enquiry.studentName, admissionNo, status: "active" } });
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") throw new Error("A student with this index number was just created. Try again.");
+      throw error;
+    }
     if (enquiry.guardianName && enquiry.phone) {
       const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: enquiry.phone } }, update: { name: enquiry.guardianName }, create: { schoolId: session.schoolId, name: enquiry.guardianName, phone: enquiry.phone } });
-      await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: "Parent/Guardian", isPrimary: true } });
+      const { linkGuardianToStudent } = await import("@/lib/guardian-service");
+      await linkGuardianToStudent(tx, { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: "Parent/Guardian" });
     }
     const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
     if (!school?.uniqueCode) throw new Error("The school's identification code is missing.");
     await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
-    await tx.$executeRawUnsafe(`UPDATE "AdmissionEnquiry" SET "stage"='converted',"convertedStudentId"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2 AND "schoolId"=$3`, student.id, id, session.schoolId);
+    await tx.$executeRawUnsafe(`UPDATE "AdmissionEnquiry" SET "stage"='converted',"convertedStudentId"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2 AND "schoolId"=$3 AND "convertedStudentId" IS NULL`, student.id, id, session.schoolId);
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "admission_enquiry.converted", entityType: "AdmissionEnquiry", entityId: id, after: { studentId: student.id, admissionNo } } });
   });
   redirect("/school/admissions/enquiries");
