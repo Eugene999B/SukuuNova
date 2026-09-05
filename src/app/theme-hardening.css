@@ -23,3 +23,52 @@ html,body{background:var(--sn-ui-bg)!important;color:var(--sn-ui-text)!important
 :root[data-theme="dark"] .app-content section[class*="bg-white"],:root[data-theme="dark"] .app-content article[class*="bg-white"],:root[data-theme="dark"] .app-content div[class*="bg-white/[0.03]"],:root[data-theme="dark"] .app-content div[class*="bg-white/[0.02]"]{background:var(--sn-ui-surface-2)!important;color:var(--sn-ui-text)!important}
 :root[data-theme="dark"] .app-content section[class*="text-slate-950"],:root[data-theme="dark"] .app-content article[class*="text-slate-950"]{color:var(--sn-ui-text)!important}
 :root[data-theme="dark"] .app-card,.module-card{color:var(--sn-ui-text)!important}
+
+/* Minimal UI pass: calmer hierarchy, tighter density, fewer competing surfaces. */
+.app-sidebar{width:252px;flex-basis:252px;padding:14px 10px 12px}
+.app-brand{gap:10px;padding:2px 6px 12px}
+.app-brand-mark{width:36px;height:36px;border-radius:10px;box-shadow:none;font-size:16px}
+.app-school-chip{margin:0 0 10px;padding:8px 10px;border-radius:10px}
+.app-nav{gap:10px}
+.app-nav-group{gap:1px}
+.app-nav-item{padding:7px 10px;min-height:36px;border-radius:9px;font-size:13px}
+.app-topbar{gap:16px;padding:12px clamp(14px,2.4vw,28px) 11px}
+.app-topbar h1{font-size:clamp(19px,2.2vw,24px)}
+.app-topbar p{font-size:12px}
+.app-search,.app-icon-button{box-shadow:none}
+.app-search:hover,.app-icon-button:hover{transform:none;box-shadow:none}
+.module-workspace{padding:12px 0 32px}
+.module-topline{gap:16px;margin-bottom:16px}
+.module-topline h2{margin:4px 0 5px;font-size:clamp(1.45rem,2.3vw,2rem)}
+.module-topline p{line-height:1.5}
+.module-action-rail{gap:7px}
+.module-action-rail a,.module-action-rail button{min-height:36px;padding:8px 12px;border-radius:9px;box-shadow:none}
+.module-tabbar{gap:2px;padding:3px;border-radius:10px;margin-bottom:16px}
+.module-tabbar a,.module-tabbar button{padding:7px 11px;border-radius:8px}
+.module-metrics{gap:10px;margin-bottom:16px}
+.module-metrics article{padding:14px 16px;border-radius:12px;box-shadow:none}
+.module-metrics article:hover{transform:none;box-shadow:none}
+.module-metrics strong{margin-top:7px;font-size:1.55rem}
+.module-card{padding:16px;border-radius:12px;box-shadow:none}
+.module-section-title{gap:14px}
+.module-section-title h3{margin:4px 0 3px}
+.module-inline-link{padding:6px 9px;border-radius:8px}
+.module-split,.module-attendance-board,.module-finance-grid,.module-comms-grid,.module-feature-grid,.module-admin-grid,.module-command-grid,.module-bottom-split{gap:14px;margin-bottom:16px}
+.module-filter-row{gap:7px;margin:12px 0 12px}
+.module-filter-row input{min-width:200px;padding:8px 11px}
+.module-filter-row button,.module-register-controls button{padding:8px 12px}
+.module-table-wrap{border-radius:10px}
+.module-table-wrap th{padding:10px 12px}
+.module-table-wrap td{padding:11px 12px}
+.module-empty{min-height:180px;padding:28px 18px}
+.module-workspace :is(.module-selector-card,.app-list-row,.module-pipeline>div,.module-workflow-step){box-shadow:none}
+
+@media (max-width:768px){
+  .app-sidebar{width:276px;flex-basis:276px;padding:12px 9px 10px}
+  .app-topbar{padding:10px 12px 9px}
+  .module-workspace{padding:10px 0 24px}
+  .module-card{padding:14px;border-radius:10px}
+  .module-metrics{gap:8px}
+  .module-topline{margin-bottom:13px}
+  .module-action-rail a,.module-action-rail button{min-height:35px;padding:7px 10px}
+}
