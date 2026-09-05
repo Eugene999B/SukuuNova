@@ -9,7 +9,7 @@ export default async function StudentIdCardPage({ params }: { params: Promise<{ 
   const session = await requireSchoolSession();
   const { id } = await params;
   const student = await withTenant(session.schoolId, async (tx) => {
-    await requirePermission(tx, session.userId, "identity_cards:manage");
+    await requirePermission(tx, session.userId, "students:read");
     return tx.student.findFirst({
       where: { id, schoolId: session.schoolId },
       select: { id: true, name: true, admissionNo: true, class: { select: { name: true } }, school: { select: { name: true, uniqueCode: true } } },
@@ -29,7 +29,7 @@ export default async function StudentIdCardPage({ params }: { params: Promise<{ 
             <Link href="/school/id-cards" className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Open ID card workspace</Link>
             <Link href={`/school/students/${student.id}/documents`} className="inline-flex items-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Back to documents</Link>
           </div>
-          <p className="mt-5 text-xs leading-5 text-slate-500">The PDF is generated server-side from the learner's current active card and is protected by school identity-card permissions.</p>
+          <p className="mt-5 text-xs leading-5 text-slate-500">The PDF download remains protected by school identity-card permissions.</p>
         </section>
       </main>
     </AppShell>
