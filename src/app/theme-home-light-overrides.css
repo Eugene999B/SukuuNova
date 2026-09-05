@@ -1,1 +1,35 @@
-/* Placeholder */
+:root:not([data-theme="dark"]) .home-shell{background:#f8fafc!important;color:#0f172a!important}
+:root:not([data-theme="dark"]) .home-shell:before{background:radial-gradient(circle at 14% 10%,rgba(20,184,166,.10),transparent 28%),radial-gradient(circle at 83% 18%,rgba(99,102,241,.08),transparent 26%),linear-gradient(180deg,#fff 0%,#f8fafc 58%,#f1f5f9 100%)!important}
+:root:not([data-theme="dark"]) .topbar{border-color:#e2e8f0!important}
+:root:not([data-theme="dark"]) .brand{color:#0f172a!important}
+:root:not([data-theme="dark"]) .topnav a,:root:not([data-theme="dark"]) .top-link{color:#475569!important}
+:root:not([data-theme="dark"]) .topnav a:hover,:root:not([data-theme="dark"]) .top-link:hover{color:#0f766e!important}
+:root:not([data-theme="dark"]) .brand-wordmark{color:#0f172a!important;-webkit-text-fill-color:#0f172a!important}
+:root:not([data-theme="dark"]) .hero h1{color:#0f172a!important}
+:root:not([data-theme="dark"]) .hero h1 span{background:linear-gradient(135deg,#0f766e,#2563eb);-webkit-background-clip:text;background-clip:text;color:transparent!important}
+:root:not([data-theme="dark"]) .hero-copy{color:#475569!important}
+:root:not([data-theme="dark"]) .eyebrow{background:#f0fdfa!important;border-color:#ccfbf1!important;color:#0f766e!important}
+:root:not([data-theme="dark"]) .eyebrow-dot{background:#14b8a6!important;box-shadow:0 0 0 4px rgba(20,184,166,.10)!important}
+:root:not([data-theme="dark"]) .primary-cta{background:#0f766e!important;color:#fff!important;box-shadow:0 12px 30px rgba(15,118,110,.16)!important}
+:root:not([data-theme="dark"]) .secondary-cta,:root:not([data-theme="dark"]) .top-button{background:#fff!important;border-color:#cbd5e1!important;color:#0f172a!important}
+:root:not([data-theme="dark"]) .hero-proof{color:#64748b!important}
+:root:not([data-theme="dark"]) .hero-proof strong{color:#0f172a!important}
+:root:not([data-theme="dark"]) .hero-proof span{color:#64748b!important}
+:root:not([data-theme="dark"]) .home-glow-a{background:#2dd4bf!important;opacity:.16!important}
+:root:not([data-theme="dark"]) .home-glow-b{background:#818cf8!important;opacity:.12!important}
+:root:not([data-theme="dark"]) .home-preview-window,:root:not([data-theme="dark"]) .intent-card,:root:not([data-theme="dark"]) .module-card{background:#fff!important;color:#0f172a!important;border-color:#e2e8f0!important;box-shadow:0 12px 36px rgba(15,23,42,.06)!important}
+:root:not([data-theme="dark"]) .home-preview-area{background:#f8fafc!important;border-color:#e2e8f0!important;color:#0f172a!important}
+:root:not([data-theme="dark"]) .home-preview-area.is-active{background:#f0fdfa!important;border-color:#99f6e4!important}
+:root:not([data-theme="dark"]) .home-preview-area-icon,:root:not([data-theme="dark"]) .home-preview-detail-icon,:root:not([data-theme="dark"]) .intent-icon,:root:not([data-theme="dark"]) .module-icon{background:#f0fdfa!important;color:#0f766e!important}
+:root:not([data-theme="dark"]) .home-preview-area.is-active .home-preview-area-icon{background:#0f766e!important;color:#fff!important}
+:root:not([data-theme="dark"]) .home-preview-detail{background:#f8fafc!important;border-color:#e2e8f0!important}
+:root:not([data-theme="dark"]) .home-preview-note{border-color:#e2e8f0!important}
+:root:not([data-theme="dark"]) .home-preview-note span,:root:not([data-theme="dark"]) .home-preview-detail-link,:root:not([data-theme="dark"]) .intent-link{color:#0f766e!important}
+:root:not([data-theme="dark"]) .home-preview-heading h3,:root:not([data-theme="dark"]) .home-preview-area,:root:not([data-theme="dark"]) .home-preview-detail strong,:root:not([data-theme="dark"]) .intent-card h2,:root:not([data-theme="dark"]) .module-card h3{color:#0f172a!important}
+:root:not([data-theme="dark"]) .home-preview-heading p,:root:not([data-theme="dark"]) .home-preview-area-copy small,:root:not([data-theme="dark"]) .home-preview-detail p,:root:not([data-theme="dark"]) .intent-card p,:root:not([data-theme="dark"]) .module-card p{color:#64748b!important}
+:root:not([data-theme="dark"]) .section-kicker{color:#0f766e!important}
+:root:not([data-theme="dark"]) .section-head p{color:#64748b!important}
+:root:not([data-theme="dark"]) .closing-cta{background:#fff!important;border:1px solid #e2e8f0!important;box-shadow:0 18px 50px rgba(15,23,42,.06)!important}
+:root:not([data-theme="dark"]) .closing-cta p{color:#64748b!important}
+:root:not([data-theme="dark"]) .footer{color:#64748b!important}
+:root:not([data-theme="dark"]) .footer a{color:#475569!important}
