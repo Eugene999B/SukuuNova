@@ -7,6 +7,7 @@ import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
+import { linkGuardianToStudent } from "@/lib/guardian-service";
 import { DetailGrid, ProductEmpty, ProductPageHeader, ProductSection } from "@/components/product/ProductWorkspace";
 import { AddGuardianDialog } from "@/components/product/AddGuardianDialog";
 import { GuardianDirectory } from "@/components/product/GuardianDirectory";
@@ -24,28 +25,40 @@ async function createGuardian(formData: FormData) {
   if (studentIds.length === 0) throw new Error("Choose at least one learner to link.");
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:write");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`guardian-create:${session.schoolId}:${phone}`}))`;
     const existingGuardian = await tx.guardian.findUnique({ where: { schoolId_phone: { schoolId: session.schoolId, phone } }, select: { id: true, userId: true } });
     if (existingGuardian?.userId) throw new Error("A guardian portal account already exists for this phone number.");
     const existingUser = await tx.user.findUnique({ where: { schoolId_phone: { schoolId: session.schoolId, phone } }, select: { id: true, name: true, email: true } });
     if (existingUser && !existingGuardian) throw new Error("This phone number already belongs to another school account. Use a different number or open that account instead.");
     if (existingUser && existingGuardian && existingGuardian.userId === null) throw new Error("This guardian has a pending profile but no login identity. Open the guardian record to finish access setup instead of creating another account.");
-    const guardian = existingGuardian ?? await tx.guardian.create({ data: { schoolId: session.schoolId, name, phone } });
+    let guardian;
+    try {
+      guardian = existingGuardian ?? await tx.guardian.create({ data: { schoolId: session.schoolId, name, phone } });
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") throw new Error("A guardian with this phone number was just created. Refresh and try again.");
+      throw error;
+    }
     if (email) {
       const emailOwner = await tx.user.findFirst({ where: { schoolId: session.schoolId, email }, select: { id: true } });
       if (emailOwner && emailOwner.id !== guardian.userId) throw new Error("That email address is already used by another school account.");
     }
     if (!guardian.userId) {
       const opaqueInitialSecret = randomBytes(24).toString("base64url");
-      const user = await tx.user.create({ data: { schoolId: session.schoolId, name, phone, email, passwordHash: await hash(opaqueInitialSecret, 12), status: "pending", needsPasswordChange: true }, select: { id: true } });
-      await tx.guardian.update({ where: { id: guardian.id }, data: { userId: user.id, name, phone } });
+      try {
+        const user = await tx.user.create({ data: { schoolId: session.schoolId, name, phone, email, passwordHash: await hash(opaqueInitialSecret, 12), status: "pending", needsPasswordChange: true }, select: { id: true } });
+        await tx.guardian.update({ where: { id: guardian.id }, data: { userId: user.id, name, phone } });
+        guardian = { ...guardian, userId: user.id };
+      } catch (error) {
+        if ((error as { code?: string }).code === "P2002") throw new Error("A school account with this phone or email was just created. Refresh and try again.");
+        throw error;
+      }
     } else {
       await tx.guardian.update({ where: { id: guardian.id }, data: { name, phone } });
     }
     for (const studentId of studentIds) {
-      const student = await tx.student.findFirst({ where: { id: studentId }, select: { id: true } });
+      const student = await tx.student.findFirst({ where: { id: studentId, schoolId: session.schoolId }, select: { id: true } });
       if (!student) continue;
-      const existingPrimary = await tx.studentGuardian.findFirst({ where: { studentId, isPrimary: true }, select: { guardianId: true } });
-      await tx.studentGuardian.upsert({ where: { studentId_guardianId: { studentId, guardianId: guardian.id } }, update: { relationship, isPrimary: existingPrimary?.guardianId === guardian.id }, create: { schoolId: session.schoolId, studentId, guardianId: guardian.id, relationship, isPrimary: !existingPrimary } });
+      await linkGuardianToStudent(tx, { schoolId: session.schoolId, studentId, guardianId: guardian.id, relationship });
     }
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: existingGuardian ? "guardian.updated" : "guardian.created", entityType: "Guardian", entityId: guardian.id, after: { name, phone, email, linkedChildren: studentIds.length, loginAccess: "pending" } } });
   });

@@ -15,6 +15,45 @@ type AssessmentConfig = AssessmentRules;
 type ReportCardConfig = { includePosition:boolean; includeSubjectPosition:boolean; includeAttendance:boolean; includeTeacherRemark:boolean; includeHeadRemark:boolean; includeSignatures:boolean; includeSchoolContacts:boolean; rankMethod:"total_average"|"weighted_total"; showGrades:boolean; showClassAverage:boolean };
 
 function jsonObject(value: Prisma.JsonValue|null|undefined): Record<string, Prisma.JsonValue> { return value && !Array.isArray(value) && typeof value === "object" ? value as Record<string, Prisma.JsonValue> : {}; }
+function isRecord(value: unknown): value is Record<string, unknown> { return !!value && typeof value === "object" && !Array.isArray(value); }
+function asNumber(value: unknown, fallback: number): number { return typeof value === "number" && Number.isFinite(value) ? value : fallback; }
+function asString(value: unknown, fallback: string): string { return typeof value === "string" && value ? value : fallback; }
+function normalizeTimetable(raw: unknown): TimetableConfig {
+  const base = JSON.parse(JSON.stringify(DEFAULT_TIMETABLE)) as TimetableConfig;
+  if (!isRecord(raw)) return base;
+  const daysRaw = Array.isArray((raw as Record<string, unknown>).days) ? (raw as Record<string, unknown>).days as unknown[] : [];
+  const days: DayConfig[] = daysRaw.length
+    ? daysRaw.filter(isRecord).map((d, i) => {
+        const r = d as Record<string, unknown>;
+        const dayOfWeek = Number.isInteger(r.dayOfWeek) ? (r.dayOfWeek as number) : i + 1;
+        return {
+          dayOfWeek,
+          name: asString(r.name, `Day ${dayOfWeek}`),
+          enabled: typeof r.enabled === "boolean" ? r.enabled : true,
+          start: /^\d{2}:\d{2}$/.test(String(r.start ?? "")) ? String(r.start) : "08:00",
+          end: /^\d{2}:\d{2}$/.test(String(r.end ?? "")) ? String(r.end) : "15:00",
+          periods: Array.isArray(r.periods) ? (r.periods as PeriodConfig[]) : undefined,
+        };
+      })
+    : base.days;
+  const breaksRaw = Array.isArray((raw as Record<string, unknown>).breaks) ? (raw as Record<string, unknown>).breaks as unknown[] : [];
+  const breaks: BreakConfig[] = breaksRaw.filter(isRecord).map((b) => {
+    const r = b as Record<string, unknown>;
+    return {
+      name: asString(r.name, "Break"),
+      start: /^\d{2}:\d{2}$/.test(String(r.start ?? "")) ? String(r.start) : "10:00",
+      end: /^\d{2}:\d{2}$/.test(String(r.end ?? "")) ? String(r.end) : "10:20",
+    };
+  });
+  return {
+    days,
+    periodMinutes: asNumber((raw as Record<string, unknown>).periodMinutes, base.periodMinutes),
+    breaks,
+    periodsPerDay: asNumber((raw as Record<string, unknown>).periodsPerDay, base.periodsPerDay),
+    periods: Array.isArray((raw as Record<string, unknown>).periods) ? (raw as Record<string, unknown>).periods as PeriodConfig[] : base.periods,
+    published: typeof (raw as Record<string, unknown>).published === "boolean" ? (raw as Record<string, unknown>).published as boolean : false,
+  };
+}
 const DEFAULT_TIMETABLE:TimetableConfig={days:[1,2,3,4,5].map(day=>({dayOfWeek:day,name:["","Monday","Tuesday","Wednesday","Thursday","Friday"][day],enabled:true,start:"08:00",end:day===5?"14:00":"15:00"})),periodMinutes:40,breaks:[{name:"Break",start:"10:00",end:"10:20"},{name:"Lunch",start:"12:20",end:"13:00"}],periodsPerDay:8,published:false};
 const DEFAULT_ASSESSMENT:AssessmentConfig={categories:[{name:"Classwork",weight:20},{name:"Homework",weight:10},{name:"Exercises",weight:10},{name:"Quizzes",weight:10},{name:"Project",weight:10},{name:"Exam",weight:40}],rounding:"nearest",missingScorePolicy:"blank",allowTeacherOverride:false};
 const DEFAULT_REPORT:ReportCardConfig={includePosition:true,includeSubjectPosition:true,includeAttendance:true,includeTeacherRemark:true,includeHeadRemark:true,includeSignatures:true,includeSchoolContacts:true,rankMethod:"total_average",showGrades:true,showClassAverage:true};
@@ -42,7 +81,7 @@ export async function getAcademicEngineConfig(tx:TenantDb, schoolIdInput?: strin
     select: { timetableConfig: true, assessmentConfig: true, reportCardConfig: true },
   }) : null;
   return {
-    timetable: parse(r?.timetableConfig, DEFAULT_TIMETABLE),
+    timetable: normalizeTimetable(r?.timetableConfig as unknown),
     assessment: parse(r?.assessmentConfig, DEFAULT_ASSESSMENT),
     reportCard: parse(r?.reportCardConfig, DEFAULT_REPORT),
   };
