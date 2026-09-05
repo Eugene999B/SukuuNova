@@ -1,29 +1,395 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import type { CSSProperties } from "react";
+import { Prisma } from "@prisma/client";
+import { BookOpenCheck, CalendarCheck2, FileBadge2, HeartHandshake, IdCard, PencilLine, ReceiptText, WalletCards } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import "../students-workspace.css";
+import { DetailGrid, ProductEmpty, ProductPageHeader, ProductSection, StatusBadge } from "@/components/product/ProductWorkspace";
+import { StudentPrintActions } from "@/components/product/StudentPrintActions";
+import "@/components/product/product-workspace.css";
 
-type ProgressStyle = CSSProperties & { "--progress"?: string };
+function money(value: unknown): Prisma.Decimal {
+  return new Prisma.Decimal(String(value ?? 0));
+}
+
+function statusTone(status: string): "success" | "warning" | "danger" | "info" | "neutral" {
+  if (status === "active") return "success";
+  if (status === "pending") return "warning";
+  if (status === "withdrawn" || status === "archived") return "danger";
+  if (status === "graduated") return "info";
+  return "neutral";
+}
 
 export default async function StudentProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSchoolSession();
   const { id } = await params;
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:read");
-    const student = await tx.student.findFirst({ where: { id, schoolId: session.schoolId }, select: { id: true, name: true, admissionNo: true, dob: true, status: true, photoUrl: true, school: { select: { name: true, uniqueCode: true } }, class: { select: { id: true, name: true, level: true, classTeacher: { select: { name: true } } } }, guardians: { select: { relationship: true, isPrimary: true, guardian: { select: { name: true, phone: true } } } }, _count: { select: { reportCards: true, invoices: true, attendanceEvents: true } } } });
+    const student = await tx.student.findFirst({
+      where: { id, schoolId: session.schoolId },
+      select: {
+        id: true,
+        name: true,
+        admissionNo: true,
+        dob: true,
+        status: true,
+        photoUrl: true,
+        house: { select: { id: true, name: true, code: true, color: true } },
+        school: { select: { name: true, uniqueCode: true } },
+        class: { select: { id: true, name: true, level: true, classTeacher: { select: { name: true } } } },
+        guardians: {
+          select: {
+            relationship: true,
+            isPrimary: true,
+            guardian: { select: { id: true, name: true, phone: true, email: true, userId: true, user: { select: { status: true } } } },
+          },
+        },
+        scores: { orderBy: { enteredAt: "desc" }, take: 6, select: { value: true, enteredAt: true, assessment: { select: { name: true, type: true } }, subject: { select: { name: true } } } },
+        attendanceEvents: { orderBy: { timestamp: "desc" }, take: 8, select: { type: true, timestamp: true, attendanceDate: true, isLate: true } },
+        invoices: {
+          orderBy: { createdAt: "desc" },
+          take: 10,
+          select: { id: true, totalAmount: true, status: true, term: { select: { name: true } }, payments: { select: { amount: true, reversals: { select: { amount: true } } } } },
+        },
+        reportCards: { orderBy: { createdAt: "desc" }, take: 5, select: { id: true, status: true, term: { select: { name: true } } } },
+        identityCards: { orderBy: { createdAt: "desc" }, take: 5, select: { id: true, serial: true, status: true, expiresAt: true } },
+        _count: { select: { reportCards: true, invoices: true, attendanceEvents: true, scores: true } },
+      },
+    });
     if (!student) return null;
-    const [scoreStats, attendanceStats, invoiceStats, paymentStats] = await Promise.all([tx.score.aggregate({ where: { studentId: id }, _avg: { value: true }, _count: { _all: true } }),tx.attendanceEvent.groupBy({ by: ["type"], where: { studentId: id }, _count: { _all: true } }),tx.invoice.aggregate({ where: { studentId: id }, _sum: { totalAmount: true } }),tx.payment.aggregate({ where: { invoice: { studentId: id } }, _sum: { amount: true } })]);
-    return { student, scoreStats, attendanceStats, invoiceStats, paymentStats };
+    const [scoreAvg, attendanceByType] = await Promise.all([
+      tx.score.aggregate({ where: { schoolId: session.schoolId, studentId: id }, _avg: { value: true } }),
+      tx.attendanceEvent.groupBy({ by: ["type"], where: { schoolId: session.schoolId, studentId: id }, _count: { _all: true } }),
+    ]);
+    return { student, scoreAvg, attendanceByType };
   });
   if (!data) notFound();
-  const attendance = Object.fromEntries(data.attendanceStats.map((row) => [row.type, row._count._all]));
-  const average = data.scoreStats._avg.value == null ? null : Number(data.scoreStats._avg.value).toFixed(1);
-  const billed = Number(data.invoiceStats._sum.totalAmount ?? 0), paid = Number(data.paymentStats._sum.amount ?? 0), balance = Math.max(0,billed-paid);
-  const progressStyle: ProgressStyle = { "--progress": average ? `${Math.max(0,Math.min(100,Number(average)))}%` : "0%" };
-  return <AppShell universe="school" title={data.student.name} subtitle="One connected learner record across identity, class, family, attendance, academics and finance." active="Students" schoolName={data.student.school.name} schoolCode={data.student.school.uniqueCode} userName={session.name}><div className="student-profile"><section className="student-profile-hero"><Link href="/school/students" className="back-link">← Students</Link><div className="profile-identity"><div className="profile-photo-wrap">{data.student.photoUrl?<Image src={data.student.photoUrl} alt={`${data.student.name} portrait`} width={88} height={88} unoptimized className="profile-photo"/>:<div className="profile-photo-empty">{data.student.name.slice(0,2).toUpperCase()}</div>}</div><div><div className="eyebrow">Learner profile</div><h2>{data.student.name}</h2><p>{data.student.class?.level??"No grade"} · {data.student.class?.name??"Awaiting class placement"} · <b>Index {data.student.admissionNo}</b></p></div><span className={`profile-status ${data.student.status==="active"?"active":"muted"}`}>{data.student.status}</span></div><div className="profile-actions"><Link className="button secondary" href={`/school/students/${data.student.id}/edit`}>Edit profile</Link><Link className="button secondary" href={`/school/students/${data.student.id}/id-card`}>Print ID card</Link><Link className="button primary" href={`/school/students/${data.student.id}/documents`}>Documents</Link></div></section><section className="profile-kpis"><article><span>Academic average</span><strong>{average??"—"}{average?"%":""}</strong><small>{data.scoreStats._count._all?`${data.scoreStats._count._all} scores recorded`:"No results yet"}</small></article><article><span>Attendance events</span><strong>{data.student._count.attendanceEvents}</strong><small>{attendance.present??0} present · {attendance.late??0} late · {attendance.absent??0} absent</small></article><article><span>Report cards</span><strong>{data.student._count.reportCards}</strong><small>Generated academic reports</small></article><article><span>Outstanding fees</span><strong>GH₵{balance.toFixed(2)}</strong><small>GH₵{paid.toFixed(2)} paid of GH₵{billed.toFixed(2)} billed</small></article></section><div className="profile-grid"><section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Identity</div><h3>Student information</h3></div><span>Index number is system-generated</span></div><div className="detail-grid"><div><small>Index number</small><b>{data.student.admissionNo}</b></div><div><small>Date of birth</small><b>{data.student.dob?new Date(data.student.dob).toLocaleDateString("en-GB"):"Not recorded"}</b></div><div><small>Status</small><b>{data.student.status}</b></div><div><small>Class teacher</small><b>{data.student.class?.classTeacher?.name??"Not assigned"}</b></div></div></section><section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Family</div><h3>Parents & guardians</h3></div><Link href="/school/guardians">Manage family →</Link></div>{data.student.guardians.length?<div className="family-list">{data.student.guardians.map((link)=><div className="family-row" key={`${link.guardian.name}-${link.guardian.phone}`}><span className="family-avatar">{link.guardian.name.slice(0,2).toUpperCase()}</span><div><b>{link.guardian.name}</b><small>{link.relationship}{link.isPrimary?" · Primary":""} · {link.guardian.phone}</small></div></div>)}</div>:<div className="mini-empty"><strong>No guardian linked</strong><p>Add the primary family contact so attendance alerts, receipts and school messages reach the right person.</p><Link href="/school/guardians">Add guardian →</Link></div>}</section><section className="profile-card profile-wide"><div className="profile-card-head"><div><div className="eyebrow">Academic snapshot</div><h3>Performance at a glance</h3><p>As scores are entered, this panel becomes the learner's longitudinal academic view.</p></div><Link href="/school/gradebook">Open gradebook →</Link></div><div className="progress-visual"><div className="progress-ring" style={progressStyle}><span>{average??"—"}</span></div><div><strong>{average?"Current average":"Waiting for first score"}</strong><p>Subject-level marks, assessment history, class position where configured, teacher comments and report-card outcomes will connect here.</p><div className="profile-link-row"><Link href="/school/exams">Assessments</Link><Link href="/school/report-cards">Report cards</Link><Link href="/school/homework">Homework</Link></div></div></div></section><section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Attendance</div><h3>Attendance summary</h3></div><Link href="/school/attendance">Open attendance →</Link></div><div className="attendance-bars"><div><span>Present</span><b>{attendance.present??0}</b></div><div><span>Late</span><b>{attendance.late??0}</b></div><div><span>Absent</span><b>{attendance.absent??0}</b></div></div></section><section className="profile-card"><div className="profile-card-head"><div><div className="eyebrow">Finance</div><h3>Fees & balances</h3></div><Link href="/school/fees">Open finance →</Link></div><div className="finance-summary"><div><small>Total billed</small><b>GH₵{billed.toFixed(2)}</b></div><div><small>Paid</small><b>GH₵{paid.toFixed(2)}</b></div><div><small>Outstanding</small><b>GH₵{balance.toFixed(2)}</b></div></div></section></div><section className="profile-connected"><div><div className="eyebrow">Connected workflows</div><h3>This learner should flow through the whole school.</h3><p>Class placement becomes the common context for daily attendance, subject teaching, assessments, homework, report cards and fees. The profile is designed to grow with the learner instead of fragmenting information across separate pages.</p></div><div className="connected-links"><Link href="/school/classes">Class placement <span>→</span></Link><Link href="/school/attendance">Attendance <span>→</span></Link><Link href="/school/timetable">Timetable <span>→</span></Link><Link href="/school/gradebook">Academic results <span>→</span></Link><Link href="/school/fees">Fees & payments <span>→</span></Link><Link href="/school/report-cards">Report cards <span>→</span></Link></div></section></div></AppShell>;
+
+  const { student } = data;
+  const attendance = Object.fromEntries(data.attendanceByType.map((r) => [r.type, r._count._all]));
+  const average = student.scores.length || data.scoreAvg._avg.value != null ? Number(data.scoreAvg._avg.value ?? 0).toFixed(1) : null;
+  const billed = student.invoices.reduce((s, inv) => s.plus(money(inv.totalAmount)), new Prisma.Decimal(0));
+  const paid = student.invoices.reduce(
+    (s, inv) =>
+      s.plus(
+        inv.payments.reduce(
+          (p, pay) => p.plus(money(pay.amount)).minus(pay.reversals.reduce((r, rev) => r.plus(money(rev.amount)), new Prisma.Decimal(0))),
+          new Prisma.Decimal(0)
+        )
+      ),
+    new Prisma.Decimal(0)
+  );
+  const balance = Prisma.Decimal.max(0, billed.minus(paid));
+  const primaryGuardian = student.guardians.find((g) => g.isPrimary)?.guardian ?? student.guardians[0]?.guardian ?? null;
+
+  return (
+    <AppShell
+      universe="school"
+      title={student.name}
+      subtitle="Central learner workspace — identity, academics, family, attendance, finance and credentials."
+      active="Students"
+      schoolName={student.school.name}
+      schoolCode={student.school.uniqueCode}
+      userName={session.name}
+    >
+      <div className="product-workspace">
+        <ProductPageHeader
+          eyebrow="Learner workspace"
+          title={student.name}
+          description={`${student.class?.level ? `${student.class.level} · ` : ""}${student.class?.name ?? "Awaiting class placement"} · Index ${student.admissionNo}`}
+          backHref="/school/students"
+          backLabel="Students"
+          stats={[
+            { label: "Academic average", value: average ? `${average}%` : "—", hint: student._count.scores ? `${student._count.scores} scores` : "No results yet" },
+            { label: "Attendance events", value: String(student._count.attendanceEvents), hint: `${attendance.in ?? 0} in · ${attendance.late ?? 0} late` },
+            { label: "Outstanding", value: `GH₵${balance.toFixed(2)}`, hint: `${student._count.invoices} invoices` },
+          ]}
+          actions={
+            <>
+              <Link className="button secondary" href={`/school/students/${student.id}/edit`}>
+                <PencilLine size={15} aria-hidden="true" /> Edit profile
+              </Link>
+              <StudentPrintActions studentId={student.id} studentName={student.name} />
+              <Link className="button primary" href="/school/id-cards">
+                <IdCard size={15} aria-hidden="true" /> ID cards
+              </Link>
+            </>
+          }
+        />
+
+        <ProductSection eyebrow="Identity" title="Student identity" description="Who this learner is, where they belong, and their enrolment state.">
+          <div className="product-profile-hero">
+            <div className="product-avatar" aria-hidden="true">
+              {student.photoUrl ? <Image src={student.photoUrl} alt="" width={72} height={72} unoptimized /> : student.name.slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <StatusBadge tone={statusTone(student.status)}>{student.status}</StatusBadge>
+              <p style={{ margin: "8px 0 0", color: "var(--color-text-secondary)", fontSize: 13 }}>
+                {student.house ? `House ${student.house.name} (${student.house.code}) · ` : "No house assigned · "}
+                {student.class?.classTeacher ? `Form teacher ${student.class.classTeacher.name}` : "No form teacher assigned"}
+              </p>
+            </div>
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <DetailGrid
+              items={[
+                { label: "Full name", value: student.name },
+                { label: "Index number", value: student.admissionNo, hint: "Permanent learner identifier" },
+                { label: "Class", value: student.class ? `${student.class.level ? `${student.class.level} · ` : ""}${student.class.name}` : "Unassigned", hint: student.class ? undefined : "Place this learner to unlock class workflows" },
+                { label: "House", value: student.house?.name ?? "—", hint: student.house ? student.house.code : "Assign from Classes & Houses" },
+                { label: "Date of birth", value: student.dob ? new Date(student.dob).toLocaleDateString("en-GB") : "—" },
+                { label: "Status", value: student.status, hint: "Withdrawn learners keep history; never delete" },
+              ]}
+            />
+          </div>
+        </ProductSection>
+
+        <ProductSection
+          eyebrow="Academics"
+          title="Academic summary"
+          description="Recent performance and published report cards. Full mark entry lives in the Gradebook studio."
+          actions={
+            <Link className="button secondary" href="/school/gradebook/studio">
+              <BookOpenCheck size={15} aria-hidden="true" /> Open gradebook
+            </Link>
+          }
+        >
+          {student.scores.length === 0 ? (
+            <ProductEmpty icon={BookOpenCheck} title="No scores yet" description="When teachers record marks for this learner, the latest six appear here with subject and assessment context." />
+          ) : (
+            <div className="product-table-wrap">
+              <table className="product-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Subject</th>
+                    <th scope="col">Assessment</th>
+                    <th scope="col">Score</th>
+                    <th scope="col">Recorded</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {student.scores.map((s, i) => (
+                    <tr key={`${s.assessment.name}-${i}`}>
+                      <td>{s.subject.name}</td>
+                      <td>
+                        {s.assessment.name} <small style={{ color: "var(--color-text-muted)" }}>· {s.assessment.type}</small>
+                      </td>
+                      <td>{String(s.value)}</td>
+                      <td>{new Date(s.enteredAt).toLocaleDateString("en-GB")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {student.reportCards.length === 0 ? (
+              <small style={{ color: "var(--color-text-muted)" }}>No report cards generated yet.</small>
+            ) : (
+              student.reportCards.map((r) => (
+                <span key={r.id}>
+                  <StatusBadge tone={r.status === "sent" ? "success" : r.status === "approved" ? "info" : "neutral"}>
+                    {r.term.name} · {r.status}
+                  </StatusBadge>{" "}
+                </span>
+              ))
+            )}
+            <Link href="/school/report-cards" className="text-link" style={{ fontSize: 13 }}>
+              Open report card studio →
+            </Link>
+          </div>
+        </ProductSection>
+
+        <ProductSection
+          eyebrow="Family"
+          title="Guardians & portal access"
+          description="Who may collect this learner, receive messages, and sign into the guardian portal."
+          actions={
+            <Link className="button secondary" href={`/school/guardians?student=${student.id}`}>
+              <HeartHandshake size={15} aria-hidden="true" /> Manage guardians
+            </Link>
+          }
+        >
+          {student.guardians.length === 0 ? (
+            <ProductEmpty
+              icon={HeartHandshake}
+              title="No guardians linked"
+              description="Link at least one guardian so attendance, fees and report cards reach a family contact. Portal access requires a verified phone number."
+              action={
+                <Link className="button primary" href={`/school/guardians?student=${student.id}`}>
+                  Link guardian
+                </Link>
+              }
+            />
+          ) : (
+            <div className="product-table-wrap">
+              <table className="product-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Guardian</th>
+                    <th scope="col">Contact</th>
+                    <th scope="col">Relationship</th>
+                    <th scope="col">Portal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {student.guardians.map((link) => (
+                    <tr key={link.guardian.id}>
+                      <td>
+                        <Link href={`/school/guardians/${link.guardian.id}`}>{link.guardian.name}</Link>
+                        {link.isPrimary ? <small style={{ color: "var(--color-text-muted)" }}> · Primary</small> : null}
+                      </td>
+                      <td>
+                        {link.guardian.phone ?? "—"}
+                        {link.guardian.email ? <small style={{ display: "block", color: "var(--color-text-muted)" }}>{link.guardian.email}</small> : null}
+                      </td>
+                      <td>{link.relationship}</td>
+                      <td>
+                        {link.guardian.userId ? (
+                          <StatusBadge tone={link.guardian.user?.status === "active" ? "success" : "warning"}>
+                            {link.guardian.user?.status ?? "pending"}
+                          </StatusBadge>
+                        ) : (
+                          <StatusBadge tone="neutral">No portal account</StatusBadge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {primaryGuardian ? (
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--color-text-muted)" }}>
+              Primary contact: {primaryGuardian.name} · {primaryGuardian.phone ?? "no phone on record"}
+            </p>
+          ) : null}
+        </ProductSection>
+
+        <ProductSection
+          eyebrow="Attendance"
+          title="Attendance"
+          description="Latest check-ins for this learner. Full history and corrections live in Attendance."
+          actions={
+            <Link className="button secondary" href="/school/attendance">
+              <CalendarCheck2 size={15} aria-hidden="true" /> Open attendance
+            </Link>
+          }
+        >
+          {student.attendanceEvents.length === 0 ? (
+            <ProductEmpty icon={CalendarCheck2} title="No attendance yet" description="Once daily or period check-ins are recorded, the latest eight appear here." />
+          ) : (
+            <div className="product-table-wrap">
+              <table className="product-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Late</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {student.attendanceEvents.map((e, i) => (
+                    <tr key={`${e.timestamp}-${i}`}>
+                      <td>{new Date(e.attendanceDate).toLocaleDateString("en-GB")}</td>
+                      <td>{e.type}</td>
+                      <td>{e.isLate ? "Yes" : "No"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </ProductSection>
+
+        <ProductSection
+          eyebrow="Finance"
+          title="Fees & balance"
+          description="Invoices, net payments after reversals, and what is still owed. Money is shown net of approved reversals."
+          actions={
+            <Link className="button secondary" href="/school/fees">
+              <WalletCards size={15} aria-hidden="true" /> Open finance
+            </Link>
+          }
+        >
+          <DetailGrid
+            items={[
+              { label: "Billed", value: `GH₵${billed.toFixed(2)}` },
+              { label: "Paid (net)", value: `GH₵${paid.toFixed(2)}`, hint: "After reversals" },
+              { label: "Outstanding", value: `GH₵${balance.toFixed(2)}`, hint: balance.gt(0) ? "Action required" : "Settled" },
+            ]}
+          />
+          {student.invoices.length === 0 ? (
+            <div style={{ marginTop: 12 }}>
+              <ProductEmpty icon={ReceiptText} title="No invoices" description="Generate an invoice for the learner's term to start the fee workflow." />
+            </div>
+          ) : (
+            <div className="product-table-wrap" style={{ marginTop: 12 }}>
+              <table className="product-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Term</th>
+                    <th scope="col">Total</th>
+                    <th scope="col">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {student.invoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td>{inv.term.name}</td>
+                      <td>GH₵{money(inv.totalAmount).toFixed(2)}</td>
+                      <td>
+                        <StatusBadge tone={inv.status === "paid" ? "success" : inv.status === "partial" ? "warning" : "neutral"}>{inv.status}</StatusBadge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </ProductSection>
+
+        <ProductSection
+          eyebrow="Credentials"
+          title="Documents & identity"
+          description="Printable identity credential for this learner. SukuuNova does not store ad-hoc files on the learner record; the signed ID card is the source of truth."
+          actions={
+            <Link className="button secondary" href="/school/id-cards">
+              <FileBadge2 size={15} aria-hidden="true" /> All ID cards
+            </Link>
+          }
+        >
+          {student.identityCards.length === 0 ? (
+            <ProductEmpty icon={FileBadge2} title="No identity card yet" description="Identity cards are issued automatically for active learners. Open School ID cards to issue and print." />
+          ) : (
+            <div className="product-table-wrap">
+              <table className="product-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Serial</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Expires</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {student.identityCards.map((c) => (
+                    <tr key={c.id}>
+                      <td>{c.serial}</td>
+                      <td>
+                        <StatusBadge tone={c.status === "active" ? "success" : "danger"}>{c.status}</StatusBadge>
+                      </td>
+                      <td>{new Date(c.expiresAt).toLocaleDateString("en-GB")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </ProductSection>
+      </div>
+    </AppShell>
+  );
 }
