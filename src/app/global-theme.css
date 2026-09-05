@@ -1,63 +1,62 @@
 /* SukuuNova Global Theme
-   One design language with exactly two visual modes: light and dark.
-   Page/module styles may control layout, but this layer owns the visual language.
+   One design language with seamless light and dark modes.
 */
 
 :root {
-  --ui-bg: #f7f9fb;
-  --ui-surface: #ffffff;
-  --ui-surface-raised: #ffffff;
-  --ui-surface-soft: #eef4f7;
-  --ui-text: #102a43;
-  --ui-text-secondary: #34495e;
-  --ui-text-muted: #60758a;
-  --ui-text-disabled: #8a9aaa;
-  --ui-border: #d9e2ea;
-  --ui-border-strong: #b9c8d5;
-  --ui-primary: #116b68;
-  --ui-primary-hover: #0d5755;
-  --ui-primary-soft: #e5f4f1;
-  --ui-success: #16734a;
-  --ui-success-soft: #e7f5ee;
-  --ui-warning: #9a5b00;
-  --ui-warning-soft: #fff3dc;
-  --ui-danger: #b42318;
-  --ui-danger-soft: #fde9e7;
-  --ui-info: #175cd3;
-  --ui-info-soft: #eaf2ff;
-  --ui-focus: 0 0 0 3px rgba(17, 107, 104, .22);
-  --ui-shadow-sm: 0 1px 2px rgba(16, 42, 67, .06);
-  --ui-shadow-md: 0 8px 24px rgba(16, 42, 67, .08);
-  --ui-radius-sm: 6px;
-  --ui-radius-md: 10px;
-  --ui-radius-lg: 14px;
+  --ui-bg: var(--color-bg, #f8fafc);
+  --ui-surface: var(--color-surface, #ffffff);
+  --ui-surface-raised: var(--color-surface-raised, #ffffff);
+  --ui-surface-soft: var(--color-surface-soft, #f1f5f9);
+  --ui-text: var(--color-text-primary, #0f172a);
+  --ui-text-secondary: var(--color-text-secondary, #334155);
+  --ui-text-muted: var(--color-text-muted, #64748b);
+  --ui-text-disabled: var(--color-text-disabled, #cbd5e1);
+  --ui-border: var(--color-border, #e2e8f0);
+  --ui-border-strong: var(--color-border-strong, #cbd5e1);
+  --ui-primary: var(--color-brand, #0f766e);
+  --ui-primary-hover: var(--color-brand-hover, #0d9488);
+  --ui-primary-soft: var(--color-brand-soft, #f0fdfa);
+  --ui-success: var(--color-success, #15803d);
+  --ui-success-soft: var(--color-success-soft, #f0fdf4);
+  --ui-warning: var(--color-warning, #b45309);
+  --ui-warning-soft: var(--color-warning-soft, #fffbeb);
+  --ui-danger: var(--color-danger, #b91c1c);
+  --ui-danger-soft: var(--color-danger-soft, #fef2f2);
+  --ui-info: var(--color-info, #1d4ed8);
+  --ui-info-soft: var(--color-info-soft, #eff6ff);
+  --ui-focus: var(--focus-ring, 0 0 0 3px rgba(15, 118, 110, 0.25));
+  --ui-shadow-sm: var(--shadow-sm);
+  --ui-shadow-md: var(--shadow-md);
+  --ui-radius-sm: var(--radius-sm, 6px);
+  --ui-radius-md: var(--radius-md, 10px);
+  --ui-radius-lg: var(--radius-xl, 18px);
 }
 
 :root[data-theme="dark"] {
-  --ui-bg: #0b1217;
-  --ui-surface: #121c23;
-  --ui-surface-raised: #19262e;
-  --ui-surface-soft: #15232a;
-  --ui-text: #f4f8fa;
-  --ui-text-secondary: #d2dce1;
-  --ui-text-muted: #a3b2ba;
-  --ui-text-disabled: #73838c;
-  --ui-border: #2a3b45;
-  --ui-border-strong: #405460;
-  --ui-primary: #56d2b5;
-  --ui-primary-hover: #78e0c9;
-  --ui-primary-soft: #173c36;
-  --ui-success: #69d99e;
-  --ui-success-soft: #123526;
-  --ui-warning: #f5bd5b;
-  --ui-warning-soft: #3a2a12;
-  --ui-danger: #ff8178;
-  --ui-danger-soft: #3f1d1b;
-  --ui-info: #89b3ff;
-  --ui-info-soft: #182d4a;
-  --ui-focus: 0 0 0 3px rgba(86, 210, 181, .30);
-  --ui-shadow-sm: 0 1px 2px rgba(0, 0, 0, .28);
-  --ui-shadow-md: 0 12px 28px rgba(0, 0, 0, .28);
+  --ui-bg: var(--color-bg, #090e17);
+  --ui-surface: var(--color-surface, #0f172a);
+  --ui-surface-raised: var(--color-surface-raised, #1e293b);
+  --ui-surface-soft: var(--color-surface-soft, #162032);
+  --ui-text: var(--color-text-primary, #f8fafc);
+  --ui-text-secondary: var(--color-text-secondary, #cbd5e1);
+  --ui-text-muted: var(--color-text-muted, #94a3b8);
+  --ui-text-disabled: var(--color-text-disabled, #475569);
+  --ui-border: var(--color-border, #1e293b);
+  --ui-border-strong: var(--color-border-strong, #334155);
+  --ui-primary: var(--color-brand, #14b8a6);
+  --ui-primary-hover: var(--color-brand-hover, #2dd4bf);
+  --ui-primary-soft: var(--color-brand-soft, #042f2e);
+  --ui-success: var(--color-success, #4ade80);
+  --ui-success-soft: var(--color-success-soft, #052e16);
+  --ui-warning: var(--color-warning, #fbbf24);
+  --ui-warning-soft: var(--color-warning-soft, #451a03);
+  --ui-danger: var(--color-danger, #f87171);
+  --ui-danger-soft: var(--color-danger-soft, #450a0a);
+  --ui-info: var(--color-info, #60a5fa);
+  --ui-info-soft: var(--color-info-soft, #172554);
+  --ui-focus: var(--focus-ring, 0 0 0 3px rgba(20, 184, 166, 0.35));
+  --ui-shadow-sm: var(--shadow-sm);
+  --ui-shadow-md: var(--shadow-md);
 }
 
 html { background: var(--ui-bg) !important; color-scheme: light; }
