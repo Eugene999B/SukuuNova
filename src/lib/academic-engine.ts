@@ -132,8 +132,10 @@ export async function saveAcademicEngineConfig(tx:TenantDb,input:{schoolId:strin
   const current=await getAcademicEngineConfig(tx, input.schoolId);
   const next={timetable:input.timetable??current.timetable,assessment:input.assessment??current.assessment,reportCard:input.reportCard??current.reportCard};
   validateAssessmentRules(next.assessment as AssessmentConfig);
-  const timetable=next.timetable as TimetableConfig;
-  const roomIds=new Set((timetable.rooms??[]).map(r=>r.id));
+  // Normalize before persisting so malformed/legacy JSON can never be stored,
+  // while preserving all known keys (weekly targets, rooms, constraints).
+  const timetable = normalizeTimetable(next.timetable);
+  const roomIds = new Set((timetable.rooms ?? []).map((r) => r.id));
   if(roomIds.size!==(timetable.rooms??[]).length)throw new AppError("Room ids must be unique.",400,"DUPLICATE_ROOM");
   for(const [teacherId,slots] of Object.entries(timetable.teacherUnavailability??{})){
     if(!teacherId)throw new AppError("Teacher availability entries need a teacher.",400,"INVALID_UNAVAILABILITY");
@@ -151,19 +153,19 @@ export async function saveAcademicEngineConfig(tx:TenantDb,input:{schoolId:strin
   await tx.schoolSettings.upsert({
     where: { schoolId: input.schoolId },
     update: {
-      timetableConfig: next.timetable as unknown as Prisma.InputJsonValue,
+      timetableConfig: timetable as unknown as Prisma.InputJsonValue,
       assessmentConfig: next.assessment as unknown as Prisma.InputJsonValue,
       reportCardConfig: next.reportCard as unknown as Prisma.InputJsonValue,
     },
     create: {
       schoolId: input.schoolId,
-      timetableConfig: next.timetable as unknown as Prisma.InputJsonValue,
+      timetableConfig: timetable as unknown as Prisma.InputJsonValue,
       assessmentConfig: next.assessment as unknown as Prisma.InputJsonValue,
       reportCardConfig: next.reportCard as unknown as Prisma.InputJsonValue,
     },
   });
-  await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:"academic.configuration_updated",entityType:"SchoolSettings",entityId:input.schoolId,after:next});
-  return next;
+  await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:"academic.configuration_updated",entityType:"SchoolSettings",entityId:input.schoolId,after:{...next,timetable}});
+  return {...next,timetable};
 }
 export async function getGradebookConfiguration(tx:TenantDb){const config=await getAcademicEngineConfig(tx);const assignments=await tx.classSubjectTeacher.findMany({include:{class:{select:{id:true,name:true,level:true}},subject:{select:{id:true,name:true}},teacher:{select:{id:true,name:true}}},orderBy:{classId:"asc"}});const terms=await tx.term.findMany({orderBy:{startDate:"desc"},select:{id:true,name:true,startDate:true,endDate:true}});return{assessment:config.assessment,reportCard:config.reportCard,assignments,terms};}
 export async function getClassSubjectPerformance(tx:TenantDb,classId:string,subjectId:string,termId:string){const [students,assessments]=await Promise.all([tx.student.findMany({where:{classId,status:"active"},select:{id:true,name:true,admissionNo:true},orderBy:{name:"asc"}}),tx.assessment.findMany({where:{classId,subjectId,termId},select:{id:true,name:true,type:true,maxScore:true,weight:true,scores:{select:{studentId:true,value:true}}},orderBy:{name:"asc"}})]);const config=(await getAcademicEngineConfig(tx)).assessment as AssessmentConfig;const rows=students.map(student=>{const studentAssessments=assessments.map(a=>({id:a.id,name:a.name,type:a.type,maxScore:a.maxScore,weight:a.weight,score:a.scores.find(s=>s.studentId===student.id)?.value??null}));const result=calculateSubjectResult(studentAssessments,config);return{student,total:result.total,scores:result.details};});return{rows,assessments:assessments.map(a=>({id:a.id,name:a.name,type:a.type,maxScore:Number(a.maxScore),weight:Number(a.weight)})),config};}
