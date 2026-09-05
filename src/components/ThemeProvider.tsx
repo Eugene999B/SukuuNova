@@ -11,6 +11,7 @@ type Preferences = { mode: ThemeMode; accent: AccentName; density: Density };
 
 const DEFAULTS: Preferences = { mode: "light", accent: "teal", density: "comfortable" };
 const KEY = "sukuunova-theme-preferences";
+const THEME_CHANGE_EVENT = "sukuunova:theme-change";
 
 function greetingForDate(date: Date) {
   const hour = date.getHours();
@@ -75,11 +76,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const value = getThemePreferences();
     setPreferences(value);
     applyPreferences(value);
+
+    const handleThemeChange = () => {
+      const next = getThemePreferences();
+      setPreferences(next);
+      applyPreferences(next);
+    };
+
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
   }, []);
 
   useEffect(() => {
     applyPreferences(preferences);
-    localStorage.setItem(KEY, JSON.stringify(preferences));
   }, [preferences]);
 
   useEffect(() => {
@@ -117,6 +126,7 @@ export function saveThemePreferences(patch: Partial<Preferences>): Preferences {
   const next: Preferences = { ...getThemePreferences(), ...patch, accent: "teal" };
   localStorage.setItem(KEY, JSON.stringify(next));
   applyPreferences(next);
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
   return next;
 }
 
