@@ -8,29 +8,20 @@ export function StudentPrintActions({ studentId, studentName }: { studentId: str
   async function downloadIdCard() {
     setState({ kind: "working" });
     try {
-      const listRes = await fetch("/api/school/identity-cards", { cache: "no-store" });
-      const listJson = await listRes.json().catch(() => ({}));
-      if (!listRes.ok || !listJson.ok) throw new Error(listJson.message || "Identity cards could not be loaded.");
-      const card = (listJson.cards ?? []).find((c: { studentId?: string }) => c.studentId === studentId);
-      if (!card) throw new Error("No active identity card exists for this learner yet. Issue cards from School ID cards first.");
-      const res = await fetch("/api/school/identity-cards", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "download", scope: "selected", ids: [card.id] }),
-      });
+      const res = await fetch(`/api/school/identity-cards/student/${encodeURIComponent(studentId)}`, { cache: "no-store" });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || `Identity card download failed (${res.status}).`);
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || `Identity card download failed (${res.status}).`);
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${studentName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-id-card.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${studentName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-id-card.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setState({ kind: "done", message: "Identity card downloaded." });
     } catch (error) {
       setState({ kind: "error", message: error instanceof Error ? error.message : "Download failed." });
