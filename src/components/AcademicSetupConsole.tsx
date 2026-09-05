@@ -13,7 +13,6 @@ const dayNames=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","S
 const clamp=(n:number,min:number,max:number)=>Math.min(max,Math.max(min,Number.isFinite(n)?n:min));
 function mins(v:string){const [h,m]=v.split(":").map(Number);return (h||0)*60+(m||0);}
 function clock(v:number){const safe=((Math.round(v)%1440)+1440)%1440;return `${String(Math.floor(safe/60)).padStart(2,"0")}:${String(safe%60).padStart(2,"0")}`;}
-function hourLabel(v:string){const [h,m]=v.split(":").map(Number);const suffix=h>=12?"PM":"AM";const hh=h%12||12;return `${hh}:${String(m).padStart(2,"0")} ${suffix}`;}
 function buildPeriods(day:Day,minutes:number,breaks:Break[],count:number){const start=mins(day.start),end=mins(day.end),out:Period[]=[];let cursor=start;for(let p=1;p<=count&&cursor+minutes<=end;p++){const next=cursor+minutes;const crossing=breaks.map(b=>({s:mins(b.start),e:mins(b.end)})).find(b=>cursor<b.e&&next>b.s);if(crossing){cursor=crossing.e;p--;continue;}out.push({period:p,start:clock(cursor),end:clock(next)});cursor=next;}return out;}
 function formatDuration(total:number){const h=Math.floor(total/60);const m=total%60;return `${h?`${h} hr${h===1?"":"s"} `:""}${m?`${m} min${m===1?"":"s"}`:h?"": "0 min"}`.trim();}
 

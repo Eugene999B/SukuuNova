@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BellRing, CalendarClock, FileCog, Percent, ReceiptText, Save } from "lucide-react";
+import { BellRing, FileCog, Percent, ReceiptText, Save } from "lucide-react";
 
 type School = { id: string; name: string; uniqueCode: string };
 type RulesResponse = { activeStudents: number; estimate: { base: number; discountedBase: number; subtotal: number; tax: number; total: number }; rules: { billingMode: "flat" | "per_student"; currency: string; studentRate: number; flatRate: number; billingDay: number; graceDays: number; trialDays: number; minimumCharge: number; maximumCharge: number | null; active: boolean; autoGenerateInvoices: boolean; invoiceDueDays: number; taxPercent: number; discountPercent: number; invoicePrefix: string; sendBillingNotifications: boolean } };

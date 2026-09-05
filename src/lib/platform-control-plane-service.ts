@@ -69,8 +69,8 @@ export async function getSchoolBillingConfig(session: PlatformSession, schoolId:
 export async function saveSchoolBillingConfig(session: PlatformSession, input: {
   schoolId: string; billingMode: "flat" | "per_student"; currency: string; studentRate: number; flatRate: number; billingDay: number; graceDays: number; trialDays: number; minimumCharge: number; maximumCharge: number | null; active: boolean;
 }) {
+  if (!session) throw new AppError("Platform session required.", 401, "UNAUTHORIZED");
   await requirePlatformPermission(session, "billing.manage");
-  if (session.role !== "super_admin" && !session) throw new AppError("Platform session required.", 401, "UNAUTHORIZED");
   await assertInScope(session, input.schoolId);
   if (input.studentRate < 0 || input.flatRate < 0 || input.minimumCharge < 0) throw new AppError("Billing rates cannot be negative.", 400, "INVALID_BILLING_RATE");
   if (input.maximumCharge !== null && input.maximumCharge < input.minimumCharge) throw new AppError("Maximum charge cannot be below minimum charge.", 400, "INVALID_BILLING_CAP");

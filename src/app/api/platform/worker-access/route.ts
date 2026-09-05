@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { routeError, ForbiddenError, AppError } from "@/lib/errors";
-import { getPlatformSchoolScope, requirePlatformPermission } from "@/lib/platform-permissions";
+import { requirePlatformPermission } from "@/lib/platform-permissions";
 
 const schema = z.object({ adminId: z.string().min(1), schoolIds: z.array(z.string().min(1)).max(200) });
 

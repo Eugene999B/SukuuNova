@@ -61,18 +61,45 @@ function permanentFailure(message:string){ return /HTTP (400|401|403|404)\b|no .
 function nextRetryAt(attempt:number){ const exponent=Math.max(attempt-1,0); const exponential=Math.min(MAX_RETRY_DELAY_MS,BASE_RETRY_DELAY_MS*Math.pow(2,exponent)); const jitter=Math.floor(Math.random()*(JITTER_MAX_MS+1)); return new Date(Date.now()+exponential+jitter); }
 function deterministicIdempotencyKey(input:NotificationInput,channel:Channel){ const explicit=input.idempotencyKey?.trim(); if(explicit)return `${explicit}:${channel}`; if(!input.templateKey)return `manual:${randomBytes(16).toString("hex")}:${channel}`; const digest=createHash("sha256").update(input.schoolId+"|"+input.templateKey+"|"+input.recipientId+"|"+input.body+"|"+JSON.stringify(input.templateVariables??{})).digest("hex"); return `${input.schoolId}:${input.templateKey}:${input.recipientId}:v1:${digest}:${channel}`; }
 
-async function deliverCreatedMessage(tx:Prisma.TransactionClient,message:{id:string;schoolId:string;channel:string;recipientPhone:string;body:string;templateKey:string|null;templateVariables:Prisma.JsonValue|null;mediaUrl:string|null;attempts:number},settings:{smsSenderId?:string|null;whatsappTemplateConfig?:Prisma.JsonValue|null}|null|undefined,senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender}){
-  const claimedAttempt=message.attempts;
-  try{
-    if(message.channel==="sms"){if(!senders.sms)throw new Error("SMS sender is unavailable."); await senders.sms({phone:message.recipientPhone,body:message.body,senderId:settings?.smsSenderId||undefined});}
-    else if(message.channel==="whatsapp"){if(!senders.whatsapp)throw new Error("WhatsApp sender is unavailable."); if(!message.templateKey)throw new Error("WhatsApp job has no approved template key."); const sid=contentSid(settings?.whatsappTemplateConfig,message.templateKey); if(!sid)throw new Error("No Twilio ContentSid is configured for "+message.templateKey+"."); const messageVariables=variables(message.templateVariables); if(message.mediaUrl)messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig,message.templateKey)]=message.mediaUrl; await senders.whatsapp({phone:message.recipientPhone,contentSid:sid,variables:messageVariables,mediaUrl:message.mediaUrl||undefined});}
-    else throw new Error("Unsupported message channel: "+message.channel);
-    await tx.message.updateMany({where:{id:message.id,status:"sending",attempts:claimedAttempt},data:{status:"sent",sentAt:new Date(),lastError:null,nextAttemptAt:new Date()}});
-  }catch(error){
-    const lastError=error instanceof Error?error.message.slice(0,500):"Unknown message error";
-    console.error("SukuuNova notification delivery failed",{messageId:message.id,schoolId:message.schoolId,lastError,attempts:claimedAttempt});
-    if(permanentFailure(lastError)||claimedAttempt>=MAX_ATTEMPTS){await tx.message.updateMany({where:{id:message.id,status:"sending",attempts:claimedAttempt},data:{status:"failed",lastError,nextAttemptAt:new Date()}});}
-    else {await tx.message.updateMany({where:{id:message.id,status:"sending",attempts:claimedAttempt},data:{status:"queued",lastError,nextAttemptAt:nextRetryAt(claimedAttempt)}});}
+async function sendExternalNotification(
+  message: { channel: string; recipientPhone: string; body: string; templateKey: string | null; templateVariables: Prisma.JsonValue | null; mediaUrl: string | null },
+  settings: { smsSenderId?: string | null; whatsappTemplateConfig?: Prisma.JsonValue | null } | null | undefined,
+  senders: NotificationSenders = { sms: httpSmsSender, whatsapp: twilioWhatsAppSender }
+) {
+  if (message.channel === "sms") {
+    if (!senders.sms) throw new Error("SMS sender is unavailable.");
+    await senders.sms({ phone: message.recipientPhone, body: message.body, senderId: settings?.smsSenderId || undefined });
+  } else if (message.channel === "whatsapp") {
+    if (!senders.whatsapp) throw new Error("WhatsApp sender is unavailable.");
+    if (!message.templateKey) throw new Error("WhatsApp job has no approved template key.");
+    const sid = contentSid(settings?.whatsappTemplateConfig, message.templateKey);
+    if (!sid) throw new Error("No Twilio ContentSid is configured for " + message.templateKey + ".");
+    const messageVariables = variables(message.templateVariables);
+    if (message.mediaUrl) messageVariables[mediaVariableKey(settings?.whatsappTemplateConfig, message.templateKey)] = message.mediaUrl;
+    await senders.whatsapp({ phone: message.recipientPhone, contentSid: sid, variables: messageVariables, mediaUrl: message.mediaUrl || undefined });
+  } else {
+    throw new Error("Unsupported message channel: " + message.channel);
+  }
+}
+
+export async function deliverCreatedMessage(
+  tx: Prisma.TransactionClient,
+  message: { id: string; schoolId: string; channel: string; recipientPhone: string; body: string; templateKey: string | null; templateVariables: Prisma.JsonValue | null; mediaUrl: string | null; attempts: number },
+  settings: { smsSenderId?: string | null; whatsappTemplateConfig?: Prisma.JsonValue | null } | null | undefined,
+  senders: NotificationSenders = { sms: httpSmsSender, whatsapp: twilioWhatsAppSender }
+) {
+  const claimedAttempt = message.attempts;
+  try {
+    await sendExternalNotification(message, settings, senders);
+    await tx.message.updateMany({ where: { id: message.id, status: "sending", attempts: claimedAttempt }, data: { status: "sent", sentAt: new Date(), lastError: null, nextAttemptAt: new Date() } });
+  } catch (error) {
+    const lastError = error instanceof Error ? error.message.slice(0, 500) : "Unknown message error";
+    console.error("SukuuNova notification delivery failed", { messageId: message.id, schoolId: message.schoolId, lastError, attempts: claimedAttempt });
+    if (permanentFailure(lastError) || claimedAttempt >= MAX_ATTEMPTS) {
+      await tx.message.updateMany({ where: { id: message.id, status: "sending", attempts: claimedAttempt }, data: { status: "failed", lastError, nextAttemptAt: new Date() } });
+    } else {
+      await tx.message.updateMany({ where: { id: message.id, status: "sending", attempts: claimedAttempt }, data: { status: "queued", lastError, nextAttemptAt: nextRetryAt(claimedAttempt) } });
+    }
   }
 }
 
@@ -96,7 +123,19 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
       if(claimed.count===0)continue;
       const settings=await withTenant(directory.schoolId,tx=>tx.schoolSettings.findUnique({where:{schoolId:directory.schoolId}}));
       const claimedJob={...job,schoolId:directory.schoolId,attempts:job.attempts+1};
-      await withTenant(directory.schoolId,tx=>deliverCreatedMessage(tx,claimedJob,settings,senders));
+      const claimedAttempt=claimedJob.attempts;
+      try {
+        await sendExternalNotification(claimedJob, settings, senders);
+        await withTenant(directory.schoolId, tx => tx.message.updateMany({ where: { id: claimedJob.id, status: "sending", attempts: claimedAttempt }, data: { status: "sent", sentAt: new Date(), lastError: null, nextAttemptAt: new Date() } }));
+      } catch (error) {
+        const lastError = error instanceof Error ? error.message.slice(0, 500) : "Unknown message error";
+        console.error("SukuuNova notification delivery failed", { messageId: claimedJob.id, schoolId: claimedJob.schoolId, lastError, attempts: claimedAttempt });
+        if (permanentFailure(lastError) || claimedAttempt >= MAX_ATTEMPTS) {
+          await withTenant(directory.schoolId, tx => tx.message.updateMany({ where: { id: claimedJob.id, status: "sending", attempts: claimedAttempt }, data: { status: "failed", lastError, nextAttemptAt: new Date() } }));
+        } else {
+          await withTenant(directory.schoolId, tx => tx.message.updateMany({ where: { id: claimedJob.id, status: "sending", attempts: claimedAttempt }, data: { status: "queued", lastError, nextAttemptAt: nextRetryAt(claimedAttempt) } }));
+        }
+      }
       processed++;
     }
   }

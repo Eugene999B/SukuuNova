@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { BellRing, CalendarClock, CheckCircle2, Home, LayoutPanelTop, Save, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { BellRing, CheckCircle2, Home, LayoutPanelTop, Save, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import "./settings.css";
 
 type Admin = { name: string; email: string; role: string; status: string };

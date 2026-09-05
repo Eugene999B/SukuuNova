@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import { useMemo, useState } from "react";
@@ -38,10 +39,6 @@ function parseCsv(text: string): string[][] {
     cells.push(cell);
     return cells;
   });
-}
-
-function csvEscape(value: string) {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
 function downloadBlob(blob: Blob, filename: string) {

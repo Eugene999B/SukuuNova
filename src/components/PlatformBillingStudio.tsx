@@ -44,7 +44,9 @@ export default function PlatformBillingStudio() {
       }
     } finally { setBusy(false); }
   }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadSchools(); }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadSchool(schoolId); }, [schoolId]);
   useEffect(() => { if (!messaging) return; const w = messaging.wallet; setRates({ sellRate: channel === "sms" ? Number(w.smsSellRate) : Number(w.whatsappSellRate), costRate: channel === "sms" ? Number(w.smsCostRate) : Number(w.whatsappCostRate), lowBalanceThreshold: w.lowBalanceThreshold }); }, [channel, messaging]);
 

@@ -18,7 +18,8 @@ function money(value: number | string | Prisma.Decimal) {
 
 function deductionSnapshot(gross: number, deductions: DeductionInput[]) {
   const grossAmount = money(gross);
-  return deductions.map((row) => {
+  let totalDeductions = new Prisma.Decimal(0);
+  const snapshot = deductions.map((row) => {
     if (!row.label.trim() || row.value < 0 || !Number.isFinite(row.value)) {
       throw new AppError("Invalid payroll deduction.", 400, "INVALID_DEDUCTION");
     }
@@ -32,6 +33,7 @@ function deductionSnapshot(gross: number, deductions: DeductionInput[]) {
     if (amount.gt(grossAmount)) {
       throw new AppError("A payroll deduction cannot exceed gross salary.", 400, "INVALID_DEDUCTION");
     }
+    totalDeductions = totalDeductions.add(amount);
     return {
       label: row.label.trim(),
       type: row.type,
@@ -39,6 +41,10 @@ function deductionSnapshot(gross: number, deductions: DeductionInput[]) {
       amount: Number(amount.toString())
     };
   });
+  if (totalDeductions.gt(grossAmount)) {
+    throw new AppError("Total payroll deductions cannot exceed gross salary.", 400, "TOTAL_DEDUCTIONS_EXCEED_GROSS");
+  }
+  return snapshot;
 }
 
 async function payslipPdf(input: {

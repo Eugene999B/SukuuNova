@@ -4,14 +4,15 @@ const compat = new FlatCompat({
   baseDirectory: import.meta.dirname
 });
 
-export default [
+const eslintConfig = [
   {
-    ignores: [".next/**", "node_modules/**", "coverage/**"]
+    ignores: [".next/**", "node_modules/**", "coverage/**", "next-env.d.ts"]
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
-      "react/no-unescaped-entities": "off"
+      "react/no-unescaped-entities": "off",
+      "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }]
     }
   },
   {
@@ -33,3 +34,5 @@ export default [
     }
   }
 ];
+
+export default eslintConfig;

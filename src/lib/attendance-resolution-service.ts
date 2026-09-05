@@ -1,6 +1,6 @@
 import type { TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
-import { hasPermission, requirePermission } from "./rbac";
+import { requirePermission } from "./rbac";
 import { appendSchoolAudit } from "./audit";
 
 const STATUSES = ["PRESENT", "LATE", "ABSENT", "EXCUSED", "LEFT_EARLY", "PENDING_REVIEW"] as const;

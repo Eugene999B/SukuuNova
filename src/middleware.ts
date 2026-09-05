@@ -40,7 +40,7 @@ function protectedApiKind(pathname: string): SessionKind | null {
     pathname.startsWith("/api/mvp/") ||
     pathname.startsWith("/api/phase2/") ||
     pathname.startsWith("/api/phase3/") ||
-    pathname.startsWith("/api/phase4") ||
+    (pathname.startsWith("/api/phase4") && pathname !== "/api/phase4/whatsapp") ||
     pathname.startsWith("/api/protected/") ||
     pathname === "/api/sync"
   ) return "school";
@@ -54,7 +54,8 @@ function isPublicOrSpecialApi(pathname: string) {
     pathname.startsWith("/api/auth/") ||
     pathname.startsWith("/api/public/") ||
     pathname.startsWith("/api/devices/") ||
-    pathname.startsWith("/api/cron/")
+    pathname.startsWith("/api/cron/") ||
+    pathname === "/api/phase4/whatsapp"
   );
 }
 

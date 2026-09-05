@@ -2,8 +2,6 @@ import { appendSchoolAudit } from "./audit";
 import { withTenant } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { requirePermission } from "./rbac";
-import { getSchoolAuthorization } from "./authorization";
-
 const teachingRoleKeys = new Set(["class_teacher", "subject_teacher", "academic_coordinator", "department_head", "principal", "vice_principal", "owner"]);
 
 async function requireActiveTeachingUser(tx: Parameters<typeof requirePermission>[0], schoolId: string, userId: string) {

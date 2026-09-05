@@ -12,7 +12,8 @@ const TENANT_MODELS = new Set([
   "Score", "ReportCard", "FeeItem", "Invoice", "InvoiceLine", "Payment", "PaymentReversal", "Message",
   "TimetableSlot", "SubstituteAssignment", "FaceEnrollment", "FaceMatchReview", "ApprovedPickup",
   "PickupApprovalRequest", "PickupEvent", "SalaryStructure", "PayrollRun", "Payslip", "VisitorLog",
-  "ReportCardTemplate", "House", "Device", "DeviceIdentity", "DeviceAttendanceReceipt"
+  "ReportCardTemplate", "House", "Device", "DeviceIdentity", "DeviceAttendanceReceipt",
+  "SyncOperation", "AttendanceRecord", "StudentRiskFlag", "IdentityCard"
 ]);
 
 const AUDIT_MODELS = new Set(["AuditLogSchool", "AuditLogPlatform"]);

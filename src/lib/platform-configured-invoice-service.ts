@@ -1,5 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
-import { db, withTenant } from "./db";
+import { withTenant } from "./db";
 import { AppError } from "./errors";
 import { appendPlatformAudit } from "./audit";
 import { getPlatformSchoolScope, requirePlatformPermission } from "./platform-permissions";

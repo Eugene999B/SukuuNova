@@ -54,17 +54,6 @@ function formatTime(value: string) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${suffix}`;
 }
 
-function timeToMinutes(value: string) {
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function formatMinutes(value: number) {
-  const h = Math.floor(value / 60) % 24;
-  const m = value % 60;
-  return formatTime(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-}
-
 export default async function TimetablePage({ searchParams }: { searchParams: Promise<{ classId?: string; edit?: string }> }) {
   const session = await requireSchoolSession();
   const params = await searchParams;

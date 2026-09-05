@@ -119,6 +119,7 @@ model School {
   devices             Device[]
   deviceIdentities    DeviceIdentity[]
   deviceAttendanceReceipts DeviceAttendanceReceipt[]
+  identityCards       IdentityCard[]
 }
 
 model SchoolSettings {
@@ -141,6 +142,12 @@ model SchoolSettings {
   timetableConfig          Json?
   assessmentConfig         Json?
   reportCardConfig         Json?
+  showOverallPosition      Boolean @default(true)
+  positionScope            String  @default("class")
+  remarkSource             String  @default("grade_band")
+  positionBandLabels       Json?
+  behaviorRatingFields     Json?
+  promotionRule            String  @default("manual")
   school                   School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
 }
 
@@ -177,6 +184,7 @@ model User {
   salaryStructures    SalaryStructure[]
   payslips            Payslip[]
   hostedVisitors      VisitorLog[] @relation("VisitorHost")
+  identityCards       IdentityCard[] @relation("IdentityCardStaff")
   @@unique([id, schoolId])
   @@unique([schoolId, email])
   @@unique([schoolId, phone])
@@ -346,6 +354,7 @@ model Student {
   pickupEvents  PickupEvent[]
   pickupApprovalRequests PickupApprovalRequest[]
   deviceIdentities DeviceIdentity[] @relation("DeviceIdentityStudent")
+  identityCards IdentityCard[]
   @@unique([id, schoolId])
   @@unique([schoolId, admissionNo])
   @@index([schoolId])
@@ -460,6 +469,7 @@ model AttendanceEvent {
   confidenceScore  Decimal?
   deviceId         String?
   recordedBy       String?
+  periodId         String   @default("DAILY")
   school           School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   student          Student? @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
   staff            User?    @relation("AttendanceStaff", fields: [staffId, schoolId], references: [id, schoolId], onDelete: Restrict)
@@ -470,6 +480,7 @@ model AttendanceEvent {
   @@index([schoolId, attendanceDate])
   @@index([schoolId, studentId, attendanceDate])
   @@index([schoolId, staffId, attendanceDate])
+  @@index([schoolId, studentId, attendanceDate, periodId])
 }
 
 model Assessment {
@@ -499,6 +510,7 @@ model Score {
   subjectId    String
   assessmentId String
   value        Decimal
+  remarks      String?
   enteredBy    String
   enteredAt    DateTime   @default(now())
   school       School     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
@@ -635,12 +647,16 @@ model Message {
   sentAt DateTime?
   lastError String?
   idempotencyKey String
+  sourceRecordId String?
+  eventType String?
+  templateVersion String?
   createdAt DateTime @default(now())
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   @@unique([id, schoolId])
   @@unique([schoolId, idempotencyKey])
   @@index([schoolId])
   @@index([status, nextAttemptAt])
+  @@index([schoolId, sourceRecordId])
 }
 
 model TimetableSlot {
@@ -903,6 +919,7 @@ model SyncOperation {
   deviceId          String
   clientOperationId String
   clientVersion     Int
+  baseEntityVersion Int?
   entityId          String?
   operationType     String
   payload           Json
@@ -934,11 +951,13 @@ model AttendanceRecord {
   resolvedBy       String?
   resolvedAt       DateTime?
   resolutionReason String?
+  version          Int      @default(1)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @default(now())
   @@unique([schoolId, studentId, attendanceDate, periodId])
   @@index([schoolId, status, attendanceDate])
   @@index([schoolId, studentId, attendanceDate])
+  @@index([schoolId, studentId, version])
 }
 
 model StudentRiskFlag {
@@ -969,4 +988,27 @@ model ImpersonationLog {
   startedAt           DateTime @default(now())
   endedAt             DateTime?
   @@index([schoolId, startedAt])
+}
+
+model IdentityCard {
+  id         String    @id @default(cuid())
+  schoolId   String
+  personType String
+  studentId  String?
+  staffId    String?
+  serial     String    @unique
+  issuedAt   DateTime  @default(now())
+  expiresAt  DateTime
+  status     String    @default("active")
+  version    Int       @default(1)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now()) @updatedAt
+  school     School    @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  student    Student?  @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  staff      User?     @relation("IdentityCardStaff", fields: [staffId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  @@unique([id, schoolId])
+  @@index([schoolId])
+  @@index([schoolId, personType, status])
+  @@index([schoolId, serial])
+  @@index([schoolId, expiresAt])
 }
