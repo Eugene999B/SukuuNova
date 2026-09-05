@@ -47,6 +47,8 @@ import { SidebarNav, type NavGroup } from "./SidebarNav";
 import { CommandPalette, type CommandItem } from "./CommandPalette";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import { usePlatformNavigationAccess } from "./PlatformNavigationContext";
+import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
+import { SpeedDialActions } from "./SpeedDialActions";
 import { Menu, X } from "lucide-react";
 import "./app-shell.css";
 
@@ -204,6 +206,7 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
   const baseGroups = universe === "platform" ? platformGroups : universe === "teacher" ? teacherGroups : universe === "guardian" ? guardianGroups : schoolGroups;
   const groups = universe === "platform" && platformAccess ? baseGroups.map((group) => ({ ...group, items: group.items.filter((item) => !item.permission || platformAccess[item.permission]) })).filter((group) => group.items.length > 0) : baseGroups;
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [compact, setCompact] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const preferenceScope = `${universe}:${schoolCode || "platform"}:${userName || "user"}`.replace(/\s+/g, "_").toLowerCase();
@@ -216,7 +219,17 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
 
   useEffect(() => {
     try { setCompact(localStorage.getItem(`sukuunova-sidebar-compact:${preferenceScope}`) === "true"); } catch { setCompact(false); }
-    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setPaletteOpen(true); } };
+    const onKey = (event: KeyboardEvent) => {
+      const activeElement = document.activeElement;
+      const isInput = activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement || activeElement instanceof HTMLSelectElement;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen(true);
+      } else if (!isInput && event.key === "?") {
+        event.preventDefault();
+        setShortcutsOpen((prev) => !prev);
+      }
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [preferenceScope]);
@@ -400,6 +413,18 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
         liveSearchEndpoint={universe === "school" ? "/api/search" : undefined}
+      />
+
+      {/* Floating Speed Dial / Quick Actions Hub */}
+      <SpeedDialActions
+        universe={universe}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+      />
+
+      {/* Interactive Keyboard Shortcuts Cheatsheet Modal */}
+      <KeyboardShortcutsModal
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
       />
     </div>
   );
