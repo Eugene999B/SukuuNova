@@ -226,17 +226,14 @@ body {
   box-shadow: var(--ui-focus) !important;
 }
 
-/* Kill the old accent system without breaking stored preferences. */
+/* Compatibility with the legacy accent attribute without creating circular CSS variables. */
 :root[data-accent] {
-  --color-brand: var(--ui-primary);
-  --color-brand-hover: var(--ui-primary-hover);
-  --color-brand-soft: var(--ui-primary-soft);
-  --sn-primary: var(--ui-primary);
-  --sn-primary-deep: var(--ui-primary-hover);
-  --sn-primary-soft: var(--ui-primary-soft);
-  --sn-accent: var(--ui-primary);
-  --sn-school-accent: var(--ui-primary);
-  --sn-teacher-accent: var(--ui-primary);
-  --sn-guardian-accent: var(--ui-primary);
-  --sn-platform-accent: var(--ui-primary);
+  --sn-primary: var(--color-brand);
+  --sn-primary-deep: var(--color-brand-hover);
+  --sn-primary-soft: var(--color-brand-soft);
+  --sn-accent: var(--color-brand);
+  --sn-school-accent: var(--color-brand);
+  --sn-teacher-accent: var(--color-brand);
+  --sn-guardian-accent: var(--color-brand);
+  --sn-platform-accent: var(--color-brand);
 }
