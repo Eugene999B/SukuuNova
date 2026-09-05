@@ -20,6 +20,7 @@ async function runReportCardAction(formData: FormData) {
   const termId = String(formData.get("termId") ?? "");
   const classId = String(formData.get("classId") ?? "");
   const reportCardId = String(formData.get("reportCardId") ?? "");
+  const headRemark = String(formData.get("headRemark") ?? "").trim().slice(0, 2000) || undefined;
   if (!termId) throw new Error("Select a reporting term first.");
   if (!classId) throw new Error("Select a class first.");
 
@@ -48,7 +49,7 @@ async function runReportCardAction(formData: FormData) {
   if (!reportCardId) throw new Error("A report card is required.");
   await withTenant(session.schoolId, async (tx) => {
     if (action === "submit") await submitReportCard(tx, { schoolId: session.schoolId, actorId: session.userId, reportCardId });
-    else if (action === "approve") await approveAndQueuePublicReportCard(tx, { schoolId: session.schoolId, actorId: session.userId, reportCardId, origin: origin() });
+    else if (action === "approve") await approveAndQueuePublicReportCard(tx, { schoolId: session.schoolId, actorId: session.userId, reportCardId, headRemark, origin: origin() });
     else if (action === "release") await sendApprovedReportCardPublic(tx, { schoolId: session.schoolId, actorId: session.userId, reportCardId, origin: origin() });
     else throw new Error("Unsupported report-card action.");
   });
