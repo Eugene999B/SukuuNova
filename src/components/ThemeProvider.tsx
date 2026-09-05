@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ThemeSwitcher } from "./ThemeSwitcher";
 
 export type ThemeMode = "light" | "dark";
 export type AccentName = "teal";
@@ -119,7 +118,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  return <><ThemeSwitcher />{children}</>;
+  return <>{children}</>;
 }
 
 export function saveThemePreferences(patch: Partial<Preferences>): Preferences {
