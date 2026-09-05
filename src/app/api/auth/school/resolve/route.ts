@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { db } from "@/lib/db";
+import { rawDb } from "@/lib/db";
 const schema = z.object({ uniqueCode: z.string().trim().min(2).max(80) });
 
 export async function POST(request: Request) {
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     if (!parsed.success) return NextResponse.json({ ok: false, message: "Enter a valid school code." }, { status: 400 });
 
     const uniqueCode = parsed.data.uniqueCode.toLowerCase();
-    const directory = await db.schoolLoginDirectory.findUnique({
+    const directory = await rawDb.schoolLoginDirectory.findUnique({
       where: { uniqueCode },
       select: { schoolId: true, status: true },
     });
@@ -18,7 +18,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "We could not find an active school with that code." }, { status: 404 });
     }
 
-    const school = await db.school.findUnique({
+    // This endpoint runs before a school tenant has been established, so the
+    // school lookup must bypass the tenant-scoped Prisma extension as well.
+    const school = await rawDb.school.findUnique({
       where: { id: directory.schoolId },
       select: { name: true, status: true },
     });
