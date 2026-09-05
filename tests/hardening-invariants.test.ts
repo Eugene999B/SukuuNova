@@ -152,6 +152,11 @@ describe("Hardening Invariants", () => {
                 approvedBy: "principal-1",
               };
             }),
+            updateMany: vi.fn().mockImplementation(async (args) => {
+              if (currentStatus !== "submitted" || args.where.status !== "submitted") return { count: 0 };
+              currentStatus = "approved";
+              return { count: 1 };
+            }),
           },
           schoolSettings: {
             findUnique: vi.fn().mockResolvedValue({

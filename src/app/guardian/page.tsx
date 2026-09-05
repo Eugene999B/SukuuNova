@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { ArrowRight, CircleCheckBig, GraduationCap, Mail, WalletCards } from "lucide-react";
+import { Prisma } from "@prisma/client";
 import { AppShell } from "@/components/AppShell";
 import { withTenant } from "@/lib/db";
 import { requireGuardianSession } from "@/lib/guardian-auth";
@@ -30,7 +31,7 @@ export default async function GuardianPortalPage() {
               attendanceEvents: true,
               scores: { include: { assessment: true, subject: true }, orderBy: { enteredAt: "desc" } },
               reportCards: { where: { status: { in: [...PUBLISHED_REPORT_STATES] } }, select: { termId: true } },
-              invoices: { include: { payments: true } },
+              invoices: { include: { payments: { include: { reversals: true } } } },
             },
           } } },
         },
@@ -46,7 +47,15 @@ export default async function GuardianPortalPage() {
     const visibleTerms = new Set(student.reportCards.map((r) => r.termId));
     return student.scores.filter((score) => visibleTerms.has(score.assessment.termId));
   };
-  const familyBalance = children.reduce((total, student) => total + student.invoices.reduce((sum, invoice) => sum + Number(invoice.totalAmount) - invoice.payments.reduce((paid, payment) => paid + Number(payment.amount), 0), 0), 0);
+  const netPaid = (payments: Array<{ amount: unknown; reversals: Array<{ amount: unknown }> }>) =>
+    payments.reduce(
+      (sum, payment) =>
+        sum.plus(new Prisma.Decimal(String(payment.amount))).minus(
+          payment.reversals.reduce((r, row) => r.plus(new Prisma.Decimal(String(row.amount))), new Prisma.Decimal(0))
+        ),
+      new Prisma.Decimal(0)
+    );
+  const familyBalance = children.reduce((total, student) => total.plus(student.invoices.reduce((sum, invoice) => sum.plus(new Prisma.Decimal(String(invoice.totalAmount)).minus(netPaid(invoice.payments))), new Prisma.Decimal(0))), new Prisma.Decimal(0));
 
   return <AppShell universe="guardian" title="Family dashboard" subtitle="Attendance, school updates, results and fees for the children connected to you." active="Overview" schoolName={session.schoolName} schoolCode="" userName={data.guardian.name} role="Guardian">
     <div className="guardian-command-center">
@@ -58,7 +67,7 @@ export default async function GuardianPortalPage() {
         <Link href="/guardian/fees" className="guardian-task-card"><span className="guardian-task-icon"><WalletCards size={18} aria-hidden="true" /></span><div><strong>Fees & receipts</strong><span>Review balances and receipts.</span></div><ArrowRight size={16} aria-hidden="true" /></Link>
       </section>
       <section className="guardian-panel app-card"><div className="guardian-panel-head"><div><span className="guardian-eyebrow">Your children</span><h2>Open a child</h2><p>Attendance, results and fees are available from each child’s page.</p></div></div><div className="guardian-child-grid">
-        {children.length ? children.map((student) => { const scores = visibleScores(student); const latest = scores[0]; const todayAttendance = student.attendanceEvents.filter((e) => localDate(e.attendanceDate, data.timezone) === today); const balance = student.invoices.reduce((n, inv) => n + Number(inv.totalAmount) - inv.payments.reduce((p, x) => p + Number(x.amount), 0), 0); return <article className="guardian-child" key={student.id}><div className="guardian-child-head"><div className="guardian-child-avatar">{student.photoUrl ? <Image src={student.photoUrl} alt="" width={54} height={54} unoptimized /> : student.name.slice(0, 2).toUpperCase()}</div><div><h3>{student.name}</h3><p>{student.admissionNo} · {student.class?.level ? `${student.class.level} · ` : ""}{student.class?.name ?? "Unassigned"}</p></div></div><div className="guardian-child-facts"><div><span>Today</span><strong>{todayAttendance[0]?.type ?? "Not recorded"}</strong></div><div><span>Latest result</span><strong>{latest ? String(latest.value) : "—"}</strong></div><div><span>Fees</span><strong>GH₵{balance.toFixed(2)}</strong></div></div><Link href={`/guardian/children/${student.id}`} className="guardian-child-link">Open learner <ArrowRight size={14} aria-hidden="true" /></Link></article>; }) : <div className="guardian-empty"><strong>No children are linked yet.</strong><p>Ask your school to connect your guardian account to a learner.</p></div>}
+        {children.length ? children.map((student) => { const scores = visibleScores(student); const latest = scores[0]; const todayAttendance = student.attendanceEvents.filter((e) => localDate(e.attendanceDate, data.timezone) === today); const balance = student.invoices.reduce((n, inv) => n.plus(new Prisma.Decimal(String(inv.totalAmount)).minus(netPaid(inv.payments))), new Prisma.Decimal(0)); return <article className="guardian-child" key={student.id}><div className="guardian-child-head"><div className="guardian-child-avatar">{student.photoUrl ? <Image src={student.photoUrl} alt="" width={54} height={54} unoptimized /> : student.name.slice(0, 2).toUpperCase()}</div><div><h3>{student.name}</h3><p>{student.admissionNo} · {student.class?.level ? `${student.class.level} · ` : ""}{student.class?.name ?? "Unassigned"}</p></div></div><div className="guardian-child-facts"><div><span>Today</span><strong>{todayAttendance[0]?.type ?? "Not recorded"}</strong></div><div><span>Latest result</span><strong>{latest ? String(latest.value) : "—"}</strong></div><div><span>Fees</span><strong>GH₵{balance.toFixed(2)}</strong></div></div><Link href={`/guardian/children/${student.id}`} className="guardian-child-link">Open learner <ArrowRight size={14} aria-hidden="true" /></Link></article>; }) : <div className="guardian-empty"><strong>No children are linked yet.</strong><p>Ask your school to connect your guardian account to a learner.</p></div>}
       </div></section>
     </div>
     <style>{styles}</style>

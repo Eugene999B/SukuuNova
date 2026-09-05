@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CircleCheckBig, GraduationCap, UsersRound, WalletCards, ArrowRight } from "lucide-react";
+import { Prisma } from "@prisma/client";
 import { AppShell } from "@/components/AppShell";
 import { DataCard } from "@/components/ui/DataCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -45,7 +46,7 @@ export default async function GuardianModulePage({ params }: Props) {
           attendanceEvents: true,
           scores: { where: { assessment: { term: { reportCards: { some: { studentId: childId, status: guardianVisibleReportStatuses } } } } }, include: { subject: true, assessment: true } },
           reportCards: { where: { status: guardianVisibleReportStatuses } },
-          invoices: { include: { payments: true } }
+          invoices: { include: { payments: { include: { reversals: true } } } }
         }
       });
       return { guardian, child, children: [] };
@@ -58,7 +59,7 @@ export default async function GuardianModulePage({ params }: Props) {
         attendanceEvents: true,
         scores: { where: { assessment: { term: { reportCards: { some: { status: guardianVisibleReportStatuses } } } } }, include: { subject: true, assessment: true } },
         reportCards: { where: { status: guardianVisibleReportStatuses } },
-        invoices: { include: { payments: true } }
+        invoices: { include: { payments: { include: { reversals: true } } } }
       }
     });
     return { guardian, child: null, children };
@@ -74,7 +75,8 @@ export default async function GuardianModulePage({ params }: Props) {
   const childData = data.child ? [data.child] : data.children;
   const totalAttendance = childData.reduce((n, s) => n + s.attendanceEvents.length, 0);
   const totalResults = childData.reduce((n, s) => n + s.scores.length, 0);
-  const totalBalance = childData.reduce((n, s) => n + s.invoices.reduce((sum, inv) => sum + Number(inv.totalAmount) - inv.payments.reduce((p, x) => p + Number(x.amount), 0), 0), 0);
+  const netPaid = (payments) => payments.reduce((sum, payment) => sum.plus(new Prisma.Decimal(String(payment.amount))).minus(payment.reversals.reduce((r, row) => r.plus(new Prisma.Decimal(String(row.amount))), new Prisma.Decimal(0))), new Prisma.Decimal(0));
+  const totalBalance = childData.reduce((n, s) => n.plus(s.invoices.reduce((sum, inv) => sum.plus(new Prisma.Decimal(String(inv.totalAmount)).minus(netPaid(inv.payments))), new Prisma.Decimal(0))), new Prisma.Decimal(0));
 
   return (
     <AppShell universe="guardian" title={title} subtitle={subtitle} active={childId ? "My Children" : route === "assignments" ? "Academics" : route === "fees" ? "Fees & Receipts" : route === "messages" ? "Messages" : route === "attendance" ? "Attendance" : route === "academics" ? "Academics" : "My Children"} schoolName={session.schoolName} userName={data.guardian.name} role="Guardian">
@@ -91,7 +93,7 @@ export default async function GuardianModulePage({ params }: Props) {
           <div className="sn-list-card-body">
             <div className="app-list-row"><span className="app-list-icon"><CircleCheckBig size={15}/></span><div><b>Attendance</b><span>{data.child!.attendanceEvents.length} recorded events</span></div></div>
             <div className="app-list-row"><span className="app-list-icon"><GraduationCap size={15}/></span><div><b>Academic records</b><span>{data.child!.scores.length} published scores · {data.child!.reportCards.length} published report cards</span></div></div>
-            <div className="app-list-row"><span className="app-list-icon"><WalletCards size={15}/></span><div><b>Fees</b><span>GH₵{data.child!.invoices.reduce((sum, inv) => sum + Number(inv.totalAmount) - inv.payments.reduce((p, x) => p + Number(x.amount), 0), 0).toFixed(2)} outstanding</span></div></div>
+            <div className="app-list-row"><span className="app-list-icon"><WalletCards size={15}/></span><div><b>Fees</b><span>GH₵{data.child!.invoices.reduce((sum, inv) => sum.plus(new Prisma.Decimal(String(inv.totalAmount)).minus(netPaid(inv.payments))), new Prisma.Decimal(0)).toFixed(2)} outstanding</span></div></div>
             <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"12px 0 14px"}}><Link className="module-hero-button" href="/guardian/attendance">Attendance</Link><Link className="module-hero-button" href="/guardian/academics">Academics</Link><Link className="module-hero-button" href="/guardian/fees">Fees</Link></div>
           </div>
         </section>

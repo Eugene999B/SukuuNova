@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { rawDb } from "@/lib/db";
+import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 import { verifyPublicReportPdfToken } from "@/lib/report-card-release-service";
 
-export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
+export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
+  if (!token || token.length > 2000) return NextResponse.json({ ok: false, message: "The report-card link is invalid or expired." }, { status: 404 });
+  try {
+    await recordLoginAttempt("public-report-pdf", token.slice(0, 32), requestIp(request.headers));
+  } catch (error) {
+    const retryAfter = (error as { retryAfterSeconds?: number }).retryAfterSeconds ?? 60;
+    return NextResponse.json({ ok: false, message: "Too many attempts. Try again later." }, { status: 429, headers: { "Retry-After": String(retryAfter) } });
+  }
   const payload = verifyPublicReportPdfToken(token);
   if (!payload) return NextResponse.json({ ok: false, message: "The report-card link is invalid or expired." }, { status: 404 });
 

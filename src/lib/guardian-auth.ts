@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { getSchoolAuthorizationState, authorizationVersion } from "./auth";
+import { rawDb } from "./db";
 import { UnauthorizedError } from "./errors";
 
 export const GUARDIAN_COOKIE = "sukuunova_guardian_session";
@@ -81,5 +82,7 @@ export async function requireGuardianSession() {
   const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This guardian account is no longer active.");
   if (authorizationVersion(state) !== session.authorizationVersion) throw new UnauthorizedError("Your guardian access has changed. Please sign in again.");
+  const schoolRows = await rawDb.$queryRawUnsafe<Array<{ status: string }>>(`SELECT "status" FROM "School" WHERE "id"=$1 LIMIT 1`, session.schoolId);
+  if (!schoolRows[0] || schoolRows[0].status !== "active") throw new UnauthorizedError("This guardian account is no longer active.");
   return { ...session, name: state.name };
 }

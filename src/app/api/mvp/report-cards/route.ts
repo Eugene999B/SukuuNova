@@ -9,18 +9,25 @@ import { generateReportCard, submitReportCard } from "@/lib/report-card-service"
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("generate"), studentId: z.string(), termId: z.string(), remarks: z.string().optional() }),
-  z.object({ action: z.literal("submit"), reportCardId: z.string() }),
-  z.object({ action: z.literal("approve"), reportCardId: z.string() }),
-  z.object({ action: z.literal("send"), reportCardId: z.string() })
+  z.object({ action: z.literal("generate"), studentId: z.string().min(1).max(100), termId: z.string().min(1).max(100), remarks: z.string().max(2000).optional() }),
+  z.object({ action: z.literal("submit"), reportCardId: z.string().min(1).max(100) }),
+  z.object({ action: z.literal("approve"), reportCardId: z.string().min(1).max(100) }),
+  z.object({ action: z.literal("send"), reportCardId: z.string().min(1).max(100) })
 ]);
 
-function requestOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (origin) return origin;
-  const host = request.headers.get("host");
-  if (host) return `${request.headers.get("x-forwarded-proto") || "https"}://${host}`;
-  return process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+export function trustedAppOrigin() {
+  const candidate = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").trim().replace(/\/+$/g, "");
+  try {
+    const url = new URL(candidate);
+    if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("bad protocol");
+    return url.origin;
+  } catch {
+    return "http://localhost:3000";
+  }
+}
+
+function requestOrigin(_request: Request) {
+  return trustedAppOrigin();
 }
 
 export async function GET() {

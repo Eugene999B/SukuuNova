@@ -155,6 +155,8 @@ export async function requireSchoolSession() {
   const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This school account is no longer active.");
   if (authorizationVersion(state) !== session.authorizationVersion) throw new UnauthorizedError("Your school access has changed. Please sign in again.");
+  const schoolRows = await rawDb.$queryRawUnsafe<Array<{ status: string }>>(`SELECT "status" FROM "School" WHERE "id"=$1 LIMIT 1`, session.schoolId);
+  if (!schoolRows[0] || schoolRows[0].status !== "active") throw new UnauthorizedError("This school account is no longer active.");
   return { ...session, name: state.name };
 }
 

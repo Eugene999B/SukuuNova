@@ -20,14 +20,57 @@ const AUDIT_MODELS = new Set(["AuditLogSchool", "AuditLogPlatform"]);
 const APPEND_ONLY_MODELS = new Set(["InvoiceLine", "Payment", "PaymentReversal", "Payslip", "PickupEvent"]);
 const DELETE_PROTECTED_MODELS = new Set(["Invoice"]);
 const READ_OPERATIONS = new Set(["findUnique", "findUniqueOrThrow", "findFirst", "findFirstOrThrow", "findMany", "count", "aggregate", "groupBy"]);
+const UNIQUE_READ_OPERATIONS = new Set(["findUnique", "findUniqueOrThrow"]);
+const UNIQUE_WRITE_OPERATIONS = new Set(["update", "delete"]);
 const UPDATE_OPERATIONS = new Set(["update", "updateMany", "updateManyAndReturn"]);
 const DELETE_OPERATIONS = new Set(["delete", "deleteMany"]);
+// Models that declare @@unique([id, schoolId]) alongside @id(id). For these,
+// a singular lookup by id must be rewritten to the compound id_schoolId key:
+// Prisma findUnique/update/delete reject a flat { id, schoolId } filter.
+const COMPOUND_ID_MODELS = new Set([
+  "User", "Role", "SchoolPasswordResetToken", "AuditLogSchool", "AcademicYear", "CalendarEvent", "Term",
+  "Student", "Guardian", "House", "Class", "Subject", "AttendanceEvent", "Assessment", "Score",
+  "ReportCard", "FeeItem", "Invoice", "Payment", "PaymentReversal", "Message", "TimetableSlot",
+  "SubstituteAssignment", "FaceEnrollment", "FaceMatchReview", "ApprovedPickup", "PickupApprovalRequest",
+  "PickupEvent", "SalaryStructure", "PayrollRun", "Payslip", "VisitorLog", "Device", "DeviceIdentity",
+  "DeviceAttendanceReceipt", "IdentityCard"
+]);
 
 type MutableArgs = Record<string, unknown>;
 
 function assertNoContradictoryWhere(model: string, where: MutableArgs, schoolId: string) {
   if (model === "School" && typeof where.id === "string" && where.id !== schoolId) throw new TenantScopeError();
   if (model !== "School" && typeof where.schoolId === "string" && where.schoolId !== schoolId) throw new TenantScopeError();
+  // Validate nested compound unique keys that embed schoolId (e.g. id_schoolId, schoolId_staffId).
+  for (const value of Object.values(where)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      const nested = value as MutableArgs;
+      if (typeof nested.schoolId === "string" && nested.schoolId !== schoolId) throw new TenantScopeError();
+    }
+  }
+}
+
+function tenantUniqueWhere(model: string, where: MutableArgs | undefined, schoolId: string): MutableArgs {
+  const original = where ?? {};
+  assertNoContradictoryWhere(model, original, schoolId);
+  if (model === "School") return { id: schoolId };
+  // ReportCardTemplate supports global presets (schoolId null); RLS enforces
+  // (schoolId IS NULL OR schoolId = current). Keep the caller's unique filter.
+  if (model === "ReportCardTemplate") return original;
+  const compound = (original as MutableArgs).id_schoolId as MutableArgs | undefined;
+  if (compound && typeof compound === "object") {
+    if (typeof compound.schoolId === "string" && compound.schoolId !== schoolId) throw new TenantScopeError();
+    return { id_schoolId: { ...(compound as object), schoolId } };
+  }
+  if (typeof original.id === "string" && COMPOUND_ID_MODELS.has(model)) {
+    return { id_schoolId: { id: original.id, schoolId } };
+  }
+  if (typeof original.schoolId === "string") return original;
+  // Composite-PK models (RolePermission, UserRole, ...) and global lookups:
+  // Prisma findUnique cannot accept an extra schoolId filter, so rely on RLS
+  // (set_config + FORCE RLS) which already scopes these reads. Do not inject
+  // an invalid flat { ..., schoolId } filter that would throw P2023.
+  return original;
 }
 
 function tenantWhere(model: string, where: MutableArgs | undefined, schoolId: string): MutableArgs {
@@ -67,15 +110,20 @@ export const db = basePrisma.$extends({
         if (!TENANT_MODELS.has(model)) return query(args);
         const schoolId = currentSchoolId();
         const next = { ...(args as MutableArgs) };
-        if (READ_OPERATIONS.has(operation)) next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
+        if (UNIQUE_READ_OPERATIONS.has(operation)) next.where = tenantUniqueWhere(model, next.where as MutableArgs | undefined, schoolId);
+        else if (READ_OPERATIONS.has(operation)) next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
         else if (operation === "create") next.data = tenantData(model, next.data as MutableArgs, schoolId);
         else if (operation === "createMany" || operation === "createManyAndReturn") next.data = tenantData(model, next.data as MutableArgs | MutableArgs[], schoolId);
         else if (UPDATE_OPERATIONS.has(operation)) {
-          next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
+          next.where = UNIQUE_WRITE_OPERATIONS.has(operation)
+            ? tenantUniqueWhere(model, next.where as MutableArgs | undefined, schoolId)
+            : tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
           rejectTenantKeyMutation(model, next.data as MutableArgs | undefined, schoolId);
-        } else if (DELETE_OPERATIONS.has(operation)) next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
+        } else if (DELETE_OPERATIONS.has(operation)) next.where = UNIQUE_WRITE_OPERATIONS.has(operation)
+          ? tenantUniqueWhere(model, next.where as MutableArgs | undefined, schoolId)
+          : tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
         else if (operation === "upsert") {
-          next.where = tenantWhere(model, next.where as MutableArgs | undefined, schoolId);
+          next.where = tenantUniqueWhere(model, next.where as MutableArgs | undefined, schoolId);
           next.create = tenantData(model, next.create as MutableArgs, schoolId);
           rejectTenantKeyMutation(model, next.update as MutableArgs | undefined, schoolId);
         } else throw new TenantScopeError("Unsupported tenant-scoped Prisma operation: " + operation);
