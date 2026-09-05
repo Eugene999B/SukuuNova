@@ -49,6 +49,18 @@ export function verifyDeviceSignature(input: {
     );
   }
 
+  if (!input.deviceSecret || typeof input.deviceSecret !== "string") {
+    throw new AppError("Invalid device signature.", 401, "INVALID_DEVICE_SIGNATURE");
+  }
+
+  if (!input.nonce || typeof input.nonce !== "string" || input.nonce.trim() === "") {
+    throw new AppError("Invalid device signature.", 401, "INVALID_DEVICE_SIGNATURE");
+  }
+
+  if (!/^[0-9a-f]{64}$/i.test(input.apiKeyHash)) {
+    throw new AppError("Invalid device signature.", 401, "INVALID_DEVICE_SIGNATURE");
+  }
+
   if (!/^[0-9a-f]{64}$/i.test(input.signature)) {
     throw new AppError("Invalid device signature.", 401, "INVALID_DEVICE_SIGNATURE");
   }

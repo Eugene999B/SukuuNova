@@ -29,7 +29,7 @@ export async function getTermReadiness(tx: TenantDb, schoolId: string, termId: s
     tx.assessment.findMany({ where: { termId }, select: { id: true, classId: true, subjectId: true, name: true, maxScore: true } }),
     tx.score.findMany({ where: { assessment: { termId } }, select: { studentId: true, assessmentId: true } }),
     tx.reportCard.findMany({ where: { termId }, select: { studentId: true, status: true } }),
-    getAcademicEngineConfig(tx)
+    getAcademicEngineConfig(tx, schoolId)
   ]);
 
   const checks: TermReadinessItem[] = [];
@@ -41,8 +41,7 @@ export async function getTermReadiness(tx: TenantDb, schoolId: string, termId: s
   checks.push({ key: "assignments", label: "Teaching assignments", ok: classesWithoutTeachers.length === 0, count: classesWithoutTeachers.length, detail: classesWithoutTeachers.length ? `${classesWithoutTeachers.length} class(es) have no subject-teacher assignment.` : `${assignments.length} class-subject-teacher links are configured.`, href: "/school/subjects" });
 
   const scoredKeys = new Set(scores.map((score) => `${score.studentId}:${score.assessmentId}`));
-  const expectedScoreSlots = activeStudents.reduce((sum, student) => sum + assessments.filter((assessment) => activeStudents.some((s) => s.id === student.id && s.classId === assessment.classId)).length, 0);
-  const missingScoreSlots = Math.max(0, expectedScoreSlots - scores.length);
+  const missingScoreSlots = activeStudents.reduce((sum, student) => sum + assessments.filter((assessment) => assessment.classId === student.classId && !scoredKeys.has(`${student.id}:${assessment.id}`)).length, 0);
   checks.push({ key: "scores", label: "Assessment marks", ok: missingScoreSlots === 0 || assessments.length === 0, count: missingScoreSlots, detail: assessments.length === 0 ? "No assessments exist for this term yet." : missingScoreSlots ? `${missingScoreSlots} student-assessment mark slot(s) are still empty.` : "All expected assessment slots have marks.", href: "/school/gradebook/studio" });
 
   const weightTotal = (config.assessment.categories ?? []).reduce((sum, category) => sum + Number(category.weight), 0);

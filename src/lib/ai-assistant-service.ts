@@ -1,6 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
-import type { Prisma } from "@prisma/client";
 import { AppError, ForbiddenError } from "./errors";
 import { hasPermission } from "./rbac";
 import { withTenant } from "./db";

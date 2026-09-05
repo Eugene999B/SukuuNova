@@ -18,6 +18,7 @@ describe("structured AI contract", () => {
     const original = process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_API_KEY;
     const { createStructuredAiDraft } = await import("../src/lib/ai-assistant-service");
+    expect(createStructuredAiDraft).toBeDefined();
     vi.spyOn(globalThis, "fetch");
     expect(process.env.OPENAI_API_KEY).toBeUndefined();
     process.env.OPENAI_API_KEY = original;

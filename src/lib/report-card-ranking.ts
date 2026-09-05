@@ -34,10 +34,18 @@ function rulesFor(settings: { gradeCaWeight: Prisma.Decimal | number; gradeExamW
 export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: string; reportCardId: string }) {
   const report = await tx.reportCard.findFirst({ where: { id: input.reportCardId, schoolId: input.schoolId }, select: { id: true, studentId: true, termId: true, calculationSnapshot: true, student: { select: { classId: true, class: { select: { id: true, level: true } } } } } });
   if (!report?.student.classId || !report.student.class) return;
-  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { gradeCaWeight: true, gradeExamWeight: true, gradingScale: true, assessmentConfig: true } });
+  const settings = await tx.schoolSettings.findUnique({
+    where: { schoolId: input.schoolId },
+    select: {
+      gradeCaWeight: true,
+      gradeExamWeight: true,
+      gradingScale: true,
+      assessmentConfig: true,
+      positionScope: true,
+    },
+  });
   if (!settings) return;
-  const reportConfig = await tx.$queryRawUnsafe<Array<{ positionScope: string }>>(`SELECT "positionScope" FROM "SchoolSettings" WHERE "schoolId"=$1`, input.schoolId);
-  const positionScope = reportConfig[0]?.positionScope === "year_group" ? "year_group" : "class";
+  const positionScope = settings.positionScope === "year_group" ? "year_group" : "class";
   const classIds = positionScope === "year_group" && report.student.class.level ? (await tx.class.findMany({ where: { level: report.student.class.level }, select: { id: true } })).map((row) => row.id) : [report.student.class.id];
   const students = await tx.student.findMany({ where: { classId: { in: classIds }, status: "active" }, select: { id: true, classId: true }, orderBy: { id: "asc" } });
   const assessments = await tx.assessment.findMany({ where: { termId: report.termId, classId: { in: classIds } }, select: { id: true, classId: true, subjectId: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true } }, subject: { select: { id: true, name: true } } } });

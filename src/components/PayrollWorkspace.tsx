@@ -71,8 +71,9 @@ export default function PayrollWorkspace({ schoolName }: { schoolName: string })
       .filter((row) => row.label.trim() || row.value.trim())
       .map((row) => ({ label: row.label.trim() || "Deduction", type: row.type, value: Number(row.value) }))
       .filter((row) => row.value > 0);
-    if (parsedDeductions.some((row) => !Number.isFinite(row.value) || (row.type === "percent" && row.value > 100))) {
-      return setNotice("Check deduction values. Percentage deductions must be between 0 and 100.");
+    const percentTotal = parsedDeductions.filter((row) => row.type === "percent").reduce((sum, row) => sum + row.value, 0);
+    if (percentTotal > 100) {
+      return setNotice("Total percentage deductions cannot exceed 100%.");
     }
     void post({ action: "salaryStructure", staffId, grossSalary: Number(gross), deductions: parsedDeductions });
   };
@@ -82,7 +83,7 @@ export default function PayrollWorkspace({ schoolName }: { schoolName: string })
   if (!data) return <div className="finance-app"><div className="finance-loading">{notice || "Loading payroll…"}</div></div>;
 
   return <div className="finance-app">
-    <section className="finance-hero"><div><span className="finance-kicker">STAFF FINANCE</span><h1>Payroll & Salaries</h1><p>Set salary structures, record approved deductions, run monthly payroll, and keep payslips tied to the correct staff member.</p></div><div className="finance-hero-actions"><Link href="/school/fees">Finance overview</Link><Link href="/school/staff">Staff directory</Link></div></section>
+    <section className="finance-hero"><div><span className="finance-kicker">{schoolName ? `${schoolName.toUpperCase()} · ` : ""}STAFF FINANCE</span><h1>Payroll & Salaries</h1><p>Set salary structures, record approved deductions, run monthly payroll, and keep payslips tied to the correct staff member.</p></div><div className="finance-hero-actions"><Link href="/school/fees">Finance overview</Link><Link href="/school/staff">Staff directory</Link></div></section>
     {notice && <div className="finance-notice">{notice}</div>}
     <section className="finance-metrics"><div><span>Staff on payroll</span><strong>{data.structures.length}</strong><small>Salary structures</small></div><div><span>Gross monthly</span><strong>{money(salaryTotal)}</strong><small>Before deductions</small></div><div><span>Payroll runs</span><strong>{data.runs.length}</strong><small>Saved periods</small></div><div><span>Payslips</span><strong>{data.payslips.length}</strong><small>Generated records</small></div></section>
     {data.canManage ? <section className="finance-grid">

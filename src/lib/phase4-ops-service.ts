@@ -1,6 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
 import { Prisma } from "@prisma/client";
-import type { TenantDb } from "./db";
 import { db, withTenant } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { appendPlatformAudit, appendSchoolAudit } from "./audit";

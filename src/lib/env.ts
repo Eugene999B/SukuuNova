@@ -41,7 +41,13 @@ const optionalSchema = z.object({
 
 export function validateRuntimeEnv() {
   const optional = optionalSchema.parse(process.env);
-  if (process.env.NODE_ENV !== "production") return optional;
+  if (
+    process.env.NODE_ENV !== "production" ||
+    process.env.NEXT_PHASE === "phase-production-build" ||
+    process.env.npm_lifecycle_event === "build"
+  ) {
+    return optional;
+  }
 
   const required = productionSchema.safeParse(process.env);
   if (!required.success) {

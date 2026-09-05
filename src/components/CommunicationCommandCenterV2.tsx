@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 
 type Mode = "messages" | "broadcasts" | "events" | "settings";
 type Row = Record<string, unknown>;
@@ -16,7 +16,7 @@ function Panel({title,detail,children,action}:{title:string;detail?:string;child
 function Field({label,hint,children}:{label:string;hint?:string;children:ReactNode}){return <label className="grid gap-1.5"><span className="text-[10px] font-extrabold uppercase tracking-[.08em] text-slate-600">{label}</span>{children}{hint&&<span className="text-[10px] leading-4 text-slate-400">{hint}</span>}</label>}
 function Audience({selected,title,description,count,onClick}:{selected:boolean;title:string;description:string;count?:string|number;onClick:()=>void}){return <button type="button" onClick={onClick} className={`rounded-2xl border p-4 text-left transition ${selected?"border-emerald-600 bg-emerald-50 ring-2 ring-emerald-100":"border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white"}`}><div className="flex items-start justify-between gap-3"><div><strong className="block text-xs font-extrabold text-slate-900">{title}</strong><span className="mt-1 block text-[10px] leading-4 text-slate-500">{description}</span></div>{count!==undefined&&<span className="rounded-full bg-slate-900 px-2 py-1 text-[9px] font-black text-white">{count}</span>}</div><span className={`mt-3 inline-flex rounded-full px-2 py-1 text-[9px] font-black ${selected?"bg-emerald-600 text-white":"border border-slate-200 bg-white text-slate-500"}`}>{selected?"Selected":"Select audience"}</span></button>}
 
-export default function CommunicationCommandCenterV2({mode,schoolName}:{mode:Mode;schoolName:string}){
+export default function CommunicationCommandCenterV2({mode,schoolName:_schoolName}:{mode:Mode;schoolName?:string}){
  const [data,setData]=useState<Row>({}); const [busy,setBusy]=useState(false); const [status,setStatus]=useState(""); const [audience,setAudience]=useState("guardians"); const [channel,setChannel]=useState(mode==="messages"?"in_app":"sms"); const [delivery,setDelivery]=useState("now"); const [bodyText,setBodyText]=useState("");
  useEffect(()=>{void load()},[]);
  async function load(){const r=await fetch("/api/school/communications",{cache:"no-store"});const b=await r.json().catch(()=>({}));if(r.ok)setData(b)}

@@ -40,10 +40,6 @@ function parseCsv(text: string): string[][] {
   });
 }
 
-function csvEscape(value: string) {
-  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-}
-
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

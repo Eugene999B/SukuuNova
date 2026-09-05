@@ -4,6 +4,7 @@ import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
 import { AppError } from "./errors";
 import { requirePermission } from "./rbac";
+import { currentSchoolId } from "./tenant-context";
 import { calculateSubjectResult, validateAssessmentRules, type AssessmentRules } from "./assessment-engine";
 
 type PeriodConfig = { period:number; start:string; end:string };
@@ -34,10 +35,21 @@ function buildPeriods(day:DayConfig,config:TimetableConfig){
 }
 export function getDayPeriods(day:DayConfig,config:TimetableConfig){return buildPeriods(day,config);}
 function parse<T>(value:unknown,fallback:T):T{return value==null?fallback:value as T;}
-export async function getAcademicEngineConfig(tx:TenantDb){const row=await tx.$queryRawUnsafe<Array<{timetableConfig:Prisma.JsonValue|null;assessmentConfig:Prisma.JsonValue|null;reportCardConfig:Prisma.JsonValue|null}>>(`SELECT "timetableConfig","assessmentConfig","reportCardConfig" FROM "SchoolSettings" LIMIT 1`);const r=row[0];return{timetable:parse(r?.timetableConfig,DEFAULT_TIMETABLE),assessment:parse(r?.assessmentConfig,DEFAULT_ASSESSMENT),reportCard:parse(r?.reportCardConfig,DEFAULT_REPORT)};}
+export async function getAcademicEngineConfig(tx:TenantDb, schoolIdInput?: string){
+  const schoolId = schoolIdInput ?? currentSchoolId();
+  const r = schoolId ? await tx.schoolSettings.findUnique({
+    where: { schoolId },
+    select: { timetableConfig: true, assessmentConfig: true, reportCardConfig: true },
+  }) : null;
+  return {
+    timetable: parse(r?.timetableConfig, DEFAULT_TIMETABLE),
+    assessment: parse(r?.assessmentConfig, DEFAULT_ASSESSMENT),
+    reportCard: parse(r?.reportCardConfig, DEFAULT_REPORT),
+  };
+}
 export async function saveAcademicEngineConfig(tx:TenantDb,input:{schoolId:string;actorId:string;timetable?:TimetableConfig;assessment?:AssessmentConfig;reportCard?:ReportCardConfig}){
   await requirePermission(tx,input.actorId,"settings:manage_school");
-  const current=await getAcademicEngineConfig(tx);
+  const current=await getAcademicEngineConfig(tx, input.schoolId);
   const next={timetable:input.timetable??current.timetable,assessment:input.assessment??current.assessment,reportCard:input.reportCard??current.reportCard};
   validateAssessmentRules(next.assessment as AssessmentConfig);
   const timetable=next.timetable as TimetableConfig;
@@ -47,7 +59,20 @@ export async function saveAcademicEngineConfig(tx:TenantDb,input:{schoolId:strin
     for(const p of periods)if(asTimeMinutes(p.end)<=asTimeMinutes(p.start))throw new AppError(`Period ${p.period} has an invalid time range.`,400,"INVALID_PERIOD_TIME");
     for(let i=1;i<periods.length;i++)if(asTimeMinutes(periods[i].start)<asTimeMinutes(periods[i-1].end))throw new AppError(`${day.name} lesson time blocks overlap.`,400,"OVERLAPPING_PERIODS");
   }
-  await tx.$executeRawUnsafe(`UPDATE "SchoolSettings" SET "timetableConfig"=$1::jsonb,"assessmentConfig"=$2::jsonb,"reportCardConfig"=$3::jsonb WHERE "schoolId"=$4`,JSON.stringify(next.timetable),JSON.stringify(next.assessment),JSON.stringify(next.reportCard),input.schoolId);
+  await tx.schoolSettings.upsert({
+    where: { schoolId: input.schoolId },
+    update: {
+      timetableConfig: next.timetable as unknown as Prisma.InputJsonValue,
+      assessmentConfig: next.assessment as unknown as Prisma.InputJsonValue,
+      reportCardConfig: next.reportCard as unknown as Prisma.InputJsonValue,
+    },
+    create: {
+      schoolId: input.schoolId,
+      timetableConfig: next.timetable as unknown as Prisma.InputJsonValue,
+      assessmentConfig: next.assessment as unknown as Prisma.InputJsonValue,
+      reportCardConfig: next.reportCard as unknown as Prisma.InputJsonValue,
+    },
+  });
   await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:"academic.configuration_updated",entityType:"SchoolSettings",entityId:input.schoolId,after:next});
   return next;
 }

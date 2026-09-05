@@ -1,12 +1,11 @@
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { createId } from "@paralleldrive/cuid2";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
 import { db, withTenant } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { appendPlatformAudit, appendSchoolAudit } from "./audit";
 import { hasPermission, requirePermission } from "./rbac";
-import { requireSchoolFeatureInTransaction } from "./feature-flags";
 import { generateReportCard } from "./report-card-service";
 import { enqueueNotification } from "./message-outbox";
 import { onboardSchool } from "./onboarding-service";
@@ -57,4 +56,100 @@ export async function prepareEmergency(input:{schoolId:string;actorId:string;mes
 export async function confirmEmergency(input:{schoolId:string;actorId:string;confirmationToken:string;message:string}){verifyEmergencyToken(input.confirmationToken,input.schoolId,input.actorId);return withTenant(input.schoolId,async(tx)=>{await requirePermission(tx,input.actorId,"broadcast:emergency_send");const message=text(input.message,"message",500);const claimed=await tx.$queryRawUnsafe<Array<{id:string;recipientSnapshot:unknown}>>(`UPDATE "EmergencyBroadcast" SET "status"='CONFIRMED',"confirmedAt"=NOW(),"updatedAt"=NOW() WHERE "schoolId"=$1 AND "actorId"=$2 AND "confirmationTokenHash"=$3 AND "status"='PREVIEWED' AND "confirmationExpiresAt">NOW() RETURNING "id","recipientSnapshot"`,input.schoolId,input.actorId,emergencyTokenHash(input.confirmationToken));const broadcast=claimed[0];if(!broadcast)throw new AppError("Emergency confirmation was already used or has expired.",409,"CONFIRMATION_USED");const recipients=emergencyRecipients(broadcast.recipientSnapshot);let queued=0;for(const recipient of recipients){await enqueueNotification(tx,{schoolId:input.schoolId,recipientType:recipient.recipientType,recipientId:recipient.recipientId,recipientPhone:recipient.recipientPhone,body:message,templateKey:"emergency_broadcast",templateVariables:{"1":message.slice(0,180)},idempotencyKey:`${input.schoolId}:EMERGENCY_BROADCAST:${broadcast.id}:${recipient.recipientType}:${recipient.recipientId}`});queued++;}await tx.$executeRawUnsafe(`UPDATE "EmergencyBroadcast" SET "queuedAt"=NOW(),"status"=CASE WHEN "recipientCount"=0 THEN 'COMPLETED' ELSE 'QUEUED' END,"updatedAt"=NOW() WHERE "id"=$1 AND "schoolId"=$2`,broadcast.id,input.schoolId);await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:"emergency.broadcast_confirmed",entityType:"EmergencyBroadcast",entityId:broadcast.id,after:{queued}});return{confirmed:true,queued};});}
 export type ParentIntent="arrival"|"fee_balance"|"next_event"|"unsupported";
 export function classifyParentIntent(message:string):ParentIntent{const s=message.toLowerCase();if(/arriv|reached|at school|bus/.test(s))return"arrival";if(/fee|balance|owe|outstanding|invoice/.test(s))return"fee_balance";if(/holiday|next event|calendar|resumption|vacation/.test(s))return"next_event";return"unsupported";}
-export async function parentAssistant(input:{schoolId:string;phone:string;message:string;secret:string}){if(!process.env.WHATSAPP_WEBHOOK_SECRET||input.secret!==process.env.WHATSAPP_WEBHOOK_SECRET)throw new ForbiddenError("Invalid WhatsApp webhook authentication.");return withTenant(input.schoolId,async(tx)=>{const guardian=await tx.guardian.findFirst({where:{phone:input.phone},select:{id:true,userId:true}});if(!guardian)throw new ForbiddenError("This WhatsApp number is not linked to a guardian account.");if(!guardian.userId||!(await hasPermission(tx,guardian.userId,"parents:read_linked")))throw new ForbiddenError("This WhatsApp number is not authorized for parent assistant queries.");const intent=classifyParentIntent(input.message);if(intent==="unsupported")return{intent,reply:"I can help with your child's arrival status, fee balance, or the next school calendar event. Please ask one of those."};const children=await tx.studentGuardian.findMany({where:{guardianId:guardian.id},include:{student:{select:{id:true,name:true}}}});if(!children.length)return{intent,reply:"No students are currently linked to this guardian account."};if(intent==="arrival"){const replies=[];for(const child of children){const latest=await tx.attendanceEvent.findFirst({where:{studentId:child.studentId},orderBy:{timestamp:"desc"},select:{type:true}});replies.push(`${child.student.name}: ${latest?.type==="in"?"arrived":latest?.type==="out"?"checked out":"no arrival record"}.`);}return{intent,reply:replies.join(" ")};}if(intent==="fee_balance"){let total=0;for(const child of children){const invoices=await tx.invoice.findMany({where:{studentId:child.studentId},select:{totalAmount:true,payments:{select:{amount:true,reversals:{select:{amount:true}}}}}});for(const invoice of invoices){total+=Number(invoice.totalAmount);for(const p of invoice.payments){total-=Number(p.amount);for(const r of p.reversals)total+=Number(r.amount);}}}return{intent,reply:`Your current recorded fee balance is GHS ${Math.max(0,total).toFixed(2)}.`};}const wantsHoliday=/holiday|vacation/.test(input.message.toLowerCase());const event=await tx.calendarEvent.findFirst({where:wantsHoliday?{startDate:{gte:new Date()},type:"holiday"}:{startDate:{gte:new Date()}},orderBy:{startDate:"asc"},select:{name:true,startDate:true}});return{intent,reply:event?`Next calendar event: ${event.name} on ${event.startDate.toLocaleDateString("en-GH")}.`:"There is no upcoming calendar event recorded yet."};});}
+export async function parentAssistant(input: { schoolId: string; phone: string; message: string; secret: string }) {
+  if (!process.env.WHATSAPP_WEBHOOK_SECRET || input.secret !== process.env.WHATSAPP_WEBHOOK_SECRET) {
+    throw new ForbiddenError("Invalid WhatsApp webhook authentication.");
+  }
+  return withTenant(input.schoolId, async (tx) => {
+    const guardian = await tx.guardian.findFirst({
+      where: { schoolId: input.schoolId, phone: input.phone },
+      select: { id: true, userId: true },
+    });
+    if (!guardian) throw new ForbiddenError("This WhatsApp number is not linked to a guardian account.");
+    if (!guardian.userId || !(await hasPermission(tx, guardian.userId, "parents:read_linked"))) {
+      throw new ForbiddenError("This WhatsApp number is not authorized for parent assistant queries.");
+    }
+    const intent = classifyParentIntent(input.message);
+    if (intent === "unsupported") {
+      return {
+        intent,
+        reply: "I can help with your child's arrival status, fee balance, or the next school calendar event. Please ask one of those.",
+      };
+    }
+    const children = await tx.studentGuardian.findMany({
+      where: { schoolId: input.schoolId, guardianId: guardian.id },
+      include: { student: { select: { id: true, name: true } } },
+    });
+    if (!children.length) {
+      return { intent, reply: "No students are currently linked to this guardian account." };
+    }
+    if (intent === "arrival") {
+      const replies = [];
+      for (const child of children) {
+        const latest = await tx.attendanceEvent.findFirst({
+          where: { schoolId: input.schoolId, studentId: child.studentId },
+          orderBy: { timestamp: "desc" },
+          select: { type: true },
+        });
+        replies.push(
+          `${child.student.name}: ${
+            latest?.type === "in" ? "arrived" : latest?.type === "out" ? "checked out" : "no arrival record"
+          }.`
+        );
+      }
+      return { intent, reply: replies.join(" ") };
+    }
+    if (intent === "fee_balance") {
+      let totalBalance = new Prisma.Decimal(0);
+      for (const child of children) {
+        const invoices = await tx.invoice.findMany({
+          where: {
+            schoolId: input.schoolId,
+            studentId: child.studentId,
+            status: { in: ["unpaid", "partial"] },
+          },
+          select: {
+            totalAmount: true,
+            payments: {
+              select: {
+                amount: true,
+                reversals: { select: { amount: true } },
+              },
+            },
+          },
+        });
+        for (const invoice of invoices) {
+          let paid = new Prisma.Decimal(0);
+          for (const p of invoice.payments) {
+            paid = paid.plus(p.amount);
+            for (const r of p.reversals) {
+              paid = paid.minus(r.amount);
+            }
+          }
+          const remaining = invoice.totalAmount.minus(paid);
+          if (remaining.greaterThan(0)) {
+            totalBalance = totalBalance.plus(remaining);
+          }
+        }
+      }
+      return {
+        intent,
+        reply: `Your current recorded fee balance is GHS ${totalBalance.toFixed(2)}.`,
+      };
+    }
+    const wantsHoliday = /holiday|vacation/.test(input.message.toLowerCase());
+    const event = await tx.calendarEvent.findFirst({
+      where: wantsHoliday
+        ? { schoolId: input.schoolId, startDate: { gte: new Date() }, type: "holiday" }
+        : { schoolId: input.schoolId, startDate: { gte: new Date() } },
+      orderBy: { startDate: "asc" },
+      select: { name: true, startDate: true },
+    });
+    return {
+      intent,
+      reply: event
+        ? `Next calendar event: ${event.name} on ${event.startDate.toLocaleDateString("en-GH")}.`
+        : "There is no upcoming calendar event recorded yet.",
+    };
+  });
+}

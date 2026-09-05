@@ -14,7 +14,7 @@ function Card({title,detail,children,action}:{title:string;detail?:string;childr
 function Input({label,name,type="text",placeholder}:{label:string;name:string;type?:string;placeholder?:string}){return <label className="grid gap-1.5 text-[10px] font-bold text-slate-400"><span>{label}</span><input name={name} type={type} placeholder={placeholder} className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-3 text-xs text-white outline-none placeholder:text-slate-600 focus:border-emerald-300/40"/></label>}
 function Textarea({label,name,placeholder}:{label:string;name:string;placeholder?:string}){return <label className="grid gap-1.5 text-[10px] font-bold text-slate-400"><span>{label}</span><textarea name={name} rows={6} placeholder={placeholder} className="rounded-xl border border-white/10 bg-slate-950/60 px-3 py-3 text-xs text-white outline-none placeholder:text-slate-600 focus:border-emerald-300/40"/></label>}
 
-export default function CommunicationWorkspace({mode,schoolName,userName}:{mode:Mode;schoolName:string;userName:string}){
+export default function CommunicationWorkspace({mode,schoolName,userName:_userName}:{mode:Mode;schoolName:string;userName?:string}){
  const [data,setData]=useState<Row>({}); const [busy,setBusy]=useState(false); const [status,setStatus]=useState(""); const [audience,setAudience]=useState("guardians"); const [channel,setChannel]=useState(mode==="messages"?"in_app":"sms");
  useEffect(()=>{void load()},[]);
  async function load(){const r=await fetch("/api/school/communications",{cache:"no-store"}); const b=await r.json().catch(()=>({})); if(r.ok)setData(b);}
