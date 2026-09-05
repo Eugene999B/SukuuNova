@@ -11,6 +11,7 @@ import "./theme-runtime.css";
 import "./ui-trust.css";
 import "./theme-hardening.css";
 import "./global-theme.css";
+import "./mobile-shell-fixes.css";
 import "@/components/ui/skeleton.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 

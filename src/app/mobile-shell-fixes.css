@@ -1,0 +1,18 @@
+/* Mobile navigation interaction fixes.
+ * AppShell renders .is-drawer-open on the shell and .is-open-mobile on the drawer.
+ */
+@media (max-width: 768px) {
+  .app-shell.is-drawer-open .app-mobile-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .app-sidebar.is-open-mobile {
+    transform: translateX(0);
+    box-shadow: 0 0 50px rgba(0, 0, 0, 0.35);
+  }
+
+  .app-topbar-title {
+    min-width: 0;
+  }
+}
