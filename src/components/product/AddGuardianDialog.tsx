@@ -5,7 +5,7 @@ import { Dialog } from "@/components/ui/Dialog";
 
 type StudentOption = { id: string; name: string; admissionNo: string; className: string | null; guardianCount: number };
 
-const MAX_GUARDIANS_PER_STUDENT = 3;
+const MAX_GUARDIANS_PER_STUDENT = 2;
 
 export function AddGuardianDialog(props: {
   students: StudentOption[];
@@ -27,7 +27,7 @@ export function AddGuardianDialog(props: {
 
   const selected = props.students.find((s) => s.id === studentId) ?? null;
   const slotsLeft = selected ? Math.max(0, MAX_GUARDIANS_PER_STUDENT - selected.guardianCount) : null;
-  const complete = selected && slotsLeft === 0;
+  const complete = Boolean(selected && slotsLeft === 0);
 
   async function onSubmit(formData: FormData) {
     setError(null);
@@ -66,14 +66,14 @@ export function AddGuardianDialog(props: {
             {selected ? (
               <small>
                 {selected.name} · {selected.className ?? "Unassigned"} · {selected.guardianCount} linked · {slotsLeft} slot{slotsLeft === 1 ? "" : "s"} left
-                {complete ? " — complete. Backend still enforces portal limits; UI does not bypass them." : ""}
+                {complete ? " — complete. The server also enforces the two-account limit." : ""}
               </small>
             ) : null}
           </div>
           {complete ? (
             <div className="product-state" role="status">
               <h3>Guardian slots complete</h3>
-              <p>This learner already has {MAX_GUARDIANS_PER_STUDENT} linked guardians. The backend will reject further portal accounts; remove or replace a link instead.</p>
+              <p>This learner already has {MAX_GUARDIANS_PER_STUDENT} linked guardian portal accounts. Remove or replace an existing link before adding another.</p>
             </div>
           ) : (
             <>
