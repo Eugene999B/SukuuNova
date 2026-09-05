@@ -4,6 +4,7 @@ import type { TenantDb } from "@/lib/db";
 import { appendSchoolAudit } from "@/lib/audit";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import { hasPermission, requirePermission } from "@/lib/rbac";
+import { calculateSubjectResult } from "@/lib/assessment-engine";
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 
 type SubjectResult = { subject: string; ca: number | null; exam: number | null; total: number | null };
@@ -34,13 +35,18 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
   const caWeight = Number(settings.gradeCaWeight); const examWeight = Number(settings.gradeExamWeight);
   if (!Number.isFinite(caWeight) || caWeight < 0 || !Number.isFinite(examWeight) || examWeight < 0 || caWeight + examWeight <= 0) throw new AppError("The school's grading weights are invalid.", 409, "INVALID_GRADING_CONFIGURATION");
   const results: SubjectResult[] = [];
+  const rules = { categories: [{ name: "ca", weight: caWeight }, { name: "exam", weight: examWeight }], rounding: "nearest" as const, missingScorePolicy: "blank" as const, allowTeacherOverride: false };
   for (const [subject, rows] of grouped) {
-    const average = (type: string) => { const typed = rows.filter((row) => row.type === type && row.scores[0]); if (!typed.length) return null; return typed.reduce((sum, row) => sum + (Number(row.scores[0].value) / Number(row.maxScore)) * 100, 0) / typed.length; };
-    const ca = average("ca"); const exam = average("exam");
-    const parts = [ca == null ? null : { value: ca, weight: caWeight }, exam == null ? null : { value: exam, weight: examWeight }].filter((part): part is { value: number; weight: number } => part !== null && part.weight > 0);
-    const denominator = parts.reduce((sum, part) => sum + part.weight, 0);
-    const total = denominator > 0 ? Math.round((parts.reduce((sum, part) => sum + part.value * part.weight, 0) / denominator) * 100) / 100 : null;
-    results.push({ subject, ca, exam, total });
+    const result = calculateSubjectResult(
+      rows.map((row) => ({ id: row.id, name: row.name, type: row.type, maxScore: row.maxScore, weight: row.weight, score: row.scores[0]?.value ?? null })),
+      rules
+    );
+    const bucketAvg = (normalized: string): number | null => {
+      const parts = result.details.filter((d) => d.type === normalized && d.percentage != null).map((d) => d.percentage as number);
+      if (!parts.length) return null;
+      return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10;
+    };
+    results.push({ subject, ca: bucketAvg("classwork"), exam: bucketAvg("exam"), total: result.total });
   }
   const attendance = await tx.attendanceEvent.findMany({ where: { studentId, type: "in", attendanceDate: { gte: term.startDate, lte: term.endDate } }, select: { attendanceDate: true, isLate: true } });
   return { student, term, settings, school, template, results, attendance, caWeight, examWeight };

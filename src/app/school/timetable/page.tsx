@@ -7,7 +7,7 @@ import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
 import { dayBlocks } from "@/lib/timetable-engine-v2";
-import { createTimetableSlot, deleteTimetableSlot } from "@/lib/timetable-service";
+import { createTimetableSlot, deleteTimetableSlot, updateTimetableSlot } from "@/lib/timetable-service";
 import "./timetable.css";
 
 type Period = { period: number; start: string; end: string };
@@ -26,11 +26,8 @@ async function saveSlot(formData: FormData) {
   if (!classId || !subjectId || !teacherId || !Number.isInteger(dayOfWeek) || !Number.isInteger(period)) throw new Error("Choose a class, subject, teacher and lesson time.");
 
   await withTenant(session.schoolId, async (tx) => {
-    await requirePermission(tx, session.userId, "classes:manage");
     if (slotId) {
-      const existing = await tx.timetableSlot.findFirst({ where: { id: slotId, schoolId: session.schoolId }, select: { id: true } });
-      if (!existing) throw new Error("That timetable lesson could not be found.");
-      await tx.timetableSlot.update({ where: { id: slotId }, data: { classId, subjectId, teacherId, dayOfWeek, period } });
+      await updateTimetableSlot(tx, { schoolId: session.schoolId, actorId: session.userId, slotId, classId, subjectId, teacherId, dayOfWeek, period });
     } else {
       await createTimetableSlot(tx, { schoolId: session.schoolId, actorId: session.userId, classId, subjectId, teacherId, dayOfWeek, period });
     }

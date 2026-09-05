@@ -4,11 +4,22 @@ import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
 import { hasPermission } from "./rbac";
 
-async function assertTermOpen(tx: TenantDb, termId: string) {
-  const term = await tx.term.findFirst({ where: { id: termId }, select: { id: true, isLocked: true, name: true } });
+async function assertTermOpen(tx: TenantDb, schoolId: string, termId: string) {
+  const term = await tx.term.findFirst({ where: { id: termId, schoolId }, select: { id: true, isLocked: true, name: true } });
   if (!term) throw new AppError("The selected term does not belong to this school.", 400, "INVALID_TERM");
-  if (term.isLocked) throw new AppError(`Term \"${term.name}\" is locked. Academic records can no longer be changed.`, 409, "TERM_LOCKED");
+  if (term.isLocked) throw new AppError(`Term "${term.name}" is locked. Academic records can no longer be changed.`, 409, "TERM_LOCKED");
   return term;
+}
+
+async function assertScoreMutable(tx: TenantDb, schoolId: string, studentId: string, termId: string) {
+  const report = await tx.reportCard.findFirst({ where: { schoolId, studentId, termId }, select: { id: true, status: true } });
+  if (report && (report.status === "approved" || report.status === "sent")) {
+    throw new AppError("This report card is finalized. Scores cannot be changed without reopening it.", 409, "REPORT_FINALIZED");
+  }
+}
+
+function canTeach(assignment: { teacherId: string } | null, classTeacher: { id: string } | null): boolean {
+  return !!assignment || !!classTeacher;
 }
 
 export async function createAssessment(
@@ -25,18 +36,21 @@ export async function createAssessment(
     maxScore: number;
   }
 ) {
-  await assertTermOpen(tx, input.termId);
+  await assertTermOpen(tx, input.schoolId, input.termId);
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   if (!canWriteAll) {
     if (!(await hasPermission(tx, input.actorId, "scores:write:assigned"))) {
       throw new ForbiddenError("Assessment creation is not permitted.");
     }
-    const assignment = await tx.classSubjectTeacher.findFirst({
-      where: { classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId },
-      select: { teacherId: true }
-    });
-    if (!assignment) {
-      throw new ForbiddenError("Teachers may create assessments only for subjects they are assigned to teach.");
+    const [assignment, classTeacher] = await Promise.all([
+      tx.classSubjectTeacher.findFirst({
+        where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId },
+        select: { teacherId: true }
+      }),
+      tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId, classTeacherId: input.actorId }, select: { id: true } })
+    ]);
+    if (!canTeach(assignment, classTeacher)) {
+      throw new ForbiddenError("Teachers may create assessments only for classes and subjects they teach (including form classes).");
     }
   }
 
@@ -45,9 +59,9 @@ export async function createAssessment(
     throw new AppError("Assessment weight and maximum score must be valid positive values.", 400, "INVALID_ASSESSMENT");
   }
   const [term, schoolClass, subject] = await Promise.all([
-    tx.term.findFirst({ where: { id: input.termId }, select: { id: true } }),
-    tx.class.findFirst({ where: { id: input.classId }, select: { id: true, name: true } }),
-    tx.subject.findFirst({ where: { id: input.subjectId }, select: { id: true, name: true } })
+    tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true } }),
+    tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId }, select: { id: true, name: true } }),
+    tx.subject.findFirst({ where: { id: input.subjectId, schoolId: input.schoolId }, select: { id: true, name: true } })
   ]);
   if (!term || !schoolClass || !subject) throw new AppError("The selected term, class or subject does not belong to this school.", 400, "INVALID_CONTEXT");
 
@@ -77,9 +91,10 @@ export async function enterScore(
     value: number;
   }
 ) {
-  const assessment = await tx.assessment.findUnique({ where: { id: input.assessmentId }, select: { id: true, classId: true, subjectId: true, termId: true, maxScore: true } });
-  if (!assessment) throw new AppError("Assessment not found.", 404, "NOT_FOUND");
-  await assertTermOpen(tx, assessment.termId);
+  const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true, maxScore: true } });
+  if (!assessment) throw new AppError("Assessment not found in this school.", 404, "NOT_FOUND");
+  await assertTermOpen(tx, input.schoolId, assessment.termId);
+  await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
 
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
@@ -90,7 +105,7 @@ export async function enterScore(
     if (!assignment && !classTeacher) throw new ForbiddenError("Teachers may enter scores only for assigned classes and subjects.");
   }
 
-  const student = await tx.student.findUnique({ where: { id: input.studentId }, select: { id: true, classId: true } });
+  const student = await tx.student.findFirst({ where: { id: input.studentId, schoolId: input.schoolId }, select: { id: true, classId: true } });
   if (!student || student.classId !== assessment.classId) throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
   if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
 

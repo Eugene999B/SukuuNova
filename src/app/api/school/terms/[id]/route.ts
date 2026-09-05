@@ -33,6 +33,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (before.isLocked && !nextLocked) {
         const canReopen = await requirePermission(tx, session.userId, "academic:manage").then(() => true).catch(() => false);
         if (!canReopen) throw new ForbiddenError("Only an academic administrator can reopen a locked term.");
+        const finalized = await tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: { in: ["approved", "sent"] } } });
+        if (finalized > 0) throw new AppError(`This term has ${finalized} finalized report card(s). Reopen is blocked to protect issued results.`, 409, "TERM_HAS_FINALIZED_REPORTS");
       }
       if (before.isLocked && (input.name !== before.name || input.startDate.getTime() !== before.startDate.getTime() || input.endDate.getTime() !== before.endDate.getTime())) {
         throw new AppError("A locked term cannot be edited. Reopen it first.", 409, "TERM_LOCKED");
