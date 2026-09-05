@@ -30,13 +30,19 @@ export default async function StudentDocumentsPage({ params }: { params: Promise
         <section className="grid gap-4 md:grid-cols-2">
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-black text-slate-900">Identity card</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-500">Open the school identity-card workspace to search, select and generate the student's current signed ID card.</p>
-            <Link className="mt-4 inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white" href="/school/id-cards">Open ID cards</Link>
+            <p className="mt-1 text-sm leading-6 text-slate-500">Generate this learner's current signed ID card directly, or open the full identity-card workspace for bulk operations.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link className="inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white" href={`/school/students/${data.id}/id-card`}>Student ID card</Link>
+              <Link className="inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700" href="/school/id-cards">Full workspace</Link>
+            </div>
           </article>
           <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-black text-slate-900">Reports & exports</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-500">Use the export centre for academic results, attendance, fees and official school-ready print outputs.</p>
-            <Link className="mt-4 inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700" href="/school/downloads">Open exports</Link>
+            <p className="mt-1 text-sm leading-6 text-slate-500">Use the export centre for school-wide datasets and official print outputs. Individual report-card PDFs are generated from the academic report workflow.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link className="inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700" href="/school/downloads">Open exports</Link>
+              <Link className="inline-flex rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-bold text-slate-700" href="/school/report-cards">Report cards</Link>
+            </div>
           </article>
         </section>
       </main>
