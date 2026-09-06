@@ -6,29 +6,24 @@
 
 html, body { min-height: 100%; background: var(--ui-bg) !important; color: var(--ui-text) !important; }
 body { font-family: var(--sn-font-family, Inter, ui-sans-serif, system-ui, sans-serif); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-
 :where(.app-main, .app-content, .page-shell, .page-content, .module-workspace, .dashboard-shell) { background: var(--ui-bg) !important; color: var(--ui-text) !important; }
 :where(.app-sidebar, .app-topbar, .topbar) { background: var(--ui-surface) !important; color: var(--ui-text) !important; border-color: var(--ui-border) !important; }
 :where(.app-card, .module-card, .module-metrics article, .sn-data-card, .sn-list-card, .sn-action-card, .sn-empty-state, .card, .panel) { background: var(--ui-surface) !important; color: var(--ui-text) !important; border-color: var(--ui-border) !important; box-shadow: var(--ui-shadow-sm) !important; }
 :where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(h1, h2, h3, h4, h5, h6, strong, b) { color: var(--ui-text) !important; }
 :where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(p, label, dt, dd) { color: var(--ui-text-secondary) !important; }
 :where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(small, .muted, .text-muted, [data-muted="true"]) { color: var(--ui-text-muted) !important; }
-
 :where(.app-brand, .app-topbar h1, .app-school-chip b, .app-user-mini b) { color: var(--ui-text) !important; }
 :where(.app-nav-item, .topnav a, .top-link) { color: var(--ui-text-secondary) !important; }
 :where(.app-nav-item:hover, .topnav a:hover, .top-link:hover) { color: var(--ui-text) !important; background: var(--ui-surface-soft) !important; }
 :where(.app-nav-item.is-active) { color: var(--ui-primary) !important; background: var(--ui-primary-soft) !important; border-color: var(--ui-primary-border) !important; box-shadow: inset 3px 0 0 var(--ui-primary) !important; }
-
 :where(input, textarea, select) { background: var(--ui-surface) !important; color: var(--ui-text) !important; caret-color: var(--ui-text) !important; border: 1px solid var(--ui-border-strong) !important; }
 :where(input, textarea, select)::placeholder { color: var(--ui-text-muted) !important; opacity: 1 !important; }
 :where(input, textarea, select):disabled { background: var(--ui-surface-soft) !important; color: var(--ui-text-disabled) !important; }
 :where(input, textarea, select):focus { border-color: var(--ui-primary) !important; box-shadow: var(--ui-focus) !important; }
 :where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--ui-primary); }
-
-:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]) { background: var(--ui-primary) !important; color: #ffffff !important; border-color: var(--ui-primary) !important; box-shadow: none !important; }
-:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]):hover { background: var(--ui-primary-hover) !important; color: #ffffff !important; border-color: var(--ui-primary-hover) !important; }
+:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]) { background: var(--ui-primary) !important; color: var(--color-text-on-brand) !important; border-color: var(--ui-primary) !important; box-shadow: none !important; }
+:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]):hover { background: var(--ui-primary-hover) !important; color: var(--color-text-on-brand) !important; border-color: var(--ui-primary-hover) !important; }
 :where(.module-secondary-button, .module-action-secondary, .secondary-cta, .btn-secondary, .button-secondary, button[data-variant="secondary"]) { background: var(--ui-surface) !important; color: var(--ui-text) !important; border: 1px solid var(--ui-border) !important; }
-
 :where(.module-table-wrap, .data-table, .table-wrap) { background: var(--ui-surface) !important; border-color: var(--ui-border) !important; }
 :where(th) { color: var(--ui-text-secondary) !important; background: var(--ui-surface-soft) !important; border-color: var(--ui-border) !important; }
 :where(td) { color: var(--ui-text-secondary) !important; border-color: var(--ui-border) !important; }
@@ -49,17 +44,10 @@ body { font-family: var(--sn-font-family, Inter, ui-sans-serif, system-ui, sans-
 :root[data-theme="dark"] :where(.divide-slate-200, .divide-gray-200, .divide-zinc-200) > :not([hidden]) ~ :not([hidden]) { border-color: var(--ui-border) !important; }
 :root[data-theme="dark"] :where(.placeholder-slate-500, .placeholder-gray-500, .placeholder-zinc-500)::placeholder { color: var(--ui-text-muted) !important; }
 :root[data-theme="dark"] :where(.ring-sky-100, .ring-blue-100, .ring-indigo-100, .ring-emerald-100) { --tw-ring-color: var(--ui-border) !important; }
-
-/* Never allow dark-mode form values to render as unreadable blue/black text. */
-:root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]),
-:root[data-theme="dark"] textarea,
-:root[data-theme="dark"] select,
-:root[data-theme="dark"] option { color: var(--ui-text) !important; background-color: var(--ui-surface) !important; -webkit-text-fill-color: var(--ui-text) !important; }
-
+:root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]), :root[data-theme="dark"] textarea, :root[data-theme="dark"] select, :root[data-theme="dark"] option { color: var(--ui-text) !important; background-color: var(--ui-surface) !important; -webkit-text-fill-color: var(--ui-text) !important; }
 :where(.status-success, [data-status="success"], .is-success) { color: var(--ui-success) !important; background: var(--ui-success-soft) !important; }
 :where(.status-warning, [data-status="warning"], .is-warning) { color: var(--ui-warning) !important; background: var(--ui-warning-soft) !important; }
 :where(.status-danger, [data-status="danger"], .is-danger) { color: var(--ui-danger) !important; background: var(--ui-danger-soft) !important; }
 :where(.status-info, [data-status="info"], .is-info) { color: var(--ui-info) !important; background: var(--ui-info-soft) !important; }
-
 :where(button, a, input, textarea, select, summary):focus-visible { outline: 0 !important; box-shadow: var(--ui-focus) !important; }
 :root[data-accent] { --sn-primary: var(--ui-primary); --sn-primary-deep: var(--ui-primary-hover); --sn-primary-soft: var(--ui-primary-soft); --sn-accent: var(--ui-primary); --sn-school-accent: var(--ui-primary); --sn-teacher-accent: var(--ui-primary); --sn-guardian-accent: var(--ui-primary); --sn-platform-accent: var(--ui-primary); }
