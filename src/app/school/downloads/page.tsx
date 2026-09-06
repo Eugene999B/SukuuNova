@@ -18,7 +18,7 @@ export default async function DownloadsPage() {
     <AppShell
       universe="school"
       title="Downloads & Exports"
-      subtitle="Create clean, school-ready copies of the information you are authorised to access."
+      subtitle="Downloads."
       active="Reports"
       schoolName={school.name}
       schoolCode={school.uniqueCode}

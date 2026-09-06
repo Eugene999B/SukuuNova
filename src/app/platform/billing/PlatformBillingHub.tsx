@@ -36,7 +36,7 @@ export default function PlatformBillingHub({ schools }: { schools: School[] }) {
   const close = () => setOpen(null);
   return <div className="platform-billing-hub">
     <section className="platform-page-header platform-billing-hero">
-      <div><span className="platform-eyebrow">Commercial operations</span><h2>What do you need to do?</h2><p>Billing is split into six simple workflows. Open only the task you need instead of navigating through one long configuration page.</p></div>
+      <div><span className="platform-eyebrow">Commercial operations</span><h2>What do you need to do?</h2></div>
       <div className="platform-header-actions"><span className="app-pill"><LayoutList size={14}/> 6 guided workflows</span></div>
     </section>
     <section className="platform-workflow-grid" aria-label="Billing workflows">
@@ -54,6 +54,6 @@ export default function PlatformBillingHub({ schools }: { schools: School[] }) {
     <PlatformWorkflowDialog open={open === "inventory"} onClose={close} eyebrow={active?.eyebrow} title="Messaging inventory" description="Record provider-backed SMS/WhatsApp purchases before allocating credits to schools."><PlatformMessagingInventoryStudio /></PlatformWorkflowDialog>
     <PlatformWorkflowDialog open={open === "provider"} onClose={close} eyebrow={active?.eyebrow} title="Provider readiness" description="Verify delivery configuration while keeping credentials server-side."><PlatformMessagingProviderReadiness /></PlatformWorkflowDialog>
     <PlatformWorkflowDialog open={open === "ledger"} onClose={close} eyebrow={active?.eyebrow} title="Invoices & collections" description="Search the commercial network, inspect invoice balances and reconcile payments."><BillingConsole /></PlatformWorkflowDialog>
-    <section className="app-card app-panel platform-billing-note"><WalletCards size={17}/><div><strong>Keep these two businesses separate</strong><span>School subscription billing pays for the SukuuNova platform. SMS/WhatsApp credits are prepaid communication capacity purchased from providers and resold to schools.</span></div><MessageSquare size={17}/></section>
+    <section className="app-card app-panel platform-billing-note"><WalletCards size={17}/><div><strong>Keep these two businesses separate</strong></div><MessageSquare size={17}/></section>
   </div>;
 }

@@ -10,7 +10,7 @@ export default async function PlansPage() {
     <AppShell
       universe="platform"
       title="Plans & Entitlements"
-      subtitle="Design subscription packaging, review feature access, and assign the right operating capability to each school."
+      subtitle="Plans and entitlements."
       active="Plans & Entitlements"
       userName={session.name}
       role={session.role}

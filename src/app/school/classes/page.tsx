@@ -38,7 +38,7 @@ export default async function ClassesPage() {
   const classRows = workspace.classes.map((item) => ({ id: item.id, name: item.name, level: item.level, teacher: item.classTeacher, students: item._count.students, subjects: item._count.subjectAssignments, timetable: item._count.timetableSlots }));
   const teacherRows = workspace.teachers.map((item) => ({ id: item.id, name: item.name, currentClass: item.classTeacherFor[0]?.name ?? null }));
   const houseRows = workspace.houses.map((item) => ({ id: item.id, name: item.name, code: item.code, color: item.color, description: item.description, active: item.isActive, students: item.studentCount }));
-  return <AppShell universe="school" title="Classes & Houses" subtitle="Build the academic structure and manage the cross-school house community from one workspace." active="Classes & Houses" schoolName={workspace.school?.name ?? "School Workspace"} schoolCode={workspace.school?.uniqueCode ?? ""} userName={session.name}>
+  return <AppShell universe="school" title="Classes & Houses" subtitle="Classes and houses." active="Classes & Houses" schoolName={workspace.school?.name ?? "School Workspace"} schoolCode={workspace.school?.uniqueCode ?? ""} userName={session.name}>
     <ClassesHousesWorkspace classes={classRows} teachers={teacherRows} houses={houseRows} learners={workspace.learners} schoolName={workspace.school?.name ?? "School Workspace"} />
   </AppShell>;
 }

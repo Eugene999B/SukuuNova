@@ -38,7 +38,7 @@ export default function AnnouncementComposer({ roles, users }: { roles: Role[]; 
   return (
     <section className="module-card">
       <div className="module-section-title">
-        <div><span>Internal communications</span><h3>Publish an announcement</h3><p>Deliver inside SukuuNova first; reserve SMS and WhatsApp for channels that actually need them.</p></div>
+        <div><span>Internal communications</span><h3>Publish an announcement</h3></div>
         <span className="app-pill">In-app delivery</span>
       </div>
       <div className="module-compose-preview" style={{ display: "grid", gap: 10, marginTop: 16 }}>

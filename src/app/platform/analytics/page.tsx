@@ -10,7 +10,7 @@ export default async function AnalyticsPage() {
     <AppShell
       universe="platform"
       title="Network Analytics"
-      subtitle="Compare operational health, adoption, attendance and commercial signals across the SukuuNova network."
+      subtitle="Network analytics."
       active="Network Analytics"
       userName={session.name}
       role={session.role}

@@ -13,7 +13,7 @@ export default async function SettingsPage() {
       universe="platform"
       active="Platform Settings"
       title="Platform Settings"
-      subtitle="Configure real network defaults, security policy, tenant lifecycle, and messaging rules, while keeping public presence and governed workflows accessible."
+      subtitle="Network settings."
       userName={session.name}
       role={session.role}
     >

@@ -10,7 +10,7 @@ export default async function HealthPage() {
     <AppShell
       universe="platform"
       title="System Health"
-      subtitle="Monitor platform responsiveness and understand exactly what a lightweight health check can and cannot prove."
+      subtitle="System health."
       active="System Health"
       userName={session.name}
       role={session.role}

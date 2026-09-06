@@ -28,7 +28,7 @@ export default async function StaffAttendancePage({ searchParams }: { searchPara
     return { school, ...dashboard };
   });
 
-  return <AppShell universe="school" title="Staff Attendance" subtitle="Review staff presence, punctuality and attendance trends without mixing them into student class registers." active="Staff Attendance" userName={session.name} schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""}>
+  return <AppShell universe="school" title="Staff Attendance" subtitle="Staff attendance." active="Staff Attendance" userName={session.name} schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""}>
     <div className="module-workspace">
       <section className="module-card">
         <form style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 }}>
@@ -47,7 +47,7 @@ export default async function StaffAttendancePage({ searchParams }: { searchPara
       </section>
 
       <section className="module-card">
-        <div className="module-section-title"><div><span>{start} → {end}</span><h3>Daily staff coverage</h3><p>Use the trend to identify punctuality gaps and follow up on unexplained absences.</p></div><Link className="button secondary" href="/school/attendance">Student attendance</Link></div>
+        <div className="module-section-title"><div><span>{start} → {end}</span><h3>Daily staff coverage</h3></div><Link className="button secondary" href="/school/attendance">Student attendance</Link></div>
         <div className="module-table-wrap"><table><thead><tr><th>Date</th><th>Present</th><th>Late</th><th>Absent</th><th>Coverage</th></tr></thead><tbody>{data.trends.map(row => { const expected = row.present + row.absent; const coverage = expected ? Math.round((row.present / expected) * 100) : 100; return <tr key={row.date}><td>{row.date}</td><td>{row.present}</td><td>{row.late}</td><td>{row.absent}</td><td>{coverage}%</td></tr>; })}{!data.trends.length ? <tr><td colSpan={5}>No staff attendance records for this range.</td></tr> : null}</tbody></table></div>
       </section>
     </div>

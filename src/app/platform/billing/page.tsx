@@ -12,7 +12,7 @@ export default async function BillingPage() {
   const scope = await getPlatformSchoolScope(session);
   const overview = scope === null ? await getPlatformOverview() : await getScopedPlatformOverview(session);
   const schools = overview.schools.map((school) => ({ id: String(school.id), name: String(school.name), uniqueCode: String(school.uniqueCode) }));
-  return <AppShell universe="platform" title="Platform Billing" subtitle="A guided commercial workspace for school subscriptions, invoices, collections and prepaid communications capacity." active="Platform Billing" userName={session.name} role={session.role}>
+  return <AppShell universe="platform" title="Platform Billing" subtitle="Subscriptions and invoices." active="Platform Billing" userName={session.name} role={session.role}>
     <PlatformBillingHub schools={schools} />
   </AppShell>;
 }

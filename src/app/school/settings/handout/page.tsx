@@ -102,7 +102,7 @@ export default async function SettingsHandoutPage() {
     <AppShell
       universe="school"
       title="SukuuNova Handout"
-      subtitle="A printable guide to your system, ready to share with your staff."
+      subtitle="Staff guide."
       active="School Settings"
       schoolName={school.name}
       schoolCode={school.uniqueCode}

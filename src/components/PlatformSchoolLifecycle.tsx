@@ -33,7 +33,7 @@ export default function PlatformSchoolLifecycle({ schoolId, status }: { schoolId
   const normal = String(status).toLowerCase() === "active";
 
   return <section className="app-card app-panel lifecycle-command-bar">
-    <div className="lifecycle-command-copy"><span className="app-eyebrow">CONTROL & SAFETY</span><h2>Manage school access</h2><p>Routine work is separate from lifecycle actions. These controls affect tenant availability and preserve operational history.</p></div>
+    <div className="lifecycle-command-copy"><span className="app-eyebrow">CONTROL & SAFETY</span><h2>Manage school access</h2></div>
     <div className="lifecycle-status"><span className={`platform-status ${normal ? "platform-status-healthy" : "platform-status-critical"}`}>{status}</span><small>Current state</small></div>
     <div className="lifecycle-actions">
       {normal ? <><button type="button" onClick={() => void run("lock")} disabled={busy}><LockKeyhole size={15}/><strong>Lock access</strong><span>Temporary sign-in freeze</span></button><button type="button" onClick={() => void run("suspend")} disabled={busy}><ShieldAlert size={15}/><strong>Suspend</strong><span>Stop school operations</span></button></> : <button type="button" onClick={() => void run("reactivate")} disabled={busy}><Play size={15}/><strong>Reactivate</strong><span>Restore school access</span></button>}

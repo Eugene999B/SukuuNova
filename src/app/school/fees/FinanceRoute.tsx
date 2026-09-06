@@ -11,5 +11,5 @@ export default async function FinanceRoute({ mode }: { mode: "overview"|"fees"|"
   const school = await withTenant(session.schoolId, tx => tx.school.findUnique({ where: { id: session.schoolId }, select: { name:true, uniqueCode:true } }));
   if (!school) throw new Error("School not found.");
   const title = mode === "fees" ? "School Fees" : mode === "invoices" ? "Invoices" : mode === "payments" ? "Payments" : mode === "arrears" ? "Arrears & Balances" : mode === "reports" ? "Finance Reports" : mode === "payroll" ? "Payroll" : "Finance";
-  return <AppShell universe="school" title={title} subtitle="Connected billing, collections, balances and payroll." active={title} schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><FinanceEvidenceDock /><FinanceWorkspace mode={mode} schoolName={school.name} /></AppShell>;
+  return <AppShell universe="school" title={title} subtitle="Fees and payroll." active={title} schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><FinanceEvidenceDock /><FinanceWorkspace mode={mode} schoolName={school.name} /></AppShell>;
 }

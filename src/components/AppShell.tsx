@@ -80,13 +80,12 @@ type Group = {
 const schoolGroups: Group[] = [
   { label: "Home", items: [
     { icon: LayoutDashboard, label: "Home", href: "/dashboard", primary: true },
-    { icon: Search, label: "Search", href: "/school/search" },
   ] },
   { label: "People", items: [
     { icon: UsersRound, label: "Students", href: "/school/students", primary: true },
     { icon: UsersRound, label: "Guardians", href: "/school/guardians" },
     { icon: UserCog, label: "Staff & Teachers", href: "/school/staff", primary: true },
-    { icon: Building2, label: "Classes & Houses", href: "/school/classes", primary: true },
+    { icon: Building2, label: "Classes & Houses", href: "/school/classes" },
     { icon: MessageSquarePlus, label: "Admissions & Enrolment", href: "/school/admissions/enquiries" },
   ] },
   { label: "Academics", items: [
@@ -101,8 +100,8 @@ const schoolGroups: Group[] = [
     { icon: CalendarDays, label: "Terms & Calendar", href: "/school/terms" },
   ] },
   { label: "Attendance", items: [
-    { icon: CircleCheckBig, label: "Student Attendance", href: "/school/attendance", primary: true },
-    { icon: Activity, label: "Staff Attendance", href: "/school/staff-attendance" },
+    { icon: CircleCheckBig, label: "Student Attendance", href: "/school/attendance" },
+    { icon: Activity, label: "Staff Attendance", href: "/school/attendance/staff" },
     { icon: TriangleAlert, label: "Late / Absence", href: "/school/attendance/exceptions" },
     { icon: BellRing, label: "Guardian Alerts", href: "/school/communications/alerts" },
   ] },
@@ -166,10 +165,10 @@ const guardianGroups: Group[] = [
   { label: "Family", items: [
     { icon: LayoutDashboard, label: "Overview", href: "/guardian", primary: true },
     { icon: UsersRound, label: "My Children", href: "/guardian/children", primary: true },
-    { icon: CircleCheckBig, label: "Attendance", href: "/guardian/attendance", primary: true },
-    { icon: GraduationCap, label: "Academics", href: "/guardian/academics", primary: true },
-    { icon: WalletCards, label: "Fees & Receipts", href: "/guardian/fees", primary: true },
-    { icon: Mail, label: "Messages", href: "/guardian/messages", primary: true },
+    { icon: CircleCheckBig, label: "Attendance", href: "/guardian/attendance" },
+    { icon: GraduationCap, label: "Academics", href: "/guardian/academics" },
+    { icon: WalletCards, label: "Fees & Receipts", href: "/guardian/fees" },
+    { icon: Mail, label: "Messages", href: "/guardian/messages" },
   ] },
 ];
 

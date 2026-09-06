@@ -73,12 +73,12 @@ export default async function AnalyticsPage() {
   const recordedPct = data.activeStudents ? Math.round((data.attendanceRecorded / data.activeStudents) * 100) : 0;
   const presentPct = data.attendanceRecorded ? Math.round(((data.attendance.present + data.attendance.late + data.attendance.excused) / data.attendanceRecorded) * 100) : 0;
 
-  return <AppShell universe="school" title="School Analytics" subtitle="Real operational intelligence from students, attendance, report cards, finance and communications." active="School Analytics" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+  return <AppShell universe="school" title="School Analytics" subtitle="Analytics." active="School Analytics" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
     <div className="reports-light space-y-5">
       <section className="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,.16)]">
         <span className="text-[9px] font-black uppercase tracking-[.16em] text-emerald-300">Executive intelligence</span>
         <div className="mt-2 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-          <div><h2 className="text-2xl font-black tracking-tight">{data.term?.name ?? "Current school data"}</h2><p className="mt-2 max-w-3xl text-xs leading-6 text-slate-300">All figures below are calculated from tenant-scoped records. Missing work is shown as missing rather than presented as completed.</p></div>
+          <div><h2 className="text-2xl font-black tracking-tight">{data.term?.name ?? "Current school data"}</h2></div>
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3"><span className="block text-[9px] font-black uppercase tracking-[.12em] text-slate-400">School timezone</span><strong className="mt-1 block text-xs text-white">{data.timezone}</strong></div>
         </div>
       </section>

@@ -31,5 +31,5 @@ export default async function PayslipPrintPage({ params }: { params: Promise<{ i
   }).catch(() => null);
 
   if (!data) notFound();
-  return <AppShell universe="school" title="Payslip Print Studio" subtitle="Preview and print a school-branded payslip without changing payroll data." active="Payroll" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}><PayslipPrintStudio data={data} /></AppShell>;
+  return <AppShell universe="school" title="Payslip Print Studio" subtitle="Payslip." active="Payroll" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}><PayslipPrintStudio data={data} /></AppShell>;
 }

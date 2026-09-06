@@ -10,7 +10,7 @@ export default async function AuditPage() {
     <AppShell
       universe="platform"
       title="Audit Log"
-      subtitle="Investigate platform actions with searchable operator, school, target and timestamp context."
+      subtitle="Audit trail."
       active="Audit Log"
       userName={session.name}
       role={session.role}

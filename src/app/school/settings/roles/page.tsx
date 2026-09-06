@@ -34,7 +34,7 @@ export default async function RolesPage() {
     <AppShell
       universe="school"
       title="Roles & Permissions"
-      subtitle="Review the real school roles and permission assignments. Account-level access is managed separately under Sub-accounts & Access."
+      subtitle="Roles."
       active="Roles & Permissions"
       schoolName={data.school.name}
       schoolCode={data.school.uniqueCode}
@@ -46,9 +46,6 @@ export default async function RolesPage() {
           <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 className="text-2xl font-black tracking-tight">Real role inventory</h2>
-              <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-300">
-                These counts come directly from this school&apos;s tenant-scoped role and permission records. No role is reported as configured unless the database contains its assignments.
-              </p>
             </div>
             <Link href="/school/settings/access" className="rounded-xl bg-white px-4 py-2.5 text-[10px] font-black text-slate-950 hover:bg-slate-100">
               Open Sub-accounts & Access
@@ -125,9 +122,6 @@ export default async function RolesPage() {
 
         <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
           <h3 className="text-sm font-black text-emerald-950">How access is changed</h3>
-          <p className="mt-1 text-[10px] leading-5 text-emerald-900">
-            Role membership and delegated user access are controlled by the existing school access workflow. This page is intentionally an inventory view so it never presents unsaved local checkboxes as if they changed production permissions.
-          </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link href="/school/settings/access" className="rounded-xl bg-slate-950 px-4 py-2.5 text-[10px] font-black text-white hover:bg-slate-800">Manage users & access</Link>
             <Link href="/school/staff" className="rounded-xl border border-emerald-300 bg-white px-4 py-2.5 text-[10px] font-black text-emerald-900 hover:bg-emerald-100">Open staff directory</Link>

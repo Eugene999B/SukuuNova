@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { HeartHandshake, Mail, Phone } from "lucide-react";
+import { Mail, Phone } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -131,9 +131,6 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
               { label: "Primary links", value: String(g.students.filter((s) => s.isPrimary).length) },
             ]}
           />
-          <p style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
-            <HeartHandshake size={15} aria-hidden="true" /> Relationships are explicit — a guardian with no linked learner cannot receive child-scoped messages.
-          </p>
         </ProductSection>
       </div>
     </AppShell>

@@ -78,7 +78,7 @@ export default function StaffQrScanner() {
       <div className="border-b border-slate-200 p-6 sm:p-8">
         <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Staff attendance</span>
         <h1 className="mt-2 text-3xl font-semibold text-slate-900">School Check-In</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">Use your logged-in account to scan the school's live attendance code. SukuuNova verifies the school challenge and records the time from the server.</p>
+        
       </div>
       <div className="space-y-5 p-5 sm:p-8">
         <div className="overflow-hidden rounded-2xl bg-slate-950">

@@ -118,7 +118,7 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
 
   if (!data.term) {
     return (
-      <AppShell universe="school" title="Report Cards" subtitle="Prepare, review, approve and release official student reports in one calm workspace." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+      <AppShell universe="school" title="Report Cards" subtitle="Report cards." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
         <main className="report-cards-page">
           <style>{REPORT_CARDS_STYLES}</style>
           <section className="report-empty-state">
@@ -145,7 +145,7 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
   const ready = percent(released, learnerCount);
 
   return (
-    <AppShell universe="school" title="Report Cards" subtitle="Prepare, review, approve and release official student reports in one calm workspace." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+    <AppShell universe="school" title="Report Cards" subtitle="Report cards." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
       <main className="report-cards-page">
         <style>{REPORT_CARDS_STYLES}</style>
 
@@ -155,7 +155,7 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
           <div className="report-hero-copy">
             <div className="report-eyebrow"><span>OFFICIAL ACADEMIC REPORTING</span><i>•</i><span>{term.name}</span></div>
             <h1>Report cards, without the clutter.</h1>
-            <p>Keep one class in focus, see exactly what is ready, and move each learner report through a clear four-step publishing flow.</p>
+            
             <div className="report-hero-actions">
               <Link href="/school/gradebook/studio" className="report-primary-link"><BookOpen aria-hidden="true" /> Open Gradebook</Link>
               <Link href="/school/reports" className="report-secondary-link">View archive <ArrowRight aria-hidden="true" /></Link>
@@ -183,7 +183,7 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
             <div className="report-empty-icon"><GraduationCap aria-hidden="true" /></div>
             <span className="report-eyebrow">NEXT</span>
             <h2>Choose a class to begin</h2>
-            <p>The workspace will show coverage, report status and the learner queue for that class.</p>
+            
           </section>
         ) : (
           <>
@@ -197,7 +197,7 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
             <section className="report-command-grid">
               <div className="report-command-card primary-command">
                 <div className="report-command-number">01</div>
-                <div className="report-command-copy"><span className="report-eyebrow">PREPARE</span><h2>Complete the class before reviewing individuals.</h2><p>Generating reports only creates missing records. Existing report cards are never replaced by this step.</p></div>
+                <div className="report-command-copy"><span className="report-eyebrow">PREPARE</span><h2>Complete the class before reviewing individuals.</h2></div>
                 <div className="report-command-progress"><div className="report-progress-track"><span style={{ width: `${coverage}%` }} /></div><strong>{reportCount} of {learnerCount}</strong><small>{missing ? `${missing} missing` : "Class fully generated"}</small></div>
                 <div className="report-command-actions">{data.permissions.generate ? <form action={runReportCardAction}><input type="hidden" name="action" value="generate" /><input type="hidden" name="termId" value={term.id} /><input type="hidden" name="classId" value={data.selectedClass?.id ?? ""} /><button className="report-button primary" type="submit" disabled={!missing}>{missing ? `Generate ${missing} missing` : "All reports generated"} <ArrowRight aria-hidden="true" /></button></form> : null}<Link className="report-secondary-link" href="/school/gradebook/studio">Review marks first <ArrowRight aria-hidden="true" /></Link></div>
               </div>
@@ -218,7 +218,7 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
 
             <section className="report-queue-card">
               <div className="report-queue-head">
-                <div><span className="report-eyebrow">02 · REVIEW & MOVE</span><h2>Learner report queue</h2><p>Every row has one clear next action. Preview is always available.</p></div>
+                <div><span className="report-eyebrow">02 · REVIEW & MOVE</span><h2>Learner report queue</h2></div>
                 <div className="report-queue-summary"><strong>{reportCount}</strong><span>report{reportCount === 1 ? "" : "s"}</span></div>
               </div>
 
@@ -243,12 +243,12 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
                   })}
                 </div>
               ) : (
-                <div className="report-list-empty"><div className="report-empty-icon"><ClipboardList aria-hidden="true" /></div><strong>No report records yet.</strong><span>Use the prepare action above to generate the missing learner records.</span></div>
+                <div className="report-list-empty"><div className="report-empty-icon"><ClipboardList aria-hidden="true" /></div><strong>No report records yet.</strong></div>
               )}
             </section>
 
             <section className="report-footer-rail">
-              <div><Download aria-hidden="true" /><span><strong>Need the source data?</strong><small>Open exports and archive tools without leaving reporting.</small></span></div>
+              <div><Download aria-hidden="true" /><span><strong>Need the source data?</strong></span></div>
               <Link href="/school/downloads">Open Downloads <ArrowRight aria-hidden="true" /></Link>
               <Link href="/school/settings">Report settings <ArrowRight aria-hidden="true" /></Link>
             </section>

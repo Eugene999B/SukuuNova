@@ -43,15 +43,15 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     sent: data.reports.filter((r) => r.status === "sent").length,
   };
 
-  return <AppShell universe="school" title="Reports" subtitle="Monitor official report-card records and move directly into the real reporting workflow." active="Reports" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+  return <AppShell universe="school" title="Reports" subtitle="Reports." active="Reports" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
     <div className="module-workspace">
       <section className="module-setup-card module-card">
-        <div><span className="module-overline">Official reporting</span><h3>Reports Centre</h3><p>This page reports on actual generated report-card records. Report configuration, approval and release live in Report Card Studio.</p></div>
+        <div><span className="module-overline">Official reporting</span><h3>Reports Centre</h3></div>
         <div className="modal-actions"><Link className="button primary" href={`/school/report-cards?term=${encodeURIComponent(data.term?.id ?? "")}`}>Open Report Card Studio →</Link><Link className="button secondary" href="/school/downloads">Downloads & exports</Link></div>
       </section>
 
       <section className="module-card">
-        <div className="module-section-title"><div><span>Reporting context</span><h3>{data.term?.name ?? "No term selected"}</h3><p>Filter the real report records below. Nothing on this page is presented as completed until a database record exists.</p></div></div>
+        <div className="module-section-title"><div><span>Reporting context</span><h3>{data.term?.name ?? "No term selected"}</h3></div></div>
         <form className="module-toolbar" action="/school/reports" method="get">
           <label style={{ display: "grid", gap: 5, fontSize: 10, fontWeight: 800, flex: 1 }}>Term<select name="term" defaultValue={data.term?.id ?? ""}>{data.terms.map((term) => <option key={term.id} value={term.id}>{term.name}</option>)}</select></label>
           <label style={{ display: "grid", gap: 5, fontSize: 10, fontWeight: 800, flex: 1 }}>Class<select name="classId" defaultValue={params.classId ?? ""}><option value="">All classes</option>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></label>
@@ -65,7 +65,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <section className="module-card"><div className="module-section-title"><div><span>Report records</span><h3>Generated reports for the selected context</h3></div></div>
         <div className="module-table-wrap"><table className="module-table"><thead><tr><th>Student</th><th>Class</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody>
           {data.reports.slice(0, 100).map((report) => <tr key={report.id}><td><strong>{report.student.name}</strong><small>{report.student.admissionNo}</small></td><td>{report.student.class ? `${report.student.class.level ?? ""}${report.student.class.level ? " · " : ""}${report.student.class.name}` : "Unplaced"}</td><td><span className="app-pill">{report.status}</span></td><td>{new Date(report.createdAt).toLocaleDateString("en-GH")}</td><td>{report.status === "approved" || report.status === "sent" ? <Link className="app-action" href={`/school/report-cards/${report.id}/print`}><strong>Print</strong> report</Link> : <Link className="app-action" href={`/school/report-cards?term=${encodeURIComponent(data.term?.id ?? "")}&classId=${encodeURIComponent(report.student.classId ?? "")}`}><strong>Open</strong> workflow</Link>}</td></tr>)}
-          {!data.reports.length && <tr><td colSpan={5}><div className="module-empty"><strong>No report records found.</strong><span>Complete the gradebook and use Report Card Studio to generate the selected class run.</span></div></td></tr>}
+          {!data.reports.length && <tr><td colSpan={5}><div className="module-empty"><strong>No report records found.</strong><Link href="/school/report-cards">Open Report Card Studio</Link></div></td></tr>}
         </tbody></table></div>
       </section>
     </div>

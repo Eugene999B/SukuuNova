@@ -16,7 +16,7 @@ export default async function AttendanceDisplayPage() {
 
   return <>
     <div className="hidden lg:block">
-      <AppShell universe="school" title="Staff Check-In Display" subtitle="Secure rotating QR code for the school's designated attendance screen." active="Attendance" userName={session.name ?? ""} schoolName={school.name} schoolCode="" role="Attendance Display">
+      <AppShell universe="school" title="Staff Check-In Display" subtitle="Check-in code." active="Attendance" userName={session.name ?? ""} schoolName={school.name} schoolCode="" role="Attendance Display">
         <div className="-mx-4 -my-4 lg:-mx-6 lg:-my-6"><AttendanceDisplay schoolName={school.name} /></div>
       </AppShell>
     </div>
