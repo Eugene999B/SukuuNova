@@ -12,7 +12,7 @@ export default async function TeacherAcademicPage() {
     const all = await hasPermission(tx, session.userId, "scores:write:all");
     if (!assigned && !all) throw new Error("You do not have teacher academic access.");
   });
-  return <AppShell universe="school" title="Teacher Academic Studio" subtitle="Work, marks, notes and learner evidence" active="Teacher Academic Studio" schoolName={session.name ? undefined : "School Workspace"} userName={session.name}>
+  return <AppShell universe="school" title="Teacher Academic Studio" subtitle="Work, marks, notes and learner evidence" active="Teacher Academic Studio" userName={session.name}>
     <TeacherAcademicWorkspace />
   </AppShell>;
 }
