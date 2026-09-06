@@ -75,7 +75,7 @@
   min-height: 40px;
   border-radius: var(--sn-radius-md);
   background: var(--sn-primary);
-  color: #fff;
+  color: var(--sn-ink);
   font-size: 13px;
   font-weight: 750;
   text-decoration: none;
@@ -408,7 +408,7 @@
   padding: 24px;
   display: grid;
   place-items: center;
-  background: rgba(15, 23, 42, 0.6);
+  background: var(--sn-surface);
   backdrop-filter: blur(8px);
 }
 
@@ -529,7 +529,7 @@
 .staff-primary-button {
   border: 0;
   background: var(--sn-primary);
-  color: #fff;
+  color: var(--sn-ink);
 }
 
 .staff-primary-button:hover:not(:disabled) {
@@ -554,13 +554,13 @@
 
 .staff-result.success {
   background: var(--sn-success-soft);
-  border: 1px solid rgba(22, 163, 74, 0.25);
+  border: 1px solid var(--sn-line);
   color: var(--sn-success);
 }
 
 .staff-result.error {
   background: var(--sn-danger-soft);
-  border: 1px solid rgba(225, 29, 72, 0.25);
+  border: 1px solid var(--sn-line);
   color: var(--sn-danger);
 }
 

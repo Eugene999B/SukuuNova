@@ -59,7 +59,7 @@ async function payslipPdf(input: {
   const page = pdf.addPage([595, 420]);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  page.drawText(input.schoolName, { x: 45, y: 370, size: 18, font: bold, color: rgb(0.05, 0.2, 0.42) });
+  page.drawText(input.schoolName, { x: 45, y: 370, size: 18, font: bold, color: var(--color-bg) });
   page.drawText("SukuuNova Payslip · " + input.period, { x: 45, y: 344, size: 11, font: regular });
   page.drawText("Staff: " + input.staffName, { x: 45, y: 310, size: 11, font: bold });
   page.drawText("Gross salary", { x: 45, y: 275, size: 10, font: regular });

@@ -161,14 +161,14 @@ export default function DevicesPage() {
           <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
             {identities.map((identity) => {
               const person = identity.studentId ? students.find((p) => p.id === identity.studentId) : staff.find((p) => p.id === identity.staffId);
-              return <div key={identity.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 12, alignItems: "center", border: "1px solid var(--app-line,#d7e0e0)", padding: 10, borderRadius: 10 }}><span>{identity.deviceKind}</span><strong>{identity.externalId}</strong><span>{person?.name ?? "Unknown person"}</span><button className="app-pill" onClick={() => void removeIdentity(identity.id)}>Remove</button></div>;
+              return <div key={identity.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 12, alignItems: "center", border: "1px solid var(--app-line,var(--color-border-strong))", padding: 10, borderRadius: 10 }}><span>{identity.deviceKind}</span><strong>{identity.externalId}</strong><span>{person?.name ?? "Unknown person"}</span><button className="app-pill" onClick={() => void removeIdentity(identity.id)}>Remove</button></div>;
             })}
           </div>
         </section>
 
         <section className="app-card app-panel">
           <p className="app-kpi-label">REGISTERED DEVICES</p>
-          {devices.length === 0 ? <p>No attendance devices registered yet.</p> : <div style={{ display: "grid", gap: 10 }}>{devices.map((device) => <div key={device.id} style={{ display: "grid", gridTemplateColumns: "1.4fr .8fr 1fr auto", gap: 12, alignItems: "center", border: "1px solid var(--app-line,#d7e0e0)", padding: 12, borderRadius: 12 }}><div><strong>{device.label}</strong><div>{device.deviceSerial}</div></div><span>{device.kind}</span><span>{device.status}{device.lastSeenAt ? ` · ${new Date(device.lastSeenAt).toLocaleString()}` : " · never seen"}</span>{device.status === "active" ? <button className="app-pill" onClick={() => void revokeDevice(device.id)}>Revoke</button> : <span className="app-pill">Revoked</span>}</div>)}</div>}
+          {devices.length === 0 ? <p>No attendance devices registered yet.</p> : <div style={{ display: "grid", gap: 10 }}>{devices.map((device) => <div key={device.id} style={{ display: "grid", gridTemplateColumns: "1.4fr .8fr 1fr auto", gap: 12, alignItems: "center", border: "1px solid var(--app-line,var(--color-border-strong))", padding: 12, borderRadius: 12 }}><div><strong>{device.label}</strong><div>{device.deviceSerial}</div></div><span>{device.kind}</span><span>{device.status}{device.lastSeenAt ? ` · ${new Date(device.lastSeenAt).toLocaleString()}` : " · never seen"}</span>{device.status === "active" ? <button className="app-pill" onClick={() => void revokeDevice(device.id)}>Revoke</button> : <span className="app-pill">Revoked</span>}</div>)}</div>}
           {message ? <div className="app-banner" style={{ marginTop: 14 }}><p>{message}</p></div> : null}
         </section>
       </main>

@@ -50,6 +50,7 @@ import { usePlatformNavigationAccess } from "./PlatformNavigationContext";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
 import { SpeedDialActions } from "./SpeedDialActions";
 import { Menu, X } from "lucide-react";
+import { PageHeader } from "./PageHeader";
 import "./app-shell.css";
 
 type Universe = "school" | "platform" | "teacher" | "guardian";
@@ -375,7 +376,8 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         </header>
 
         <div className="app-content">
-          {children}
+          <PageHeader title={title} description={subtitle} />
+          <div className="sn-page-body">{children}</div>
         </div>
       </main>
 

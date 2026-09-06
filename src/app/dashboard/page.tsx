@@ -180,7 +180,7 @@ const adminCommandStyles = `
 
 .admin-primary-action {
   background: var(--sn-primary);
-  color: #fff;
+  color: var(--sn-ink);
   box-shadow: var(--sn-shadow-sm);
 }
 
@@ -367,8 +367,8 @@ const adminCommandStyles = `
 }
 
 .tone-finance .admin-attention-mark {
-  background: rgba(99, 102, 241, 0.15);
-  color: #6366f1;
+  background: var(--sn-surface);
+  color: var(--color-info);
 }
 
 .tone-people .admin-attention-mark {
@@ -384,7 +384,7 @@ const adminCommandStyles = `
   padding: 20px;
   border-radius: var(--sn-radius-lg);
   background: var(--sn-success-soft);
-  border: 1px solid rgba(22, 163, 74, 0.2);
+  border: 1px solid var(--sn-line);
 }
 
 .admin-clear-state > span {
@@ -393,7 +393,7 @@ const adminCommandStyles = `
   display: grid;
   place-items: center;
   border-radius: var(--sn-radius-md);
-  background: #fff;
+  background: var(--sn-surface);
   color: var(--sn-success);
   font-weight: 800;
   flex-shrink: 0;

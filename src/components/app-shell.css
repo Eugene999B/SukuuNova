@@ -19,7 +19,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.65);
+    background: var(--sn-surface);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     z-index: 90;
@@ -68,7 +68,7 @@
 
   .app-sidebar.is-mobile-open {
     transform: translateX(0);
-    box-shadow: 0 0 50px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 50px var(--sn-shadow-sm);
   }
 }
 
@@ -115,10 +115,10 @@
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, var(--sn-primary), var(--sn-primary-deep));
-  box-shadow: 0 4px 14px rgba(15, 118, 110, 0.25);
+  box-shadow: 0 4px 14px var(--sn-shadow-sm);
   font-weight: 800;
   font-size: 18px;
-  color: #fff;
+  color: var(--sn-ink);
   letter-spacing: -0.03em;
   flex-shrink: 0;
 }
@@ -170,7 +170,7 @@
   color: var(--sn-primary-deep);
   font-size: 12px;
   font-weight: 800;
-  border: 1px solid rgba(15, 118, 110, 0.15);
+  border: 1px solid var(--sn-line);
 }
 
 .app-school-chip > span:last-child,
@@ -267,7 +267,7 @@
   background: var(--sn-primary-soft);
   color: var(--sn-primary-deep);
   font-weight: 700;
-  box-shadow: inset 3px 0 0 var(--portal-accent, var(--sn-primary)), inset 0 0 0 1px rgba(15, 118, 110, 0.12);
+  box-shadow: inset 3px 0 0 var(--portal-accent, var(--sn-primary)), inset 0 0 0 1px var(--sn-shadow-sm);
 }
 
 .app-nav-icon {
@@ -616,7 +616,7 @@
   position: fixed;
   inset: 0;
   z-index: 200;
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--sn-surface);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: grid;
@@ -882,19 +882,19 @@
 .platform-status-critical {
   color: var(--sn-danger);
   background: var(--sn-danger-soft);
-  border: 1px solid rgba(225, 29, 72, 0.2);
+  border: 1px solid var(--sn-line);
 }
 
 .platform-status-watch {
   color: var(--sn-warning);
   background: var(--sn-warning-soft);
-  border: 1px solid rgba(217, 119, 6, 0.2);
+  border: 1px solid var(--sn-line);
 }
 
 .platform-status-healthy {
   color: var(--sn-success);
   background: var(--sn-success-soft);
-  border: 1px solid rgba(22, 163, 74, 0.2);
+  border: 1px solid var(--sn-line);
 }
 
 @media (max-width: 1024px) {
@@ -967,7 +967,7 @@
 .sn-speed-dial-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--sn-surface);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   z-index: 81;
@@ -979,9 +979,9 @@
   height: 48px;
   border-radius: 999px;
   background: var(--sn-primary);
-  color: #fff;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 24px -4px rgba(15, 118, 110, 0.45);
+  color: var(--sn-ink);
+  border: 2px solid var(--sn-line);
+  box-shadow: 0 8px 24px -4px var(--sn-shadow-sm);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -993,13 +993,13 @@
 .sn-speed-dial-trigger:hover {
   transform: scale(1.08);
   background: var(--sn-primary-deep);
-  box-shadow: 0 12px 28px -4px rgba(15, 118, 110, 0.6);
+  box-shadow: 0 12px 28px -4px var(--sn-shadow-sm);
 }
 
 .sn-speed-dial.is-open .sn-speed-dial-trigger {
   transform: rotate(90deg);
   background: var(--sn-ink);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 24px var(--sn-shadow-sm);
 }
 
 .sn-speed-dial-ping {
@@ -1031,7 +1031,7 @@
   background: var(--sn-surface);
   border: 1px solid var(--sn-line);
   border-radius: var(--sn-radius-lg);
-  box-shadow: 0 20px 35px -8px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 20px 35px -8px var(--sn-shadow-sm), 0 0 0 1px var(--sn-shadow-sm);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -1142,7 +1142,7 @@
 .sn-shortcuts-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.7);
+  background: var(--sn-surface);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 120;
@@ -1304,7 +1304,7 @@
   background: var(--sn-surface);
   border: 1px solid var(--sn-line-strong);
   border-radius: var(--sn-radius-xs);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 2px var(--sn-shadow-sm);
 }
 
 .sn-shortcuts-footer {
@@ -1315,3 +1315,7 @@
   color: var(--sn-muted);
   text-align: center;
 }
+
+
+/* system-wide compact operational page treatment */
+.app-content{min-width:0}.sn-page-body{min-width:0}.app-content>h1,.app-content>section>h1,.app-content>main>h1{font-size:var(--sn-font-2xl)!important;line-height:1.15!important}.app-content [class*="hero"] h1,.app-content [class*="Hero"] h1{font-size:var(--sn-font-2xl);line-height:1.15}.app-content [class*="hero"],[class*="Hero"].app-card{margin-bottom:18px}

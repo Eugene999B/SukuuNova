@@ -8,7 +8,7 @@ import { AppError } from "@/lib/errors";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 const teacherRoleKeys = ["teacher", "class_teacher", "subject_teacher", "assistant_teacher", "teaching_assistant"];
-const HOUSE_COLORS = ["#d36b4b", "#267a66", "#c18a2c", "#6f5ab8", "#2d7d8a", "#b84f74"];
+const HOUSE_COLORS = ["var(--color-danger)", "var(--color-brand)", "var(--color-warning)", "var(--color-text-muted)", "var(--color-brand-hover)", "var(--color-danger)"];
 
 /** Never echo raw database errors (constraint/table names) to the UI. */
 function safeActionError(error: unknown, fallback: string, duplicateMessage: string): string {

@@ -445,8 +445,8 @@ export function Phase2Console({ name, canManageRoles }: { name: string; canManag
                   reader.readAsDataURL(file);
                 }} />
               </label>
-              <label className="text-sm font-medium">Primary colour<input name="primaryColor" type="color" defaultValue="#1d4ed8" className={inputClass} /></label>
-              <label className="text-sm font-medium">Accent colour<input name="accentColor" type="color" defaultValue="#dbeafe" className={inputClass} /></label>
+              <label className="text-sm font-medium">Primary colour<input name="primaryColor" type="color" defaultValue="var(--color-info)" className={inputClass} /></label>
+              <label className="text-sm font-medium">Accent colour<input name="accentColor" type="color" defaultValue="var(--color-border)" className={inputClass} /></label>
               <label className="text-sm font-medium">Watermark<input name="watermark" defaultValue="SUKUUNOVA" maxLength={36} className={inputClass} /></label>
               <button className={primaryButton}>Apply brand</button>
             </form>
