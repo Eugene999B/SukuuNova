@@ -1,34 +1,10 @@
 name: one-shot-design-normalization
 
 on:
-  push:
-    branches:
-      - fix/system-wide-design-tokens
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
-  normalize:
-    if: ${{ !contains(github.event.head_commit.message, '[design-normalized]') }}
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: node scripts/normalize-design-system.mjs
-      - name: Commit normalized source
-        shell: bash
-        run: |
-          git config user.name "sukuunova-design-bot"
-          git config user.email "actions@users.noreply.github.com"
-          if git diff --quiet; then
-            echo "No normalization changes required."
-            exit 0
-          fi
-          git add src package.json scripts/check-design-tokens.mjs
-          git commit -m "chore: normalize application design tokens [design-normalized]"
-          git push
+      - run: echo "Disabled after source normalization; design checks run through the standard build workflow."
