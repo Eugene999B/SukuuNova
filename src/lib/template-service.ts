@@ -35,8 +35,8 @@ export async function selectReportTemplate(
     throw new AppError("Logo must be PNG, JPEG, or WebP and under 1 MB.", 400, "INVALID_LOGO");
   }
   const colors: Prisma.InputJsonValue = {
-    primary: input.primaryColor ?? "#1d4ed8",
-    accent: input.accentColor ?? "#dbeafe"
+    primary: input.primaryColor ?? "var(--color-info)",
+    accent: input.accentColor ?? "var(--color-border)"
   };
   await tx.school.update({
     where: { id: input.schoolId },

@@ -25,29 +25,29 @@ export function SpeedDialActions({ universe, onOpenShortcuts }: Props) {
   const getQuickLinks = () => {
     if (universe === "teacher") {
       return [
-        { label: "Mark Class Attendance", href: "/teacher/attendance", icon: CircleCheckBig, color: "#0f766e" },
-        { label: "Enter Student Marks", href: "/teacher?view=My%20Gradebook", icon: FileText, color: "#2563eb" },
-        { label: "My Timetable", href: "/teacher?view=My%20Timetable", icon: FileText, color: "#7c3aed" },
+        { label: "Mark Class Attendance", href: "/teacher/attendance", icon: CircleCheckBig, color: "var(--color-brand)" },
+        { label: "Enter Student Marks", href: "/teacher?view=My%20Gradebook", icon: FileText, color: "var(--color-info)" },
+        { label: "My Timetable", href: "/teacher?view=My%20Timetable", icon: FileText, color: "var(--color-accent-indigo)" },
       ];
     }
     if (universe === "guardian") {
       return [
-        { label: "View Attendance History", href: "/guardian/attendance", icon: CircleCheckBig, color: "#0f766e" },
-        { label: "View Outstanding Fees", href: "/guardian/fees", icon: Wallet, color: "#d97706" },
-        { label: "Children Records", href: "/guardian/children", icon: FileText, color: "#7c3aed" },
+        { label: "View Attendance History", href: "/guardian/attendance", icon: CircleCheckBig, color: "var(--color-brand)" },
+        { label: "View Outstanding Fees", href: "/guardian/fees", icon: Wallet, color: "var(--color-warning)" },
+        { label: "Children Records", href: "/guardian/children", icon: FileText, color: "var(--color-accent-indigo)" },
       ];
     }
     if (universe === "platform") {
       return [
-        { label: "Network Health Status", href: "/platform/health", icon: Activity, color: "#0f766e" },
-        { label: "Inspect School Tenant", href: "/platform/schools", icon: Layers, color: "#2563eb" },
-        { label: "Platform Billing", href: "/platform/billing", icon: Wallet, color: "#d97706" },
+        { label: "Network Health Status", href: "/platform/health", icon: Activity, color: "var(--color-brand)" },
+        { label: "Inspect School Tenant", href: "/platform/schools", icon: Layers, color: "var(--color-info)" },
+        { label: "Platform Billing", href: "/platform/billing", icon: Wallet, color: "var(--color-warning)" },
       ];
     }
     return [
-      { label: "Student Attendance", href: "/school/attendance", icon: CircleCheckBig, color: "#0f766e" },
-      { label: "Collect Fee Payment", href: "/school/fees/payments", icon: Wallet, color: "#d97706" },
-      { label: "Broadcast SMS / Alert", href: "/school/communications/broadcasts", icon: Megaphone, color: "#e11d48" },
+      { label: "Student Attendance", href: "/school/attendance", icon: CircleCheckBig, color: "var(--color-brand)" },
+      { label: "Collect Fee Payment", href: "/school/fees/payments", icon: Wallet, color: "var(--color-warning)" },
+      { label: "Broadcast SMS / Alert", href: "/school/communications/broadcasts", icon: Megaphone, color: "var(--color-danger)" },
     ];
   };
 
@@ -100,7 +100,7 @@ export function SpeedDialActions({ universe, onOpenShortcuts }: Props) {
               }}
               role="menuitem"
             >
-              <span className="sn-speed-dial-item-icon" style={{ background: "rgba(100, 116, 139, 0.15)", color: "var(--sn-ink)" }}>
+              <span className="sn-speed-dial-item-icon" style={{ background: "var(--sn-surface)", color: "var(--sn-ink)" }}>
                 <Keyboard size={16} aria-hidden="true" />
               </span>
               <span className="sn-speed-dial-item-label">Keyboard Shortcuts</span>
