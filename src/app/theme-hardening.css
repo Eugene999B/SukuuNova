@@ -1,73 +1,73 @@
-:root{--sn-ui-bg:#f5f7f6;--sn-ui-surface:#ffffff;--sn-ui-surface-2:#f8faf9;--sn-ui-border:#dce6e3;--sn-ui-text:#17383d;--sn-ui-muted:#65797d;--sn-ui-accent:#8f523e;--sn-ui-accent-soft:#f5e9e3;color-scheme:light}
-:root[data-theme="dark"]{--sn-ui-bg:#0b1518;--sn-ui-surface:#121e22;--sn-ui-surface-2:#17262b;--sn-ui-border:#294047;--sn-ui-text:#ecf5f3;--sn-ui-muted:#9fb1b4;--sn-ui-accent:#d79a7e;--sn-ui-accent-soft:#36251f;color-scheme:dark}
-html,body{background:var(--sn-ui-bg)!important;color:var(--sn-ui-text)!important}
-.app-main,.app-content{background:transparent!important;color:var(--sn-ui-text)}
-.app-topbar,.app-sidebar{background:var(--sn-ui-surface)!important;color:var(--sn-ui-text)!important;border-color:var(--sn-ui-border)!important}
-.app-breadcrumb,.app-topbar p,.app-school-chip small,.app-user-mini small{color:var(--sn-ui-muted)!important}
-.app-topbar h1,.app-breadcrumb,.app-brand-copy strong,.app-brand-copy small,.app-school-chip b,.app-user-mini b{color:var(--sn-ui-text)!important}
-.app-search,.app-icon-button,.app-account-link,.app-collapse-button{background:var(--sn-ui-surface-2)!important;border-color:var(--sn-ui-border)!important;color:var(--sn-ui-text)!important}
-.app-nav-item{color:var(--sn-ui-muted)!important}
-.app-nav-item:hover,.app-nav-item.is-active{background:var(--sn-ui-surface-2)!important;color:var(--sn-ui-text)!important}
-.app-card,.module-card,.module-table-wrap,.module-metrics article,.sn-data-card,.sn-list-card,.sn-action-card,.module-selector-card,.module-setup-card,.module-side-card,.module-workflow-step,.module-list-item,.module-pipeline>div{background:var(--sn-ui-surface)!important;color:var(--sn-ui-text)!important;border-color:var(--sn-ui-border)!important}
-.module-card p,.module-card small,.module-setup-card p,.module-list-item,.module-side-card,.module-workflow-step small,.module-selector-card span,.module-selector-card small{color:var(--sn-ui-muted)!important}
-.module-toolbar input,.module-card input,.module-card select,.module-card textarea,.module-setup-card input,.module-setup-card select,.module-setup-card textarea{background:var(--sn-ui-surface-2)!important;color:var(--sn-ui-text)!important;border-color:var(--sn-ui-border)!important}
-.module-table th{background:var(--sn-ui-surface-2)!important;color:var(--sn-ui-muted)!important;border-color:var(--sn-ui-border)!important}.module-table td{background:var(--sn-ui-surface)!important;color:var(--sn-ui-text)!important;border-color:var(--sn-ui-border)!important}
-.module-tab{color:var(--sn-ui-muted)!important;border-color:transparent!important}.module-tab:hover,.module-tab.is-active{color:var(--sn-ui-text)!important;background:var(--sn-ui-surface-2)!important}
-.app-button,.button.secondary,.button.primary,.app-action,.app-pill{border-color:var(--sn-ui-border)!important}.button.secondary{background:var(--sn-ui-surface)!important;color:var(--sn-ui-text)!important}.button.primary{background:var(--sn-ui-accent)!important;color:#fff!important}
-.module-workspace :is(.module-selector-card,.app-list-row,.module-pipeline>div,.module-workflow-step){box-shadow:0 8px 24px rgba(0,0,0,.045)}
-:root[data-theme="light"] .module-pipeline>div{background:var(--sn-ui-surface)!important;color:var(--sn-ui-text)!important}
-:root[data-theme="dark"] .module-pipeline>div{background:var(--sn-ui-surface-2)!important;color:var(--sn-ui-text)!important}
-.school-life-studio{color:var(--sn-ui-text)!important}.school-life-studio [class*="bg-slate-950"],.school-life-studio [class*="bg-white/[0.02]"],.school-life-studio [class*="bg-white/[0.025]"],.school-life-studio [class*="bg-white/[0.035]"],.school-life-studio [class*="bg-white/[0.015]"]{background:var(--sn-ui-surface-2)!important}.school-life-studio [class*="text-white"]{color:var(--sn-ui-text)!important}.school-life-studio [class*="text-slate-400"],.school-life-studio [class*="text-slate-500"],.school-life-studio [class*="text-slate-600"]{color:var(--sn-ui-muted)!important}.school-life-studio [class*="border-white"]{border-color:var(--sn-ui-border)!important}.school-life-studio input,.school-life-studio textarea,.school-life-studio select{background:var(--sn-ui-surface-2)!important;color:var(--sn-ui-text)!important;border-color:var(--sn-ui-border)!important}.school-life-studio option{background:var(--sn-ui-surface)!important;color:var(--sn-ui-text)!important}.school-life-studio header{color:var(--sn-ui-text)}
-:root[data-theme="light"] .app-content section[class*="bg-slate-950"],:root[data-theme="light"] .app-content article[class*="bg-slate-950"],:root[data-theme="light"] .app-content div[class*="bg-slate-950"]{background:var(--sn-ui-surface)!important;color:var(--sn-ui-text)!important}
-:root[data-theme="light"] .app-content section[class*="text-white"],:root[data-theme="light"] .app-content article[class*="text-white"]{color:var(--sn-ui-text)!important}
-:root[data-theme="dark"] .app-content section[class*="bg-white"],:root[data-theme="dark"] .app-content article[class*="bg-white"],:root[data-theme="dark"] .app-content div[class*="bg-white/[0.03]"],:root[data-theme="dark"] .app-content div[class*="bg-white/[0.02]"]{background:var(--sn-ui-surface-2)!important;color:var(--sn-ui-text)!important}
-:root[data-theme="dark"] .app-content section[class*="text-slate-950"],:root[data-theme="dark"] .app-content article[class*="text-slate-950"]{color:var(--sn-ui-text)!important}
-:root[data-theme="dark"] .app-card,.module-card{color:var(--sn-ui-text)!important}
+:root{--sn-ui-bg:#f5f7f6;--sn-ui-surface:#ffffff;--sn-ui-surface-2:#f8faf9;--sn-ui-border: var(--sn-line);--sn-ui-text:#17383d;--sn-ui-muted:#65797d;--sn-ui-accent:#8f523e;--sn-ui-accent-soft:#f5e9e3;color-scheme:light}
+:root[data-theme="dark"]{--sn-ui-bg:#0b1518;--sn-ui-surface:#121e22;--sn-ui-surface-2:#17262b;--sn-ui-border: var(--sn-line);--sn-ui-text:#ecf5f3;--sn-ui-muted:#9fb1b4;--sn-ui-accent:#d79a7e;--sn-ui-accent-soft:#36251f;color-scheme:dark}
+html,body{background: var(--sn-ui-bg)!important;color: var(--sn-ui-text)!important}
+.app-main,.app-content{background: transparent!important;color: var(--sn-ui-text)}
+.app-topbar,.app-sidebar{background: var(--sn-ui-surface)!important;color: var(--sn-ui-text)!important;border-color: var(--sn-ui-border)!important}
+.app-breadcrumb,.app-topbar p,.app-school-chip small,.app-user-mini small{color: var(--sn-ui-muted)!important}
+.app-topbar h1,.app-breadcrumb,.app-brand-copy strong,.app-brand-copy small,.app-school-chip b,.app-user-mini b{color: var(--sn-ui-text)!important}
+.app-search,.app-icon-button,.app-account-link,.app-collapse-button{background: var(--sn-ui-surface-2)!important;border-color: var(--sn-ui-border)!important;color: var(--sn-ui-text)!important}
+.app-nav-item{color: var(--sn-ui-muted)!important}
+.app-nav-item:hover,.app-nav-item.is-active{background: var(--sn-ui-surface-2)!important;color: var(--sn-ui-text)!important}
+.app-card,.module-card,.module-table-wrap,.module-metrics article,.sn-data-card,.sn-list-card,.sn-action-card,.module-selector-card,.module-setup-card,.module-side-card,.module-workflow-step,.module-list-item,.module-pipeline>div{background: var(--sn-ui-surface)!important;color: var(--sn-ui-text)!important;border-color: var(--sn-ui-border)!important}
+.module-card p,.module-card small,.module-setup-card p,.module-list-item,.module-side-card,.module-workflow-step small,.module-selector-card span,.module-selector-card small{color: var(--sn-ui-muted)!important}
+.module-toolbar input,.module-card input,.module-card select,.module-card textarea,.module-setup-card input,.module-setup-card select,.module-setup-card textarea{background: var(--sn-ui-surface-2)!important;color: var(--sn-ui-text)!important;border-color: var(--sn-ui-border)!important}
+.module-table th{background: var(--sn-ui-surface-2)!important;color: var(--sn-ui-muted)!important;border-color: var(--sn-ui-border)!important}.module-table td{background: var(--sn-ui-surface)!important;color: var(--sn-ui-text)!important;border-color: var(--sn-ui-border)!important}
+.module-tab{color: var(--sn-ui-muted)!important;border-color: transparent!important}.module-tab:hover,.module-tab.is-active{color: var(--sn-ui-text)!important;background: var(--sn-ui-surface-2)!important}
+.app-button,.button.secondary,.button.primary,.app-action,.app-pill{border-color: var(--sn-ui-border)!important}.button.secondary{background: var(--sn-ui-surface)!important;color: var(--sn-ui-text)!important}.button.primary{background: var(--sn-ui-accent)!important;color: var(--color-surface)!important}
+.module-workspace :is(.module-selector-card,.app-list-row,.module-pipeline>div,.module-workflow-step){box-shadow: 0 8px 24px var(--sn-shadow-sm)}
+:root[data-theme="light"] .module-pipeline>div{background: var(--sn-ui-surface)!important;color: var(--sn-ui-text)!important}
+:root[data-theme="dark"] .module-pipeline>div{background: var(--sn-ui-surface-2)!important;color: var(--sn-ui-text)!important}
+.school-life-studio{color: var(--sn-ui-text)!important}.school-life-studio [class*="bg-slate-950"],.school-life-studio [class*="bg-white/[0.02]"],.school-life-studio [class*="bg-white/[0.025]"],.school-life-studio [class*="bg-white/[0.035]"],.school-life-studio [class*="bg-white/[0.015]"]{background: var(--sn-ui-surface-2)!important}.school-life-studio [class*="text-white"]{color: var(--sn-ui-text)!important}.school-life-studio [class*="text-slate-400"],.school-life-studio [class*="text-slate-500"],.school-life-studio [class*="text-slate-600"]{color: var(--sn-ui-muted)!important}.school-life-studio [class*="border-white"]{border-color: var(--sn-ui-border)!important}.school-life-studio input,.school-life-studio textarea,.school-life-studio select{background: var(--sn-ui-surface-2)!important;color: var(--sn-ui-text)!important;border-color: var(--sn-ui-border)!important}.school-life-studio option{background: var(--sn-ui-surface)!important;color: var(--sn-ui-text)!important}.school-life-studio header{color: var(--sn-ui-text)}
+:root[data-theme="light"] .app-content section[class*="bg-slate-950"],:root[data-theme="light"] .app-content article[class*="bg-slate-950"],:root[data-theme="light"] .app-content div[class*="bg-slate-950"]{background: var(--sn-ui-surface)!important;color: var(--sn-ui-text)!important}
+:root[data-theme="light"] .app-content section[class*="text-white"],:root[data-theme="light"] .app-content article[class*="text-white"]{color: var(--sn-ui-text)!important}
+:root[data-theme="dark"] .app-content section[class*="bg-white"],:root[data-theme="dark"] .app-content article[class*="bg-white"],:root[data-theme="dark"] .app-content div[class*="bg-white/[0.03]"],:root[data-theme="dark"] .app-content div[class*="bg-white/[0.02]"]{background: var(--sn-ui-surface-2)!important;color: var(--sn-ui-text)!important}
+:root[data-theme="dark"] .app-content section[class*="text-slate-950"],:root[data-theme="dark"] .app-content article[class*="text-slate-950"]{color: var(--sn-ui-text)!important}
+:root[data-theme="dark"] .app-card,.module-card{color: var(--sn-ui-text)!important}
 
 /* Minimal UI pass: calmer hierarchy, tighter density, fewer competing surfaces. */
 .app-sidebar{width:252px;flex-basis:252px;padding:14px 10px 12px}
 .app-brand{gap:10px;padding:2px 6px 12px}
-.app-brand-mark{width:36px;height:36px;border-radius:10px;box-shadow:none;font-size:16px}
-.app-school-chip{margin:0 0 10px;padding:8px 10px;border-radius:10px}
+.app-brand-mark{width:36px;height:36px;border-radius: 10px;box-shadow: none;font-size:16px}
+.app-school-chip{margin:0 0 10px;padding:8px 10px;border-radius: 10px}
 .app-nav{gap:10px}
 .app-nav-group{gap:1px}
-.app-nav-item{padding:7px 10px;min-height:36px;border-radius:9px;font-size:13px}
+.app-nav-item{padding:7px 10px;min-height:36px;border-radius: 9px;font-size:13px}
 .app-topbar{gap:16px;padding:12px clamp(14px,2.4vw,28px) 11px}
 .app-topbar h1{font-size:clamp(19px,2.2vw,24px)}
 .app-topbar p{font-size:12px}
-.app-search,.app-icon-button{box-shadow:none}
-.app-search:hover,.app-icon-button:hover{transform:none;box-shadow:none}
+.app-search,.app-icon-button{box-shadow: none}
+.app-search:hover,.app-icon-button:hover{transform:none;box-shadow: none}
 .module-workspace{padding:12px 0 32px}
 .module-topline{gap:16px;margin-bottom:16px}
 .module-topline h2{margin:4px 0 5px;font-size:clamp(1.45rem,2.3vw,2rem)}
 .module-topline p{line-height:1.5}
 .module-action-rail{gap:7px}
-.module-action-rail a,.module-action-rail button{min-height:36px;padding:8px 12px;border-radius:9px;box-shadow:none}
-.module-tabbar{gap:2px;padding:3px;border-radius:10px;margin-bottom:16px}
-.module-tabbar a,.module-tabbar button{padding:7px 11px;border-radius:8px}
+.module-action-rail a,.module-action-rail button{min-height:36px;padding:8px 12px;border-radius: 9px;box-shadow: none}
+.module-tabbar{gap:2px;padding:3px;border-radius: 10px;margin-bottom:16px}
+.module-tabbar a,.module-tabbar button{padding:7px 11px;border-radius: 8px}
 .module-metrics{gap:10px;margin-bottom:16px}
-.module-metrics article{padding:14px 16px;border-radius:12px;box-shadow:none}
-.module-metrics article:hover{transform:none;box-shadow:none}
+.module-metrics article{padding:14px 16px;border-radius: 12px;box-shadow: none}
+.module-metrics article:hover{transform:none;box-shadow: none}
 .module-metrics strong{margin-top:7px;font-size:1.55rem}
-.module-card{padding:16px;border-radius:12px;box-shadow:none}
+.module-card{padding:16px;border-radius: 12px;box-shadow: none}
 .module-section-title{gap:14px}
 .module-section-title h3{margin:4px 0 3px}
-.module-inline-link{padding:6px 9px;border-radius:8px}
+.module-inline-link{padding:6px 9px;border-radius: 8px}
 .module-split,.module-attendance-board,.module-finance-grid,.module-comms-grid,.module-feature-grid,.module-admin-grid,.module-command-grid,.module-bottom-split{gap:14px;margin-bottom:16px}
 .module-filter-row{gap:7px;margin:12px 0 12px}
 .module-filter-row input{min-width:200px;padding:8px 11px}
 .module-filter-row button,.module-register-controls button{padding:8px 12px}
-.module-table-wrap{border-radius:10px}
+.module-table-wrap{border-radius: 10px}
 .module-table-wrap th{padding:10px 12px}
 .module-table-wrap td{padding:11px 12px}
 .module-empty{min-height:180px;padding:28px 18px}
-.module-workspace :is(.module-selector-card,.app-list-row,.module-pipeline>div,.module-workflow-step){box-shadow:none}
+.module-workspace :is(.module-selector-card,.app-list-row,.module-pipeline>div,.module-workflow-step){box-shadow: none}
 
 @media (max-width:768px){
   .app-sidebar{width:276px;flex-basis:276px;padding:12px 9px 10px}
   .app-topbar{padding:10px 12px 9px}
   .module-workspace{padding:10px 0 24px}
-  .module-card{padding:14px;border-radius:10px}
+  .module-card{padding:14px;border-radius: 10px}
   .module-metrics{gap:8px}
   .module-topline{margin-bottom:13px}
   .module-action-rail a,.module-action-rail button{min-height:35px;padding:7px 10px}

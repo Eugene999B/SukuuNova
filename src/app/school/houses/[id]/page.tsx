@@ -47,11 +47,11 @@ export default async function HouseDetailPage({ params }: { params: Promise<{ id
         />
         <ProductSection eyebrow="Identity" title="House identity" description="How this house appears across the school.">
           <DetailGrid items={[{ label: "Name", value: h.name }, { label: "Code", value: h.code }, { label: "Colour", value: h.color ?? "—" }, { label: "Status", value: h.isActive ? "Active" : "Inactive" }]} />
-          {h.description ? <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{h.description}</p> : null}
+          {h.description ? <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }>{h.description}</p> : null}
         </ProductSection>
         <ProductSection eyebrow="Membership" title={`Students (${data.count})`} description="First 50 active members alphabetically. Assign houses from Classes & Houses.">
           {h.students.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>No active members yet. Assign learners to this house to build the community.</p>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }>No active members yet. Assign learners to this house to build the community.</p>
           ) : (
             <div className="product-table-wrap">
               <table className="product-table">
@@ -66,7 +66,7 @@ export default async function HouseDetailPage({ params }: { params: Promise<{ id
                     <tr key={s.id}>
                       <td>
                         <Link href={`/school/students/${s.id}`}>{s.name}</Link>
-                        <small style={{ display: "block", color: "var(--color-text-muted)" }}>{s.admissionNo}</small>
+                        <small style={{ display: "block", color: "var(--color-text-muted)" }>{s.admissionNo}</small>
                       </td>
                       <td>{s.class?.name ?? "Unassigned"}</td>
                     </tr>

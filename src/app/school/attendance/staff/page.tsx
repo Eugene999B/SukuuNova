@@ -31,11 +31,11 @@ export default async function StaffAttendancePage({ searchParams }: { searchPara
   return <AppShell universe="school" title="Staff Attendance" subtitle="Staff attendance." active="Staff Attendance" userName={session.name} schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""}>
     <div className="module-workspace">
       <section className="module-card">
-        <form style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 }}>
-          <label style={{ display: "grid", gap: 6 }}><span>From</span><input type="date" name="start" defaultValue={start} /></label>
-          <label style={{ display: "grid", gap: 6 }}><span>To</span><input type="date" name="end" defaultValue={end} /></label>
-          <label style={{ display: "grid", gap: 6 }}><span>Staff member</span><select name="staffId" defaultValue={params.staffId ?? ""}><option value="">All active staff</option>{data.staff.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
-          <button className="module-hero-button" type="submit" style={{ alignSelf: "end" }}>Apply filters →</button>
+        <form style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 10 }>
+          <label style={{ display: "grid", gap: 6 }><span>From</span><input type="date" name="start" defaultValue={start} /></label>
+          <label style={{ display: "grid", gap: 6 }><span>To</span><input type="date" name="end" defaultValue={end} /></label>
+          <label style={{ display: "grid", gap: 6 }><span>Staff member</span><select name="staffId" defaultValue={params.staffId ?? ""}><option value="">All active staff</option>{data.staff.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+          <button className="module-hero-button" type="submit" style={{ alignSelf: "end" }>Apply filters →</button>
         </form>
       </section>
 

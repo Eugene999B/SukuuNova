@@ -88,7 +88,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="closing-cta"><div><span className="section-kicker">READY TO GET STARTED?</span><h2>Put the school in one place.</h2><p>Give your team one system for the records and work they already manage every day.</p></div><div style={{ display: "grid", gap: 10 }}><Link className="primary-cta" href="/for-schools">See SukuuNova for schools <ArrowRight size={16} aria-hidden="true" /></Link><HomeLeadChat /></div></section>
+        <section className="closing-cta"><div><span className="section-kicker">READY TO GET STARTED?</span><h2>Put the school in one place.</h2><p>Give your team one system for the records and work they already manage every day.</p></div><div style={{ display: "grid", gap: 10 }><Link className="primary-cta" href="/for-schools">See SukuuNova for schools <ArrowRight size={16} aria-hidden="true" /></Link><HomeLeadChat /></div></section>
 
         <footer className="footer"><span>© 2026 SukuuNova</span><span>School work, kept together.</span><span><Link href="/about">About</Link> · <Link href="/contact">Contact</Link> · <Link href="/login/platform">Platform access</Link></span></footer>
       </div>

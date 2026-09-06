@@ -172,7 +172,7 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
         </ProductSection>
         <ProductSection eyebrow="Attendance" title="Summary" description="Check-in mix for learners currently in this class.">
           {data.attendance.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>No attendance recorded for this class yet.</p>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }>No attendance recorded for this class yet.</p>
           ) : (
             <DetailGrid items={data.attendance.map((a) => ({ label: a.type, value: String(a.count) }))} />
           )}

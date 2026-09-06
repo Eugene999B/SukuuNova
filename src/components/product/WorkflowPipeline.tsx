@@ -29,7 +29,7 @@ export function WorkflowPipeline(props: { steps: Array<{ key: string; label: str
 
 export function ExportDialogHint(props: { what: string; count: number; formats: string[] }) {
   return (
-    <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>
+    <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }>
       Exporting <strong>{props.count} {props.what}</strong> as {props.formats.join(" / ")}. You stay on this page; the file downloads when ready. Large exports may take a moment — do not close the tab.
     </p>
   );

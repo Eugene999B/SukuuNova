@@ -53,7 +53,7 @@ export function StudentEditForm(props: {
         </div>
       ) : null}
       {dirty && !pending ? (
-        <p role="status" style={{ fontSize: 13, color: "var(--color-warning)" }}>
+        <p role="status" style={{ fontSize: 13, color: "var(--color-warning)" }>
           Unsaved changes — review the sections below, then Save.
         </p>
       ) : null}

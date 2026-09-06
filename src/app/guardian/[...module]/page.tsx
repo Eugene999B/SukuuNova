@@ -100,22 +100,22 @@ export default async function GuardianModulePage({ params }: Props) {
       </div>
 
       {childId ? (
-        <section className="sn-list-card" style={{marginTop:16}}>
+        <section className="sn-list-card" style={{marginTop:16}>
           <header className="sn-list-card-head"><div><h2>{data.child!.name}</h2><p>{data.child!.admissionNo} · {data.child!.class?.name ?? "Unassigned"}</p></div><span className="app-pill">Connected learner</span></header>
           <div className="sn-list-card-body">
             <div className="app-list-row"><span className="app-list-icon"><CircleCheckBig size={15}/></span><div><b>Attendance</b><span>{data.child!.attendanceEvents.length} recorded events</span></div></div>
             <div className="app-list-row"><span className="app-list-icon"><GraduationCap size={15}/></span><div><b>Academic records</b><span>{data.child!.scores.length} published scores · {data.child!.reportCards.length} published report cards</span></div></div>
             <div className="app-list-row"><span className="app-list-icon"><WalletCards size={15}/></span><div><b>Fees</b><span>GH₵{data.child!.invoices.reduce((sum, inv) => sum.plus(invoiceDue(inv)), new Prisma.Decimal(0)).toFixed(2)} outstanding</span></div></div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"12px 0 14px"}}><Link className="module-hero-button" href="/guardian/attendance">Attendance</Link><Link className="module-hero-button" href="/guardian/academics">Academics</Link><Link className="module-hero-button" href="/guardian/fees">Fees</Link></div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"12px 0 14px"}><Link className="module-hero-button" href="/guardian/attendance">Attendance</Link><Link className="module-hero-button" href="/guardian/academics">Academics</Link><Link className="module-hero-button" href="/guardian/fees">Fees</Link></div>
           </div>
         </section>
       ) : data.children.length ? (
-        <section className="sn-list-card" style={{marginTop:16}}>
+        <section className="sn-list-card" style={{marginTop:16}>
           <header className="sn-list-card-head"><div><h2>{title}</h2></div></header>
-          <div className="sn-list-card-body">{data.children.map((student) => <Link key={student.id} href={`/guardian/children/${student.id}`} className="app-list-row" style={{textDecoration:"none"}}><span className="app-list-icon"><UsersRound size={15}/></span><div><b>{student.name}</b><span>{student.admissionNo} · {student.class?.name ?? "Unassigned"}</span></div><ArrowRight size={15}/></Link>)}</div>
+          <div className="sn-list-card-body">{data.children.map((student) => <Link key={student.id} href={`/guardian/children/${student.id}`} className="app-list-row" style={{textDecoration:"none"}><span className="app-list-icon"><UsersRound size={15}/></span><div><b>{student.name}</b><span>{student.admissionNo} · {student.class?.name ?? "Unassigned"}</span></div><ArrowRight size={15}/></Link>)}</div>
         </section>
       ) : (
-        <div style={{marginTop:16}}><EmptyState icon={UsersRound} title="No linked learner records yet" description="Your school must connect a learner to this guardian account before family information appears here." /></div>
+        <div style={{marginTop:16}><EmptyState icon={UsersRound} title="No linked learner records yet" description="Your school must connect a learner to this guardian account before family information appears here." /></div>
       )}
     </AppShell>
   );

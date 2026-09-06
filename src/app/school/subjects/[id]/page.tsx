@@ -91,11 +91,11 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
         <ProductSection eyebrow="Assessment" title="Assessments & results" description="What has been set, how it is weighted, and where marks live.">
           <DetailGrid items={[{ label: "Timetable slots", value: String(s._count.timetableSlots) }, { label: "Scores recorded", value: String(s._count.scores) }]} />
           {s.assessments.length === 0 ? (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12 }>
               <ProductEmpty title="No assessments" description="Create assessments from Exams so teachers can enter marks against this subject." />
             </div>
           ) : (
-            <div className="product-table-wrap" style={{ marginTop: 12 }}>
+            <div className="product-table-wrap" style={{ marginTop: 12 }>
               <table className="product-table">
                 <thead>
                   <tr>
@@ -108,7 +108,7 @@ export default async function SubjectDetailPage({ params }: { params: Promise<{ 
                   {s.assessments.map((a) => (
                     <tr key={a.id}>
                       <td>
-                        {a.name} <small style={{ color: "var(--color-text-muted)" }}>· {a.type} · /{String(a.maxScore)}</small>
+                        {a.name} <small style={{ color: "var(--color-text-muted)" }>· {a.type} · /{String(a.maxScore)}</small>
                       </td>
                       <td>{a.class.name}</td>
                       <td>{String(a.weight)}</td>

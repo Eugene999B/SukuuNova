@@ -407,7 +407,7 @@ function AccessPageInner() {
             </div>
 
             {selected.status === "pending" ? (
-              <div className="access-note" style={{ marginBottom: 16 }}>
+              <div className="access-note" style={{ marginBottom: 16 }>
                 <strong>Login not created yet.</strong> This is a staff profile only. Set a password below and activate the same person; the existing teacher, class and subject relationships remain attached.
               </div>
             ) : null}
@@ -430,7 +430,7 @@ function AccessPageInner() {
                   ))}
                 </div>
                 {selected.status === "pending" ? (
-                  <label style={{ display: "block", marginTop: 16 }}>
+                  <label style={{ display: "block", marginTop: 16 }>
                     Login password
                     <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="At least 12 characters" disabled={!data?.canControlRoles} />
                   </label>

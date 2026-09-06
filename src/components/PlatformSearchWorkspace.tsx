@@ -32,17 +32,17 @@ export default function PlatformSearchWorkspace() {
   }
 
   return <div className="app-dashboard-grid">
-      <section className="app-card app-panel" style={{gridColumn:"1/-1"}}>
+      <section className="app-card app-panel" style={{gridColumn:"1/-1"}>
         <div className="app-card-head"><div><span className="app-eyebrow">FIND · INVESTIGATE · VERIFY</span><h2>Search the network</h2></div><Link href="/platform/schools" className="app-pill">Browse schools</Link></div>
-        <form onSubmit={event=>{event.preventDefault();void search()}} style={{display:"flex",gap:10,alignItems:"stretch",marginTop:16}}>
-          <div style={{position:"relative",flex:1}}><Search size={17} aria-hidden="true" style={{position:"absolute",left:14,top:15,color:"#64748b"}}/><input aria-label="Search schools, students or staff" value={query} onChange={event=>setQuery(event.target.value)} style={{width:"100%",paddingLeft:42}} placeholder="e.g. Accra Academy, STU-2026-014, Ama Mensah" autoComplete="off" /></div>
+        <form onSubmit={event=>{event.preventDefault();void search()}} style={{display:"flex",gap:10,alignItems:"stretch",marginTop:16}>
+          <div style={{position:"relative",flex:1}><Search size={17} aria-hidden="true" style={{position:"absolute",left:14,top:15,color: "var(--color-text-muted)"}/><input aria-label="Search schools, students or staff" value={query} onChange={event=>setQuery(event.target.value)} style={{width:"100%",paddingLeft:42} placeholder="e.g. Accra Academy, STU-2026-014, Ama Mensah" autoComplete="off" /></div>
           <button type="submit" disabled={loading||!query.trim()} className="app-action"><strong>{loading?"Searching…":"Search"}</strong>Network-wide lookup</button>
         </form>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}}><span className="app-pill"><SchoolIcon size={13}/> Schools</span><span className="app-pill"><UsersRound size={13}/> Students</span><span className="app-pill"><UserRound size={13}/> Staff</span><span className="app-pill">Scope enforced server-side</span></div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:12}><span className="app-pill"><SchoolIcon size={13}/> Schools</span><span className="app-pill"><UsersRound size={13}/> Students</span><span className="app-pill"><UserRound size={13}/> Staff</span><span className="app-pill">Scope enforced server-side</span></div>
       </section>
 
-      {error&&<div className="app-banner" style={{gridColumn:"1/-1"}}><div><h3>{error}</h3><p>Check the search term or your platform access.</p></div></div>}
-      {searched&&!loading&&!error&&!results.length&&<div className="app-empty" style={{gridColumn:"1/-1"}}><b>No matches found</b><span>No result was returned within the schools available to your worker account.</span></div>}
+      {error&&<div className="app-banner" style={{gridColumn:"1/-1"}><div><h3>{error}</h3><p>Check the search term or your platform access.</p></div></div>}
+      {searched&&!loading&&!error&&!results.length&&<div className="app-empty" style={{gridColumn:"1/-1"}><b>No matches found</b><span>No result was returned within the schools available to your worker account.</span></div>}
       {results.map(school=><section key={school.schoolId} className="app-card app-panel">
         <div className="app-card-head"><div><span className="app-eyebrow">SCHOOL</span><h3>{school.school?.name??"Unknown school"}</h3><p>{school.school?.uniqueCode??school.schoolId}</p></div><Link href={`/platform/schools/${school.schoolId}`} className="app-pill">Open School 360 <ArrowRight size={13}/></Link></div>
         <div className="platform-search-counts"><span><strong>{school.students.length}</strong> students</span><span><strong>{school.users.length}</strong> staff</span></div>

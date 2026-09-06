@@ -22,7 +22,7 @@ export default async function PlatformSchoolPeoplePage({ params }: { params: Pro
   });
   if (!result) notFound();
   return <AppShell universe="platform" title={`${result.school.name} · People`} subtitle="People and access." active="Schools">
-    <div className="app-banner"><div><span className="app-eyebrow">SCHOOL 360 · PEOPLE</span><h3>{result.school.name}</h3><p>{result.school.uniqueCode} · {result.school.status} · Platform operators stay within the selected school scope.</p></div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Link className="app-pill" href={`/platform/schools/${encodeURIComponent(id)}`}>Back to School 360</Link><Link className="app-pill" href={`/platform/schools/${encodeURIComponent(id)}/activity`}>Activity Center</Link></div></div>
+    <div className="app-banner"><div><span className="app-eyebrow">SCHOOL 360 · PEOPLE</span><h3>{result.school.name}</h3><p>{result.school.uniqueCode} · {result.school.status} · Platform operators stay within the selected school scope.</p></div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }><Link className="app-pill" href={`/platform/schools/${encodeURIComponent(id)}`}>Back to School 360</Link><Link className="app-pill" href={`/platform/schools/${encodeURIComponent(id)}/activity`}>Activity Center</Link></div></div>
     <PlatformSchoolPeopleConsole schoolId={id} people={result.people} canImpersonate={canImpersonate} />
   </AppShell>;
 }

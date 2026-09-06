@@ -53,9 +53,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <section className="module-card">
         <div className="module-section-title"><div><span>Reporting context</span><h3>{data.term?.name ?? "No term selected"}</h3></div></div>
         <form className="module-toolbar" action="/school/reports" method="get">
-          <label style={{ display: "grid", gap: 5, fontSize: 10, fontWeight: 800, flex: 1 }}>Term<select name="term" defaultValue={data.term?.id ?? ""}>{data.terms.map((term) => <option key={term.id} value={term.id}>{term.name}</option>)}</select></label>
-          <label style={{ display: "grid", gap: 5, fontSize: 10, fontWeight: 800, flex: 1 }}>Class<select name="classId" defaultValue={params.classId ?? ""}><option value="">All classes</option>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></label>
-          <label style={{ display: "grid", gap: 5, fontSize: 10, fontWeight: 800, flex: 1 }}>Status<select name="status" defaultValue={params.status ?? ""}><option value="">All statuses</option><option value="draft">Draft</option><option value="submitted">For review</option><option value="approved">Approved</option><option value="sent">Released</option></select></label>
+          <label style={{ display: "grid", gap: 5, fontSize: 10, fontWeight: 800, flex: 1 }>Term<select name="term" defaultValue={data.term?.id ?? ""}>{data.terms.map((term) => <option key={term.id} value={term.id}>{term.name}</option>)}</select></label>
+          <label style={{ display: "grid", gap: 5, fontSize: 10, fontWeight: 800, flex: 1 }>Class<select name="classId" defaultValue={params.classId ?? ""}><option value="">All classes</option>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></label>
+          <label style={{ display: "grid", gap: 5, fontSize: 10, fontWeight: 800, flex: 1 }>Status<select name="status" defaultValue={params.status ?? ""}><option value="">All statuses</option><option value="draft">Draft</option><option value="submitted">For review</option><option value="approved">Approved</option><option value="sent">Released</option></select></label>
           <button className="button primary" type="submit">Load reports</button>
         </form>
       </section>

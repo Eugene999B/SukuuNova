@@ -33,7 +33,7 @@ body {
   min-height: 100vh;
   margin: 0;
   background: var(--bg);
-  color: var(--color-text-primary, #0f172a);
+  color: var(--color-text-primary, var(--color-text-primary));
   font-family: var(--sn-font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -56,7 +56,7 @@ a {
 /* Base interactive focus */
 :focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring, 0 0 0 3px rgba(15, 118, 110, 0.25));
+  box-shadow: var(--focus-ring, 0 0 0 3px var(--sn-shadow-sm));
 }
 
 /* Custom Scrollbar */
@@ -68,14 +68,14 @@ a {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--color-border-strong);
   border-radius: 999px;
 }
 :root[data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--color-text-secondary);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--color-text-subtle);
 }
 
 /* Modern Module Workspace Layouts */
@@ -144,7 +144,7 @@ a {
 
 .module-action-primary {
   background: var(--color-brand);
-  color: #ffffff !important;
+  color: var(--color-surface) !important;
   box-shadow: var(--shadow-sm);
 }
 .module-action-primary:hover {
@@ -294,7 +294,7 @@ a {
 
 .module-inline-link:hover {
   background: var(--color-brand);
-  color: #ffffff;
+  color: var(--color-surface);
 }
 
 .module-split, .module-attendance-board, .module-finance-grid, .module-comms-grid, .module-feature-grid, .module-admin-grid, .module-command-grid {

@@ -123,11 +123,11 @@ export default function DevicesPage() {
       subtitle="Terminal setup."
       active="Security & Access"
     >
-      <main style={{ display: "grid", gap: 18 }}>
+      <main style={{ display: "grid", gap: 18 }>
         <section className="app-card app-panel">
           <p className="app-kpi-label">DEVICE REGISTRATION</p>
           <h2>Connect an attendance terminal</h2>
-          <div style={{ display: "grid", gap: 12, maxWidth: 820, gridTemplateColumns: "1fr 1fr" }}>
+          <div style={{ display: "grid", gap: 12, maxWidth: 820, gridTemplateColumns: "1fr 1fr" }>
             <input value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="Device serial" />
             <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label, e.g. Main Gate" />
             <select value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -140,9 +140,9 @@ export default function DevicesPage() {
             </button>
           </div>
           {secret ? (
-            <div className="app-banner" style={{ marginTop: 14 }}>
+            <div className="app-banner" style={{ marginTop: 14 }>
               <strong>Copy this device secret now</strong>
-              <p style={{ wordBreak: "break-all" }}>{secret}</p>
+              <p style={{ wordBreak: "break-all" }>{secret}</p>
             </div>
           ) : null}
         </section>
@@ -151,25 +151,25 @@ export default function DevicesPage() {
           <p className="app-kpi-label">IDENTITY MAPPING</p>
           <h2>Map fingerprint/card IDs to people</h2>
           <p>Vendor external IDs are mapped to a student or staff identity. SukuuNova does not store raw fingerprint templates or card credentials.</p>
-          <div style={{ display: "grid", gap: 12, maxWidth: 900, gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <div style={{ display: "grid", gap: 12, maxWidth: 900, gridTemplateColumns: "1fr 1fr 1fr" }>
             <select value={identityKind} onChange={(e) => setIdentityKind(e.target.value)}><option value="fingerprint">Fingerprint</option><option value="card">Card</option></select>
             <input value={externalId} onChange={(e) => setExternalId(e.target.value)} placeholder="Vendor external ID" />
             <select value={targetType} onChange={(e) => { const next = e.target.value; setTargetType(next); setTargetId((next === "student" ? students[0]?.id : staff[0]?.id) ?? ""); }}><option value="student">Student</option><option value="staff">Staff</option></select>
             <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>{people.map((person) => <option key={person.id} value={person.id}>{person.name}{person.admissionNo ? ` · ${person.admissionNo}` : ""}</option>)}</select>
             <button className="app-action" onClick={() => void saveIdentity()} disabled={!externalId.trim() || !targetId}><strong>Save mapping</strong></button>
           </div>
-          <div style={{ marginTop: 16, display: "grid", gap: 8 }}>
+          <div style={{ marginTop: 16, display: "grid", gap: 8 }>
             {identities.map((identity) => {
               const person = identity.studentId ? students.find((p) => p.id === identity.studentId) : staff.find((p) => p.id === identity.staffId);
-              return <div key={identity.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 12, alignItems: "center", border: "1px solid var(--app-line,#d7e0e0)", padding: 10, borderRadius: 10 }}><span>{identity.deviceKind}</span><strong>{identity.externalId}</strong><span>{person?.name ?? "Unknown person"}</span><button className="app-pill" onClick={() => void removeIdentity(identity.id)}>Remove</button></div>;
+              return <div key={identity.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr auto", gap: 12, alignItems: "center", border: "1px solid var(--app-line,#d7e0e0)", padding: 10, borderRadius: 10 }><span>{identity.deviceKind}</span><strong>{identity.externalId}</strong><span>{person?.name ?? "Unknown person"}</span><button className="app-pill" onClick={() => void removeIdentity(identity.id)}>Remove</button></div>;
             })}
           </div>
         </section>
 
         <section className="app-card app-panel">
           <p className="app-kpi-label">REGISTERED DEVICES</p>
-          {devices.length === 0 ? <p>No attendance devices registered yet.</p> : <div style={{ display: "grid", gap: 10 }}>{devices.map((device) => <div key={device.id} style={{ display: "grid", gridTemplateColumns: "1.4fr .8fr 1fr auto", gap: 12, alignItems: "center", border: "1px solid var(--app-line,#d7e0e0)", padding: 12, borderRadius: 12 }}><div><strong>{device.label}</strong><div>{device.deviceSerial}</div></div><span>{device.kind}</span><span>{device.status}{device.lastSeenAt ? ` · ${new Date(device.lastSeenAt).toLocaleString()}` : " · never seen"}</span>{device.status === "active" ? <button className="app-pill" onClick={() => void revokeDevice(device.id)}>Revoke</button> : <span className="app-pill">Revoked</span>}</div>)}</div>}
-          {message ? <div className="app-banner" style={{ marginTop: 14 }}><p>{message}</p></div> : null}
+          {devices.length === 0 ? <p>No attendance devices registered yet.</p> : <div style={{ display: "grid", gap: 10 }>{devices.map((device) => <div key={device.id} style={{ display: "grid", gridTemplateColumns: "1.4fr .8fr 1fr auto", gap: 12, alignItems: "center", border: "1px solid var(--app-line,#d7e0e0)", padding: 12, borderRadius: 12 }><div><strong>{device.label}</strong><div>{device.deviceSerial}</div></div><span>{device.kind}</span><span>{device.status}{device.lastSeenAt ? ` · ${new Date(device.lastSeenAt).toLocaleString()}` : " · never seen"}</span>{device.status === "active" ? <button className="app-pill" onClick={() => void revokeDevice(device.id)}>Revoke</button> : <span className="app-pill">Revoked</span>}</div>)}</div>}
+          {message ? <div className="app-banner" style={{ marginTop: 14 }><p>{message}</p></div> : null}
         </section>
       </main>
     </AppShell>

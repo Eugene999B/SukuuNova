@@ -66,7 +66,7 @@
 
 .module-button.primary {
   background: var(--sn-primary);
-  color: #fff;
+  color: var(--color-surface);
   border-color: var(--sn-primary);
   box-shadow: var(--sn-shadow-sm);
 }

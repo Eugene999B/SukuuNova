@@ -83,7 +83,7 @@ export function SpeedDialActions({ universe, onOpenShortcuts }: Props) {
                   onClick={() => setOpen(false)}
                   role="menuitem"
                 >
-                  <span className="sn-speed-dial-item-icon" style={{ background: `${item.color}15`, color: item.color }}>
+                  <span className="sn-speed-dial-item-icon" style={{ background: `${item.color}15`, color: item.color }>
                     <Icon size={16} aria-hidden="true" />
                   </span>
                   <span className="sn-speed-dial-item-label">{item.label}</span>
@@ -100,7 +100,7 @@ export function SpeedDialActions({ universe, onOpenShortcuts }: Props) {
               }}
               role="menuitem"
             >
-              <span className="sn-speed-dial-item-icon" style={{ background: "rgba(100, 116, 139, 0.15)", color: "var(--sn-ink)" }}>
+              <span className="sn-speed-dial-item-icon" style={{ background: "var(--sn-surface)", color: "var(--sn-ink)" }>
                 <Keyboard size={16} aria-hidden="true" />
               </span>
               <span className="sn-speed-dial-item-label">Keyboard Shortcuts</span>

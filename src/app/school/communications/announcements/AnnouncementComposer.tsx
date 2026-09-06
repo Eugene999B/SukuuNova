@@ -41,7 +41,7 @@ export default function AnnouncementComposer({ roles, users }: { roles: Role[]; 
         <div><span>Internal communications</span><h3>Publish an announcement</h3></div>
         <span className="app-pill">In-app delivery</span>
       </div>
-      <div className="module-compose-preview" style={{ display: "grid", gap: 10, marginTop: 16 }}>
+      <div className="module-compose-preview" style={{ display: "grid", gap: 10, marginTop: 16 }>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Announcement title" aria-label="Announcement title" />
         <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Write the message for the selected audience…" aria-label="Announcement body" rows={7} />
         <div className="module-audience-grid">
@@ -53,11 +53,11 @@ export default function AnnouncementComposer({ roles, users }: { roles: Role[]; 
         </div>
         {audience === "role" ? <select value={roleId} onChange={(e) => setRoleId(e.target.value)} aria-label="Role audience">{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select> : null}
         {audience === "individual" ? <select value={userId} onChange={(e) => setUserId(e.target.value)} aria-label="Individual recipient">{users.map((user) => <option key={user.id} value={user.id}>{user.name}{user.roleNames.length ? ` · ${user.roleNames.join(", ")}` : ""}</option>)}</select> : null}
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <small style={{ color: "#627b80" }}>Announcements are recorded in the school audit trail.</small>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }>
+          <small style={{ color: "var(--sn-ink)" }>Announcements are recorded in the school audit trail.</small>
           <button className="module-hero-button" type="button" onClick={submit} disabled={pending || !title.trim() || !body.trim()}>{pending ? "Publishing…" : "Publish announcement →"}</button>
         </div>
-        {status ? <p role="status" style={{ margin: 0, color: status.startsWith("Published") ? "#72e3c1" : "#ff9b9b", fontSize: 9 }}>{status}</p> : null}
+        {status ? <p role="status" style={{ margin: 0, color: status.startsWith("Published") ? "#72e3c1" : "#ff9b9b", fontSize: 9 }>{status}</p> : null}
       </div>
     </section>
   );

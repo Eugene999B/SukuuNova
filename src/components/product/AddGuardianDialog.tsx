@@ -68,7 +68,7 @@ export function AddGuardianDialog(props: {
               <input name="name" placeholder="Full name, e.g. Akosua Mensah" required maxLength={120} aria-label="Guardian full name" />
               <small>Family contact name as it should appear on messages and reports.</small>
             </div>
-            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }>
               <label className="product-field">
                 <span>Phone / WhatsApp</span>
                 <input name="phone" inputMode="tel" placeholder="024 000 0000" required aria-label="Guardian phone" />
@@ -78,7 +78,7 @@ export function AddGuardianDialog(props: {
                 <input name="email" type="email" placeholder="guardian@example.com" aria-label="Guardian email" />
               </label>
             </div>
-            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }>
               <label className="product-field">
                 <span>3 · Relationship</span>
                 <select name="relationship" defaultValue="Parent">

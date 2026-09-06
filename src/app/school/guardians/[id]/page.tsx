@@ -72,14 +72,14 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
               { label: "Portal", value: g.userId ? (g.user?.status ?? "pending") : "Not provisioned", hint: g.user?.needsPasswordChange ? "Must change password on first sign-in" : undefined },
             ]}
           />
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", fontSize: 13, color: "var(--color-text-secondary)" }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap", fontSize: 13, color: "var(--color-text-secondary)" }>
             {g.phone ? (
-              <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }>
                 <Phone size={14} aria-hidden="true" /> {g.phone}
               </span>
             ) : null}
             {g.email || g.user?.email ? (
-              <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }>
                 <Mail size={14} aria-hidden="true" /> {g.email ?? g.user?.email}
               </span>
             ) : null}
@@ -87,7 +87,7 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
         </ProductSection>
         <ProductSection eyebrow="Relationships" title={`Linked learners (${g.students.length})`} description="Each row is one explicit school relationship. Primary marks the first contact for fees and emergencies.">
           {g.students.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>No children linked yet. Link from the guardian directory.</p>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }>No children linked yet. Link from the guardian directory.</p>
           ) : (
             <div className="product-table-wrap">
               <table className="product-table">
@@ -106,7 +106,7 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
                         <Link href={`/school/students/${link.student.id}`}>
                           {link.student.name}
                         </Link>
-                        <small style={{ display: "block", color: "var(--color-text-muted)" }}>
+                        <small style={{ display: "block", color: "var(--color-text-muted)" }>
                           {link.student.admissionNo}
                           {link.isPrimary ? " · Primary" : ""}
                         </small>

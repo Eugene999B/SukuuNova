@@ -127,13 +127,13 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             </div>
             <div>
               <StatusBadge tone={statusTone(student.status)}>{student.status}</StatusBadge>
-              <p style={{ margin: "8px 0 0", color: "var(--color-text-secondary)", fontSize: 13 }}>
+              <p style={{ margin: "8px 0 0", color: "var(--color-text-secondary)", fontSize: 13 }>
                 {student.house ? `House ${student.house.name} (${student.house.code}) · ` : "No house assigned · "}
                 {student.class?.classTeacher ? `Form teacher ${student.class.classTeacher.name}` : "No form teacher assigned"}
               </p>
             </div>
           </div>
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 16 }>
             <DetailGrid
               items={[
                 { label: "Full name", value: student.name },
@@ -175,7 +175,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                     <tr key={`${s.assessment.name}-${i}`}>
                       <td>{s.subject.name}</td>
                       <td>
-                        {s.assessment.name} <small style={{ color: "var(--color-text-muted)" }}>· {s.assessment.type}</small>
+                        {s.assessment.name} <small style={{ color: "var(--color-text-muted)" }>· {s.assessment.type}</small>
                       </td>
                       <td>{String(s.value)}</td>
                       <td>{new Date(s.enteredAt).toLocaleDateString("en-GB")}</td>
@@ -185,9 +185,9 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
               </table>
             </div>
           )}
-          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }>
             {student.reportCards.length === 0 ? (
-              <small style={{ color: "var(--color-text-muted)" }}>No report cards generated yet.</small>
+              <small style={{ color: "var(--color-text-muted)" }>No report cards generated yet.</small>
             ) : (
               student.reportCards.map((r) => (
                 <span key={r.id}>
@@ -197,7 +197,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                 </span>
               ))
             )}
-            <Link href="/school/report-cards" className="text-link" style={{ fontSize: 13 }}>
+            <Link href="/school/report-cards" className="text-link" style={{ fontSize: 13 }>
               Open report card studio →
             </Link>
           </div>
@@ -240,11 +240,11 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
                     <tr key={link.guardian.id}>
                       <td>
                         <Link href={`/school/guardians/${link.guardian.id}`}>{link.guardian.name}</Link>
-                        {link.isPrimary ? <small style={{ color: "var(--color-text-muted)" }}> · Primary</small> : null}
+                        {link.isPrimary ? <small style={{ color: "var(--color-text-muted)" }> · Primary</small> : null}
                       </td>
                       <td>
                         {link.guardian.phone ?? "—"}
-                        {link.guardian.email ? <small style={{ display: "block", color: "var(--color-text-muted)" }}>{link.guardian.email}</small> : null}
+                        {link.guardian.email ? <small style={{ display: "block", color: "var(--color-text-muted)" }>{link.guardian.email}</small> : null}
                       </td>
                       <td>{link.relationship}</td>
                       <td>
@@ -263,7 +263,7 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             </div>
           )}
           {primaryGuardian ? (
-            <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--color-text-muted)" }}>
+            <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--color-text-muted)" }>
               Primary contact: {primaryGuardian.name} · {primaryGuardian.phone ?? "no phone on record"}
             </p>
           ) : null}
@@ -323,11 +323,11 @@ export default async function StudentProfilePage({ params }: { params: Promise<{
             ]}
           />
           {student.invoices.length === 0 ? (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12 }>
               <ProductEmpty icon={ReceiptText} title="No invoices" description="Generate an invoice for the learner's term to start the fee workflow." />
             </div>
           ) : (
-            <div className="product-table-wrap" style={{ marginTop: 12 }}>
+            <div className="product-table-wrap" style={{ marginTop: 12 }>
               <table className="product-table">
                 <thead>
                   <tr>

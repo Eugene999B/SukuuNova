@@ -6,7 +6,7 @@ type SkeletonProps = HTMLAttributes<HTMLSpanElement> & {
 };
 
 export function Skeleton({ width = "100%", height = 16, className = "", style, ...props }: SkeletonProps) {
-  return <span aria-hidden="true" className={`sn-skeleton ${className}`.trim()} style={{ width, height, ...style }} {...props} />;
+  return <span aria-hidden="true" className={`sn-skeleton ${className}`.trim()} style={{ width, height, ...style } {...props} />;
 }
 
 export function SkeletonText({ lines = 3, lastWidth = "70%" }: { lines?: number; lastWidth?: string }) {

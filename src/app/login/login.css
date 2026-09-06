@@ -174,7 +174,7 @@
   display: grid;
   place-items: center;
   background: linear-gradient(135deg, var(--auth-accent), color-mix(in srgb, var(--auth-accent) 80%, black));
-  color: #fff;
+  color: var(--color-surface);
   font-weight: 850;
   font-size: 18px;
   box-shadow: 0 4px 14px color-mix(in srgb, var(--auth-accent) 25%, transparent);
@@ -261,7 +261,7 @@
 
 .auth-stepper span.is-active {
   background: var(--auth-accent);
-  color: #fff;
+  color: var(--color-surface);
   border-color: var(--auth-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--auth-accent) 20%, transparent);
 }
@@ -269,7 +269,7 @@
 .auth-stepper span.is-complete {
   background: var(--sn-success-soft);
   color: var(--sn-success);
-  border-color: rgba(22, 163, 74, 0.3);
+  border-color: var(--sn-line);
 }
 
 .auth-stepper i {
@@ -503,7 +503,7 @@
 
 .auth-error {
   margin: 0;
-  border: 1px solid rgba(225, 29, 72, 0.3);
+  border: 1px solid var(--sn-line);
   border-radius: var(--sn-radius-md);
   background: var(--sn-danger-soft);
   padding: 10px 14px;
@@ -523,7 +523,7 @@
   padding: 13px 20px;
   min-height: 46px;
   background: var(--auth-accent);
-  color: #fff;
+  color: var(--color-surface);
   font: inherit;
   font-size: 14px;
   font-weight: 800;

@@ -15,13 +15,13 @@
   --ui-text-muted: #64748b;
   --ui-text-subtle: #94a3b8;
   --ui-text-disabled: #cbd5e1;
-  --ui-border: #e2e8f0;
-  --ui-border-strong: #cbd5e1;
-  --ui-border-subtle: #f1f5f9;
+  --ui-border: var(--color-border);
+  --ui-border-strong: var(--color-border-strong);
+  --ui-border-subtle: var(--color-bg-subtle);
   --ui-primary: #0f766e;
   --ui-primary-hover: #0d9488;
   --ui-primary-soft: #f0fdfa;
-  --ui-primary-border: #ccfbf1;
+  --ui-primary-border: var(--sn-line);
   --ui-success: #15803d;
   --ui-success-soft: #f0fdf4;
   --ui-warning: #b45309;
@@ -51,13 +51,13 @@
   --ui-text-muted: #94a3b8;
   --ui-text-subtle: #64748b;
   --ui-text-disabled: #475569;
-  --ui-border: #1e293b;
-  --ui-border-strong: #334155;
-  --ui-border-subtle: #162032;
+  --ui-border: var(--color-surface-raised);
+  --ui-border-strong: var(--color-text-secondary);
+  --ui-border-subtle: var(--color-surface-soft);
   --ui-primary: #14b8a6;
   --ui-primary-hover: #2dd4bf;
   --ui-primary-soft: #042f2e;
-  --ui-primary-border: #134e4a;
+  --ui-primary-border: var(--sn-line);
   --ui-success: #4ade80;
   --ui-success-soft: #052e16;
   --ui-warning: #fbbf24;
@@ -168,14 +168,14 @@ body {
 /* Primary / secondary actions */
 :where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]) {
   background: var(--ui-primary) !important;
-  color: #fff !important;
+  color: var(--color-surface) !important;
   border-color: var(--ui-primary) !important;
   box-shadow: none !important;
 }
 
 :where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]):hover {
   background: var(--ui-primary-hover) !important;
-  color: #fff !important;
+  color: var(--color-surface) !important;
   border-color: var(--ui-primary-hover) !important;
 }
 

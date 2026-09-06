@@ -198,7 +198,7 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
               <div className="report-command-card primary-command">
                 <div className="report-command-number">01</div>
                 <div className="report-command-copy"><span className="report-eyebrow">PREPARE</span><h2>Complete the class before reviewing individuals.</h2></div>
-                <div className="report-command-progress"><div className="report-progress-track"><span style={{ width: `${coverage}%` }} /></div><strong>{reportCount} of {learnerCount}</strong><small>{missing ? `${missing} missing` : "Class fully generated"}</small></div>
+                <div className="report-command-progress"><div className="report-progress-track"><span style={{ width: `${coverage}%` } /></div><strong>{reportCount} of {learnerCount}</strong><small>{missing ? `${missing} missing` : "Class fully generated"}</small></div>
                 <div className="report-command-actions">{data.permissions.generate ? <form action={runReportCardAction}><input type="hidden" name="action" value="generate" /><input type="hidden" name="termId" value={term.id} /><input type="hidden" name="classId" value={data.selectedClass?.id ?? ""} /><button className="report-button primary" type="submit" disabled={!missing}>{missing ? `Generate ${missing} missing` : "All reports generated"} <ArrowRight aria-hidden="true" /></button></form> : null}<Link className="report-secondary-link" href="/school/gradebook/studio">Review marks first <ArrowRight aria-hidden="true" /></Link></div>
               </div>
 

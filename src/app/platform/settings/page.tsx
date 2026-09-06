@@ -18,9 +18,9 @@ export default async function SettingsPage() {
       role={session.role}
     >
       <PlatformControlSettingsStudio />
-      <details style={{ marginTop: 24 }}>
-        <summary className="app-card" style={{ padding: "15px 18px", cursor: "pointer", fontSize: 12, fontWeight: 850 }}>Public presence & legacy governed links</summary>
-        <div style={{ marginTop: 12 }}><PlatformSettingsWorkspace /></div>
+      <details style={{ marginTop: 24 }>
+        <summary className="app-card" style={{ padding: "15px 18px", cursor: "pointer", fontSize: 12, fontWeight: 850 }>Public presence & legacy governed links</summary>
+        <div style={{ marginTop: 12 }><PlatformSettingsWorkspace /></div>
       </details>
     </AppShell>
   );
