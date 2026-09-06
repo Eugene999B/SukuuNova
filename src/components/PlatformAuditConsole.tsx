@@ -75,14 +75,14 @@ export default function PlatformAuditConsole() {
         <div>
           <span className="platform-eyebrow">Governance & evidence</span>
           <h2>Audit Investigation</h2>
-          <p>Trace who changed what, where and when. Expand an event for its recorded decision context.</p>
+          
         </div>
         <button type="button" className="app-pill" onClick={() => void load(cursor)} disabled={loading}>
           <RefreshCw size={14} /> Refresh
         </button>
       </section>
 
-      {message && <div className="app-banner" role="alert"><div><h3>{message}</h3><p>The audit reader is permission-scoped and read-only.</p></div></div>}
+      {message && <div className="app-banner" role="alert"><div><h3>{message}</h3></div></div>}
 
       <div className="app-grid kpis platform-kpis">
         <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Events</span><span className="app-kpi-icon"><ShieldCheck size={17} /></span></div><div className="app-kpi-value">{events.length.toLocaleString()}</div><div className="app-kpi-meta">Current result page</div></div>

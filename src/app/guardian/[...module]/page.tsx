@@ -12,13 +12,13 @@ import "@/app/globals.css";
 type Props = { params: Promise<{ module: string[] }> };
 
 const titles: Record<string, [string, string]> = {
-  children: ["My children", "Learners connected to your guardian account."],
-  attendance: ["Attendance", "Attendance activity for your connected children."],
-  academics: ["Academics & results", "Published academic results and assessment history."],
-  assignments: ["Homework", "Learning work and exercises assigned by the school."],
-  fees: ["Fees & receipts", "School invoices, payments and outstanding balances."],
-  messages: ["Messages", "School communication available to your guardian account."],
-  calendar: ["Calendar", "Upcoming school events and important dates."]
+  children: ["My children", "Your children."],
+  attendance: ["Attendance", "Attendance."],
+  academics: ["Academics & results", "Results."],
+  assignments: ["Homework", "Homework."],
+  fees: ["Fees & receipts", "Fees and balances."],
+  messages: ["Messages", "Messages."],
+  calendar: ["Calendar", "Events."]
 };
 
 const guardianVisibleReportStatuses = { in: ["approved", "sent"] };
@@ -93,10 +93,10 @@ export default async function GuardianModulePage({ params }: Props) {
   return (
     <AppShell universe="guardian" title={title} subtitle={subtitle} active={childId ? "My Children" : route === "assignments" ? "Academics" : route === "fees" ? "Fees & Receipts" : route === "messages" ? "Messages" : route === "attendance" ? "Attendance" : route === "academics" ? "Academics" : "My Children"} schoolName={session.schoolName} userName={data.guardian.name} role="Guardian">
       <div className="app-grid kpis">
-        <DataCard label="Children" value={childData.length} meta="Relationship-scoped" icon={UsersRound} />
-        <DataCard label="Attendance" value={totalAttendance} meta="Recorded activity" icon={CircleCheckBig} />
-        <DataCard label="Results" value={totalResults} meta="Published records" icon={GraduationCap} />
-        <DataCard label="Outstanding" value={`GH₵${totalBalance.toFixed(2)}`} meta="Live invoice balances" icon={WalletCards} />
+        {route === "attendance" ? <DataCard label="Attendance" value={totalAttendance} meta="Recorded activity" icon={CircleCheckBig} />
+        : route === "academics" || route === "assignments" ? <DataCard label="Results" value={totalResults} meta="Published records" icon={GraduationCap} />
+        : route === "fees" || childId ? <DataCard label="Outstanding" value={`GH₵${totalBalance.toFixed(2)}`} meta="Live invoice balances" icon={WalletCards} />
+        : <DataCard label="Children" value={childData.length} meta="Relationship-scoped" icon={UsersRound} />}
       </div>
 
       {childId ? (
@@ -111,7 +111,7 @@ export default async function GuardianModulePage({ params }: Props) {
         </section>
       ) : data.children.length ? (
         <section className="sn-list-card" style={{marginTop:16}}>
-          <header className="sn-list-card-head"><div><h2>{title}</h2><p>Only records belonging to your guardian relationship are shown here.</p></div></header>
+          <header className="sn-list-card-head"><div><h2>{title}</h2></div></header>
           <div className="sn-list-card-body">{data.children.map((student) => <Link key={student.id} href={`/guardian/children/${student.id}`} className="app-list-row" style={{textDecoration:"none"}}><span className="app-list-icon"><UsersRound size={15}/></span><div><b>{student.name}</b><span>{student.admissionNo} · {student.class?.name ?? "Unassigned"}</span></div><ArrowRight size={15}/></Link>)}</div>
         </section>
       ) : (

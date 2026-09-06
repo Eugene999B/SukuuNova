@@ -105,13 +105,13 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
   const gridTemplateColumns = `112px repeat(${Math.max(enabledDays.length, 1)}, minmax(190px, 1fr))`;
 
   return (
-    <AppShell universe="school" title="Timetable" subtitle="Build the weekly teaching schedule, then print or publish it from a dedicated output workspace." active="Timetable" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+    <AppShell universe="school" title="Timetable" subtitle="Weekly schedule." active="Timetable" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
       <main className="timetable-page">
         <section className="timetable-intro">
           <div className="timetable-intro-copy">
             <span className="timetable-kicker">ACADEMIC SCHEDULE</span>
             <h1>One clear view of the school week.</h1>
-            <p>Choose a class to work on, place lessons into the fixed periods from Academic Setup, and keep the finished timetable ready for print or publication.</p>
+            
           </div>
           <div className="timetable-intro-actions">
             <Link className="tt-button primary" href={`/school/timetable?edit=new:${enabledDays[0]?.dayOfWeek ?? 1}:${periods[0]?.period ?? 1}${selectedClassId ? `&classId=${encodeURIComponent(selectedClassId)}` : ""}`}><CalendarPlus size={15} /> Add lesson</Link>
@@ -165,7 +165,7 @@ export default async function TimetablePage({ searchParams }: { searchParams: Pr
           </div>
 
           {!enabledDays.length || !periods.length ? (
-            <div className="tt-empty-state"><div className="tt-empty-icon"><Clock3 size={18} /></div><strong>Set the school day before scheduling lessons.</strong><span>Turn on school days and define lesson periods in Academic Setup. The timetable will use those times automatically.</span><Link className="tt-button secondary" href="/school/academics/setup">Open Academic Setup <ExternalLink size={14} /></Link></div>
+            <div className="tt-empty-state"><div className="tt-empty-icon"><Clock3 size={18} /></div><strong>Set the school day before scheduling lessons.</strong><Link className="tt-button secondary" href="/school/academics/setup">Open Academic Setup <ExternalLink size={14} /></Link></div>
           ) : (
             <div className="tt-grid-scroll">
               <div className="tt-grid" style={{ gridTemplateColumns }}>

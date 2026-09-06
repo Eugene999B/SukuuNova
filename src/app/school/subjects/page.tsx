@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { SubjectAssignDialog, SubjectCreateDialog } from "@/components/subjects/SubjectDialogs";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
@@ -126,15 +127,15 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
   const selectedAssignments = selectedSubject?.teacherAssignments ?? [];
 
   return (
-    <AppShell universe="school" title="Subjects" subtitle="Manage the school's subject catalogue and teaching assignments." active="Subjects" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+    <AppShell universe="school" title="Subjects" subtitle="Subjects and assignments." active="Subjects" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
       <div className="subjects-page">
         <section className="subjects-header">
           <div>
             <span className="subjects-kicker">ACADEMICS</span>
             <h2>Subjects</h2>
-            <p>Keep the catalogue clean. Assign each subject to the classes and teachers who deliver it.</p>
+            
           </div>
-          <Link href="#new-subject" className="subjects-primary">+ Add subject</Link>
+          <SubjectCreateDialog action={createSubject} />
         </section>
 
         <section className="subjects-stats">
@@ -154,7 +155,7 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
           <section className="subjects-list-card">
             <div className="subjects-list-head"><div><span className="subjects-kicker">CATALOGUE</span><h3>{query ? `Results for “${query}”` : "School subjects"}</h3></div><span>{data.subjects.length}</span></div>
             <div className="subject-list">
-              {data.subjects.length === 0 ? <div className="subject-empty"><strong>No subjects found</strong><p>Create the first subject or clear the search.</p></div> : data.subjects.map((subject) => {
+              {data.subjects.length === 0 ? <div className="subject-empty"><strong>No subjects found</strong></div> : data.subjects.map((subject) => {
                 const active = selectedSubject?.id === subject.id;
                 const classCount = new Set(subject.teacherAssignments.map((assignment) => assignment.class.id)).size;
                 return <Link key={subject.id} href={`/school/subjects?subject=${encodeURIComponent(subject.id)}${query ? `&q=${encodeURIComponent(query)}` : ""}`} className={`subject-row ${active ? "active" : ""}`}>
@@ -164,9 +165,6 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
                   <span className="subject-chevron">›</span>
                 </Link>;
               })}
-            </div>
-            <div className="subject-new-inline" id="new-subject">
-              <form action={createSubject}><input name="name" required placeholder="New subject name" /><button type="submit">Create</button></form>
             </div>
           </section>
 
@@ -181,12 +179,7 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
               </div>
 
               <div className="subject-detail-section"><div className="subject-section-head"><div><span className="subjects-kicker">TEACHING</span><h4>Assign to classes</h4></div></div>
-                <form action={assignSubject} className="assignment-form">
-                  <input type="hidden" name="subjectId" value={selectedSubject.id} />
-                  <label>Teacher<select name="teacherId" required defaultValue=""><option value="">Choose teacher</option>{data.teachers.map((teacher) => <option key={teacher.id} value={teacher.id}>{teacher.name}</option>)}</select></label>
-                  <label>Classes<select name="classIds" multiple required size={Math.min(8, Math.max(4, data.classes.length))}>{data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</option>)}</select><small>Hold Ctrl/Cmd to select multiple classes.</small></label>
-                  <button type="submit" className="subjects-primary wide">Assign teacher</button>
-                </form>
+                <SubjectAssignDialog subjectId={selectedSubject.id} subjectName={selectedSubject.name} teachers={data.teachers} classes={data.classes} action={assignSubject} />
               </div>
 
               <div className="subject-detail-section"><div className="subject-section-head"><div><span className="subjects-kicker">CURRENT LINKS</span><h4>Teaching assignments</h4></div></div>
@@ -196,7 +189,7 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
               <div className="subject-detail-section compact"><div className="subject-section-head"><div><span className="subjects-kicker">RENAME</span><h4>Subject name</h4></div></div><form action={updateSubject} className="rename-form"><input type="hidden" name="subjectId" value={selectedSubject.id}/><input name="name" required defaultValue={selectedSubject.name}/><button type="submit">Save</button></form></div>
 
               <div className="subject-danger"><form action={deleteSubject}><input type="hidden" name="subjectId" value={selectedSubject.id}/><span>{selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots ? "In use — keep academic history intact." : "No academic records depend on this subject."}</span><button type="submit" disabled={Boolean(selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots)}>Delete subject</button></form></div>
-            </> : <div className="subject-empty detail"><strong>Start with your subject catalogue</strong><p>Create Mathematics, English, Science and other subjects, then assign each one to the classes and teachers who need them.</p></div>}
+            </> : <div className="subject-empty detail"><strong>Start with your subject catalogue</strong></div>}
           </aside>
         </div>
       </div>

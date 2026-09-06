@@ -61,7 +61,7 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
       <div className="mb-6 text-center">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-300">SukuuNova · Staff Check-In</p>
         <h1 className="mt-2 text-3xl font-semibold sm:text-5xl">{schoolName}</h1>
-        <p className="mt-3 max-w-2xl text-sm text-slate-300 sm:text-base">Scan this live school code from your logged-in SukuuNova Teacher Portal. The code changes automatically and cannot be used as a permanent attendance code.</p>
+        
       </div>
 
       <section className="grid w-full gap-6 rounded-3xl border border-white/10 bg-white p-6 text-slate-900 shadow-2xl sm:p-10 md:grid-cols-[minmax(0,1fr)_280px]">

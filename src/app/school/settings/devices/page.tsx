@@ -120,7 +120,7 @@ export default function DevicesPage() {
     <AppShell
       universe="school"
       title="Biometric Attendance Devices"
-      subtitle="Register attendance terminals, issue one-time secrets, map hardware identities, and revoke lost devices."
+      subtitle="Terminal setup."
       active="Security & Access"
     >
       <main style={{ display: "grid", gap: 18 }}>

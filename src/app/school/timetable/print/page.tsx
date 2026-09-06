@@ -23,5 +23,5 @@ export default async function TimetablePrintPage(){
     ]);
     return {school,classes,subjects,teachers,slots,timetableConfig:academic.timetable as TimetableConfig};
   });
-  return <AppShell universe="school" title="Print Timetable" subtitle="Design, print, edit, export and share the school timetable without changing the schedule." active="Print Timetable" schoolName={data.school?.name??"School Workspace"} schoolCode={data.school?.uniqueCode??""} userName={session.name}><PrintStudio data={data}/></AppShell>;
+  return <AppShell universe="school" title="Print Timetable" subtitle="Print and share." active="Print Timetable" schoolName={data.school?.name??"School Workspace"} schoolCode={data.school?.uniqueCode??""} userName={session.name}><PrintStudio data={data}/></AppShell>;
 }

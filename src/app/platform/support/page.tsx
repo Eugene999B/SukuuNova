@@ -10,7 +10,7 @@ export default async function SupportPage() {
     <AppShell
       universe="platform"
       title="Support"
-      subtitle="Triage school issues, keep evidence attached to the case, and use time-limited audited access only when necessary."
+      subtitle="Support desk."
       active="Support"
       userName={session.name}
       role={session.role}

@@ -13,7 +13,7 @@ export default async function SchoolIdentityCardsPage() {
     return school;
   });
   return (
-    <AppShell universe="school" title="School ID Cards" subtitle="Issue, verify and print secure identification cards for students and staff." active="Students" userName={session.name ?? ""} schoolName={data.name} schoolCode={data.uniqueCode} role="ID Card Management">
+    <AppShell universe="school" title="School ID Cards" subtitle="ID cards." active="Students" userName={session.name ?? ""} schoolName={data.name} schoolCode={data.uniqueCode} role="ID Card Management">
       <IdentityCardManager schoolName={data.name} />
     </AppShell>
   );

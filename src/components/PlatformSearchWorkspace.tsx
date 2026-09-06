@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Search, School as SchoolIcon, UserRound, UsersRound } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
 
 type SearchSchool = {
   schoolId: string;
@@ -32,10 +31,9 @@ export default function PlatformSearchWorkspace() {
     finally { setLoading(false); }
   }
 
-  return <AppShell universe="platform" active="Global Search" title="Global Search" subtitle="Find the school, student or staff member first. Every result remains restricted to your authorised platform scope.">
-    <div className="app-dashboard-grid">
+  return <div className="app-dashboard-grid">
       <section className="app-card app-panel" style={{gridColumn:"1/-1"}}>
-        <div className="app-card-head"><div><span className="app-eyebrow">FIND · INVESTIGATE · VERIFY</span><h2>Search the network</h2><p>Search school names or codes, student names or admission numbers, and staff names, email addresses or phone numbers. Access is enforced again by the platform API.</p></div><Link href="/platform/schools" className="app-pill">Browse schools</Link></div>
+        <div className="app-card-head"><div><span className="app-eyebrow">FIND · INVESTIGATE · VERIFY</span><h2>Search the network</h2></div><Link href="/platform/schools" className="app-pill">Browse schools</Link></div>
         <form onSubmit={event=>{event.preventDefault();void search()}} style={{display:"flex",gap:10,alignItems:"stretch",marginTop:16}}>
           <div style={{position:"relative",flex:1}}><Search size={17} aria-hidden="true" style={{position:"absolute",left:14,top:15,color:"#64748b"}}/><input aria-label="Search schools, students or staff" value={query} onChange={event=>setQuery(event.target.value)} style={{width:"100%",paddingLeft:42}} placeholder="e.g. Accra Academy, STU-2026-014, Ama Mensah" autoComplete="off" /></div>
           <button type="submit" disabled={loading||!query.trim()} className="app-action"><strong>{loading?"Searching…":"Search"}</strong>Network-wide lookup</button>
@@ -51,6 +49,5 @@ export default function PlatformSearchWorkspace() {
         {school.students.length>0&&<div className="platform-search-group"><div className="platform-search-group-title">Students</div>{school.students.slice(0,8).map(student=><div className="app-list-row" key={student.id}><div><b>{student.name}</b><span>{student.admissionNo}</span></div><span className="app-pill">{student.status}</span></div>)}</div>}
         {school.users.length>0&&<div className="platform-search-group"><div className="platform-search-group-title">Staff / users</div>{school.users.slice(0,8).map(user=><div className="app-list-row" key={user.id}><div><b>{user.name}</b><span>{user.email??user.phone??"No contact"}</span></div><span className="app-pill">{user.status}</span></div>)}</div>}
       </section>)}
-    </div>
-  </AppShell>;
+    </div>;
 }

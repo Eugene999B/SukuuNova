@@ -10,7 +10,7 @@ export default async function SearchPage() {
     <AppShell
       universe="platform"
       title="Global Search"
-      subtitle="Search the schools you are authorised to support. Results stay limited to your platform-worker scope."
+      subtitle="Search the network."
       active="Global Search"
       userName={session.name}
       role={session.role}

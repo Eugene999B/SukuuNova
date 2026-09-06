@@ -60,7 +60,7 @@ export default async function HelpPage() {
     <AppShell
       universe="school"
       title="Help & Support"
-      subtitle="Guides and direct links to the live tools in your SukuuNova school workspace."
+      subtitle="Help."
       active="Help & Support"
       schoolName={school.name}
       schoolCode={school.uniqueCode}
@@ -70,9 +70,6 @@ export default async function HelpPage() {
         <section className="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,.16)]">
           <span className="text-[9px] font-black uppercase tracking-[.16em] text-emerald-300">Product support</span>
           <h2 className="mt-2 text-2xl font-black tracking-tight">Find the right place to do the work</h2>
-          <p className="mt-2 max-w-3xl text-xs leading-6 text-slate-300">
-            This support centre links to live SukuuNova screens. It does not pretend to offer a knowledge base or ticketing system that is not connected.
-          </p>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -94,7 +91,6 @@ export default async function HelpPage() {
         <div className="grid gap-5 lg:grid-cols-[1.1fr,.9fr]">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h3 className="text-sm font-black text-slate-950">Popular guides</h3>
-            <p className="mt-1 text-[10px] text-slate-500">Direct paths to common tasks using the current school workspace.</p>
             <div className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
               {popularGuides.map(([label, href]) => (
                 <Link key={href} href={href} className="flex items-center justify-between py-3 text-left text-[10px] font-bold text-slate-700 hover:text-slate-950">
@@ -107,9 +103,6 @@ export default async function HelpPage() {
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
             <span className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">Support boundary</span>
             <h3 className="mt-2 text-sm font-black text-slate-950">Need help with a live workflow?</h3>
-            <p className="mt-2 text-[10px] leading-5 text-slate-600">
-              Start from the relevant operational screen above so the correct school, permission and workflow context is preserved. There is no connected in-product support ticket form yet.
-            </p>
             <Link href="/school/settings/access" className="mt-4 inline-flex rounded-xl bg-slate-950 px-4 py-3 text-[10px] font-black text-white hover:bg-slate-800">Review access first</Link>
           </section>
         </div>

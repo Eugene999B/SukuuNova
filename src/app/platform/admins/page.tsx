@@ -10,7 +10,7 @@ export default async function PlatformAdminsPage() {
     <AppShell
       universe="platform"
       title="Workers & Permissions"
-      subtitle="Manage internal platform operators, their role capabilities, and the exact schools they can access."
+      subtitle="Operators and permissions."
       active="Workers & Permissions"
       userName={session.name}
       role={session.role}

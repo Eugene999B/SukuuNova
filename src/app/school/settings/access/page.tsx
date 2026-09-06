@@ -282,7 +282,7 @@ function AccessPageInner() {
     <AppShell
       universe="school"
       title="People, Roles & Access"
-      subtitle="Create staff profiles separately from logins. Activate only the people who should be able to sign in, with the role and scope they actually need."
+      subtitle="Access."
       active="Roles & Permissions"
     >
       <div className="access-shell">
@@ -290,9 +290,6 @@ function AccessPageInner() {
           <div>
             <span className="access-kicker">SCHOOL ACCESS CONTROL</span>
             <h2>Everyone gets a job, not a copy of the owner.</h2>
-            <p>
-              Staff records and login accounts are separate. A teacher can exist in the workforce directory without credentials, then be explicitly activated here with the right teaching role and permissions.
-            </p>
           </div>
           <div className="access-hero-stat">
             <strong>{data?.users.length ?? 0}</strong>
@@ -307,7 +304,7 @@ function AccessPageInner() {
               <div>
                 <span className="access-kicker">PENDING STAFF</span>
                 <h3>Staff who do not have a login yet</h3>
-                <p>Select a person to activate their account. Their staff profile and teaching assignments already exist.</p>
+
               </div>
               <span className="access-count">{pendingStaff.length}</span>
             </div>
@@ -333,7 +330,7 @@ function AccessPageInner() {
               <div>
                 <span className="access-kicker">DIRECT ACCOUNT</span>
                 <h3>Create a non-staff login</h3>
-                <p>Use this for identities that are not created through the workforce staff directory.</p>
+
               </div>
             </div>
             {!data?.canManage ? (
@@ -367,7 +364,7 @@ function AccessPageInner() {
               <div>
                 <span className="access-kicker">ACCOUNT DIRECTORY</span>
                 <h3>Who can do what</h3>
-                <p>Open an identity to review status, roles and direct permissions without changing the baseline role for everyone else.</p>
+
               </div>
               <span className="access-count">{data?.users.length ?? 0}</span>
             </div>
@@ -493,7 +490,7 @@ function AccessPageInner() {
           <div>
             <span className="access-kicker">ROLE DESIGN</span>
             <h3>Need a new job without changing the system defaults?</h3>
-            <p>Create a custom role, give it exactly the permissions it needs, then combine it with another role on one identity.</p>
+
           </div>
           <Link className="access-secondary link-button" href="/school/settings/roles">Open Role Designer →</Link>
         </section>

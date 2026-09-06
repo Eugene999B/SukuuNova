@@ -22,10 +22,10 @@ export default async function TeacherMessagesPage() {
     return { school, messages };
   });
   if (!data) redirect("/dashboard");
-  return <AppShell universe="teacher" title="My messages" subtitle="School messages addressed directly to your teacher account." active="Teacher Home" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+  return <AppShell universe="teacher" title="My messages" subtitle="Your messages." active="Teacher Home" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
     <div className="staff-workspace" style={{ maxWidth: 1180, margin: "0 auto" }}>
       <section className="staff-card">
-        <div className="staff-card-head"><div><span>MY INBOX</span><h3>Messages for {session.name}</h3><p>Only messages addressed to this account are shown here.</p></div><Link href="/teacher" className="staff-link-grid">Back to teacher workspace →</Link></div>
+        <div className="staff-card-head"><div><span>MY INBOX</span><h3>Messages for {session.name}</h3></div><Link href="/teacher" className="staff-link-grid">Back to teacher workspace →</Link></div>
         {data.messages.length ? <div className="staff-role-stack">{data.messages.map((message) => { const [title, ...rest] = message.body.split("\n\n"); return <article key={message.id} style={{ padding: "14px 0", borderBottom: "1px solid var(--color-border)" }}><div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><div><strong>{title || "School message"}</strong><p style={{ margin: "5px 0 0", whiteSpace: "pre-wrap" }}>{rest.join("\n\n") || message.body}</p></div><span>{new Date(message.sentAt ?? message.createdAt).toLocaleString("en-GH")}</span></div></article>; })}</div> : <div style={{ padding: 36, textAlign: "center" }}><strong>No messages yet.</strong><p style={{ margin: "6px 0 0" }}>Messages sent directly to your account will appear here.</p></div>}
       </section>
     </div>

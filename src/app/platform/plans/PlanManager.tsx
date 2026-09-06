@@ -67,9 +67,9 @@ export default function PlanManager() {
   const selectedPlanRecord = plans.find((plan) => plan.id === selectedPlan) ?? null;
 
   return <div className="platform-page-stack">
-    {message ? <div className="app-banner" role="status"><div><h3>{message}</h3><p>Plan and entitlement changes are permission-checked and audited.</p></div><span className="app-pill">Controlled</span><button type="button" className="platform-dialog-close" onClick={() => setMessage("")} aria-label="Dismiss message"><X size={16}/></button></div> : null}
+    {message ? <div className="app-banner" role="status"><div><h3>{message}</h3></div><span className="app-pill">Controlled</span><button type="button" className="platform-dialog-close" onClick={() => setMessage("")} aria-label="Dismiss message"><X size={16}/></button></div> : null}
     <section className="platform-page-header">
-      <div><span className="platform-eyebrow">Commercial packaging</span><h2>Plans & entitlements</h2><p>Define what a school receives, what it pays, and which schools are currently assigned to each package.</p></div>
+      <div><span className="platform-eyebrow">Commercial packaging</span><h2>Plans & entitlements</h2></div>
       <div className="platform-header-actions"><button type="button" className="app-pill" onClick={() => void load()} disabled={busy}><RefreshCw size={14}/> Refresh</button>{canEditCatalog ? <button type="button" className="app-action" onClick={() => setDialog("create")}><Plus size={14}/><strong>Create plan</strong>Build package</button> : <span className="app-pill">Super Admin catalog</span>}</div>
     </section>
     <div className="app-grid kpis platform-kpis">
@@ -79,12 +79,12 @@ export default function PlanManager() {
       <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Available entitlements</span><span className="app-kpi-icon"><Sparkles size={17}/></span></div><div className="app-kpi-value">{ALL_FEATURES.length}</div><div className="app-kpi-meta">Product capabilities</div></div>
     </div>
     <section className="app-card app-panel platform-catalog-card">
-      <div className="app-card-head"><div><span className="app-eyebrow">PLAN CATALOG</span><h2>Packages at a glance</h2><p>Price and entitlement scope are visible together. Open a plan to see where it is being used.</p></div></div>
+      <div className="app-card-head"><div><span className="app-eyebrow">PLAN CATALOG</span><h2>Packages at a glance</h2></div></div>
       <div className="platform-filter-search"><Search size={15}/><input aria-label="Search plans" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search plan name"/><span>{visiblePlans.length} shown</span></div>
       <div className="platform-plan-list">{visiblePlans.map((plan) => { const planFlags = flagsOf(plan); const adoption = schools.filter((school) => school.subscriptionPlan?.id === plan.id).length; return <div className="platform-plan-row" key={plan.id}><div className="platform-plan-title"><span className="platform-workflow-icon"><Layers3 size={17}/></span><div><b>{plan.name}</b><small>{planFlags.length ? `${planFlags.length} entitlements enabled` : "Core-only package"}</small></div></div><strong>{money(plan.price)}<small>/ month</small></strong><span className="app-pill">{adoption} schools</span><div className="platform-plan-entitlements">{planFlags.slice(0,5).map((flag) => <span className="app-pill" key={flag}>{flag.replaceAll("_", " ")}</span>)}{planFlags.length > 5 ? <span className="app-pill">+{planFlags.length - 5} more</span> : null}</div><button type="button" className="app-pill" onClick={() => { setSelectedPlan(plan.id); setDialog("assign"); }}>Use this plan <ArrowRight size={13}/></button></div>; })}{visiblePlans.length === 0 ? <div className="platform-empty"><strong>No plans match this search.</strong><span>Clear the search or create a new package.</span></div> : null}</div>
     </section>
     <section className="platform-plan-next app-card app-panel">
-      <div><span className="platform-eyebrow">NEXT STEP</span><h2>Assign a package to a school</h2><p>Plan creation defines the catalogue. Assignment connects the commercial package to an actual school account.</p></div>
+      <div><span className="platform-eyebrow">NEXT STEP</span><h2>Assign a package to a school</h2></div>
       <button type="button" className="app-action" onClick={() => setDialog("assign")} disabled={!plans.length || !schools.length}><UsersRound size={14}/><strong>Assign a plan</strong>Choose school + package</button>
     </section>
     <PlatformWorkflowDialog open={dialog === "create"} onClose={() => setDialog(null)} eyebrow="PLAN CATALOG" title="Create a plan" description="Build a clear commercial package. You can assign it to schools after it has been created.">
