@@ -36,6 +36,48 @@ function cleanVenue(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+type RoomInventory = { rooms: Array<{ id: string; name: string; type?: string }>; requiredTypes: Set<string> };
+
+/**
+ * Canonical venue keys shared by the generator and manual edits:
+ * `room:<id>` for a known room, `type:<type>` for a known room type (or a type
+ * ever required by a room rule, covering empty inventories), otherwise the raw
+ * label (no cross-path conflict enforcement possible).
+ * Without this, generated `room:lab-1` and manual `Lab 1` never match and
+ * double-book silently.
+ */
+function canonicalVenue(inventory: RoomInventory, value: unknown): string | null {
+  const trimmed = cleanVenue(value);
+  if (!trimmed) return null;
+  if (trimmed.startsWith("room:") || trimmed.startsWith("type:")) return trimmed;
+  const lowered = trimmed.toLowerCase();
+  const byIdOrName = inventory.rooms.find((r) => r.id.toLowerCase() === lowered || r.name.toLowerCase() === lowered);
+  if (byIdOrName) return `room:${byIdOrName.id}`;
+  const types = new Set(inventory.rooms.map((r) => (r.type ?? "").trim().toLowerCase()).filter(Boolean));
+  for (const t of inventory.requiredTypes) types.add(t);
+  if (types.has(lowered)) return `type:${lowered}`;
+  return trimmed;
+}
+
+async function roomInventory(tx: TenantDb, schoolId: string): Promise<RoomInventory> {
+  const config = await getAcademicEngineConfig(tx, schoolId);
+  const timetable = config.timetable as { rooms?: unknown; roomRequirements?: unknown };
+  const rawRooms = Array.isArray(timetable.rooms) ? timetable.rooms : [];
+  const rooms = rawRooms
+    .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && !Array.isArray(r))
+    .map((r) => ({ id: String(r.id ?? ""), name: String(r.name ?? ""), type: typeof r.type === "string" ? r.type : undefined }))
+    .filter((r) => r.id && r.name);
+  const requiredTypes = new Set<string>();
+  if (timetable.roomRequirements && typeof timetable.roomRequirements === "object" && !Array.isArray(timetable.roomRequirements)) {
+    for (const req of Object.values(timetable.roomRequirements as Record<string, unknown>)) {
+      if (req && typeof req === "object" && !Array.isArray(req) && typeof (req as Record<string, unknown>).roomType === "string") {
+        requiredTypes.add(String((req as Record<string, unknown>).roomType).trim().toLowerCase());
+      }
+    }
+  }
+  return { rooms, requiredTypes };
+}
+
 async function isUnavailable(tx: TenantDb, schoolId: string, teacherId: string, dayOfWeek: number, period: number): Promise<boolean> {
   const config = await getAcademicEngineConfig(tx, schoolId);
   const timetable = config.timetable as { teacherUnavailability?: Record<string, string[]> };
@@ -59,7 +101,7 @@ export async function createTimetableSlot(tx: TenantDb, input: { schoolId: strin
   if (teacherBusy) throw new AppError("This teacher is already teaching another class at this time.", 409, "TEACHER_BUSY");
   const existing = await tx.timetableSlot.findFirst({ where: { schoolId: input.schoolId, classId: input.classId, dayOfWeek: input.dayOfWeek, period: input.period }, select: { id: true } });
   if (existing) throw new AppError("This class already has a lesson at this time. Edit or remove it first.", 409, "CLASS_SLOT_CONFLICT");
-  const venue = cleanVenue(input.venue);
+  const venue = canonicalVenue(await roomInventory(tx, input.schoolId), input.venue);
   if (venue) {
     const roomBusy = await tx.timetableSlot.findFirst({ where: { schoolId: input.schoolId, venue, dayOfWeek: input.dayOfWeek, period: input.period }, select: { id: true } });
     if (roomBusy) throw new AppError("This room is already booked at this time.", 409, "ROOM_BUSY");
@@ -89,7 +131,7 @@ export async function updateTimetableSlot(tx: TenantDb, input: { schoolId: strin
   if (teacherBusy) throw new AppError("This teacher is already teaching another class at this time.", 409, "TEACHER_BUSY");
   const classBusy = await tx.timetableSlot.findFirst({ where: { schoolId: input.schoolId, classId: input.classId, dayOfWeek: input.dayOfWeek, period: input.period, NOT: { id: slot.id } }, select: { id: true } });
   if (classBusy) throw new AppError("This class already has a lesson at this time.", 409, "CLASS_SLOT_CONFLICT");
-  const venue = cleanVenue(input.venue ?? (slot as { venue?: string | null }).venue);
+  const venue = canonicalVenue(await roomInventory(tx, input.schoolId), input.venue ?? (slot as { venue?: string | null }).venue);
   if (venue) {
     const roomBusy = await tx.timetableSlot.findFirst({ where: { schoolId: input.schoolId, venue, dayOfWeek: input.dayOfWeek, period: input.period, NOT: { id: slot.id } }, select: { id: true } });
     if (roomBusy) throw new AppError("This room is already booked at this time.", 409, "ROOM_BUSY");

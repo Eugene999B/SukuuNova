@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import { compare } from "bcryptjs";
-import { createHash } from "crypto";
 import { UnauthorizedError } from "./errors";
 import { roleKeyForName } from "./authorization";
 import { authorizationVersion } from "./auth";
@@ -15,7 +14,8 @@ function normalizedIdentifier(value: string): string { const trimmed = value.tri
 function isSyntheticTestSchool(uniqueCode: string): boolean { return uniqueCode === SYNTHETIC_TEST_SCHOOL; }
 function diagnosticIdentifier(value: string) {
   const trimmed = value.trim();
-  return { kind: trimmed.includes("@") ? "email" : /^\\+?[0-9 ()-]+$/.test(trimmed) ? "phone" : "other", length: trimmed.length, sha256: createHash("sha256").update(trimmed).digest("hex").slice(0, 12) };
+  // Minimal shape only: never log identifier length, hashes, or password lengths.
+  return { kind: trimmed.includes("@") ? "email" : /^\+?[0-9 ()-]+$/.test(trimmed) ? "phone" : "other" };
 }
 function logSyntheticLoginDiagnostic(stage: string, data: Record<string, unknown>) {
   console.error("[school-login-diagnostic]", JSON.stringify({ stage, ...data }));
@@ -66,7 +66,7 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     }
     const passwordMatches = await compare(input.password, user.passwordHash);
     if (!passwordMatches) {
-      if (synthetic) logSyntheticLoginDiagnostic("password_failure", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier), passwordLength: input.password.length });
+      if (synthetic) logSyntheticLoginDiagnostic("password_failure", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier) });
       throw new UnauthorizedError(LOGIN_FAILURE);
     }
     if (synthetic) logSyntheticLoginDiagnostic("credentials_ok", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier) });

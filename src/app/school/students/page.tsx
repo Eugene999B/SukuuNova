@@ -59,7 +59,13 @@ async function createStudent(formData: FormData) {
       if (!exists) break;
       indexNumber = createIndexNumber();
     }
-    const student = await tx.student.create({ data: { schoolId: session.schoolId, name, admissionNo: indexNumber, dob: dobRaw ? new Date(`${dobRaw}T00:00:00.000Z`) : null, classId: classId || null, status: "active", photoUrl: photoData || null } });
+    let student;
+    try {
+      student = await tx.student.create({ data: { schoolId: session.schoolId, name, admissionNo: indexNumber, dob: dobRaw ? new Date(`${dobRaw}T00:00:00.000Z`) : null, classId: classId || null, status: "active", photoUrl: photoData || null } });
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") throw new Error("A learner with this index number was just created. Try again.");
+      throw error;
+    }
     if (guardianName && guardianPhone) {
       const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
       await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });

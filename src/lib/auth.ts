@@ -34,6 +34,39 @@ function secret(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET"): Uint8Array
   return new TextEncoder().encode(value);
 }
 
+/** Rotation-aware secrets: verifies against current, then previous (graceful rollover). */
+function secretCandidates(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET"): Uint8Array[] {
+  const out = [secret(name)];
+  const previous = process.env[name + "_PREVIOUS"];
+  if (previous && previous.length >= 32 && previous !== process.env[name]) {
+    out.push(new TextEncoder().encode(previous));
+  }
+  return out;
+}
+
+async function verifyWithRotation(token: string, name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET", issuer: string, audience: string) {
+  let lastError: unknown = null;
+  for (const key of secretCandidates(name)) {
+    try {
+      return await jwtVerify(token, key, { issuer, audience });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
+/** Fails closed when the school itself is not active (suspended/locked/deleted). */
+export async function assertSchoolActive(schoolId: string): Promise<void> {
+  const rows = await rawDb.$queryRawUnsafe<Array<{ status: string }>>(
+    `SELECT "status" FROM "School" WHERE "id"=$1 LIMIT 1`,
+    schoolId
+  );
+  if (!rows[0] || rows[0].status !== "active") {
+    throw new UnauthorizedError("This school account is no longer active.");
+  }
+}
+
 export function sessionCookieOptions(maxAge = SESSION_SECONDS) {
   return { httpOnly: true, sameSite: "lax" as const, secure: process.env.NODE_ENV === "production", path: "/", maxAge };
 }
@@ -120,14 +153,14 @@ export async function createPlatformSessionToken(session: Omit<PlatformSession, 
 }
 
 export async function verifySchoolSessionToken(token: string): Promise<SchoolSession> {
-  const { payload } = await jwtVerify(token, secret("SCHOOL_AUTH_SECRET"), { issuer: "sukuunova-school", audience: "sukuunova-school" });
+  const { payload } = await verifyWithRotation(token, "SCHOOL_AUTH_SECRET", "sukuunova-school", "sukuunova-school");
   if (payload.kind !== "school" || typeof payload.sub !== "string" || typeof payload.schoolId !== "string" || typeof payload.name !== "string" || typeof payload.authorizationVersion !== "string") throw new UnauthorizedError("Invalid school session.");
   const impersonationId = typeof payload.impersonationId === "string" ? payload.impersonationId : undefined;
   const impersonatedByAdminId = typeof payload.impersonatedByAdminId === "string" ? payload.impersonatedByAdminId : undefined;
   if (impersonationId || impersonatedByAdminId) {
     if (!impersonationId || !impersonatedByAdminId) throw new UnauthorizedError("Invalid impersonation session.");
-    const active = await rawDb.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT "id" FROM "ImpersonationLog"
+    const active = await rawDb.$queryRawUnsafe<Array<{ id: string; startedAt: Date }>>(
+      `SELECT "id", "startedAt" FROM "ImpersonationLog"
        WHERE "id"=$1 AND "platformAdminId"=$2 AND "schoolId"=$3 AND "impersonatedUserId"=$4 AND "endedAt" IS NULL
        LIMIT 1`,
       impersonationId,
@@ -136,12 +169,14 @@ export async function verifySchoolSessionToken(token: string): Promise<SchoolSes
       payload.sub,
     );
     if (!active.length) throw new UnauthorizedError("This impersonation session has ended.");
+    const ageMs = Date.now() - new Date(active[0].startedAt).getTime();
+    if (!Number.isFinite(ageMs) || ageMs > IMPERSONATION_SECONDS * 1000) throw new UnauthorizedError("This impersonation session has expired.");
   }
   return { kind: "school", userId: payload.sub, schoolId: payload.schoolId, name: payload.name, authorizationVersion: payload.authorizationVersion, impersonationId, impersonatedByAdminId };
 }
 
 export async function verifyPlatformSessionToken(token: string): Promise<PlatformSession> {
-  const { payload } = await jwtVerify(token, secret("PLATFORM_AUTH_SECRET"), { issuer: "sukuunova-platform", audience: "sukuunova-platform" });
+  const { payload } = await verifyWithRotation(token, "PLATFORM_AUTH_SECRET", "sukuunova-platform", "sukuunova-platform");
   if (payload.kind !== "platform" || typeof payload.sub !== "string" || typeof payload.name !== "string" || typeof payload.role !== "string" || typeof payload.authorizationVersion !== "string") throw new UnauthorizedError("Invalid platform session.");
   return { kind: "platform", adminId: payload.sub, name: payload.name, role: payload.role, authorizationVersion: payload.authorizationVersion };
 }
@@ -155,6 +190,7 @@ export async function requireSchoolSession() {
   const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This school account is no longer active.");
   if (authorizationVersion(state) !== session.authorizationVersion) throw new UnauthorizedError("Your school access has changed. Please sign in again.");
+  await assertSchoolActive(session.schoolId);
   return { ...session, name: state.name };
 }
 

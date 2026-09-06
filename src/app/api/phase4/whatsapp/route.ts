@@ -55,11 +55,15 @@ export async function POST(request: Request) {
     }
     const input = schema.parse(JSON.parse(rawBody));
     const metaSignature = request.headers.get("x-hub-signature-256");
-    // Accept the existing shared-secret adapter only when a Meta signature is
-    // absent. Native Meta traffic must prove possession of the app secret.
-    const authenticated = metaSignature
+    // Once the native Meta app secret is configured, body-secret auth is retired:
+    // every delivery must carry a valid Meta signature. Until then, the legacy
+    // shared-secret adapter keeps existing integrations working.
+    const nativeMode = Boolean(process.env.WHATSAPP_APP_SECRET && process.env.WHATSAPP_APP_SECRET.length >= 32);
+    const authenticated = nativeMode
       ? verifyMetaSignature(rawBody, metaSignature)
-      : verifyWebhookSecret(input.secret);
+      : metaSignature
+        ? verifyMetaSignature(rawBody, metaSignature)
+        : verifyWebhookSecret(input.secret);
     if (!authenticated) {
       return NextResponse.json({ error: "Invalid webhook authentication." }, { status: 401 });
     }

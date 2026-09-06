@@ -16,19 +16,19 @@ export async function getTermReadiness(tx: TenantDb, schoolId: string, termId: s
   checks: TermReadinessItem[];
   ready: boolean;
 }> {
-  const term = await tx.term.findUnique({
-    where: { id: termId },
+  const term = await tx.term.findFirst({
+    where: { id: termId, schoolId },
     select: { id: true, name: true, startDate: true, endDate: true }
   });
-  if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
+  if (!term) throw new AppError("Term not found in this school.", 404, "TERM_NOT_FOUND");
 
   const [students, classes, assignments, assessments, scores, reports, config] = await Promise.all([
-    tx.student.findMany({ where: { status: "active" }, select: { id: true, classId: true } }),
-    tx.class.findMany({ select: { id: true, name: true } }),
-    tx.classSubjectTeacher.findMany({ select: { classId: true, subjectId: true, teacherId: true } }),
-    tx.assessment.findMany({ where: { termId }, select: { id: true, classId: true, subjectId: true, name: true, maxScore: true } }),
-    tx.score.findMany({ where: { assessment: { termId } }, select: { studentId: true, assessmentId: true } }),
-    tx.reportCard.findMany({ where: { termId }, select: { studentId: true, status: true } }),
+    tx.student.findMany({ where: { schoolId, status: "active" }, select: { id: true, classId: true } }),
+    tx.class.findMany({ where: { schoolId }, select: { id: true, name: true } }),
+    tx.classSubjectTeacher.findMany({ where: { schoolId }, select: { classId: true, subjectId: true, teacherId: true } }),
+    tx.assessment.findMany({ where: { schoolId, termId }, select: { id: true, classId: true, subjectId: true, name: true, maxScore: true } }),
+    tx.score.findMany({ where: { schoolId, assessment: { termId }, status: { not: "excused" } }, select: { studentId: true, assessmentId: true } }),
+    tx.reportCard.findMany({ where: { schoolId, termId }, select: { studentId: true, status: true } }),
     getAcademicEngineConfig(tx, schoolId)
   ]);
 

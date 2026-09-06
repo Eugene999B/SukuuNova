@@ -1,5 +1,5 @@
 import type { TenantDb } from "./db";
-import { calculateSubjectResult, gradeForPercentage, type AssessmentRules } from "./assessment-engine";
+import { calculateSubjectResult, gradeForPercentage, rankTotals, type AssessmentRules } from "./assessment-engine";
 
 export type PerformanceRow = {
   studentId: string;
@@ -35,7 +35,7 @@ export async function getClassSubjectIntelligence(tx: TenantDb, input: RankingIn
     }),
     tx.assessment.findMany({
       where: { classId: { in: classIds }, subjectId: input.subjectId, termId: input.termId },
-      select: { id: true, classId: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true } } },
+      select: { id: true, classId: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true, status: true } } },
       orderBy: [{ classId: "asc" }, { name: "asc" }]
     })
   ]);
@@ -43,14 +43,18 @@ export async function getClassSubjectIntelligence(tx: TenantDb, input: RankingIn
   const rows: PerformanceRow[] = students.map((student) => {
     const studentAssessments = assessments.filter((assessment) => assessment.classId === student.classId);
     const result = calculateSubjectResult(
-      studentAssessments.map((assessment) => ({
-        id: assessment.id,
-        name: assessment.name,
-        type: assessment.type,
-        maxScore: assessment.maxScore,
-        weight: assessment.weight,
-        score: assessment.scores.find((score) => score.studentId === student.id)?.value ?? null
-      })),
+      studentAssessments.map((assessment) => {
+        const hit = assessment.scores.find((score) => score.studentId === student.id);
+        return {
+          id: assessment.id,
+          name: assessment.name,
+          type: assessment.type,
+          maxScore: assessment.maxScore,
+          weight: assessment.weight,
+          score: hit?.value ?? null,
+          status: hit?.status ?? null
+        };
+      }),
       input.rules
     );
     return {
@@ -64,17 +68,8 @@ export async function getClassSubjectIntelligence(tx: TenantDb, input: RankingIn
     };
   });
 
-  const ranked = rows.filter((row) => row.total != null).sort((a, b) => {
-    if ((b.total ?? -1) !== (a.total ?? -1)) return (b.total ?? -1) - (a.total ?? -1);
-    return a.studentName.localeCompare(b.studentName);
-  });
-  let position = 0;
-  let previous: number | null = null;
-  for (let index = 0; index < ranked.length; index += 1) {
-    if (previous === null || ranked[index].total !== previous) position = index + 1;
-    ranked[index].position = position;
-    previous = ranked[index].total;
-  }
+  const positions = rankTotals(rows.filter((row) => row.total != null).map((row) => ({ id: row.studentId, name: row.studentName, total: row.total as number })));
+  for (const row of rows) row.position = positions.get(row.studentId) ?? null;
 
   const values = rows.map((row) => row.total).filter((value): value is number => value != null);
   const average = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;

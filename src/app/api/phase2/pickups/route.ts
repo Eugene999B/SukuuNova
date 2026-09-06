@@ -8,11 +8,11 @@ import { requirePermission } from "@/lib/rbac";
 import { addApprovedPickup, attemptPickup, reviewPickupRequest } from "@/lib/pickup-service";
 
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("approveGuardian"), studentId: z.string(), guardianId: z.string() }),
-  z.object({ action: z.literal("attempt"), studentId: z.string(), guardianId: z.string() }),
+  z.object({ action: z.literal("approveGuardian"), studentId: z.string().min(1).max(100), guardianId: z.string().min(1).max(100) }),
+  z.object({ action: z.literal("attempt"), studentId: z.string().min(1).max(100), guardianId: z.string().min(1).max(100) }),
   z.object({
     action: z.literal("review"),
-    requestId: z.string(),
+    requestId: z.string().min(1).max(100),
     decision: z.enum(["approved", "rejected"])
   })
 ]);

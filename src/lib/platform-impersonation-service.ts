@@ -29,8 +29,12 @@ export async function impersonatePlatformUser(input: {
   const reason = validateReason(input.reason);
 
   return withTenant(input.schoolId, async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, status: true } });
+    const [user, school] = await Promise.all([
+      tx.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, status: true } }),
+      tx.school.findUnique({ where: { id: input.schoolId }, select: { status: true } }),
+    ]);
     if (!user || user.status !== "active") throw new AppError("Target user is not active.", 404, "USER_NOT_FOUND");
+    if (!school || school.status !== "active") throw new AppError("Impersonation is not available for inactive schools.", 403, "SCHOOL_INACTIVE");
 
     const id = createId();
     await tx.$executeRawUnsafe(

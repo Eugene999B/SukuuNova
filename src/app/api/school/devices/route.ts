@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
+import { AppError, routeError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 import { generateDeviceSecret, hashDeviceSecret } from "@/lib/device-auth";
@@ -12,7 +12,7 @@ const createSchema = z.object({
   kind: z.enum(["face", "fingerprint", "card"]),
   label: z.string().trim().min(1).max(120)
 });
-const patchSchema = z.object({ id: z.string().min(1), action: z.literal("revoke") });
+const patchSchema = z.object({ id: z.string().min(1).max(100), action: z.literal("revoke") });
 
 export async function GET() {
   try {
@@ -110,7 +110,7 @@ export async function PATCH(request: Request) {
           label: true
         }
       });
-      if (!before) throw new Error("Device not found.");
+      if (!before) throw new AppError("Device not found in this school.", 404, "NOT_FOUND");
 
       const updated = await tx.device.update({
         where: { id: before.id },

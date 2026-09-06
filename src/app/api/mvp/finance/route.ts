@@ -10,10 +10,10 @@ import { cacheTenantRead } from "@/lib/server-cache";
 import { createFeeItem, generateInvoice, recordPayment, reversePayment } from "@/lib/finance-service";
 
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("feeItem"), termId: z.string(), classId: z.string().optional(), name: z.string().min(1), amount: z.number().positive() }),
-  z.object({ action: z.literal("invoice"), studentId: z.string(), termId: z.string() }),
-  z.object({ action: z.literal("payment"), invoiceId: z.string(), amount: z.number().positive(), method: z.enum(["momo", "cash", "card", "bank", "cheque"]), reference: z.string().trim().min(1).max(200) }),
-  z.object({ action: z.literal("reversal"), paymentId: z.string(), amount: z.number().positive(), reason: z.string().min(2) })
+  z.object({ action: z.literal("feeItem"), termId: z.string().min(1).max(100), classId: z.string().min(1).max(100).optional(), name: z.string().trim().min(1).max(160), amount: z.number().finite().positive().max(1_000_000_000) }),
+  z.object({ action: z.literal("invoice"), studentId: z.string().min(1).max(100), termId: z.string().min(1).max(100) }),
+  z.object({ action: z.literal("payment"), invoiceId: z.string().min(1).max(100), amount: z.number().finite().positive().max(1_000_000_000), method: z.enum(["momo", "cash", "card", "bank", "cheque"]), reference: z.string().trim().min(1).max(200) }),
+  z.object({ action: z.literal("reversal"), paymentId: z.string().min(1).max(100), amount: z.number().finite().positive().max(1_000_000_000), reason: z.string().trim().min(2).max(500), idempotencyKey: z.string().trim().min(8).max(100).optional() })
 ]);
 
 export async function GET() {

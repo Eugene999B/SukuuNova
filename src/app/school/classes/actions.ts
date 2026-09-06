@@ -4,10 +4,19 @@ import { withTenant } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
+import { AppError } from "@/lib/errors";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
 const teacherRoleKeys = ["teacher", "class_teacher", "subject_teacher", "assistant_teacher", "teaching_assistant"];
 const HOUSE_COLORS = ["#d36b4b", "#267a66", "#c18a2c", "#6f5ab8", "#2d7d8a", "#b84f74"];
+
+/** Never echo raw database errors (constraint/table names) to the UI. */
+function safeActionError(error: unknown, fallback: string, duplicateMessage: string): string {
+  if ((error as { code?: string }).code === "P2002") return duplicateMessage;
+  if (error instanceof Error && (/Unique constraint/i.test(error.message))) return duplicateMessage;
+  if (error instanceof AppError) return error.message;
+  return fallback;
+}
 
 export async function createClass(input: { level: string; name: string; classTeacherId?: string }): Promise<ActionResult> {
   const session = await requireSchoolSession();
@@ -28,8 +37,7 @@ export async function createClass(input: { level: string; name: string; classTea
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "class.created", entityType: "Class", entityId: schoolClass.id, after: { level, name, classTeacherId: teacherId } });
       return { ok: true, message: `${name} was created successfully.` };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "We could not create the class.";
-      return { ok: false, message: /Unique constraint/i.test(message) ? "A class with that name already exists." : message };
+      return { ok: false, message: safeActionError(error, "We could not create the class.", "A class with that name already exists.") };
     }
   });
 }
@@ -47,7 +55,7 @@ export async function createHouse(input: { name: string; code: string; color?: s
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "house.created", entityType: "House", entityId: house.id, after: house });
       return { ok: true, message: `${name} was added to the house system.` };
     } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : "We could not create the house." };
+      return { ok: false, message: safeActionError(error, "We could not create the house.", "A house with that name or code already exists.") };
     }
   });
 }
@@ -67,7 +75,7 @@ export async function assignHouse(input: { studentId: string; houseId: string })
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "student.house_assigned", entityType: "Student", entityId: student.id, before: { houseId: student.houseId }, after: { houseId: house.id, houseName: house.name } });
       return { ok: true, message: `${student.name} is now in ${house.name}.` };
     } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : "We could not assign the house." };
+      return { ok: false, message: safeActionError(error, "We could not assign the house.", "This house assignment already exists.") };
     }
   });
 }
@@ -93,7 +101,7 @@ export async function autoBalanceHouses(): Promise<ActionResult> {
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "houses.auto_assigned", entityType: "House", entityId: houses[0].id, after: { houseCount: houses.length, studentCount: students.length, changed } });
       return { ok: true, message: changed ? `${changed} unassigned learners were distributed across the active houses.` : "All active learners are already assigned to a house." };
     } catch (error) {
-      return { ok: false, message: error instanceof Error ? error.message : "We could not assign the houses." };
+      return { ok: false, message: safeActionError(error, "We could not assign the houses.", "A house assignment conflict occurred. Try again.") };
     }
   });
 }

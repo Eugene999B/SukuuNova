@@ -9,11 +9,13 @@ import { requireSchoolFeatureInTransaction } from "@/lib/feature-flags";
 import { matchFaceAttendance, reviewFaceMatch, enrollFace } from "@/lib/face-service";
 
 const periodIdSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/);
+// ~2MB cap: base64 face crops larger than this are rejected before any crypto/CPU work.
+const faceImageSchema = z.string().min(100).max(2_800_000);
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("enrollStudent"), studentId: z.string(), consentByGuardianId: z.string(), image: z.string().min(100) }),
-  z.object({ action: z.literal("enrollStaff"), staffId: z.string(), image: z.string().min(100) }),
-  z.object({ action: z.literal("match"), image: z.string().min(100), deviceId: z.string().max(100).optional(), type: z.enum(["in", "out"]), periodId: periodIdSchema.optional() }),
-  z.object({ action: z.literal("review"), reviewId: z.string(), decision: z.enum(["confirmed", "rejected"]), type: z.enum(["in", "out"]).optional() })
+  z.object({ action: z.literal("enrollStudent"), studentId: z.string().min(1).max(100), consentByGuardianId: z.string().min(1).max(100), image: faceImageSchema }),
+  z.object({ action: z.literal("enrollStaff"), staffId: z.string().min(1).max(100), image: faceImageSchema }),
+  z.object({ action: z.literal("match"), image: faceImageSchema, deviceId: z.string().max(100).optional(), type: z.enum(["in", "out"]), periodId: periodIdSchema.optional() }),
+  z.object({ action: z.literal("review"), reviewId: z.string().min(1).max(100), decision: z.enum(["confirmed", "rejected"]), type: z.enum(["in", "out"]).optional() })
 ]);
 
 export async function GET() {

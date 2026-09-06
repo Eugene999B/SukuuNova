@@ -9,18 +9,23 @@ import { generateReportCard, submitReportCard } from "@/lib/report-card-service"
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("generate"), studentId: z.string(), termId: z.string(), remarks: z.string().optional() }),
-  z.object({ action: z.literal("submit"), reportCardId: z.string() }),
-  z.object({ action: z.literal("approve"), reportCardId: z.string(), headRemark: z.string().trim().max(2000).optional() }),
-  z.object({ action: z.literal("send"), reportCardId: z.string() })
+  z.object({ action: z.literal("generate"), studentId: z.string().min(1).max(100), termId: z.string().min(1).max(100), remarks: z.string().trim().max(2000).optional() }),
+  z.object({ action: z.literal("submit"), reportCardId: z.string().min(1).max(100) }),
+  z.object({ action: z.literal("approve"), reportCardId: z.string().min(1).max(100), headRemark: z.string().trim().max(2000).optional() }),
+  z.object({ action: z.literal("send"), reportCardId: z.string().min(1).max(100) })
 ]);
 
-function requestOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  if (origin) return origin;
-  const host = request.headers.get("host");
-  if (host) return `${request.headers.get("x-forwarded-proto") || "https"}://${host}`;
-  return process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+function appOrigin(): string {
+  // Never trust Origin/Host headers for links sent to guardians: an authenticated
+  // caller could poison them and redirect families to a phishing domain.
+  const raw = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").trim().replace(/\/+$/, "");
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("bad protocol");
+    return url.origin;
+  } catch {
+    return "http://localhost:3000";
+  }
 }
 
 export async function GET() {
@@ -49,8 +54,8 @@ export async function POST(request: Request) {
       switch (input.action) {
         case "generate": return await generateReportCard(tx, { ...common, ...input });
         case "submit": return await submitReportCard(tx, { ...common, ...input });
-        case "approve": return await approveAndQueuePublicReportCard(tx, { ...common, ...input, origin: requestOrigin(request) });
-        case "send": return await sendApprovedReportCardPublic(tx, { ...common, ...input, origin: requestOrigin(request) });
+        case "approve": return await approveAndQueuePublicReportCard(tx, { ...common, ...input, origin: appOrigin() });
+        case "send": return await sendApprovedReportCardPublic(tx, { ...common, ...input, origin: appOrigin() });
       }
     });
     return NextResponse.json({ ok: true, result });

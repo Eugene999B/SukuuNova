@@ -125,8 +125,45 @@ export const db = basePrisma.$extends({
 });
 
 export type TenantDb = Prisma.TransactionClient;
+
+let roleSafetyChecked = false;
+let roleSafetyCheck: Promise<void> | null = null;
+
+/**
+ * Fail closed if the app connects with a role that bypasses row-level security.
+ * RLS (even FORCE) is silently ignored for superusers / BYPASSRLS roles, which
+ * would collapse every tenant boundary. Checked once per process, production
+ * runtime only — never during builds or tests.
+ */
+export function ensureDatabaseRoleSafe(): Promise<void> {
+  if (roleSafetyChecked) return Promise.resolve();
+  if (roleSafetyCheck) return roleSafetyCheck;
+  roleSafetyCheck = (async () => {
+    if (process.env.NODE_ENV !== "production" || process.env.VITEST || process.env.NEXT_PHASE === "phase-production-build") {
+      roleSafetyChecked = true;
+      return;
+    }
+    try {
+      const rows = await basePrisma.$queryRawUnsafe<Array<{ bypass: boolean; superuser: boolean }>>(
+        `SELECT rolbypassrls AS "bypass", rolsuper AS "superuser" FROM pg_roles WHERE rolname = current_user`
+      );
+      if (rows[0]?.bypass || rows[0]?.superuser) {
+        throw new Error("Database role must not have SUPERUSER or BYPASSRLS; tenant isolation depends on RLS.");
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("must not have")) throw error;
+      // If the check itself cannot run (e.g. restricted pg_roles), log loudly
+      // but do not take the app down — RLS still applies to normal roles.
+      console.error("[db] Could not verify database role RLS safety:", error instanceof Error ? error.message : error);
+    }
+    roleSafetyChecked = true;
+  })();
+  return roleSafetyCheck;
+}
+
 export async function withTenant<T>(schoolIdInput: string, work: (tx: TenantDb) => Promise<T>): Promise<T> {
   const schoolId = validateSchoolId(schoolIdInput);
+  await ensureDatabaseRoleSafe();
   return tenantContext.run({ schoolId }, async () => db.$transaction(async (extendedTx) => {
     const tx = extendedTx as unknown as TenantDb;
     await tx.$queryRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", schoolId);

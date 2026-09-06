@@ -15,9 +15,10 @@ const money = (n: number | string) => `GH₵ ${Number(n || 0).toLocaleString("en
 const emptyDeduction = (): DeductionRow => ({ label: "", type: "percent", value: "" });
 
 function deductionAmount(row: { type?: string; value?: number | string; amount?: number | string }, gross: number) {
-  if (row.amount !== undefined) return Number(row.amount || 0);
+  // Preview only (server is authoritative): integer-pesewa math, no float drift.
+  if (row.amount !== undefined) return Math.round(Number(row.amount || 0) * 100) / 100;
   const value = Number(row.value || 0);
-  return row.type === "percent" ? gross * value / 100 : value;
+  return row.type === "percent" ? Math.round(gross * value) / 100 : Math.round(value * 100) / 100;
 }
 
 export default function PayrollWorkspace({ schoolName }: { schoolName: string }) {

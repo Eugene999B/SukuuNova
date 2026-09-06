@@ -8,20 +8,24 @@ import { requirePermission } from "@/lib/rbac";
 import { z } from "zod";
 
 const target = z.union([
-  z.object({ studentId: z.string(), staffId: z.never().optional() }),
-  z.object({ staffId: z.string(), studentId: z.never().optional() })
+  z.object({ studentId: z.string().min(1).max(100), staffId: z.never().optional() }),
+  z.object({ staffId: z.string().min(1).max(100), studentId: z.never().optional() })
 ]);
 const periodId = z.string().trim().regex(/^[A-Za-z0-9_-]{1,64}$/).optional();
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("record"), target, type: z.enum(["in", "out"]), periodId }),
-  z.object({ action: z.literal("finalize"), day: z.coerce.date(), classId: z.string().optional() })
+  z.object({ action: z.literal("finalize"), day: z.coerce.date(), classId: z.string().min(1).max(100).optional() })
 ]);
 
 export async function GET(request: Request) {
   try {
     const session = await requireSchoolSession();
     const url = new URL(request.url);
-    const day = new Date(url.searchParams.get("day") ?? new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+    const dayParam = url.searchParams.get("day");
+    const day = new Date(dayParam ?? new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
+    if (dayParam && Number.isNaN(day.getTime())) {
+      return NextResponse.json({ error: "INVALID_DATE", message: "Provide a valid attendance day." }, { status: 400 });
+    }
     const requestedPeriod = url.searchParams.get("periodId") ?? undefined;
     if (requestedPeriod && !/^[A-Za-z0-9_-]{1,64}$/.test(requestedPeriod.trim())) {
       return NextResponse.json({ error: "Invalid attendance period." }, { status: 400 });

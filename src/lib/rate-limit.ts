@@ -108,11 +108,16 @@ export async function clearLoginAttempts(identityHash: string): Promise<void> {
 /**
  * Best-effort client IP used only for abuse-control bucketing and telemetry.
  * It is never used for authentication or authorization decisions.
+ *
+ * Neither X-Forwarded-For nor X-Real-Ip is trustworthy without a trusted-proxy
+ * configuration, so callers must treat the per-identity bucket (not the IP
+ * bucket) as the real protection. We prefer the leftmost X-Forwarded-For entry
+ * (standard proxy semantics) and fall back to X-Real-Ip.
  */
-export function requestIp(headers: Headers): string {
-  const realIp = headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
-
+export function requestIp(headers: Pick<Headers, "get">): string {
   const forwarded = headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim();
-  return forwarded || "unknown";
+  if (forwarded) return forwarded;
+
+  const realIp = headers.get("x-real-ip")?.trim();
+  return realIp || "unknown";
 }

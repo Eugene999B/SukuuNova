@@ -7,6 +7,7 @@ import { hasPermission, requirePermission } from "@/lib/rbac";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { generateReportCard, submitReportCard } from "@/lib/report-card-service";
+import { appendSchoolAudit } from "@/lib/audit";
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 
 function origin() {
@@ -27,20 +28,37 @@ async function runReportCardAction(formData: FormData) {
   if (action === "generate") {
     await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "reports:generate");
-      const students = await tx.student.findMany({ where: { schoolId: session.schoolId, classId, status: "active" }, select: { id: true }, orderBy: { name: "asc" } });
+      const students = await tx.student.findMany({ where: { schoolId: session.schoolId, classId, status: "active" }, select: { id: true, name: true, admissionNo: true }, orderBy: { name: "asc" } });
       const existing = await tx.reportCard.findMany({ where: { termId, student: { classId } }, select: { studentId: true } });
       const existingIds = new Set(existing.map((item) => item.studentId));
       let created = 0;
+      const skipped: Array<{ admissionNo: string; reason: string }> = [];
       for (const student of students) {
         if (existingIds.has(student.id)) continue;
         try {
           await generateReportCard(tx, { schoolId: session.schoolId, actorId: session.userId, studentId: student.id, termId });
           created += 1;
-        } catch {
-          // Keep the rest of the class moving if a learner is not ready.
+        } catch (error) {
+          // Keep the rest of the class moving, but record exactly who was
+          // skipped and why instead of silently dropping them.
+          const reason = error instanceof Error ? error.message.slice(0, 160) : "Not ready for generation.";
+          skipped.push({ admissionNo: student.admissionNo, reason });
+          await appendSchoolAudit(tx, {
+            schoolId: session.schoolId,
+            actorId: session.userId,
+            action: "report_card.generate_skipped",
+            entityType: "Student",
+            entityId: student.id,
+            after: { termId, reason },
+          });
         }
       }
-      const message = created ? `Generated ${created} report${created === 1 ? "" : "s"}.` : "No new reports were generated. Existing reports were left unchanged.";
+      const skippedNote = skipped.length
+        ? ` Skipped ${skipped.length}: ${skipped.slice(0, 10).map((s) => `${s.admissionNo} (${s.reason})`).join("; ")}${skipped.length > 10 ? "; …" : ""}`
+        : "";
+      const message = created
+        ? `Generated ${created} report${created === 1 ? "" : "s"}.${skippedNote}`
+        : `No new reports were generated. Existing reports were left unchanged.${skippedNote}`;
       revalidatePath("/school/report-cards");
       redirect(`/school/report-cards?term=${encodeURIComponent(termId)}&classId=${encodeURIComponent(classId)}&notice=${encodeURIComponent(message)}`);
     });

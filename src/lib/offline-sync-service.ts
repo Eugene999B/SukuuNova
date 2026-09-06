@@ -192,14 +192,24 @@ export async function processOfflineSync(
       `;
       results.push({ ...base, status: "APPLIED" as SyncOutcome, result });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Attendance operation failed.";
-      const status: SyncOutcome = message.includes("permission") || message.includes("permitted") ? "REJECTED_PERMISSION" : "REJECTED_VALIDATION";
+      // Never echo raw error text (it can carry Prisma/table internals) to the
+      // device. Map to a stable, safe reason instead.
+      const raw = error instanceof Error ? error.message : "Attendance operation failed.";
+      const code = (error as { code?: string }).code;
+      const status: SyncOutcome = raw.includes("permission") || raw.includes("permitted") ? "REJECTED_PERMISSION" : "REJECTED_VALIDATION";
+      const safeReason =
+        code === "P2002" ? "This attendance record already exists on the server."
+        : code === "P2025" ? "The referenced school record no longer exists."
+        : status === "REJECTED_PERMISSION" ? "This account no longer has attendance recording permission."
+        : raw.includes("permission") || raw.includes("permitted") ? "This account no longer has attendance recording permission."
+        : /invalid|required|missing|duplicate|already|expired|window|future/i.test(raw) ? raw.slice(0, 200)
+        : "Attendance operation failed. Refresh and try again.";
       await tx.$executeRaw`
         UPDATE "SyncOperation"
-        SET "status" = ${status}, "reason" = ${message.slice(0, 500)}, "processedAt" = NOW()
+        SET "status" = ${status}, "reason" = ${safeReason.slice(0, 500)}, "processedAt" = NOW()
         WHERE "id" = ${operationId} AND "schoolId" = ${input.schoolId}
       `;
-      results.push({ ...base, status, reason: message.slice(0, 500) });
+      results.push({ ...base, status, reason: safeReason.slice(0, 500) });
     }
   }
 

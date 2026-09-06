@@ -19,10 +19,18 @@ export async function registerStudent(input: {
       const schoolClass = await tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId }, select: { id: true } });
       if (!schoolClass) throw new AppError("The selected class does not belong to this school.", 400, "CLASS_NOT_FOUND");
     }
-    const student = await tx.student.create({ data: {
-      schoolId: input.schoolId, admissionNo: input.admissionNo.trim(),
-      name: input.name.trim(), dob: input.dob, classId: input.classId, photoUrl: input.photoUrl
-    }});
+    let student;
+    try {
+      student = await tx.student.create({ data: {
+        schoolId: input.schoolId, admissionNo: input.admissionNo.trim(),
+        name: input.name.trim(), dob: input.dob, classId: input.classId, photoUrl: input.photoUrl
+      }});
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") {
+        throw new AppError("A learner with this admission number already exists in this school.", 409, "DUPLICATE_ADMISSION_NO");
+      }
+      throw error;
+    }
 
     if (input.guardian) {
       let userId: string | undefined;

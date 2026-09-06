@@ -6,7 +6,10 @@ const KNOWN_PERMISSIONS = new Set<string>(DEFAULT_PERMISSIONS);
 
 function assertKnownPermission(permissionKey: string): asserts permissionKey is PermissionKey {
   if (KNOWN_PERMISSIONS.has(permissionKey)) return;
-  if (process.env.NODE_ENV !== "production") throw new AppError(`Unknown permission key: ${permissionKey}`, 500, "UNKNOWN_PERMISSION_KEY");
+  // Fail closed everywhere; log loudly in production so typos surface in log
+  // aggregation instead of silently denying access forever.
+  console.error(`[rbac] Unknown permission key denied: ${permissionKey}`);
+  throw new AppError(`Unknown permission key: ${permissionKey}`, 500, "UNKNOWN_PERMISSION_KEY");
 }
 
 export async function hasPermission(tx: TenantDb, userId: string, permissionKey: string, schoolId?: string): Promise<boolean> {
