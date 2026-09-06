@@ -22,7 +22,7 @@ async function assertTeacherCanUseContext(tx: TenantDb, schoolId: string, teache
 async function assertTermOpen(tx: TenantDb, schoolId: string, termId: string) {
   const term = await tx.term.findFirst({ where: { schoolId, id: termId }, select: { id: true, name: true, isLocked: true } });
   if (!term) throw new AppError("The selected term is not available in this school.", 400, "INVALID_TERM");
-  if (term.isLocked) throw new AppError(`Term "${term.name}" is locked.", 409, "TERM_LOCKED");
+  if (term.isLocked) throw new AppError(`Term "${term.name}" is locked.`, 409, "TERM_LOCKED");
   return term;
 }
 
@@ -102,7 +102,7 @@ export async function saveTeacherWorkMarks(tx: TenantDb, input: { schoolId: stri
   for (const mark of input.marks) {
     const student = await tx.student.findFirst({ where: { schoolId: input.schoolId, id: mark.studentId, classId: work.classId }, select: { id: true } });
     if (!student) throw new AppError("A selected student is not in this class.", 400, "INVALID_STUDENT");
-    if (!Number.isFinite(mark.value) || mark.value < 0 || new Prisma.Decimal(mark.value).greaterThan(assessment.maxScore)) throw new AppError(`Mark must be from 0 to ${assessment.maxScore.toString()}.", 400, "INVALID_SCORE");
+    if (!Number.isFinite(mark.value) || mark.value < 0 || new Prisma.Decimal(mark.value).greaterThan(assessment.maxScore)) throw new AppError(`Mark must be from 0 to ${assessment.maxScore.toString()}.`, 400, "INVALID_SCORE");
     await tx.score.upsert({ where: { studentId_assessmentId: { studentId: mark.studentId, assessmentId: assessment.id } }, update: { value: new Prisma.Decimal(mark.value), status: mark.status ?? "present", enteredBy: input.teacherId, enteredAt: new Date() }, create: { schoolId: input.schoolId, studentId: mark.studentId, subjectId: work.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(mark.value), status: mark.status ?? "present", enteredBy: input.teacherId } });
     saved += 1;
   }
