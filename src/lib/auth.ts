@@ -58,10 +58,13 @@ async function verifyWithRotation(token: string, name: "SCHOOL_AUTH_SECRET" | "P
 
 /** Fails closed when the school itself is not active (suspended/locked/deleted). */
 export async function assertSchoolActive(schoolId: string): Promise<void> {
-  const rows = await rawDb.$queryRawUnsafe<Array<{ status: string }>>(
-    `SELECT "status" FROM "School" WHERE "id"=$1 LIMIT 1`,
-    schoolId
-  );
+  const rows = await rawDb.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", schoolId);
+    return tx.$queryRawUnsafe<Array<{ status: string }>>(
+      `SELECT "status" FROM "School" WHERE "id"=$1 LIMIT 1`,
+      schoolId
+    );
+  });
   if (!rows[0] || rows[0].status !== "active") {
     throw new UnauthorizedError("This school account is no longer active.");
   }
@@ -159,15 +162,18 @@ export async function verifySchoolSessionToken(token: string): Promise<SchoolSes
   const impersonatedByAdminId = typeof payload.impersonatedByAdminId === "string" ? payload.impersonatedByAdminId : undefined;
   if (impersonationId || impersonatedByAdminId) {
     if (!impersonationId || !impersonatedByAdminId) throw new UnauthorizedError("Invalid impersonation session.");
-    const active = await rawDb.$queryRawUnsafe<Array<{ id: string; startedAt: Date }>>(
-      `SELECT "id", "startedAt" FROM "ImpersonationLog"
-       WHERE "id"=$1 AND "platformAdminId"=$2 AND "schoolId"=$3 AND "impersonatedUserId"=$4 AND "endedAt" IS NULL
-       LIMIT 1`,
-      impersonationId,
-      impersonatedByAdminId,
-      payload.schoolId,
-      payload.sub,
-    );
+    const active = await rawDb.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", payload.schoolId as string);
+      return tx.$queryRawUnsafe<Array<{ id: string; startedAt: Date }>>(
+        `SELECT "id", "startedAt" FROM "ImpersonationLog"
+         WHERE "id"=$1 AND "platformAdminId"=$2 AND "schoolId"=$3 AND "impersonatedUserId"=$4 AND "endedAt" IS NULL
+         LIMIT 1`,
+        impersonationId,
+        impersonatedByAdminId,
+        payload.schoolId,
+        payload.sub,
+      );
+    });
     if (!active.length) throw new UnauthorizedError("This impersonation session has ended.");
     const ageMs = Date.now() - new Date(active[0].startedAt).getTime();
     if (!Number.isFinite(ageMs) || ageMs > IMPERSONATION_SECONDS * 1000) throw new UnauthorizedError("This impersonation session has expired.");
