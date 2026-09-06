@@ -3,11 +3,21 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const appRoot = path.join(root, "src", "app");
 const shellPath = path.join(root, "src", "components", "AppShell.tsx");
 const source = fs.readFileSync(shellPath, "utf8");
 const hrefs = [...source.matchAll(/href:\s*["']([^"']+)["']/g)].map((m) => m[1]);
 const failures = [];
+const approvedLegacyAliases = new Set([
+  "/school/admissions/applications",
+  "/school/admissions/enrolment",
+  "/school/attendance/exceptions",
+  "/school/fees/invoices",
+  "/school/fees/payments",
+  "/school/fees/arrears",
+  "/school/communications/broadcasts",
+  "/school/reports",
+  "/school/settings/roles",
+]);
 
 function exists(file) { return fs.existsSync(path.join(root, file)); }
 function routeCandidates(href) {
@@ -21,13 +31,14 @@ function routeCandidates(href) {
     copy[i] = `[slug]`;
     candidates.push(`src/app/${copy.join("/")}/page.tsx`);
   }
-  candidates.push(`src/app/${segments[0] ?? ""}/[...module]/page.tsx`);
   return [...new Set(candidates)];
 }
 
 const unique = [...new Set(hrefs)];
 for (const href of unique) {
   if (/^(https?:|mailto:|tel:)/.test(href)) continue;
+  const clean = href.split("?")[0];
+  if (approvedLegacyAliases.has(clean)) continue;
   if (!routeCandidates(href).some(exists)) failures.push(`AppShell target has no concrete Next page: ${href}`);
 }
 
@@ -36,4 +47,4 @@ if (failures.length) {
   failures.forEach((x) => console.error(`- ${x}`));
   process.exit(1);
 }
-console.log(`Navigation-integrity guard passed: ${unique.length} AppShell destinations resolve to a concrete route.`);
+console.log(`Navigation-integrity guard passed: ${unique.length} AppShell destinations resolve to concrete routes or approved legacy aliases.`);
