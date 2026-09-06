@@ -1,0 +1,10 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+const root=process.cwd(),src=path.join(root,"src"),tokenFile=path.resolve(src,"app","design-tokens.css");
+function walk(dir){const out=[];for(const e of fs.readdirSync(dir,{withFileTypes:true})){if(e.name==='node_modules'||e.name==='.next'||e.name.startsWith('.'))continue;const f=path.join(dir,e.name);if(e.isDirectory())out.push(...walk(f));else if((f.endsWith('.css')||f.endsWith('.tsx')||f.endsWith('.ts'))&&path.resolve(f)!==tokenFile)out.push(f)}return out}
+const literal=/#[0-9a-f]{3,8}\b|\brgba?\s*\(/gi;
+const visualDecl=/\b(?:background(?:Color|Image)?|color|fill|stroke|border(?:Color)?|outlineColor|boxShadow|textShadow)\s*[:=]\s*[^;},\n]*?(?:#[0-9a-f]{3,8}\b|rgba?\s*\(|\b(?:white|black)\b)/gi;
+let failures=0;
+for(const file of walk(src)){const text=fs.readFileSync(file,'utf8');if(file.endsWith('.css')){for(const [i,line] of text.split(/\r?\n/).entries()){for(const m of line.matchAll(literal)){failures++;console.error(`${path.relative(root,file)}:${i+1}: hardcoded color ${m[0]}`)}for(const m of line.matchAll(/\b(?:background(?:-color|-image)?|color|fill|stroke|border(?:-[a-z-]+)?|outline(?:-color)?|box-shadow|text-shadow)\s*:\s*[^;{}]*(?:white|black)\b/gi)){failures++;console.error(`${path.relative(root,file)}:${i+1}: hardcoded color keyword ${m[0]}`)}}}else{for(const block of text.matchAll(/style=\{\{([\s\S]*?)\}\}/g))for(const m of block[1].matchAll(visualDecl)){failures++;console.error(`${path.relative(root,file)}: inline style contains ${m[0]}`)}for(const m of text.matchAll(/\b(?:backgroundColor|color|fill|stroke|borderColor)=(['"])(?:#[0-9a-f]{3,8}|rgba?\([^)]*\)|white|black)\1/gi)){failures++;console.error(`${path.relative(root,file)}: JSX color attribute contains ${m[0]}`)}for(const block of text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi))for(const m of block[1].matchAll(literal)){failures++;console.error(`${path.relative(root,file)}: embedded style contains ${m[0]}`)}}}
+if(failures){console.error(`\n${failures} hardcoded visual color literal(s) found outside design-tokens.css.`);process.exit(1)}console.log('Design-token lint passed.');
