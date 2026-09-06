@@ -18,24 +18,15 @@ function walk(dir) {
   return files;
 }
 
-const forbiddenUiPhrases = [
-  "Prototype / placeholder",
-  "Workflow not connected yet",
-  "Read-only preview.",
-  "Search index not connected yet.",
-];
+const forbiddenUiPhrases = ["Prototype / placeholder", "Workflow not connected yet", "Read-only preview.", "Search index not connected yet."];
 
 for (const dir of scanRoots) {
   if (!fs.existsSync(dir)) continue;
   for (const file of walk(dir)) {
     const text = fs.readFileSync(file, "utf8");
     const relative = path.relative(root, file);
-    for (const phrase of forbiddenUiPhrases) {
-      if (text.includes(phrase)) failures.push(`${relative}: pilot-blocking placeholder text: ${phrase}`);
-    }
-    if (/setForm\([^;\n]*\)\s*;[^\n]*setTimeout\([^\n]*(?:save|submit)\(/.test(text)) {
-      failures.push(`${relative}: potential stale React state submission pattern; pass the next payload directly to the action.`);
-    }
+    for (const phrase of forbiddenUiPhrases) if (text.includes(phrase)) failures.push(`${relative}: pilot-blocking placeholder text: ${phrase}`);
+    if (/setForm\([^;\n]*\)\s*;[^\n]*setTimeout\([^\n]*(?:save|submit)\(/.test(text)) failures.push(`${relative}: potential stale React state submission pattern; pass the next payload directly to the action.`);
   }
 }
 
