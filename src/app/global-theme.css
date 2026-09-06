@@ -1,9 +1,7 @@
 /* SukuuNova canonical theme layer. The theme owns palette semantics; component styles own layout. */
 
 :root { color-scheme: light; --ui-bg: var(--color-bg); --ui-bg-subtle: var(--color-bg-subtle); --ui-surface: var(--color-surface); --ui-surface-raised: var(--color-surface-raised); --ui-surface-soft: var(--color-surface-soft); --ui-surface-hover: var(--color-surface-hover); --ui-text: var(--color-text-primary); --ui-text-secondary: var(--color-text-secondary); --ui-text-muted: var(--color-text-muted); --ui-text-subtle: var(--color-text-subtle); --ui-text-disabled: var(--color-text-disabled); --ui-border: var(--color-border); --ui-border-strong: var(--color-border-strong); --ui-border-subtle: var(--color-border-subtle); --ui-primary: var(--color-brand); --ui-primary-hover: var(--color-brand-hover); --ui-primary-soft: var(--color-brand-soft); --ui-primary-border: var(--color-brand-border); --ui-success: var(--color-success); --ui-success-soft: var(--color-success-soft); --ui-warning: var(--color-warning); --ui-warning-soft: var(--color-warning-soft); --ui-danger: var(--color-danger); --ui-danger-soft: var(--color-danger-soft); --ui-info: var(--color-info); --ui-info-soft: var(--color-info-soft); --ui-focus: var(--focus-ring); --ui-shadow-sm: var(--shadow-sm); --ui-shadow-md: var(--shadow-md); --ui-radius-sm: var(--radius-sm); --ui-radius-md: var(--radius-md); --ui-radius-lg: var(--radius-lg); }
-
 :root[data-theme="dark"] { color-scheme: dark; --ui-bg: var(--color-bg); --ui-bg-subtle: var(--color-bg-subtle); --ui-surface: var(--color-surface); --ui-surface-raised: var(--color-surface-raised); --ui-surface-soft: var(--color-surface-soft); --ui-surface-hover: var(--color-surface-hover); --ui-text: var(--color-text-primary); --ui-text-secondary: var(--color-text-secondary); --ui-text-muted: var(--color-text-muted); --ui-text-subtle: var(--color-text-subtle); --ui-text-disabled: var(--color-text-disabled); --ui-border: var(--color-border); --ui-border-strong: var(--color-border-strong); --ui-border-subtle: var(--color-border-subtle); --ui-primary: var(--color-brand); --ui-primary-hover: var(--color-brand-hover); --ui-primary-soft: var(--color-brand-soft); --ui-primary-border: var(--color-brand-border); --ui-success: var(--color-success); --ui-success-soft: var(--color-success-soft); --ui-warning: var(--color-warning); --ui-warning-soft: var(--color-warning-soft); --ui-danger: var(--color-danger); --ui-danger-soft: var(--color-danger-soft); --ui-info: var(--color-info); --ui-info-soft: var(--color-info-soft); --ui-focus: var(--focus-ring); --ui-shadow-sm: var(--shadow-sm); --ui-shadow-md: var(--shadow-md); }
-
 html, body { min-height: 100%; background: var(--ui-bg) !important; color: var(--ui-text) !important; }
 body { font-family: var(--sn-font-family, Inter, ui-sans-serif, system-ui, sans-serif); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 :where(.app-main, .app-content, .page-shell, .page-content, .module-workspace, .dashboard-shell) { background: var(--ui-bg) !important; color: var(--ui-text) !important; }
@@ -34,7 +32,7 @@ body { font-family: var(--sn-font-family, Inter, ui-sans-serif, system-ui, sans-
 :where(.module-tabbar a.is-active, .tabs .is-active) { background: var(--ui-primary-soft) !important; color: var(--ui-primary) !important; }
 :where(dialog, [role="dialog"], .modal, .dialog, .drawer) { background: var(--ui-surface) !important; color: var(--ui-text) !important; border-color: var(--ui-border) !important; box-shadow: var(--ui-shadow-md) !important; }
 
-/* Compatibility bridge for remaining Tailwind/legacy literal utility classes. */
+/* Compatibility bridge for Tailwind/legacy literal utility classes. */
 :root[data-theme="dark"] :where(.bg-white, .bg-slate-50, .bg-slate-100, .bg-gray-50, .bg-gray-100, .bg-zinc-50, .bg-zinc-100) { background: var(--ui-surface) !important; }
 :root[data-theme="dark"] :where(.bg-slate-200, .bg-gray-200, .bg-zinc-200) { background: var(--ui-surface-raised) !important; }
 :root[data-theme="dark"] :where(.text-black, .text-slate-950, .text-slate-900, .text-slate-800, .text-gray-950, .text-gray-900, .text-gray-800, .text-zinc-950, .text-zinc-900, .text-zinc-800) { color: var(--ui-text) !important; }
@@ -44,7 +42,11 @@ body { font-family: var(--sn-font-family, Inter, ui-sans-serif, system-ui, sans-
 :root[data-theme="dark"] :where(.divide-slate-200, .divide-gray-200, .divide-zinc-200) > :not([hidden]) ~ :not([hidden]) { border-color: var(--ui-border) !important; }
 :root[data-theme="dark"] :where(.placeholder-slate-500, .placeholder-gray-500, .placeholder-zinc-500)::placeholder { color: var(--ui-text-muted) !important; }
 :root[data-theme="dark"] :where(.ring-sky-100, .ring-blue-100, .ring-indigo-100, .ring-emerald-100) { --tw-ring-color: var(--ui-border) !important; }
+
+/* In dark mode, ordinary interface copy is always readable light text. Semantic status classes below retain their colors. */
+:root[data-theme="dark"] body :where(h1,h2,h3,h4,h5,h6,p,span,a,button,label,small,strong,b,em,li,dt,dd,th,td,legend) { color: var(--ui-text) !important; }
 :root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]), :root[data-theme="dark"] textarea, :root[data-theme="dark"] select, :root[data-theme="dark"] option { color: var(--ui-text) !important; background-color: var(--ui-surface) !important; -webkit-text-fill-color: var(--ui-text) !important; }
+
 :where(.status-success, [data-status="success"], .is-success) { color: var(--ui-success) !important; background: var(--ui-success-soft) !important; }
 :where(.status-warning, [data-status="warning"], .is-warning) { color: var(--ui-warning) !important; background: var(--ui-warning-soft) !important; }
 :where(.status-danger, [data-status="danger"], .is-danger) { color: var(--ui-danger) !important; background: var(--ui-danger-soft) !important; }
