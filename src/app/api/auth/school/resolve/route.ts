@@ -3,12 +3,15 @@ import { z } from "zod";
 import { rawDb } from "@/lib/db";
 import { RateLimitError } from "@/lib/errors";
 import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
+
 const schema = z.object({ uniqueCode: z.string().trim().min(2).max(80) });
 
 export async function POST(request: Request) {
   try {
     const parsed = schema.safeParse(await request.json());
-    if (!parsed.success) return NextResponse.json({ ok: false, message: "Enter a valid school code." }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, message: "Enter a valid school code." }, { status: 400 });
+    }
 
     const uniqueCode = parsed.data.uniqueCode.toLowerCase();
     try {
@@ -22,24 +25,35 @@ export async function POST(request: Request) {
       }
       throw error;
     }
+
     const directory = await rawDb.schoolLoginDirectory.findUnique({
       where: { uniqueCode },
       select: { schoolId: true, status: true },
     });
 
     if (!directory || directory.status !== "active") {
-      return NextResponse.json({ ok: false, message: "We could not find an active school with that code." }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, message: "We could not find an active school with that code." },
+        { status: 404 }
+      );
     }
 
-    // This endpoint runs before a school tenant has been established, so the
-    // school lookup must bypass the tenant-scoped Prisma extension as well.
-    const school = await rawDb.school.findUnique({
-      where: { id: directory.schoolId },
-      select: { name: true, status: true },
+    // The directory lookup is intentionally pre-tenant. Once it gives us the
+    // verified schoolId, establish that tenant context before reading School so
+    // PostgreSQL RLS can safely expose only the matching school row.
+    const school = await rawDb.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
+      return tx.school.findUnique({
+        where: { id: directory.schoolId },
+        select: { name: true, status: true },
+      });
     });
 
     if (!school || school.status !== "active") {
-      return NextResponse.json({ ok: false, message: "We could not find an active school with that code." }, { status: 404 });
+      return NextResponse.json(
+        { ok: false, message: "We could not find an active school with that code." },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({ ok: true, school: { name: school.name, uniqueCode } });
