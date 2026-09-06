@@ -54,10 +54,10 @@ export default function AnnouncementComposer({ roles, users }: { roles: Role[]; 
         {audience === "role" ? <select value={roleId} onChange={(e) => setRoleId(e.target.value)} aria-label="Role audience">{roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}</select> : null}
         {audience === "individual" ? <select value={userId} onChange={(e) => setUserId(e.target.value)} aria-label="Individual recipient">{users.map((user) => <option key={user.id} value={user.id}>{user.name}{user.roleNames.length ? ` · ${user.roleNames.join(", ")}` : ""}</option>)}</select> : null}
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <small style={{ color: "#627b80" }}>Announcements are recorded in the school audit trail.</small>
+          <small style={{ color: "var(--sn-ink)" }}>Announcements are recorded in the school audit trail.</small>
           <button className="module-hero-button" type="button" onClick={submit} disabled={pending || !title.trim() || !body.trim()}>{pending ? "Publishing…" : "Publish announcement →"}</button>
         </div>
-        {status ? <p role="status" style={{ margin: 0, color: status.startsWith("Published") ? "#72e3c1" : "#ff9b9b", fontSize: 9 }}>{status}</p> : null}
+        {status ? <p role="status" style={{ margin: 0, color: status.startsWith("Published") ? "var(--color-brand-hover)" : "var(--color-danger)", fontSize: 9 }}>{status}</p> : null}
       </div>
     </section>
   );

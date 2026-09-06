@@ -1,20 +1,132 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import * as ts from "typescript";
 
-const root=process.cwd();
-const srcRoot=path.join(root,"src");
-const tokenFile=path.resolve(srcRoot,"app","design-tokens.css");
-const visualKeys=new Set(["background","backgroundColor","backgroundImage","color","fill","stroke","borderColor","borderTopColor","borderRightColor","borderBottomColor","borderLeftColor","outlineColor","boxShadow","textShadow"]);
+const root = process.cwd();
+const srcRoot = path.join(root, "src");
+const tokenFile = path.join(srcRoot, "app", "design-tokens.css");
+const extensions = new Set([".ts", ".tsx", ".css"]);
+const skipFiles = new Set([tokenFile]);
 
-function walk(dir){const out=[];for(const e of fs.readdirSync(dir,{withFileTypes:true})){if(e.name==='node_modules'||e.name==='.next'||e.name.startsWith('.'))continue;const f=path.join(dir,e.name);if(e.isDirectory())out.push(...walk(f));else if((f.endsWith('.css')||f.endsWith('.tsx'))&&path.resolve(f)!==tokenFile)out.push(f)}return out}
-const exact=new Map([
-['#0f766e','var(--color-brand)'],['#0d9488','var(--color-brand-hover)'],['#042f2e','var(--color-brand-deep)'],['#f8fafc','var(--color-bg)'],['#f1f5f9','var(--color-bg-subtle)'],['#ffffff','var(--color-surface)'],['#e2e8f0','var(--color-border)'],['#cbd5e1','var(--color-border-strong)'],['#0f172a','var(--color-text-primary)'],['#334155','var(--color-text-secondary)'],['#64748b','var(--color-text-muted)'],['#94a3b8','var(--color-text-subtle)'],['#15803d','var(--color-success)'],['#166534','var(--color-success-hover)'],['#f0fdf4','var(--color-success-soft)'],['#b45309','var(--color-warning)'],['#92400e','var(--color-warning-hover)'],['#fffbeb','var(--color-warning-soft)'],['#b91c1c','var(--color-danger)'],['#991b1b','var(--color-danger-hover)'],['#fef2f2','var(--color-danger-soft)'],['#1d4ed8','var(--color-info)'],['#1e40af','var(--color-info-hover)'],['#eff6ff','var(--color-info-soft)'],['#4338ca','var(--color-accent-indigo)'],['#eef2ff','var(--color-accent-indigo-soft)'],['#14b8a6','var(--color-brand)'],['#2dd4bf','var(--color-brand-hover)'],['#090e17','var(--color-bg)'],['#1e293b','var(--color-surface-raised)'],['#162032','var(--color-surface-soft)'],['#4ade80','var(--color-success)'],['#fbbf24','var(--color-warning)'],['#f87171','var(--color-danger)'],['#60a5fa','var(--color-info)']]);
-function tokenFor(prop,raw){const v=raw.trim().toLowerCase();const normalized=v.length===4?`#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}`:v; if(exact.has(v))return exact.get(v);if(exact.has(normalized))return exact.get(normalized);const p=prop.toLowerCase();if(p.includes('shadow'))return 'var(--sn-shadow-sm)';if(p.includes('border')||p.includes('outline'))return 'var(--sn-line)';if(p==='fill'||p==='stroke')return 'currentColor';if(p.includes('placeholder')||p==='color')return p.includes('placeholder')?'var(--color-text-subtle)':'var(--sn-ink)';if(p.includes('background'))return 'var(--sn-surface)';return 'var(--sn-ink)'}
-function hasLiteral(v){return /#[0-9a-f]{3,8}\b|\brgba?\s*\(|\b(?:white|black)\b/i.test(v)}
-function normalizeCss(css){return css.replace(/(^|[;{}\n]\s*)(background(?:-color|-image)?|color|fill|stroke|border(?:-[a-z-]+)?|outline(?:-color)?|box-shadow|text-shadow|placeholder-color)\s*:\s*([^;{}]+)(?=;|})/gim,(_m,prefix,prop,value)=>hasLiteral(value)?`${prefix}${prop}: ${tokenFor(prop,value)}`:_m)}
-function applyChanges(text,changes){changes.sort((a,b)=>b.start-a.start);for(const c of changes)text=text.slice(0,c.start)+c.text+text.slice(c.end);return text}
-function normalizeTsx(text){const sf=ts.createSourceFile('file.tsx',text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);const changes=[];function visit(node){if(ts.isJsxAttribute(node)){const name=node.name.text;if(visualKeys.has(name)&&node.initializer&&ts.isStringLiteral(node.initializer)&&hasLiteral(node.initializer.text)){changes.push({start:node.initializer.getStart(sf)+1,end:node.initializer.getEnd()-1,text:tokenFor(name,node.initializer.text)})}if(name==='style'&&node.initializer&&ts.isJsxExpression(node.initializer)&&node.initializer.expression&&ts.isObjectLiteralExpression(node.initializer.expression)){for(const prop of node.initializer.expression.properties){if(!ts.isPropertyAssignment(prop)||!prop.name)continue;const propName=ts.isIdentifier(prop.name)||ts.isStringLiteral(prop.name)?prop.name.text:undefined;if(!propName||!visualKeys.has(propName))continue;const init=prop.initializer;if(ts.isStringLiteral(init)&&hasLiteral(init.text)){changes.push({start:init.getStart(sf)+1,end:init.getEnd()-1,text:tokenFor(propName,init.text)})}}}}ts.forEachChild(node,visit)}visit(sf);let out=applyChanges(text,changes);return out.replace(/<style([^>]*)>([\s\S]*?)<\/style>/gi,(_m,a,c)=>`<style${a}>${normalizeCss(c)}</style>`)}
-const changed=[];for(const file of walk(srcRoot)){const before=fs.readFileSync(file,'utf8');const after=file.endsWith('.css')?normalizeCss(before):normalizeTsx(before);if(after!==before){fs.writeFileSync(file,after);changed.push(path.relative(root,file))}}
-console.log(`Normalized ${changed.length} visual source files.`);changed.forEach(f=>console.log(f));
+function walk(dir) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === ".next" || entry.name.startsWith(".")) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walk(full));
+    else if (extensions.has(path.extname(entry.name)) && !skipFiles.has(full)) out.push(full);
+  }
+  return out;
+}
+
+function rgb(hex) {
+  const h = hex.replace(/^#/, "");
+  if (![3, 6, 8].includes(h.length)) return null;
+  const s = h.length === 3 ? h.split("").map((x) => x + x).join("") : h;
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+}
+
+const palette = [
+  ["#0f766e", "--color-brand"], ["#0d9488", "--color-brand-hover"], ["#042f2e", "--color-brand-deep"],
+  ["#f8fafc", "--color-bg"], ["#f1f5f9", "--color-bg-subtle"], ["#ffffff", "--color-surface"], ["#e2e8f0", "--color-border"], ["#cbd5e1", "--color-border-strong"],
+  ["#0f172a", "--color-text-primary"], ["#334155", "--color-text-secondary"], ["#64748b", "--color-text-muted"], ["#94a3b8", "--color-text-subtle"],
+  ["#15803d", "--color-success"], ["#f0fdf4", "--color-success-soft"], ["#b45309", "--color-warning"], ["#fffbeb", "--color-warning-soft"],
+  ["#b91c1c", "--color-danger"], ["#fef2f2", "--color-danger-soft"], ["#1d4ed8", "--color-info"], ["#eff6ff", "--color-info-soft"],
+  ["#4338ca", "--color-accent-indigo"], ["#eef2ff", "--color-accent-indigo-soft"], ["#14b8a6", "--color-brand"], ["#2dd4bf", "--color-brand-hover"],
+  ["#162032", "--color-surface-soft"], ["#1e293b", "--color-surface-raised"], ["#090e17", "--color-bg"], ["#4ade80", "--color-success"],
+  ["#fbbf24", "--color-warning"], ["#f87171", "--color-danger"], ["#60a5fa", "--color-info"],
+];
+
+function nearestToken(value) {
+  const c = rgb(value);
+  if (!c) return "--sn-ink";
+  let best = null;
+  let bestDist = Infinity;
+  for (const [hex, token] of palette) {
+    const p = rgb(hex);
+    const d = Math.sqrt((c[0] - p[0]) ** 2 + (c[1] - p[1]) ** 2 + (c[2] - p[2]) ** 2);
+    if (d < bestDist) { bestDist = d; best = token; }
+  }
+  return best || "--sn-ink";
+}
+
+function inferToken(source, index, raw) {
+  const before = source.slice(Math.max(0, index - 240), index);
+  const prop = [...before.matchAll(/([A-Za-z-]+)\s*[:=]\s*[^;{}\n]*$/g)].at(-1)?.[1]?.toLowerCase() || "";
+  if (prop.includes("boxshadow") || prop.includes("shadow")) return "--sn-shadow-sm";
+  if (prop.includes("border") || prop === "outline" || prop === "outlinecolor") return "--sn-line";
+  if (prop === "color" || prop === "fill" || prop === "stroke" || prop.includes("textcolor")) {
+    const t = nearestToken(raw);
+    return ["--color-success", "--color-warning", "--color-danger", "--color-info"].includes(t) ? t : "--sn-ink";
+  }
+  if (prop.includes("background") || prop === "background") {
+    const t = nearestToken(raw);
+    if (t.includes("success") || t.includes("warning") || t.includes("danger") || t.includes("info")) return t;
+    return "--sn-surface";
+  }
+  return nearestToken(raw);
+}
+
+function replaceColors(content) {
+  const literal = /#[0-9a-f]{3,8}\b/gi;
+  let out = content.replace(literal, (m, offset) => `var(${inferToken(content, offset, m)})`);
+  out = out.replace(/\brgba?\(\s*[^)]*\)/gi, (m, offset) => `var(${inferToken(out, offset, "#000000")})`);
+  out = out.replace(/([:\s,(])(?:white|black)(?=[;,\s)])/gi, (m, prefix, offset) => {
+    const token = inferToken(out, Math.max(0, offset), prefix.toLowerCase() === "black" ? "#000000" : "#ffffff");
+    return `${prefix}var(${token})`;
+  });
+  return out;
+}
+
+function rewriteFiles() {
+  const changed = [];
+  for (const file of walk(srcRoot)) {
+    const before = fs.readFileSync(file, "utf8");
+    const after = replaceColors(before);
+    if (after !== before) { fs.writeFileSync(file, after); changed.push(path.relative(root, file)); }
+  }
+  return changed;
+}
+
+function ensurePageHeader() {
+  const component = path.join(srcRoot, "components", "PageHeader.tsx");
+  const css = path.join(srcRoot, "components", "page-header.css");
+  fs.writeFileSync(component, `import type { ReactNode } from "react";\nimport "./page-header.css";\n\nexport function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {\n  return <header className="sn-page-header"><div className="sn-page-header-copy"><h1>{title}</h1>{description ? <p>{description}</p> : null}</div>{actions ? <div className="sn-page-header-actions">{actions}</div> : null}</header>;\n}\n`);
+  fs.writeFileSync(css, `.sn-page-header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:0 0 18px;padding:2px 0 6px}.sn-page-header-copy{min-width:0}.sn-page-header h1{margin:0;color:var(--sn-ink);font-size:var(--sn-font-2xl);line-height:1.15;letter-spacing:-.02em;font-weight:800}.sn-page-header p{margin:5px 0 0;color:var(--sn-muted);font-size:var(--sn-font-sm);line-height:1.45}.sn-page-header-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}@media(max-width:720px){.sn-page-header{align-items:flex-start;flex-direction:column}.sn-page-header-actions{width:100%;justify-content:flex-start}}\n`);
+}
+
+function patchAppShell() {
+  const file = path.join(srcRoot, "components", "AppShell.tsx");
+  let text = fs.readFileSync(file, "utf8");
+  if (!text.includes('from "./PageHeader"')) text = text.replace('import "./app-shell.css";', 'import { PageHeader } from "./PageHeader";\nimport "./app-shell.css";');
+  const old = '<div className="app-content">\n          {children}\n        </div>';
+  const next = '<div className="app-content">\n          <PageHeader title={title} description={subtitle} />\n          <div className="sn-page-body">{children}</div>\n        </div>';
+  if (text.includes(old)) text = text.replace(old, next);
+  fs.writeFileSync(file, text);
+}
+
+function patchGlobalLayout() {
+  const shell = path.join(srcRoot, "components", "app-shell.css");
+  if (fs.existsSync(shell)) {
+    let text = fs.readFileSync(shell, "utf8");
+    if (!text.includes("/* system-wide compact operational page treatment */")) {
+      text += `\n\n/* system-wide compact operational page treatment */\n.app-content{min-width:0}.sn-page-body{min-width:0}.app-content>h1,.app-content>section>h1,.app-content>main>h1{font-size:var(--sn-font-2xl)!important;line-height:1.15!important}.app-content [class*="hero"] h1,.app-content [class*="Hero"] h1{font-size:var(--sn-font-2xl);line-height:1.15}.app-content [class*="hero"],[class*="Hero"].app-card{margin-bottom:18px}\n`;
+      fs.writeFileSync(shell, text);
+    }
+  }
+  const globals = path.join(srcRoot, "app", "globals.css");
+  if (fs.existsSync(globals)) {
+    let g = fs.readFileSync(globals, "utf8");
+    if (!g.includes("/* system-wide select sizing */")) {
+      g += `\n\n/* system-wide select sizing */\nselect{min-width:10.5rem;max-width:100%;}\n`;
+      fs.writeFileSync(globals, g);
+    }
+  }
+}
+
+const changed = rewriteFiles();
+ensurePageHeader();
+patchAppShell();
+patchGlobalLayout();
+console.log(`Design-system normalization changed ${changed.length} source files. [rerun]`);
+for (const file of changed) console.log(file);

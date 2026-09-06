@@ -76,7 +76,7 @@
 
 .school-page-button.primary {
   background: var(--sn-primary);
-  color: #fff;
+  color: var(--sn-ink);
   border-color: var(--sn-primary);
   box-shadow: var(--sn-shadow-sm);
 }

@@ -7,7 +7,7 @@
 
   .app-sidebar.is-open-mobile {
     transform: translateX(0);
-    box-shadow: 0 0 50px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 0 50px var(--sn-shadow-sm);
   }
 
   .app-topbar-left {

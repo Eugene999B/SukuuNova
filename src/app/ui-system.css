@@ -207,7 +207,7 @@
 }
 
 .sn-dialog::backdrop {
-  background: rgba(15, 23, 42, 0.5);
+  background: var(--sn-surface);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -330,7 +330,7 @@
 
 .button-primary, .button.primary {
   background: var(--color-brand);
-  color: #ffffff !important;
+  color: var(--sn-ink) !important;
   box-shadow: var(--shadow-sm);
 }
 
@@ -354,7 +354,7 @@
 
 .button-danger, .button.danger {
   background: var(--color-danger);
-  color: #ffffff !important;
+  color: var(--sn-ink) !important;
 }
 
 .button-danger:hover, .button.danger:hover {

@@ -9,12 +9,12 @@ export default function CommunicationCommandCenter(props: Props) {
     <>
       <style jsx global>{`
         .sukuu-communication button[type="submit"] {
-          background-color: #0f172a !important;
-          color: #ffffff !important;
-          border-color: #0f172a !important;
+          background-color: var(--sn-surface) !important;
+          color: var(--sn-ink) !important;
+          border-color: var(--sn-line) !important;
         }
         .sukuu-communication button[type="submit"]:hover:not(:disabled) {
-          background-color: #1e293b !important;
+          background-color: var(--sn-surface) !important;
         }
         .sukuu-communication button[type="submit"]:disabled {
           opacity: 0.5;

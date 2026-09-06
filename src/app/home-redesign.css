@@ -8,7 +8,7 @@
 .hero h1{color:var(--sn-ink)}
 .hero-proof{color:var(--sn-muted)}
 .hero-proof strong{color:var(--sn-ink)}
-.primary-cta{color:#fff}
+.primary-cta{color:var(--sn-ink)}
 .intent-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:8px 0 0}
 .intent-card{min-height:260px;padding:26px;border:1px solid var(--sn-line);border-radius:22px;background:var(--sn-surface);box-shadow:var(--sn-shadow-sm);text-decoration:none;color:var(--sn-ink);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
 .intent-card:hover{transform:translateY(-3px);box-shadow:var(--sn-shadow-md);border-color:var(--portal-accent,var(--sn-primary))}
@@ -38,7 +38,7 @@
 .eyebrow{border-color:color-mix(in srgb,var(--sn-school-accent) 20%,var(--sn-line));background:color-mix(in srgb,var(--sn-school-tint) 72%,transparent);color:var(--sn-school-accent)}
 .eyebrow-dot{background:var(--sn-school-accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--sn-school-accent) 10%,transparent)}
 .hero h1 span{background:linear-gradient(135deg,var(--sn-primary),var(--sn-platform-accent));-webkit-background-clip:text;background-clip:text;color:transparent}
-.primary-cta{background:var(--sn-primary);color:#fff;box-shadow:var(--sn-shadow-md)}
+.primary-cta{background:var(--sn-primary);color:var(--sn-ink);box-shadow:var(--sn-shadow-md)}
 .primary-cta:hover{box-shadow:var(--sn-shadow-lg)}
 .secondary-cta{border-color:var(--sn-line);background:var(--sn-surface);color:var(--sn-ink-2)}
 .hero-proof strong{color:var(--sn-ink)}
