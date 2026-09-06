@@ -15,8 +15,8 @@ const legacyRedirects: Record<string, string> = {
   "fees/payments": "/school/fees",
   "fees/arrears": "/school/fees",
   "communications/broadcasts": "/school/communications/messages",
-  reports: "/school/reports/analytics",
-  settings/roles: "/school/settings",
+  "reports": "/school/reports/analytics",
+  "settings/roles": "/school/settings",
 };
 
 export default async function SchoolLegacyModulePage({ params }: { params: Promise<{ module?: string[] }> }) {
