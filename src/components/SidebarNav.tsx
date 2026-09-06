@@ -13,6 +13,14 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
   const storageKey = `sukuunova-sidebar-groups:${storageScope}`;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
+  const activeLabel = useMemo(() => {
+    const matches = groups
+      .flatMap((group) => group.items.map((item) => ({ ...item, group: group.label })))
+      .filter((item) => pathname === item.href || (pathname.startsWith(`${item.href}/`) && item.href !== "/dashboard"))
+      .sort((a, b) => b.href.length - a.href.length);
+    return matches[0]?.label ?? active;
+  }, [groups, pathname, active]);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey);
@@ -22,13 +30,17 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
     }
   }, [storageKey]);
 
-  const activeLabel = useMemo(() => {
-    const matches = groups
-      .flatMap((group) => group.items.map((item) => ({ ...item, group: group.label })))
-      .filter((item) => pathname === item.href || (pathname.startsWith(`${item.href}/`) && item.href !== "/dashboard"))
-      .sort((a, b) => b.href.length - a.href.length);
-    return matches[0]?.label ?? active;
-  }, [groups, pathname, active]);
+  useEffect(() => {
+    const activeGroup = groups.find((group) => group.items.some((item) => item.label === activeLabel));
+    if (!activeGroup || !collapsed[activeGroup.label]) return;
+
+    setCollapsed((current) => {
+      if (!current[activeGroup.label]) return current;
+      const next = { ...current, [activeGroup.label]: false };
+      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [activeLabel, collapsed, groups, storageKey]);
 
   const toggleGroup = (label: string) => {
     setCollapsed((current) => {
