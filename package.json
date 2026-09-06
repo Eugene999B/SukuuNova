@@ -1,6 +1,6 @@
 {
   "name":"sukuunova",
-  "version":"0.1.0",
+  "version":"0.1.1",
   "private":true,
   "description":"Secure multi-tenant school operations with attendance, safety, messaging, payroll, reporting, platform operations, billing, and AI-assisted workflows.",
   "engines":{"node":">=20.19.0"},
