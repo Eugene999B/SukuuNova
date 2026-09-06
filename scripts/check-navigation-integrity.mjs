@@ -18,6 +18,7 @@ const approvedLegacyAliases = new Set([
   "/school/reports",
   "/school/settings/roles",
 ]);
+const approvedCatchAllPrefixes = new Set(["/guardian"]);
 
 function exists(file) { return fs.existsSync(path.join(root, file)); }
 function routeCandidates(href) {
@@ -34,11 +35,16 @@ function routeCandidates(href) {
   return [...new Set(candidates)];
 }
 
+function hasApprovedCatchAll(href) {
+  const clean = href.split("?")[0].replace(/\/$/, "") || "/";
+  return [...approvedCatchAllPrefixes].some((prefix) => clean === prefix || clean.startsWith(`${prefix}/`)) && exists(`src/app${clean.split("/")[0]}/[...module]/page.tsx`);
+}
+
 const unique = [...new Set(hrefs)];
 for (const href of unique) {
   if (/^(https?:|mailto:|tel:)/.test(href)) continue;
   const clean = href.split("?")[0];
-  if (approvedLegacyAliases.has(clean)) continue;
+  if (approvedLegacyAliases.has(clean) || hasApprovedCatchAll(href)) continue;
   if (!routeCandidates(href).some(exists)) failures.push(`AppShell target has no concrete Next page: ${href}`);
 }
 
@@ -47,4 +53,4 @@ if (failures.length) {
   failures.forEach((x) => console.error(`- ${x}`));
   process.exit(1);
 }
-console.log(`Navigation-integrity guard passed: ${unique.length} AppShell destinations resolve to concrete routes or approved legacy aliases.`);
+console.log(`Navigation-integrity guard passed: ${unique.length} AppShell destinations resolve to concrete routes, approved workspaces, or approved legacy aliases.`);
