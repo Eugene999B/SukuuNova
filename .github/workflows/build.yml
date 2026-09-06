@@ -7,10 +7,46 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  repair-design:
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'fix/system-wide-design-tokens' }}
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.repair.outputs.changed }}
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/system-wide-design-tokens
+          fetch-depth: 0
+      - name: Repair unsafe generated normalization
+        id: repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "sukuunova-design-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if git log -1 --format=%B | grep -q '\[design-repaired\]'; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git checkout e517f3c546b7e21031ad03d09a0f8c0afad71ca1 -- $(git diff --name-only e517f3c546b7e21031ad03d09a0f8c0afad71ca1 45fd44dccf67b0dad4ba7002ddfbcf3d6a953703 -- src)
+          node scripts/normalize-design-system.mjs
+          rm -f .github/workflows/repair-design-normalization.yml scripts/.design-repair-trigger
+          git add src scripts/normalize-design-system.mjs scripts/check-design-tokens.mjs .github/workflows/build.yml .github/workflows/one-shot-design-normalization.yml package.json
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git commit -m "fix: safely normalize application design styles [design-repaired]"
+          git push origin HEAD:fix/system-wide-design-tokens
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: repair-design
+    if: ${{ needs.repair-design.result == 'skipped' || needs.repair-design.outputs.changed != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
