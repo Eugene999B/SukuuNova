@@ -1,11 +1,14 @@
+import { Prisma } from "@prisma/client";
 import { AppError } from "./errors";
 
 /** Platform billing uses integer minor units (pesewas/cents) end-to-end — no binary float. */
 
-export function minorUnits(value: number | string): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) throw new AppError("Billing amount must be a finite number.", 400, "INVALID_AMOUNT");
-  return Math.round(n * 100);
+export function minorUnits(value: number | string | Prisma.Decimal): number {
+  // Decimal-from-string with ROUND_HALF_UP: Number("1.005")*100 is
+  // 100.49999... in binary float and would silently lose a pesewa.
+  const decimal = value instanceof Prisma.Decimal ? value : new Prisma.Decimal(String(value));
+  if (!decimal.isFinite()) throw new AppError("Billing amount must be a finite number.", 400, "INVALID_AMOUNT");
+  return decimal.mul(100).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toNumber();
 }
 
 export function majorUnits(minor: number): number {

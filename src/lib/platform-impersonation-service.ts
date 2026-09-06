@@ -26,6 +26,17 @@ export async function impersonatePlatformUser(input: {
   reason: string;
 }) {
   await requireImpersonationPermission(input.adminId, input.adminRole);
+  // Non-super-admins may only enter schools explicitly assigned to them.
+  // Without this, any worker with schools.impersonate could become Owner of
+  // an unassigned tenant.
+  if (input.adminRole !== "super_admin") {
+    const scope = await db.$queryRawUnsafe<Array<{ schoolId: string }>>(
+      `SELECT "schoolId" FROM "PlatformAdminSchoolAccess" WHERE "adminId"=$1 AND "schoolId"=$2 LIMIT 1`,
+      input.adminId,
+      input.schoolId,
+    );
+    if (!scope.length) throw new ForbiddenError("This worker is not assigned to manage this school.");
+  }
   const reason = validateReason(input.reason);
 
   return withTenant(input.schoolId, async (tx) => {

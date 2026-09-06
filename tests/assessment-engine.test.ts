@@ -61,6 +61,27 @@ describe("assessment engine", () => {
     expect(result.includedWeight).toBe(50);
   });
 
+  it("counts an absent mark as zero, matching an explicit 0", () => {
+    const absent = calculateSubjectResult([
+      { id: "cw1", name: "Classwork 1", type: "classwork", maxScore: 20, weight: 20, score: null, status: "absent" },
+      { id: "ex1", name: "Exam 1", type: "exam", maxScore: 100, weight: 40, score: 70 },
+    ], rules);
+    const explicit = calculateSubjectResult([
+      { id: "cw1", name: "Classwork 1", type: "classwork", maxScore: 20, weight: 20, score: 0, status: "absent" },
+      { id: "ex1", name: "Exam 1", type: "exam", maxScore: 100, weight: 40, score: 70 },
+    ], rules);
+    expect(absent.complete).toBe(true);
+    expect(absent.total).toBe(explicit.total);
+  });
+
+  it("excludes excused marks from the average", () => {
+    const result = calculateSubjectResult([
+      { id: "cw1", name: "Classwork 1", type: "classwork", maxScore: 20, weight: 20, score: null, status: "excused" },
+      { id: "ex1", name: "Exam 1", type: "exam", maxScore: 100, weight: 40, score: 70 },
+    ], rules);
+    expect(result.details.find((d) => d.assessmentId === "cw1")?.percentage).toBeNull();
+  });
+
   it("uses school-defined grading bands", () => {
     expect(gradeForPercentage(74, [
       { min: 75, max: 100, grade: "A1" },

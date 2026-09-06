@@ -45,10 +45,17 @@ export type PreviewAssessment = {
   maxScore: number;
   weight: number;
   percentage: number | null;
+  status?: "present" | "absent" | "excused" | string | null;
 };
 
 export function previewSubjectTotal(items: PreviewAssessment[], rules: PreviewRules): number | null {
-  const normalized = items.map((item) => ({ ...item, normalized: normalizeType(item.type) }));
+  // Mirror of assessment-engine: absent with no mark counts as zero,
+  // excused stays missing.
+  const normalized = items.map((item) => ({
+    ...item,
+    percentage: item.percentage ?? (item.status === "absent" ? 0 : null),
+    normalized: normalizeType(item.type),
+  }));
   const buckets = new Map<string, typeof normalized>();
   for (const row of normalized) {
     const bucket = buckets.get(row.normalized) ?? [];
@@ -74,7 +81,7 @@ export function previewSubjectTotal(items: PreviewAssessment[], rules: PreviewRu
     appliedWeight += weight;
   }
   void appliedWeight;
-  const complete = normalized.length > 0 && normalized.every((row) => row.percentage != null);
+  const complete = normalized.length > 0 && normalized.every((row) => row.percentage != null || row.status === "absent");
   if (!normalized.length) return null;
   if (rules.missingScorePolicy === "blank" && !complete) return null;
   return roundPreview(total, rules.rounding);

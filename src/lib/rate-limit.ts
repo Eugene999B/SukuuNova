@@ -70,6 +70,24 @@ export async function recordLoginAttempt(
   identity: string,
   ip?: string,
 ): Promise<string> {
+  return recordApiAttempt(scope, identity, ip, {
+    maxIdentityAttempts: MAX_IDENTITY_ATTEMPTS,
+    maxIpAttempts: MAX_IP_ATTEMPTS,
+  });
+}
+
+/**
+ * General API abuse bucket with caller-chosen limits. Same storage/mechanics
+ * as login throttling, but tuned for expensive endpoints (AI, exports, sync):
+ * identity limits are per-actor/per-school so one tenant cannot burn shared
+ * OpenAI/Postgres capacity for everyone else.
+ */
+export async function recordApiAttempt(
+  scope: string,
+  identity: string,
+  ip: string | undefined,
+  limits: { maxIdentityAttempts: number; maxIpAttempts: number },
+): Promise<string> {
   const identityHash = bucketKey("identity:" + scope, identity);
   const normalizedIp = normalizeIp(ip);
   const ipHash = normalizedIp
@@ -80,7 +98,7 @@ export async function recordLoginAttempt(
   const retryAfterSeconds = await rawDb.$transaction(async (tx) => {
     const identityRetry = await consumeBucket(
       tx,
-      { identityHash, maxAttempts: MAX_IDENTITY_ATTEMPTS },
+      { identityHash, maxAttempts: limits.maxIdentityAttempts },
       now,
     );
     if (identityRetry > 0) return identityRetry;
@@ -89,7 +107,7 @@ export async function recordLoginAttempt(
 
     return consumeBucket(
       tx,
-      { identityHash: ipHash, maxAttempts: MAX_IP_ATTEMPTS },
+      { identityHash: ipHash, maxAttempts: limits.maxIpAttempts },
       now,
     );
   });

@@ -129,7 +129,10 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
     const maxScore = Number(assessment.maxScore);
     const status: ScoreStatus = assessment.status === "excused" || assessment.status === "absent" ? assessment.status : "present";
     const excused = status === "excused";
-    const rawScore = excused || assessment.score == null ? null : Number(assessment.score);
+    // Absent is an unexcused no-show: it counts as zero (not as "missing"),
+    // so an absent mark matches an explicit 0 under every missing-score policy.
+    // Excused stays missing and is excluded from averages.
+    const rawScore = excused ? null : assessment.score == null ? (status === "absent" ? 0 : null) : Number(assessment.score);
     if (!Number.isFinite(maxScore) || maxScore <= 0) {
       throw new AppError(`Assessment ${assessment.name} has an invalid maximum score.`, 409, "INVALID_MAX_SCORE");
     }

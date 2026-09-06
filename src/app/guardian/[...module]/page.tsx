@@ -106,7 +106,7 @@ export default async function GuardianModulePage({ params }: Props) {
             <div className="app-list-row"><span className="app-list-icon"><CircleCheckBig size={15}/></span><div><b>Attendance</b><span>{data.child!.attendanceEvents.length} recorded events</span></div></div>
             <div className="app-list-row"><span className="app-list-icon"><GraduationCap size={15}/></span><div><b>Academic records</b><span>{data.child!.scores.length} published scores · {data.child!.reportCards.length} published report cards</span></div></div>
             <div className="app-list-row"><span className="app-list-icon"><WalletCards size={15}/></span><div><b>Fees</b><span>GH₵{data.child!.invoices.reduce((sum, inv) => sum.plus(invoiceDue(inv)), new Prisma.Decimal(0)).toFixed(2)} outstanding</span></div></div>
-            <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"12px 0 14px"}}><Link className="module-hero-button" href="/guardian/attendance">Attendance</Link><Link className="module-hero-button" href="/guardian/academics">Academics</Link><Link className="module-hero-button" href="/guardian/fees">Fees</Link></div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",padding:"12px 0 14px"}}><Link className="module-hero-button" href="/guardian/attendance">Attendance</Link><Link className="module-hero-button" href="/guardian/academic">Academics</Link><Link className="module-hero-button" href="/guardian/fees">Fees</Link></div>
           </div>
         </section>
       ) : data.children.length ? (

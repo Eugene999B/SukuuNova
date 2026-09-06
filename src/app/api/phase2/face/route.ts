@@ -39,7 +39,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
-    const input = await parseJson(request, schema);
+    const input = await parseJson(request, schema, 4 * 1024 * 1024);
     const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       await requireSchoolFeatureInTransaction(tx, session.schoolId, "face_recognition");
       const common = { schoolId: session.schoolId, actorId: session.userId };

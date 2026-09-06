@@ -58,16 +58,22 @@ export async function POST(request: Request) {
     }
 
     const result = await withTenant(input.schoolId, async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"platform-payment:" + input.schoolId + ":" + (input.reference ?? input.invoiceId)}))`;
+      // Serialize on the invoice (never on the caller-supplied reference):
+      // two operators collecting against the same invoice with different
+      // references must still exclude each other, or both INSERT and the
+      // school is double-charged.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"platform-payment:" + input.schoolId + ":" + input.invoiceId}))`;
       const invoice = (await tx.$queryRawUnsafe<Array<{ id: string; amount: string }>>(`SELECT "id","amount"::text FROM "PlatformInvoice" WHERE "id"=$1 AND "schoolId"=$2 FOR UPDATE`, input.invoiceId, input.schoolId))[0];
       if (!invoice) return null;
+      const dueMinor = Math.round(Number(invoice.amount) * 100);
+      if (!Number.isFinite(dueMinor)) return null;
       if (input.reference) {
         const existing = (await tx.$queryRawUnsafe<Array<{ id: string; platformInvoiceId: string; amount: string; method: string }>>(
           `SELECT "id","platformInvoiceId","amount"::text,"method" FROM "PlatformPayment" WHERE "schoolId"=$1 AND "reference"=$2 LIMIT 1`,
           input.schoolId, input.reference,
         ))[0];
         if (existing) {
-          if (existing.platformInvoiceId !== input.invoiceId || Number(existing.amount) !== input.amount || existing.method !== input.method) return { duplicateReference: true } as const;
+          if (existing.platformInvoiceId !== input.invoiceId || Math.round(Number(existing.amount) * 100) !== Math.round(input.amount * 100) || existing.method !== input.method) return { duplicateReference: true } as const;
           const paid = Number((await tx.$queryRawUnsafe<Array<{ paid: string }>>(
             `SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`, input.schoolId, input.invoiceId,
           ))[0]?.paid ?? 0);
@@ -75,6 +81,13 @@ export async function POST(request: Request) {
           const status = paid >= due ? "paid" : "unpaid";
           return { paymentId: existing.id, invoiceId: input.invoiceId, due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), status, method: existing.method, idempotent: true } as const;
         }
+      }
+      // Mirror the school ledger: never silently over-collect. A payment above
+      // the outstanding balance must be split or reviewed, not recorded.
+      const alreadyPaidMinor = Math.round(Number((await tx.$queryRawUnsafe<Array<{ paid: string }>>(`SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`, input.schoolId, input.invoiceId))[0]?.paid ?? 0) * 100);
+      const outstandingMinor = dueMinor - alreadyPaidMinor;
+      if (Math.round(input.amount * 100) > outstandingMinor) {
+        return { overpaymentRequiresReview: true, outstanding: outstandingMinor / 100 } as const;
       }
       const paymentId = createId();
       try {
@@ -94,6 +107,7 @@ export async function POST(request: Request) {
     });
     if (!result) return NextResponse.json({ error: "NOT_FOUND", message: "Platform invoice not found." }, { status: 404 });
     if ("duplicateReference" in result) return NextResponse.json({ error: "DUPLICATE_REFERENCE", message: "That payment reference is already recorded for another invoice in this school." }, { status: 409 });
+    if ("overpaymentRequiresReview" in result) return NextResponse.json({ error: "OVERPAYMENT_REQUIRES_REVIEW", message: `This payment exceeds the outstanding balance of ${result.outstanding.toFixed(2)}. Split it or record a smaller amount.`, outstanding: result.outstanding }, { status: 409 });
     if ("idempotent" in result) return NextResponse.json({ ok: true, reconciliation: result, idempotent: true });
     return NextResponse.json({ ok: true, reconciliation: result });
   } catch (error) { return routeError(error); }

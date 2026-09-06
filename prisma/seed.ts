@@ -2,6 +2,9 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { createId } from "@paralleldrive/cuid2";
 import { hash } from "bcryptjs";
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } from "../src/lib/default-rbac";
+if (process.env.NODE_ENV === "production" && process.env.ALLOW_PROD_SEED !== "true") {
+  throw new Error("Refusing to seed in production. Set ALLOW_PROD_SEED=true only for a deliberate, backed-up bootstrap.");
+}
 const prisma=new PrismaClient();
 function envValue(name:string):string|undefined{const raw=process.env[name];if(raw==null)return undefined;const trimmed=raw.trim();if(trimmed.length>=2&&trimmed.startsWith('"')&&trimmed.endsWith('"'))return trimmed.slice(1,-1);return trimmed;}
 function required(name:string):string{const value=envValue(name);if(!value)throw new Error(name+" is required to seed SukuuNova. No seed credential has a code default.");return value;}

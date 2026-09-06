@@ -83,7 +83,7 @@ export async function startGuardianSubmission(tx: TenantDb, input: { schoolId: s
   }
   const submission = await loadSubmission(tx, input.schoolId, student.id, work.id);
   const questions = await tx.$queryRawUnsafe<QuestionRow[]>(`SELECT "id","position","type","prompt","points","options","acceptedAnswers" FROM "TeacherAcademicQuestion" WHERE "workId"=$1 AND "schoolId"=$2 ORDER BY "position" ASC`, work.id, input.schoolId);
-  const answers = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT "questionId","responseText","responseData","awardedScore","markingMode","markerComment" FROM "TeacherAcademicAnswer" WHERE "submissionId"=$1 ORDER BY "questionId"`, submission?.id);
+  const answers = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT "questionId","responseText","responseData","awardedScore","markingMode","markerComment" FROM "TeacherAcademicAnswer" WHERE "schoolId"=$1 AND "submissionId"=$2 ORDER BY "questionId"`, input.schoolId, submission?.id);
   return { work, submission, questions, answers };
 }
 async function gradeAnswers(questions: QuestionRow[], answers: Map<string, AnswerInput>, guide: unknown, mode: string) {
@@ -128,13 +128,13 @@ export async function submitGuardianSubmission(tx: TenantDb, input: { schoolId: 
   if (["submitted","graded","review_required"].includes(String(submission.status))) throw new AppError("This submission has already been submitted.", 409, "SUBMISSION_CLOSED");
   if (work.dueAt && work.dueAt.getTime() < Date.now()) throw new AppError("The submission deadline has passed.", 409, "WORK_EXPIRED");
   const questions = await tx.$queryRawUnsafe<QuestionRow[]>(`SELECT "id","position","type","prompt","points","options","acceptedAnswers" FROM "TeacherAcademicQuestion" WHERE "workId"=$1 AND "schoolId"=$2 ORDER BY "position" ASC`, work.id, input.schoolId);
-  const answerRows = await tx.$queryRawUnsafe<Array<{ questionId: string; responseText: string | null; responseData: unknown }>>(`SELECT "questionId","responseText","responseData" FROM "TeacherAcademicAnswer" WHERE "submissionId"=$1`, submission.id);
+  const answerRows = await tx.$queryRawUnsafe<Array<{ questionId: string; responseText: string | null; responseData: unknown }>>(`SELECT "questionId","responseText","responseData" FROM "TeacherAcademicAnswer" WHERE "schoolId"=$1 AND "submissionId"=$2`, input.schoolId, submission.id);
   const graded = await gradeAnswers(questions, new Map(answerRows.map((answer) => [answer.questionId, answer])), work.answerGuide, work.markingMode);
   const total = graded.reduce((sum, item) => sum + Number(item.score), 0);
   const reviewRequired = graded.some((item) => item.markingMode === "manual" || item.markingMode === "suggested") || work.markingMode === "review";
-  for (const item of graded) await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicAnswer" SET "awardedScore"=$1,"markingMode"=$2,"markerComment"=$3,"responseData"=COALESCE("responseData",'{}'::jsonb) || $4::jsonb,"updatedAt"=NOW() WHERE "submissionId"=$5 AND "questionId"=$6`, item.score, item.markingMode, item.reason, JSON.stringify({ suggestedScore: item.suggestedScore ?? null, confidence: item.confidence ?? null }), submission.id, item.questionId);
+  for (const item of graded) await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicAnswer" SET "awardedScore"=$1,"markingMode"=$2,"markerComment"=$3,"responseData"=COALESCE("responseData",'{}'::jsonb) || $4::jsonb,"updatedAt"=NOW() WHERE "schoolId"=$5 AND "submissionId"=$6 AND "questionId"=$7`, item.score, item.markingMode, item.reason, JSON.stringify({ suggestedScore: item.suggestedScore ?? null, confidence: item.confidence ?? null }), input.schoolId, submission.id, item.questionId);
   const status = reviewRequired ? "review_required" : "graded";
-  await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicSubmission" SET "submittedAt"=NOW(),"status"=$1,"totalAwarded"=$2,"updatedAt"=NOW() WHERE "id"=$3`, status, total, submission.id);
+  await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicSubmission" SET "submittedAt"=NOW(),"status"=$1,"totalAwarded"=$2,"updatedAt"=NOW() WHERE "id"=$3 AND "schoolId"=$4`, status, total, submission.id, input.schoolId);
   return { submissionId: submission.id, status, totalAwarded: total, maxScore: Number(work.maxScore) };
 }
 async function assertTeacherContext(tx: TenantDb, schoolId: string, teacherId: string, workId: string) {
@@ -158,16 +158,24 @@ export async function reviewTeacherSubmission(tx: TenantDb, input: { schoolId: s
   const work = workRows[0]; if (!work) throw new AppError("Work not found.",404,"NOT_FOUND");
   const assessment = await tx.assessment.findFirst({ where: { schoolId: input.schoolId, termId: work.termId, classId: work.classId, subjectId: work.subjectId, name: work.title }, select: { id: true, maxScore: true } });
   if (!assessment) throw new AppError("The corresponding gradebook assessment does not exist yet. Save the work mark first.",409,"ASSESSMENT_NOT_READY");
+  // Same guards as the primary score path: locked terms and finalized
+  // (approved/sent) report cards reject reviewed marks too, so the review
+  // UI cannot silently invalidate a frozen snapshot.
+  const termRow = await tx.term.findFirst({ where: { id: work.termId, schoolId: input.schoolId }, select: { isLocked: true, name: true } });
+  if (!termRow) throw new AppError("The assessment term does not belong to this school.", 400, "INVALID_TERM");
+  if (termRow.isLocked) throw new AppError(`Term "${termRow.name}" is locked. Academic records can no longer be changed.`, 409, "TERM_LOCKED");
+  const finalized = await tx.reportCard.findFirst({ where: { schoolId: input.schoolId, studentId: submission.studentId, termId: work.termId }, select: { status: true } });
+  if (finalized && (finalized.status === "approved" || finalized.status === "sent")) throw new AppError("This report card is finalized. Request a re-open before changing reviewed marks.", 409, "REPORT_FINALIZED");
   for (const answer of input.answers) {
     const q = await tx.$queryRawUnsafe<Array<{ points: Prisma.Decimal }>>(`SELECT "points" FROM "TeacherAcademicQuestion" WHERE "id"=$1 AND "workId"=$2 AND "schoolId"=$3 LIMIT 1`, answer.questionId, submission.workId, input.schoolId);
     if (!q[0]) throw new AppError("Question not found.",400,"INVALID_QUESTION");
     if (answer.awardedScore < 0 || new Prisma.Decimal(answer.awardedScore).greaterThan(q[0].points)) throw new AppError("Awarded marks cannot exceed question points.",400,"INVALID_SCORE");
-    await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicAnswer" SET "awardedScore"=$1,"markingMode"='manual_review',"markerComment"=$2,"updatedAt"=NOW() WHERE "submissionId"=$3 AND "questionId"=$4`, answer.awardedScore, answer.markerComment ?? null, input.submissionId, answer.questionId);
+    await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicAnswer" SET "awardedScore"=$1,"markingMode"='manual_review',"markerComment"=$2,"updatedAt"=NOW() WHERE "schoolId"=$3 AND "submissionId"=$4 AND "questionId"=$5`, answer.awardedScore, answer.markerComment ?? null, input.schoolId, input.submissionId, answer.questionId);
   }
-  const totalRows = await tx.$queryRawUnsafe<Array<{ total: Prisma.Decimal | null }>>(`SELECT COALESCE(SUM("awardedScore"),0) AS "total" FROM "TeacherAcademicAnswer" WHERE "submissionId"=$1`, input.submissionId);
+  const totalRows = await tx.$queryRawUnsafe<Array<{ total: Prisma.Decimal | null }>>(`SELECT COALESCE(SUM("awardedScore"),0) AS "total" FROM "TeacherAcademicAnswer" WHERE "schoolId"=$1 AND "submissionId"=$2`, input.schoolId, input.submissionId);
   const total = Number(totalRows[0]?.total ?? 0);
   if (total > Number(assessment.maxScore)) throw new AppError("Reviewed total exceeds the gradebook assessment maximum.",400,"INVALID_TOTAL");
-  await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicSubmission" SET "status"='graded',"totalAwarded"=$1,"reviewedBy"=$2,"reviewedAt"=NOW(),"reviewNotes"=$3,"updatedAt"=NOW() WHERE "id"=$4`, total,input.teacherId,input.reviewNotes ?? null,input.submissionId);
+  await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicSubmission" SET "status"='graded',"totalAwarded"=$1,"reviewedBy"=$2,"reviewedAt"=NOW(),"reviewNotes"=$3,"updatedAt"=NOW() WHERE "id"=$4 AND "schoolId"=$5`, total,input.teacherId,input.reviewNotes ?? null,input.submissionId,input.schoolId);
   await tx.score.upsert({ where: { studentId_assessmentId: { studentId: submission.studentId, assessmentId: assessment.id } }, update: { value: new Prisma.Decimal(total), status: "present", enteredBy: input.teacherId, enteredAt: new Date(), remarks: input.reviewNotes ?? null }, create: { schoolId: input.schoolId, studentId: submission.studentId, subjectId: work.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(total), status: "present", enteredBy: input.teacherId, remarks: input.reviewNotes ?? null } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.teacherId, action: "academic_submission.reviewed", entityType: "TeacherAcademicSubmission", entityId: input.submissionId, after: { totalAwarded: total, status: "graded", reviewNotes: input.reviewNotes ?? null } });
   return { submissionId: input.submissionId, totalAwarded: total, status: "graded" };

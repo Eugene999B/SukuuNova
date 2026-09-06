@@ -153,7 +153,7 @@ const teacherGroups: Group[] = [
     { icon: GraduationCap, label: "My Assessments", href: "/teacher/module?view=My%20Assessments" },
   ] },
   { label: "Communication", items: [
-    { icon: Mail, label: "My Messages", href: "/teacher/module?view=My%20Messages" },
+    { icon: Mail, label: "My Messages", href: "/teacher/messages" },
     { icon: Megaphone, label: "Class Announcements", href: "/teacher/module?view=Class%20Announcements" },
   ] },
   { label: "Account", items: [
@@ -167,7 +167,7 @@ const guardianGroups: Group[] = [
     { icon: LayoutDashboard, label: "Overview", href: "/guardian", primary: true },
     { icon: UsersRound, label: "My Children", href: "/guardian/children", primary: true },
     { icon: CircleCheckBig, label: "Attendance", href: "/guardian/attendance" },
-    { icon: GraduationCap, label: "Academics", href: "/guardian/academics" },
+    { icon: GraduationCap, label: "Academics", href: "/guardian/academic" },
     { icon: WalletCards, label: "Fees & Receipts", href: "/guardian/fees" },
     { icon: Mail, label: "Messages", href: "/guardian/messages" },
   ] },

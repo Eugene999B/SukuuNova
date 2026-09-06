@@ -22,6 +22,10 @@ export async function saveClassAttendance(classId: string, attendanceDate: strin
   const dateValue = new Date(`${attendanceDate}T00:00:00.000Z`);
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "attendance:record");
+    // Frozen terms stay frozen: a register dated inside a locked term is
+    // rejected, matching the gradebook term-lock rule.
+    const lockedTerm = await tx.term.findFirst({ where: { schoolId: session.schoolId, isLocked: true, startDate: { lte: dateValue }, endDate: { gte: dateValue } }, select: { id: true, name: true } });
+    if (lockedTerm) throw new AppError(`Term "${lockedTerm.name}" is locked. Attendance can no longer be recorded for that period.`, 409, "TERM_LOCKED");
     const uniqueIds = [...new Set(entries.map((entry) => entry.studentId))];
     if (uniqueIds.length !== entries.length) throw new AppError("A learner appears more than once in this register.", 400, "DUPLICATE_REGISTER_ENTRY");
     const students = await tx.student.findMany({ where: { classId, status: "active", id: { in: uniqueIds } }, select: { id: true } });

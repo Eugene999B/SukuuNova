@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { SubjectAssignDialog, SubjectCreateDialog } from "@/components/subjects/SubjectDialogs";
+import { ConfirmSubmitButton } from "@/components/ui/ConfirmSubmitButton";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
@@ -183,12 +184,12 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
               </div>
 
               <div className="subject-detail-section"><div className="subject-section-head"><div><span className="subjects-kicker">CURRENT LINKS</span><h4>Teaching assignments</h4></div></div>
-                <div className="assignment-list">{selectedAssignments.length ? selectedAssignments.map((assignment) => <div className="assignment-row" key={`${assignment.class.id}:${assignment.teacher.id}`}><div><strong>{assignment.class.level ? `${assignment.class.level} · ` : ""}{assignment.class.name}</strong><span>{assignment.teacher.name}</span></div><form action={removeAssignment}><input type="hidden" name="subjectId" value={selectedSubject.id}/><input type="hidden" name="classId" value={assignment.class.id}/><input type="hidden" name="teacherId" value={assignment.teacher.id}/><button type="submit" aria-label={`Remove ${assignment.teacher.name} from ${assignment.class.name}`}>Remove</button></form></div>) : <div className="assignment-empty">No teacher assignments yet.</div>}</div>
+                <div className="assignment-list">{selectedAssignments.length ? selectedAssignments.map((assignment) => <div className="assignment-row" key={`${assignment.class.id}:${assignment.teacher.id}`}><div><strong>{assignment.class.level ? `${assignment.class.level} · ` : ""}{assignment.class.name}</strong><span>{assignment.teacher.name}</span></div><form action={removeAssignment}><input type="hidden" name="subjectId" value={selectedSubject.id}/><input type="hidden" name="classId" value={assignment.class.id}/><input type="hidden" name="teacherId" value={assignment.teacher.id}/><ConfirmSubmitButton ariaLabel={`Remove ${assignment.teacher.name} from ${assignment.class.name}`} message={`Remove ${assignment.teacher.name} from ${assignment.class.name} for ${selectedSubject.name}? Scheduled lessons stay until the timetable is regenerated.`}>Remove</ConfirmSubmitButton></form></div>) : <div className="assignment-empty">No teacher assignments yet.</div>}</div>
               </div>
 
               <div className="subject-detail-section compact"><div className="subject-section-head"><div><span className="subjects-kicker">RENAME</span><h4>Subject name</h4></div></div><form action={updateSubject} className="rename-form"><input type="hidden" name="subjectId" value={selectedSubject.id}/><input name="name" required defaultValue={selectedSubject.name}/><button type="submit">Save</button></form></div>
 
-              <div className="subject-danger"><form action={deleteSubject}><input type="hidden" name="subjectId" value={selectedSubject.id}/><span>{selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots ? "In use — keep academic history intact." : "No academic records depend on this subject."}</span><button type="submit" disabled={Boolean(selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots)}>Delete subject</button></form></div>
+              <div className="subject-danger"><form action={deleteSubject}><input type="hidden" name="subjectId" value={selectedSubject.id}/><span>{selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots ? "In use — keep academic history intact." : "No academic records depend on this subject."}</span><ConfirmSubmitButton disabled={Boolean(selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots)} message={`Delete the subject "${selectedSubject.name}" permanently? This cannot be undone.`}>Delete subject</ConfirmSubmitButton></form></div>
             </> : <div className="subject-empty detail"><strong>Start with your subject catalogue</strong></div>}
           </aside>
         </div>

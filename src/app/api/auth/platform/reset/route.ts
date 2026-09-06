@@ -7,7 +7,7 @@ import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 
 const schema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("request"), email: z.string().email() }),
-  z.object({ mode: z.literal("confirm"), token: z.string().min(20), newPassword: z.string().min(12).max(256) })
+  z.object({ mode: z.literal("confirm"), token: z.string().min(32), newPassword: z.string().min(12).max(256) })
 ]);
 
 export async function POST(request: Request) {
@@ -24,6 +24,7 @@ export async function POST(request: Request) {
         message: "If that account is active, reset instructions have been sent."
       });
     }
+    await recordLoginAttempt("platform-password-reset-confirm", input.token.slice(0, 16), requestIp(request.headers));
     await confirmPlatformPasswordReset(input);
     return NextResponse.json({ ok: true, message: "Password reset completed." });
   } catch (e) {

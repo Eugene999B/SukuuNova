@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
+import { recordApiAttempt, requestIp } from "@/lib/rate-limit";
 import { MAX_OFFLINE_SYNC_OPERATIONS, processOfflineSync } from "@/lib/offline-sync-service";
 
 const operationSchema = z.object({
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
     const input = schema.parse(await request.json());
+    await recordApiAttempt("offline-sync", `${session.schoolId}:${input.deviceId}`, requestIp(request.headers), { maxIdentityAttempts: 120, maxIpAttempts: 1200 });
     const result = await withTenant(session.schoolId, (tx) => processOfflineSync(tx, {
       schoolId: session.schoolId,
       actorId: session.userId,

@@ -3,10 +3,11 @@ import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
+import { pesewas } from "@/lib/money";
 import "../reports-light.css";
 
 function money(value: number) {
-  return new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 }
 
 function ghToday() {
@@ -27,7 +28,7 @@ export default async function AnalyticsPage() {
       tx.student.count({ where: { status: "active" } }),
       tx.class.count(),
       tx.attendanceEvent.findMany({ where: { attendanceDate: today, studentId: { not: null } }, select: { studentId: true, type: true }, orderBy: { timestamp: "desc" } }),
-      tx.invoice.findMany({ select: { totalAmount: true, payments: { select: { amount: true } } } }),
+      tx.invoice.findMany({ select: { totalAmount: true, payments: { select: { amount: true, reversals: { select: { amount: true } } } } } }),
       tx.message.count({ where: { status: "failed" } }),
     ]);
     const termReports = term ? await tx.reportCard.findMany({ where: { termId: term.id }, select: { studentId: true, status: true } }) : [];
@@ -43,11 +44,17 @@ export default async function AnalyticsPage() {
       else attendance.present += 1;
     }
 
-    let outstanding = 0;
+    // Net paid = payments minus reversals, in integer pesewas (no float drift),
+    // matching the ledger and CSV exports. Reversed payments must not hide debtors.
+    let outstandingPesewas = 0;
     for (const invoice of invoiceTotals) {
-      const paid = invoice.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
-      outstanding += Math.max(0, Number(invoice.totalAmount) - paid);
+      const netPaid = invoice.payments.reduce(
+        (sum, payment) => sum + pesewas(payment.amount) - payment.reversals.reduce((r, row) => r + pesewas(row.amount), 0),
+        0,
+      );
+      outstandingPesewas += Math.max(0, pesewas(invoice.totalAmount) - netPaid);
     }
+    const outstanding = outstandingPesewas / 100;
 
     const reportStudents = new Set(termReports.map((report) => report.studentId));
     return {

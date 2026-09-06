@@ -45,6 +45,8 @@ function protectedApiKind(pathname: string): SessionKind | null {
     pathname === "/api/sync"
   ) return "school";
   if (pathname.startsWith("/api/account/") || pathname === "/api/account") return "platform";
+  if (pathname.startsWith("/api/guardian/") || pathname === "/api/guardian") return "guardian";
+  if (pathname.startsWith("/api/teacher/") || pathname === "/api/teacher") return "school";
   return null;
 }
 
@@ -98,5 +100,7 @@ export const config = {
     "/api/protected/:path*",
     "/api/sync",
     "/api/account/:path*",
+    "/api/guardian/:path*",
+    "/api/teacher/:path*",
   ],
 };

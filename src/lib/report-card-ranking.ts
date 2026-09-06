@@ -50,7 +50,7 @@ export function remarkForLine(
   }
   if (total == null) return null;
   const bands = scale.length ? scale : [{ min: 0, max: 100, grade: "", remark: "", label: "" }];
-  const grade = bands.find((b) => total >= b.min && total <= b.max);
+  const grade = [...bands].sort((a, b) => b.min - a.min).find((b) => total >= b.min && total <= b.max);
   return grade?.remark?.trim() || grade?.label?.trim() || grade?.grade?.trim() || null;
 }
 
@@ -69,6 +69,7 @@ export function promotionForRule(
   input: { overallPosition: number | null; rankedCount: number; cutoffPercent: number; lines: Array<{ total: number | null }>; passMark: number }
 ): PromotionDecision {
   if (rule === "manual") return "decision_required";
+  if (input.lines.some((l) => l.total == null)) return "decision_required";
   if (rule === "pass_mark") return input.lines.length > 0 && input.lines.every((l) => (l.total ?? -1) >= input.passMark) ? "promoted" : "not_promoted";
   const cutoff = Math.min(100, Math.max(1, Math.round(input.cutoffPercent)));
   return input.overallPosition != null && input.overallPosition <= Math.ceil((input.rankedCount * cutoff) / 100) ? "promoted" : "not_promoted";

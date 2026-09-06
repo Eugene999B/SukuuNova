@@ -52,7 +52,9 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
     };
     results.push({ subject, ca: bucketAvg("classwork"), exam: bucketAvg("exam"), total: result.total });
   }
-  const attendance = await tx.attendanceEvent.findMany({ where: { studentId, type: "in", attendanceDate: { gte: term.startDate, lte: term.endDate } }, select: { attendanceDate: true, isLate: true } });
+  // Present set: device/face flows write "in"; the class register writes
+  // "present"/"late". All three mean the learner was there.
+  const attendance = await tx.attendanceEvent.findMany({ where: { schoolId: school.id, studentId, type: { in: ["in", "present", "late"] }, attendanceDate: { gte: term.startDate, lte: term.endDate } }, select: { attendanceDate: true, isLate: true } });
   return { student, term, settings, school, template, results, attendance, caWeight, examWeight };
 }
 
@@ -236,6 +238,8 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   });
   const frozenAverage = numOrNull(frozen.average) ?? average;
   const frozenOverall = typeof frozen.overallPosition === "number" ? frozen.overallPosition : overallPosition;
+  const frozenClassSize = typeof frozen.classSize === "number" ? frozen.classSize : scopeStudents.length;
+  const frozenRankedCount = typeof frozen.rankedCount === "number" ? frozen.rankedCount : rankedCount;
   const frozenPromotion = frozen.promotionDecision === "promoted" || frozen.promotionDecision === "not_promoted" || frozen.promotionDecision === "decision_required" ? frozen.promotionDecision : promotionDecision;
   const frozenWeights = asRecord(frozen.gradingWeights);
   const weights = {
@@ -243,7 +247,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     exam: numOrNull(frozenWeights.exam) ?? Number(settings.gradeExamWeight),
   };
   const frozenSnapshot = Object.keys(frozen).length ? frozen : null;
-  const attendanceRows = await tx.attendanceEvent.findMany({ where: { schoolId: input.schoolId, studentId: report.studentId, type: "in", attendanceDate: { gte: report.term.startDate, lte: report.term.endDate } }, select: { attendanceDate: true, isLate: true } });
+  const attendanceRows = await tx.attendanceEvent.findMany({ where: { schoolId: input.schoolId, studentId: report.studentId, type: { in: ["in", "present", "late"] }, attendanceDate: { gte: report.term.startDate, lte: report.term.endDate } }, select: { attendanceDate: true, isLate: true } });
   const recordedDays = await tx.attendanceEvent.findMany({ where: { schoolId: input.schoolId, studentId: report.studentId, attendanceDate: { gte: report.term.startDate, lte: report.term.endDate } }, distinct: ["attendanceDate"], select: { attendanceDate: true } });
   const liveAttendance = { presentDays: new Set(attendanceRows.map((r) => r.attendanceDate.toISOString().slice(0, 10))).size, lateDays: attendanceRows.filter((r) => r.isLate).length, totalRecorded: recordedDays.length };
   const frozenAttendanceRaw = asRecord(frozen.attendance);
@@ -276,6 +280,10 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
   const dob = report.student.dob ? new Date(report.student.dob) : null;
   const age = dob && !Number.isNaN(dob.getTime()) ? Math.max(0, new Date(report.term.endDate).getFullYear() - dob.getFullYear()) : null;
+  // A partial card's summed total is not comparable to full-card totals, so it
+  // renders as missing rather than a misleading small number.
+  const allLinesComplete = results.length > 0 && results.every((r) => r.total != null);
+  const summaryTotal = allLinesComplete ? results.reduce((a, b) => a + (b.total ?? 0), 0) : null;
   return {
     school: { name: school.name, uniqueCode: school.uniqueCode, logoUrl: school.logoUrl, brandColors: school.brandColors, motto: str(brand.motto), address: str(brand.address) ?? str(brand.schoolAddress), phone: str(brand.phone) ?? str(brand.schoolPhone), watermark: settings.reportCardWatermark ?? str(brand.watermark) ?? "SUKUUNOVA" },
     student: { name: report.student.name, admissionNo: report.student.admissionNo, className: report.student.class.name, level: report.student.class.level, photoUrl: report.student.photoUrl, dob: dob?.toISOString() ?? null, age, classTeacherName: report.student.class.classTeacher?.name ?? "Class Teacher" },
@@ -283,12 +291,13 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     results,
     gradingScale: scale,
     gradingWeights: weights,
-    summary: { average: frozenAverage, grade: frozenAverage == null ? null : gradeForPercentage(frozenAverage, scale.length ? scale : undefined), total: results.reduce((a, b) => a + (b.total ?? 0), 0) },
+    summary: { average: frozenAverage, grade: frozenAverage == null ? null : gradeForPercentage(frozenAverage, scale.length ? scale : undefined), total: summaryTotal, complete: allLinesComplete },
     attendance: { present: attendanceSummary.presentDays, late: attendanceSummary.lateDays, totalRecorded: attendanceSummary.totalRecorded },
     position: policy.showOverallPosition ? frozenOverall : null,
+    overallPositionUngated: overallPosition,
     showSubjectPosition: policy.showSubjectPosition,
-    classSize: scopeStudents.length,
-    rankedCount,
+    classSize: frozenClassSize,
+    rankedCount: frozenRankedCount,
     remarks: report.remarks ?? "",
     headRemark: await readHeadRemark(tx, input.schoolId, report.id),
     promotionDecision: frozenPromotion,

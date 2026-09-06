@@ -246,6 +246,28 @@ export async function commitPayrollRun(
   if (run.status !== "draft") throw new AppError("Only draft payroll runs can be processed.", 409, "INVALID_STATE");
   if (input.rendered.length === 0) throw new AppError("No payslips to commit.", 409, "NO_PAYSLIPS");
 
+  // TOCTOU guard: salary structures may change between plan/render (outside
+  // any transaction) and this commit. Re-derive every row inside the commit
+  // transaction and reject stale renders instead of committing wrong pay.
+  const liveStructures = await tx.salaryStructure.findMany({
+    where: { schoolId: input.schoolId },
+    include: { staff: { select: { id: true, schoolId: true, status: true } } },
+  });
+  const liveByStaff = new Map(liveStructures.map((s) => [s.staffId, s]));
+  for (const row of input.rendered) {
+    const live = liveByStaff.get(row.staffId);
+    if (!live || live.staff.schoolId !== input.schoolId || live.staff.status !== "active") {
+      throw new AppError(`Payroll data changed while rendering: ${row.staffName} no longer has an active salary structure. Re-plan the run.`, 409, "PAYROLL_STALE");
+    }
+    const liveGross = money(live.grossSalary);
+    const liveDeductions = deductionSnapshot(Number(liveGross.toString()), Array.isArray(live.deductions) ? live.deductions as unknown as DeductionInput[] : []);
+    const liveTotal = liveDeductions.reduce((sum, d) => sum.plus(money(d.amount)), new Prisma.Decimal(0)).toDecimalPlaces(2);
+    const liveNet = liveGross.minus(liveTotal).lt(0) ? new Prisma.Decimal(0) : liveGross.minus(liveTotal).toDecimalPlaces(2);
+    if (!liveGross.equals(new Prisma.Decimal(row.gross)) || !liveNet.equals(new Prisma.Decimal(row.net))) {
+      throw new AppError(`Payroll data changed while rendering: ${row.staffName}'s salary structure moved. Re-plan the run.`, 409, "PAYROLL_STALE");
+    }
+  }
+
   for (const row of input.rendered) {
     await tx.payslip.create({
       data: {

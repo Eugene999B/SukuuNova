@@ -6,6 +6,8 @@ import { useEffect } from "react";
 
 function loginPath(pathname: string): string {
   if (pathname.startsWith("/guardian")) return "/login/guardian";
+  if (pathname.startsWith("/platform")) return "/login/platform";
+  if (pathname.startsWith("/teacher")) return "/login/school";
   return "/login/school";
 }
 

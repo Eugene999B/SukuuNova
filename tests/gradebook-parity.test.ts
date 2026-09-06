@@ -26,6 +26,21 @@ const CASES = [
     { id: "a1", type: "Quizzes", maxScore: 30, weight: 10, percentage: 33.333 },
     { id: "a2", type: "quiz", maxScore: 30, weight: 10, percentage: 66.666 },
   ],
+  // Absent with no mark counts as zero (not missing) on both sides.
+  [
+    { id: "a1", type: "ca", maxScore: 20, weight: 40, percentage: null, status: "absent" },
+    { id: "a2", type: "exam", maxScore: 100, weight: 60, percentage: 70 },
+  ],
+  // Excused stays missing on both sides.
+  [
+    { id: "a1", type: "ca", maxScore: 20, weight: 40, percentage: null, status: "excused" },
+    { id: "a2", type: "exam", maxScore: 100, weight: 60, percentage: 70 },
+  ],
+  // Absent with an explicit zero matches absent with no mark.
+  [
+    { id: "a1", type: "ca", maxScore: 20, weight: 40, percentage: 0, status: "absent" },
+    { id: "a2", type: "exam", maxScore: 100, weight: 60, percentage: 70 },
+  ],
 ];
 
 describe("gradebook preview parity with the canonical engine", () => {
@@ -40,6 +55,7 @@ describe("gradebook preview parity with the canonical engine", () => {
             maxScore: item.maxScore,
             weight: item.weight,
             score: item.percentage == null ? null : (item.percentage / 100) * item.maxScore,
+            status: (item as { status?: string }).status ?? null,
           })),
           { ...rules, allowTeacherOverride: false }
         );

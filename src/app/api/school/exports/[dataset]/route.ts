@@ -4,6 +4,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { AppError, routeError } from "@/lib/errors";
+import { recordApiAttempt, requestIp } from "@/lib/rate-limit";
 
 const EXPORT_PERMISSIONS: Record<string, string> = {
   students: "exports:students",
@@ -61,6 +62,9 @@ export async function GET(
     if (!requiredPermission) {
       throw new AppError("That export is not available.", 404, "EXPORT_NOT_FOUND");
     }
+    // Gradebook exports can reach 50k rows: cap each actor so repeated pulls
+    // cannot saturate shared Postgres capacity for other schools.
+    await recordApiAttempt("dataset-export", `${session.schoolId}:${session.userId}:${dataset}`, requestIp(request.headers), { maxIdentityAttempts: 30, maxIpAttempts: 300 });
 
     const url = new URL(request.url);
     const result = await withTenant(session.schoolId, async (tx) => {
