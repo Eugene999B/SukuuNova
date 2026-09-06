@@ -26,8 +26,8 @@ export function getSchoolDocumentIdentity(input: {
     name: input.name,
     uniqueCode: input.uniqueCode,
     logoUrl: input.logoUrl ?? null,
-    primary: validHex(brand.primary) ? brand.primary : "var(--color-text-secondary)",
-    accent: validHex(brand.accent) ? brand.accent : "var(--color-border)",
+    primary: validHex(brand.primary) ? brand.primary : "#164e63",
+    accent: validHex(brand.accent) ? brand.accent : "#dcefeb",
     watermark: typeof input.watermark === "string" && input.watermark.trim()
       ? input.watermark.trim()
       : "SUKUUNOVA"
