@@ -87,14 +87,14 @@ export async function onboardSchool(input: {
       entityId: schoolId,
       after: { uniqueCode, ownerId: owner.id }
     });
+    await appendPlatformAudit({
+      actorId: input.adminId,
+      action: "school.onboarded",
+      targetSchoolId: schoolId,
+      targetEntity: "School",
+      meta: { uniqueCode, ownerId: owner.id }
+    }, tx);
     return { school, ownerId: owner.id };
-  });
-  await appendPlatformAudit({
-    actorId: input.adminId,
-    action: "school.onboarded",
-    targetSchoolId: schoolId,
-    targetEntity: "School",
-    meta: { uniqueCode, ownerId: result.ownerId }
   });
   return result;
 }

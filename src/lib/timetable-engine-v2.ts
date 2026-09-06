@@ -141,7 +141,7 @@ export async function generateBalancedTimetable(tx:TenantDb,input:{schoolId:stri
 
   const resolveVenue=(a:Assignment,day:number,period:number,occupied:Set<string>):{venue:string|null;blocked?:string}=>{
     const req=constraints.roomReq[`${a.classId}:${a.subjectId}`]??constraints.roomReq[a.subjectId];
-    if(!req)return{venue:null};
+    if(!req||(!req.room&&!req.roomType))return{venue:null};
     if(req.room){
       const key=`room:${req.room}:${day}:${period}`;
       if(occupied.has(key))return{venue:null,blocked:req.room};

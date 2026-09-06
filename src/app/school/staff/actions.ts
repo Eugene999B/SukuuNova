@@ -94,7 +94,15 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
     await tx.rolePermission.createMany({ data: permissions.map((permission) => ({ schoolId: session.schoolId, roleId: role.id, permissionId: permission.id })) });
 
     const placeholderPasswordHash = await hash(randomUUID() + randomUUID(), 12);
-    const user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: placeholderPasswordHash, status: "pending" }, select: { id: true, name: true, email: true, phone: true, status: true } });
+    let user;
+    try {
+      user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: placeholderPasswordHash, status: "pending" }, select: { id: true, name: true, email: true, phone: true, status: true } });
+    } catch (error) {
+      if ((error as { code?: string }).code === "P2002") {
+        return { ok: false as const, message: "That email or phone number was just used by another account. Refresh and try again." };
+      }
+      throw error;
+    }
     await tx.userRole.create({ data: { schoolId: session.schoolId, userId: user.id, roleId: role.id } });
 
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "staff.created_pending", entityType: "User", entityId: user.id, after: { name, email, phone, staffType, staffCategory, role: roleName, roleKey, permissionCount: permissions.length, primaryClassId: null, subjectId: null, loginCreated: false } } });

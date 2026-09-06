@@ -54,7 +54,7 @@ export async function getScopedPlatformOverview(session: PlatformSession): Promi
   const today = new Date(new Date().toISOString().slice(0, 10));
   const schoolResults = await Promise.all(directories.map(({ schoolId }) =>
     withTenant(schoolId, async (tx) => {
-      const [school, studentCount, userCount, classCount, attendanceToday, invoiceRows, paymentRows] = await Promise.all([
+      const [school, studentCount, userCount, classCount, attendanceToday, invoiceRows, collectedRows] = await Promise.all([
         tx.school.findUnique({
           where: { id: schoolId },
           select: { id: true, name: true, uniqueCode: true, status: true, createdAt: true, subscriptionPlan: { select: { id: true, name: true, price: true } } },
@@ -64,9 +64,10 @@ export async function getScopedPlatformOverview(session: PlatformSession): Promi
         tx.class.count(),
         tx.attendanceEvent.count({ where: { attendanceDate: today, type: "in" } }),
         tx.$queryRawUnsafe<Array<{ status: string }>>(`SELECT "status" FROM "PlatformInvoice" WHERE "schoolId"=$1`, schoolId),
-        tx.$queryRawUnsafe<Array<{ amount: string }>>(`SELECT "amount"::text amount FROM "PlatformPayment" WHERE "schoolId"=$1`, schoolId),
+        tx.$queryRawUnsafe<Array<{ collected: string }>>(`SELECT COALESCE(SUM("amount"),0)::text AS "collected" FROM "PlatformPayment" WHERE "schoolId"=$1`, schoolId),
       ]);
       if (!school) return null;
+      const collected = Number(collectedRows[0]?.collected ?? 0);
       return {
         ...school,
         studentCount,
@@ -75,7 +76,7 @@ export async function getScopedPlatformOverview(session: PlatformSession): Promi
         attendanceToday,
         invoices: invoiceRows.length,
         unpaidInvoices: invoiceRows.filter((invoice) => invoice.status !== "paid").length,
-        collected: paymentRows.reduce((sum, payment) => sum + Number(payment.amount || 0), 0),
+        collected,
         subscriptionPlan: school.subscriptionPlan,
       } satisfies OverviewSchool;
     }).catch(() => null),

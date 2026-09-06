@@ -512,6 +512,9 @@ model Score {
   subjectId    String
   assessmentId String
   value        Decimal
+  // present: sat and scored. absent: unexcused no-show, counts as zero.
+  // excused: approved absence, excluded from averages (treated as missing).
+  status       String     @default("present")
   remarks      String?
   enteredBy    String
   enteredAt    DateTime   @default(now())
@@ -625,10 +628,12 @@ model PaymentReversal {
   amount Decimal
   reason String
   reversedBy String
+  idempotencyKey String?
   createdAt DateTime @default(now())
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   payment Payment @relation(fields: [paymentId, schoolId], references: [id, schoolId], onDelete: Restrict)
   @@unique([id, schoolId])
+  @@unique([schoolId, idempotencyKey])
   @@index([schoolId])
   @@index([schoolId, paymentId])
 }

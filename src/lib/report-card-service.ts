@@ -5,7 +5,7 @@ import { appendSchoolAudit } from "@/lib/audit";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { calculateSubjectResult, gradeForPercentage } from "@/lib/assessment-engine";
-import { overallTotalsForScope, rankTotals, rulesFor } from "@/lib/report-card-ranking";
+import { overallTotalsForScope, passMarkForScale, promotionForRule, rankTotals, remarkForLine, rulesFor } from "@/lib/report-card-ranking";
 import { getClassSubjectIntelligence } from "@/lib/performance-intelligence";
 import { approveAndQueuePublicReportCard, readHeadRemark, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 
@@ -37,10 +37,12 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
   const caWeight = Number(settings.gradeCaWeight); const examWeight = Number(settings.gradeExamWeight);
   if (!Number.isFinite(caWeight) || caWeight < 0 || !Number.isFinite(examWeight) || examWeight < 0 || caWeight + examWeight <= 0) throw new AppError("The school's grading weights are invalid.", 409, "INVALID_GRADING_CONFIGURATION");
   const results: SubjectResult[] = [];
-  const rules = { categories: [{ name: "ca", weight: caWeight }, { name: "exam", weight: examWeight }], rounding: "nearest" as const, missingScorePolicy: "blank" as const, allowTeacherOverride: false };
+  // Same engine + rules as the print path: custom assessment categories win,
+  // otherwise the school's CA/exam split applies.
+  const rules = rulesFor(settings);
   for (const [subject, rows] of grouped) {
     const result = calculateSubjectResult(
-      rows.map((row) => ({ id: row.id, name: row.name, type: row.type, maxScore: row.maxScore, weight: row.weight, score: row.scores[0]?.value ?? null })),
+      rows.map((row) => ({ id: row.id, name: row.name, type: row.type, maxScore: row.maxScore, weight: row.weight, score: row.scores[0]?.value ?? null, status: (row.scores[0] as { status?: string } | undefined)?.status ?? null })),
       rules
     );
     const bucketAvg = (normalized: string): number | null => {
@@ -73,10 +75,29 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
   const existing = await tx.reportCard.findUnique({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } } });
   if (existing && existing.status !== "draft") throw new AppError("A submitted report card cannot be regenerated.", 409, "REPORT_LOCKED");
   const data = await reportData(tx, input.studentId, input.termId); const pdfData = await makePdf(data, input.remarks);
-  const calculationSnapshot = { calculationVersion: 2, calculatedAt: new Date().toISOString(), gradingWeights: { ca: data.caWeight, exam: data.examWeight }, partialReportsAllowed: data.settings.allowPartialReportCards, assessments: data.results.map((row) => ({ subject: row.subject, ca: row.ca, exam: row.exam, total: row.total })), attendance: { presentDays: new Set(data.attendance.map((row) => row.attendanceDate.toISOString().slice(0, 10))).size, lateDays: data.attendance.filter((row) => row.isLate).length } };
-  const report = await tx.reportCard.upsert({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } }, update: { pdfData, remarks: input.remarks, templateId: data.template.id, calculationSnapshot, calculationVersion: 2 }, create: { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, templateId: data.template.id, pdfData, remarks: input.remarks, calculationSnapshot, calculationVersion: 2, generatedPdfUrl: "/api/mvp/report-cards/pending/pdf" } });
+  const presentDays = new Set(data.attendance.map((row) => row.attendanceDate.toISOString().slice(0, 10))).size;
+  const lateDays = data.attendance.filter((row) => row.isLate).length;
+  const completeTotals = data.results.map((row) => row.total).filter((t): t is number => t != null);
+  const average = completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
+  const rules = rulesFor(data.settings);
+  const scale = rules.gradingScale?.length ? rules.gradingScale : undefined;
+  // Single snapshot version (v4): everything the print path renders is frozen
+  // here; positions + promotion are filled in by freezeReportCardRanking at
+  // approval and never recomputed afterwards.
+  const calculationSnapshot = {
+    calculationVersion: 4, calculatedAt: new Date().toISOString(),
+    gradingWeights: { ca: data.caWeight, exam: data.examWeight },
+    assessmentCategories: rules.categories, rounding: rules.rounding, missingScorePolicy: rules.missingScorePolicy,
+    partialReportsAllowed: data.settings.allowPartialReportCards,
+    assessments: data.results.map((row) => ({ subject: row.subject, ca: row.ca, exam: row.exam, total: row.total, grade: gradeForPercentage(row.total, scale) })),
+    average, attendance: { presentDays, lateDays },
+    positionScope: null as string | null, overallPosition: null as number | null, classSize: null as number | null, rankedCount: null as number | null,
+    subjectPositions: [] as Array<{ subject: string; position: number | null; total: number | null; grade: string | null; remark: string | null }>,
+    promotionRule: null as string | null, promotionDecision: "decision_required" as const,
+  };
+  const report = await tx.reportCard.upsert({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } }, update: { pdfData, remarks: input.remarks, templateId: data.template.id, calculationSnapshot, calculationVersion: 4 }, create: { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, templateId: data.template.id, pdfData, remarks: input.remarks, calculationSnapshot, calculationVersion: 4, generatedPdfUrl: "/api/mvp/report-cards/pending/pdf" } });
   const generatedPdfUrl = "/api/mvp/report-cards/" + report.id + "/pdf"; await tx.reportCard.update({ where: { id: report.id }, data: { generatedPdfUrl } });
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.generated", entityType: "ReportCard", entityId: report.id, after: { studentId: input.studentId, termId: input.termId, templateId: data.template.id, calculationVersion: 2 } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.generated", entityType: "ReportCard", entityId: report.id, after: { studentId: input.studentId, termId: input.termId, templateId: data.template.id, calculationVersion: 4 } });
   return { ...report, generatedPdfUrl };
 }
 
@@ -113,33 +134,8 @@ export type ReportPolicy = { showOverallPosition: boolean; showSubjectPosition: 
 
 function asRecord(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 
-export function remarkForPosition(total: number | null, scale: Array<{ min: number; max: number; grade: string; remark?: string; label?: string }>, position: number | null, rankedCount: number, policy: ReportPolicy): string | null {
-  return remarkForLine(total, scale, position, rankedCount, policy);
-}
-
-export function promotionForRule(
-  rule: ReportPolicy["promotionRule"],
-  input: { overallPosition: number | null; rankedCount: number; cutoffPercent: number; lines: Array<{ total: number | null }>; passMark: number }
-): "promoted" | "not_promoted" | "decision_required" {
-  if (rule === "manual") return "decision_required";
-  if (rule === "pass_mark") return input.lines.length > 0 && input.lines.every((l) => (l.total ?? -1) >= input.passMark) ? "promoted" : "not_promoted";
-  const cutoff = Math.min(100, Math.max(1, Math.round(input.cutoffPercent)));
-  return input.overallPosition != null && input.overallPosition <= Math.ceil((input.rankedCount * cutoff) / 100) ? "promoted" : "not_promoted";
-}
-
-function remarkForLine(total: number | null, scale: Array<{ min: number; max: number; grade: string; remark?: string; label?: string }>, position: number | null, rankedCount: number, policy: ReportPolicy): string | null {
-  if (policy.remarkSource === "position_band" && Array.isArray(policy.positionBandLabels) && position != null && rankedCount > 0) {
-    const bands = (policy.positionBandLabels as unknown[]).filter((e): e is Record<string, unknown> => !!e && typeof e === "object" && !Array.isArray(e));
-    const withRange = bands.filter((b) => Number.isFinite(Number(b.min)) && Number.isFinite(Number(b.max)));
-    const pool: Array<Record<string, unknown>> = withRange.length ? withRange : bands.map((b, i) => ({ ...b, min: Math.floor((i * rankedCount) / bands.length) + 1, max: Math.floor(((i + 1) * rankedCount) / bands.length) }));
-    const hit = pool.find((b) => position >= Number(b.min) && position <= Number(b.max));
-    if (hit && typeof hit.remark === "string" && hit.remark.trim()) return hit.remark.trim();
-  }
-  if (total == null) return null;
-  const bands = scale.length ? scale : [{ min: 0, max: 100, grade: "", remark: "", label: "" }];
-  const grade = bands.find((b) => total >= b.min && total <= b.max);
-  return grade?.remark?.trim() || grade?.label?.trim() || grade?.grade?.trim() || null;
-}
+// Single home for remark/promotion rules (re-exported for existing callers).
+export { remarkForPosition, promotionForRule, type PromotionDecision } from "@/lib/report-card-ranking";
 
 /**
  * Single consolidated report-card calculation.
@@ -185,7 +181,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   for (const a of assessments) grouped.set(a.subject.name, [...(grouped.get(a.subject.name) ?? []), a]);
   const liveLines: ReportSubjectLine[] = [];
   for (const [subject, rows] of grouped) {
-    const result = calculateSubjectResult(rows.map((r) => ({ id: r.id, name: r.name, type: r.type, maxScore: r.maxScore, weight: r.weight, score: r.scores[0]?.value ?? null })), rules);
+    const result = calculateSubjectResult(rows.map((r) => ({ id: r.id, name: r.name, type: r.type, maxScore: r.maxScore, weight: r.weight, score: r.scores[0]?.value ?? null, status: (r.scores[0] as { status?: string } | undefined)?.status ?? null })), rules);
     const bucketAvg = (normalized: string): number | null => {
       const parts = result.details.filter((d) => d.type === normalized && d.percentage != null).map((d) => d.percentage as number);
       if (!parts.length) return null;
@@ -209,39 +205,65 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   }
   const completeTotals = liveLines.map((l) => l.total).filter((t): t is number => t != null);
   const average = completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
-  const overallGrade = gradeForPercentage(average, scale.length ? scale : undefined);
-  const passBand = scale.find((b) => typeof b.label === "string" && /pass/i.test(b.label)) ?? scale.find((b) => b.min >= 40);
-  const passMark = passBand?.min ?? 50;
+  const passMark = passMarkForScale(scale);
   const promotionDecision = promotionForRule(policy.promotionRule, { overallPosition, rankedCount, cutoffPercent: policy.positionPromotionCutoffPercent, lines: liveLines, passMark });
-  // Frozen merge: issued cards keep their snapshot (v2/v3/v4 tolerant).
+  // Frozen merge: issued cards keep their snapshot (v2/v4 tolerant). Every
+  // rendered number — ca/exam/total/grade/position/remark, average, attendance,
+  // weights — comes from the snapshot once one exists; live values only fill
+  // gaps for cards generated before a field existed.
   const frozen = asRecord(report.calculationSnapshot);
+  const frozenAssessments = Array.isArray(frozen.assessments) ? frozen.assessments as Array<Record<string, unknown>> : [];
   const frozenSubjects = Array.isArray(frozen.subjectPositions) ? frozen.subjectPositions as Array<Record<string, unknown>> : [];
-  const frozenMap = new Map(frozenSubjects.map((r) => [String(r.subject), r]));
+  const frozenMap = new Map<string, Record<string, unknown>>();
+  for (const r of [...frozenSubjects, ...frozenAssessments]) {
+    const key = String(r.subject);
+    if (!frozenMap.has(key)) frozenMap.set(key, r);
+    else Object.assign(frozenMap.get(key)!, r);
+  }
+  const numOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const strOrNull = (v: unknown): string | null => (typeof v === "string" ? v : null);
   const results: ReportSubjectLine[] = liveLines.map((line) => {
     const f = frozenMap.get(line.subject);
     return {
       ...line,
+      ca: numOrNull(f?.ca) ?? line.ca,
+      exam: numOrNull(f?.exam) ?? line.exam,
       position: typeof f?.position === "number" ? f.position : line.position,
-      total: typeof f?.total === "number" ? f.total : line.total,
-      grade: typeof f?.grade === "string" ? f.grade : line.grade,
-      remark: typeof f?.remark === "string" ? f.remark : line.remark,
+      total: numOrNull(f?.total) ?? line.total,
+      grade: strOrNull(f?.grade) ?? line.grade,
+      remark: strOrNull(f?.remark) ?? line.remark,
     };
   });
+  const frozenAverage = numOrNull(frozen.average) ?? average;
   const frozenOverall = typeof frozen.overallPosition === "number" ? frozen.overallPosition : overallPosition;
   const frozenPromotion = frozen.promotionDecision === "promoted" || frozen.promotionDecision === "not_promoted" || frozen.promotionDecision === "decision_required" ? frozen.promotionDecision : promotionDecision;
+  const frozenWeights = asRecord(frozen.gradingWeights);
+  const weights = {
+    ca: numOrNull(frozenWeights.ca) ?? Number(settings.gradeCaWeight),
+    exam: numOrNull(frozenWeights.exam) ?? Number(settings.gradeExamWeight),
+  };
   const frozenSnapshot = Object.keys(frozen).length ? frozen : null;
   const attendanceRows = await tx.attendanceEvent.findMany({ where: { schoolId: input.schoolId, studentId: report.studentId, type: "in", attendanceDate: { gte: report.term.startDate, lte: report.term.endDate } }, select: { attendanceDate: true, isLate: true } });
   const recordedDays = await tx.attendanceEvent.findMany({ where: { schoolId: input.schoolId, studentId: report.studentId, attendanceDate: { gte: report.term.startDate, lte: report.term.endDate } }, distinct: ["attendanceDate"], select: { attendanceDate: true } });
-  const attendanceSummary = { presentDays: new Set(attendanceRows.map((r) => r.attendanceDate.toISOString().slice(0, 10))).size, lateDays: attendanceRows.filter((r) => r.isLate).length, totalRecorded: recordedDays.length };
+  const liveAttendance = { presentDays: new Set(attendanceRows.map((r) => r.attendanceDate.toISOString().slice(0, 10))).size, lateDays: attendanceRows.filter((r) => r.isLate).length, totalRecorded: recordedDays.length };
+  const frozenAttendanceRaw = asRecord(frozen.attendance);
+  const attendanceSummary = frozenSnapshot
+    ? {
+        presentDays: numOrNull(frozenAttendanceRaw.presentDays) ?? liveAttendance.presentDays,
+        lateDays: numOrNull(frozenAttendanceRaw.lateDays) ?? liveAttendance.lateDays,
+        totalRecorded: numOrNull(frozenAttendanceRaw.totalRecorded) ?? liveAttendance.totalRecorded,
+      }
+    : liveAttendance;
   if (!frozenSnapshot) {
     await tx.reportCard.update({
       where: { id: report.id },
       data: {
         calculationSnapshot: {
           calculationVersion: 4, calculatedAt: new Date().toISOString(),
-          gradingWeights: { ca: Number(settings.gradeCaWeight), exam: Number(settings.gradeExamWeight) },
+          gradingWeights: weights,
           partialReportsAllowed: settings.allowPartialReportCards,
           assessments: results.map((r) => ({ subject: r.subject, ca: r.ca, exam: r.exam, total: r.total, grade: r.grade })),
+          average: frozenAverage,
           attendance: attendanceSummary, positionScope: policy.positionScope, overallPosition, classSize: scopeStudents.length, rankedCount,
           subjectPositions: results.map((r) => ({ subject: r.subject, position: r.position, total: r.total, grade: r.grade, remark: r.remark })),
           promotionRule: policy.promotionRule, promotionDecision,
@@ -260,8 +282,8 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     term: { name: report.term.name, academicYear: report.term.academicYear.name, startDate: report.term.startDate.toISOString(), endDate: report.term.endDate.toISOString(), nextTermStartDate: nextTerm?.startDate.toISOString() ?? null, nextTermName: nextTerm?.name ?? null },
     results,
     gradingScale: scale,
-    gradingWeights: { ca: Number(settings.gradeCaWeight), exam: Number(settings.gradeExamWeight) },
-    summary: { average, grade: overallGrade, total: completeTotals.reduce((a, b) => a + b, 0) },
+    gradingWeights: weights,
+    summary: { average: frozenAverage, grade: frozenAverage == null ? null : gradeForPercentage(frozenAverage, scale.length ? scale : undefined), total: results.reduce((a, b) => a + (b.total ?? 0), 0) },
     attendance: { present: attendanceSummary.presentDays, late: attendanceSummary.lateDays, totalRecorded: attendanceSummary.totalRecorded },
     position: policy.showOverallPosition ? frozenOverall : null,
     showSubjectPosition: policy.showSubjectPosition,

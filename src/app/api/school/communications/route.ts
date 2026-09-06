@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { hasPermission } from "@/lib/rbac";
 import { revalidatePath } from "next/cache";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -13,11 +14,23 @@ import { cacheTenantRead } from "@/lib/server-cache";
 
 type Recipient = { id: string; name: string; phone: string | null };
 type JsonRecord = Record<string, unknown>;
-const sendSchema = z.object({ action: z.literal("send"), title: z.string().trim().min(2).max(160), body: z.string().trim().min(2).max(5000), audience: z.enum(["guardians", "teachers", "staff", "individual"]), channel: z.enum(["in_app", "sms", "whatsapp"]), userId: z.string().optional(), mediaUrl: z.string().url().optional() });
-const broadcastSchema = z.object({ action: z.literal("broadcast"), title: z.string().trim().min(2).max(160), body: z.string().trim().min(2).max(5000), audience: z.enum(["guardians", "teachers", "staff", "all"]), channel: z.enum(["sms", "whatsapp"]), scheduleAt: z.string().optional(), mediaUrl: z.string().url().optional() });
+const sendSchema = z.object({ action: z.literal("send"), title: z.string().trim().min(2).max(160), body: z.string().trim().min(2).max(5000), audience: z.enum(["guardians", "teachers", "staff", "individual"]), channel: z.enum(["in_app", "sms", "whatsapp"]), userId: z.string().trim().min(1).max(100).optional(), mediaUrl: z.string().url().max(2000).optional() });
+const broadcastSchema = z.object({ action: z.literal("broadcast"), title: z.string().trim().min(2).max(160), body: z.string().trim().min(2).max(5000), audience: z.enum(["guardians", "teachers", "staff", "all"]), channel: z.enum(["sms", "whatsapp"]), scheduleAt: z.string().max(40).optional(), mediaUrl: z.string().url().max(2000).optional() });
+// One request fans out inside a single transaction; cap the batch so a huge
+// school cannot time out the request. The response states the cap explicitly.
+const MAX_BROADCAST_RECIPIENTS = 1000;
 const eventSchema = z.object({ action: z.literal("create_event"), name: z.string().trim().min(2).max(180), type: z.string().trim().min(2).max(40), startDate: z.string().min(1), endDate: z.string().min(1), location: z.string().optional(), description: z.string().max(5000).optional(), notifyGuardians: z.string().optional(), notifyStaff: z.string().optional() });
 function asRecord(value: unknown): JsonRecord { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {}; }
-async function canCommunicate(schoolId: string, userId: string) { return withTenant(schoolId, async (tx) => { const access = await getSchoolAuthorization(tx, userId); return access.isOwner || (await access.can("templates:manage")); }); }
+async function canCommunicate(schoolId: string, userId: string) {
+  return withTenant(schoolId, async (tx) => {
+    const access = await getSchoolAuthorization(tx, userId);
+    if (access.isOwner) return true;
+    // communications:manage is the dedicated permission; templates:manage is
+    // still honoured so existing template managers keep working.
+    if (await hasPermission(tx, userId, "communications:manage")) return true;
+    return access.can("templates:manage");
+  });
+}
 
 export async function GET() {
   try {
@@ -46,19 +59,20 @@ export async function POST(request: Request) {
       const value = sendSchema.parse(input);
       return withTenant(session.schoolId, async (tx) => {
         let recipients: Recipient[] = [];
-        if (value.audience === "individual") { const user = await tx.user.findFirst({ where: { id: value.userId, status: "active" }, select: { id: true, name: true, phone: true } }); if (user) recipients = [user]; }
-        else if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
-        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true } });
-        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
-        else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });
+        if (value.audience === "individual") { const user = value.userId ? await tx.user.findFirst({ where: { id: value.userId, schoolId: session.schoolId, status: "active" }, select: { id: true, name: true, phone: true } }) : null; if (user) recipients = [user]; }
+        else if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
         if (!recipients.length) return NextResponse.json({ ok: true, message: "No recipients matched that audience." });
+        const capped = recipients.length >= MAX_BROADCAST_RECIPIENTS;
         if (value.channel === "in_app") {
           const batchKey = `direct:${session.schoolId}:${Date.now()}`; const now = new Date();
           await tx.message.createMany({ data: recipients.map((r) => ({ schoolId: session.schoolId, channel: "in_app", recipientType: "user", recipientId: r.id, recipientPhone: r.phone || "", body: `${value.title}\n\n${value.body}`, templateKey: "direct_message", templateVariables: { title: value.title }, mediaUrl: value.mediaUrl || null, status: "delivered", attempts: 1, sentAt: now, nextAttemptAt: now, idempotencyKey: `${batchKey}:${r.id}:in_app` })) });
         } else for (const recipient of recipients) { if (!recipient.phone) continue; await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl }); }
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "message.sent", entityType: "MessageBatch", entityId: `message-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: recipients.length } });
         revalidatePath("/school/communications/messages"); revalidatePath("/school/communications/broadcasts"); revalidatePath("/school/communications/announcements");
-        return NextResponse.json({ ok: true, message: `Message sent to ${recipients.length} matched recipient${recipients.length === 1 ? "" : "s"}.` });
+        return NextResponse.json({ ok: true, message: `Message sent to ${recipients.length} matched recipient${recipients.length === 1 ? "" : "s"}.${capped ? ` Limited to ${MAX_BROADCAST_RECIPIENTS} per request — narrow the audience and send again for the rest.` : ""}` });
       });
     }
 
@@ -69,10 +83,11 @@ export async function POST(request: Request) {
       if (scheduledAt && scheduledAt.getTime() <= Date.now()) return NextResponse.json({ error: "INVALID_INPUT", message: "Scheduled broadcast time must be in the future." }, { status: 400 });
       return withTenant(session.schoolId, async (tx) => {
         let recipients: Recipient[] = [];
-        if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
-        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true } });
-        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true } });
-        else recipients = await tx.user.findMany({ where: { status: "active" }, select: { id: true, name: true, phone: true } });
+        if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        const capped = recipients.length >= MAX_BROADCAST_RECIPIENTS;
         let queued = 0;
         for (const recipient of recipients) {
           if (!recipient.phone) continue;
@@ -83,7 +98,7 @@ export async function POST(request: Request) {
         }
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: scheduledAt ? "broadcast.scheduled" : "broadcast.queued", entityType: "Broadcast", entityId: `broadcast-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: queued, scheduleAt: scheduledAt?.toISOString() || null } });
         revalidatePath("/school/communications/messages"); revalidatePath("/school/communications/broadcasts");
-        return NextResponse.json({ ok: true, message: scheduledAt ? `Broadcast scheduled for ${scheduledAt.toLocaleString("en-GH")}. ${queued} recipient${queued === 1 ? "" : "s"} queued.` : `Broadcast queued for ${queued} recipient${queued === 1 ? "" : "s"}.` });
+        return NextResponse.json({ ok: true, message: scheduledAt ? `Broadcast scheduled for ${scheduledAt.toLocaleString("en-GH")}. ${queued} recipient${queued === 1 ? "" : "s"} queued.${capped ? ` Limited to ${MAX_BROADCAST_RECIPIENTS} per request.` : ""}` : `Broadcast queued for ${queued} recipient${queued === 1 ? "" : "s"}.${capped ? ` Limited to ${MAX_BROADCAST_RECIPIENTS} per request — narrow the audience and send again for the rest.` : ""}` });
       });
     }
 
@@ -93,12 +108,18 @@ export async function POST(request: Request) {
     }
 
     if (input?.action === "save_settings") {
-      const channels = Array.isArray(input.channels) ? input.channels : ["in_app"];
+      const rawChannels: unknown[] = Array.isArray(input.channels) ? input.channels : ["in_app"];
+      const channels = [...new Set(rawChannels.filter((c): c is string => c === "in_app" || c === "sms" || c === "whatsapp"))];
+      if (!channels.length) return NextResponse.json({ error: "INVALID_INPUT", message: "Select at least one communication channel." }, { status: 400 });
+      const whatsappFrom = typeof input.whatsappFrom === "string" && input.whatsappFrom.trim() ? input.whatsappFrom.trim().slice(0, 40) : null;
+      const reportCardMediaBase = typeof input.reportCardMediaBase === "string" && input.reportCardMediaBase.trim() ? input.reportCardMediaBase.trim().slice(0, 2000) : null;
+      if (reportCardMediaBase) { try { new URL(reportCardMediaBase); } catch { return NextResponse.json({ error: "INVALID_INPUT", message: "Report-card media base must be a valid URL." }, { status: 400 }); } }
       return withTenant(session.schoolId, async (tx) => {
         const current = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { notificationChannels: true, whatsappTemplateConfig: true } }); const currentChannels = asRecord(current?.notificationChannels); const nextConfig = { ...asRecord(current?.whatsappTemplateConfig) };
-        if (input.whatsappFrom) Object.assign(nextConfig, { from: String(input.whatsappFrom) }); if (input.reportCardMediaBase) Object.assign(nextConfig, { reportCardMediaBase: String(input.reportCardMediaBase) });
+        if (whatsappFrom) Object.assign(nextConfig, { from: whatsappFrom }); if (reportCardMediaBase) Object.assign(nextConfig, { reportCardMediaBase });
         const notificationConfig = { channels, smsCredits: typeof currentChannels.smsCredits === "number" ? currentChannels.smsCredits : 0, automation: { payment_received: Boolean(input.payment_received), report_card_ready: Boolean(input.report_card_ready), student_absence: Boolean(input.student_absence), staff_late: Boolean(input.staff_late), transport_boarding: Boolean(input.transport_boarding), emergency_broadcast: Boolean(input.emergency_broadcast) } };
-        await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: { smsSenderId: input.smsSenderId ? String(input.smsSenderId) : undefined, notificationChannels: JSON.parse(JSON.stringify(notificationConfig)) as Prisma.InputJsonValue, whatsappTemplateConfig: JSON.parse(JSON.stringify(nextConfig)) as Prisma.InputJsonValue } });
+        const smsSenderId = typeof input.smsSenderId === "string" && input.smsSenderId.trim() ? input.smsSenderId.trim().slice(0, 20) : undefined;
+        await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: { smsSenderId, notificationChannels: JSON.parse(JSON.stringify(notificationConfig)) as Prisma.InputJsonValue, whatsappTemplateConfig: JSON.parse(JSON.stringify(nextConfig)) as Prisma.InputJsonValue } });
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "communications.settings_updated", entityType: "SchoolSettings", entityId: session.schoolId, after: JSON.parse(JSON.stringify(notificationConfig)) }); revalidatePath("/school/communications/settings"); return NextResponse.json({ ok: true, message: "Communication settings saved." });
       });
     }

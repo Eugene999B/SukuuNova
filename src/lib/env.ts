@@ -19,6 +19,12 @@ const productionSchema = z.object({
   PLATFORM_AUTH_SECRET: z.string().min(32, "PLATFORM_AUTH_SECRET must be at least 32 characters."),
 });
 
+const secretAtLeast = (min: number) =>
+  z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    z.string().trim().min(min).optional(),
+  );
+
 const optionalSchema = z.object({
   APP_URL: optionalUrl,
   NEXT_PUBLIC_APP_URL: optionalUrl,
@@ -31,18 +37,22 @@ const optionalSchema = z.object({
   AWS_SECRET_ACCESS_KEY: optionalString,
   SMS_PROVIDER_URL: optionalUrl,
   SMS_PROVIDER_TOKEN: optionalString,
+  EMAIL_PROVIDER_URL: optionalUrl,
+  EMAIL_PROVIDER_TOKEN: optionalString,
+  RISK_SCAN_CRON_SECRET: secretAtLeast(32),
   TWILIO_ACCOUNT_SID: optionalString,
   TWILIO_AUTH_TOKEN: optionalString,
   TWILIO_WHATSAPP_FROM: optionalString,
-  WHATSAPP_WEBHOOK_SECRET: optionalString,
-  WHATSAPP_APP_SECRET: optionalString,
-  WHATSAPP_VERIFY_TOKEN: optionalString,
+  WHATSAPP_WEBHOOK_SECRET: secretAtLeast(32),
+  WHATSAPP_APP_SECRET: secretAtLeast(32),
+  WHATSAPP_VERIFY_TOKEN: secretAtLeast(16),
 });
 
 export function validateRuntimeEnv() {
   const optional = optionalSchema.parse(process.env);
   if (
-    process.env.NODE_ENV !== "production" ||
+    process.env.VITEST ||
+    (process.env.NODE_ENV !== "production" && !process.env.DATABASE_URL) ||
     process.env.NEXT_PHASE === "phase-production-build" ||
     process.env.npm_lifecycle_event === "build"
   ) {
@@ -67,6 +77,14 @@ export function validateRuntimeEnv() {
 
   if (optional.SMS_PROVIDER_TOKEN && !optional.SMS_PROVIDER_URL) {
     throw new Error("Invalid production environment configuration: SMS_PROVIDER_URL is required when SMS_PROVIDER_TOKEN is configured.");
+  }
+
+  if (optional.EMAIL_PROVIDER_URL && !optional.EMAIL_PROVIDER_TOKEN) {
+    throw new Error("Invalid production environment configuration: EMAIL_PROVIDER_TOKEN is required when EMAIL_PROVIDER_URL is configured.");
+  }
+
+  if (optional.EMAIL_PROVIDER_TOKEN && !optional.EMAIL_PROVIDER_URL) {
+    throw new Error("Invalid production environment configuration: EMAIL_PROVIDER_URL is required when EMAIL_PROVIDER_TOKEN is configured.");
   }
 
   if ((optional.WHATSAPP_APP_SECRET && optional.WHATSAPP_APP_SECRET.length < 32) || (optional.WHATSAPP_WEBHOOK_SECRET && optional.WHATSAPP_WEBHOOK_SECRET.length < 32) || (optional.WHATSAPP_VERIFY_TOKEN && optional.WHATSAPP_VERIFY_TOKEN.length < 16)) {

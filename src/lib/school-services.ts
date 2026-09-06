@@ -2,7 +2,7 @@ import { hash } from "bcryptjs";
 import type { Prisma } from "@prisma/client";
 import { appendSchoolAudit } from "./audit";
 import { withTenant } from "./db";
-import { ForbiddenError } from "./errors";
+import { AppError, ForbiddenError } from "./errors";
 import { requirePermission } from "./rbac";
 
 export async function createSchoolUser(input: {
@@ -15,6 +15,9 @@ export async function createSchoolUser(input: {
 }) {
   if (!input.email && !input.phone) {
     throw new ForbiddenError("A school user requires an email address or phone number.");
+  }
+  if (typeof input.password !== "string" || input.password.length < 12 || input.password.length > 256) {
+    throw new AppError("A new school user requires a password of 12–256 characters.", 400, "WEAK_PASSWORD");
   }
 
   return withTenant(input.schoolId, async (tx) => {

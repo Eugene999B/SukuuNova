@@ -11,19 +11,19 @@ import { hasPermission } from "@/lib/rbac";
 
 const date = z.coerce.date();
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("academicYear"), name: z.string().min(1), startDate: date, endDate: date }),
-  z.object({ action: z.literal("term"), academicYearId: z.string(), name: z.string().min(1), startDate: date, endDate: date }),
-  z.object({ action: z.literal("event"), academicYearId: z.string(), type: z.enum(["holiday", "vacation", "exam_week", "closure"]), name: z.string().min(1), startDate: date, endDate: date, affectsAttendance: z.boolean().optional() }),
-  z.object({ action: z.literal("class"), name: z.string().min(1), level: z.string().optional(), classTeacherId: z.string().optional() }),
-  z.object({ action: z.literal("subject"), name: z.string().min(1) }),
-  z.object({ action: z.literal("assignment"), classId: z.string(), subjectId: z.string(), teacherId: z.string() }),
+  z.object({ action: z.literal("academicYear"), name: z.string().trim().min(1).max(80), startDate: date, endDate: date }),
+  z.object({ action: z.literal("term"), academicYearId: z.string().min(1).max(100), name: z.string().trim().min(1).max(80), startDate: date, endDate: date }),
+  z.object({ action: z.literal("event"), academicYearId: z.string().min(1).max(100), type: z.enum(["holiday", "vacation", "exam_week", "closure"]), name: z.string().trim().min(1).max(180), startDate: date, endDate: date, affectsAttendance: z.boolean().optional() }),
+  z.object({ action: z.literal("class"), name: z.string().trim().min(1).max(120), level: z.string().trim().max(80).optional(), classTeacherId: z.string().min(1).max(100).optional() }),
+  z.object({ action: z.literal("subject"), name: z.string().trim().min(1).max(120) }),
+  z.object({ action: z.literal("assignment"), classId: z.string().min(1).max(100), subjectId: z.string().min(1).max(100), teacherId: z.string().min(1).max(100) }),
   z.object({
-    action: z.literal("student"), admissionNo: z.string().min(1), name: z.string().min(1),
-    dob: date.optional(), classId: z.string().optional(), photoUrl: z.string().url().optional(),
+    action: z.literal("student"), admissionNo: z.string().trim().min(1).max(60), name: z.string().trim().min(1).max(160),
+    dob: date.optional(), classId: z.string().min(1).max(100).optional(), photoUrl: z.string().url().max(2000).optional(),
     guardian: z.object({
-      name: z.string().min(1), phone: z.string().min(6), relationship: z.string().min(1),
+      name: z.string().trim().min(1).max(160), phone: z.string().trim().min(6).max(40), relationship: z.string().trim().min(1).max(60),
       isPrimary: z.boolean().optional(),
-      createParentLogin: z.object({ email: z.string().email().optional(), password: z.string().min(12) }).optional()
+      createParentLogin: z.object({ email: z.string().trim().email().max(160).optional(), password: z.string().min(12).max(256) }).optional()
     }).optional()
   })
 ]);

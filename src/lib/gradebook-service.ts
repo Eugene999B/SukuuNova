@@ -65,6 +65,25 @@ export async function createAssessment(
   ]);
   if (!term || !schoolClass || !subject) throw new AppError("The selected term, class or subject does not belong to this school.", 400, "INVALID_CONTEXT");
 
+  // A new assessment after report cards are issued would silently invalidate
+  // frozen results. Reopen the term's reports first (term-reopen is already
+  // blocked while finalized reports exist, so this closes the remaining gap).
+  const finalizedCount = await tx.reportCard.count({
+    where: {
+      schoolId: input.schoolId,
+      termId: input.termId,
+      status: { in: ["approved", "sent"] },
+      student: { classId: input.classId },
+    },
+  });
+  if (finalizedCount > 0) {
+    throw new AppError(
+      "This class already has finalized report cards for the term. New assessments cannot be added without reopening them.",
+      409,
+      "REPORT_FINALIZED"
+    );
+  }
+
   const assessment = await tx.assessment.create({
     data: {
       schoolId: input.schoolId,
@@ -89,6 +108,7 @@ export async function enterScore(
     studentId: string;
     assessmentId: string;
     value: number;
+    status?: "present" | "absent" | "excused";
   }
 ) {
   const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true, maxScore: true } });
@@ -108,13 +128,40 @@ export async function enterScore(
   const student = await tx.student.findFirst({ where: { id: input.studentId, schoolId: input.schoolId }, select: { id: true, classId: true } });
   if (!student || student.classId !== assessment.classId) throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
   if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
+  const status = input.status ?? "present";
+  if (status !== "present" && status !== "absent" && status !== "excused") throw new AppError("Score status must be present, absent, or excused.", 400, "INVALID_SCORE_STATUS");
 
   const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
   const score = await tx.score.upsert({
     where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } },
-    update: { value: new Prisma.Decimal(input.value), enteredBy: input.actorId, enteredAt: new Date() },
-    create: { schoolId: input.schoolId, studentId: input.studentId, subjectId: assessment.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(input.value), enteredBy: input.actorId }
+    update: { value: new Prisma.Decimal(input.value), status, enteredBy: input.actorId, enteredAt: new Date() },
+    create: { schoolId: input.schoolId, studentId: input.studentId, subjectId: assessment.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(input.value), status, enteredBy: input.actorId }
   });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: previous ? "score.updated" : "score.created", entityType: "Score", entityId: score.id, before: previous, after: score });
   return score;
+}
+
+/** Remove a score entirely (returns the row to missing). Excused absences
+ * should use status "excused" instead so the trail is preserved. */
+export async function clearScore(
+  tx: TenantDb,
+  input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; }
+) {
+  const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true } });
+  if (!assessment) throw new AppError("Assessment not found in this school.", 404, "NOT_FOUND");
+  await assertTermOpen(tx, input.schoolId, assessment.termId);
+  await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
+  const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
+  if (!canWriteAll) {
+    const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
+    if (!canWriteAssigned) throw new ForbiddenError("Score entry is not permitted.");
+    const assignment = await tx.classSubjectTeacher.findFirst({ where: { classId: assessment.classId, subjectId: assessment.subjectId, teacherId: input.actorId }, select: { teacherId: true } });
+    const classTeacher = await tx.class.findFirst({ where: { id: assessment.classId, classTeacherId: input.actorId }, select: { id: true } });
+    if (!assignment && !classTeacher) throw new ForbiddenError("Teachers may clear scores only for assigned classes and subjects.");
+  }
+  const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
+  if (!previous) throw new AppError("No score recorded for this student and assessment.", 404, "NOT_FOUND");
+  await tx.score.delete({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "score.cleared", entityType: "Score", entityId: previous.id, before: previous });
+  return { cleared: true };
 }

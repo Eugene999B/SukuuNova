@@ -2,6 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { db, withTenant } from "./db";
 import { AppError } from "./errors";
 import { appendPlatformAudit } from "./audit";
+import { majorUnits, minorUnits } from "./billing-math";
 import { getPlatformSchoolScope, requirePlatformPermission } from "./platform-permissions";
 import type { PlatformSession } from "./auth";
 
@@ -9,11 +10,6 @@ const CONFIG_KEYS = ["platform.defaults", "platform.security", "platform.lifecyc
 type ConfigKey = typeof CONFIG_KEYS[number];
 
 type JsonRecord = Record<string, unknown>;
-
-function asNumber(value: unknown, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
 
 function assertInScope(session: PlatformSession, schoolId: string) {
   return getPlatformSchoolScope(session).then((scope) => {
@@ -58,11 +54,11 @@ export async function getSchoolBillingConfig(session: PlatformSession, schoolId:
     const row = config[0] ?? null;
     const students = await tx.student.count({ where: { status: "active" } });
     const billing = row ?? { billingMode: "flat", currency: "GHS", studentRate: "0", flatRate: String(school.subscriptionPlan?.price ?? 0), billingDay: 1, graceDays: 0, trialDays: 0, minimumCharge: "0", maximumCharge: null, active: true, updatedAt: new Date() };
-    const rawTotal = billing.billingMode === "per_student" ? students * asNumber(billing.studentRate) : asNumber(billing.flatRate);
-    const minimum = asNumber(billing.minimumCharge);
-    const maximum = billing.maximumCharge == null ? null : asNumber(billing.maximumCharge);
-    const calculatedTotal = Math.min(maximum == null ? Number.POSITIVE_INFINITY : maximum, Math.max(minimum, rawTotal));
-    return { school, billing: { ...billing, studentRate: asNumber(billing.studentRate), flatRate: asNumber(billing.flatRate), minimumCharge: minimum, maximumCharge: maximum }, activeStudents: students, calculatedTotal };
+    const rawMinor = billing.billingMode === "per_student" ? minorUnits(billing.studentRate) * students : minorUnits(billing.flatRate);
+    const floorMinor = minorUnits(billing.minimumCharge);
+    const cappedMinor = billing.maximumCharge == null ? Math.max(floorMinor, rawMinor) : Math.min(minorUnits(billing.maximumCharge), Math.max(floorMinor, rawMinor));
+    const calculatedTotal = majorUnits(cappedMinor);
+    return { school, billing: { ...billing, studentRate: majorUnits(minorUnits(billing.studentRate)), flatRate: majorUnits(minorUnits(billing.flatRate)), minimumCharge: majorUnits(floorMinor), maximumCharge: billing.maximumCharge == null ? null : majorUnits(minorUnits(billing.maximumCharge)) }, activeStudents: students, calculatedTotal };
   });
 }
 
@@ -73,6 +69,10 @@ export async function saveSchoolBillingConfig(session: PlatformSession, input: {
   await requirePlatformPermission(session, "billing.manage");
   await assertInScope(session, input.schoolId);
   if (input.studentRate < 0 || input.flatRate < 0 || input.minimumCharge < 0) throw new AppError("Billing rates cannot be negative.", 400, "INVALID_BILLING_RATE");
+  for (const [name, value] of [["Student rate", input.studentRate], ["Flat rate", input.flatRate], ["Minimum charge", input.minimumCharge]] as const) {
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new AppError(`${name} must be a finite number.`, 400, "INVALID_BILLING_RATE");
+  }
+  if (input.maximumCharge !== null && (typeof input.maximumCharge !== "number" || !Number.isFinite(input.maximumCharge))) throw new AppError("Maximum charge must be a finite number.", 400, "INVALID_BILLING_RATE");
   if (input.maximumCharge !== null && input.maximumCharge < input.minimumCharge) throw new AppError("Maximum charge cannot be below minimum charge.", 400, "INVALID_BILLING_CAP");
   await withTenant(input.schoolId, async (tx) => {
     const exists = await tx.school.findUnique({ where: { id: input.schoolId }, select: { id: true } });
@@ -84,8 +84,8 @@ export async function saveSchoolBillingConfig(session: PlatformSession, input: {
       input.schoolId, input.billingMode, input.currency.toUpperCase().slice(0, 8), input.studentRate, input.flatRate, input.billingDay, input.graceDays, input.trialDays, input.minimumCharge, input.maximumCharge,
       input.active,
     );
+    await appendPlatformAudit({ actorId: session.adminId, action: "school.billing_configuration.updated", targetSchoolId: input.schoolId, targetEntity: "PlatformSchoolBillingConfig", meta: input }, tx);
   });
-  await appendPlatformAudit({ actorId: session.adminId, action: "school.billing_configuration.updated", targetSchoolId: input.schoolId, targetEntity: "PlatformSchoolBillingConfig", meta: input });
   return getSchoolBillingConfig(session, input.schoolId);
 }
 
@@ -112,6 +112,9 @@ export async function adjustMessagingBalance(session: PlatformSession, input: {
   if (session.role !== "super_admin") throw new AppError("Only Super Admin can allocate communication credits.", 403, "FORBIDDEN");
   await assertInScope(session, input.schoolId);
   if (!Number.isInteger(input.quantity) || input.quantity === 0) throw new AppError("Credit quantity must be a non-zero whole number.", 400, "INVALID_QUANTITY");
+  for (const [name, value] of [["Unit cost", input.unitCost], ["Unit price", input.unitPrice]] as const) {
+    if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < 0)) throw new AppError(`${name} must be a finite non-negative number.`, 400, "INVALID_RATE");
+  }
   const result = await withTenant(input.schoolId, async (tx) => {
     const existing = await tx.$queryRawUnsafe<Array<{ smsBalance: number; whatsappBalance: number }>>(`SELECT "smsBalance","whatsappBalance" FROM "PlatformMessagingWallet" WHERE "schoolId"=$1 FOR UPDATE`, input.schoolId);
     const current = existing[0] ?? { smsBalance: 0, whatsappBalance: 0 };
@@ -127,9 +130,9 @@ export async function adjustMessagingBalance(session: PlatformSession, input: {
       `INSERT INTO "PlatformMessagingLedger" ("id","schoolId","channel","entryType","quantity","balanceAfter","unitCost","unitPrice","reference","notes","actorId") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       createId(), input.schoolId, input.channel, input.quantity > 0 ? "allocation" : "adjustment", input.quantity, after, input.unitCost ?? null, input.unitPrice ?? null, input.reference ?? null, input.notes ?? null, session.adminId,
     );
+    await appendPlatformAudit({ actorId: session.adminId, action: input.quantity > 0 ? "messaging.credits.allocated" : "messaging.credits.adjusted", targetSchoolId: input.schoolId, targetEntity: `MessagingWallet:${input.channel}`, meta: { ...input, ...result } }, tx);
     return { before, after };
   });
-  await appendPlatformAudit({ actorId: session.adminId, action: input.quantity > 0 ? "messaging.credits.allocated" : "messaging.credits.adjusted", targetSchoolId: input.schoolId, targetEntity: `MessagingWallet:${input.channel}`, meta: { ...input, ...result } });
   return getMessagingWallet(session, input.schoolId);
 }
 
@@ -138,6 +141,9 @@ export async function updateMessagingRates(session: PlatformSession, input: { sc
   if (session.role !== "super_admin") throw new AppError("Only Super Admin can change communication pricing.", 403, "FORBIDDEN");
   await assertInScope(session, input.schoolId);
   if (input.sellRate < 0 || input.costRate < 0 || input.lowBalanceThreshold < 0) throw new AppError("Messaging rates and thresholds cannot be negative.", 400, "INVALID_MESSAGING_RATE");
+  for (const [name, value] of [["Sell rate", input.sellRate], ["Cost rate", input.costRate], ["Low-balance threshold", input.lowBalanceThreshold]] as const) {
+    if (typeof value !== "number" || !Number.isFinite(value)) throw new AppError(`${name} must be a finite number.`, 400, "INVALID_MESSAGING_RATE");
+  }
   await withTenant(input.schoolId, async (tx) => {
     const current = await tx.$queryRawUnsafe<Array<{ smsBalance: number; whatsappBalance: number; smsSellRate: string; whatsappSellRate: string; smsCostRate: string; whatsappCostRate: string; lowBalanceThreshold: number }>>(`SELECT * FROM "PlatformMessagingWallet" WHERE "schoolId"=$1 FOR UPDATE`, input.schoolId);
     const base = current[0] ?? { smsBalance: 0, whatsappBalance: 0, smsSellRate: "0", whatsappSellRate: "0", smsCostRate: "0", whatsappCostRate: "0", lowBalanceThreshold: 50 };
@@ -148,8 +154,8 @@ export async function updateMessagingRates(session: PlatformSession, input: { sc
       `INSERT INTO "PlatformMessagingWallet" ("schoolId","smsBalance","whatsappBalance","smsSellRate","whatsappSellRate","smsCostRate","whatsappCostRate","lowBalanceThreshold","status","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',CURRENT_TIMESTAMP)
        ON CONFLICT ("schoolId") DO UPDATE SET "smsBalance"=$2,"whatsappBalance"=$3,"smsSellRate"=$4,"whatsappSellRate"=$5,"smsCostRate"=$6,"whatsappCostRate"=$7,"lowBalanceThreshold"=$8,"updatedAt"=CURRENT_TIMESTAMP`, input.schoolId, ...values, input.lowBalanceThreshold,
     );
+    await appendPlatformAudit({ actorId: session.adminId, action: "messaging.pricing.updated", targetSchoolId: input.schoolId, targetEntity: `MessagingWallet:${input.channel}`, meta: input }, tx);
   });
-  await appendPlatformAudit({ actorId: session.adminId, action: "messaging.pricing.updated", targetSchoolId: input.schoolId, targetEntity: `MessagingWallet:${input.channel}`, meta: input });
   return getMessagingWallet(session, input.schoolId);
 }
 
@@ -163,8 +169,8 @@ export async function changeSchoolLifecycle(session: PlatformSession, input: { s
     if (!school) throw new AppError("School not found.", 404, "NOT_FOUND");
     await tx.school.update({ where: { id: input.schoolId }, data: { status: targetStatus } });
     await tx.schoolLoginDirectory.update({ where: { schoolId: input.schoolId }, data: { status: targetStatus } });
+    await appendPlatformAudit({ actorId: session.adminId, action: `school.lifecycle.${input.action}`, targetSchoolId: input.schoolId, targetEntity: "School", meta: { beforeStatus: school.status, afterStatus: targetStatus } }, tx);
     return { ...school, status: targetStatus };
   });
-  await appendPlatformAudit({ actorId: session.adminId, action: `school.lifecycle.${input.action}`, targetSchoolId: input.schoolId, targetEntity: "School", meta: { beforeStatus: result.status === targetStatus ? undefined : result.status, afterStatus: targetStatus } });
   return result;
 }

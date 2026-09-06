@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
-import { getSchoolAuthorizationState, authorizationVersion } from "./auth";
+import { assertSchoolActive, getSchoolAuthorizationState, authorizationVersion } from "./auth";
+import { rawDb } from "./db";
 import { UnauthorizedError } from "./errors";
 
 export const GUARDIAN_COOKIE = "sukuunova_guardian_session";
@@ -10,6 +11,27 @@ function secret(): Uint8Array {
   const value = process.env.GUARDIAN_AUTH_SECRET;
   if (!value || value.length < 32) throw new Error("GUARDIAN_AUTH_SECRET must be configured with at least 32 characters.");
   return new TextEncoder().encode(value);
+}
+
+function secretCandidates(): Uint8Array[] {
+  const out = [secret()];
+  const previous = process.env.GUARDIAN_AUTH_SECRET_PREVIOUS;
+  if (previous && previous.length >= 32 && previous !== process.env.GUARDIAN_AUTH_SECRET) {
+    out.push(new TextEncoder().encode(previous));
+  }
+  return out;
+}
+
+async function verifyWithRotation(token: string) {
+  let lastError: unknown = null;
+  for (const key of secretCandidates()) {
+    try {
+      return await jwtVerify(token, key, { issuer: "sukuunova-guardian", audience: "sukuunova-guardian" });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 export type GuardianSession = {
@@ -26,6 +48,12 @@ export type GuardianSession = {
 export async function createGuardianSessionToken(session: Omit<GuardianSession, "authorizationVersion"> | GuardianSession): Promise<string> {
   const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This guardian account is no longer active.");
+  await assertSchoolActive(session.schoolId);
+  const linked = await rawDb.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT "id" FROM "Guardian" WHERE "id"=$1 AND "schoolId"=$2 AND "userId"=$3 LIMIT 1`,
+    session.guardianId, session.schoolId, session.userId
+  );
+  if (!linked.length) throw new UnauthorizedError("This guardian account is no longer linked.");
   const currentAuthorizationVersion = authorizationVersion(state);
 
   return new SignJWT({
@@ -47,7 +75,7 @@ export async function createGuardianSessionToken(session: Omit<GuardianSession, 
 }
 
 export async function verifyGuardianSessionToken(token: string): Promise<GuardianSession> {
-  const { payload } = await jwtVerify(token, secret(), { issuer: "sukuunova-guardian", audience: "sukuunova-guardian" });
+  const { payload } = await verifyWithRotation(token);
   if (
     payload.kind !== "guardian" ||
     typeof payload.sub !== "string" ||
@@ -81,5 +109,6 @@ export async function requireGuardianSession() {
   const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This guardian account is no longer active.");
   if (authorizationVersion(state) !== session.authorizationVersion) throw new UnauthorizedError("Your guardian access has changed. Please sign in again.");
+  await assertSchoolActive(session.schoolId);
   return { ...session, name: state.name };
 }

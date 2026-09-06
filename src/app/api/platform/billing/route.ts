@@ -10,7 +10,7 @@ import { z } from "zod";
 
 const postSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("generate"), schoolId: z.string().min(1), period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }),
-  z.object({ action: z.literal("record_payment"), schoolId: z.string().min(1), invoiceId: z.string().min(1), amount: z.number().finite().positive(), method: z.string().trim().min(2).max(40), reference: z.string().trim().max(120).optional() }),
+  z.object({ action: z.literal("record_payment"), schoolId: z.string().min(1).max(100), invoiceId: z.string().min(1).max(100), amount: z.number().finite().positive().max(1_000_000_000), method: z.string().trim().min(2).max(40), reference: z.string().trim().max(120).optional() }),
 ]);
 
 async function scopedSchools(session: { adminId: string; role: string }) {
@@ -32,10 +32,10 @@ export async function GET() {
         tx.$queryRawUnsafe<Array<{ id: string; platformInvoiceId: string; amount: string; method: string; reference: string|null; createdAt: string }>>(`SELECT "id","platformInvoiceId","amount"::text,"method","reference","createdAt" FROM "PlatformPayment" WHERE "schoolId"=$1 ORDER BY "createdAt" DESC`, school.id),
       ]));
       const paidByInvoice = new Map<string, number>();
-      for (const payment of payments) paidByInvoice.set(payment.platformInvoiceId, (paidByInvoice.get(payment.platformInvoiceId) ?? 0) + Number(payment.amount));
+      for (const payment of payments) paidByInvoice.set(payment.platformInvoiceId, Math.round((paidByInvoice.get(payment.platformInvoiceId) ?? 0) * 100 + Number(payment.amount) * 100) / 100);
       const normalizedInvoices = invoices.map((invoice) => {
-        const due = Number(invoice.amount);
-        const paid = paidByInvoice.get(invoice.id) ?? 0;
+        const due = Math.round(Number(invoice.amount) * 100) / 100;
+        const paid = Math.round((paidByInvoice.get(invoice.id) ?? 0) * 100) / 100;
         return { ...invoice, amount: due, paid, outstanding: Math.max(0, due - paid), overpaid: Math.max(0, paid - due), effectiveStatus: paid >= due ? "paid" : invoice.status };
       });
       return { school, invoices: normalizedInvoices, payments, totals: { invoiced: normalizedInvoices.reduce((n, i) => n + i.amount, 0), paid: normalizedInvoices.reduce((n, i) => n + i.paid, 0), outstanding: normalizedInvoices.reduce((n, i) => n + i.outstanding, 0), overpaid: normalizedInvoices.reduce((n, i) => n + i.overpaid, 0) } };
@@ -58,6 +58,7 @@ export async function POST(request: Request) {
     }
 
     const result = await withTenant(input.schoolId, async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"platform-payment:" + input.schoolId + ":" + (input.reference ?? input.invoiceId)}))`;
       const invoice = (await tx.$queryRawUnsafe<Array<{ id: string; amount: string }>>(`SELECT "id","amount"::text FROM "PlatformInvoice" WHERE "id"=$1 AND "schoolId"=$2 FOR UPDATE`, input.invoiceId, input.schoolId))[0];
       if (!invoice) return null;
       if (input.reference) {
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
           input.schoolId, input.reference,
         ))[0];
         if (existing) {
-          if (existing.platformInvoiceId !== input.invoiceId) return { duplicateReference: true } as const;
+          if (existing.platformInvoiceId !== input.invoiceId || Number(existing.amount) !== input.amount || existing.method !== input.method) return { duplicateReference: true } as const;
           const paid = Number((await tx.$queryRawUnsafe<Array<{ paid: string }>>(
             `SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`, input.schoolId, input.invoiceId,
           ))[0]?.paid ?? 0);
@@ -76,7 +77,14 @@ export async function POST(request: Request) {
         }
       }
       const paymentId = createId();
-      await tx.$executeRawUnsafe(`INSERT INTO "PlatformPayment" ("id","schoolId","platformInvoiceId","amount","method","reference","reconciledBy") VALUES ($1,$2,$3,$4,$5,$6,$7)`, paymentId, input.schoolId, input.invoiceId, input.amount, input.method, input.reference ?? null, session.adminId);
+      try {
+        await tx.$executeRawUnsafe(`INSERT INTO "PlatformPayment" ("id","schoolId","platformInvoiceId","amount","method","reference","reconciledBy") VALUES ($1,$2,$3,$4,$5,$6,$7)`, paymentId, input.schoolId, input.invoiceId, input.amount, input.method, input.reference ?? null, session.adminId);
+      } catch (error) {
+        if (input.reference && (error as { code?: string }).code === "23505") {
+          return { duplicateReference: true } as const;
+        }
+        throw error;
+      }
       const paid = Number((await tx.$queryRawUnsafe<Array<{ paid: string }>>(`SELECT COALESCE(SUM("amount"),0)::text paid FROM "PlatformPayment" WHERE "schoolId"=$1 AND "platformInvoiceId"=$2`, input.schoolId, input.invoiceId))[0]?.paid ?? 0);
       const due = Number(invoice.amount);
       const status = paid >= due ? "paid" : "unpaid";

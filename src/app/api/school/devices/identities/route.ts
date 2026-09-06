@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
+import { AppError, routeError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 
@@ -10,7 +10,7 @@ const createSchema = z.object({
   deviceKind: z.enum(["fingerprint", "card"]),
   externalId: z.string().trim().min(1).max(200),
   targetType: z.enum(["student", "staff"]),
-  targetId: z.string().min(1)
+  targetId: z.string().min(1).max(100)
 });
 
 export async function GET() {
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       const person = input.targetType === "student"
         ? await tx.student.findUnique({ where: { id: input.targetId }, select: { id: true } })
         : await tx.user.findUnique({ where: { id: input.targetId }, select: { id: true } });
-      if (!person) throw new Error("Target person was not found.");
+      if (!person) throw new AppError("Target person was not found in this school.", 404, "NOT_FOUND");
 
       const created = await tx.deviceIdentity.create({
         data: {
@@ -99,11 +99,11 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const session = await requireSchoolSession();
-    const input = z.object({ id: z.string().min(1) }).parse(await request.json());
+    const input = z.object({ id: z.string().min(1).max(100) }).parse(await request.json());
     const identity = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
       const before = await tx.deviceIdentity.findUnique({ where: { id: input.id } });
-      if (!before) throw new Error("Device identity was not found.");
+      if (!before) throw new AppError("Device identity was not found in this school.", 404, "NOT_FOUND");
       const deleted = await tx.deviceIdentity.delete({ where: { id: before.id } });
       await appendSchoolAudit(tx, {
         schoolId: session.schoolId,

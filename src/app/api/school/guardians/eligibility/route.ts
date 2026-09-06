@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
+import { ForbiddenError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
+import { hasPermission } from "@/lib/rbac";
 import { getGuardianSlotInfo } from "@/lib/guardian-service";
 
 const schema = z.object({ studentIds: z.array(z.string().min(1).max(100)).min(1).max(100) });
@@ -13,6 +14,9 @@ export async function POST(request: Request) {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
     const result = await withTenant(session.schoolId, async (tx) => {
+      if (!(await hasPermission(tx, session.userId, "students:read"))) {
+        throw new ForbiddenError("You do not have permission to view guardian eligibility.");
+      }
       const slots = [];
       for (const studentId of [...new Set(input.studentIds)]) {
         try {

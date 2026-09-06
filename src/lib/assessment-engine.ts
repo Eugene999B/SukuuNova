@@ -11,6 +11,8 @@ export type AssessmentRules = {
   gradingScale?: GradeBand[];
 };
 
+export type ScoreStatus = "present" | "absent" | "excused";
+
 type AssessmentLike = {
   id: string;
   name: string;
@@ -18,6 +20,9 @@ type AssessmentLike = {
   maxScore: Prisma.Decimal | number;
   weight: Prisma.Decimal | number;
   score?: Prisma.Decimal | number | null;
+  // excused: approved absence, excluded from averages (as if missing).
+  // absent: unexcused no-show, counts at face value (typically 0).
+  status?: ScoreStatus | string | null;
 };
 
 const TYPE_ALIASES: Record<string, string> = {
@@ -55,6 +60,31 @@ function round(value: number, mode: AssessmentRules["rounding"]) {
   if (mode === "down") return Math.floor(value * 100) / 100;
   if (mode === "up") return Math.ceil(value * 100) / 100;
   return Math.round(value * 100) / 100;
+}
+
+/** Single ranking rule for the whole product: competition ranking ("1224")
+ * with an epsilon so float dust never splits ties, and a stable
+ * name-then-id tiebreak so equal totals always order identically. */
+export const RANK_EPSILON = 0.005;
+
+export function rankTotals(entries: Array<{ id: string; name?: string; total: number }>): Map<string, number> {
+  const sorted = [...entries].sort((a, b) => {
+    const diff = b.total - a.total;
+    if (Math.abs(diff) > RANK_EPSILON) return diff;
+    const nameCmp = (a.name ?? "").localeCompare(b.name ?? "");
+    if (nameCmp !== 0) return nameCmp;
+    return a.id.localeCompare(b.id);
+  });
+  const positions = new Map<string, number>();
+  let position = 0;
+  let previous: number | null = null;
+  for (let index = 0; index < sorted.length; index += 1) {
+    const total = sorted[index].total;
+    if (previous === null || Math.abs(total - previous) > RANK_EPSILON) position = index + 1;
+    positions.set(sorted[index].id, position);
+    previous = total;
+  }
+  return positions;
 }
 
 function validateGradeScale(scale: GradeBand[]) {
@@ -97,7 +127,9 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
 
   const normalizedRows = assessments.map((assessment) => {
     const maxScore = Number(assessment.maxScore);
-    const rawScore = assessment.score == null ? null : Number(assessment.score);
+    const status: ScoreStatus = assessment.status === "excused" || assessment.status === "absent" ? assessment.status : "present";
+    const excused = status === "excused";
+    const rawScore = excused || assessment.score == null ? null : Number(assessment.score);
     if (!Number.isFinite(maxScore) || maxScore <= 0) {
       throw new AppError(`Assessment ${assessment.name} has an invalid maximum score.`, 409, "INVALID_MAX_SCORE");
     }
@@ -111,6 +143,7 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
       type,
       maxScore,
       rawScore,
+      status,
       percentage: rawScore == null ? null : rawScore / maxScore * 100,
       fallbackWeight: Number(assessment.weight)
     };
@@ -131,6 +164,7 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
     type: row.type,
     maxScore: row.maxScore,
     rawScore: row.rawScore,
+    status: row.status,
     percentage: row.percentage,
     weight: categoryWeight(row.type, row.fallbackWeight, rules),
     contribution: 0

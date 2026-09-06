@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
@@ -217,8 +218,9 @@ export async function GET(
               "Status",
             ],
             rows.map((r) => {
-              const paid = r.payments.reduce((sum, p) => sum + Number(p.amount) - p.reversals.reduce((reversed, reversal) => reversed + Number(reversal.amount), 0), 0);
-              const total = Number(r.totalAmount);
+              const paid = r.payments.reduce((sum, p) => sum.plus(new Prisma.Decimal(String(p.amount))).minus(p.reversals.reduce((reversed, reversal) => reversed.plus(new Prisma.Decimal(String(reversal.amount))), new Prisma.Decimal(0))), new Prisma.Decimal(0));
+              const total = new Prisma.Decimal(String(r.totalAmount));
+              const balance = total.minus(paid);
               return [
                 r.createdAt.toISOString().slice(0, 10),
                 r.student.admissionNo,
@@ -226,7 +228,7 @@ export async function GET(
                 r.student.class?.name ?? "",
                 total.toFixed(2),
                 paid.toFixed(2),
-                Math.max(0, total - Math.max(0, paid)).toFixed(2),
+                balance.toFixed(2),
                 r.status,
               ];
             }),

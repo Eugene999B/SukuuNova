@@ -47,22 +47,29 @@ export default function FinanceWorkspace({ mode = "overview", schoolName = "Scho
   }
   useEffect(() => { load(); }, []);
 
+  // Display sums use integer pesewas to avoid binary-float drift (ledger stays Decimal server-side).
+  const toPesewas = (value: unknown) => Math.round(Number(value) * 100);
+  const fromPesewas = (value: number) => value / 100;
   const paidByInvoice = useMemo(() => {
     const map = new Map<string, number>();
-    (data?.payments ?? []).forEach(p => map.set(p.invoiceId, (map.get(p.invoiceId) ?? 0) + Number(p.amount)));
+    (data?.payments ?? []).forEach(p => map.set(p.invoiceId, (map.get(p.invoiceId) ?? 0) + toPesewas(p.amount)));
     (data?.reversals ?? []).forEach(r => {
       const payment = data?.payments.find(p => p.id === r.paymentId);
-      if (payment) map.set(payment.invoiceId, (map.get(payment.invoiceId) ?? 0) - Number(r.amount));
+      if (payment) map.set(payment.invoiceId, (map.get(payment.invoiceId) ?? 0) - toPesewas(r.amount));
     });
     return map;
   }, [data]);
 
-  const invoiceRows = useMemo(() => (data?.invoices ?? []).map(i => ({ ...i, total:Number(i.totalAmount), paid:paidByInvoice.get(i.id) ?? 0, due:Math.max(0, Number(i.totalAmount) - (paidByInvoice.get(i.id) ?? 0)) })), [data, paidByInvoice]);
+  const invoiceRows = useMemo(() => (data?.invoices ?? []).map(i => {
+    const total = toPesewas(i.totalAmount);
+    const paid = Math.max(0, paidByInvoice.get(i.id) ?? 0);
+    return { ...i, total: fromPesewas(total), paid: fromPesewas(paid), due: fromPesewas(Math.max(0, total - paid)), overpaid: fromPesewas(Math.max(0, paid - total)) };
+  }), [data, paidByInvoice]);
   const filteredInvoices = invoiceRows.filter(i => !query || `${i.student?.name ?? ""} ${i.student?.admissionNo ?? ""} ${i.id}`.toLowerCase().includes(query.toLowerCase()));
   const netPaymentsTotal = useMemo(() => {
-    const paymentSum = (data?.payments ?? []).reduce((s, p) => s + Number(p.amount), 0);
-    const reversalSum = (data?.reversals ?? []).reduce((s, r) => s + Number(r.amount), 0);
-    return Math.max(0, paymentSum - reversalSum);
+    const paymentSum = (data?.payments ?? []).reduce((s, p) => s + toPesewas(p.amount), 0);
+    const reversalSum = (data?.reversals ?? []).reduce((s, r) => s + toPesewas(r.amount), 0);
+    return fromPesewas(Math.max(0, paymentSum - reversalSum));
   }, [data]);
   const totals = useMemo(() => ({ billed:invoiceRows.reduce((s,i)=>s+i.total,0), collected:invoiceRows.reduce((s,i)=>s+i.paid,0), owing:invoiceRows.reduce((s,i)=>s+i.due,0), payments:netPaymentsTotal }), [invoiceRows, netPaymentsTotal]);
   const arrears = filteredInvoices.filter(i => i.due > 0).sort((a,b)=>b.due-a.due);
