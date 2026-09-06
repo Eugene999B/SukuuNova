@@ -1,278 +1,58 @@
-/* SukuuNova canonical theme layer.
-   Keep theme behavior predictable: the mode owns the palette, while
-   component styles own layout, spacing, and semantic accents. */
+/* SukuuNova canonical theme layer. The theme owns palette semantics; component styles own layout. */
 
-:root {
-  color-scheme: light;
-  --ui-bg: var(--color-bg);
-  --ui-bg-subtle: var(--color-bg-subtle);
-  --ui-surface: var(--color-surface);
-  --ui-surface-raised: var(--color-surface);
-  --ui-surface-soft: var(--color-bg);
-  --ui-surface-hover: var(--color-bg-subtle);
-  --ui-text: var(--color-text-primary);
-  --ui-text-secondary: var(--color-text-secondary);
-  --ui-text-muted: var(--color-text-muted);
-  --ui-text-subtle: var(--color-text-subtle);
-  --ui-text-disabled: var(--color-border-strong);
-  --ui-border: var(--sn-line);
-  --ui-border-strong: var(--sn-line);
-  --ui-border-subtle: var(--sn-line);
-  --ui-primary: var(--color-brand);
-  --ui-primary-hover: var(--color-brand-hover);
-  --ui-primary-soft: var(--color-success-soft);
-  --ui-primary-border: var(--sn-line);
-  --ui-success: var(--color-success);
-  --ui-success-soft: var(--color-success-soft);
-  --ui-warning: var(--color-warning);
-  --ui-warning-soft: var(--color-warning-soft);
-  --ui-danger: var(--color-danger);
-  --ui-danger-soft: var(--color-danger-soft);
-  --ui-info: var(--color-info);
-  --ui-info-soft: var(--color-info-soft);
-  --ui-focus: 0 0 0 3px var(--color-bg);
-  --ui-shadow-sm: 0 1px 3px var(--sn-shadow-sm), 0 1px 2px var(--sn-shadow-sm);
-  --ui-shadow-md: 0 4px 12px var(--sn-shadow-sm), 0 2px 4px var(--sn-shadow-sm);
-  --ui-radius-sm: 6px;
-  --ui-radius-md: 10px;
-  --ui-radius-lg: 18px;
-}
+:root { color-scheme: light; --ui-bg: var(--color-bg); --ui-bg-subtle: var(--color-bg-subtle); --ui-surface: var(--color-surface); --ui-surface-raised: var(--color-surface-raised); --ui-surface-soft: var(--color-surface-soft); --ui-surface-hover: var(--color-surface-hover); --ui-text: var(--color-text-primary); --ui-text-secondary: var(--color-text-secondary); --ui-text-muted: var(--color-text-muted); --ui-text-subtle: var(--color-text-subtle); --ui-text-disabled: var(--color-text-disabled); --ui-border: var(--color-border); --ui-border-strong: var(--color-border-strong); --ui-border-subtle: var(--color-border-subtle); --ui-primary: var(--color-brand); --ui-primary-hover: var(--color-brand-hover); --ui-primary-soft: var(--color-brand-soft); --ui-primary-border: var(--color-brand-border); --ui-success: var(--color-success); --ui-success-soft: var(--color-success-soft); --ui-warning: var(--color-warning); --ui-warning-soft: var(--color-warning-soft); --ui-danger: var(--color-danger); --ui-danger-soft: var(--color-danger-soft); --ui-info: var(--color-info); --ui-info-soft: var(--color-info-soft); --ui-focus: var(--focus-ring); --ui-shadow-sm: var(--shadow-sm); --ui-shadow-md: var(--shadow-md); --ui-radius-sm: var(--radius-sm); --ui-radius-md: var(--radius-md); --ui-radius-lg: var(--radius-lg); }
+:root[data-theme="dark"] { color-scheme: dark; --ui-bg: var(--color-bg); --ui-bg-subtle: var(--color-bg-subtle); --ui-surface: var(--color-surface); --ui-surface-raised: var(--color-surface-raised); --ui-surface-soft: var(--color-surface-soft); --ui-surface-hover: var(--color-surface-hover); --ui-text: var(--color-text-primary); --ui-text-secondary: var(--color-text-secondary); --ui-text-muted: var(--color-text-muted); --ui-text-subtle: var(--color-text-subtle); --ui-text-disabled: var(--color-text-disabled); --ui-border: var(--color-border); --ui-border-strong: var(--color-border-strong); --ui-border-subtle: var(--color-border-subtle); --ui-primary: var(--color-brand); --ui-primary-hover: var(--color-brand-hover); --ui-primary-soft: var(--color-brand-soft); --ui-primary-border: var(--color-brand-border); --ui-success: var(--color-success); --ui-success-soft: var(--color-success-soft); --ui-warning: var(--color-warning); --ui-warning-soft: var(--color-warning-soft); --ui-danger: var(--color-danger); --ui-danger-soft: var(--color-danger-soft); --ui-info: var(--color-info); --ui-info-soft: var(--color-info-soft); --ui-focus: var(--focus-ring); --ui-shadow-sm: var(--shadow-sm); --ui-shadow-md: var(--shadow-md); }
+html, body { min-height: 100%; background: var(--ui-bg) !important; color: var(--ui-text) !important; }
+body { font-family: var(--sn-font-family, Inter, ui-sans-serif, system-ui, sans-serif); -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+:where(.app-main, .app-content, .page-shell, .page-content, .module-workspace, .dashboard-shell) { background: var(--ui-bg) !important; color: var(--ui-text) !important; }
+:where(.app-sidebar, .app-topbar, .topbar) { background: var(--ui-surface) !important; color: var(--ui-text) !important; border-color: var(--ui-border) !important; }
+:where(.app-card, .module-card, .module-metrics article, .sn-data-card, .sn-list-card, .sn-action-card, .sn-empty-state, .card, .panel) { background: var(--ui-surface) !important; color: var(--ui-text) !important; border-color: var(--ui-border) !important; box-shadow: var(--ui-shadow-sm) !important; }
+:where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(h1, h2, h3, h4, h5, h6, strong, b) { color: var(--ui-text) !important; }
+:where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(p, label, dt, dd) { color: var(--ui-text-secondary) !important; }
+:where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(small, .muted, .text-muted, [data-muted="true"]) { color: var(--ui-text-muted) !important; }
+:where(.app-brand, .app-topbar h1, .app-school-chip b, .app-user-mini b) { color: var(--ui-text) !important; }
+:where(.app-nav-item, .topnav a, .top-link) { color: var(--ui-text-secondary) !important; }
+:where(.app-nav-item:hover, .topnav a:hover, .top-link:hover) { color: var(--ui-text) !important; background: var(--ui-surface-soft) !important; }
+:where(.app-nav-item.is-active) { color: var(--ui-primary) !important; background: var(--ui-primary-soft) !important; border-color: var(--ui-primary-border) !important; box-shadow: inset 3px 0 0 var(--ui-primary) !important; }
+:where(input, textarea, select) { background: var(--ui-surface) !important; color: var(--ui-text) !important; caret-color: var(--ui-text) !important; border: 1px solid var(--ui-border-strong) !important; }
+:where(input, textarea, select)::placeholder { color: var(--ui-text-muted) !important; opacity: 1 !important; }
+:where(input, textarea, select):disabled { background: var(--ui-surface-soft) !important; color: var(--ui-text-disabled) !important; }
+:where(input, textarea, select):focus { border-color: var(--ui-primary) !important; box-shadow: var(--ui-focus) !important; }
+:where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--ui-primary); }
+:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]) { background: var(--ui-primary) !important; color: var(--color-text-on-brand) !important; border-color: var(--ui-primary) !important; box-shadow: none !important; }
+:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]):hover { background: var(--ui-primary-hover) !important; color: var(--color-text-on-brand) !important; border-color: var(--ui-primary-hover) !important; }
+:where(.module-secondary-button, .module-action-secondary, .secondary-cta, .btn-secondary, .button-secondary, button[data-variant="secondary"]) { background: var(--ui-surface) !important; color: var(--ui-text) !important; border: 1px solid var(--ui-border) !important; }
+:where(.module-table-wrap, .data-table, .table-wrap) { background: var(--ui-surface) !important; border-color: var(--ui-border) !important; }
+:where(th) { color: var(--ui-text-secondary) !important; background: var(--ui-surface-soft) !important; border-color: var(--ui-border) !important; }
+:where(td) { color: var(--ui-text-secondary) !important; border-color: var(--ui-border) !important; }
+:where(tbody tr:hover) { background: var(--ui-surface-hover) !important; }
+:where(.module-tabbar, .tabs) { background: var(--ui-surface) !important; border-color: var(--ui-border) !important; }
+:where(.module-tabbar a, .tabs a, .tabs button) { color: var(--ui-text-secondary) !important; }
+:where(.module-tabbar a:hover, .tabs a:hover, .tabs button:hover) { background: var(--ui-surface-hover) !important; color: var(--ui-text) !important; }
+:where(.module-tabbar a.is-active, .tabs .is-active) { background: var(--ui-primary-soft) !important; color: var(--ui-primary) !important; }
+:where(dialog, [role="dialog"], .modal, .dialog, .drawer) { background: var(--ui-surface) !important; color: var(--ui-text) !important; border-color: var(--ui-border) !important; box-shadow: var(--ui-shadow-md) !important; }
 
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --ui-bg: var(--color-bg);
-  --ui-bg-subtle: var(--color-bg-subtle);
-  --ui-surface: var(--color-surface);
-  --ui-surface-raised: var(--color-surface-raised);
-  --ui-surface-soft: var(--color-surface-soft);
-  --ui-surface-hover: var(--color-surface-hover);
-  --ui-text: var(--color-text-primary);
-  --ui-text-secondary: var(--color-text-secondary);
-  --ui-text-muted: var(--color-text-muted);
-  --ui-text-subtle: var(--color-text-subtle);
-  --ui-text-disabled: var(--color-text-disabled);
-  --ui-border: var(--color-border);
-  --ui-border-strong: var(--color-border-strong);
-  --ui-border-subtle: var(--color-border-subtle);
-  --ui-primary: var(--color-brand);
-  --ui-primary-hover: var(--color-brand-hover);
-  --ui-primary-soft: var(--color-brand-soft);
-  --ui-primary-border: var(--color-brand-border);
-  --ui-success: var(--color-success);
-  --ui-success-soft: var(--color-success-soft);
-  --ui-warning: var(--color-warning);
-  --ui-warning-soft: var(--color-warning-soft);
-  --ui-danger: var(--color-danger);
-  --ui-danger-soft: var(--color-danger-soft);
-  --ui-info: var(--color-info);
-  --ui-info-soft: var(--color-info-soft);
-  --ui-focus: 0 0 0 3px var(--color-brand-glow);
-  --ui-shadow-sm: 0 1px 3px var(--sn-shadow-sm), 0 1px 2px var(--sn-shadow-sm);
-  --ui-shadow-md: 0 8px 24px var(--sn-shadow-sm), 0 2px 8px var(--sn-shadow-sm);
-}
+:root[data-theme="dark"] :where(.bg-white, .bg-slate-50, .bg-slate-100, .bg-gray-50, .bg-gray-100, .bg-zinc-50, .bg-zinc-100) { background: var(--ui-surface) !important; }
+:root[data-theme="dark"] :where(.bg-slate-200, .bg-gray-200, .bg-zinc-200) { background: var(--ui-surface-raised) !important; }
+:root[data-theme="dark"] :where(.text-black, .text-slate-950, .text-slate-900, .text-slate-800, .text-gray-950, .text-gray-900, .text-gray-800, .text-zinc-950, .text-zinc-900, .text-zinc-800) { color: var(--ui-text) !important; }
+:root[data-theme="dark"] :where(.text-slate-700, .text-slate-600, .text-gray-700, .text-gray-600, .text-zinc-700, .text-zinc-600) { color: var(--ui-text-secondary) !important; }
+:root[data-theme="dark"] :where(.text-slate-500, .text-gray-500, .text-zinc-500) { color: var(--ui-text-muted) !important; }
+:root[data-theme="dark"] :where(.border-slate-200, .border-slate-300, .border-gray-200, .border-gray-300, .border-zinc-200, .border-zinc-300) { border-color: var(--ui-border) !important; }
+:root[data-theme="dark"] :where(.divide-slate-200, .divide-gray-200, .divide-zinc-200) > :not([hidden]) ~ :not([hidden]) { border-color: var(--ui-border) !important; }
+:root[data-theme="dark"] :where(.placeholder-slate-500, .placeholder-gray-500, .placeholder-zinc-500)::placeholder { color: var(--ui-text-muted) !important; }
+:root[data-theme="dark"] :where(.ring-sky-100, .ring-blue-100, .ring-indigo-100, .ring-emerald-100) { --tw-ring-color: var(--ui-border) !important; }
 
-html,
-body {
-  min-height: 100%;
-  background: var(--ui-bg) !important;
-  color: var(--ui-text) !important;
-}
+/* Catch Tailwind opacity variants too, e.g. bg-white/5, bg-white/10, text-slate-900/80. */
+:root[data-theme="dark"] body :where([class*="bg-white"], [class*="bg-slate-50"], [class*="bg-slate-100"], [class*="bg-gray-50"], [class*="bg-gray-100"], [class*="bg-zinc-50"], [class*="bg-zinc-100"]) { background: var(--ui-surface) !important; }
+:root[data-theme="dark"] body :where([class*="text-black"], [class*="text-slate-950"], [class*="text-slate-900"], [class*="text-slate-800"], [class*="text-gray-950"], [class*="text-gray-900"], [class*="text-gray-800"], [class*="text-zinc-950"], [class*="text-zinc-900"], [class*="text-zinc-800"]) { color: var(--ui-text) !important; }
+:root[data-theme="dark"] body :where([class*="text-slate-700"], [class*="text-slate-600"], [class*="text-gray-700"], [class*="text-gray-600"], [class*="text-zinc-700"], [class*="text-zinc-600"]) { color: var(--ui-text-secondary) !important; }
+:root[data-theme="dark"] body :where([class*="text-slate-500"], [class*="text-gray-500"], [class*="text-zinc-500"]) { color: var(--ui-text-muted) !important; }
 
-body {
-  font-family: var(--sn-font-family, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Shared application shells */
-:where(.app-main, .app-content, .page-shell, .page-content, .module-workspace, .dashboard-shell) {
-  background: var(--ui-bg) !important;
-  color: var(--ui-text) !important;
-}
-
-:where(.app-sidebar, .app-topbar, .topbar) {
-  background: var(--ui-surface) !important;
-  color: var(--ui-text) !important;
-  border-color: var(--ui-border) !important;
-}
-
-/* Cards and panels: solid, calm surfaces in both modes. */
-:where(.app-card, .module-card, .module-metrics article, .sn-data-card, .sn-list-card, .sn-action-card, .sn-empty-state, .card, .panel) {
-  background: var(--ui-surface) !important;
-  color: var(--ui-text) !important;
-  border-color: var(--ui-border) !important;
-  box-shadow: var(--ui-shadow-sm) !important;
-}
-
-/* Only style generic text inside known SukuuNova surfaces. Avoid changing
-   semantic/status text or page-specific components unexpectedly. */
-:where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(h1, h2, h3, h4, h5, h6, strong, b) {
-  color: var(--ui-text);
-}
-
-:where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(p, label, dt, dd) {
-  color: var(--ui-text-secondary);
-}
-
-:where(.module-card, .module-metrics article, .app-card, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel) :where(small, .muted, .text-muted, [data-muted="true"]) {
-  color: var(--ui-text-muted);
-}
-
-/* Navigation */
-:where(.app-brand, .app-topbar h1, .app-school-chip b, .app-user-mini b) {
-  color: var(--ui-text) !important;
-}
-
-:where(.app-nav-item, .topnav a, .top-link) {
-  color: var(--ui-text-secondary) !important;
-}
-
-:where(.app-nav-item:hover, .topnav a:hover, .top-link:hover) {
-  color: var(--ui-text) !important;
-  background: var(--ui-surface-soft) !important;
-}
-
-:where(.app-nav-item.is-active) {
-  color: var(--ui-primary) !important;
-  background: var(--ui-primary-soft) !important;
-  border-color: var(--ui-primary-border) !important;
-  box-shadow: inset 3px 0 0 var(--ui-primary) !important;
-}
-
-/* Inputs */
-:where(input, textarea, select) {
-  background: var(--ui-surface) !important;
-  color: var(--ui-text) !important;
-  border: 1px solid var(--ui-border-strong) !important;
-}
-
-:where(input, textarea, select)::placeholder {
-  color: var(--ui-text-muted) !important;
-  opacity: 1;
-}
-
-:where(input, textarea, select):disabled {
-  background: var(--ui-surface-soft) !important;
-  color: var(--ui-text-disabled) !important;
-}
-
-:where(input, textarea, select):focus {
-  border-color: var(--ui-primary) !important;
-  box-shadow: var(--ui-focus) !important;
-}
-
-:where(input[type="checkbox"], input[type="radio"]) {
-  accent-color: var(--ui-primary);
-}
-
-/* Primary / secondary actions */
-:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]) {
-  background: var(--ui-primary) !important;
-  color: var(--sn-ink) !important;
-  border-color: var(--ui-primary) !important;
-  box-shadow: none !important;
-}
-
-:where(.module-hero-button, .module-action-primary, .primary-cta, .btn-primary, .button-primary, button[data-variant="primary"]):hover {
-  background: var(--ui-primary-hover) !important;
-  color: var(--sn-ink) !important;
-  border-color: var(--ui-primary-hover) !important;
-}
-
-:where(.module-secondary-button, .module-action-secondary, .secondary-cta, .btn-secondary, .button-secondary, button[data-variant="secondary"]) {
-  background: var(--ui-surface) !important;
-  color: var(--ui-text) !important;
-  border: 1px solid var(--ui-border) !important;
-}
-
-:where(.module-secondary-button, .module-action-secondary, .secondary-cta, .btn-secondary, .button-secondary, button[data-variant="secondary"]):hover {
-  background: var(--ui-surface-soft) !important;
-  border-color: var(--ui-border-strong) !important;
-}
-
-/* Tables */
-:where(.module-table-wrap, .data-table, .table-wrap) {
-  background: var(--ui-surface) !important;
-  border-color: var(--ui-border) !important;
-}
-
-:where(th) {
-  color: var(--ui-text-secondary) !important;
-  background: var(--ui-surface-soft) !important;
-  border-color: var(--ui-border) !important;
-}
-
-:where(td) {
-  color: var(--ui-text-secondary);
-  border-color: var(--ui-border) !important;
-}
-
-:where(tbody tr:hover) {
-  background: var(--ui-surface-soft) !important;
-}
-
-/* Tabs and local filters */
-:where(.module-tabbar, .tabs) {
-  background: var(--ui-surface) !important;
-  border-color: var(--ui-border) !important;
-}
-
-:where(.module-tabbar a, .tabs a, .tabs button) {
-  color: var(--ui-text-secondary) !important;
-}
-
-:where(.module-tabbar a:hover, .tabs a:hover, .tabs button:hover) {
-  background: var(--ui-surface-soft) !important;
-  color: var(--ui-text) !important;
-}
-
-:where(.module-tabbar a.is-active, .tabs .is-active) {
-  background: var(--ui-primary-soft) !important;
-  color: var(--ui-primary) !important;
-}
-
-/* Dialogs */
-:where(dialog, [role="dialog"], .modal, .dialog, .drawer) {
-  background: var(--ui-surface) !important;
-  color: var(--ui-text) !important;
-  border-color: var(--ui-border) !important;
-  box-shadow: var(--ui-shadow-md) !important;
-}
-
-/* Semantic status colors remain explicit and readable in both modes. */
-:where(.status-success, [data-status="success"], .is-success) {
-  color: var(--ui-success) !important;
-  background: var(--ui-success-soft);
-}
-
-:where(.status-warning, [data-status="warning"], .is-warning) {
-  color: var(--ui-warning) !important;
-  background: var(--ui-warning-soft);
-}
-
-:where(.status-danger, [data-status="danger"], .is-danger) {
-  color: var(--ui-danger) !important;
-  background: var(--ui-danger-soft);
-}
-
-:where(.status-info, [data-status="info"], .is-info) {
-  color: var(--ui-info) !important;
-  background: var(--ui-info-soft);
-}
-
-/* Focus and legacy token compatibility */
-:where(button, a, input, textarea, select, summary):focus-visible {
-  outline: 0 !important;
-  box-shadow: var(--ui-focus) !important;
-}
-
-:root[data-accent] {
-  --sn-primary: var(--ui-primary);
-  --sn-primary-deep: var(--ui-primary-hover);
-  --sn-primary-soft: var(--ui-primary-soft);
-  --sn-accent: var(--ui-primary);
-  --sn-school-accent: var(--ui-primary);
-  --sn-teacher-accent: var(--ui-primary);
-  --sn-guardian-accent: var(--ui-primary);
-  --sn-platform-accent: var(--ui-primary);
-}
+:root[data-theme="dark"] body :where(h1,h2,h3,h4,h5,h6,p,span,a,button,label,small,strong,b,em,li,dt,dd,th,td,legend) { color: var(--ui-text) !important; }
+:root[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]), :root[data-theme="dark"] textarea, :root[data-theme="dark"] select, :root[data-theme="dark"] option { color: var(--ui-text) !important; background-color: var(--ui-surface) !important; -webkit-text-fill-color: var(--ui-text) !important; }
+:where(.status-success, [data-status="success"], .is-success) { color: var(--ui-success) !important; background: var(--ui-success-soft) !important; }
+:where(.status-warning, [data-status="warning"], .is-warning) { color: var(--ui-warning) !important; background: var(--ui-warning-soft) !important; }
+:where(.status-danger, [data-status="danger"], .is-danger) { color: var(--ui-danger) !important; background: var(--ui-danger-soft) !important; }
+:where(.status-info, [data-status="info"], .is-info) { color: var(--ui-info) !important; background: var(--ui-info-soft) !important; }
+:where(button, a, input, textarea, select, summary):focus-visible { outline: 0 !important; box-shadow: var(--ui-focus) !important; }
+:root[data-accent] { --sn-primary: var(--ui-primary); --sn-primary-deep: var(--ui-primary-hover); --sn-primary-soft: var(--ui-primary-soft); --sn-accent: var(--ui-primary); --sn-school-accent: var(--ui-primary); --sn-teacher-accent: var(--ui-primary); --sn-guardian-accent: var(--ui-primary); --sn-platform-accent: var(--ui-primary); }
