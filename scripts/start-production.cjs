@@ -73,30 +73,19 @@ async function main() {
   const result = await ensureAppRole();
   const childEnv = { ...process.env, DATABASE_URL: result.databaseUrl };
 
-  const seed = spawn(process.execPath, ["scripts/run-eugene-academy-seed-once.cjs"], {
-    env: childEnv,
-    stdio: "inherit",
-  });
-
   const next = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--port", process.env.PORT || "3000", "--hostname", "0.0.0.0"], {
     env: childEnv,
     stdio: "inherit",
   });
 
   const shutdown = (signal) => {
-    seed.kill(signal);
     next.kill(signal);
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
   next.on("exit", (code, signal) => {
-    seed.kill("SIGTERM");
     process.exit(signal ? 1 : code ?? 1);
-  });
-
-  seed.on("error", (error) => {
-    console.error("[production-seed] failed to start:", error);
   });
 
   console.log(`[production-db] application role ${ROLE} ${result.changedRole ? "provisioned/updated" : "already safe"}`);
