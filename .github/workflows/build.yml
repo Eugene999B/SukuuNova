@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -55,8 +55,6 @@ jobs:
           echo "PLATFORM_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "FACE_EMBEDDING_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
           echo "WHATSAPP_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-      - name: Normalize design tokens and operational headers
-        run: node scripts/normalize-design-system.mjs
       - name: Generate Prisma client
         run: npx prisma generate
       - name: Validate Prisma schema
@@ -73,14 +71,3 @@ jobs:
         env:
           NODE_ENV: production
         run: npm run build
-      - name: Commit normalized source
-        run: |
-          git config user.name "sukuunova-design-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add src package.json scripts/check-design-tokens.mjs
-          if git diff --cached --quiet; then
-            echo "No generated source changes to commit."
-          else
-            git commit -m "chore: normalize application design tokens [design-normalized]"
-            git push
-          fi
