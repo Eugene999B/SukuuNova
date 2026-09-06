@@ -1,0 +1,204 @@
+import type { Prisma } from "@prisma/client";
+import type { TenantDb } from "@/lib/db";
+import { AppError } from "@/lib/errors";
+import { gradeForPercentage, rankTotals, type GradeBand } from "@/lib/assessment-engine";
+import { readHeadRemark } from "@/lib/report-card-release-service";
+
+type ReportConfig = {
+  classAssessmentWeight: number;
+  examWeight: number;
+  classAssessmentTypes: string[];
+  examTypes: string[];
+  rounding: "nearest" | "down" | "up";
+  missingScorePolicy: "blank" | "zero";
+  showStudentPhoto: boolean;
+  showOverallPosition: boolean;
+  showSubjectPosition: boolean;
+  showAttendance: boolean;
+  showPromotion: boolean;
+  showClassTeacherRemark: boolean;
+  showHeadteacherRemark: boolean;
+};
+
+const DEFAULT_CA_TYPES = ["classwork", "ca", "exercise", "exercises", "homework", "participation", "quiz", "quizzes", "project", "assignment", "continuousassessment"];
+const DEFAULT_EXAM_TYPES = ["exam", "examination", "finalexam", "terminalexam"];
+const DEFAULT_SCALE: GradeBand[] = [
+  { min: 80, max: 100, grade: "A", label: "Excellent" },
+  { min: 70, max: 79.99, grade: "B", label: "Very Good" },
+  { min: 60, max: 69.99, grade: "C", label: "Good" },
+  { min: 50, max: 59.99, grade: "D", label: "Pass" },
+  { min: 40, max: 49.99, grade: "E", label: "Needs Improvement" },
+  { min: 0, max: 39.99, grade: "F", label: "Below Standard" },
+];
+
+const normalize = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+const round = (value: number, mode: ReportConfig["rounding"]) => mode === "down" ? Math.floor(value * 100) / 100 : mode === "up" ? Math.ceil(value * 100) / 100 : Math.round(value * 100) / 100;
+
+function jsonObject(value: Prisma.JsonValue | null | undefined) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.JsonValue> : {};
+}
+
+export function readReportCardConfig(value: Prisma.JsonValue | null | undefined, caWeight = 30, examWeight = 70): ReportConfig {
+  const raw = jsonObject(value);
+  const ca = Number(raw.classAssessmentWeight ?? caWeight);
+  const exam = Number(raw.examWeight ?? examWeight);
+  const validWeights = Number.isFinite(ca) && Number.isFinite(exam) && ca >= 0 && exam >= 0 && Math.abs(ca + exam - 100) < 0.01;
+  return {
+    classAssessmentWeight: validWeights ? ca : caWeight,
+    examWeight: validWeights ? exam : examWeight,
+    classAssessmentTypes: Array.isArray(raw.classAssessmentTypes) ? raw.classAssessmentTypes.filter((x): x is string => typeof x === "string").map(normalize) : DEFAULT_CA_TYPES,
+    examTypes: Array.isArray(raw.examTypes) ? raw.examTypes.filter((x): x is string => typeof x === "string").map(normalize) : DEFAULT_EXAM_TYPES,
+    rounding: raw.rounding === "down" || raw.rounding === "up" ? raw.rounding : "nearest",
+    missingScorePolicy: raw.missingScorePolicy === "zero" ? "zero" : "blank",
+    showStudentPhoto: raw.showStudentPhoto !== false,
+    showOverallPosition: raw.showOverallPosition !== false,
+    showSubjectPosition: raw.showSubjectPosition !== false,
+    showAttendance: raw.showAttendance !== false,
+    showPromotion: raw.showPromotion !== false,
+    showClassTeacherRemark: raw.showClassTeacherRemark !== false,
+    showHeadteacherRemark: raw.showHeadteacherRemark !== false,
+  };
+}
+
+export function readGradeScale(value: Prisma.JsonValue | null | undefined): GradeBand[] {
+  const scale = Array.isArray(value) ? value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const item = entry as Record<string, Prisma.JsonValue>;
+    const min = Number(item.min); const max = Number(item.max);
+    const grade = typeof item.grade === "string" ? item.grade : "";
+    if (!Number.isFinite(min) || !Number.isFinite(max) || !grade) return [];
+    return [{ min, max, grade, label: typeof item.label === "string" ? item.label : undefined, remark: typeof item.remark === "string" ? item.remark : undefined }];
+  }) : [];
+  return scale.length ? scale : DEFAULT_SCALE;
+}
+
+type AssessmentRow = {
+  id: string;
+  name: string;
+  type: string;
+  maxScore: Prisma.Decimal;
+  weight: Prisma.Decimal;
+  scores: Array<{ studentId: string; value: Prisma.Decimal; status: string }>;
+  subjectId: string;
+  subjectName: string;
+};
+
+function classify(type: string, config: ReportConfig) {
+  const t = normalize(type);
+  if (config.examTypes.includes(t)) return "exam" as const;
+  if (config.classAssessmentTypes.includes(t)) return "ca" as const;
+  return t.includes("exam") ? "exam" as const : "ca" as const;
+}
+
+function componentAverage(assessments: AssessmentRow[], studentId: string, kind: "ca" | "exam", config: ReportConfig) {
+  const rows = assessments.filter((a) => classify(a.type, config) === kind);
+  const percentages = rows.map((a) => {
+    const hit = a.scores.find((s) => s.studentId === studentId);
+    if (!hit || hit.status === "excused") return config.missingScorePolicy === "zero" ? 0 : null;
+    const max = Number(a.maxScore); const value = Number(hit.value);
+    if (!Number.isFinite(max) || max <= 0 || !Number.isFinite(value) || value < 0 || value > max) throw new AppError(`Invalid score data for ${a.name}.`, 409, "INVALID_SCORE_DATA");
+    return (value / max) * 100;
+  }).filter((v): v is number => v != null);
+  if (!percentages.length) return null;
+  return percentages.reduce((sum, v) => sum + v, 0) / percentages.length;
+}
+
+function subjectResult(assessments: AssessmentRow[], subjectId: string, studentId: string, config: ReportConfig, scale: GradeBand[]) {
+  const rows = assessments.filter((a) => a.subjectId === subjectId);
+  const caPercent = componentAverage(rows, studentId, "ca", config);
+  const examPercent = componentAverage(rows, studentId, "exam", config);
+  if (config.missingScorePolicy === "blank" && (caPercent == null || examPercent == null)) return { ca: caPercent == null ? null : round(caPercent * config.classAssessmentWeight / 100, config.rounding), exam: examPercent == null ? null : round(examPercent * config.examWeight / 100, config.rounding), total: null, grade: null };
+  const ca = caPercent == null ? 0 : caPercent * config.classAssessmentWeight / 100;
+  const exam = examPercent == null ? 0 : examPercent * config.examWeight / 100;
+  const total = round(ca + exam, config.rounding);
+  return { ca: round(ca, config.rounding), exam: round(exam, config.rounding), total, grade: gradeForPercentage(total, scale) };
+}
+
+export async function calculateIntelligentReportCard(tx: TenantDb, input: { schoolId: string; reportId: string }) {
+  const report = await tx.reportCard.findFirst({
+    where: { id: input.reportId, schoolId: input.schoolId },
+    select: { id: true, studentId: true, termId: true, remarks: true, calculationSnapshot: true, status: true, student: { select: { id: true, name: true, admissionNo: true, photoUrl: true, classId: true, class: { select: { id: true, name: true, level: true, classTeacherId: true } } } } },
+  });
+  if (!report?.student.classId || !report.student.class) throw new AppError("Report card student has no class.", 409, "NO_CLASS");
+
+  const [school, settings, term, assignments, subjects, activeStudents, staff] = await Promise.all([
+    tx.school.findUnique({ where: { id: input.schoolId }, select: { id: true, name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
+    tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { gradeCaWeight: true, gradeExamWeight: true, gradingScale: true, reportCardConfig: true, showOverallPosition: true, showSubjectPosition: true, positionScope: true, promotionRule: true, positionPromotionCutoffPercent: true, behaviorRatingFields: true, reportCardWatermark: true } }),
+    tx.term.findUnique({ where: { id: report.termId }, select: { id: true, name: true, startDate: true, endDate: true, academicYear: { select: { name: true } } } }),
+    tx.classSubjectTeacher.findMany({ where: { schoolId: input.schoolId, classId: report.student.classId }, select: { subjectId: true, subject: { select: { id: true, name: true } } }, orderBy: { subject: { name: "asc" } } }),
+    tx.subject.findMany({ where: { schoolId: input.schoolId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    tx.student.findMany({ where: { schoolId: input.schoolId, classId: report.student.classId, status: "active" }, select: { id: true, name: true } }),
+    tx.user.findUnique({ where: { id: report.student.class.classTeacherId }, select: { name: true } }),
+  ]);
+  if (!school || !settings || !term) throw new AppError("Report-card configuration is incomplete.", 409, "REPORT_CONTEXT_INCOMPLETE");
+
+  const config = readReportCardConfig(settings.reportCardConfig, Number(settings.gradeCaWeight), Number(settings.gradeExamWeight));
+  const gradeScale = readGradeScale(settings.gradingScale);
+  const assignedSubjectIds = [...new Set(assignments.map((a) => a.subjectId))];
+  const assessmentRows = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: report.termId, classId: report.student.classId, subjectId: { in: assignedSubjectIds } }, select: { id: true, name: true, type: true, maxScore: true, weight: true, subjectId: true, subject: { select: { name: true } }, scores: { select: { studentId: true, value: true, status: true } } }, orderBy: [{ subject: { name: "asc" } }, { type: "asc" }, { name: "asc" }] });
+  const rows = assessmentRows as AssessmentRow[];
+  const visibleSubjects = assignments.length ? assignments.map((a) => ({ id: a.subjectId, name: a.subject.name })) : subjects.map((s) => ({ id: s.id, name: s.name }));
+  const results = visibleSubjects.map((subject) => ({ subjectId: subject.id, subject: subject.name, ...subjectResult(rows, subject.id, report.studentId, config, gradeScale) }));
+
+  const studentSubjectTotals = new Map<string, Map<string, number>>();
+  for (const student of activeStudents) {
+    const subjectMap = new Map<string, number>();
+    for (const subject of visibleSubjects) {
+      const result = subjectResult(rows, subject.id, student.id, config, gradeScale);
+      if (result.total != null) subjectMap.set(subject.id, result.total);
+    }
+    studentSubjectTotals.set(student.id, subjectMap);
+  }
+
+  const overallEntries = activeStudents.flatMap((student) => {
+    const totals = [...(studentSubjectTotals.get(student.id)?.values() ?? [])];
+    if (!totals.length) return [];
+    return [{ id: student.id, name: student.name, total: totals.reduce((a, b) => a + b, 0) / totals.length }];
+  });
+  const overallPositions = rankTotals(overallEntries);
+  const subjectPositions = new Map<string, Map<string, number>>();
+  for (const subject of visibleSubjects) {
+    const entries = activeStudents.flatMap((student) => {
+      const total = studentSubjectTotals.get(student.id)?.get(subject.id);
+      return total == null ? [] : [{ id: student.id, name: student.name, total }];
+    });
+    subjectPositions.set(subject.id, rankTotals(entries));
+  }
+
+  const studentTotals = [...(studentSubjectTotals.get(report.studentId)?.values() ?? [])];
+  const overallTotal = studentTotals.length ? round(studentTotals.reduce((a, b) => a + b, 0), config.rounding) : null;
+  const average = studentTotals.length ? round(overallTotal! / visibleSubjects.length, config.rounding) : null;
+  const overallPosition = overallPositions.get(report.studentId) ?? null;
+  const rankedCount = overallEntries.length;
+  const classSize = activeStudents.length;
+  const resultLines = results.map((r) => ({ ...r, position: subjectPositions.get(r.subjectId)?.get(report.studentId) ?? null }));
+  const snapshot = jsonObject(report.calculationSnapshot);
+  const frozen = typeof snapshot.calculationVersion === "number" && Array.isArray(snapshot.assessments) && snapshot.rankingFrozenAt;
+  const frozenSubjects = frozen && Array.isArray(snapshot.subjectPositions) ? snapshot.subjectPositions : null;
+  const finalPosition = frozen ? Number(snapshot.overallPosition ?? 0) || null : overallPosition;
+  const finalResults = frozen && Array.isArray(snapshot.assessments) ? resultLines.map((row) => {
+    const old = (snapshot.assessments as Prisma.JsonValue[]).find((x) => typeof x === "object" && x && !Array.isArray(x) && (x as Record<string, Prisma.JsonValue>).subject === row.subject) as Record<string, Prisma.JsonValue> | undefined;
+    return old ? { ...row, ca: typeof old.ca === "number" ? old.ca : row.ca, exam: typeof old.exam === "number" ? old.exam : row.exam, total: typeof old.total === "number" ? old.total : row.total, grade: typeof old.grade === "string" ? old.grade : row.grade } : row;
+  }) : resultLines;
+
+  const headRemark = await readHeadRemark(tx, input.schoolId, report.id);
+  return {
+    reportId: report.id,
+    status: report.status,
+    school,
+    student: { ...report.student, className: report.student.class.name, level: report.student.class.level },
+    term: { ...term, academicYear: term.academicYear.name },
+    gradingWeights: { ca: config.classAssessmentWeight, exam: config.examWeight },
+    results: finalResults,
+    summary: { total: overallTotal, average, grade: gradeForPercentage(average, gradeScale) },
+    position: finalPosition,
+    classSize,
+    rankedCount,
+    remarks: report.remarks ?? "",
+    headRemark,
+    reportSettings: { ...config, showOverallPosition: settings.showOverallPosition && config.showOverallPosition, showSubjectPosition: settings.showSubjectPosition && config.showSubjectPosition, behaviorRatingFields: settings.behaviorRatingFields, promotionRule: settings.promotionRule, positionPromotionCutoffPercent: settings.positionPromotionCutoffPercent },
+    logoUrl: school.logoUrl,
+    watermark: settings.reportCardWatermark ?? "",
+    classTeacherName: staff?.name ?? "Class Teacher",
+  };
+}
