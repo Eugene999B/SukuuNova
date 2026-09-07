@@ -2,91 +2,83 @@
    SCOPE: every rule below is gated on :root[data-theme="dark"], so the
    light theme is byte-for-byte untouched. Loaded last in layout.tsx so it
    wins over the blanket remaps in global-theme.css / ui-trust.css.
-   Explicit hex values (mirroring the dark token palette) are used instead
-   of var() chains so these rules hold even if a token block is disturbed. */
+   Explicit token references keep these repairs aligned with the central
+   design-token palette while remaining scoped to dark mode. */
 
-/* 1. Light tint backgrounds (mint/sky/amber/etc.) stay light in dark mode
-   while the blanket remap flips their text white -> invisible. Map the
-   tints to the dark surface so white text reads correctly. */
+/* 1. Light tint backgrounds stay light in dark mode while the blanket remap
+   flips their text white -> invisible. Map the tints to the dark surface. */
 :root[data-theme="dark"] :where(.bg-emerald-50, .bg-emerald-100, .bg-teal-50, .bg-teal-100, .bg-green-50, .bg-green-100, .bg-blue-50, .bg-blue-100, .bg-sky-50, .bg-sky-100, .bg-indigo-50, .bg-indigo-100, .bg-amber-50, .bg-amber-100, .bg-yellow-50, .bg-yellow-100, .bg-orange-50, .bg-orange-100, .bg-red-50, .bg-red-100, .bg-rose-50, .bg-rose-100, .bg-cyan-50, .bg-cyan-100, .bg-lime-50, .bg-lime-100, .bg-fuchsia-50, .bg-purple-50, .bg-pink-50) {
-  background-color: #0f172a !important;
+  background-color: var(--color-surface) !important;
 }
 
-/* 2. Dark text colors designed for those tints. Near-black body text
-   (800/900/950) -> near-white; semantic hues keep their meaning with a
-   light variant so success/warning/error signals survive on dark navy.
-   Mid-tone accents (500/600) are intentionally left alone: they already
-   read fine on dark surfaces (icons, links). */
+/* 2. Dark text colors designed for those tints. */
 :root[data-theme="dark"] :where(.text-emerald-950, .text-emerald-900, .text-emerald-800, .text-teal-950, .text-teal-900, .text-teal-800, .text-green-950, .text-green-900, .text-green-800, .text-blue-950, .text-blue-900, .text-blue-800, .text-sky-950, .text-sky-900, .text-sky-800, .text-indigo-950, .text-indigo-900, .text-indigo-800, .text-amber-950, .text-amber-900, .text-amber-800, .text-yellow-950, .text-yellow-900, .text-yellow-800, .text-orange-950, .text-orange-900, .text-orange-800, .text-red-950, .text-red-900, .text-red-800, .text-rose-950, .text-rose-900, .text-rose-800) {
-  color: #f8fafc !important;
+  color: var(--color-text-primary) !important;
 }
 :root[data-theme="dark"] :where(.text-emerald-700, .text-teal-700, .text-green-700) {
-  color: #86efac !important;
+  color: var(--color-success-hover) !important;
 }
 :root[data-theme="dark"] :where(.text-blue-700, .text-sky-700, .text-indigo-700) {
-  color: #93c5fd !important;
+  color: var(--color-info-hover) !important;
 }
 :root[data-theme="dark"] :where(.text-amber-700, .text-yellow-700, .text-orange-700) {
-  color: #fcd34d !important;
+  color: var(--color-warning-hover) !important;
 }
 :root[data-theme="dark"] :where(.text-red-700, .text-rose-700) {
-  color: #fca5a5 !important;
+  color: var(--color-danger-hover) !important;
 }
 
 /* 3. Tint borders -> dark border so tinted cards keep a visible edge. */
 :root[data-theme="dark"] :where(.border-emerald-100, .border-emerald-200, .border-teal-100, .border-teal-200, .border-green-100, .border-green-200, .border-blue-100, .border-blue-200, .border-sky-100, .border-sky-200, .border-amber-100, .border-amber-200, .border-red-100, .border-red-200, .border-rose-100, .border-rose-200) {
-  border-color: #1e293b !important;
+  border-color: var(--color-border) !important;
 }
 
-/* 4. App topbar + page header: pin the dark surface explicitly so the
-   breadcrumb/title/subtitle can never sit white-on-white. */
+/* 4. App topbar + page header: pin the dark surface explicitly. */
 :root[data-theme="dark"] .app-topbar {
-  background: #0f172a !important;
-  border-color: #1e293b !important;
+  background: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
 }
 :root[data-theme="dark"] .app-topbar h1 {
-  color: #f8fafc !important;
+  color: var(--color-text-primary) !important;
 }
 :root[data-theme="dark"] .app-topbar p,
 :root[data-theme="dark"] .app-breadcrumb,
 :root[data-theme="dark"] .app-breadcrumb span {
-  color: #94a3b8 !important;
+  color: var(--color-text-muted) !important;
 }
 :root[data-theme="dark"] .sn-page-header {
   background: transparent !important;
 }
 :root[data-theme="dark"] .sn-page-header h1 {
-  color: #f8fafc !important;
+  color: var(--color-text-primary) !important;
 }
 :root[data-theme="dark"] .sn-page-header p {
-  color: #94a3b8 !important;
+  color: var(--color-text-muted) !important;
 }
 
-/* 5. Chrome autofill paints a light lavender field while dark-theme input
-   text is near-white -> typed values vanish. Force the field back to the
-   dark surface with light text (dark scope only). */
+/* 5. Chrome autofill paints a light field while dark-theme input text is
+   near-white. Force the field back to the dark surface with light text. */
 :root[data-theme="dark"] input:-webkit-autofill,
 :root[data-theme="dark"] input:-webkit-autofill:hover,
 :root[data-theme="dark"] input:-webkit-autofill:focus,
 :root[data-theme="dark"] input:-webkit-autofill:active,
 :root[data-theme="dark"] textarea:-webkit-autofill,
 :root[data-theme="dark"] select:-webkit-autofill {
-  -webkit-text-fill-color: #f8fafc !important;
-  caret-color: #f8fafc !important;
-  -webkit-box-shadow: 0 0 0 100px #162032 inset !important;
-  box-shadow: 0 0 0 100px #162032 inset !important;
-  border-color: #334155 !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
+  caret-color: var(--color-text-primary) !important;
+  -webkit-box-shadow: 0 0 0 100px var(--color-surface-soft) inset !important;
+  box-shadow: 0 0 0 100px var(--color-surface-soft) inset !important;
+  border-color: var(--color-border-strong) !important;
   transition: background-color 9999s ease-in-out 0s !important;
 }
 
-/* 6. Teal auth buttons + active step dot: white text on bright teal is
-   ~2.3:1 contrast (reads blank). Deep-teal text restores contrast. */
+/* 6. Teal auth buttons + active step dot: deep-teal text restores contrast. */
 :root[data-theme="dark"] .auth-submit {
-  color: #042f2e !important;
+  color: var(--color-brand-deep) !important;
 }
 :root[data-theme="dark"] .auth-submit span {
   color: inherit !important;
 }
 :root[data-theme="dark"] .auth-stepper span.is-active {
-  color: #042f2e !important;
+  color: var(--color-brand-deep) !important;
 }
