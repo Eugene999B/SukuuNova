@@ -16,9 +16,15 @@ export default async function PerformanceStudioPage({ searchParams }: { searchPa
   const session = await requireSchoolSession();
   const params = await searchParams;
   const data = await withTenant(session.schoolId, async (tx) => {
-    await requirePermission(tx, session.userId, "reports:generate");
-    const canWriteAll = await hasPermission(tx, session.userId, "scores:write:all");
-    const canReview = await hasPermission(tx, session.userId, "lesson_plans:review");
+    const [canGenerateReports, canWriteAll, canWriteAssigned, canReview] = await Promise.all([
+      hasPermission(tx, session.userId, "reports:generate"),
+      hasPermission(tx, session.userId, "scores:write:all"),
+      hasPermission(tx, session.userId, "scores:write:assigned"),
+      hasPermission(tx, session.userId, "lesson_plans:review"),
+    ]);
+    if (!canGenerateReports && !canWriteAll && !canWriteAssigned && !canReview) {
+      await requirePermission(tx, session.userId, "reports:generate");
+    }
     const [school, classes, subjects, terms, assignments, config] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.class.findMany({ select: { id: true, name: true, level: true }, orderBy: [{ level: "asc" }, { name: "asc" }] }),
@@ -27,11 +33,11 @@ export default async function PerformanceStudioPage({ searchParams }: { searchPa
       tx.classSubjectTeacher.findMany({ include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } }, teacher: { select: { id: true, name: true } } } }),
       getGradebookConfiguration(tx),
     ]);
-    const visible = canWriteAll || canReview ? assignments : assignments.filter((item) => item.teacherId === session.userId);
+    const visible = canWriteAll || canReview || canGenerateReports ? assignments : assignments.filter((item) => item.teacherId === session.userId);
     const term = terms.find((item) => item.id === params.term) ?? terms[0];
     const assignment = visible.find((item) => item.classId === params.class && item.subjectId === params.subject) ?? null;
     const performance = assignment && term ? await getClassSubjectPerformance(tx, assignment.classId, assignment.subjectId, term.id) : null;
-    return { school, classes, subjects, terms, term, assignment, performance, canWriteAll, canReview, config };
+    return { school, classes, subjects, terms, term, assignment, performance, canWriteAll, canReview, canGenerateReports, config };
   });
   const rows = data.performance?.rows ?? [];
   const scored = rows.filter((row) => row.total != null);
@@ -43,7 +49,7 @@ export default async function PerformanceStudioPage({ searchParams }: { searchPa
   const contextQuery = data.assignment && data.term ? `?class=${encodeURIComponent(data.assignment.classId)}&subject=${encodeURIComponent(data.assignment.subjectId)}&term=${encodeURIComponent(data.term.id)}` : "";
   const classLabel = data.assignment ? `${data.assignment.class.level ? `${data.assignment.class.level} · ` : ""}${data.assignment.class.name}` : "Choose a class";
   const subjectLabel = data.assignment?.subject.name ?? "Choose a subject";
-  const mode = data.canWriteAll || data.canReview ? "School academic intelligence" : "Your teaching performance";
+  const mode = data.canWriteAll || data.canReview || data.canGenerateReports ? "School academic intelligence" : "Your teaching performance";
 
   return <AppShell universe="school" title="Performance" subtitle="Understand class and subject results." active="Performance Studio" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
     <div className="academic-page">
@@ -65,7 +71,7 @@ export default async function PerformanceStudioPage({ searchParams }: { searchPa
 
       <section className="academic-context-card"><div className="academic-section-head"><div><span className="academic-page-overline">WORKING CONTEXT</span><h2>Choose exactly what you want to review</h2><p>Class and subject must be a real teaching assignment. The term comes from the shared academic calendar.</p></div></div><form className="academic-context-form" action="/school/academics/performance" method="get"><div className="academic-field"><label htmlFor="performance-class">Class</label><select id="performance-class" name="class" defaultValue={params.class ?? ""}><option value="">Choose class</option>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></div><div className="academic-field"><label htmlFor="performance-subject">Subject</label><select id="performance-subject" name="subject" defaultValue={params.subject ?? ""}><option value="">Choose subject</option>{data.subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><div className="academic-field"><label htmlFor="performance-term">Term</label><select id="performance-term" name="term" defaultValue={data.term?.id ?? ""}>{data.terms.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div><button className="academic-context-submit" type="submit">Analyse results</button></form></section>
 
-      {!data.performance ? <section className="academic-empty"><strong>{data.canWriteAll || data.canReview ? "Select a valid class + subject assignment." : "Select one of your teaching assignments."}</strong><p>Performance reads the same assignment and term context as Gradebook. This prevents results from being analysed against a different class, subject or academic period.</p><div className="academic-empty-actions"><Link href="/school/classes">Check class assignments</Link><Link href="/school/gradebook/studio">Enter marks</Link><Link href="/school/terms">Check terms</Link></div></section> : <>
+      {!data.performance ? <section className="academic-empty"><strong>{data.canWriteAll || data.canReview || data.canGenerateReports ? "Select a valid class + subject assignment." : "Select one of your teaching assignments."}</strong><p>Performance reads the same assignment and term context as Gradebook. This prevents results from being analysed against a different class, subject or academic period.</p><div className="academic-empty-actions"><Link href="/school/classes">Check class assignments</Link><Link href="/school/gradebook/studio">Enter marks</Link><Link href="/school/terms">Check terms</Link></div></section> : <>
         <section className="academic-stat-row"><div className="academic-stat"><span>Class average</span><strong>{average == null ? "—" : `${average.toFixed(1)}%`}</strong><small>Average of completed weighted results</small></div><div className="academic-stat"><span>Completion</span><strong>{completePct}%</strong><small>{scored.length} of {rows.length} learners have totals</small></div><div className="academic-stat"><span>Highest</span><strong>{highest == null ? "—" : `${highest.toFixed(1)}%`}</strong><small>Strongest completed result</small></div><div className="academic-stat"><span>Needs attention</span><strong>{attention.length}</strong><small>Incomplete or below 50%</small></div></section>
 
         <section className="academic-main-grid"><div className="academic-work-card"><div className="academic-section-head"><div><span className="academic-page-overline">03 · RESULT TABLE</span><h2>{subjectLabel} · {classLabel}</h2><p>{data.term?.name} · ranked by the current weighted subject result.</p></div><Link className="academic-btn-secondary" href="/api/school/exports/gradebook.csv">Export results</Link></div><div className="performance-table"><table className="performance-grid"><thead><tr><th>Position</th><th>Learner</th><th>Result</th><th>Grade</th><th>Status</th></tr></thead><tbody>{rows.map((row) => { const total = row.total == null ? null : Number(row.total); const needsAttention = total == null || total < 50; return <tr key={row.student.id}><td className="performance-rank">{ranks.get(row.student.id) ? `#${ranks.get(row.student.id)}` : "—"}</td><td><div className="performance-name"><strong>{row.student.name}</strong><small>{row.student.admissionNo}</small></div></td><td className="performance-result">{total == null ? "—" : `${total.toFixed(2)}%`}</td><td>{total == null ? "—" : <span className="performance-grade">Grade {gradeForPercentage(total)}</span>}</td><td>{needsAttention ? <span className="performance-attention">Needs attention</span> : <span className="performance-good">On track</span>}</td></tr>; })}</tbody></table></div></div>
