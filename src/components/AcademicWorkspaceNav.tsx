@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, CalendarDays, ClipboardList, FileText, GraduationCap, LayoutGrid, Settings2, Table2 } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarDays, ClipboardList, FileText, LayoutGrid, Settings2, Table2 } from "lucide-react";
 
 type Item = { key: string; label: string; description: string; href: string; icon: typeof LayoutGrid };
 
