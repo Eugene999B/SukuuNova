@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, BarChart3, CalendarDays, ClipboardList, FileText, LayoutGrid, Settings2, Table2 } from "lucide-react";
 
 type Item = { key: string; label: string; description: string; href: string; icon: typeof LayoutGrid };
@@ -14,7 +17,30 @@ const items: Item[] = [
   { key: "reports", label: "Report cards", description: "Turn results into reports", href: "/school/report-cards", icon: FileText },
 ];
 
+function contextHref(item: Item, params: URLSearchParams): string {
+  const term = params.get("term") ?? params.get("termId");
+  const classId = params.get("class") ?? params.get("classId");
+  const subjectId = params.get("subject") ?? params.get("subjectId");
+  const query = new URLSearchParams();
+
+  if (item.key === "gradebook" || item.key === "performance") {
+    if (classId) query.set("class", classId);
+    if (subjectId) query.set("subject", subjectId);
+    if (term) query.set("term", term);
+  } else if (item.key === "reports") {
+    if (classId) query.set("classId", classId);
+    if (term) query.set("term", term);
+  } else if (item.key === "calendar" || item.key === "readiness") {
+    if (term) query.set("termId", term);
+  }
+
+  const suffix = query.toString();
+  return suffix ? `${item.href}?${suffix}` : item.href;
+}
+
 export function AcademicWorkspaceNav({ current }: { current: string }) {
+  const searchParams = useSearchParams();
+
   return (
     <nav className="academic-workspace-nav" aria-label="Academic workflow">
       <div className="academic-workspace-nav-intro">
@@ -27,7 +53,7 @@ export function AcademicWorkspaceNav({ current }: { current: string }) {
           const Icon = item.icon;
           const active = current === item.key;
           return (
-            <Link key={item.key} href={item.href} className={`academic-workspace-nav-item ${active ? "is-active" : ""}`} aria-current={active ? "page" : undefined}>
+            <Link key={item.key} href={contextHref(item, searchParams)} className={`academic-workspace-nav-item ${active ? "is-active" : ""}`} aria-current={active ? "page" : undefined}>
               <span className="academic-workspace-nav-icon"><Icon size={16} aria-hidden="true" /></span>
               <span className="academic-workspace-nav-copy"><strong>{item.label}</strong><small>{item.description}</small></span>
               <ArrowRight size={14} aria-hidden="true" className="academic-workspace-nav-arrow" />
