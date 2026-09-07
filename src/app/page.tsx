@@ -11,6 +11,7 @@ import "./home-photos.css";
 import { HomeLeadChat } from "@/components/HomeLeadChat";
 import { HomeHelpBar } from "@/components/HomeHelpBar";
 import { HomeProductPreview } from "@/components/HomeProductPreview";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 const modules = [
   ["Students & families", "Keep admissions, learner records and family details together.", Users, "/features/students-families"],
@@ -35,7 +36,7 @@ export default function HomePage() {
           <nav className="topnav" aria-label="Primary navigation">
             <Link href="/features">What it does</Link><Link href="#how-it-works">How it works</Link><Link href="/for-schools">For schools</Link><Link href="/about">About</Link><Link href="/contact">Contact</Link>
           </nav>
-          <div className="top-actions"><Link className="top-link" href="/login/platform"><LogIn size={15} aria-hidden="true" /> Platform</Link><Link className="top-button" href="/login/school">School login <ArrowRight size={15} aria-hidden="true" /></Link></div>
+          <div className="top-actions"><div className="home-theme-control"><ThemeSwitcher /></div><Link className="top-link" href="/login/platform"><LogIn size={15} aria-hidden="true" /> Platform</Link><Link className="top-button" href="/login/school">School login <ArrowRight size={15} aria-hidden="true" /></Link></div>
         </header>
 
         <HomeHelpBar />
