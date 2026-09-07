@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/AppShell";
+import { AcademicWorkspaceNav } from "@/components/AcademicWorkspaceNav";
 import { TimetableConstraintsPanel } from "@/components/TimetableConstraintsPanel";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -6,6 +7,7 @@ import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
 import TimetableWorkspace from "./TimetableWorkspace";
 import "./timetable.css";
+import "../academic-workspace.css";
 
 export default async function TimetablePage() {
   const session = await requireSchoolSession();
@@ -19,5 +21,5 @@ export default async function TimetablePage() {
     ]);
     return { school, teachers, subjects, config: config.timetable as { rooms?: Array<{ id: string; name: string; type?: string }>; teacherUnavailability?: Record<string, string[]>; roomRequirements?: Record<string, { roomType?: string; room?: string }>; doublePeriodSubjects?: Record<string, number> } };
   });
-  return <AppShell universe="school" title="Timetable" subtitle="Intelligent weekly scheduling." active="Timetable" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}><main className="timetable-page"><TimetableWorkspace /><section className="tt-advanced-constraints"><TimetableConstraintsPanel teachers={data.teachers} subjects={data.subjects} initial={{ rooms: data.config.rooms ?? [], teacherUnavailability: data.config.teacherUnavailability ?? {}, roomRequirements: data.config.roomRequirements ?? {}, doublePeriodSubjects: data.config.doublePeriodSubjects ?? {} }} /></section></main></AppShell>;
+  return <AppShell universe="school" title="Timetable" subtitle="Plan teaching time using the same academic setup." active="Timetable" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}><main className="academic-page"><section className="academic-page-hero"><div className="academic-page-hero-copy"><span className="academic-page-overline">TIMETABLE · TEACHING CALENDAR</span><h1>Build the week from the school’s configured teaching rules.</h1><p>Timetable uses the academic setup for teaching days, periods, breaks and scheduling constraints. Changes here should remain aligned with the term and class assignment model.</p></div><div className="academic-page-hero-side"><div className="academic-page-actions"><a className="academic-btn-secondary" href="/school/academics/setup">Academic setup</a><a className="academic-btn-secondary" href="/school/terms">Terms & calendar</a><a className="academic-btn-secondary" href="/school/classes">Class assignments</a></div></div></section><AcademicWorkspaceNav current="timetable" /><TimetableWorkspace /><section className="tt-advanced-constraints"><TimetableConstraintsPanel teachers={data.teachers} subjects={data.subjects} initial={{ rooms: data.config.rooms ?? [], teacherUnavailability: data.config.teacherUnavailability ?? {}, roomRequirements: data.config.roomRequirements ?? {}, doublePeriodSubjects: data.config.doublePeriodSubjects ?? {} }} /></section></main></AppShell>;
 }
