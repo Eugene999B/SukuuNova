@@ -14,6 +14,11 @@ function localMinutes(value: Date, timezone: string) {
 
 type SlotEndpoint = { classId: string; teacherId: string; venue: string | null; dayOfWeek: number; period: number };
 
+async function assertTeachingAssignment(tx: TenantDb, schoolId: string, classId: string, subjectId: string, teacherId: string) {
+  const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId, classId, subjectId, teacherId }, select: { classId: true } });
+  if (!assignment) throw new AppError("The selected teacher is not assigned to this subject for this class. Update Academic Setup first.", 409, "TEACHING_ASSIGNMENT_REQUIRED");
+}
+
 async function endpointConflicts(tx: TenantDb, schoolId: string, endpoint: SlotEndpoint, ignoreSlotIds: string[] = []): Promise<string | null> {
   const teacherBusy = await tx.timetableSlot.findFirst({ where: { schoolId, teacherId: endpoint.teacherId, dayOfWeek: endpoint.dayOfWeek, period: endpoint.period, NOT: ignoreSlotIds.length ? { id: { in: ignoreSlotIds } } : undefined }, select: { id: true, classId: true } });
   if (teacherBusy) return "This teacher is already teaching another class at this time.";
@@ -38,14 +43,6 @@ function cleanVenue(value: unknown): string | null {
 
 type RoomInventory = { rooms: Array<{ id: string; name: string; type?: string }>; requiredTypes: Set<string> };
 
-/**
- * Canonical venue keys shared by the generator and manual edits:
- * `room:<id>` for a known room, `type:<type>` for a known room type (or a type
- * ever required by a room rule, covering empty inventories), otherwise the raw
- * label (no cross-path conflict enforcement possible).
- * Without this, generated `room:lab-1` and manual `Lab 1` never match and
- * double-book silently.
- */
 function canonicalVenue(inventory: RoomInventory, value: unknown): string | null {
   const trimmed = cleanVenue(value);
   if (!trimmed) return null;
@@ -63,16 +60,11 @@ async function roomInventory(tx: TenantDb, schoolId: string): Promise<RoomInvent
   const config = await getAcademicEngineConfig(tx, schoolId);
   const timetable = config.timetable as { rooms?: unknown; roomRequirements?: unknown };
   const rawRooms = Array.isArray(timetable.rooms) ? timetable.rooms : [];
-  const rooms = rawRooms
-    .filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && !Array.isArray(r))
-    .map((r) => ({ id: String(r.id ?? ""), name: String(r.name ?? ""), type: typeof r.type === "string" ? r.type : undefined }))
-    .filter((r) => r.id && r.name);
+  const rooms = rawRooms.filter((r): r is Record<string, unknown> => !!r && typeof r === "object" && !Array.isArray(r)).map((r) => ({ id: String(r.id ?? ""), name: String(r.name ?? ""), type: typeof r.type === "string" ? r.type : undefined })).filter((r) => r.id && r.name);
   const requiredTypes = new Set<string>();
   if (timetable.roomRequirements && typeof timetable.roomRequirements === "object" && !Array.isArray(timetable.roomRequirements)) {
     for (const req of Object.values(timetable.roomRequirements as Record<string, unknown>)) {
-      if (req && typeof req === "object" && !Array.isArray(req) && typeof (req as Record<string, unknown>).roomType === "string") {
-        requiredTypes.add(String((req as Record<string, unknown>).roomType).trim().toLowerCase());
-      }
+      if (req && typeof req === "object" && !Array.isArray(req) && typeof (req as Record<string, unknown>).roomType === "string") requiredTypes.add(String((req as Record<string, unknown>).roomType).trim().toLowerCase());
     }
   }
   return { rooms, requiredTypes };
@@ -96,6 +88,7 @@ export async function createTimetableSlot(tx: TenantDb, input: { schoolId: strin
   if (!subject) throw new AppError("Subject not found in this school.", 404, "SUBJECT_NOT_FOUND");
   if (!teacher) throw new AppError("Teacher not found in this school.", 404, "TEACHER_NOT_FOUND");
   if (!teacher.userRoles.some(({ role }) => isTeachingRoleKey(role.key?.trim() || roleKeyForName(role.name)))) throw new AppError("Selected user is not an eligible teaching staff member.", 409, "TEACHER_NOT_ELIGIBLE");
+  await assertTeachingAssignment(tx, input.schoolId, input.classId, input.subjectId, input.teacherId);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`timetable-slot:${input.schoolId}:${input.dayOfWeek}:${input.period}`}))`;
   const teacherBusy = await tx.timetableSlot.findFirst({ where: { schoolId: input.schoolId, teacherId: input.teacherId, dayOfWeek: input.dayOfWeek, period: input.period, NOT: { classId: input.classId } }, select: { id: true, classId: true } });
   if (teacherBusy) throw new AppError("This teacher is already teaching another class at this time.", 409, "TEACHER_BUSY");
@@ -126,6 +119,7 @@ export async function updateTimetableSlot(tx: TenantDb, input: { schoolId: strin
   if (!subject) throw new AppError("Subject not found in this school.", 404, "SUBJECT_NOT_FOUND");
   if (!teacher) throw new AppError("Teacher not found in this school.", 404, "TEACHER_NOT_FOUND");
   if (!teacher.userRoles.some(({ role }) => isTeachingRoleKey(role.key?.trim() || roleKeyForName(role.name)))) throw new AppError("Selected user is not an eligible teaching staff member.", 409, "TEACHER_NOT_ELIGIBLE");
+  await assertTeachingAssignment(tx, input.schoolId, input.classId, input.subjectId, input.teacherId);
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`timetable-slot:${input.schoolId}:${input.dayOfWeek}:${input.period}`}))`;
   const teacherBusy = await tx.timetableSlot.findFirst({ where: { schoolId: input.schoolId, teacherId: input.teacherId, dayOfWeek: input.dayOfWeek, period: input.period, NOT: { id: slot.id } }, select: { id: true } });
   if (teacherBusy) throw new AppError("This teacher is already teaching another class at this time.", 409, "TEACHER_BUSY");
@@ -183,11 +177,7 @@ export async function moveTimetableSlot(tx: TenantDb, input: { schoolId: string;
 export async function getTeacherWeeklyGrid(tx: TenantDb, input: { schoolId: string; teacherId: string }) {
   const teacher = await tx.user.findFirst({ where: { id: input.teacherId, schoolId: input.schoolId }, select: { id: true, name: true } });
   if (!teacher) throw new AppError("Teacher not found in this school.", 404, "TEACHER_NOT_FOUND");
-  const slots = await tx.timetableSlot.findMany({
-    where: { schoolId: input.schoolId, teacherId: input.teacherId },
-    include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } } },
-    orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }],
-  });
+  const slots = await tx.timetableSlot.findMany({ where: { schoolId: input.schoolId, teacherId: input.teacherId }, include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } } }, orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }] });
   const byDay = new Map<number, typeof slots>();
   for (const s of slots) byDay.set(s.dayOfWeek, [...(byDay.get(s.dayOfWeek) ?? []), s]);
   return { teacher, totalLessons: slots.length, days: [...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([dayOfWeek, daySlots]) => ({ dayOfWeek, lessons: daySlots })) };
@@ -203,10 +193,7 @@ export async function deleteTimetableSlot(tx: TenantDb, input: { schoolId: strin
 
 export async function suggestSubstitutes(tx: TenantDb, input: { schoolId: string; actorId: string; absentTeacherId: string; day: Date; period: number; asOf?: Date; }) {
   await requirePermission(tx, input.actorId, "classes:manage");
-  const [settings, absentTeacher] = await Promise.all([
-    tx.schoolSettings.findFirst({ where: { schoolId: input.schoolId } }),
-    tx.user.findFirst({ where: { id: input.absentTeacherId, schoolId: input.schoolId, status: "active" }, select: { id: true } })
-  ]);
+  const [settings, absentTeacher] = await Promise.all([tx.schoolSettings.findFirst({ where: { schoolId: input.schoolId } }),tx.user.findFirst({ where: { id: input.absentTeacherId, schoolId: input.schoolId, status: "active" }, select: { id: true } })]);
   if (!absentTeacher) throw new AppError("Absent teacher was not found in this school.", 404, "TEACHER_NOT_FOUND");
   if (!settings?.expectedResumptionTime) throw new AppError("Attendance timing must be configured.", 409, "ATTENDANCE_NOT_CONFIGURED");
   const dayOfWeek = input.day.getUTCDay();
@@ -219,10 +206,7 @@ export async function suggestSubstitutes(tx: TenantDb, input: { schoolId: string
   const asOf = input.asOf ?? new Date();
   const reason = !checkIn ? localMinutes(asOf, settings.timezone) > threshold ? "absent" : "not_due" : localMinutes(checkIn.timestamp, settings.timezone) > threshold ? "late" : "present";
   if (reason === "present" || reason === "not_due") return { reason, slots, suggestions: [] };
-  const [teacherRows, busyRows] = await Promise.all([
-    tx.timetableSlot.findMany({ where: { schoolId: input.schoolId }, distinct: ["teacherId"], select: { teacherId: true } }),
-    tx.timetableSlot.findMany({ where: { schoolId: input.schoolId, dayOfWeek, period: input.period }, distinct: ["teacherId"], select: { teacherId: true } })
-  ]);
+  const [teacherRows, busyRows] = await Promise.all([tx.timetableSlot.findMany({ where: { schoolId: input.schoolId }, distinct: ["teacherId"], select: { teacherId: true } }),tx.timetableSlot.findMany({ where: { schoolId: input.schoolId, dayOfWeek, period: input.period }, distinct: ["teacherId"], select: { teacherId: true } })]);
   const busy = new Set(busyRows.map((row) => row.teacherId));
   const candidateIds = teacherRows.map((row) => row.teacherId).filter((id) => id !== input.absentTeacherId && !busy.has(id));
   const suggestions = await tx.user.findMany({ where: { schoolId: input.schoolId, id: { in: candidateIds }, status: "active" }, select: { id: true, name: true, userRoles: { select: { role: { select: { name: true, key: true } } } } } });
@@ -241,10 +225,8 @@ export async function confirmSubstitute(tx: TenantDb, input: { schoolId: string;
   const busy = await tx.timetableSlot.findFirst({ where: { schoolId: input.schoolId, teacherId: input.substituteTeacherId, dayOfWeek: slot.dayOfWeek, period: slot.period }, select: { id: true } });
   if (busy) throw new AppError("Selected substitute is already teaching in this period.", 409, "SUBSTITUTE_BUSY");
   const existing = await tx.substituteAssignment.findFirst({ where: { schoolId: input.schoolId, timetableSlotId: slot.id, assignmentDate: input.assignmentDate }, select: { id: true } });
-  if (existing) throw new AppError("A substitute is already assigned for this lesson.", 409, "SUBSTITUTE_ALREADY_ASSIGNED");
-  let assignment;
-  try { assignment = await tx.substituteAssignment.create({ data: { schoolId: input.schoolId, timetableSlotId: slot.id, substituteTeacherId: input.substituteTeacherId, assignedBy: input.actorId, assignmentDate: input.assignmentDate } }); }
-  catch (error) { if ((error as { code?: string }).code === "P2002") throw new AppError("A substitute is already assigned for this lesson.", 409, "SUBSTITUTE_ALREADY_ASSIGNED"); throw error; }
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "substitute.confirmed", entityType: "SubstituteAssignment", entityId: assignment.id, after: assignment });
+  if (existing) throw new AppError("A substitute is already assigned for this lesson and date.", 409, "SUBSTITUTE_EXISTS");
+  const assignment = await tx.substituteAssignment.create({ data: { schoolId: input.schoolId, timetableSlotId: slot.id, substituteTeacherId: input.substituteTeacherId, assignedBy: input.actorId, assignmentDate: input.assignmentDate } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "timetable.substitute_assigned", entityType: "SubstituteAssignment", entityId: assignment.id, after: assignment });
   return assignment;
 }
