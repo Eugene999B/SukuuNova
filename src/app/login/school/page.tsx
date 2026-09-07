@@ -2,7 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { Building2, HeartHandshake, ShieldCheck, UsersRound } from "lucide-react";
 import { LoginForm } from "@/components/LoginForm";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import "../login.css";
+import "../login-theme.css";
 import "./gateway.css";
 import "../login-photo.css";
 
@@ -23,27 +25,7 @@ export default function SchoolLoginPage() {
           </div>
         </div>
       </section>
-
-      <section className="auth-form-pane">
-        <div className="auth-panel">
-          <Link href="/" className="auth-brand" aria-label="SukuuNova home">
-            <span className="auth-brand-mark">S</span>
-            <span><strong>SukuuNova</strong><small>School workspace</small></span>
-          </Link>
-          <div className="auth-context"><Building2 size={12} aria-hidden="true" /> School access</div>
-          <div className="auth-heading">
-            <h1>Welcome back</h1>
-            <p>Sign in to manage attendance, learning and school operations in one place.</p>
-          </div>
-          <LoginForm universe="school" />
-          <div className="auth-divider">Need another door?</div>
-          <div className="auth-secondary">
-            <Link href="/">Back to SukuuNova</Link>
-            <Link href="/login/platform">Platform access</Link>
-          </div>
-          <p className="auth-foot">Need help with access? <Link href="/contact">Contact support</Link>.</p>
-        </div>
-      </section>
+      <section className="auth-form-pane"><div className="auth-panel"><div className="auth-theme-row"><ThemeSwitcher /></div><Link href="/" className="auth-brand" aria-label="SukuuNova home"><span className="auth-brand-mark">S</span><span><strong>SukuuNova</strong><small>School workspace</small></span></Link><div className="auth-context"><Building2 size={12} aria-hidden="true" /> School access</div><div className="auth-heading"><h1>Welcome back</h1><p>Sign in to manage attendance, learning and school operations in one place.</p></div><LoginForm universe="school" /><div className="auth-divider">Need another door?</div><div className="auth-secondary"><Link href="/">Back to SukuuNova</Link><Link href="/login/platform">Platform access</Link></div><p className="auth-foot">Need help with access? <Link href="/contact">Contact support</Link>.</p></div></section>
     </main>
   );
 }

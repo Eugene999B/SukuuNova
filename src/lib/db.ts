@@ -147,14 +147,17 @@ export function ensureDatabaseRoleSafe(): Promise<void> {
       const rows = await basePrisma.$queryRawUnsafe<Array<{ bypass: boolean; superuser: boolean }>>(
         `SELECT rolbypassrls AS "bypass", rolsuper AS "superuser" FROM pg_roles WHERE rolname = current_user`
       );
-      if (rows[0]?.bypass || rows[0]?.superuser) {
+      if (!rows[0]) {
+        throw new Error("Database role could not be identified; refusing to run without RLS safety verification.");
+      }
+      if (rows[0].bypass || rows[0].superuser) {
         throw new Error("Database role must not have SUPERUSER or BYPASSRLS; tenant isolation depends on RLS.");
       }
     } catch (error) {
       if (error instanceof Error && error.message.includes("must not have")) throw error;
-      // If the check itself cannot run (e.g. restricted pg_roles), log loudly
-      // but do not take the app down — RLS still applies to normal roles.
-      console.error("[db] Could not verify database role RLS safety:", error instanceof Error ? error.message : error);
+      throw new Error(
+        `Database role RLS safety verification failed; refusing to continue: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
     roleSafetyChecked = true;
   })();

@@ -187,17 +187,27 @@ export async function verifyPlatformSessionToken(token: string): Promise<Platfor
   return { kind: "platform", adminId: payload.sub, name: payload.name, role: payload.role, authorizationVersion: payload.authorizationVersion };
 }
 
-export async function getSchoolSession() { const token = (await cookies()).get(SCHOOL_COOKIE)?.value; if (!token) return null; try { return await verifySchoolSessionToken(token); } catch { return null; } }
+export async function getSchoolSession() {
+  const token = (await cookies()).get(SCHOOL_COOKIE)?.value;
+  if (!token) return null;
+  try {
+    const session = await verifySchoolSessionToken(token);
+    const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
+    if (!state || state.status !== "active" || state.schoolId !== session.schoolId) return null;
+    if (authorizationVersion(state) !== session.authorizationVersion) return null;
+    await assertSchoolActive(session.schoolId);
+    return { ...session, name: state.name };
+  } catch {
+    return null;
+  }
+}
+
 export async function getPlatformSession() { const token = (await cookies()).get(PLATFORM_COOKIE)?.value; if (!token) return null; try { return await verifyPlatformSessionToken(token); } catch { return null; } }
 
 export async function requireSchoolSession() {
   const session = await getSchoolSession();
   if (!session) throw new UnauthorizedError();
-  const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
-  if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This school account is no longer active.");
-  if (authorizationVersion(state) !== session.authorizationVersion) throw new UnauthorizedError("Your school access has changed. Please sign in again.");
-  await assertSchoolActive(session.schoolId);
-  return { ...session, name: state.name };
+  return session;
 }
 
 export async function requirePlatformSession() {
