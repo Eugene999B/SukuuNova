@@ -16,18 +16,36 @@ const schema = z.object({
   signatureSlots: z.array(z.object({ role: z.string().trim().min(1).max(80), name: z.string().trim().max(160), signatureDataUrl: z.string().max(250000).optional().or(z.literal("")) })).max(6),
 }).superRefine((value, ctx) => { if (Math.abs(value.classAssessmentWeight + value.examWeight - 100) > 0.001) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Class assessment and examination weights must total 100%." }); });
 
+function buildCategories(input: z.infer<typeof schema>) {
+  const classWeight = input.classAssessmentWeight / input.classAssessmentTypes.length;
+  const examWeight = input.examWeight / input.examTypes.length;
+  return [
+    ...input.classAssessmentTypes.map((name) => ({ name, weight: classWeight })),
+    ...input.examTypes.map((name) => ({ name, weight: examWeight })),
+  ];
+}
+
 export async function GET() {
   try {
     const session = await requireSchoolSession();
     return await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
-      const settings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { gradeCaWeight: true, gradeExamWeight: true, reportCardConfig: true } });
+      const settings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { gradeCaWeight: true, gradeExamWeight: true, reportCardConfig: true, assessmentConfig: true } });
       if (!settings) throw new AppError("School settings are not configured.", 404, "SETTINGS_NOT_FOUND");
       const raw = settings.reportCardConfig && typeof settings.reportCardConfig === "object" && !Array.isArray(settings.reportCardConfig) ? settings.reportCardConfig as Record<string, unknown> : {};
+      const assessmentRaw = settings.assessmentConfig && typeof settings.assessmentConfig === "object" && !Array.isArray(settings.assessmentConfig) ? settings.assessmentConfig as Record<string, unknown> : {};
+      const categories = Array.isArray(assessmentRaw.categories) ? assessmentRaw.categories : [];
+      const classTypes = Array.isArray(raw.classAssessmentTypes) ? raw.classAssessmentTypes : ["Exercise", "Homework", "Participation", "Quiz", "Project", "Classwork"];
+      const examTypes = Array.isArray(raw.examTypes) ? raw.examTypes : ["Exam", "Examination"];
+      const fallbackCa = Number(settings.gradeCaWeight ?? 30);
+      const fallbackExam = Number(settings.gradeExamWeight ?? 70);
       return new Response(JSON.stringify({
-        classAssessmentWeight: Number(raw.classAssessmentWeight ?? settings.gradeCaWeight ?? 30), examWeight: Number(raw.examWeight ?? settings.gradeExamWeight ?? 70),
-        classAssessmentTypes: Array.isArray(raw.classAssessmentTypes) ? raw.classAssessmentTypes : ["Exercise", "Homework", "Participation", "Quiz", "Project", "Classwork"], examTypes: Array.isArray(raw.examTypes) ? raw.examTypes : ["Exam", "Examination"],
-        rounding: raw.rounding === "down" || raw.rounding === "up" ? raw.rounding : "nearest", missingScorePolicy: raw.missingScorePolicy === "zero" ? "zero" : "blank",
+        classAssessmentWeight: Number(raw.classAssessmentWeight ?? (categories.length ? categories.filter((c) => c && typeof c === "object" && !Array.isArray(c) && !/exam|examination/i.test(String((c as Record<string, unknown>).name ?? ""))).reduce((sum, c) => sum + Number((c as Record<string, unknown>).weight ?? 0), 0) : fallbackCa)),
+        examWeight: Number(raw.examWeight ?? (categories.length ? categories.filter((c) => c && typeof c === "object" && !Array.isArray(c) && /exam|examination/i.test(String((c as Record<string, unknown>).name ?? ""))).reduce((sum, c) => sum + Number((c as Record<string, unknown>).weight ?? 0), 0) : fallbackExam)),
+        classAssessmentTypes: classTypes,
+        examTypes,
+        rounding: raw.rounding === "down" || raw.rounding === "up" ? raw.rounding : typeof assessmentRaw.rounding === "string" ? assessmentRaw.rounding : "nearest",
+        missingScorePolicy: raw.missingScorePolicy === "zero" || assessmentRaw.missingScorePolicy === "zero" ? "zero" : "blank",
         showStudentPhoto: raw.showStudentPhoto !== false, showOverallPosition: raw.showOverallPosition !== false, showSubjectPosition: raw.showSubjectPosition !== false, showAttendance: raw.showAttendance !== false, showPromotion: raw.showPromotion !== false, showClassTeacherRemark: raw.showClassTeacherRemark !== false, showHeadteacherRemark: raw.showHeadteacherRemark !== false,
         signatureSlots: Array.isArray(raw.signatureSlots) ? raw.signatureSlots : [],
       }), { headers: { "Cache-Control": "no-store" } });
@@ -40,11 +58,28 @@ export async function PATCH(request: Request) {
     const session = await requireSchoolSession(); const input = await parseJson(request, schema);
     return await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
-      const current = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { reportCardConfig: true } });
+      const current = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { reportCardConfig: true, assessmentConfig: true, gradeCaWeight: true, gradeExamWeight: true } });
       if (!current) throw new AppError("School settings are not configured.", 404, "SETTINGS_NOT_FOUND");
-      await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: { reportCardConfig: input } });
-      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "settings.report_card_configuration_updated", entityType: "SchoolSettings", entityId: session.schoolId, before: { reportCardConfig: current.reportCardConfig }, after: { reportCardConfig: input } });
-      return NextResponse.json({ ok: true, reportCardConfig: input });
+      const existingAssessment = current.assessmentConfig && typeof current.assessmentConfig === "object" && !Array.isArray(current.assessmentConfig) ? current.assessmentConfig as Record<string, unknown> : {};
+      const assessmentConfig = {
+        ...existingAssessment,
+        categories: buildCategories(input),
+        rounding: input.rounding,
+        missingScorePolicy: input.missingScorePolicy,
+      };
+      await tx.schoolSettings.update({
+        where: { schoolId: session.schoolId },
+        data: {
+          reportCardConfig: input,
+          assessmentConfig,
+          // Keep the legacy columns synchronized for older screens/readers until
+          // they are retired. All calculation paths already prefer assessmentConfig.
+          gradeCaWeight: new (require("@prisma/client").Prisma.Decimal)(input.classAssessmentWeight),
+          gradeExamWeight: new (require("@prisma/client").Prisma.Decimal)(input.examWeight),
+        },
+      });
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "settings.report_card_configuration_updated", entityType: "SchoolSettings", entityId: session.schoolId, before: { reportCardConfig: current.reportCardConfig, assessmentConfig: current.assessmentConfig }, after: { reportCardConfig: input, assessmentConfig } });
+      return NextResponse.json({ ok: true, reportCardConfig: input, assessmentConfig });
     });
   } catch (error) { return routeError(error); }
 }
