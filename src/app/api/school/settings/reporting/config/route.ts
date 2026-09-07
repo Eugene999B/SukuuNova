@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -39,9 +40,12 @@ export async function GET() {
       const examTypes = Array.isArray(raw.examTypes) ? raw.examTypes : ["Exam", "Examination"];
       const fallbackCa = Number(settings.gradeCaWeight ?? 30);
       const fallbackExam = Number(settings.gradeExamWeight ?? 70);
+      const categoryWeight = (predicate: (name: string) => boolean) => categories.filter((c) => c && typeof c === "object" && !Array.isArray(c) && predicate(String((c as Record<string, unknown>).name ?? ""))).reduce((sum, c) => sum + Number((c as Record<string, unknown>).weight ?? 0), 0);
+      const canonicalCa = categoryWeight((name) => !/exam|examination/i.test(name));
+      const canonicalExam = categoryWeight((name) => /exam|examination/i.test(name));
       return new Response(JSON.stringify({
-        classAssessmentWeight: Number(raw.classAssessmentWeight ?? (categories.length ? categories.filter((c) => c && typeof c === "object" && !Array.isArray(c) && !/exam|examination/i.test(String((c as Record<string, unknown>).name ?? ""))).reduce((sum, c) => sum + Number((c as Record<string, unknown>).weight ?? 0), 0) : fallbackCa)),
-        examWeight: Number(raw.examWeight ?? (categories.length ? categories.filter((c) => c && typeof c === "object" && !Array.isArray(c) && /exam|examination/i.test(String((c as Record<string, unknown>).name ?? ""))).reduce((sum, c) => sum + Number((c as Record<string, unknown>).weight ?? 0), 0) : fallbackExam)),
+        classAssessmentWeight: Number(raw.classAssessmentWeight ?? (categories.length ? canonicalCa : fallbackCa)),
+        examWeight: Number(raw.examWeight ?? (categories.length ? canonicalExam : fallbackExam)),
         classAssessmentTypes: classTypes,
         examTypes,
         rounding: raw.rounding === "down" || raw.rounding === "up" ? raw.rounding : typeof assessmentRaw.rounding === "string" ? assessmentRaw.rounding : "nearest",
@@ -72,10 +76,10 @@ export async function PATCH(request: Request) {
         data: {
           reportCardConfig: input,
           assessmentConfig,
-          // Keep the legacy columns synchronized for older screens/readers until
-          // they are retired. All calculation paths already prefer assessmentConfig.
-          gradeCaWeight: new (require("@prisma/client").Prisma.Decimal)(input.classAssessmentWeight),
-          gradeExamWeight: new (require("@prisma/client").Prisma.Decimal)(input.examWeight),
+          // Keep legacy columns synchronized for older screens/readers until
+          // they are retired. Calculation paths prefer assessmentConfig.
+          gradeCaWeight: new Prisma.Decimal(input.classAssessmentWeight),
+          gradeExamWeight: new Prisma.Decimal(input.examWeight),
         },
       });
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "settings.report_card_configuration_updated", entityType: "SchoolSettings", entityId: session.schoolId, before: { reportCardConfig: current.reportCardConfig, assessmentConfig: current.assessmentConfig }, after: { reportCardConfig: input, assessmentConfig } });
