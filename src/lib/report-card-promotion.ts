@@ -52,6 +52,8 @@ async function freezeApprovedPresentation(tx: TenantDb, input: {
         showOverallPosition: true,
         showSubjectPosition: true,
         positionScope: true,
+        behaviorRatingFields: true,
+        reportCardWatermark: true,
       },
     }),
     tx.term.findFirst({
@@ -88,6 +90,8 @@ async function freezeApprovedPresentation(tx: TenantDb, input: {
     ...snapshot,
     reportPresentation,
     attendance: { presentDays, lateDays },
+    behaviorRatingFields: settings.behaviorRatingFields ?? null,
+    watermark: settings.reportCardWatermark ?? "",
     presentationFrozenAt: new Date().toISOString(),
     positionScope: settings.positionScope === "year_group" ? "year_group" : "class",
   } as Prisma.InputJsonObject;
