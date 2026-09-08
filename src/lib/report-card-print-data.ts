@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { reportAttendanceForTerm } from "@/lib/report-card-attendance";
 import { calculateIntelligentReportCard, readReportCardConfig } from "@/lib/report-card-intelligence";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
 
@@ -39,7 +40,18 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
   if (!report) throw new AppError("Report card not found.", 404, "NOT_FOUND");
   const snapshot = object(report.calculationSnapshot);
   const frozen = Boolean(snapshot.rankingFrozenAt) && Array.isArray(snapshot.assessments);
-  if (!frozen) return calculateIntelligentReportCard(tx, input);
+  if (!frozen) {
+    const [live, attendance] = await Promise.all([
+      calculateIntelligentReportCard(tx, input),
+      reportAttendanceForTerm(tx, {
+        schoolId: input.schoolId,
+        studentId: report.student.id,
+        startDate: report.term.startDate,
+        endDate: report.term.endDate,
+      }),
+    ]);
+    return { ...live, attendance };
+  }
 
   const [school, settings] = await Promise.all([
     tx.school.findUnique({ where: { id: input.schoolId }, select: { id: true, name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
@@ -89,7 +101,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
     }];
   });
   const grading = object(snapshot.gradingWeights);
-  const attendance = object(snapshot.attendance);
+  const frozenAttendance = object(snapshot.attendance);
   const promotionDecision: FrozenPromotionDecision = frozenPromotionDecision(snapshot.promotionDecision);
   const show = (key: string, fallback: boolean) => typeof presentation[key] === "boolean" ? Boolean(presentation[key]) : fallback;
   const positionScope: "class" | "year_group" = snapshot.positionScope === "year_group" || snapshot.positionScope === "class"
@@ -101,6 +113,19 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
   const watermark = typeof snapshot.watermark === "string"
     ? snapshot.watermark
     : settings.reportCardWatermark ?? "";
+
+  const calendarAttendance = await reportAttendanceForTerm(tx, {
+    schoolId: input.schoolId,
+    studentId: report.student.id,
+    startDate: report.term.startDate,
+    endDate: report.term.endDate,
+  });
+  const present = numberOrNull(frozenAttendance.presentDays) ?? calendarAttendance.present;
+  const late = numberOrNull(frozenAttendance.lateDays) ?? calendarAttendance.late;
+  const expectedDays = numberOrNull(frozenAttendance.expectedDays) ?? calendarAttendance.expectedDays;
+  const absent = numberOrNull(frozenAttendance.absentDays) ?? Math.max(0, expectedDays - present);
+  const attendanceRate = numberOrNull(frozenAttendance.attendanceRate)
+    ?? (expectedDays > 0 ? Math.round((present / expectedDays) * 1000) / 10 : null);
 
   return {
     reportId: report.id,
@@ -128,9 +153,12 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
     remarks: report.remarks ?? "",
     headRemark: report.headRemark,
     attendance: {
-      present: typeof attendance.presentDays === "number" ? attendance.presentDays : 0,
-      late: typeof attendance.lateDays === "number" ? attendance.lateDays : 0,
-      totalRecorded: typeof attendance.presentDays === "number" ? attendance.presentDays : 0,
+      present,
+      late,
+      expectedDays,
+      absent,
+      attendanceRate,
+      totalRecorded: numberOrNull(frozenAttendance.totalRecorded) ?? calendarAttendance.totalRecorded,
     },
     promotionDecision,
     manualPromotionDecision: snapshot.manualPromotionDecision === "promoted" || snapshot.manualPromotionDecision === "not_promoted" ? snapshot.manualPromotionDecision : null,
