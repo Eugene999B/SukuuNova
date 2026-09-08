@@ -20,10 +20,10 @@ async function assertScoreMutable(tx: TenantDb, schoolId: string, studentId: str
 function canTeach(assignment: { teacherId: string } | null, classTeacher: { id: string } | null): boolean { return !!assignment || !!classTeacher; }
 
 export async function createAssessment(tx: TenantDb, input: { schoolId: string; actorId: string; termId: string; classId: string; subjectId: string; name: string; type: string; weight: number; maxScore: number; }) {
-  await lockTerm(tx, input.schoolId, input.termId);
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
+  if (!canWriteAll && !(await hasPermission(tx, input.actorId, "scores:write:assigned"))) throw new ForbiddenError("Assessment creation is not permitted.");
+  await lockTerm(tx, input.schoolId, input.termId);
   if (!canWriteAll) {
-    if (!(await hasPermission(tx, input.actorId, "scores:write:assigned"))) throw new ForbiddenError("Assessment creation is not permitted.");
     const [assignment, classTeacher] = await Promise.all([
       tx.classSubjectTeacher.findFirst({ where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId }, select: { teacherId: true } }),
       tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId, classTeacherId: input.actorId }, select: { id: true } })
@@ -48,16 +48,16 @@ export async function createAssessment(tx: TenantDb, input: { schoolId: string; 
 export async function enterScore(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; value: number; status?: "present" | "absent" | "excused"; }) {
   const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true, maxScore: true } });
   if (!assessment) throw new AppError("Assessment not found in this school.", 404, "NOT_FOUND");
-  await lockTerm(tx, input.schoolId, assessment.termId);
-  await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
+  if (!canWriteAll && !canWriteAssigned) throw new ForbiddenError("Score entry is not permitted.");
   if (!canWriteAll) {
-    if (!canWriteAssigned) throw new ForbiddenError("Score entry is not permitted.");
     const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId: input.schoolId, classId: assessment.classId, subjectId: assessment.subjectId, teacherId: input.actorId }, select: { teacherId: true } });
     const classTeacher = await tx.class.findFirst({ where: { id: assessment.classId, schoolId: input.schoolId, classTeacherId: input.actorId }, select: { id: true } });
     if (!assignment && !classTeacher) throw new ForbiddenError("Teachers may enter scores only for assigned classes and subjects.");
   }
+  await lockTerm(tx, input.schoolId, assessment.termId);
+  await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
   const student = await tx.student.findFirst({ where: { id: input.studentId, schoolId: input.schoolId }, select: { id: true, classId: true } });
   if (!student || student.classId !== assessment.classId) throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
   if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
@@ -71,8 +71,6 @@ export async function enterScore(tx: TenantDb, input: { schoolId: string; actorI
 export async function clearScore(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; }) {
   const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true } });
   if (!assessment) throw new AppError("Assessment not found in this school.", 404, "NOT_FOUND");
-  await lockTerm(tx, input.schoolId, assessment.termId);
-  await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   if (!canWriteAll) {
     const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
@@ -81,6 +79,8 @@ export async function clearScore(tx: TenantDb, input: { schoolId: string; actorI
     const classTeacher = await tx.class.findFirst({ where: { id: assessment.classId, schoolId: input.schoolId, classTeacherId: input.actorId }, select: { id: true } });
     if (!assignment && !classTeacher) throw new ForbiddenError("Teachers may clear scores only for assigned classes and subjects.");
   }
+  await lockTerm(tx, input.schoolId, assessment.termId);
+  await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
   const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
   if (!previous) throw new AppError("No score recorded for this student and assessment.", 404, "NOT_FOUND");
   await tx.score.delete({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
