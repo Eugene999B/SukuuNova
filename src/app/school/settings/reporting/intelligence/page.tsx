@@ -4,6 +4,7 @@ import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import ReportCardIntelligenceSettings from "./ReportCardIntelligenceSettings";
 import "./report-card-intelligence.css";
+import "./report-card-theme-gallery.css";
 
 export default async function ReportCardIntelligencePage() {
   const session = await requireSchoolSession();
