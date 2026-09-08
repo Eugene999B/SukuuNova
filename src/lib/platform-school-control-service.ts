@@ -69,6 +69,16 @@ export async function getPlatformSchoolControlSnapshot(schoolId: string) {
         leadership: leadership.length,
         guardians: guardianAccounts.length,
       },
+      users: users.map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        status: user.status,
+        needsPasswordChange: user.needsPasswordChange,
+        isGuardian: user.guardianProfiles.length > 0,
+        roles: user.userRoles.map(({ role }) => role.key ?? role.name),
+      })),
       rolelessUsers: roleless.slice(0, 20).map((user) => ({ id: user.id, name: user.name, email: user.email, phone: user.phone })),
       pendingPasswordUsers: pendingPassword.slice(0, 20).map((user) => ({ id: user.id, name: user.name, email: user.email, phone: user.phone })),
       leadershipUsers: leadership.slice(0, 20).map((user) => ({
@@ -152,6 +162,88 @@ export async function forceSignOutSchoolUser(schoolId: string, userId: string, a
   await appendPlatformAudit({
     actorId: actor.adminId,
     action: "platform.user_sessions.revoked",
+    targetSchoolId: schoolId,
+    targetEntity: `User:${userId}`,
+    meta: { reason: trimmedReason, ...result },
+  });
+  return result;
+}
+
+export async function setSchoolUserStatus(schoolId: string, userId: string, status: "active" | "suspended", actor: ControlActor, reason: string) {
+  const trimmedReason = reason.trim();
+  const result = await withTenant(schoolId, async (tx) => {
+    const user = await tx.user.findFirst({ where: { id: userId, schoolId }, select: { id: true, name: true, status: true } });
+    if (!user) throw new AppError("School user not found.", 404, "NOT_FOUND");
+    await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, `platform-user-control:${schoolId}:${userId}`);
+    if (user.status !== status) await tx.user.update({ where: { id: userId }, data: { status } });
+    const epochRows = await tx.$queryRawUnsafe<Array<{ version: number }>>(
+      `INSERT INTO "SchoolUserSessionEpoch" ("schoolId","userId","version","updatedAt")
+       VALUES ($1,$2,1,CURRENT_TIMESTAMP)
+       ON CONFLICT ("schoolId","userId") DO UPDATE
+       SET "version"="SchoolUserSessionEpoch"."version"+1,"updatedAt"=CURRENT_TIMESTAMP
+       RETURNING "version"`,
+      schoolId,
+      userId,
+    );
+    const endedImpersonations = status === "suspended"
+      ? await tx.$executeRawUnsafe(`UPDATE "ImpersonationLog" SET "endedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$1 AND "impersonatedUserId"=$2 AND "endedAt" IS NULL`, schoolId, userId)
+      : 0;
+    await appendSchoolAudit(tx, {
+      schoolId,
+      actorId: platformActorId(actor.adminId),
+      action: status === "active" ? "platform.user.reactivated" : "platform.user.suspended",
+      entityType: "User",
+      entityId: userId,
+      before: { status: user.status },
+      after: { status, reason: trimmedReason, sessionEpoch: Number(epochRows[0]?.version ?? 1), endedImpersonations: Number(endedImpersonations) },
+    });
+    return { userId, userName: user.name, beforeStatus: user.status, status, sessionEpoch: Number(epochRows[0]?.version ?? 1), endedImpersonations: Number(endedImpersonations) };
+  });
+  await appendPlatformAudit({
+    actorId: actor.adminId,
+    action: status === "active" ? "platform.user.reactivated" : "platform.user.suspended",
+    targetSchoolId: schoolId,
+    targetEntity: `User:${userId}`,
+    meta: { reason: trimmedReason, ...result },
+  });
+  return result;
+}
+
+export async function requireSchoolUserPasswordChange(schoolId: string, userId: string, actor: ControlActor, reason: string) {
+  const trimmedReason = reason.trim();
+  const result = await withTenant(schoolId, async (tx) => {
+    const user = await tx.user.findFirst({ where: { id: userId, schoolId }, select: { id: true, name: true, status: true, needsPasswordChange: true } });
+    if (!user) throw new AppError("School user not found.", 404, "NOT_FOUND");
+    await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, `platform-user-control:${schoolId}:${userId}`);
+    if (!user.needsPasswordChange) await tx.user.update({ where: { id: userId }, data: { needsPasswordChange: true } });
+    const epochRows = await tx.$queryRawUnsafe<Array<{ version: number }>>(
+      `INSERT INTO "SchoolUserSessionEpoch" ("schoolId","userId","version","updatedAt")
+       VALUES ($1,$2,1,CURRENT_TIMESTAMP)
+       ON CONFLICT ("schoolId","userId") DO UPDATE
+       SET "version"="SchoolUserSessionEpoch"."version"+1,"updatedAt"=CURRENT_TIMESTAMP
+       RETURNING "version"`,
+      schoolId,
+      userId,
+    );
+    const endedImpersonations = await tx.$executeRawUnsafe(
+      `UPDATE "ImpersonationLog" SET "endedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$1 AND "impersonatedUserId"=$2 AND "endedAt" IS NULL`,
+      schoolId,
+      userId,
+    );
+    await appendSchoolAudit(tx, {
+      schoolId,
+      actorId: platformActorId(actor.adminId),
+      action: "platform.user.password_change_required",
+      entityType: "User",
+      entityId: userId,
+      before: { needsPasswordChange: user.needsPasswordChange },
+      after: { needsPasswordChange: true, reason: trimmedReason, sessionEpoch: Number(epochRows[0]?.version ?? 1), endedImpersonations: Number(endedImpersonations) },
+    });
+    return { userId, userName: user.name, needsPasswordChange: true, sessionEpoch: Number(epochRows[0]?.version ?? 1), endedImpersonations: Number(endedImpersonations) };
+  });
+  await appendPlatformAudit({
+    actorId: actor.adminId,
+    action: "platform.user.password_change_required",
     targetSchoolId: schoolId,
     targetEntity: `User:${userId}`,
     meta: { reason: trimmedReason, ...result },
