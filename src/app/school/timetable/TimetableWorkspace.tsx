@@ -6,6 +6,7 @@ import { AlertTriangle, CalendarDays, Check, CheckCircle2, Clock3, Eye, LockKeyh
 
 type ClassItem = { id: string; name: string; level: string | null };
 type Person = { id: string; name: string };
+type TeachingAssignment = { classId: string; subjectId: string; teacherId: string };
 type Slot = {
   id: string;
   classId: string;
@@ -33,6 +34,7 @@ type Data = {
   classes: ClassItem[];
   subjects: Person[];
   teachers: Person[];
+  teachingAssignments: TeachingAssignment[];
   slots: Slot[];
   timetableConfig: TimetableConfig;
 };
@@ -455,12 +457,36 @@ function GenerationStudio({ mode, scope, className, lockedCount, plan, previewin
 }
 
 function LessonEditor({ data, value, close, done, action }: { data: Data; value: Editor; close: () => void; done: () => Promise<void>; action: (body: unknown) => Promise<unknown> }) {
-  const [classId, setClassId] = useState(value.slot?.classId ?? data.classes[0]?.id ?? "");
-  const [subjectId, setSubjectId] = useState(value.slot?.subjectId ?? data.subjects[0]?.id ?? "");
-  const [teacherId, setTeacherId] = useState(value.slot?.teacherId ?? data.teachers[0]?.id ?? "");
+  const initialAssignment = data.teachingAssignments.find((assignment) => value.slot && assignment.classId === value.slot.classId && assignment.subjectId === value.slot.subjectId && assignment.teacherId === value.slot.teacherId) ?? data.teachingAssignments[0];
+  const [classId, setClassId] = useState(initialAssignment?.classId ?? "");
+  const [subjectId, setSubjectId] = useState(initialAssignment?.subjectId ?? "");
+  const [teacherId, setTeacherId] = useState(initialAssignment?.teacherId ?? "");
   const [venue, setVenue] = useState(displayVenue(value.slot?.venue, data.timetableConfig));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const assignedClassIds = new Set(data.teachingAssignments.map((assignment) => assignment.classId));
+  const classOptions = data.classes.filter((item) => assignedClassIds.has(item.id));
+  const subjectIds = new Set(data.teachingAssignments.filter((assignment) => assignment.classId === classId).map((assignment) => assignment.subjectId));
+  const subjectOptions = data.subjects.filter((item) => subjectIds.has(item.id));
+  const teacherIds = new Set(data.teachingAssignments.filter((assignment) => assignment.classId === classId && assignment.subjectId === subjectId).map((assignment) => assignment.teacherId));
+  const teacherOptions = data.teachers.filter((item) => teacherIds.has(item.id));
+  const hasAssignments = data.teachingAssignments.length > 0;
+
+  const changeClass = (nextClassId: string) => {
+    const next = data.teachingAssignments.find((assignment) => assignment.classId === nextClassId);
+    setClassId(nextClassId);
+    setSubjectId(next?.subjectId ?? "");
+    setTeacherId(next?.teacherId ?? "");
+    setError("");
+  };
+
+  const changeSubject = (nextSubjectId: string) => {
+    const next = data.teachingAssignments.find((assignment) => assignment.classId === classId && assignment.subjectId === nextSubjectId);
+    setSubjectId(nextSubjectId);
+    setTeacherId(next?.teacherId ?? "");
+    setError("");
+  };
 
   const save = async () => {
     setSaving(true); setError("");
@@ -492,11 +518,12 @@ function LessonEditor({ data, value, close, done, action }: { data: Data; value:
     <div className="tt-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <section className="tt-editor" role="dialog" aria-modal="true" aria-labelledby="tt-editor-title">
         <button className="tt-editor-close" type="button" onClick={close} aria-label="Close lesson editor"><X size={17} /></button>
-        <span className="tt-eyebrow">LESSON</span><h2 id="tt-editor-title">{value.slot ? "Edit lesson" : "Add lesson"}</h2><p>Day {value.day}, period {value.period}. Conflicts and teacher assignment rules are checked when you save.</p>
+        <span className="tt-eyebrow">LESSON</span><h2 id="tt-editor-title">{value.slot ? "Edit lesson" : "Add lesson"}</h2><p>Day {value.day}, period {value.period}. Only class, subject and teacher combinations assigned in Academic Setup are available.</p>
         {error ? <div className="tt-alert error">{error}</div> : null}
-        <label>Class<select value={classId} onChange={(event) => setClassId(event.target.value)}>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label>Subject<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>{data.subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label>Teacher<select value={teacherId} onChange={(event) => setTeacherId(event.target.value)}>{data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        {!hasAssignments ? <div className="tt-alert error">No teaching assignments are configured. Assign subjects and teachers in Academic Setup before adding timetable lessons.</div> : null}
+        <label>Class<select value={classId} disabled={!hasAssignments} onChange={(event) => changeClass(event.target.value)}>{classOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label>Subject<select value={subjectId} disabled={!classId || !subjectOptions.length} onChange={(event) => changeSubject(event.target.value)}>{subjectOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label>Teacher<select value={teacherId} disabled={!subjectId || !teacherOptions.length} onChange={(event) => { setTeacherId(event.target.value); setError(""); }}>{teacherOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>Room / venue<input value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Optional room name" /></label>
         <div className="tt-editor-actions">
           {value.slot ? <button className="tt-btn danger" disabled={saving} onClick={() => void remove()}>Remove</button> : <span />}
