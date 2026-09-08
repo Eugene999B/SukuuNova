@@ -5,7 +5,7 @@ import { routeError } from "@/lib/errors";
 import { getVisibleReportPdf } from "@/lib/report-card-service";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -23,11 +23,16 @@ export async function GET(
       getVisibleReportPdf(tx, { actorId: actor.userId, reportCardId: id })
     );
     const bytes = Uint8Array.from(report.pdfData);
+    const url = new URL(request.url);
+    const download = url.searchParams.get("download") === "1" || url.searchParams.get("download") === "true";
+    const filename = `sukuunova-report-card-${id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48)}.pdf`;
     return new Response(bytes.buffer, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": 'inline; filename="sukuunova-report-card.pdf"',
-        "Cache-Control": "private, no-store"
+        "Content-Disposition": `${download ? "attachment" : "inline"}; filename="${filename}"`,
+        "Content-Length": String(bytes.byteLength),
+        "Cache-Control": "private, no-store, max-age=0",
+        "X-Content-Type-Options": "nosniff"
       }
     });
   } catch (error) { return routeError(error); }

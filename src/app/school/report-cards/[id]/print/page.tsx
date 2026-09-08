@@ -5,9 +5,8 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { getSchoolAuthorization } from "@/lib/authorization";
-import { calculateIntelligentReportCard } from "@/lib/report-card-intelligence";
-
-type Signature = { role: string; name: string; signatureDataUrl?: string };
+import { getReportCardPrintData } from "@/lib/report-card-print-data";
+import { signaturesForReport } from "@/lib/report-card-signatures";
 
 export default async function ReportCardPrintPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSchoolSession();
@@ -27,16 +26,10 @@ export default async function ReportCardPrintPage({ params }: { params: Promise<
       );
       if (!assigned) throw new Error("Teachers may only view report cards for their assigned classes.");
     }
-    const report = await calculateIntelligentReportCard(tx, { schoolId: session.schoolId, reportId: id });
-    const settings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { reportCardConfig: true } });
-    const raw = settings?.reportCardConfig && typeof settings.reportCardConfig === "object" && !Array.isArray(settings.reportCardConfig) ? settings.reportCardConfig as Record<string, unknown> : {};
-    const signatures = Array.isArray(raw.signatureSlots)
-      ? raw.signatureSlots.filter((s): s is Signature => Boolean(s) && typeof s === "object" && !Array.isArray(s)).map((s) => ({
-          role: typeof s.role === "string" ? s.role : "School Official",
-          name: typeof s.name === "string" ? s.name : "",
-          signatureDataUrl: typeof s.signatureDataUrl === "string" ? s.signatureDataUrl : "",
-        }))
-      : [];
+    const [report, signatures] = await Promise.all([
+      getReportCardPrintData(tx, { schoolId: session.schoolId, reportId: id }),
+      signaturesForReport(tx, { schoolId: session.schoolId, reportId: id }),
+    ]);
     return { report, signatures };
   });
   if (!data) notFound();
