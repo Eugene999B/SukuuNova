@@ -190,8 +190,12 @@ export default function TimetableWorkspace() {
   const periodNumbers = useMemo(() => {
     const values = new Set<number>();
     periodsByDay.forEach((periods) => periods.forEach((period) => values.add(period.period)));
+    for (const slot of data?.slots ?? []) {
+      const inView = view === "class" ? slot.classId === selectedClass : slot.teacherId === selectedTeacher;
+      if (inView) values.add(slot.period);
+    }
     return [...values].sort((a, b) => a - b);
-  }, [periodsByDay]);
+  }, [periodsByDay, data, view, selectedClass, selectedTeacher]);
   const scheduleRows = useMemo<ScheduleRow[]>(() => {
     const periodRows: ScheduleRow[] = periodNumbers.map((periodNumber) => {
       const starts = days.flatMap((day) => {
@@ -435,7 +439,7 @@ export default function TimetableWorkspace() {
                       return period ? [periodTime(period)] : [];
                     });
                     const uniqueTimes = [...new Set(configuredTimes)];
-                    const rowTime = uniqueTimes.length === 1 ? uniqueTimes[0] : "Varies by day";
+                    const rowTime = uniqueTimes.length === 0 ? "Outside current schedule" : uniqueTimes.length === 1 ? uniqueTimes[0] : "Varies by day";
 
                     return (
                       <tr key={`period-${periodNumber}`}>
