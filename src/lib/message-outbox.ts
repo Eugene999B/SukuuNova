@@ -6,7 +6,7 @@ export type NotificationTemplateKey="student_absence"|"student_attendance"|"staf
 type RecipientType="guardian"|"staff"|"user";
 type Channel="sms"|"whatsapp";
 
-type NotificationInput={schoolId:string; recipientType:RecipientType; recipientId:string; recipientPhone:string; body:string; templateKey?:NotificationTemplateKey; templateVariables?:Record<string,string>; mediaUrl?:string; idempotencyKey?:string; scheduledAt?:Date};
+type NotificationInput={schoolId:string; recipientType:RecipientType; recipientId:string; recipientPhone:string; body:string; templateKey?:NotificationTemplateKey; templateVariables?:Record<string,string>; mediaUrl?:string; idempotencyKey?:string; scheduledAt?:Date; channels?:Channel|Channel[]};
 type NotificationSenders={sms?:SmsSender;whatsapp?:WhatsAppSender};
 
 const MAX_ATTEMPTS=5;
@@ -15,11 +15,14 @@ const MAX_RETRY_DELAY_MS=2*60*60_000;
 const JITTER_MAX_MS=5_000;
 const CLAIM_LEASE_MS=10*60_000;
 
-function configuredChannels(value:Prisma.JsonValue|null|undefined):Channel[]{
-  const candidate = !Array.isArray(value) && value && typeof value === "object" ? (value as Record<string,Prisma.JsonValue>).channels : value;
-  if(!Array.isArray(candidate))return["sms"];
-  const channels=candidate.filter((item):item is Channel=>item==="sms"||item==="whatsapp");
-  return channels.length?[...new Set(channels)]:["sms"];
+function configuredChannels(value:Prisma.JsonValue|null|undefined,explicit?:Channel|Channel[]):Channel[]{
+  if(explicit){
+    const requested=Array.isArray(explicit)?explicit:[explicit];
+    return [...new Set(requested.filter((channel):channel is Channel=>channel==="sms"||channel==="whatsapp"))];
+  }
+  const candidate = !Array.isArray(value) && value && typeof value==="object" ? (value as Record<string,Prisma.JsonValue>).channels : value;
+  if(!Array.isArray(candidate))return[];
+  return [...new Set(candidate.filter((item):item is Channel=>item==="sms"||item==="whatsapp"))];
 }
 function contentSid(value:Prisma.JsonValue|null|undefined,key:string){
   if(!value||Array.isArray(value)||typeof value!=="object")return undefined;
@@ -59,7 +62,7 @@ export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,var
 function variables(value:Prisma.JsonValue|null){ if(!value||Array.isArray(value)||typeof value!=="object")return{}; return Object.fromEntries(Object.entries(value).filter((entry):entry is [string,string]=>typeof entry[1]==="string")); }
 function permanentFailure(message:string){ return /HTTP (400|401|403|404)\b|no .*configured|no .*template|unsupported message channel|unavailable/i.test(message); }
 function nextRetryAt(attempt:number){ const exponent=Math.max(attempt-1,0); const exponential=Math.min(MAX_RETRY_DELAY_MS,BASE_RETRY_DELAY_MS*Math.pow(2,exponent)); const jitter=Math.floor(Math.random()*(JITTER_MAX_MS+1)); return new Date(Date.now()+exponential+jitter); }
-function deterministicIdempotencyKey(input:NotificationInput,channel:Channel){ const explicit=input.idempotencyKey?.trim(); if(explicit)return `${explicit}:${channel}`; if(!input.templateKey)return `manual:${randomBytes(16).toString("hex")}:${channel}`; const digest=createHash("sha256").update(input.schoolId+"|"+input.templateKey+"|"+input.recipientId+"|"+input.body+"|"+JSON.stringify(input.templateVariables??{})).digest("hex"); return `${input.schoolId}:${input.templateKey}:${input.recipientId}:v1:${digest}:${channel}`; }
+function deterministicIdempotencyKey(input:NotificationInput,channel:Channel){ const explicit=input.idempotencyKey?.trim(); if(explicit)return `${explicit}:${input.recipientType}:${input.recipientId}:${channel}`; if(!input.templateKey)return `manual:${randomBytes(16).toString("hex")}:${input.recipientType}:${input.recipientId}:${channel}`; const digest=createHash("sha256").update(input.schoolId+"|"+input.templateKey+"|"+input.recipientId+"|"+input.body+"|"+JSON.stringify(input.templateVariables??{})).digest("hex"); return `${input.schoolId}:${input.templateKey}:${input.recipientId}:v1:${digest}:${channel}`; }
 
 async function sendExternalNotification(
   message: { channel: string; recipientPhone: string; body: string; templateKey: string | null; templateVariables: Prisma.JsonValue | null; mediaUrl: string | null },
@@ -104,7 +107,7 @@ export async function deliverCreatedMessage(
 }
 
 export async function enqueueNotification(tx:Prisma.TransactionClient,input:NotificationInput){
-  const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}}); const channels=configuredChannels(settings?.notificationChannels); const messages=[]; const nextAttemptAt=input.scheduledAt && input.scheduledAt.getTime()>Date.now()?input.scheduledAt:new Date();
+  const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}}); const channels=configuredChannels(settings?.notificationChannels,input.channels); const messages=[]; const nextAttemptAt=input.scheduledAt && input.scheduledAt.getTime()>Date.now()?input.scheduledAt:new Date();
   for(const channel of channels){ if(channel==="whatsapp"&&!input.templateKey)continue; const idempotencyKey=deterministicIdempotencyKey(input,channel); const existing=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(existing){messages.push(existing);continue;} try{ const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt,idempotencyKey}}); messages.push(message);}catch(error){ if((error as {code?:string}).code!=="P2002")throw error; const existingAfterRace=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(!existingAfterRace)throw error; messages.push(existingAfterRace); } }
   return messages;
 }

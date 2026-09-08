@@ -6,9 +6,12 @@ import { requirePermission } from "./rbac";
 import { enqueueSms } from "./sms-outbox";
 import { netPaid, toMoney } from "./money";
 
+const termLockKey=(schoolId:string,termId:string)=>`term-mutation:${schoolId}:${termId}`;
+
 export async function createFeeItem(tx: TenantDb, input: { schoolId: string; actorId: string; termId: string; classId?: string; name: string; amount: number; }) {
   await requirePermission(tx, input.actorId, "finance:write");
   const feeAmount = toMoney(input.amount);
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${termLockKey(input.schoolId,input.termId)}))`;
   const term = await tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, isLocked: true } });
   if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
   if (term.isLocked) throw new AppError("Locked terms cannot receive new fee items.", 409, "TERM_LOCKED");
@@ -25,6 +28,7 @@ export async function generateInvoice(tx: TenantDb, input: { schoolId: string; a
   await requirePermission(tx, input.actorId, "invoices:create");
   const student = await tx.student.findFirst({ where: { id: input.studentId, schoolId: input.schoolId }, include: { guardians: { where: { isPrimary: true }, include: { guardian: true } } } });
   if (!student) throw new AppError("Student not found.", 404, "NOT_FOUND");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${termLockKey(input.schoolId,input.termId)}))`;
   const term = await tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, isLocked: true } });
   if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
   if (term.isLocked) throw new AppError("Locked terms cannot receive new invoices.", 409, "TERM_LOCKED");

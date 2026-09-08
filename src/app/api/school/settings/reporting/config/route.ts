@@ -3,10 +3,10 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import { parseJson } from "@/lib/http";
 import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
+import { parseJson } from "@/lib/http";
 
 const schema = z.object({
   classAssessmentWeight: z.number().min(0).max(100), examWeight: z.number().min(0).max(100),
@@ -26,6 +26,9 @@ function buildCategories(input: z.infer<typeof schema>) {
   ];
 }
 
+type JsonObject = Record<string, Prisma.JsonValue>;
+function asObject(value: Prisma.JsonValue | null | undefined): JsonObject { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : {}; }
+
 export async function GET() {
   try {
     const session = await requireSchoolSession();
@@ -33,22 +36,22 @@ export async function GET() {
       await requirePermission(tx, session.userId, "settings:manage_school");
       const settings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { gradeCaWeight: true, gradeExamWeight: true, reportCardConfig: true, assessmentConfig: true } });
       if (!settings) throw new AppError("School settings are not configured.", 404, "SETTINGS_NOT_FOUND");
-      const raw = settings.reportCardConfig && typeof settings.reportCardConfig === "object" && !Array.isArray(settings.reportCardConfig) ? settings.reportCardConfig as Record<string, unknown> : {};
-      const assessmentRaw = settings.assessmentConfig && typeof settings.assessmentConfig === "object" && !Array.isArray(settings.assessmentConfig) ? settings.assessmentConfig as Record<string, unknown> : {};
-      const categories = Array.isArray(assessmentRaw.categories) ? assessmentRaw.categories : [];
+      const raw = asObject(settings.reportCardConfig);
+      const assessmentRaw = asObject(settings.assessmentConfig);
       const classTypes = Array.isArray(raw.classAssessmentTypes) ? raw.classAssessmentTypes : ["Exercise", "Homework", "Participation", "Quiz", "Project", "Classwork"];
       const examTypes = Array.isArray(raw.examTypes) ? raw.examTypes : ["Exam", "Examination"];
+      // Older rows may not contain the aggregate values in reportCardConfig.
+      // Preserve explicit legacy weights rather than guessing from arbitrary
+      // display labels such as "Final" or "Summative".
       const fallbackCa = Number(settings.gradeCaWeight ?? 30);
       const fallbackExam = Number(settings.gradeExamWeight ?? 70);
-      const categoryWeight = (predicate: (name: string) => boolean) => categories.filter((c) => c && typeof c === "object" && !Array.isArray(c) && predicate(String((c as Record<string, unknown>).name ?? ""))).reduce((sum, c) => sum + Number((c as Record<string, unknown>).weight ?? 0), 0);
-      const canonicalCa = categoryWeight((name) => !/exam|examination/i.test(name));
-      const canonicalExam = categoryWeight((name) => /exam|examination/i.test(name));
+      const assessmentRounding = assessmentRaw.rounding;
       return new Response(JSON.stringify({
-        classAssessmentWeight: Number(raw.classAssessmentWeight ?? (categories.length ? canonicalCa : fallbackCa)),
-        examWeight: Number(raw.examWeight ?? (categories.length ? canonicalExam : fallbackExam)),
+        classAssessmentWeight: Number(raw.classAssessmentWeight ?? fallbackCa),
+        examWeight: Number(raw.examWeight ?? fallbackExam),
         classAssessmentTypes: classTypes,
         examTypes,
-        rounding: raw.rounding === "down" || raw.rounding === "up" ? raw.rounding : typeof assessmentRaw.rounding === "string" ? assessmentRaw.rounding : "nearest",
+        rounding: raw.rounding === "down" || raw.rounding === "up" ? raw.rounding : assessmentRounding === "nearest" || assessmentRounding === "down" || assessmentRounding === "up" ? assessmentRounding : "nearest",
         missingScorePolicy: raw.missingScorePolicy === "zero" || assessmentRaw.missingScorePolicy === "zero" ? "zero" : "blank",
         showStudentPhoto: raw.showStudentPhoto !== false, showOverallPosition: raw.showOverallPosition !== false, showSubjectPosition: raw.showSubjectPosition !== false, showAttendance: raw.showAttendance !== false, showPromotion: raw.showPromotion !== false, showClassTeacherRemark: raw.showClassTeacherRemark !== false, showHeadteacherRemark: raw.showHeadteacherRemark !== false,
         signatureSlots: Array.isArray(raw.signatureSlots) ? raw.signatureSlots : [],
@@ -59,29 +62,15 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const session = await requireSchoolSession(); const input = await parseJson(request, schema);
+    const session = await requireSchoolSession();
+    const input = await parseJson(request, schema);
     return await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
-      const current = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { reportCardConfig: true, assessmentConfig: true, gradeCaWeight: true, gradeExamWeight: true } });
+      const current = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { reportCardConfig: true, assessmentConfig: true } });
       if (!current) throw new AppError("School settings are not configured.", 404, "SETTINGS_NOT_FOUND");
-      const existingAssessment = current.assessmentConfig && typeof current.assessmentConfig === "object" && !Array.isArray(current.assessmentConfig) ? current.assessmentConfig as Record<string, unknown> : {};
-      const assessmentConfig = {
-        ...existingAssessment,
-        categories: buildCategories(input),
-        rounding: input.rounding,
-        missingScorePolicy: input.missingScorePolicy,
-      };
-      await tx.schoolSettings.update({
-        where: { schoolId: session.schoolId },
-        data: {
-          reportCardConfig: input,
-          assessmentConfig,
-          // Keep legacy columns synchronized for older screens/readers until
-          // they are retired. Calculation paths prefer assessmentConfig.
-          gradeCaWeight: new Prisma.Decimal(input.classAssessmentWeight),
-          gradeExamWeight: new Prisma.Decimal(input.examWeight),
-        },
-      });
+      const existingAssessment = asObject(current.assessmentConfig);
+      const assessmentConfig = { ...existingAssessment, categories: buildCategories(input), rounding: input.rounding, missingScorePolicy: input.missingScorePolicy };
+      await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: { reportCardConfig: input, assessmentConfig, gradeCaWeight: new Prisma.Decimal(input.classAssessmentWeight), gradeExamWeight: new Prisma.Decimal(input.examWeight) } });
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "settings.report_card_configuration_updated", entityType: "SchoolSettings", entityId: session.schoolId, before: { reportCardConfig: current.reportCardConfig, assessmentConfig: current.assessmentConfig }, after: { reportCardConfig: input, assessmentConfig } });
       return NextResponse.json({ ok: true, reportCardConfig: input, assessmentConfig });
     });

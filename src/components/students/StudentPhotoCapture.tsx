@@ -3,7 +3,7 @@
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 
-function compressImage(source: HTMLCanvasElement, maxSize = 720): string {
+function compressImage(source: HTMLCanvasElement, maxSize = 640, maxDataUrlLength = 700_000): string {
   const ratio = Math.min(1, maxSize / Math.max(source.width, source.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(source.width * ratio));
@@ -11,7 +11,11 @@ function compressImage(source: HTMLCanvasElement, maxSize = 720): string {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Camera is unavailable in this browser.");
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.78);
+  for (let quality = 0.72; quality >= 0.42; quality -= 0.06) {
+    const value = canvas.toDataURL("image/jpeg", quality);
+    if (value.length <= maxDataUrlLength) return value;
+  }
+  return canvas.toDataURL("image/jpeg", 0.38);
 }
 
 export function StudentPhotoCapture() {
@@ -64,7 +68,9 @@ export function StudentPhotoCapture() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setPhoto(compressImage(canvas));
+    const value = compressImage(canvas);
+    setPhoto(value);
+    setMessage("");
     stopCamera();
   }
 
@@ -80,17 +86,28 @@ export function StudentPhotoCapture() {
       return;
     }
     const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
     image.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.drawImage(image, 0, 0);
-      setPhoto(compressImage(canvas));
-      URL.revokeObjectURL(image.src);
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) throw new Error("Photo processing is unavailable in this browser.");
+        ctx.drawImage(image, 0, 0);
+        setPhoto(compressImage(canvas));
+        setMessage("");
+      } catch {
+        setMessage("This photo could not be processed. Please choose another image.");
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
     };
-    image.src = URL.createObjectURL(file);
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setMessage("This photo could not be loaded. Please choose another image.");
+    };
+    image.src = objectUrl;
   }
 
   return (

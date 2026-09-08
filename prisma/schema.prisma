@@ -258,7 +258,7 @@ model SchoolPasswordResetToken {
   tokenHash String   @unique
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   school    School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   user      User     @relation(fields: [userId, schoolId], references: [id, schoolId], onDelete: Cascade)
   @@unique([id, schoolId])
@@ -343,8 +343,8 @@ model Student {
   houseId       String?
   photoUrl      String?
   school        School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  class         Class?   @relation(fields: [classId, schoolId], references: [id, schoolId], onDelete: SetNull)
-  house         House?   @relation(fields: [houseId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  class         Class?   @relation(fields: [classId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  house         House?   @relation(fields: [houseId, schoolId], references: [id, schoolId], onDelete: Restrict)
   guardians     StudentGuardian[]
   attendanceEvents AttendanceEvent[]
   scores        Score[]
@@ -371,7 +371,7 @@ model Guardian {
   email     String?
   userId    String?
   school    School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user      User?   @relation("GuardianUser", fields: [userId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  user      User?   @relation("GuardianUser", fields: [userId, schoolId], references: [id, schoolId], onDelete: Restrict)
   students  StudentGuardian[]
   faceConsents FaceEnrollment[] @relation("FaceConsentGuardian")
   approvedPickups ApprovedPickup[]
@@ -418,7 +418,7 @@ model Class {
   level        String?
   classTeacherId String?
   school       School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  classTeacher User?    @relation("ClassTeacher", fields: [classTeacherId, schoolId], references: [id, schoolId], onDelete: SetNull)
+  classTeacher User?    @relation("ClassTeacher", fields: [classTeacherId, schoolId], references: [id, schoolId], onDelete: Restrict)
   students     Student[]
   subjectAssignments ClassSubjectTeacher[]
   assessments  Assessment[]
@@ -540,7 +540,7 @@ model ReportCard {
   calculationSnapshot Json?
   calculationVersion  Int      @default(1)
   remarks              String?
-  headRemark           String?
+  headRemark          String?
   status              String   @default("draft")
   submittedBy         String?
   submittedAt         DateTime?
