@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
+import { ForbiddenError, routeError } from "@/lib/errors";
+import { parseJson } from "@/lib/http";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
-import { parseJson } from "@/lib/http";
+import { hasPermission } from "@/lib/rbac";
 import { clearScore, createAssessment, enterScore } from "@/lib/gradebook-service";
 import { visibleStudents } from "@/lib/sis-service";
 import { getAcademicEngineConfig, getClassSubjectPerformance } from "@/lib/academic-engine";
+import { z } from "zod";
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("assessment"), termId: z.string().min(1).max(100), classId: z.string().min(1).max(100), subjectId: z.string().min(1).max(100), name: z.string().trim().min(1).max(160), type: z.string().trim().min(1).max(40), weight: z.number().finite().positive().max(100), maxScore: z.number().finite().positive().max(1_000_000) }),
@@ -22,14 +23,31 @@ export async function GET(request: Request) {
     const subjectId = url.searchParams.get("subjectId");
     const termId = url.searchParams.get("termId");
     const result = await withTenant(session.schoolId, async (tx) => {
+      const [canWriteAll, canWriteAssigned] = await Promise.all([
+        hasPermission(tx, session.userId, "scores:write:all"),
+        hasPermission(tx, session.userId, "scores:write:assigned")
+      ]);
+      if (!canWriteAll && !canWriteAssigned) throw new ForbiddenError("You do not have gradebook access.");
+
       const visible = await visibleStudents(tx, session.userId);
+      const requestedClass = classId;
+      if (requestedClass && !canWriteAll) {
+        const allowedClassIds = new Set(visible.filter((row) => row.classId).map((row) => row.classId as string));
+        if (!allowedClassIds.has(requestedClass)) throw new ForbiddenError("You do not have gradebook access for this class.");
+      }
+      if (requestedClass && subjectId && !canWriteAll) {
+        const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId: session.schoolId, classId: requestedClass, subjectId, teacherId: session.userId }, select: { classId: true } });
+        const classTeacher = await tx.class.findFirst({ where: { id: requestedClass, schoolId: session.schoolId, classTeacherId: session.userId }, select: { id: true } });
+        if (!assignment && !classTeacher) throw new ForbiddenError("You do not have gradebook access for this class and subject.");
+      }
       const students = classId ? visible.filter((row) => row.classId === classId) : visible;
       const studentIds = students.map((row) => row.id);
       const classIds = [...new Set(students.flatMap((row) => row.classId ? [row.classId] : []))];
+      if (!studentIds.length && classId) throw new ForbiddenError("No learners in the requested gradebook context are visible to this account.");
       const [config, assessments, scores, performance] = await Promise.all([
         getAcademicEngineConfig(tx),
-        tx.assessment.findMany({ where: { classId: classId ? classId : { in: classIds }, ...(subjectId ? { subjectId } : {}), ...(termId ? { termId } : {}) }, include: { subject: true, class: true, term: true }, orderBy: [{ classId: "asc" }, { subjectId: "asc" }, { name: "asc" }] }),
-        tx.score.findMany({ where: { studentId: { in: studentIds }, ...(subjectId ? { subjectId } : {}), ...(termId ? { assessment: { termId } } : {}) } }),
+        tx.assessment.findMany({ where: { schoolId: session.schoolId, classId: classId ? classId : { in: classIds }, ...(subjectId ? { subjectId } : {}), ...(termId ? { termId } : {}) }, include: { subject: true, class: true, term: true }, orderBy: [{ classId: "asc" }, { subjectId: "asc" }, { name: "asc" }] }),
+        tx.score.findMany({ where: { schoolId: session.schoolId, studentId: { in: studentIds }, ...(subjectId ? { subjectId } : {}), ...(termId ? { assessment: { termId } } : {}) } }),
         classId && subjectId && termId ? getClassSubjectPerformance(tx, classId, subjectId, termId) : null
       ]);
       return { students, assessments, scores, performance, assessmentRules: config.assessment };
