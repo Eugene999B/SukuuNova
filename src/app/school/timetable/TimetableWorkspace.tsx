@@ -2,7 +2,23 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarDays, Check, CheckCircle2, Clock3, Eye, LockKeyhole, Plus, Printer, RefreshCw, ShieldCheck, Sparkles, Unlock, WandSparkles, X } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Clock3,
+  Eye,
+  LockKeyhole,
+  Plus,
+  Printer,
+  RefreshCw,
+  ShieldCheck,
+  Sparkles,
+  Unlock,
+  WandSparkles,
+  X,
+} from "lucide-react";
 
 type ClassItem = { id: string; name: string; level: string | null };
 type Person = { id: string; name: string };
@@ -39,7 +55,13 @@ type Data = {
   timetableConfig: TimetableConfig;
 };
 
-type Editor = { day: number; period: number; slot?: Slot };
+type Editor = {
+  day: number;
+  period: number;
+  slot?: Slot;
+  preferredClassId?: string;
+  preferredTeacherId?: string;
+};
 type GenerationMode = "fill_gaps" | "rebuild" | "rebuild_preserving_locked";
 type GenerationScope = "class" | "school";
 type GenerationPlan = {
@@ -72,8 +94,9 @@ type GenerationPlan = {
     }>;
   };
 };
-
-type ScheduleRow = { kind: "period"; period: Period } | { kind: "break"; name: string; start: string; end: string };
+type ScheduleRow =
+  | { kind: "period"; period: number; sortStart: number }
+  | { kind: "break"; name: string; start: string; end: string; sortStart: number };
 
 function toMinutes(value: string) {
   const [h, m] = value.split(":").map(Number);
@@ -109,6 +132,10 @@ function displayVenue(value: string | null | undefined, config: TimetableConfig)
   return value;
 }
 
+function periodTime(period: Period) {
+  return `${formatTime(period.start)}–${formatTime(period.end)}`;
+}
+
 export default function TimetableWorkspace() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
@@ -133,10 +160,11 @@ export default function TimetableWorkspace() {
       const response = await fetch("/api/phase2/timetable", { cache: "no-store" });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Could not load timetable.");
-      setData(payload);
-      setSelectedClass((current) => current || payload.classes?.[0]?.id || "");
-      setSelectedTeacher((current) => current || payload.teachers?.[0]?.id || "");
-      const validIds = new Set<string>((payload.slots ?? []).map((slot: Slot) => slot.id));
+      const normalized: Data = { ...payload, teachingAssignments: payload.teachingAssignments ?? [] };
+      setData(normalized);
+      setSelectedClass((current) => current || normalized.classes?.[0]?.id || "");
+      setSelectedTeacher((current) => current || normalized.teachers?.[0]?.id || "");
+      const validIds = new Set<string>((normalized.slots ?? []).map((slot: Slot) => slot.id));
       setLockedSlotIds((current) => new Set([...current].filter((id) => validIds.has(id))));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load timetable.");
@@ -145,33 +173,60 @@ export default function TimetableWorkspace() {
     }
   };
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
-  const days = useMemo(() => data?.timetableConfig.days.filter((day) => day.enabled).sort((a, b) => a.dayOfWeek - b.dayOfWeek) ?? [], [data]);
-  const periods = useMemo(() => buildPeriods(data?.timetableConfig ?? { days: [], periodsPerDay: 8, periodMinutes: 40 }, days[0]), [data, days]);
+  const days = useMemo(
+    () => data?.timetableConfig.days.filter((day) => day.enabled).sort((a, b) => a.dayOfWeek - b.dayOfWeek) ?? [],
+    [data],
+  );
+  const periodsByDay = useMemo(() => {
+    const map = new Map<number, Period[]>();
+    if (!data) return map;
+    for (const day of days) map.set(day.dayOfWeek, buildPeriods(data.timetableConfig, day));
+    return map;
+  }, [data, days]);
+  const periodNumbers = useMemo(() => {
+    const values = new Set<number>();
+    periodsByDay.forEach((periods) => periods.forEach((period) => values.add(period.period)));
+    return [...values].sort((a, b) => a - b);
+  }, [periodsByDay]);
   const scheduleRows = useMemo<ScheduleRow[]>(() => {
-    const periodRows: ScheduleRow[] = periods.map((period) => ({ kind: "period", period }));
-    const breakRows: ScheduleRow[] = (data?.timetableConfig.breaks ?? []).map((item) => ({ kind: "break", ...item }));
-    return [...periodRows, ...breakRows].sort((a, b) => {
-      const aStart = a.kind === "period" ? a.period.start : a.start;
-      const bStart = b.kind === "period" ? b.period.start : b.start;
-      return toMinutes(aStart) - toMinutes(bStart);
+    const periodRows: ScheduleRow[] = periodNumbers.map((periodNumber) => {
+      const starts = days.flatMap((day) => {
+        const period = periodsByDay.get(day.dayOfWeek)?.find((item) => item.period === periodNumber);
+        return period ? [toMinutes(period.start)] : [];
+      });
+      return { kind: "period", period: periodNumber, sortStart: starts.length ? Math.min(...starts) : Number.MAX_SAFE_INTEGER };
     });
-  }, [data, periods]);
-  const activeId = view === "class" ? selectedClass : selectedTeacher;
-  const activeName = view === "class"
-    ? data?.classes.find((item) => item.id === selectedClass)?.name ?? "Choose a class"
-    : data?.teachers.find((item) => item.id === selectedTeacher)?.name ?? "Choose a teacher";
+    const breakRows: ScheduleRow[] = (data?.timetableConfig.breaks ?? []).map((item) => ({
+      kind: "break",
+      ...item,
+      sortStart: toMinutes(item.start),
+    }));
+    return [...periodRows, ...breakRows].sort((a, b) => a.sortStart - b.sortStart || (a.kind === "period" ? -1 : 1));
+  }, [data, days, periodNumbers, periodsByDay]);
 
+  const activeId = view === "class" ? selectedClass : selectedTeacher;
+  const activeName =
+    view === "class"
+      ? data?.classes.find((item) => item.id === selectedClass)?.name ?? "Choose a class"
+      : data?.teachers.find((item) => item.id === selectedTeacher)?.name ?? "Choose a teacher";
   const visibleSlots = useMemo(() => {
     if (!data || !activeId) return [];
-    return data.slots.filter((slot) => view === "class" ? slot.classId === activeId : slot.teacherId === activeId);
+    return data.slots.filter((slot) => (view === "class" ? slot.classId === activeId : slot.teacherId === activeId));
   }, [data, activeId, view]);
-  const slotMap = useMemo(() => new Map(visibleSlots.map((slot) => [`${slot.dayOfWeek}:${slot.period}`, slot])), [visibleSlots]);
+  const slotMap = useMemo(
+    () => new Map(visibleSlots.map((slot) => [`${slot.dayOfWeek}:${slot.period}`, slot])),
+    [visibleSlots],
+  );
   const currentClassName = data?.classes.find((item) => item.id === selectedClass)?.name ?? "Selected class";
   const lockedInScope = useMemo(() => {
     if (!data) return [];
-    return data.slots.filter((slot) => lockedSlotIds.has(slot.id) && (generationScope === "school" || slot.classId === selectedClass));
+    return data.slots.filter(
+      (slot) => lockedSlotIds.has(slot.id) && (generationScope === "school" || slot.classId === selectedClass),
+    );
   }, [data, lockedSlotIds, generationScope, selectedClass]);
 
   const action = async (body: unknown) => {
@@ -232,7 +287,9 @@ export default function TimetableWorkspace() {
     setNotice("");
     try {
       const applied = await requestGeneration(false);
-      setNotice(`Timetable updated: ${applied.metrics.generatedLessons} lesson(s) added, ${applied.metrics.removedLessons} replaced, ${applied.metrics.coverageAfter}% target coverage.`);
+      setNotice(
+        `Timetable updated: ${applied.metrics.generatedLessons} lesson(s) added, ${applied.metrics.removedLessons} replaced, ${applied.metrics.coverageAfter}% target coverage.`,
+      );
       setGenerationOpen(false);
       setGenerationPlan(null);
       await load();
@@ -254,16 +311,31 @@ export default function TimetableWorkspace() {
   };
 
   if (loading) {
-    return <div className="tt-modern-loading"><Clock3 size={18} /><div><strong>Loading timetable</strong><span>Getting the latest classes, teachers and lessons…</span></div></div>;
+    return (
+      <div className="tt-modern-loading">
+        <Clock3 size={18} />
+        <div>
+          <strong>Loading timetable</strong>
+          <span>Getting the latest classes, teachers and lessons…</span>
+        </div>
+      </div>
+    );
   }
 
   if (!data) {
-    return <div className="tt-modern-error"><strong>Timetable could not be loaded</strong><p>{error || "Please try again."}</p><button className="tt-btn primary" onClick={() => void load()}>Try again</button></div>;
+    return (
+      <div className="tt-modern-error">
+        <strong>Timetable could not be loaded</strong>
+        <p>{error || "Please try again."}</p>
+        <button className="tt-btn primary" onClick={() => void load()}>Try again</button>
+      </div>
+    );
   }
 
-  const printUrl = view === "teacher"
-    ? `/school/timetable/print?view=teacher&teacherId=${encodeURIComponent(selectedTeacher)}`
-    : `/school/timetable/print?view=class&classId=${encodeURIComponent(selectedClass)}`;
+  const printUrl =
+    view === "teacher"
+      ? `/school/timetable/print?view=teacher&teacherId=${encodeURIComponent(selectedTeacher)}`
+      : `/school/timetable/print?view=class&classId=${encodeURIComponent(selectedClass)}`;
 
   return (
     <div className="tt-modern-workspace">
@@ -307,7 +379,7 @@ export default function TimetableWorkspace() {
         />
       ) : null}
 
-      {!days.length || !periods.length ? (
+      {!days.length || !periodNumbers.length ? (
         <section className="tt-selection-empty">
           <CalendarDays size={24} />
           <h2>No timetable schedule is configured yet</h2>
@@ -330,13 +402,17 @@ export default function TimetableWorkspace() {
                 {data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             )}
-            <span className="tt-toolbar-meta">{days.length} days · {periods.length} teaching periods · {data.timetableConfig.breaks?.length ?? 0} breaks</span>
+            <span className="tt-toolbar-meta">{days.length} days · {periodNumbers.length} teaching periods · {data.timetableConfig.breaks?.length ?? 0} breaks</span>
             <button className="tt-icon-btn" onClick={() => void load()} aria-label="Refresh timetable"><RefreshCw size={15} /></button>
           </section>
 
           <section className="tt-grid-card">
             <div className="tt-grid-heading">
-              <div><span className="tt-eyebrow">WEEKLY TIMETABLE</span><h2>{activeName}</h2><p>Click a lesson to edit it. Use the lock beside a lesson when it must survive a preserve-locked rebuild.</p></div>
+              <div>
+                <span className="tt-eyebrow">WEEKLY TIMETABLE</span>
+                <h2>{activeName}</h2>
+                <p>Click a lesson to edit it. Each day keeps its own configured period times; locks survive only preserve-locked rebuilds.</p>
+              </div>
               <div className="tt-legend"><span><LockKeyhole size={12} /> Locked lessons are preserved only in preserve-locked mode.</span></div>
             </div>
             <div className="tt-table-scroll">
@@ -345,29 +421,68 @@ export default function TimetableWorkspace() {
                 <tbody>
                   {scheduleRows.map((row, rowIndex) => {
                     if (row.kind === "break") {
-                      return <tr className="tt-break-row-grid" key={`break-${row.name}-${row.start}-${rowIndex}`}><th><strong>{row.name}</strong><span>{formatTime(row.start)}–{formatTime(row.end)}</span></th><td colSpan={days.length}><span>Break / non-teaching time</span></td></tr>;
+                      return (
+                        <tr className="tt-break-row-grid" key={`break-${row.name}-${row.start}-${rowIndex}`}>
+                          <th><strong>{row.name}</strong><span>{formatTime(row.start)}–{formatTime(row.end)}</span></th>
+                          <td colSpan={days.length}><span>Break / non-teaching time</span></td>
+                        </tr>
+                      );
                     }
-                    const period = row.period;
+
+                    const periodNumber = row.period;
+                    const configuredTimes = days.flatMap((day) => {
+                      const period = periodsByDay.get(day.dayOfWeek)?.find((item) => item.period === periodNumber);
+                      return period ? [periodTime(period)] : [];
+                    });
+                    const uniqueTimes = [...new Set(configuredTimes)];
+                    const rowTime = uniqueTimes.length === 1 ? uniqueTimes[0] : "Varies by day";
+
                     return (
-                      <tr key={`period-${period.period}`}>
-                        <th><strong>Period {period.period}</strong><span>{formatTime(period.start)}–{formatTime(period.end)}</span></th>
+                      <tr key={`period-${periodNumber}`}>
+                        <th><strong>Period {periodNumber}</strong><span>{rowTime}</span></th>
                         {days.map((day) => {
-                          const slot = slotMap.get(`${day.dayOfWeek}:${period.period}`);
+                          const dayPeriod = periodsByDay.get(day.dayOfWeek)?.find((item) => item.period === periodNumber);
+                          const slot = slotMap.get(`${day.dayOfWeek}:${periodNumber}`);
                           const locked = slot ? lockedSlotIds.has(slot.id) : false;
-                          return (
-                            <td key={`${day.dayOfWeek}:${period.period}`}>
-                              {slot ? (
-                                <div className={`tt-simple-lesson filled ${locked ? "locked" : ""}`}>
-                                  <button className="tt-lesson-main" onClick={() => setEditor({ day: day.dayOfWeek, period: period.period, slot })}>
+
+                          if (!dayPeriod && !slot) {
+                            return (
+                              <td key={`${day.dayOfWeek}:${periodNumber}`}>
+                                <div className="tt-simple-lesson unavailable"><span>No teaching period</span></div>
+                              </td>
+                            );
+                          }
+
+                          if (slot) {
+                            return (
+                              <td key={`${day.dayOfWeek}:${periodNumber}`}>
+                                <div className={`tt-simple-lesson filled ${locked ? "locked" : ""} ${dayPeriod ? "" : "outside-schedule"}`}>
+                                  <button className="tt-lesson-main" onClick={() => setEditor({ day: day.dayOfWeek, period: periodNumber, slot })}>
                                     <strong>{slot.subject.name}</strong>
                                     <span>{view === "class" ? slot.teacher.name : slot.class.name}</span>
                                     {slot.venue ? <small>{displayVenue(slot.venue, data.timetableConfig)}</small> : null}
+                                    <small className={`tt-cell-time ${dayPeriod ? "" : "warning"}`}>{dayPeriod ? periodTime(dayPeriod) : "Outside current schedule"}</small>
                                   </button>
                                   <button className="tt-lock-toggle" type="button" aria-label={locked ? "Unlock lesson" : "Lock lesson"} aria-pressed={locked} onClick={() => toggleLock(slot.id)}>{locked ? <LockKeyhole size={12} /> : <Unlock size={12} />}</button>
                                 </div>
-                              ) : (
-                                <button className="tt-simple-lesson empty" onClick={() => setEditor({ day: day.dayOfWeek, period: period.period })}><Plus size={13} /> Add lesson</button>
-                              )}
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={`${day.dayOfWeek}:${periodNumber}`}>
+                              <button
+                                className="tt-simple-lesson empty"
+                                onClick={() => setEditor({
+                                  day: day.dayOfWeek,
+                                  period: periodNumber,
+                                  preferredClassId: view === "class" ? selectedClass : undefined,
+                                  preferredTeacherId: view === "teacher" ? selectedTeacher : undefined,
+                                })}
+                              >
+                                <span><Plus size={13} /> Add lesson</span>
+                                <small className="tt-cell-time">{periodTime(dayPeriod)}</small>
+                              </button>
                             </td>
                           );
                         })}
@@ -381,7 +496,15 @@ export default function TimetableWorkspace() {
         </>
       )}
 
-      {editor ? <LessonEditor data={data} value={editor} close={() => setEditor(null)} done={async () => { setEditor(null); await load(); }} action={action} /> : null}
+      {editor ? (
+        <LessonEditor
+          data={data}
+          value={editor}
+          close={() => setEditor(null)}
+          done={async () => { setEditor(null); await load(); }}
+          action={action}
+        />
+      ) : null}
     </div>
   );
 }
@@ -411,7 +534,11 @@ function GenerationStudio({ mode, scope, className, lockedCount, plan, previewin
   return (
     <section className="tt-generation-studio" aria-label="Timetable generation planner">
       <div className="tt-generation-head">
-        <div><span className="tt-eyebrow"><Sparkles size={13} /> INTELLIGENT GENERATION</span><h2>Preview the schedule before changing anything</h2><p>The preview is read-only. Applying the plan recalculates it under a school-level generation lock before writing.</p></div>
+        <div>
+          <span className="tt-eyebrow"><Sparkles size={13} /> INTELLIGENT GENERATION</span>
+          <h2>Preview the schedule before changing anything</h2>
+          <p>The preview is read-only. Applying the plan recalculates it under a school-level generation lock before writing.</p>
+        </div>
         <button className="tt-icon-btn" type="button" onClick={onClose} aria-label="Close timetable planner"><X size={15} /></button>
       </div>
 
@@ -419,7 +546,11 @@ function GenerationStudio({ mode, scope, className, lockedCount, plan, previewin
         <div className="tt-option-group">
           <strong>Generation mode</strong>
           <div className="tt-mode-grid">
-            {(Object.keys(modeCopy) as GenerationMode[]).map((value) => <button key={value} className={mode === value ? "active" : ""} onClick={() => onMode(value)}><span>{modeCopy[value].title}</span><small>{modeCopy[value].text}</small></button>)}
+            {(Object.keys(modeCopy) as GenerationMode[]).map((value) => (
+              <button key={value} className={mode === value ? "active" : ""} onClick={() => onMode(value)}>
+                <span>{modeCopy[value].title}</span><small>{modeCopy[value].text}</small>
+              </button>
+            ))}
           </div>
         </div>
         <div className="tt-option-group scope">
@@ -433,7 +564,11 @@ function GenerationStudio({ mode, scope, className, lockedCount, plan, previewin
       </div>
 
       {!plan ? (
-        <div className="tt-preview-empty"><Eye size={18} /><div><strong>No changes have been made.</strong><span>Preview calculates additions, replacements, coverage and conflicts without writing to the timetable.</span></div><button className="tt-btn primary" disabled={previewing} onClick={onPreview}>{previewing ? "Calculating…" : "Preview plan"}</button></div>
+        <div className="tt-preview-empty">
+          <Eye size={18} />
+          <div><strong>No changes have been made.</strong><span>Preview calculates additions, replacements, coverage and conflicts without writing to the timetable.</span></div>
+          <button className="tt-btn primary" disabled={previewing} onClick={onPreview}>{previewing ? "Calculating…" : "Preview plan"}</button>
+        </div>
       ) : (
         <div className="tt-plan-results">
           <div className="tt-plan-metrics">
@@ -443,35 +578,88 @@ function GenerationStudio({ mode, scope, className, lockedCount, plan, previewin
             <div><small>Replace</small><strong>{plan.metrics.removedLessons}</strong></div>
             <div><small>Coverage after</small><strong>{plan.metrics.coverageAfter}%</strong></div>
           </div>
-          {plan.warnings.length ? <div className="tt-plan-warnings">{plan.warnings.map((warning) => <p key={warning}><AlertTriangle size={13} />{warning}</p>)}</div> : <div className="tt-plan-ok"><CheckCircle2 size={14} />No scheduling warnings in this preview.</div>}
+          {plan.warnings.length ? (
+            <div className="tt-plan-warnings">{plan.warnings.map((warning) => <p key={warning}><AlertTriangle size={13} />{warning}</p>)}</div>
+          ) : (
+            <div className="tt-plan-ok"><CheckCircle2 size={14} />No scheduling warnings in this preview.</div>
+          )}
           <div className="tt-plan-detail">
             <div><h3>Planned additions</h3><p>{plan.changes.additions.length ? `${plan.changes.additions.length} lesson(s) will be placed.` : "No new lessons are needed."}</p></div>
-            {plan.changes.additions.length ? <div className="tt-addition-list">{plan.changes.additions.slice(0, 10).map((addition, index) => <div key={`${addition.classId}-${addition.subjectId}-${addition.dayOfWeek}-${addition.period}-${index}`}><strong>{addition.subjectName}</strong><span>{addition.className} · {addition.teacherName}</span><small>{dayName(addition.dayOfWeek)} · Period {addition.period}</small></div>)}</div> : null}
+            {plan.changes.additions.length ? (
+              <div className="tt-addition-list">
+                {plan.changes.additions.slice(0, 10).map((addition, index) => (
+                  <div key={`${addition.classId}-${addition.subjectId}-${addition.dayOfWeek}-${addition.period}-${index}`}>
+                    <strong>{addition.subjectName}</strong>
+                    <span>{addition.className} · {addition.teacherName}</span>
+                    <small>{dayName(addition.dayOfWeek)} · Period {addition.period}</small>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {plan.changes.additions.length > 10 ? <small className="tt-more-note">+ {plan.changes.additions.length - 10} more planned lessons</small> : null}
           </div>
-          <div className="tt-generation-actions"><button className="tt-btn ghost" disabled={previewing || applying} onClick={onPreview}><RefreshCw size={13} /> Recalculate preview</button><button className="tt-btn primary" disabled={applying} onClick={onApply}><ShieldCheck size={13} />{applying ? "Applying safely…" : "Apply this plan"}</button></div>
+          <div className="tt-generation-actions">
+            <button className="tt-btn ghost" disabled={previewing || applying} onClick={onPreview}><RefreshCw size={13} /> Recalculate preview</button>
+            <button className="tt-btn primary" disabled={applying} onClick={onApply}><ShieldCheck size={13} />{applying ? "Applying safely…" : "Apply this plan"}</button>
+          </div>
         </div>
       )}
     </section>
   );
 }
 
-function LessonEditor({ data, value, close, done, action }: { data: Data; value: Editor; close: () => void; done: () => Promise<void>; action: (body: unknown) => Promise<unknown> }) {
-  const initialAssignment = data.teachingAssignments.find((assignment) => value.slot && assignment.classId === value.slot.classId && assignment.subjectId === value.slot.subjectId && assignment.teacherId === value.slot.teacherId) ?? data.teachingAssignments[0];
-  const [classId, setClassId] = useState(initialAssignment?.classId ?? "");
-  const [subjectId, setSubjectId] = useState(initialAssignment?.subjectId ?? "");
-  const [teacherId, setTeacherId] = useState(initialAssignment?.teacherId ?? "");
+function LessonEditor({ data, value, close, done, action }: {
+  data: Data;
+  value: Editor;
+  close: () => void;
+  done: () => Promise<void>;
+  action: (body: unknown) => Promise<unknown>;
+}) {
+  const slotAssignment = value.slot
+    ? data.teachingAssignments.find(
+        (assignment) => assignment.classId === value.slot?.classId && assignment.subjectId === value.slot?.subjectId && assignment.teacherId === value.slot?.teacherId,
+      )
+    : undefined;
+  const preferredAssignment =
+    data.teachingAssignments.find(
+      (assignment) =>
+        (!value.preferredClassId || assignment.classId === value.preferredClassId) &&
+        (!value.preferredTeacherId || assignment.teacherId === value.preferredTeacherId),
+    ) ??
+    data.teachingAssignments.find((assignment) => value.preferredClassId && assignment.classId === value.preferredClassId) ??
+    data.teachingAssignments.find((assignment) => value.preferredTeacherId && assignment.teacherId === value.preferredTeacherId) ??
+    data.teachingAssignments[0];
+  const initialAssignment = slotAssignment ?? preferredAssignment;
+
+  const [classId, setClassId] = useState(value.slot?.classId ?? initialAssignment?.classId ?? "");
+  const [subjectId, setSubjectId] = useState(value.slot?.subjectId ?? initialAssignment?.subjectId ?? "");
+  const [teacherId, setTeacherId] = useState(value.slot?.teacherId ?? initialAssignment?.teacherId ?? "");
   const [venue, setVenue] = useState(displayVenue(value.slot?.venue, data.timetableConfig));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const assignedClassIds = new Set(data.teachingAssignments.map((assignment) => assignment.classId));
+  if (value.slot) assignedClassIds.add(value.slot.classId);
   const classOptions = data.classes.filter((item) => assignedClassIds.has(item.id));
-  const subjectIds = new Set(data.teachingAssignments.filter((assignment) => assignment.classId === classId).map((assignment) => assignment.subjectId));
+
+  const subjectIds = new Set(
+    data.teachingAssignments.filter((assignment) => assignment.classId === classId).map((assignment) => assignment.subjectId),
+  );
+  if (value.slot?.classId === classId) subjectIds.add(value.slot.subjectId);
   const subjectOptions = data.subjects.filter((item) => subjectIds.has(item.id));
-  const teacherIds = new Set(data.teachingAssignments.filter((assignment) => assignment.classId === classId && assignment.subjectId === subjectId).map((assignment) => assignment.teacherId));
+
+  const teacherIds = new Set(
+    data.teachingAssignments
+      .filter((assignment) => assignment.classId === classId && assignment.subjectId === subjectId)
+      .map((assignment) => assignment.teacherId),
+  );
+  if (value.slot?.classId === classId && value.slot.subjectId === subjectId) teacherIds.add(value.slot.teacherId);
   const teacherOptions = data.teachers.filter((item) => teacherIds.has(item.id));
+  const selectionAssigned = data.teachingAssignments.some(
+    (assignment) => assignment.classId === classId && assignment.subjectId === subjectId && assignment.teacherId === teacherId,
+  );
   const hasAssignments = data.teachingAssignments.length > 0;
+  const staleCurrentAssignment = Boolean(value.slot && !slotAssignment);
 
   const changeClass = (nextClassId: string) => {
     const next = data.teachingAssignments.find((assignment) => assignment.classId === nextClassId);
@@ -482,14 +670,17 @@ function LessonEditor({ data, value, close, done, action }: { data: Data; value:
   };
 
   const changeSubject = (nextSubjectId: string) => {
-    const next = data.teachingAssignments.find((assignment) => assignment.classId === classId && assignment.subjectId === nextSubjectId);
+    const next = data.teachingAssignments.find(
+      (assignment) => assignment.classId === classId && assignment.subjectId === nextSubjectId,
+    );
     setSubjectId(nextSubjectId);
     setTeacherId(next?.teacherId ?? "");
     setError("");
   };
 
   const save = async () => {
-    setSaving(true); setError("");
+    setSaving(true);
+    setError("");
     try {
       await action({
         action: value.slot ? "updateSlot" : "saveSlot",
@@ -502,32 +693,62 @@ function LessonEditor({ data, value, close, done, action }: { data: Data; value:
         venue: venue.trim() || undefined,
       });
       await done();
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save lesson."); }
-    finally { setSaving(false); }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save lesson.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async () => {
     if (!value.slot) return;
-    setSaving(true); setError("");
-    try { await action({ action: "deleteSlot", slotId: value.slot.id }); await done(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not remove lesson."); }
-    finally { setSaving(false); }
+    setSaving(true);
+    setError("");
+    try {
+      await action({ action: "deleteSlot", slotId: value.slot.id });
+      await done();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not remove lesson.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="tt-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
       <section className="tt-editor" role="dialog" aria-modal="true" aria-labelledby="tt-editor-title">
         <button className="tt-editor-close" type="button" onClick={close} aria-label="Close lesson editor"><X size={17} /></button>
-        <span className="tt-eyebrow">LESSON</span><h2 id="tt-editor-title">{value.slot ? "Edit lesson" : "Add lesson"}</h2><p>Day {value.day}, period {value.period}. Only class, subject and teacher combinations assigned in Academic Setup are available.</p>
+        <span className="tt-eyebrow">LESSON</span>
+        <h2 id="tt-editor-title">{value.slot ? "Edit lesson" : "Add lesson"}</h2>
+        <p>Day {value.day}, period {value.period}. Only class, subject and teacher combinations assigned in Academic Setup can be saved.</p>
         {error ? <div className="tt-alert error">{error}</div> : null}
         {!hasAssignments ? <div className="tt-alert error">No teaching assignments are configured. Assign subjects and teachers in Academic Setup before adding timetable lessons.</div> : null}
-        <label>Class<select value={classId} disabled={!hasAssignments} onChange={(event) => changeClass(event.target.value)}>{classOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label>Subject<select value={subjectId} disabled={!classId || !subjectOptions.length} onChange={(event) => changeSubject(event.target.value)}>{subjectOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label>Teacher<select value={teacherId} disabled={!subjectId || !teacherOptions.length} onChange={(event) => { setTeacherId(event.target.value); setError(""); }}>{teacherOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        {staleCurrentAssignment ? <div className="tt-alert warning">This lesson no longer matches a current teaching assignment. Choose a valid assignment to save changes, or remove the lesson.</div> : null}
+        <label>
+          Class
+          <select value={classId} disabled={!classOptions.length} onChange={(event) => changeClass(event.target.value)}>
+            {classOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label>
+          Subject
+          <select value={subjectId} disabled={!classId || !subjectOptions.length} onChange={(event) => changeSubject(event.target.value)}>
+            {subjectOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
+        <label>
+          Teacher
+          <select value={teacherId} disabled={!subjectId || !teacherOptions.length} onChange={(event) => { setTeacherId(event.target.value); setError(""); }}>
+            {teacherOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+        </label>
         <label>Room / venue<input value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Optional room name" /></label>
         <div className="tt-editor-actions">
           {value.slot ? <button className="tt-btn danger" disabled={saving} onClick={() => void remove()}>Remove</button> : <span />}
-          <div><button className="tt-btn ghost" type="button" onClick={close}>Cancel</button><button className="tt-btn primary" disabled={saving || !classId || !subjectId || !teacherId} onClick={() => void save()}>{saving ? "Saving…" : "Save lesson"}</button></div>
+          <div>
+            <button className="tt-btn ghost" type="button" onClick={close}>Cancel</button>
+            <button className="tt-btn primary" disabled={saving || !selectionAssigned} onClick={() => void save()}>{saving ? "Saving…" : "Save lesson"}</button>
+          </div>
         </div>
       </section>
     </div>
