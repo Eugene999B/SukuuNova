@@ -3,6 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { AcademicWorkspaceNav } from "@/components/AcademicWorkspaceNav";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
+import { hasPermission } from "@/lib/rbac";
 import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/academic-engine";
 import GradebookEntryGrid from "@/components/GradebookEntryGrid";
 import "../../academic-workspace.css";
@@ -11,8 +12,8 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
   const session = await requireSchoolSession();
   const params = await searchParams;
   const data = await withTenant(session.schoolId, async (tx) => {
-    const canWriteAssigned = await (await import("@/lib/rbac")).hasPermission(tx, session.userId, "scores:write:assigned");
-    const canWriteAll = await (await import("@/lib/rbac")).hasPermission(tx, session.userId, "scores:write:all");
+    const canWriteAssigned = await hasPermission(tx, session.userId, "scores:write:assigned");
+    const canWriteAll = await hasPermission(tx, session.userId, "scores:write:all");
     if (!canWriteAssigned && !canWriteAll) throw new Error("You do not have gradebook access.");
     const [school, config] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
