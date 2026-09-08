@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { StudentPhotoCapture } from "@/components/students/StudentPhotoCapture";
 import { OptimisticSubmitButton } from "@/components/ui/OptimisticSubmitButton";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -86,11 +86,6 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void submit(new FormData(event.currentTarget));
-  }
-
   return (
     <>
       <button type="button" className="button primary" onClick={openDialog}>{triggerLabel}</button>
@@ -122,7 +117,7 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
 
             {actionError ? <div className="dialog-callout" role="alert"><span className="callout-icon">!</span><div><strong>Student was not created</strong><p>{actionError}</p><button type="button" className="text-link" onClick={() => setActionError("")}>Dismiss</button></div></div> : null}
 
-            <form action={submit} onSubmit={handleSubmit} className="student-dialog-form">
+            <form action={submit} className="student-dialog-form">
               <div className="student-dialog-body">
                 <div className="dialog-panel" hidden={step !== 0} aria-hidden={step !== 0}>
                   <div className="dialog-panel-heading"><div><span className="eyebrow">Step 1</span><h3>Start with the learner</h3><p>Enter the essentials that identify this student throughout SukuuNova.</p></div><span className="panel-badge">Required</span></div>
