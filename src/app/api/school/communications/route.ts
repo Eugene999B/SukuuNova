@@ -16,23 +16,19 @@ type Recipient = { id: string; name: string; phone: string | null };
 type JsonRecord = Record<string, unknown>;
 const sendSchema = z.object({ action: z.literal("send"), title: z.string().trim().min(2).max(160), body: z.string().trim().min(2).max(5000), audience: z.enum(["guardians", "teachers", "staff", "individual"]), channel: z.enum(["in_app", "sms", "whatsapp"]), userId: z.string().trim().min(1).max(100).optional(), mediaUrl: z.string().url().max(2000).optional() });
 const broadcastSchema = z.object({ action: z.literal("broadcast"), title: z.string().trim().min(2).max(160), body: z.string().trim().min(2).max(5000), audience: z.enum(["guardians", "teachers", "staff", "all"]), channel: z.enum(["sms", "whatsapp"]), scheduleAt: z.string().max(40).optional(), mediaUrl: z.string().url().max(2000).optional() });
-// One request fans out inside a single transaction; cap the batch so a huge
-// school cannot time out the request. The response states the cap explicitly.
 const MAX_BROADCAST_RECIPIENTS = 1000;
 const eventFlag = z.union([z.boolean(), z.string()]).optional();
 const eventSchema = z.object({ action: z.literal("create_event"), name: z.string().trim().min(2).max(180), type: z.string().trim().min(2).max(40), startDate: z.string().min(1), endDate: z.string().min(1), location: z.string().optional(), description: z.string().max(5000).optional(), affectsAttendance: eventFlag, affectsTransport: eventFlag, notifyGuardians: eventFlag, notifyStaff: eventFlag });
+const STAFF_ROLE_KEYS=["owner","administrator","principal","vice_principal","academic_coordinator","department_head","accountant","hr_officer","admissions_officer","front_desk_security","transport_officer","teacher","class_teacher","subject_teacher"] as const;
 function asRecord(value: unknown): JsonRecord { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {}; }
 function flag(value: boolean | string | undefined): boolean | undefined { if (value === undefined) return undefined; if (typeof value === "boolean") return value; return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase()); }
 async function canCommunicate(schoolId: string, userId: string) {
   return withTenant(schoolId, async (tx) => {
     const access = await getSchoolAuthorization(tx, userId);
-    if (access.isOwner) return true;
-    // communications:manage is the dedicated permission; templates:manage is
-    // still honoured so existing template managers keep working.
-    if (await hasPermission(tx, userId, "communications:manage")) return true;
-    return access.can("templates:manage");
+    return access.isOwner || await hasPermission(tx, userId, "communications:manage");
   });
 }
+async function canManageCalendar(schoolId:string,userId:string){return withTenant(schoolId,tx=>hasPermission(tx,userId,"calendar:manage"));}
 
 export async function GET() {
   try {
@@ -55,23 +51,26 @@ export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
     const input = await request.json();
-    if (!(await canCommunicate(session.schoolId, session.userId))) throw new ForbiddenError("Your account is not authorised to manage school communications.");
+    const communicationAccess = await canCommunicate(session.schoolId, session.userId);
+    const calendarAccess = input?.action === "create_event" ? await canManageCalendar(session.schoolId, session.userId) : false;
+    if (!communicationAccess && !calendarAccess) throw new ForbiddenError("Your account is not authorised to manage this school workspace action.");
 
     if (input?.action === "send") {
       const value = sendSchema.parse(input);
+      if (!communicationAccess) throw new ForbiddenError("Your account is not authorised to manage school communications.");
       return withTenant(session.schoolId, async (tx) => {
         let recipients: Recipient[] = [];
         if (value.audience === "individual") { const user = value.userId ? await tx.user.findFirst({ where: { id: value.userId, schoolId: session.schoolId, status: "active" }, select: { id: true, name: true, phone: true } }) : null; if (user) recipients = [user]; }
         else if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
-        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
-        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", userRoles: { some: { role: { key: { in: [...STAFF_ROLE_KEYS.filter((key)=>["teacher","class_teacher","subject_teacher","academic_coordinator","department_head"].includes(key))] } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", userRoles: { some: { role: { key: { in: STAFF_ROLE_KEYS } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
         else recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
         if (!recipients.length) return NextResponse.json({ ok: true, message: "No recipients matched that audience." });
         const capped = recipients.length >= MAX_BROADCAST_RECIPIENTS;
         if (value.channel === "in_app") {
           const batchKey = `direct:${session.schoolId}:${Date.now()}`; const now = new Date();
           await tx.message.createMany({ data: recipients.map((r) => ({ schoolId: session.schoolId, channel: "in_app", recipientType: "user", recipientId: r.id, recipientPhone: r.phone || "", body: `${value.title}\n\n${value.body}`, templateKey: "direct_message", templateVariables: { title: value.title }, mediaUrl: value.mediaUrl || null, status: "delivered", attempts: 1, sentAt: now, nextAttemptAt: now, idempotencyKey: `${batchKey}:${r.id}:in_app` })) });
-        } else for (const recipient of recipients) { if (!recipient.phone) continue; await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl }); }
+        } else for (const recipient of recipients) { if (!recipient.phone) continue; const rows=await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl, channels: value.channel }); if (rows.length===0) continue; }
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "message.sent", entityType: "MessageBatch", entityId: `message-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: recipients.length } });
         revalidatePath("/school/communications/messages"); revalidatePath("/school/communications/broadcasts"); revalidatePath("/school/communications/announcements");
         return NextResponse.json({ ok: true, message: `Message sent to ${recipients.length} matched recipient${recipients.length === 1 ? "" : "s"}.${capped ? ` Limited to ${MAX_BROADCAST_RECIPIENTS} per request — narrow the audience and send again for the rest.` : ""}` });
@@ -80,6 +79,7 @@ export async function POST(request: Request) {
 
     if (input?.action === "broadcast") {
       const value = broadcastSchema.parse(input);
+      if (!communicationAccess) throw new ForbiddenError("Your account is not authorised to manage school communications.");
       const scheduledAt = value.scheduleAt ? new Date(value.scheduleAt) : null;
       if (scheduledAt && Number.isNaN(scheduledAt.getTime())) return NextResponse.json({ error: "INVALID_INPUT", message: "Choose a valid schedule time." }, { status: 400 });
       if (scheduledAt && scheduledAt.getTime() <= Date.now()) return NextResponse.json({ error: "INVALID_INPUT", message: "Scheduled broadcast time must be in the future." }, { status: 400 });
@@ -87,16 +87,16 @@ export async function POST(request: Request) {
         let recipients: Recipient[] = [];
         if (value.audience === "guardians") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", guardianProfiles: { some: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
         else if (value.audience === "teachers") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", userRoles: { some: { role: { key: { in: ["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"] } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
-        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", guardianProfiles: { none: { schoolId: session.schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+        else if (value.audience === "staff") recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active", userRoles: { some: { role: { key: { in: STAFF_ROLE_KEYS } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
         else recipients = await tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
         const capped = recipients.length >= MAX_BROADCAST_RECIPIENTS;
         let queued = 0;
         for (const recipient of recipients) {
           if (!recipient.phone) continue;
-          if (value.channel === "sms" && !process.env.SMS_PROVIDER_URL) break;
-          if (value.channel === "whatsapp" && !process.env.TWILIO_ACCOUNT_SID) break;
-          await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl, scheduledAt: scheduledAt || undefined, idempotencyKey: `broadcast:${session.schoolId}:${value.audience}:${value.channel}:${value.title}:${value.body}:${scheduledAt?.toISOString() || "now"}` });
-          queued++;
+          if (value.channel === "sms" && (!process.env.SMS_PROVIDER_URL || !process.env.SMS_PROVIDER_TOKEN)) break;
+          if (value.channel === "whatsapp" && (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_WHATSAPP_FROM)) break;
+          const rows=await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone, body: `${value.title}\n\n${value.body}`, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl, scheduledAt: scheduledAt || undefined, channels: value.channel, idempotencyKey: `broadcast:${session.schoolId}:${value.audience}:${value.channel}:${value.title}:${value.body}:${scheduledAt?.toISOString() || "now"}` });
+          queued += rows.length;
         }
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: scheduledAt ? "broadcast.scheduled" : "broadcast.queued", entityType: "Broadcast", entityId: `broadcast-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: queued, scheduleAt: scheduledAt?.toISOString() || null } });
         revalidatePath("/school/communications/messages"); revalidatePath("/school/communications/broadcasts");
@@ -126,11 +126,12 @@ export async function POST(request: Request) {
         });
         revalidatePath("/school/events");
         revalidatePath("/school/communications/messages");
-        return NextResponse.json({ ok: true, message: `Event created. ${result.guardianRecipients} guardian and ${result.staffRecipients} staff notification recipient${result.guardianRecipients + result.staffRecipients === 1 ? " was" : "s were"} queued.`, event: result.event });
+        return NextResponse.json({ ok: true, message: `Event created. ${result.queuedDeliveryJobs} delivery job${result.queuedDeliveryJobs === 1 ? " was" : "s were"} queued for ${result.guardianRecipients} guardian and ${result.staffRecipients} staff recipients.`, event: result.event });
       });
     }
 
     if (input?.action === "save_settings") {
+      if (!communicationAccess) throw new ForbiddenError("Your account is not authorised to manage communication settings.");
       const rawChannels: unknown[] = Array.isArray(input.channels) ? input.channels : ["in_app"];
       const channels = [...new Set(rawChannels.filter((c): c is string => c === "in_app" || c === "sms" || c === "whatsapp"))];
       if (!channels.length) return NextResponse.json({ error: "INVALID_INPUT", message: "Select at least one communication channel." }, { status: 400 });
