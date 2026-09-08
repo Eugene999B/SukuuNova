@@ -10,12 +10,16 @@ import {
   forceSignOutSchool,
   forceSignOutSchoolUser,
   getPlatformSchoolControlSnapshot,
+  requireSchoolUserPasswordChange,
   sendPlatformSchoolNotice,
+  setSchoolUserStatus,
 } from "@/lib/platform-school-control-service";
 
 const postSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("force_school_signout"), reason: z.string().trim().min(8).max(500), confirmation: z.literal("SIGN OUT SCHOOL") }),
   z.object({ action: z.literal("force_user_signout"), userId: z.string().min(1).max(120), reason: z.string().trim().min(8).max(500) }),
+  z.object({ action: z.literal("set_user_status"), userId: z.string().min(1).max(120), status: z.enum(["active", "suspended"]), reason: z.string().trim().min(8).max(500) }),
+  z.object({ action: z.literal("require_password_change"), userId: z.string().min(1).max(120), reason: z.string().trim().min(8).max(500) }),
   z.object({ action: z.literal("end_impersonations"), reason: z.string().trim().min(8).max(500) }),
   z.object({
     action: z.literal("send_notice"),
@@ -53,6 +57,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       case "force_user_signout":
         await requirePlatformPermission(session, "security.manage");
         return NextResponse.json({ ok: true, result: await forceSignOutSchoolUser(id, input.userId, actor, input.reason) });
+      case "set_user_status":
+        await requirePlatformPermission(session, "security.manage");
+        return NextResponse.json({ ok: true, result: await setSchoolUserStatus(id, input.userId, input.status, actor, input.reason) });
+      case "require_password_change":
+        await requirePlatformPermission(session, "security.manage");
+        return NextResponse.json({ ok: true, result: await requireSchoolUserPasswordChange(id, input.userId, actor, input.reason) });
       case "end_impersonations":
         await requirePlatformPermission(session, "schools.impersonate");
         return NextResponse.json({ ok: true, result: await endSchoolImpersonations(id, actor, input.reason) });
