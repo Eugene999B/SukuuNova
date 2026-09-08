@@ -1,12 +1,56 @@
 "use client";
-import { LifeBuoy, MessageCircle, X } from "lucide-react";
+
+import { ArrowRight, LifeBuoy, MessageCircle, X } from "lucide-react";
 import { useState } from "react";
 
-const EMPTY_FORM={name:"",email:"",phone:"",subject:"Help from SukuuNova",message:""};
-export function HomeHelpBar(){
- const [open,setOpen]=useState(false),[sent,setSent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
- const [form,setForm]=useState(EMPTY_FORM);
- async function send(){setBusy(true);setError("");try{const r=await fetch("/api/public/inquiries",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(form)});const b=await r.json().catch(()=>({}));if(r.ok)setSent(true);else setError(b.message||"We could not send your message.");}catch{setError("We could not send your message. Please try again.");}finally{setBusy(false)}}
- function another(){setSent(false);setError("");setForm(EMPTY_FORM);}
- return <section className="mx-auto mb-5 max-w-[1480px] rounded-3xl border border-emerald-200 bg-emerald-50 p-4 shadow-sm sm:p-5"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white"><LifeBuoy size={18}/></span><div><strong className="block text-sm font-black text-emerald-950">Need help? Start here.</strong><p className="mt-1 text-xs leading-5 text-emerald-900/70">Tell SukuuNova what you need and our support team can follow up by email or phone/WhatsApp.</p></div></div><button type="button" onClick={()=>{setOpen(true);setSent(false)}} className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2.5 text-[11px] font-black text-white"><MessageCircle size={15}/> Send a help message</button></div>{open?<div className="mt-4 rounded-2xl border border-emerald-200 bg-white p-4"><div className="mb-4 flex items-center justify-between gap-3"><div><span className="text-[9px] font-black uppercase tracking-[.15em] text-emerald-700">Direct support</span><h2 className="mt-1 text-base font-black text-slate-950">Message SukuuNova</h2></div><button type="button" onClick={()=>setOpen(false)} aria-label="Close help form"><X size={17}/></button></div>{sent?<div className="rounded-xl bg-emerald-50 p-4 text-sm font-bold text-emerald-800"><p>Your help request is in the support inbox.</p><button type="button" onClick={another} className="mt-3 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white">Send another</button></div>:<div className="grid gap-3 sm:grid-cols-2"><input required className="rounded-xl border border-slate-300 px-3 py-3 text-base sm:text-sm" placeholder="Your name" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/><input type="email" className="rounded-xl border border-slate-300 px-3 py-3 text-base sm:text-sm" placeholder="Email address" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/><input className="rounded-xl border border-slate-300 px-3 py-3 text-base sm:text-sm" placeholder="Phone / WhatsApp" value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})}/><input required className="rounded-xl border border-slate-300 px-3 py-3 text-base sm:text-sm" placeholder="What do you need help with?" value={form.subject} onChange={e=>setForm({...form,subject:e.target.value})}/><textarea required className="min-h-32 rounded-xl border border-slate-300 px-3 py-3 text-base sm:text-sm sm:col-span-2" placeholder="Describe the problem, question or request…" value={form.message} onChange={e=>setForm({...form,message:e.target.value})}/><div className="sm:col-span-2"><button disabled={busy||!form.name||!form.subject||!form.message||(!form.email&&!form.phone)} onClick={()=>void send()} className="inline-flex w-fit items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-[11px] font-black text-white disabled:opacity-50"><MessageCircle size={14}/>{busy?"Sending…":"Send help request"}</button>{error&&<p className="mt-2 text-xs font-bold text-rose-700" role="alert">{error}</p>}</div></div>}</div>:null}</section>;
+const EMPTY_FORM = { name: "", email: "", phone: "", subject: "Help from SukuuNova", message: "" };
+
+export function HomeHelpBar() {
+  const [open, setOpen] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  async function send() {
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/public/inquiries", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(form) });
+      const body = await response.json().catch(() => ({}));
+      if (response.ok) setSent(true);
+      else setError(body.message || "We could not send your message.");
+    } catch {
+      setError("We could not send your message. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function another() {
+    setSent(false);
+    setError("");
+    setForm(EMPTY_FORM);
+  }
+
+  return (
+    <section className={`home-help ${open ? "is-open" : ""}`}>
+      <div className="home-help-summary">
+        <div className="home-help-intro"><span className="home-help-icon"><LifeBuoy size={18} /></span><div><span className="home-help-kicker">Human support</span><strong>Need help deciding where to start?</strong><p>Tell us what your school needs. Send one message and give us either email or phone/WhatsApp so a real person can follow up.</p></div></div>
+        <button type="button" className="home-help-open" onClick={() => { setOpen(true); setSent(false); }}><MessageCircle size={15} /> Send a help message <ArrowRight size={14} /></button>
+      </div>
+
+      {open ? <div className="home-help-panel">
+        <div className="home-help-head"><div><span>Direct support</span><h2>Message SukuuNova</h2><p>Short is fine. Tell us the problem, question or goal.</p></div><button type="button" onClick={() => setOpen(false)} aria-label="Close help form"><X size={18} /></button></div>
+        {sent ? <div className="home-help-success"><strong>Your message is in the support inbox.</strong><p>We have the details you sent and a way to reply.</p><button type="button" onClick={another}>Send another message</button></div> : <div className="home-help-form">
+          <label><span>Your name</span><input required placeholder="e.g. Ama Mensah" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+          <label><span>Email</span><input type="email" placeholder="name@school.com" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label>
+          <label><span>Phone / WhatsApp</span><input placeholder="A number we can reply to" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} /></label>
+          <label><span>What do you need?</span><input required placeholder="e.g. School setup, fees, attendance…" value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} /></label>
+          <label className="home-help-message"><span>Message</span><textarea required placeholder="Describe the question or request…" value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} /></label>
+          <div className="home-help-submit"><button disabled={busy || !form.name || !form.subject || !form.message || (!form.email && !form.phone)} onClick={() => void send()}><MessageCircle size={14} />{busy ? "Sending…" : "Send help request"}</button><small>Only the information needed to understand and reply to your request.</small>{error ? <p role="alert">{error}</p> : null}</div>
+        </div>}
+      </div> : null}
+    </section>
+  );
 }
