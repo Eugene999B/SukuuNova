@@ -1,5 +1,6 @@
 import { appendSchoolAudit } from "./audit";
-import { TenantDb, withTenant } from "./db";
+import type { TenantDb } from "./db";
+import { withTenant } from "./db";
 import { AppError } from "./errors";
 import { requirePermission } from "./rbac";
 import { enqueueNotification } from "./message-outbox";
@@ -81,9 +82,9 @@ export async function createCalendarEventTx(tx: TenantDb, input: CalendarEventIn
 
   let guardianRecipients = 0;
   let staffRecipients = 0;
-  const dateText = input.startDate.toISOString().slice(0, 10) === input.endDate.toISOString().slice(0, 10)
-    ? input.startDate.toISOString().slice(0, 10)
-    : `${input.startDate.toISOString().slice(0, 10)} to ${input.endDate.toISOString().slice(0, 10)}`;
+  const startText = input.startDate.toISOString().slice(0, 10);
+  const endText = input.endDate.toISOString().slice(0, 10);
+  const dateText = startText === endText ? startText : `${startText} to ${endText}`;
   const messageBody = `School calendar event: ${event.name}\nDate: ${dateText}\nType: ${event.type}`;
 
   if (input.notifyGuardians) {
