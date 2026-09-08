@@ -61,6 +61,9 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       const common = { schoolId: session.schoolId, actorId: session.userId };
+      if (input.action === "saveSlot" || input.action === "updateSlot" || input.action === "deleteSlot" || input.action === "swapSlots" || input.action === "moveSlot") {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`timetable-generation:${session.schoolId}`}))`;
+      }
       switch (input.action) {
         case "saveSlot": return createTimetableSlot(tx, { ...common, ...input });
         case "updateSlot": return updateTimetableSlot(tx, { ...common, ...input });
