@@ -1,9 +1,10 @@
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { AppError } from "@/lib/errors";
-import { calculateIntelligentReportCard } from "@/lib/report-card-intelligence";
-import { readReportCardConfig } from "@/lib/report-card-intelligence";
+import { calculateIntelligentReportCard, readReportCardConfig } from "@/lib/report-card-intelligence";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+
+export type FrozenPromotionDecision = "promoted" | "not_promoted" | "decision_required";
 
 function object(value: Prisma.JsonValue | null | undefined): Record<string, Prisma.JsonValue> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.JsonValue> : {};
@@ -15,6 +16,11 @@ function numberOrNull(value: Prisma.JsonValue | undefined) {
 
 function stringOrNull(value: Prisma.JsonValue | undefined) {
   return typeof value === "string" ? value : null;
+}
+
+function frozenPromotionDecision(value: Prisma.JsonValue | undefined): FrozenPromotionDecision {
+  if (value === "promoted" || value === "not_promoted" || value === "decision_required") return value;
+  return "decision_required";
 }
 
 export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: string; reportId: string }) {
@@ -69,7 +75,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
   });
   const grading = object(snapshot.gradingWeights);
   const attendance = object(snapshot.attendance);
-  const promotionDecision = snapshot.promotionDecision === "promoted" || snapshot.promotionDecision === "not_promoted" || snapshot.promotionDecision === "decision_required" ? snapshot.promotionDecision : "decision_required";
+  const promotionDecision: FrozenPromotionDecision = frozenPromotionDecision(snapshot.promotionDecision);
   const show = (key: string, fallback: boolean) => typeof presentation[key] === "boolean" ? Boolean(presentation[key]) : fallback;
 
   return {
