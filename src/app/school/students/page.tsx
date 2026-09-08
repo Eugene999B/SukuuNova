@@ -37,15 +37,15 @@ async function getStudentsPageData(schoolId: string) {
 
 async function createStudent(_previousState: StudentActionState, formData: FormData): Promise<StudentActionState> {
   "use server";
+  const session = await requireSchoolSession();
+  const name = String(formData.get("name") ?? "").trim();
+  const dobRaw = String(formData.get("dob") ?? "").trim();
+  const classId = String(formData.get("classId") ?? "").trim();
+  const guardianName = String(formData.get("guardianName") ?? "").trim();
+  const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
+  const guardianRelationship = String(formData.get("guardianRelationship") ?? "Parent/Guardian").trim() || "Parent/Guardian";
+  const photoData = String(formData.get("photoData") ?? "").trim();
   try {
-    const session = await requireSchoolSession();
-    const name = String(formData.get("name") ?? "").trim();
-    const dobRaw = String(formData.get("dob") ?? "").trim();
-    const classId = String(formData.get("classId") ?? "").trim();
-    const guardianName = String(formData.get("guardianName") ?? "").trim();
-    const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
-    const guardianRelationship = String(formData.get("guardianRelationship") ?? "Parent/Guardian").trim() || "Parent/Guardian";
-    const photoData = String(formData.get("photoData") ?? "").trim();
     if (!name) throw new Error("Student name is required.");
     if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large. Capture a smaller photo and try again.");
     if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
@@ -76,12 +76,10 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
       await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
     });
     revalidatePath("/school/students");
-    return { message: null };
   } catch (error) {
     console.error("Student registration action failed", error);
     return { message: error instanceof Error && error.message ? error.message : "Student registration could not be completed. Nothing was saved. Please try again." };
   }
-  // Successful server actions redirect after the transaction has committed.
   redirect("/school/students");
 }
 
