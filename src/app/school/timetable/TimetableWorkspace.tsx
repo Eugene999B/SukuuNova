@@ -481,7 +481,7 @@ export default function TimetableWorkspace() {
                                 })}
                               >
                                 <span><Plus size={13} /> Add lesson</span>
-                                <small className="tt-cell-time">{periodTime(dayPeriod)}</small>
+                                <small className="tt-cell-time">{dayPeriod ? periodTime(dayPeriod) : ""}</small>
                               </button>
                             </td>
                           );
