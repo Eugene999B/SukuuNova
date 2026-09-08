@@ -31,13 +31,15 @@ export async function GET(request: Request) {
 
       const visible = await visibleStudents(tx, session.userId);
       const requestedClass = classId;
-      if (requestedClass && !canWriteAll) {
+      const classTeacher = requestedClass ? await tx.class.findFirst({ where: { id: requestedClass, schoolId: session.schoolId, classTeacherId: session.userId }, select: { id: true } }) : null;
+      if (!canWriteAll && !requestedClass) throw new ForbiddenError("Choose a class before viewing an assigned gradebook.");
+      if (!canWriteAll && requestedClass) {
         const allowedClassIds = new Set(visible.filter((row) => row.classId).map((row) => row.classId as string));
         if (!allowedClassIds.has(requestedClass)) throw new ForbiddenError("You do not have gradebook access for this class.");
+        if (!subjectId && !classTeacher) throw new ForbiddenError("Subject is required for assigned subject teachers.");
       }
       if (requestedClass && subjectId && !canWriteAll) {
         const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId: session.schoolId, classId: requestedClass, subjectId, teacherId: session.userId }, select: { classId: true } });
-        const classTeacher = await tx.class.findFirst({ where: { id: requestedClass, schoolId: session.schoolId, classTeacherId: session.userId }, select: { id: true } });
         if (!assignment && !classTeacher) throw new ForbiddenError("You do not have gradebook access for this class and subject.");
       }
       const students = classId ? visible.filter((row) => row.classId === classId) : visible;
