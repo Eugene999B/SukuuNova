@@ -15,7 +15,8 @@ describe("message enqueue idempotency", () => {
         body: "Payment received",
         templateKey: "payment_received" as const,
         templateVariables: { "1": "100.00", "2": "paid", "3": "invoice-1" },
-        idempotencyKey: "payment-created:payment-1:v1"
+        idempotencyKey: "payment-created:payment-1:v1",
+        channels: "sms" as const,
       };
 
       const first = await enqueueNotification(tx, input);
