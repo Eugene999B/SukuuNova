@@ -22,7 +22,7 @@ const MAX_BROADCAST_RECIPIENTS = 1000;
 const eventFlag = z.union([z.boolean(), z.string()]).optional();
 const eventSchema = z.object({ action: z.literal("create_event"), name: z.string().trim().min(2).max(180), type: z.string().trim().min(2).max(40), startDate: z.string().min(1), endDate: z.string().min(1), location: z.string().optional(), description: z.string().max(5000).optional(), affectsAttendance: eventFlag, affectsTransport: eventFlag, notifyGuardians: eventFlag, notifyStaff: eventFlag });
 function asRecord(value: unknown): JsonRecord { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {}; }
-function flag(value: boolean | string | undefined) { if (typeof value === "boolean") return value; if (typeof value !== "string") return false; return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase()); }
+function flag(value: boolean | string | undefined): boolean | undefined { if (value === undefined) return undefined; if (typeof value === "boolean") return value; return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase()); }
 async function canCommunicate(schoolId: string, userId: string) {
   return withTenant(schoolId, async (tx) => {
     const access = await getSchoolAuthorization(tx, userId);
@@ -117,8 +117,8 @@ export async function POST(request: Request) {
           name: value.name,
           startDate: start,
           endDate: end,
-          affectsAttendance: flag(value.affectsAttendance),
-          affectsTransport: flag(value.affectsTransport),
+          ...(value.affectsAttendance === undefined ? {} : { affectsAttendance: flag(value.affectsAttendance) }),
+          ...(value.affectsTransport === undefined ? {} : { affectsTransport: flag(value.affectsTransport) }),
           notifyGuardians: flag(value.notifyGuardians),
           notifyStaff: flag(value.notifyStaff),
           location: value.location || null,
