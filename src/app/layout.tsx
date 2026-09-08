@@ -1,19 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import "./design-tokens.css";
-import "./ui-system.css";
-import "./student-theme.css";
-import "./visual-system.css";
 import "./typography.css";
-import "./sukuunova-overrides.css";
+import "./ui-system.css";
 import "./theme-switcher.css";
 import "./theme-runtime.css";
-import "./ui-trust.css";
-import "./theme-hardening.css";
-import "./global-theme.css";
 import "./mobile-shell-fixes.css";
-import "./dark-contrast-fix.css";
 import "@/components/ui/skeleton.css";
+import "./product-ui.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {

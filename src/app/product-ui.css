@@ -1,0 +1,640 @@
+/* SukuuNova unified product UI layer.
+   Layout components may define structure; this layer defines the product's visual language. */
+
+html,
+body {
+  background: var(--color-bg) !important;
+  color: var(--color-text-primary) !important;
+}
+
+body {
+  font-family: var(--sn-font-family);
+  letter-spacing: -0.006em;
+}
+
+::selection {
+  background: var(--color-brand-soft);
+  color: var(--color-text-primary);
+}
+
+/* ---------- Product shell ---------- */
+.app-shell {
+  background: var(--color-bg) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.app-sidebar {
+  width: 268px !important;
+  flex-basis: 268px !important;
+  padding: 18px 12px 14px !important;
+  background: var(--color-surface) !important;
+  border-right: 1px solid var(--color-border) !important;
+  box-shadow: 10px 0 34px color-mix(in srgb, var(--color-text-primary) 4%, transparent) !important;
+}
+
+:root[data-theme="dark"] .app-sidebar {
+  background: linear-gradient(180deg, var(--color-surface) 0%, var(--color-bg-subtle) 100%) !important;
+  box-shadow: 16px 0 46px color-mix(in srgb, black 24%, transparent) !important;
+}
+
+.app-sidebar-top-bar {
+  min-height: 48px;
+}
+
+.app-brand {
+  gap: 11px !important;
+  padding: 2px 8px 16px !important;
+}
+
+.app-brand-mark {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 13px !important;
+  background: linear-gradient(145deg, var(--color-brand), var(--color-brand-deep)) !important;
+  color: var(--color-text-on-brand) !important;
+  box-shadow: 0 10px 22px var(--color-brand-glow) !important;
+}
+
+.app-brand strong {
+  color: var(--color-text-primary) !important;
+  font-size: 16px !important;
+  font-weight: 820 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.app-brand small,
+.app-school-chip small,
+.app-user-mini small {
+  color: var(--color-text-muted) !important;
+}
+
+.app-school-chip {
+  margin: 0 2px 16px !important;
+  padding: 10px 11px !important;
+  border: 1px solid var(--color-border) !important;
+  background: var(--color-surface-soft) !important;
+  border-radius: 13px !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-surface) 85%, transparent) !important;
+}
+
+.app-chip-avatar,
+.app-user-avatar {
+  background: var(--color-brand-soft) !important;
+  color: var(--color-brand) !important;
+  border: 1px solid var(--color-brand-border) !important;
+}
+
+.app-nav {
+  gap: 13px !important;
+}
+
+.app-nav-group {
+  gap: 3px !important;
+}
+
+.app-nav-group + .app-nav-group {
+  padding-top: 2px;
+}
+
+.app-nav-group-toggle {
+  min-height: 28px;
+  padding: 3px 10px 6px !important;
+  color: var(--color-text-muted) !important;
+  border-radius: 8px !important;
+}
+
+.app-nav-group-toggle:hover {
+  background: var(--color-surface-soft) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.app-nav-label {
+  color: inherit !important;
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.105em !important;
+}
+
+.app-nav-chevron {
+  transition: transform var(--transition-normal);
+}
+
+.app-nav-group.is-collapsed .app-nav-chevron {
+  transform: rotate(-90deg);
+}
+
+.app-nav-item {
+  min-height: 40px !important;
+  padding: 9px 11px !important;
+  gap: 10px !important;
+  border: 1px solid transparent !important;
+  border-radius: 11px !important;
+  color: var(--color-text-secondary) !important;
+  font-size: 13px !important;
+  font-weight: 620 !important;
+  transform: none !important;
+}
+
+.app-nav-item:hover {
+  background: var(--color-surface-hover) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.app-nav-item.is-active {
+  background: var(--color-brand-soft) !important;
+  border-color: var(--color-brand-border) !important;
+  color: var(--color-brand-deep) !important;
+  box-shadow: inset 3px 0 0 var(--color-brand) !important;
+}
+
+:root[data-theme="dark"] .app-nav-item.is-active {
+  color: var(--color-text-primary) !important;
+  background: color-mix(in srgb, var(--color-brand-soft) 88%, var(--color-surface)) !important;
+}
+
+.app-nav-active-dot {
+  width: 6px !important;
+  height: 6px !important;
+  background: var(--color-brand) !important;
+  box-shadow: 0 0 0 3px var(--color-brand-glow) !important;
+}
+
+.app-account-link,
+.app-signout,
+.app-collapse-button,
+.app-drawer-close {
+  background: var(--color-surface-soft) !important;
+  color: var(--color-text-secondary) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: none !important;
+}
+
+.app-account-link:hover,
+.app-signout:hover,
+.app-collapse-button:hover,
+.app-drawer-close:hover {
+  background: var(--color-surface-hover) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border-strong) !important;
+}
+
+.app-main {
+  background:
+    radial-gradient(circle at 90% 0%, var(--color-brand-glow), transparent 25rem),
+    var(--color-bg) !important;
+}
+
+:root[data-theme="light"] .app-main {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 62%, transparent), transparent 18rem),
+    var(--color-bg) !important;
+}
+
+.app-topbar {
+  align-items: center !important;
+  min-height: 76px !important;
+  padding: 14px var(--sn-content-pad) !important;
+  background: var(--sn-surface-glass) !important;
+  border-bottom: 1px solid var(--color-border) !important;
+  backdrop-filter: blur(18px) saturate(145%) !important;
+}
+
+.app-breadcrumb {
+  color: var(--color-text-muted) !important;
+}
+
+.app-topbar h1 {
+  color: var(--color-text-primary) !important;
+  font-size: clamp(21px, 2.1vw, 27px) !important;
+  font-weight: 830 !important;
+  letter-spacing: -0.035em !important;
+}
+
+.app-topbar p {
+  color: var(--color-text-muted) !important;
+}
+
+.app-search,
+.app-icon-button,
+.app-mobile-menu-btn {
+  background: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-text-secondary) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.app-search:hover,
+.app-icon-button:hover,
+.app-mobile-menu-btn:hover {
+  background: var(--color-surface-hover) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border-strong) !important;
+  transform: none !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.app-content {
+  width: 100%;
+  max-width: none !important;
+  padding: 24px var(--sn-content-pad) 56px !important;
+  color: var(--color-text-primary) !important;
+}
+
+/* ---------- Page hierarchy ---------- */
+.sn-page-header,
+.module-topline {
+  margin-bottom: 22px !important;
+}
+
+.sn-page-header h1,
+.module-topline h2 {
+  color: var(--color-text-primary) !important;
+  font-weight: 830 !important;
+  letter-spacing: -0.04em !important;
+}
+
+.sn-page-header p,
+.module-topline p,
+.module-section-title p {
+  color: var(--color-text-muted) !important;
+}
+
+.module-overline,
+.module-section-title > div > span,
+.admin-eyebrow {
+  color: var(--color-brand) !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.11em !important;
+}
+
+/* ---------- Cards and surfaces ---------- */
+:where(.app-card, .module-card, .module-panel, .module-side-card, .module-stat, .module-metrics article, .sn-data-card, .sn-list-card, .sn-action-card, .card, .panel, .module-selector-card, .module-setup-card, .module-workflow-step, .module-list-item) {
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+:where(.app-card, .module-card, .module-panel, .module-side-card, .module-stat, .module-metrics article, .sn-data-card, .sn-action-card):hover {
+  border-color: var(--color-border-strong) !important;
+  box-shadow: var(--shadow-card-hover) !important;
+}
+
+:where(.app-card, .module-card, .module-panel, .module-side-card, .module-stat, .module-metrics article, .sn-data-card, .sn-list-card, .sn-action-card) :where(h1,h2,h3,h4,strong,b) {
+  color: var(--color-text-primary) !important;
+}
+
+:where(.app-card, .module-card, .module-panel, .module-side-card, .module-stat, .module-metrics article, .sn-data-card, .sn-list-card, .sn-action-card) :where(p,small,label) {
+  color: var(--color-text-muted) !important;
+}
+
+/* ---------- Tabs: consistent segmented navigation ---------- */
+.module-tabbar,
+.module-tabs,
+.tabs {
+  display: flex !important;
+  gap: 4px !important;
+  padding: 5px !important;
+  overflow-x: auto !important;
+  flex-wrap: nowrap !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 14px !important;
+  background: var(--color-surface-soft) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-surface) 80%, transparent) !important;
+  scrollbar-width: none;
+}
+
+.module-tabs::-webkit-scrollbar,
+.module-tabbar::-webkit-scrollbar,
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.module-tab,
+.module-tabbar a,
+.module-tabbar button,
+.tabs a,
+.tabs button {
+  min-height: 36px !important;
+  padding: 8px 13px !important;
+  white-space: nowrap !important;
+  border: 1px solid transparent !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  color: var(--color-text-muted) !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+.module-tab:hover,
+.module-tabbar a:hover,
+.module-tabbar button:hover,
+.tabs a:hover,
+.tabs button:hover {
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+}
+
+.module-tab.active,
+.module-tab.is-active,
+.module-tabbar a.is-active,
+.module-tabbar button.is-active,
+.tabs .is-active,
+.tabs [aria-selected="true"] {
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: var(--shadow-xs) !important;
+  position: relative;
+}
+
+.module-tab.active::after,
+.module-tab.is-active::after,
+.module-tabbar a.is-active::after,
+.module-tabbar button.is-active::after,
+.tabs .is-active::after,
+.tabs [aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  bottom: -5px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand);
+}
+
+/* ---------- Controls ---------- */
+:where(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+  min-height: 40px;
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  -webkit-text-fill-color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border-strong) !important;
+  border-radius: 10px !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-surface) 80%, transparent) !important;
+}
+
+:where(input,textarea)::placeholder {
+  color: var(--color-text-subtle) !important;
+  opacity: 1 !important;
+}
+
+:where(input:not([type="checkbox"]):not([type="radio"]), textarea, select):focus {
+  border-color: var(--color-brand) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+select option,
+select optgroup {
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+}
+
+:where(.button-primary, .button.primary, .btn-primary, .module-action-primary, .module-button.primary, .admin-primary-action) {
+  background: var(--color-brand) !important;
+  color: var(--color-text-on-brand) !important;
+  border-color: var(--color-brand) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 18px var(--color-brand-glow) !important;
+}
+
+:where(.button-primary, .button.primary, .btn-primary, .module-action-primary, .module-button.primary, .admin-primary-action):hover {
+  background: var(--color-brand-hover) !important;
+  color: var(--color-text-on-brand) !important;
+  transform: translateY(-1px) !important;
+}
+
+:where(.button-secondary, .button.secondary, .btn-secondary, .module-action-secondary, .module-button.secondary, .admin-secondary-action) {
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 10px !important;
+}
+
+/* ---------- Tables ---------- */
+.module-table-wrap,
+.table-wrap,
+.data-table {
+  overflow: auto !important;
+  background: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+:where(.module-table-wrap, .table-wrap, .data-table) th {
+  background: var(--color-surface-soft) !important;
+  color: var(--color-text-muted) !important;
+  border-color: var(--color-border) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.075em !important;
+}
+
+:where(.module-table-wrap, .table-wrap, .data-table) td {
+  background: var(--color-surface) !important;
+  color: var(--color-text-secondary) !important;
+  border-color: var(--color-border-subtle) !important;
+}
+
+:where(.module-table-wrap, .table-wrap, .data-table) tbody tr:hover td {
+  background: var(--color-surface-hover) !important;
+}
+
+/* ---------- Dialogs, drawers, floating panels ---------- */
+:where(dialog, [role="dialog"], .modal, .dialog, .drawer, .sn-dialog-card, .sn-command-palette) {
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-2xl) !important;
+}
+
+.sn-dialog::backdrop,
+.sn-command-backdrop,
+.modal-backdrop,
+.staff-modal-backdrop {
+  background: color-mix(in srgb, var(--color-bg) 76%, transparent) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+/* ---------- Dashboard homepage ---------- */
+.admin-command-center {
+  max-width: var(--sn-page-max) !important;
+  gap: 18px !important;
+  padding: 2px 0 44px !important;
+}
+
+.admin-command-hero,
+.admin-readiness-card,
+.admin-attention-card,
+.admin-panel-card,
+.admin-section-block {
+  background: var(--color-surface) !important;
+  color: var(--color-text-primary) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 18px !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+.admin-command-hero {
+  padding: clamp(24px, 3vw, 36px) !important;
+  background:
+    radial-gradient(circle at 88% 18%, var(--color-brand-glow), transparent 18rem),
+    linear-gradient(135deg, var(--color-surface), var(--color-surface-soft)) !important;
+}
+
+.admin-command-hero h1 {
+  max-width: 760px !important;
+  color: var(--color-text-primary) !important;
+  font-size: clamp(29px, 3.2vw, 44px) !important;
+  line-height: 1.06 !important;
+  letter-spacing: -0.052em !important;
+  font-weight: 850 !important;
+}
+
+.admin-command-hero p,
+.admin-section-head p {
+  color: var(--color-text-muted) !important;
+  font-size: 13.5px !important;
+}
+
+.admin-readiness-card,
+.admin-attention-card,
+.admin-panel-card,
+.admin-section-block {
+  padding: 22px !important;
+}
+
+.admin-section-head h2 {
+  color: var(--color-text-primary) !important;
+  letter-spacing: -0.035em !important;
+}
+
+.admin-progress-track {
+  background: var(--color-surface-active) !important;
+  height: 7px !important;
+  border-radius: var(--radius-pill) !important;
+  overflow: hidden;
+}
+
+.admin-progress-track span {
+  background: linear-gradient(90deg, var(--color-brand), var(--color-brand-hover)) !important;
+}
+
+.admin-progress-value,
+.admin-stat-card strong {
+  color: var(--color-text-primary) !important;
+}
+
+.admin-setup-row,
+.admin-attention-row,
+.admin-metric-row,
+.admin-message-row,
+.admin-action-grid > a,
+.admin-stat-card {
+  background: transparent !important;
+  border-color: var(--color-border) !important;
+  border-radius: 12px !important;
+  color: var(--color-text-primary) !important;
+}
+
+.admin-setup-row:hover,
+.admin-attention-row:hover,
+.admin-metric-row:hover,
+.admin-message-row:hover,
+.admin-action-grid > a:hover,
+.admin-stat-card:hover {
+  background: var(--color-surface-hover) !important;
+  border-color: var(--color-border-strong) !important;
+  transform: translateY(-1px) !important;
+}
+
+.admin-stat-card span,
+.admin-stat-card small,
+.admin-action-grid span,
+.admin-setup-row small,
+.admin-attention-row small,
+.admin-message-row small {
+  color: var(--color-text-muted) !important;
+}
+
+.admin-clear-state,
+.admin-empty-state,
+.module-empty,
+.sn-empty-state {
+  background: var(--color-surface-soft) !important;
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-border-strong) !important;
+}
+
+/* ---------- Dark-mode rescue for legacy utility classes ---------- */
+:root[data-theme="dark"] .app-shell :where([class*="bg-white"], [class*="bg-slate-50"], [class*="bg-slate-100"], [class*="bg-gray-50"], [class*="bg-gray-100"]) {
+  background: var(--color-surface) !important;
+}
+
+:root[data-theme="dark"] .app-shell :where([class*="text-black"], [class*="text-slate-950"], [class*="text-slate-900"], [class*="text-gray-950"], [class*="text-gray-900"]) {
+  color: var(--color-text-primary) !important;
+}
+
+:root[data-theme="dark"] .app-shell :where([class*="text-slate-700"], [class*="text-slate-600"], [class*="text-gray-700"], [class*="text-gray-600"]) {
+  color: var(--color-text-secondary) !important;
+}
+
+:root[data-theme="dark"] .app-shell :where([class*="text-slate-500"], [class*="text-gray-500"]) {
+  color: var(--color-text-muted) !important;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 980px) {
+  .app-content {
+    padding: 20px 18px 44px !important;
+  }
+
+  .admin-command-hero {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-sidebar {
+    width: min(304px, 88vw) !important;
+    flex-basis: min(304px, 88vw) !important;
+  }
+
+  .app-topbar {
+    min-height: 64px !important;
+    padding: 11px 13px !important;
+  }
+
+  .app-content {
+    padding: 16px 13px 88px !important;
+  }
+
+  .module-tabbar,
+  .module-tabs,
+  .tabs {
+    margin-inline: -2px !important;
+    border-radius: 12px !important;
+  }
+
+  .admin-readiness-card,
+  .admin-attention-card,
+  .admin-panel-card,
+  .admin-section-block {
+    padding: 17px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
