@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
+import { parseJson } from "@/lib/http";
 
 const schema = z.object({
   classAssessmentWeight: z.number().min(0).max(100), examWeight: z.number().min(0).max(100),
