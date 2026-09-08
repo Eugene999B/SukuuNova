@@ -6,7 +6,6 @@ import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { requirePermission } from "@/lib/rbac";
 import { withTenant } from "@/lib/db";
-import { ensureIdentityCardsForSchool } from "@/lib/identity-card-service";
 import "./enquiries.css";
 
 const STAGES = [
@@ -86,6 +85,7 @@ async function convertEnquiry(formData: FormData) {
     if (!enquiry) throw new Error("Enquiry not found.");
     if (enquiry.convertedStudentId) throw new Error("This enquiry has already been converted. Open the linked student instead.");
     if (enquiry.stage !== "applied") throw new Error("Only applications at Applied stage can be enrolled. Move the enquiry to Applied first.");
+    await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, `student-registration:${session.schoolId}`);
     let admissionNo = `ADM-${new Date().getFullYear()}-${randomInt(1000, 9999)}`;
     for (let i = 0; i < 6; i++) {
       const hit = await tx.student.findUnique({ where: { schoolId_admissionNo: { schoolId: session.schoolId, admissionNo } }, select: { id: true } });
@@ -104,10 +104,8 @@ async function convertEnquiry(formData: FormData) {
       const { linkGuardianToStudent } = await import("@/lib/guardian-service");
       await linkGuardianToStudent(tx, { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: "Parent/Guardian" });
     }
-    const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
-    if (!school?.uniqueCode) throw new Error("The school's identification code is missing.");
-    await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
-    await tx.$executeRawUnsafe(`UPDATE "AdmissionEnquiry" SET "stage"='converted',"convertedStudentId"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2 AND "schoolId"=$3 AND "convertedStudentId" IS NULL`, student.id, id, session.schoolId);
+    const updateCount = await tx.$executeRawUnsafe(`UPDATE "AdmissionEnquiry" SET "stage"='converted',"convertedStudentId"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2 AND "schoolId"=$3 AND "convertedStudentId" IS NULL`, student.id, id, session.schoolId);
+    if (updateCount !== 1) throw new Error("This enquiry was converted by another user. Refresh the admissions desk.");
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "admission_enquiry.converted", entityType: "AdmissionEnquiry", entityId: id, after: { studentId: student.id, admissionNo } } });
   });
   redirect("/school/admissions/enquiries");
