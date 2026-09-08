@@ -51,7 +51,19 @@ export async function GET(request: Request) {
         .map(({ id, name }) => ({ id, name }));
       const eligibleTeacherIds = new Set(teachers.map((teacher) => teacher.id));
       const validTeachingAssignments = teachingAssignments.filter((assignment) => eligibleTeacherIds.has(assignment.teacherId));
-      return { school, classes, subjects, teachers, slots, assignments, teachingAssignments: validTeachingAssignments, timetableConfig: academic.timetable, teacherGrid: view === "teacher" && teacherId ? await getTeacherWeeklyGrid(tx, { schoolId: session.schoolId, teacherId }) : undefined };
+      const timetableConfig = {
+        ...academic.timetable,
+        days: academic.timetable.days.map((day) => {
+          if (!day.enabled) return day;
+          const periods = dayBlocks(day, academic.timetable).blocks.flatMap((block) =>
+            block.kind === "lesson" && typeof block.period === "number"
+              ? [{ period: block.period, start: block.start, end: block.end }]
+              : [],
+          );
+          return { ...day, periods };
+        }),
+      };
+      return { school, classes, subjects, teachers, slots, assignments, teachingAssignments: validTeachingAssignments, timetableConfig, teacherGrid: view === "teacher" && teacherId ? await getTeacherWeeklyGrid(tx, { schoolId: session.schoolId, teacherId }) : undefined };
     });
     return NextResponse.json(data);
   } catch (error) {
