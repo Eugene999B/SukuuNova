@@ -22,6 +22,20 @@ function numberValue(value: unknown, field: string, min = 0, max = 1000000) {
   return n;
 }
 
+async function requireLinkedStudentForBorrower(
+  tx: Parameters<typeof hasPermission>[0],
+  userId: string,
+  studentId: string,
+  canManage: boolean,
+) {
+  if (canManage) return;
+  const link = await tx.studentGuardian.findFirst({
+    where: { studentId, guardian: { userId } },
+    select: { studentId: true },
+  });
+  if (!link) throw new AppError("You can only manage library loans for a student linked to your guardian account.", 403, "FORBIDDEN");
+}
+
 export async function GET() {
   try {
     const session = await requireSchoolSession();
@@ -32,7 +46,7 @@ export async function GET() {
       const books = await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT * FROM "P3LibraryBook" WHERE "schoolId"=$1 ORDER BY "title"`, session.schoolId);
       const loans = canManage
         ? await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT *, CASE WHEN "status"='borrowed' AND "dueAt"<CURRENT_TIMESTAMP THEN 'overdue' ELSE "status" END AS "displayStatus" FROM "P3LibraryLoan" WHERE "schoolId"=$1 ORDER BY "borrowedAt" DESC LIMIT 300`, session.schoolId)
-        : await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT *, CASE WHEN "status"='borrowed' AND "dueAt"<CURRENT_TIMESTAMP THEN 'overdue' ELSE "status" END AS "displayStatus" FROM "P3LibraryLoan" WHERE "schoolId"=$1 AND "studentId" IN (SELECT sg."studentId" FROM "StudentGuardian" sg WHERE "sg"."guardianId" IN (SELECT g."id" FROM "Guardian" g WHERE g."userId"=$2)) ORDER BY "borrowedAt" DESC LIMIT 100`, session.schoolId, session.userId);
+        : await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT l.*, CASE WHEN l."status"='borrowed' AND l."dueAt"<CURRENT_TIMESTAMP THEN 'overdue' ELSE l."status" END AS "displayStatus" FROM "P3LibraryLoan" l WHERE l."schoolId"=$1 AND l."studentId" IN (SELECT sg."studentId" FROM "StudentGuardian" sg INNER JOIN "Guardian" g ON g."id"=sg."guardianId" AND g."schoolId"=sg."schoolId" WHERE sg."schoolId"=$1 AND g."userId"=$2) ORDER BY l."borrowedAt" DESC LIMIT 100`, session.schoolId, session.userId);
       return { books, loans, canManage, canBorrow };
     });
     return NextResponse.json({ ok: true, ...result });
@@ -68,13 +82,15 @@ export async function POST(request: Request) {
       }
       if (action === "borrow") {
         await requirePermission(tx, session.userId, "library:borrow");
+        const canManage = await hasPermission(tx, session.userId, "library:manage");
         const bookId = text(input.bookId, "bookId", 100);
         const studentId = text(input.studentId, "studentId", 100);
         const days = numberValue(input.days ?? 14, "days", 1, 365);
-        const student = await tx.$queryRawUnsafe<Array<{id:string}>>(`SELECT "id" FROM "Student" WHERE "schoolId"=$1 AND "id"=$2 AND "status"='active' LIMIT 1`, session.schoolId, studentId);
+        await requireLinkedStudentForBorrower(tx, session.userId, studentId, canManage);
+        const student = await tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "Student" WHERE "schoolId"=$1 AND "id"=$2 AND "status"='active' LIMIT 1`, session.schoolId, studentId);
         if (!student[0]) throw new AppError("Student not found.", 404, "STUDENT_NOT_FOUND");
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`library-book:${session.schoolId}:${bookId}`}))`;
-        const available = await tx.$queryRawUnsafe<Array<{availableCopies:number}>>(`SELECT "availableCopies" FROM "P3LibraryBook" WHERE "schoolId"=$1 AND "id"=$2 FOR UPDATE`, session.schoolId, bookId);
+        const available = await tx.$queryRawUnsafe<Array<{ availableCopies: number }>>(`SELECT "availableCopies" FROM "P3LibraryBook" WHERE "schoolId"=$1 AND "id"=$2 FOR UPDATE`, session.schoolId, bookId);
         if (!available[0] || Number(available[0].availableCopies) < 1) throw new AppError("No available copy remains.", 409, "BOOK_UNAVAILABLE");
         const loanId = createId();
         await tx.$queryRawUnsafe(`INSERT INTO "P3LibraryLoan" ("id","schoolId","bookId","studentId","borrowedAt","dueAt","status","issuedBy","createdAt") VALUES ($1,$2,$3,$4,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP + ($5 || ' days')::interval,'borrowed',$6,CURRENT_TIMESTAMP)`, loanId, session.schoolId, bookId, studentId, String(days), session.userId);
@@ -83,12 +99,15 @@ export async function POST(request: Request) {
       }
       if (action === "return") {
         await requirePermission(tx, session.userId, "library:borrow");
+        const canManage = await hasPermission(tx, session.userId, "library:manage");
         const loanId = text(input.loanId, "loanId", 100);
-        const loan = await tx.$queryRawUnsafe<Array<{bookId:string;status:string}>>(`SELECT "bookId","status" FROM "P3LibraryLoan" WHERE "schoolId"=$1 AND "id"=$2 FOR UPDATE`, session.schoolId, loanId);
+        const loan = await tx.$queryRawUnsafe<Array<{ bookId: string; studentId: string; status: string }>>(`SELECT "bookId","studentId","status" FROM "P3LibraryLoan" WHERE "schoolId"=$1 AND "id"=$2 FOR UPDATE`, session.schoolId, loanId);
         if (!loan[0]) throw new AppError("Loan not found.", 404, "LOAN_NOT_FOUND");
+        await requireLinkedStudentForBorrower(tx, session.userId, loan[0].studentId, canManage);
         if (loan[0].status !== "borrowed") throw new AppError("This loan has already been returned.", 409, "LOAN_ALREADY_RETURNED");
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`library-book:${session.schoolId}:${loan[0].bookId}`}))`;
-        await tx.$queryRawUnsafe(`UPDATE "P3LibraryLoan" SET "status"='returned',"returnedAt"=CURRENT_TIMESTAMP,"returnedBy"=$3 WHERE "schoolId"=$1 AND "id"=$2 AND "status"='borrowed'`, session.schoolId, loanId, session.userId);
+        const returned = await tx.$queryRawUnsafe<Array<{ id: string }>>(`UPDATE "P3LibraryLoan" SET "status"='returned',"returnedAt"=CURRENT_TIMESTAMP,"returnedBy"=$3 WHERE "schoolId"=$1 AND "id"=$2 AND "status"='borrowed' RETURNING "id"`, session.schoolId, loanId, session.userId);
+        if (!returned[0]) throw new AppError("This loan was returned by another request. Refresh and try again.", 409, "LOAN_ALREADY_RETURNED");
         await tx.$queryRawUnsafe(`UPDATE "P3LibraryBook" SET "availableCopies"=LEAST("copies","availableCopies"+1) WHERE "schoolId"=$1 AND "id"=$2`, session.schoolId, loan[0].bookId);
         return { id: loanId };
       }
