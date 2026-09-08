@@ -47,6 +47,7 @@ export default function AutoPrintTimetable({ data }: { data: Data }) {
         if (block.kind === "lesson" && block.period) periodNumbers.add(block.period);
       }
     }
+    for (const slot of data.slots) periodNumbers.add(slot.period);
     const lessons: PrintRow[] = [...periodNumbers].sort((a, b) => a - b).map((period) => {
       const starts = data.days.flatMap((day) => {
         const block = (data.blocksByDay[day.dayOfWeek] ?? []).find((item) => item.kind === "lesson" && item.period === period);
@@ -59,7 +60,7 @@ export default function AutoPrintTimetable({ data }: { data: Data }) {
       : [];
     const breaks: PrintRow[] = firstDayBreaks.map((block) => ({ kind: "break", name: block.name, start: block.start, end: block.end, sortStart: minutes(block.start) }));
     return [...lessons, ...breaks].sort((a, b) => a.sortStart - b.sortStart || (a.kind === "lesson" ? -1 : 1));
-  }, [data.blocksByDay, data.days]);
+  }, [data.blocksByDay, data.days, data.slots]);
 
   return (
     <main className="quick-print-timetable">
@@ -77,7 +78,7 @@ export default function AutoPrintTimetable({ data }: { data: Data }) {
               return block ? [blockTime(block)] : [];
             });
             const uniqueTimes = [...new Set(periodTimes)];
-            const rowTime = uniqueTimes.length === 1 ? uniqueTimes[0] : "Varies by day";
+            const rowTime = uniqueTimes.length === 0 ? "Outside current schedule" : uniqueTimes.length === 1 ? uniqueTimes[0] : "Varies by day";
             return <tr key={`period-${row.period}`}><th><strong>Period {row.period}</strong><span>{rowTime}</span></th>{data.days.map((day) => {
               const block = (data.blocksByDay[day.dayOfWeek] ?? []).find((item) => item.kind === "lesson" && item.period === row.period);
               const slot = data.slots.find((item) => item.dayOfWeek === day.dayOfWeek && item.period === row.period);
