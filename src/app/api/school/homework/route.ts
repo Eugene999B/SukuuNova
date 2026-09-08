@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { createId } from "@paralleldrive/cuid2";
 import { requireSchoolSession } from "@/lib/school-auth";
+import { withTenant } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 import { routeError, ForbiddenError, AppError } from "@/lib/errors";
