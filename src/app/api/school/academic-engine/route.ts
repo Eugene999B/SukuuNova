@@ -26,7 +26,14 @@ const assessment = z.object({ categories: z.array(z.object({ name: z.string().mi
 const report = z.object({ includePosition: z.boolean(), includeSubjectPosition: z.boolean(), includeAttendance: z.boolean(), includeTeacherRemark: z.boolean(), includeHeadRemark: z.boolean(), includeSignatures: z.boolean(), includeSchoolContacts: z.boolean(), rankMethod: z.enum(["total_average", "weighted_total"]), showGrades: z.boolean(), showClassAverage: z.boolean() });
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save"), timetable: timetable.optional(), assessment: assessment.optional(), reportCard: report.optional() }),
-  z.object({ action: z.literal("generate"), replaceExisting: z.boolean().default(false), classIds: z.array(z.string()).max(100).optional() }),
+  z.object({
+    action: z.literal("generate"),
+    mode: z.enum(["fill_gaps", "rebuild", "rebuild_preserving_locked"]).optional(),
+    dryRun: z.boolean().default(false),
+    lockedSlotIds: z.array(z.string().min(1)).max(1000).optional(),
+    classIds: z.array(z.string().min(1)).max(100).optional(),
+    replaceExisting: z.boolean().optional(),
+  }),
 ]);
 
 type LegacyReport = z.infer<typeof report>;
@@ -101,7 +108,15 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({ ...result, reportCard });
       }
-      const result = await generateBalancedTimetable(tx, { schoolId: session.schoolId, actorId: session.userId, replaceExisting: input.replaceExisting, classIds: input.classIds });
+      const result = await generateBalancedTimetable(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        mode: input.mode,
+        dryRun: input.dryRun,
+        lockedSlotIds: input.lockedSlotIds,
+        classIds: input.classIds,
+        replaceExisting: input.replaceExisting,
+      });
       return NextResponse.json(result);
     });
   } catch (error) { return routeError(error); }

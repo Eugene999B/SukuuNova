@@ -3,6 +3,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
+import { dayBlocks } from "@/lib/timetable-engine-v2";
 import AutoPrintTimetable from "./AutoPrintTimetable";
 
 export default async function TimetablePrintPage({ searchParams }: { searchParams: Promise<{ view?: string; classId?: string; teacherId?: string }> }) {
@@ -24,11 +25,10 @@ export default async function TimetablePrintPage({ searchParams }: { searchParam
     if (mode === "teacher" && !teacherId) return null;
     const visible = slots.filter((slot) => mode === "class" ? slot.classId === classId : slot.teacherId === teacherId);
     const title = mode === "class" ? (classes.find((item) => item.id === classId)?.name || "Class timetable") : (visible[0]?.teacher.name || "Teacher timetable");
-    const config = academic.timetable as { days?: Array<{ dayOfWeek: number; name: string; enabled: boolean; periods?: Array<{ period: number; start: string; end: string }> }>; periods?: Array<{ period: number; start: string; end: string }>; periodsPerDay?: number };
-    const days = (config.days || []).filter((day) => day.enabled && day.dayOfWeek >= 1 && day.dayOfWeek <= 6);
-    const firstDay = days[0];
-    const periods = (firstDay?.periods?.length ? firstDay.periods : config.periods?.length ? config.periods : []).slice(0, Math.min(16, config.periodsPerDay || 16));
-    return { school, title, mode, days, periods, slots: visible };
+    const config = academic.timetable as Parameters<typeof dayBlocks>[1];
+    const days = config.days.filter((day) => day.enabled && day.dayOfWeek >= 1 && day.dayOfWeek <= 6).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+    const blocks = days[0] ? dayBlocks(days[0], config).blocks : [];
+    return { school, title, mode, days, blocks, slots: visible, rooms: config.rooms ?? [] };
   });
   if (!data) notFound();
   return <AutoPrintTimetable data={data} />;
