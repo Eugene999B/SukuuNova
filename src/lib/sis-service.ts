@@ -18,7 +18,8 @@ export async function registerStudent(input: {
       const schoolClass = await tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId }, select: { id: true } });
       if (!schoolClass) throw new AppError("The selected class does not belong to this school.", 400, "CLASS_NOT_FOUND");
     }
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${input.schoolId}`}))`);
+    const lockKey = `student-registration:${input.schoolId}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
     let student;
     try {
       student = await tx.student.create({ data: {
