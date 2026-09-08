@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import AutoPrint from "@/components/AutoPrint";
 import OfficialReportCard from "@/components/OfficialReportCard";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -33,5 +32,5 @@ export default async function ReportCardPrintPage({ params }: { params: Promise<
     return { report, signatures };
   });
   if (!data) notFound();
-  return <AutoPrint><OfficialReportCard data={data.report} signatures={data.signatures} /></AutoPrint>;
+  return <OfficialReportCard data={data.report} signatures={data.signatures} />;
 }
