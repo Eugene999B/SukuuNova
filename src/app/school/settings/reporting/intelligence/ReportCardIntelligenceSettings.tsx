@@ -1,13 +1,240 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-type SignatureSlot = { role: string; name: string; signatureDataUrl?: string };
-type Config = { classAssessmentWeight:number; examWeight:number; classAssessmentTypes:string[]; examTypes:string[]; rounding:"nearest"|"down"|"up"; missingScorePolicy:"blank"|"zero"; showStudentPhoto:boolean; showOverallPosition:boolean; showSubjectPosition:boolean; showAttendance:boolean; showPromotion:boolean; showClassTeacherRemark:boolean; showHeadteacherRemark:boolean; signatureSlots:SignatureSlot[] };
-const fallback:Config={classAssessmentWeight:30,examWeight:70,classAssessmentTypes:["Exercise","Homework","Participation","Quiz","Project","Classwork"],examTypes:["Exam","Examination"],rounding:"nearest",missingScorePolicy:"blank",showStudentPhoto:true,showOverallPosition:true,showSubjectPosition:true,showAttendance:true,showPromotion:true,showClassTeacherRemark:true,showHeadteacherRemark:true,signatureSlots:[{role:"Class Teacher",name:""},{role:"Headteacher",name:""}]};
-export default function ReportCardIntelligenceSettings(){const [config,setConfig]=useState<Config>(fallback);const [message,setMessage]=useState("");const [busy,setBusy]=useState(false);useEffect(()=>{fetch("/api/school/settings/reporting/config",{cache:"no-store"}).then(async r=>{const j=await r.json();if(r.ok)setConfig({...fallback,...j});}).catch(()=>{});},[]);const save=async()=>{setBusy(true);setMessage("");try{if(Math.abs(Number(config.classAssessmentWeight)+Number(config.examWeight)-100)>0.001)throw new Error("Class assessment and examination weights must total 100%.");const r=await fetch("/api/school/settings/reporting/config",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify(config)});const j=await r.json();if(!r.ok)throw new Error(j.error??"Unable to save");setMessage("Report card intelligence settings saved.");}catch(e){setMessage(e instanceof Error?e.message:"Unable to save settings.");}finally{setBusy(false);}};const updateList=(key:"classAssessmentTypes"|"examTypes",i:number,value:string)=>setConfig(c=>({...c,[key]:c[key].map((v,n)=>n===i?value:v)}));const addType=(key:"classAssessmentTypes"|"examTypes")=>setConfig(c=>({...c,[key]:[...c[key],key==="classAssessmentTypes"?"New assessment":"New exam"]}));const removeType=(key:"classAssessmentTypes"|"examTypes",i:number)=>setConfig(c=>({...c,[key]:c[key].filter((_,n)=>n!==i)}));const updateSig=(i:number,patch:Partial<SignatureSlot>)=>setConfig(c=>({...c,signatureSlots:c.signatureSlots.map((s,n)=>n===i?{...s,...patch}:s)}));const addSig=()=>setConfig(c=>({...c,signatureSlots:[...c.signatureSlots,{role:"School Official",name:""}]}));return <div className="rc-intel-page"><style>{styles}</style><header className="rc-intel-head"><div><span className="kicker">REPORT CARD INTELLIGENCE</span><h1>Configure the school's academic truth once.</h1><p>SukuuNova normalises every raw mark against its real maximum, applies the school's weighting, calculates positions inside the correct class, and freezes the issued result.</p></div><div className="head-actions"><Link href="/school/report-cards">Back to reports</Link><button className="save" onClick={save} disabled={busy}>{busy?"Saving…":"Save configuration"}</button></div></header>{message&&<div className="message">{message}</div>}<section className="grid two"><article className="card hero-card"><span className="kicker">01 · MARK MODEL</span><h2>Class assessment + examination</h2><p>Example: 30 marks of continuous assessment plus 70 marks of examination = 100 marks overall.</p><div className="weights"><label><span>Class assessment</span><input type="number" min="0" max="100" value={config.classAssessmentWeight} onChange={e=>setConfig(c=>({...c,classAssessmentWeight:Number(e.target.value)}))}/><b>marks</b></label><div className="plus">+</div><label><span>Examination</span><input type="number" min="0" max="100" value={config.examWeight} onChange={e=>setConfig(c=>({...c,examWeight:Number(e.target.value)}))}/><b>marks</b></label><div className={`total ${Math.abs(config.classAssessmentWeight+config.examWeight-100)<0.001?"ok":"bad"}`}>{config.classAssessmentWeight+config.examWeight}<small> / 100</small></div></div></article><article className="card"><span className="kicker">02 · ROUNDING & MISSING MARKS</span><h2>Make edge cases explicit</h2><label className="select"><span>Rounding</span><select value={config.rounding} onChange={e=>setConfig(c=>({...c,rounding:e.target.value as Config["rounding"]}))}><option value="nearest">Nearest</option><option value="up">Round up</option><option value="down">Round down</option></select></label><label className="select"><span>Missing score policy</span><select value={config.missingScorePolicy} onChange={e=>setConfig(c=>({...c,missingScorePolicy:e.target.value as Config["missingScorePolicy"]}))}><option value="blank">Keep result incomplete</option><option value="zero">Treat missing as zero</option></select></label><div className="note">A teacher's work must always have a maximum mark. For example, 17/20 is safely normalised to 85% before the school weighting is applied.</div></article></section><section className="grid two"><TypeEditor title="Class assessment types" hint="These work items feed the class-assessment bucket." values={config.classAssessmentTypes} update={(i,v)=>updateList("classAssessmentTypes",i,v)} add={()=>addType("classAssessmentTypes")} remove={i=>removeType("classAssessmentTypes",i)}/><TypeEditor title="Examination types" hint="These labels feed the examination bucket." values={config.examTypes} update={(i,v)=>updateList("examTypes",i,v)} add={()=>addType("examTypes")} remove={i=>removeType("examTypes",i)}/></section><section className="card"><span className="kicker">03 · REPORT PRESENTATION</span><h2>What families see on the official report</h2><div className="toggles"><Toggle label="Student photograph" detail="Show the learner's stored profile photo." checked={config.showStudentPhoto} onChange={v=>setConfig(c=>({...c,showStudentPhoto:v}))}/><Toggle label="Overall class position" detail="Show position and class denominator." checked={config.showOverallPosition} onChange={v=>setConfig(c=>({...c,showOverallPosition:v}))}/><Toggle label="Subject position" detail="Rank the learner within the class for each subject." checked={config.showSubjectPosition} onChange={v=>setConfig(c=>({...c,showSubjectPosition:v}))}/><Toggle label="Attendance" detail="Show present and late information." checked={config.showAttendance} onChange={v=>setConfig(c=>({...c,showAttendance:v}))}/><Toggle label="Promotion decision" detail="Show the configured academic progression status." checked={config.showPromotion} onChange={v=>setConfig(c=>({...c,showPromotion:v}))}/><Toggle label="Class teacher remark" detail="Show the teacher's stored individual remark." checked={config.showClassTeacherRemark} onChange={v=>setConfig(c=>({...c,showClassTeacherRemark:v}))}/><Toggle label="Headteacher remark" detail="Show the approved headteacher remark." checked={config.showHeadteacherRemark} onChange={v=>setConfig(c=>({...c,showHeadteacherRemark:v}))}/></div></section><section className="card"><div className="sig-head"><div><span className="kicker">04 · STORED SIGNATURES</span><h2>Sign once. Reuse until changed.</h2><p>Use a touchscreen, stylus or mouse. The saved signature is attached to future report documents until the school replaces it.</p></div><button onClick={addSig}>+ Add signer</button></div><div className="signatures">{config.signatureSlots.map((sig,i)=><SignatureEditor key={i} value={sig} onChange={p=>updateSig(i,p)} remove={()=>setConfig(c=>({...c,signatureSlots:c.signatureSlots.filter((_,n)=>n!==i)}))}/>)}</div></section></div>}
-function TypeEditor({title,hint,values,update,add,remove}:{title:string;hint:string;values:string[];update:(i:number,v:string)=>void;add:()=>void;remove:(i:number)=>void}){return <article className="card"><span className="kicker">CONFIGURATION</span><h2>{title}</h2><p>{hint}</p><div className="chips">{values.map((v,i)=><div className="chip" key={`${v}-${i}`}><input value={v} onChange={e=>update(i,e.target.value)}/><button type="button" onClick={()=>remove(i)} aria-label={`Remove ${v}`}>×</button></div>)}</div><button className="add" onClick={add}>+ Add type</button></article>}
-function Toggle({label,detail,checked,onChange}:{label:string;detail:string;checked:boolean;onChange:(v:boolean)=>void}){return <label className="toggle"><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/><span><strong>{label}</strong><small>{detail}</small></span><i/></label>}
-function SignatureEditor({value,onChange,remove}:{value:SignatureSlot;onChange:(p:Partial<SignatureSlot>)=>void;remove:()=>void}){const canvas=useRef<HTMLCanvasElement>(null);const drawing=useRef(false);useEffect(()=>{const c=canvas.current;if(!c)return;const ctx=c.getContext("2d");if(!ctx)return;ctx.clearRect(0,0,c.width,c.height);if(value.signatureDataUrl){const img=new Image();img.onload=()=>ctx.drawImage(img,0,0,c.width,c.height);img.src=value.signatureDataUrl;}},[value.signatureDataUrl]);const point=(e:React.PointerEvent<HTMLCanvasElement>)=>{const c=canvas.current;if(!c)return;const r=c.getBoundingClientRect();return{x:(e.clientX-r.left)*(c.width/r.width),y:(e.clientY-r.top)*(c.height/r.height)}};const down=(e:React.PointerEvent<HTMLCanvasElement>)=>{drawing.current=true;canvas.current?.setPointerCapture(e.pointerId);const p=point(e);const ctx=canvas.current?.getContext("2d");if(ctx&&p){ctx.beginPath();ctx.moveTo(p.x,p.y)}};const move=(e:React.PointerEvent<HTMLCanvasElement>)=>{if(!drawing.current)return;const p=point(e);const ctx=canvas.current?.getContext("2d");if(ctx&&p){ctx.lineWidth=2.4;ctx.lineCap="round";ctx.strokeStyle="var(--color-surface-raised)";ctx.lineTo(p.x,p.y);ctx.stroke()}};const up=()=>{drawing.current=false;const data=canvas.current?.toDataURL("image/png");if(data)onChange({signatureDataUrl:data})};return <div className="sig-card"><div className="sig-fields"><label><span>Role</span><input value={value.role} onChange={e=>onChange({role:e.target.value})}/></label><label><span>Typed name</span><input value={value.name} onChange={e=>onChange({name:e.target.value})}/></label><button onClick={remove}>Remove</button></div><canvas ref={canvas} width={720} height={180} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} className="sig-pad"/><div className="sig-help"><span>Draw above</span><button onClick={()=>{const c=canvas.current;const ctx=c?.getContext("2d");if(c&&ctx){ctx.clearRect(0,0,c.width,c.height);onChange({signatureDataUrl:""})}}}>Clear signature</button></div></div>}
-const styles=`.rc-intel-page{max-width:1250px;margin:0 auto;padding:24px;color:var(--color-text-primary,var(--sn-ink))}.rc-intel-page *{box-sizing:border-box}.rc-intel-head{display:flex;justify-content:space-between;gap:28px;align-items:flex-start;margin-bottom:16px}.kicker{font-size:10px;font-weight:900;letter-spacing:.15em;text-transform:uppercase;color:var(--color-text-muted,var(--sn-ink))}.rc-intel-head h1{max-width:780px;margin:7px 0 9px;font-size:36px;line-height:1.02;letter-spacing:-.04em}.rc-intel-head p,.card>p{margin:0;max-width:760px;color:var(--color-text-secondary,var(--sn-ink));font-size:12px;line-height:1.7}.head-actions{display:flex;gap:8px;align-items:center}.head-actions a,.head-actions button,.sig-head button,.add{border:1px solid var(--color-border,var(--sn-line));background:var(--color-surface,var(--sn-surface));color:var(--color-text-primary,var(--sn-ink));border-radius:12px;padding:10px 13px;text-decoration:none;font-size:10px;font-weight:900}.head-actions .save{background:var(--color-brand,var(--sn-surface));color:var(--color-surface);border-color:transparent}.message{padding:11px 14px;border:1px solid var(--sn-line);background:var(--sn-surface);border-radius:12px;margin-bottom:14px;font-size:11px;font-weight:800}.grid{display:grid;gap:14px;margin-bottom:14px}.grid.two{grid-template-columns:1.15fr .85fr}.card{border:1px solid var(--color-border,var(--sn-line));border-radius:20px;background:var(--color-surface,var(--sn-surface));box-shadow:0 16px 40px var(--sn-shadow-sm);padding:20px}.card h2{margin:6px 0 9px;font-size:18px;letter-spacing:-.025em}.hero-card{background:radial-gradient(circle at 90% 5%,var(--sn-surface),transparent 32%),var(--color-surface,var(--sn-surface))}.weights{display:grid;grid-template-columns:1fr auto 1fr auto;align-items:end;gap:10px;margin-top:18px}.weights label,.select{display:grid;gap:7px}.weights label span,.select span,.sig-fields span{font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-muted,var(--sn-ink))}.weights input{width:100%;height:52px;border:1px solid var(--color-border,var(--sn-line));border-radius:13px;padding:0 12px;font-size:22px;font-weight:900;background:var(--color-surface-2,var(--sn-surface))}.weights b{font-size:8px;color:var(--sn-ink)}.plus{font-size:22px;font-weight:900;color:var(--sn-ink);padding-bottom:11px}.total{min-width:88px;height:58px;border-radius:15px;display:grid;place-items:center;font-size:24px;font-weight:950;background:var(--color-success-soft);color:var(--sn-ink)}.total.bad{background:var(--color-danger-soft);color:var(--color-warning)}.total small{font-size:9px;font-weight:800}.select{margin-top:14px}.select select{height:42px;border:1px solid var(--color-border,var(--sn-line));border-radius:11px;padding:0 11px;background:var(--color-surface-2,var(--sn-surface))}.note{margin-top:14px;padding:11px;border-radius:12px;background:var(--sn-surface);color:var(--sn-ink);font-size:10px;line-height:1.65}.chips{display:grid;gap:7px;margin-top:14px}.chip{display:flex;gap:7px}.chip input{flex:1;height:39px;border:1px solid var(--color-border,var(--sn-line));border-radius:10px;padding:0 10px}.chip button,.sig-fields button,.sig-help button{border:1px solid var(--color-border,var(--sn-line));background:var(--color-surface-2,var(--sn-surface));border-radius:10px;padding:0 11px;cursor:pointer}.add{margin-top:10px;cursor:pointer}.toggles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:14px}.toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border:1px solid var(--color-border,var(--sn-line));border-radius:13px;background:var(--color-surface-2,var(--sn-surface));cursor:pointer}.toggle input{position:absolute;opacity:0}.toggle span{min-width:0}.toggle strong{display:block;font-size:11px}.toggle small{display:block;margin-top:3px;color:var(--sn-ink);font-size:9px;line-height:1.4}.toggle i{width:34px;height:20px;border-radius:999px;background:var(--sn-surface);position:relative;flex:none}.toggle i:after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;background:var(--color-surface);border-radius:50%;transition:.18s}.toggle input:checked+i{background:var(--sn-surface)}.toggle input:checked+i:after{left:17px}.sig-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.signatures{display:grid;gap:12px;margin-top:14px}.sig-card{border:1px solid var(--color-border,var(--sn-line));border-radius:15px;padding:12px;background:var(--color-surface-2,var(--sn-surface))}.sig-fields{display:grid;grid-template-columns:1fr 1fr auto;gap:9px;align-items:end}.sig-fields label{display:grid;gap:6px}.sig-fields input{height:39px;border:1px solid var(--color-border,var(--sn-line));border-radius:10px;padding:0 10px;background:var(--color-surface,var(--sn-surface))}.sig-pad{display:block;width:100%;height:160px;margin-top:10px;border:1px dashed var(--sn-line);border-radius:12px;background:var(--color-surface);touch-action:none}.sig-help{display:flex;justify-content:space-between;gap:10px;margin-top:7px}.sig-help span{font-size:9px;color:var(--sn-ink)}.sig-help button{height:30px;font-size:9px}@media(max-width:900px){.grid.two{grid-template-columns:1fr}.rc-intel-head{flex-direction:column}.head-actions{width:100%}.head-actions>*{flex:1;text-align:center}.toggles{grid-template-columns:1fr}}@media(max-width:600px){.rc-intel-page{padding:14px}.rc-intel-head h1{font-size:28px}.weights{grid-template-columns:1fr}.plus{display:none}.total{min-width:0}.sig-fields{grid-template-columns:1fr}.sig-fields button{height:36px}.card{padding:15px}}`;
+type GradeBand = { min: number; max: number; grade: string; label?: string; remark?: string };
+type Theme = { id: string; key: string; name: string; description: string; density: "standard" | "compact" };
+type Staff = { id: string; name: string; roles: string[]; hasSignature: boolean };
+type ClassRow = { id: string; name: string; level: string | null };
+type SignatureSlot = { userId: string; role: string };
+type Config = {
+  classAssessmentWeight: number;
+  examWeight: number;
+  classAssessmentTypes: string[];
+  examTypes: string[];
+  rounding: "nearest" | "down" | "up";
+  missingScorePolicy: "blank" | "zero";
+  gradingScale: GradeBand[];
+  themeId: string;
+  showStudentPhoto: boolean;
+  showOverallPosition: boolean;
+  showSubjectPosition: boolean;
+  showAttendance: boolean;
+  showPromotion: boolean;
+  showClassTeacherRemark: boolean;
+  showHeadteacherRemark: boolean;
+  signatureSlots: SignatureSlot[];
+  finalTermNumber: number;
+  autoApplyPromotion: boolean;
+  classProgression: Record<string, string>;
+  themes: Theme[];
+  staff: Staff[];
+  classes: ClassRow[];
+  currentUserId: string;
+};
+
+const fallback: Config = {
+  classAssessmentWeight: 30,
+  examWeight: 70,
+  classAssessmentTypes: ["Exercise", "Homework", "Participation", "Quiz", "Project", "Classwork"],
+  examTypes: ["Exam", "Examination"],
+  rounding: "nearest",
+  missingScorePolicy: "blank",
+  gradingScale: [
+    { min: 80, max: 100, grade: "A", label: "Excellent", remark: "Excellent" },
+    { min: 70, max: 79.99, grade: "B", label: "Very Good", remark: "Very good" },
+    { min: 60, max: 69.99, grade: "C", label: "Good", remark: "Good" },
+    { min: 50, max: 59.99, grade: "D", label: "Pass", remark: "Pass" },
+    { min: 40, max: 49.99, grade: "E", label: "Needs Improvement", remark: "Needs improvement" },
+    { min: 0, max: 39.99, grade: "F", label: "Below Standard", remark: "Work harder" },
+  ],
+  themeId: "preset-ghana-classic",
+  showStudentPhoto: true,
+  showOverallPosition: true,
+  showSubjectPosition: true,
+  showAttendance: true,
+  showPromotion: true,
+  showClassTeacherRemark: true,
+  showHeadteacherRemark: true,
+  signatureSlots: [],
+  finalTermNumber: 3,
+  autoApplyPromotion: true,
+  classProgression: {},
+  themes: [],
+  staff: [],
+  classes: [],
+  currentUserId: "",
+};
+
+function savePayload(config: Config) {
+  return {
+    classAssessmentWeight: Number(config.classAssessmentWeight),
+    examWeight: Number(config.examWeight),
+    classAssessmentTypes: config.classAssessmentTypes,
+    examTypes: config.examTypes,
+    rounding: config.rounding,
+    missingScorePolicy: config.missingScorePolicy,
+    gradingScale: config.gradingScale.map((row) => ({ ...row, min: Number(row.min), max: Number(row.max) })),
+    themeId: config.themeId,
+    showStudentPhoto: config.showStudentPhoto,
+    showOverallPosition: config.showOverallPosition,
+    showSubjectPosition: config.showSubjectPosition,
+    showAttendance: config.showAttendance,
+    showPromotion: config.showPromotion,
+    showClassTeacherRemark: config.showClassTeacherRemark,
+    showHeadteacherRemark: config.showHeadteacherRemark,
+    signatureSlots: config.signatureSlots,
+    finalTermNumber: Number(config.finalTermNumber),
+    autoApplyPromotion: config.autoApplyPromotion,
+    classProgression: Object.fromEntries(Object.entries(config.classProgression).filter(([, next]) => Boolean(next))),
+  };
+}
+
+export default function ReportCardIntelligenceSettings() {
+  const [config, setConfig] = useState<Config>(fallback);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/school/settings/reporting/config", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || payload.error || "Unable to load report settings.");
+        setConfig({ ...fallback, ...payload });
+        setLoaded(true);
+      })
+      .catch((error) => setMessage(error instanceof Error ? error.message : "Unable to load report settings."));
+  }, []);
+
+  const totalWeight = Number(config.classAssessmentWeight) + Number(config.examWeight);
+  const selectedTheme = config.themes.find((theme) => theme.id === config.themeId);
+  const signerIds = useMemo(() => new Set(config.signatureSlots.map((slot) => slot.userId)), [config.signatureSlots]);
+
+  const save = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      if (Math.abs(totalWeight - 100) > .001) throw new Error("Class assessment and examination weights must total 100%.");
+      const response = await fetch("/api/school/settings/reporting/config", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(savePayload(config)),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.error || "Unable to save report settings.");
+      setMessage("Report-card grading, design, signers and progression rules saved.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to save report settings.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateList = (key: "classAssessmentTypes" | "examTypes", index: number, value: string) => {
+    setConfig((current) => ({ ...current, [key]: current[key].map((item, itemIndex) => itemIndex === index ? value : item) }));
+  };
+  const addType = (key: "classAssessmentTypes" | "examTypes") => setConfig((current) => ({ ...current, [key]: [...current[key], key === "classAssessmentTypes" ? "New assessment" : "New exam"] }));
+  const removeType = (key: "classAssessmentTypes" | "examTypes", index: number) => setConfig((current) => ({ ...current, [key]: current[key].filter((_, itemIndex) => itemIndex !== index) }));
+  const updateGrade = (index: number, patch: Partial<GradeBand>) => setConfig((current) => ({ ...current, gradingScale: current.gradingScale.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row) }));
+  const addGrade = () => setConfig((current) => ({ ...current, gradingScale: [...current.gradingScale, { min: 0, max: 0, grade: "New", label: "", remark: "" }] }));
+  const updateSigner = (index: number, patch: Partial<SignatureSlot>) => setConfig((current) => ({ ...current, signatureSlots: current.signatureSlots.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row) }));
+  const addSigner = () => {
+    const candidate = config.staff.find((person) => !signerIds.has(person.id));
+    if (!candidate || config.signatureSlots.length >= 4) return;
+    setConfig((current) => ({ ...current, signatureSlots: [...current.signatureSlots, { userId: candidate.id, role: candidate.roles[0] || "School Official" }] }));
+  };
+
+  return (
+    <main className="rc-intel-page">
+      <header className="rc-intel-head">
+        <div>
+          <span className="rc-kicker">ACADEMIC REPORTING · SOURCE OF TRUTH</span>
+          <h1>Configure the calculation once, then print the same truth everywhere.</h1>
+          <p>Assessment weights, grading bands, report design, positions, signers and promotion rules all feed the same Gradebook → Report Card → Approval → Print workflow.</p>
+        </div>
+        <div className="rc-head-actions">
+          <Link href="/account/signature">My signature</Link>
+          <Link href="/school/report-cards">Report cards</Link>
+          <button className="rc-btn primary" type="button" disabled={!loaded || busy || Math.abs(totalWeight - 100) > .001} onClick={() => void save()}>{busy ? "Saving…" : "Save reporting setup"}</button>
+        </div>
+      </header>
+      {message ? <div className="rc-message" role="status">{message}</div> : null}
+
+      <section className="rc-section">
+        <div className="rc-section-head"><div><span className="rc-kicker">01 · SUBJECT RESULT MODEL</span><h2>How every subject reaches its terminal mark</h2><p>Raw work keeps its real maximum mark—17/20 remains 17/20 in the gradebook. SukuuNova normalizes it before applying these school-wide report weights.</p></div></div>
+        <div className="rc-grid-two">
+          <div>
+            <div className="rc-weight-grid">
+              <label className="rc-field"><span>Class assessment</span><input type="number" min="0" max="100" value={config.classAssessmentWeight} onChange={(event) => setConfig((current) => ({ ...current, classAssessmentWeight: Number(event.target.value) }))} /></label>
+              <div className="rc-weight-plus">+</div>
+              <label className="rc-field"><span>Examination</span><input type="number" min="0" max="100" value={config.examWeight} onChange={(event) => setConfig((current) => ({ ...current, examWeight: Number(event.target.value) }))} /></label>
+              <div className={`rc-weight-total ${Math.abs(totalWeight - 100) > .001 ? "bad" : ""}`}>{totalWeight}/100</div>
+            </div>
+            <div className="rc-callout">The official subject total is normalized to 100 so your grading bands and positions stay mathematically comparable, even when teachers use different raw maximum marks for quizzes, projects or examinations.</div>
+          </div>
+          <div className="rc-grid-two">
+            <label className="rc-field"><span>Rounding</span><select value={config.rounding} onChange={(event) => setConfig((current) => ({ ...current, rounding: event.target.value as Config["rounding"] }))}><option value="nearest">Nearest</option><option value="up">Round up</option><option value="down">Round down</option></select></label>
+            <label className="rc-field"><span>Missing score</span><select value={config.missingScorePolicy} onChange={(event) => setConfig((current) => ({ ...current, missingScorePolicy: event.target.value as Config["missingScorePolicy"] }))}><option value="blank">Keep result incomplete</option><option value="zero">Treat missing as zero</option></select></label>
+          </div>
+        </div>
+      </section>
+
+      <div className="rc-grid-two">
+        <TypeEditor title="Class assessment types" values={config.classAssessmentTypes} update={(index, value) => updateList("classAssessmentTypes", index, value)} add={() => addType("classAssessmentTypes")} remove={(index) => removeType("classAssessmentTypes", index)} />
+        <TypeEditor title="Examination types" values={config.examTypes} update={(index, value) => updateList("examTypes", index, value)} add={() => addType("examTypes")} remove={(index) => removeType("examTypes", index)} />
+      </div>
+
+      <section className="rc-section">
+        <div className="rc-section-head"><div><span className="rc-kicker">02 · SCHOOL GRADING SCALE</span><h2>The school decides what A, B, C and every remark mean</h2><p>These bands drive subject grades and the overall grade on official reports. They are not hardcoded to one Ghanaian convention.</p></div><button className="rc-btn soft" type="button" onClick={addGrade}>+ Add band</button></div>
+        <div className="rc-grade-wrap"><table className="rc-grade-table"><thead><tr><th>Minimum</th><th>Maximum</th><th>Grade</th><th>Label</th><th>Default remark</th><th /></tr></thead><tbody>{config.gradingScale.map((band, index) => <tr key={`${band.grade}-${index}`}><td><input type="number" min="0" max="100" step=".01" value={band.min} onChange={(event) => updateGrade(index, { min: Number(event.target.value) })} /></td><td><input type="number" min="0" max="100" step=".01" value={band.max} onChange={(event) => updateGrade(index, { max: Number(event.target.value) })} /></td><td><input value={band.grade} onChange={(event) => updateGrade(index, { grade: event.target.value })} /></td><td><input value={band.label || ""} onChange={(event) => updateGrade(index, { label: event.target.value })} /></td><td><input value={band.remark || ""} onChange={(event) => updateGrade(index, { remark: event.target.value })} /></td><td><button className="rc-btn danger" type="button" disabled={config.gradingScale.length <= 1} onClick={() => setConfig((current) => ({ ...current, gradingScale: current.gradingScale.filter((_, rowIndex) => rowIndex !== index) }))}>Remove</button></td></tr>)}</tbody></table></div>
+      </section>
+
+      <section className="rc-section">
+        <div className="rc-section-head"><div><span className="rc-kicker">03 · REPORT DESIGN</span><h2>Choose the school's official print theme</h2><p>Twelve layouts are available. All use the school's own name, logo, learner photo and configured reporting rules; the theme changes the presentation, not the academic calculation.</p></div>{selectedTheme ? <span className="rc-kicker">SELECTED · {selectedTheme.name}</span> : null}</div>
+        <div className="rc-theme-grid">{config.themes.map((theme) => <label key={theme.id} data-theme-key={theme.key} className={`rc-theme-card ${config.themeId === theme.id ? "selected" : ""}`}><input type="radio" name="report-theme" value={theme.id} checked={config.themeId === theme.id} onChange={() => setConfig((current) => ({ ...current, themeId: theme.id }))} /><div className="rc-theme-preview"><div className="rc-theme-preview-head" /><div className="rc-theme-preview-lines">{Array.from({ length: theme.density === "compact" ? 35 : 25 }, (_, index) => <span key={index} />)}</div></div><strong>{theme.name}</strong><p>{theme.description}</p></label>)}</div>
+      </section>
+
+      <section className="rc-section">
+        <div className="rc-section-head"><div><span className="rc-kicker">04 · WHAT PRINTS</span><h2>Control the official document content</h2><p>Schools can hide positions or other sections without changing stored academic evidence.</p></div></div>
+        <div className="rc-policy-grid">
+          <Toggle label="Learner photograph" detail="Use the stored student photo in the report header." checked={config.showStudentPhoto} onChange={(value) => setConfig((current) => ({ ...current, showStudentPhoto: value }))} />
+          <Toggle label="Overall class position" detail="Show the learner's overall position and class size." checked={config.showOverallPosition} onChange={(value) => setConfig((current) => ({ ...current, showOverallPosition: value }))} />
+          <Toggle label="Subject positions" detail="Show each learner's position for every subject." checked={config.showSubjectPosition} onChange={(value) => setConfig((current) => ({ ...current, showSubjectPosition: value }))} />
+          <Toggle label="Attendance" detail="Show the term attendance summary." checked={config.showAttendance} onChange={(value) => setConfig((current) => ({ ...current, showAttendance: value }))} />
+          <Toggle label="Promotion decision" detail="Show promoted/not promoted on the final-term report." checked={config.showPromotion} onChange={(value) => setConfig((current) => ({ ...current, showPromotion: value }))} />
+          <Toggle label="Class teacher remark" detail="Written only by the class's assigned head/class teacher." checked={config.showClassTeacherRemark} onChange={(value) => setConfig((current) => ({ ...current, showClassTeacherRemark: value }))} />
+          <Toggle label="Headteacher remark" detail="Written/confirmed during the approval stage." checked={config.showHeadteacherRemark} onChange={(value) => setConfig((current) => ({ ...current, showHeadteacherRemark: value }))} />
+        </div>
+      </section>
+
+      <section className="rc-section">
+        <div className="rc-section-head"><div><span className="rc-kicker">05 · OFFICIAL SIGNERS</span><h2>Choose who appears on issued report cards</h2><p>The school selects staff accounts and labels their report role. Each person manages their own drawing under My Signature; the issue workflow snapshots it when the report is approved.</p></div><button className="rc-btn soft" type="button" disabled={config.signatureSlots.length >= 4 || config.signatureSlots.length >= config.staff.length} onClick={addSigner}>+ Add signer</button></div>
+        <div className="rc-signer-list">
+          {config.signatureSlots.length ? config.signatureSlots.map((slot, index) => {
+            const person = config.staff.find((staff) => staff.id === slot.userId);
+            return <div className="rc-signer-row" key={`${slot.userId}-${index}`}><label className="rc-field"><span>Staff member</span><select value={slot.userId} onChange={(event) => updateSigner(index, { userId: event.target.value })}>{config.staff.filter((staff) => staff.id === slot.userId || !signerIds.has(staff.id)).map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}</select></label><label className="rc-field"><span>Printed role</span><input value={slot.role} onChange={(event) => updateSigner(index, { role: event.target.value })} /></label><div className="rc-signer-person"><strong>{person?.name ?? "Unknown staff"}</strong><small className={person?.hasSignature ? "rc-signature-ready" : "rc-signature-missing"}>{person?.hasSignature ? "Signature ready" : "Signature not saved yet"}</small>{person?.id === config.currentUserId ? <small><Link href="/account/signature">Manage my signature</Link></small> : null}</div><button className="rc-btn danger" type="button" onClick={() => setConfig((current) => ({ ...current, signatureSlots: current.signatureSlots.filter((_, rowIndex) => rowIndex !== index) }))}>Remove</button></div>;
+          }) : <div className="rc-callout">No signers selected. Add the class teacher, headteacher, administrator or any other active school official whose signature should appear.</div>}
+        </div>
+      </section>
+
+      <section className="rc-section">
+        <div className="rc-section-head"><div><span className="rc-kicker">06 · THIRD-TERM PROMOTION</span><h2>Move promoted learners into the next class safely</h2><p>Set which term is the final term of the year and map each class to its next class. The assigned class teacher records each learner's promotion decision; SukuuNova can apply it after final approval.</p></div></div>
+        <div className="rc-grid-two">
+          <label className="rc-field"><span>Final term number</span><select value={config.finalTermNumber} onChange={(event) => setConfig((current) => ({ ...current, finalTermNumber: Number(event.target.value) }))}>{[1, 2, 3, 4, 5, 6].map((value) => <option key={value} value={value}>Term {value}{value === 3 ? " (common Ghana setup)" : ""}</option>)}</select></label>
+          <Toggle label="Apply approved promotions automatically" detail="After the final report is approved, move learners marked Promoted to the mapped next class." checked={config.autoApplyPromotion} onChange={(value) => setConfig((current) => ({ ...current, autoApplyPromotion: value }))} />
+        </div>
+        <div className="rc-progression-list">{config.classes.map((klass) => <div className="rc-progression-row" key={klass.id}><strong>{klass.level ? `${klass.level} · ` : ""}{klass.name}</strong><span>→</span><label className="rc-field"><span>Next class</span><select value={config.classProgression[klass.id] || ""} onChange={(event) => setConfig((current) => ({ ...current, classProgression: { ...current.classProgression, [klass.id]: event.target.value } }))}><option value="">No automatic next class</option>{config.classes.filter((candidate) => candidate.id !== klass.id).map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.level ? `${candidate.level} · ` : ""}{candidate.name}</option>)}</select></label></div>)}</div>
+      </section>
+    </main>
+  );
+}
+
+function TypeEditor({ title, values, update, add, remove }: { title: string; values: string[]; update: (index: number, value: string) => void; add: () => void; remove: (index: number) => void }) {
+  return <section className="rc-section"><div className="rc-section-head"><div><span className="rc-kicker">ASSESSMENT TYPES</span><h2>{title}</h2></div><button className="rc-btn soft" type="button" onClick={add}>+ Add type</button></div><div className="rc-type-list">{values.map((value, index) => <div className="rc-type-row" key={`${value}-${index}`}><input aria-label={`${title} ${index + 1}`} value={value} onChange={(event) => update(index, event.target.value)} /><button className="rc-btn danger" type="button" disabled={values.length <= 1} onClick={() => remove(index)}>Remove</button></div>)}</div></section>;
+}
+
+function Toggle({ label, detail, checked, onChange }: { label: string; detail: string; checked: boolean; onChange: (value: boolean) => void }) {
+  return <label className="rc-toggle"><span><strong>{label}</strong><small>{detail}</small></span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>;
+}
