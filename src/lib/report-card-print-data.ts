@@ -43,7 +43,22 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
 
   const [school, settings] = await Promise.all([
     tx.school.findUnique({ where: { id: input.schoolId }, select: { id: true, name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
-    tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { gradeCaWeight: true, gradeExamWeight: true, reportCardTemplateId: true, reportCardConfig: true, showOverallPosition: true, showSubjectPosition: true, behaviorRatingFields: true, promotionRule: true, positionPromotionCutoffPercent: true, reportCardWatermark: true } }),
+    tx.schoolSettings.findUnique({
+      where: { schoolId: input.schoolId },
+      select: {
+        gradeCaWeight: true,
+        gradeExamWeight: true,
+        reportCardTemplateId: true,
+        reportCardConfig: true,
+        showOverallPosition: true,
+        showSubjectPosition: true,
+        positionScope: true,
+        behaviorRatingFields: true,
+        promotionRule: true,
+        positionPromotionCutoffPercent: true,
+        reportCardWatermark: true,
+      },
+    }),
   ]);
   if (!school || !settings) throw new AppError("Report-card configuration is incomplete.", 409, "REPORT_CONTEXT_INCOMPLETE");
 
@@ -77,6 +92,15 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
   const attendance = object(snapshot.attendance);
   const promotionDecision: FrozenPromotionDecision = frozenPromotionDecision(snapshot.promotionDecision);
   const show = (key: string, fallback: boolean) => typeof presentation[key] === "boolean" ? Boolean(presentation[key]) : fallback;
+  const positionScope = snapshot.positionScope === "year_group" || snapshot.positionScope === "class"
+    ? snapshot.positionScope
+    : settings.positionScope === "year_group" ? "year_group" : "class";
+  const behaviorRatingFields = snapshot.behaviorRatingFields !== undefined
+    ? snapshot.behaviorRatingFields
+    : settings.behaviorRatingFields;
+  const watermark = typeof snapshot.watermark === "string"
+    ? snapshot.watermark
+    : settings.reportCardWatermark ?? "";
 
   return {
     reportId: report.id,
@@ -92,7 +116,10 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
       level: typeof snapshot.classLevel === "string" || snapshot.classLevel === null ? snapshot.classLevel as string | null : report.student.class?.level ?? null,
     },
     term: { ...report.term, academicYear: report.term.academicYear.name },
-    gradingWeights: { ca: typeof grading.ca === "number" ? grading.ca : Number(settings.gradeCaWeight), exam: typeof grading.exam === "number" ? grading.exam : Number(settings.gradeExamWeight) },
+    gradingWeights: {
+      ca: typeof grading.ca === "number" ? grading.ca : Number(settings.gradeCaWeight),
+      exam: typeof grading.exam === "number" ? grading.exam : Number(settings.gradeExamWeight),
+    },
     results,
     summary: { total: numberOrNull(snapshot.overallTotal), average: numberOrNull(snapshot.average), grade: stringOrNull(snapshot.overallGrade) },
     position: numberOrNull(snapshot.overallPosition),
@@ -100,26 +127,31 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
     rankedCount: typeof snapshot.rankedCount === "number" ? snapshot.rankedCount : 0,
     remarks: report.remarks ?? "",
     headRemark: report.headRemark,
-    attendance: { present: typeof attendance.presentDays === "number" ? attendance.presentDays : 0, late: typeof attendance.lateDays === "number" ? attendance.lateDays : 0, totalRecorded: typeof attendance.presentDays === "number" ? attendance.presentDays : 0 },
+    attendance: {
+      present: typeof attendance.presentDays === "number" ? attendance.presentDays : 0,
+      late: typeof attendance.lateDays === "number" ? attendance.lateDays : 0,
+      totalRecorded: typeof attendance.presentDays === "number" ? attendance.presentDays : 0,
+    },
     promotionDecision,
     manualPromotionDecision: snapshot.manualPromotionDecision === "promoted" || snapshot.manualPromotionDecision === "not_promoted" ? snapshot.manualPromotionDecision : null,
     reportSettings: {
       ...legacy,
       themeId: typeof snapshot.themeId === "string" ? snapshot.themeId : workflow.themeId,
-      showOverallPosition: show("showOverallPosition", Boolean(settings.showOverallPosition) && workflow.showOverallPosition),
-      showSubjectPosition: show("showSubjectPosition", Boolean(settings.showSubjectPosition) && workflow.showSubjectPosition),
-      showStudentPhoto: show("showStudentPhoto", workflow.showStudentPhoto),
-      showAttendance: show("showAttendance", workflow.showAttendance),
-      showPromotion: show("showPromotion", workflow.showPromotion),
-      showClassTeacherRemark: show("showClassTeacherRemark", workflow.showClassTeacherRemark),
-      showHeadteacherRemark: show("showHeadteacherRemark", workflow.showHeadteacherRemark),
-      behaviorRatingFields: settings.behaviorRatingFields,
+      positionScope,
+      showOverallPosition: show("showOverallPosition", Boolean(settings.showOverallPosition) && workflow.showOverallPosition && legacy.showOverallPosition),
+      showSubjectPosition: show("showSubjectPosition", Boolean(settings.showSubjectPosition) && workflow.showSubjectPosition && legacy.showSubjectPosition),
+      showStudentPhoto: show("showStudentPhoto", workflow.showStudentPhoto && legacy.showStudentPhoto),
+      showAttendance: show("showAttendance", workflow.showAttendance && legacy.showAttendance),
+      showPromotion: show("showPromotion", workflow.showPromotion && legacy.showPromotion),
+      showClassTeacherRemark: show("showClassTeacherRemark", workflow.showClassTeacherRemark && legacy.showClassTeacherRemark),
+      showHeadteacherRemark: show("showHeadteacherRemark", workflow.showHeadteacherRemark && legacy.showHeadteacherRemark),
+      behaviorRatingFields,
       promotionRule: typeof snapshot.promotionRule === "string" ? snapshot.promotionRule : settings.promotionRule,
       positionPromotionCutoffPercent: Number(settings.positionPromotionCutoffPercent ?? 50),
       finalTermNumber: workflow.finalTermNumber,
       autoApplyPromotion: workflow.autoApplyPromotion,
     },
-    watermark: settings.reportCardWatermark ?? "",
+    watermark,
     classTeacherName: typeof snapshot.classTeacherName === "string" ? snapshot.classTeacherName : report.student.class?.classTeacher?.name ?? "Class Teacher",
   };
 }
