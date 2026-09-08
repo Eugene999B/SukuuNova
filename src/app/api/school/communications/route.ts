@@ -8,7 +8,7 @@ import { withTenant } from "@/lib/db";
 import { ForbiddenError, routeError } from "@/lib/errors";
 import { appendSchoolAudit } from "@/lib/audit";
 import { enqueueNotification } from "@/lib/message-outbox";
-import { createCalendarEvent } from "@/lib/calendar-service";
+import { createCalendarEventTx } from "@/lib/calendar-service";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { cacheTenantRead } from "@/lib/server-cache";
 
@@ -19,8 +19,10 @@ const broadcastSchema = z.object({ action: z.literal("broadcast"), title: z.stri
 // One request fans out inside a single transaction; cap the batch so a huge
 // school cannot time out the request. The response states the cap explicitly.
 const MAX_BROADCAST_RECIPIENTS = 1000;
-const eventSchema = z.object({ action: z.literal("create_event"), name: z.string().trim().min(2).max(180), type: z.string().trim().min(2).max(40), startDate: z.string().min(1), endDate: z.string().min(1), location: z.string().optional(), description: z.string().max(5000).optional(), notifyGuardians: z.string().optional(), notifyStaff: z.string().optional() });
+const eventFlag = z.union([z.boolean(), z.string()]).optional();
+const eventSchema = z.object({ action: z.literal("create_event"), name: z.string().trim().min(2).max(180), type: z.string().trim().min(2).max(40), startDate: z.string().min(1), endDate: z.string().min(1), location: z.string().optional(), description: z.string().max(5000).optional(), affectsAttendance: eventFlag, affectsTransport: eventFlag, notifyGuardians: eventFlag, notifyStaff: eventFlag });
 function asRecord(value: unknown): JsonRecord { return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {}; }
+function flag(value: boolean | string | undefined) { if (typeof value === "boolean") return value; if (typeof value !== "string") return false; return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase()); }
 async function canCommunicate(schoolId: string, userId: string) {
   return withTenant(schoolId, async (tx) => {
     const access = await getSchoolAuthorization(tx, userId);
@@ -104,7 +106,28 @@ export async function POST(request: Request) {
 
     if (input?.action === "create_event") {
       const value = eventSchema.parse(input); const start = new Date(value.startDate); const end = new Date(value.endDate);
-      return withTenant(session.schoolId, async (tx) => { const year = await tx.academicYear.findFirst({ where: { schoolId: session.schoolId }, orderBy: { startDate: "desc" } }); if (!year) throw new Error("Create an academic year before creating calendar events."); const event = await createCalendarEvent({ schoolId: session.schoolId, actorId: session.userId, academicYearId: year.id, type: value.type, name: value.name, startDate: start, endDate: end }); await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "event.created", entityType: "CalendarEvent", entityId: event.id, after: { location: value.location || null, description: value.description || null, notifyGuardians: Boolean(value.notifyGuardians), notifyStaff: Boolean(value.notifyStaff) } }); revalidatePath("/school/events"); return NextResponse.json({ ok: true, message: "Event created and added to the school calendar.", event }); });
+      return withTenant(session.schoolId, async (tx) => {
+        const year = await tx.academicYear.findFirst({ where: { schoolId: session.schoolId }, orderBy: { startDate: "desc" } });
+        if (!year) throw new Error("Create an academic year before creating calendar events.");
+        const result = await createCalendarEventTx(tx, {
+          schoolId: session.schoolId,
+          actorId: session.userId,
+          academicYearId: year.id,
+          type: value.type,
+          name: value.name,
+          startDate: start,
+          endDate: end,
+          affectsAttendance: flag(value.affectsAttendance),
+          affectsTransport: flag(value.affectsTransport),
+          notifyGuardians: flag(value.notifyGuardians),
+          notifyStaff: flag(value.notifyStaff),
+          location: value.location || null,
+          description: value.description || null,
+        });
+        revalidatePath("/school/events");
+        revalidatePath("/school/communications/messages");
+        return NextResponse.json({ ok: true, message: `Event created. ${result.guardianRecipients} guardian and ${result.staffRecipients} staff notification recipient${result.guardianRecipients + result.staffRecipients === 1 ? " was" : "s were"} queued.`, event: result.event });
+      });
     }
 
     if (input?.action === "save_settings") {
