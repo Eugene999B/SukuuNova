@@ -58,16 +58,11 @@ describe("timetable generator consolidation", () => {
   it("respects slots outside a scoped run instead of double-booking the teacher", async () => {
     const tx = baseTx({
       timetableSlot: {
-        findMany: vi.fn().mockImplementation(async (args: { where?: { classId?: { notIn?: string[] } } }) => {
+        findMany: vi.fn().mockResolvedValue([
           // Seeded commitments outside the run scope: Mr. Mensah teaches Class 8B Mon P1 + P2.
-          if (args.where?.classId && typeof args.where.classId === "object" && "notIn" in (args.where.classId as object)) {
-            return [
-              { classId: "classB", teacherId: "teacherT", dayOfWeek: 1, period: 1, venue: null, class: { name: "Class 8B" }, teacher: { name: "Mr. Mensah" } },
-              { classId: "classB", teacherId: "teacherT", dayOfWeek: 1, period: 2, venue: null, class: { name: "Class 8B" }, teacher: { name: "Mr. Mensah" } },
-            ];
-          }
-          return [];
-        }),
+          { id: "outside-1", classId: "classB", subjectId: "subOther", teacherId: "teacherT", dayOfWeek: 1, period: 1, venue: null, class: { name: "Class 8B" }, teacher: { name: "Mr. Mensah" } },
+          { id: "outside-2", classId: "classB", subjectId: "subOther", teacherId: "teacherT", dayOfWeek: 1, period: 2, venue: null, class: { name: "Class 8B" }, teacher: { name: "Mr. Mensah" } },
+        ]),
         create: vi.fn(),
         deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
