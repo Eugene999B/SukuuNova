@@ -5,6 +5,7 @@ import { requirePermission } from "@/lib/rbac";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
+import { isTermActive } from "@/lib/term-date";
 import "./academic-readiness.css";
 import "../../academic-workspace.css";
 
@@ -17,14 +18,13 @@ export default async function AcademicHealthPage(){
       tx.class.findMany({select:{id:true,name:true,level:true,subjectAssignments:{select:{subjectId:true,teacherId:true}}},orderBy:[{level:"asc"},{name:"asc"}]}),
       tx.classSubjectTeacher.findMany({select:{classId:true,subjectId:true,teacherId:true,class:{select:{name:true}},subject:{select:{name:true}},teacher:{select:{name:true}}}}),
       tx.student.findMany({where:{schoolId:session.schoolId,status:"active"},select:{id:true,classId:true}}),
-      tx.term.findMany({where:{schoolId:session.schoolId},include:{academicYear:true},orderBy:[{startDate:"desc"},{name:"asc"}],take:12}),
+      tx.term.findMany({where:{schoolId:session.schoolId},include:{academicYear:true},orderBy:[{startDate:"desc"},{name:"asc"}]}),
       tx.assessment.count({where:{schoolId:session.schoolId}}),
       tx.reportCard.count({where:{schoolId:session.schoolId}}),
       getAcademicEngineConfig(tx),
-      tx.schoolSettings.findUnique({where:{schoolId:session.schoolId},select:{reportCardTemplateId:true}}),
+      tx.schoolSettings.findUnique({where:{schoolId:session.schoolId},select:{reportCardTemplateId:true,timezone:true}}),
     ]);
-    const now=new Date();
-    const currentTerm=terms.find((term)=>now>=term.startDate&&now<=term.endDate)??null;
+    const currentTerm=terms.find((term)=>isTermActive(term,new Date(),settings?.timezone||"Africa/Accra"))??null;
     const [termAssessments,termScores,reportTemplate]=currentTerm?await Promise.all([
       tx.assessment.count({where:{schoolId:session.schoolId,termId:currentTerm.id}}),
       tx.score.count({where:{schoolId:session.schoolId,assessment:{termId:currentTerm.id}}}),
