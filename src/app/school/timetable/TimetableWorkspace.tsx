@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Check, Clock3, Plus, Printer, RefreshCw, Sparkles, X } from "lucide-react";
 
@@ -155,7 +156,7 @@ export default function TimetableWorkspace() {
           <p>See the actual weekly timetable first. Generate or print it when it is ready.</p>
         </div>
         <div className="tt-header-actions">
-          <a className="tt-btn ghost" href={printUrl}><Printer size={15} /> Print timetable</a>
+          <Link className="tt-btn ghost" href={printUrl}><Printer size={15} /> Print timetable</Link>
           <button className="tt-btn primary" disabled={generating} onClick={() => void generate()}><Sparkles size={15} />{generating ? "Generating…" : "Generate timetable"}</button>
         </div>
       </header>
@@ -168,7 +169,7 @@ export default function TimetableWorkspace() {
           <CalendarDays size={24} />
           <h2>No timetable schedule is configured yet</h2>
           <p>Set the school's working days and teaching periods in Academic Setup, then return here to generate the timetable.</p>
-          <a className="tt-btn primary" href="/school/academics/setup">Open academic setup</a>
+          <Link className="tt-btn primary" href="/school/academics/setup">Open academic setup</Link>
         </section>
       ) : (
         <>
@@ -232,42 +233,45 @@ export default function TimetableWorkspace() {
 }
 
 function LessonEditor({ data, value, close, done, action }: { data: Data; value: Editor; close: () => void; done: () => Promise<void>; action: (body: unknown) => Promise<unknown> }) {
-  const slot = value.slot;
-  const [classId, setClassId] = useState(slot?.classId || data.classes[0]?.id || "");
-  const [subjectId, setSubjectId] = useState(slot?.subjectId || "");
-  const [teacherId, setTeacherId] = useState(slot?.teacherId || "");
-  const [venue, setVenue] = useState(slot?.venue?.replace(/^room:/, "") || "");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+  const [classId, setClassId] = useState(value.slot?.classId ?? data.classes[0]?.id ?? "");
+  const [subjectId, setSubjectId] = useState(value.slot?.subjectId ?? data.subjects[0]?.id ?? "");
+  const [teacherId, setTeacherId] = useState(value.slot?.teacherId ?? data.teachers[0]?.id ?? "");
+  const [venue, setVenue] = useState(value.slot?.venue?.replace(/^room:/, "") ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  const run = async (body: unknown) => {
-    setBusy(true);
-    setMessage("");
-    try { await action(body); await done(); }
-    catch (cause) { setMessage(cause instanceof Error ? cause.message : "Could not save the lesson."); }
-    finally { setBusy(false); }
+  const save = async () => {
+    setSaving(true); setError("");
+    try {
+      await action({ action: "assign", classId, subjectId, teacherId, dayOfWeek: value.day, period: value.period, room: venue.trim() || undefined });
+      await done();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save lesson."); }
+    finally { setSaving(false); }
+  };
+
+  const remove = async () => {
+    if (!value.slot) return;
+    setSaving(true); setError("");
+    try { await action({ action: "remove", slotId: value.slot.id }); await done(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not remove lesson."); }
+    finally { setSaving(false); }
   };
 
   return (
-    <div className="tt-drawer">
-      <aside className="tt-drawer-panel">
-        <div className="tt-drawer-head">
-          <div><span className="tt-eyebrow">{slot ? "LESSON" : "ADD LESSON"}</span><h2>{slot?.subject.name || "Add a lesson"}</h2><p>Period {value.period} · {data.timetableConfig.days.find((day) => day.dayOfWeek === value.day)?.name}</p></div>
-          <button className="tt-close" onClick={close} aria-label="Close"><X size={17} /></button>
+    <div className="tt-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
+      <section className="tt-editor" role="dialog" aria-modal="true" aria-labelledby="tt-editor-title">
+        <button className="tt-editor-close" type="button" onClick={close} aria-label="Close lesson editor"><X size={17} /></button>
+        <span className="tt-eyebrow">LESSON</span><h2 id="tt-editor-title">{value.slot ? "Edit lesson" : "Add lesson"}</h2><p>Day {value.day}, period {value.period}</p>
+        {error ? <div className="tt-alert error">{error}</div> : null}
+        <label>Class<select value={classId} onChange={(event) => setClassId(event.target.value)}>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label>Subject<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>{data.subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label>Teacher<select value={teacherId} onChange={(event) => setTeacherId(event.target.value)}>{data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+        <label>Room / venue<input value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Optional" /></label>
+        <div className="tt-editor-actions">
+          {value.slot ? <button className="tt-btn danger" disabled={saving} onClick={() => void remove()}>Remove</button> : <span />}
+          <div><button className="tt-btn ghost" type="button" onClick={close}>Cancel</button><button className="tt-btn primary" disabled={saving || !classId || !subjectId || !teacherId} onClick={() => void save()}>{saving ? "Saving…" : "Save lesson"}</button></div>
         </div>
-        {slot ? (
-          <div className="tt-form"><div className="tt-form-note">{slot.class.name} · {slot.teacher.name}{slot.venue ? ` · ${slot.venue.replace(/^room:/, "")}` : ""}</div><div className="tt-form-actions"><button className="tt-btn danger" disabled={busy} onClick={() => void run({ action: "deleteSlot", slotId: slot.id })}>Delete lesson</button><button className="tt-btn ghost" onClick={close}>Close</button></div></div>
-        ) : (
-          <div className="tt-form">
-            <label>Class<select value={classId} onChange={(event) => setClassId(event.target.value)}>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <label>Subject<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)}><option value="">Choose subject</option>{data.subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <label>Teacher<select value={teacherId} onChange={(event) => setTeacherId(event.target.value)}><option value="">Choose teacher</option>{data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-            <label>Room / venue<input value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Optional" /></label>
-            <div className="tt-form-actions"><button className="tt-btn ghost" onClick={close}>Cancel</button><button className="tt-btn primary" disabled={busy || !classId || !subjectId || !teacherId} onClick={() => void run({ action: "saveSlot", classId, subjectId, teacherId, dayOfWeek: value.day, period: value.period, venue: venue || undefined })}>Add lesson</button></div>
-          </div>
-        )}
-        {message ? <div className="tt-alert error" role="alert"><X size={13} />{message}</div> : null}
-      </aside>
+      </section>
     </div>
   );
 }
