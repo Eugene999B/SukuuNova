@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { StudentPhotoCapture } from "@/components/students/StudentPhotoCapture";
 import { OptimisticSubmitButton } from "@/components/ui/OptimisticSubmitButton";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -36,6 +36,7 @@ function Field({ label, required, children, hint }: { label: string; required?: 
 export function AddStudentDialog({ classes, action, triggerLabel = "+ Add student", initialOpen = false }: Props) {
   const [open, setOpen] = useState(initialOpen);
   const [step, setStep] = useState(0);
+  const [actionError, setActionError] = useState("");
 
   useEffect(() => {
     setOpen(initialOpen);
@@ -57,6 +58,7 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
 
   function openDialog() {
     setStep(0);
+    setActionError("");
     setOpen(true);
     window.history.replaceState(null, "", "/school/students?action=create");
   }
@@ -64,7 +66,29 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
   function closeDialog() {
     setOpen(false);
     setStep(0);
+    setActionError("");
     window.history.replaceState(null, "", "/school/students");
+  }
+
+  async function submit(formData: FormData) {
+    setActionError("");
+    const photoData = String(formData.get("photoData") ?? "");
+    if (photoData.length > 800_000) {
+      setActionError("The student photo is too large to submit. Please capture the photo again or upload a smaller image.");
+      setStep(3);
+      return;
+    }
+    try {
+      await action(formData);
+    } catch (error) {
+      console.error("Student registration failed", error);
+      setActionError(error instanceof Error && error.message ? error.message : "Student registration could not be completed. Nothing was saved. Please try again.");
+    }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submit(new FormData(event.currentTarget));
   }
 
   return (
@@ -96,7 +120,9 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
               ))}
             </div>
 
-            <form action={action} className="student-dialog-form">
+            {actionError ? <div className="dialog-callout" role="alert"><span className="callout-icon">!</span><div><strong>Student was not created</strong><p>{actionError}</p><button type="button" className="text-link" onClick={() => setActionError("")}>Dismiss</button></div></div> : null}
+
+            <form action={submit} onSubmit={handleSubmit} className="student-dialog-form">
               <div className="student-dialog-body">
                 <div className="dialog-panel" hidden={step !== 0} aria-hidden={step !== 0}>
                   <div className="dialog-panel-heading"><div><span className="eyebrow">Step 1</span><h3>Start with the learner</h3><p>Enter the essentials that identify this student throughout SukuuNova.</p></div><span className="panel-badge">Required</span></div>
@@ -137,7 +163,7 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
                 <div className="dialog-footer-note"><span className="secure-dot" />Secure school record</div>
                 <div className="dialog-footer-actions">
                   <button type="button" className="button secondary" onClick={() => step === 0 ? closeDialog() : setStep((value) => value - 1)}>{step === 0 ? "Cancel" : "Back"}</button>
-                  {step < steps.length - 1 ? <button type="button" className="button primary" onClick={() => setStep((value) => value + 1)}>Continue <span>→</span></button> : <OptimisticSubmitButton className="button primary" pendingLabel="Creating student…">Create student &amp; generate index <span>→</span></OptimisticSubmitButton>}
+                  {step < steps.length - 1 ? <button type="button" className="button primary" onClick={() => { setActionError(""); setStep((value) => value + 1); }}>Continue <span>→</span></button> : <OptimisticSubmitButton className="button primary" pendingLabel="Creating student…">Create student &amp; generate index <span>→</span></OptimisticSubmitButton>}
                 </div>
               </footer>
             </form>
