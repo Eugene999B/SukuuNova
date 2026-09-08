@@ -3,7 +3,6 @@ import { appendSchoolAudit } from "./audit";
 import { withTenant, type TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { hasPermission, requirePermission } from "./rbac";
-import { ensureIdentityCardsForSchool } from "./identity-card-service";
 
 export async function registerStudent(input: {
   schoolId: string; actorId: string; admissionNo: string; name: string;
@@ -19,6 +18,7 @@ export async function registerStudent(input: {
       const schoolClass = await tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId }, select: { id: true } });
       if (!schoolClass) throw new AppError("The selected class does not belong to this school.", 400, "CLASS_NOT_FOUND");
     }
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${input.schoolId}`}))`);
     let student;
     try {
       student = await tx.student.create({ data: {
@@ -64,10 +64,6 @@ export async function registerStudent(input: {
         relationship: input.guardian.relationship.trim(), isPrimary: input.guardian.isPrimary ?? true
       }});
     }
-
-    const school = await tx.school.findUnique({ where: { id: input.schoolId }, select: { uniqueCode: true } });
-    if (!school?.uniqueCode) throw new AppError("The school's identification code is missing.", 500, "SCHOOL_CODE_MISSING");
-    await ensureIdentityCardsForSchool(tx, input.schoolId, school.uniqueCode, input.actorId);
 
     await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId,
       action: "student.registered", entityType: "Student", entityId: student.id, after: student });
