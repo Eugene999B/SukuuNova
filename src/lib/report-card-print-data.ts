@@ -92,7 +92,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
   const attendance = object(snapshot.attendance);
   const promotionDecision: FrozenPromotionDecision = frozenPromotionDecision(snapshot.promotionDecision);
   const show = (key: string, fallback: boolean) => typeof presentation[key] === "boolean" ? Boolean(presentation[key]) : fallback;
-  const positionScope = snapshot.positionScope === "year_group" || snapshot.positionScope === "class"
+  const positionScope: "class" | "year_group" = snapshot.positionScope === "year_group" || snapshot.positionScope === "class"
     ? snapshot.positionScope
     : settings.positionScope === "year_group" ? "year_group" : "class";
   const behaviorRatingFields = snapshot.behaviorRatingFields !== undefined
