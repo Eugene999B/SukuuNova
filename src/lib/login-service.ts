@@ -71,9 +71,11 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     }
     if (synthetic) logSyntheticLoginDiagnostic("credentials_ok", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier) });
 
-    const [roles, permissionOverrides] = await Promise.all([
+    const [roles, permissionOverrides, schoolEpochRows, userEpochRows] = await Promise.all([
       tx.userRole.findMany({ where: { userId: user.id }, select: { role: { select: { id: true, name: true, key: true, rolePermissions: { select: { permissionId: true } } } } } }),
-      tx.userPermissionOverride.findMany({ where: { userId: user.id }, select: { permissionId: true, granted: true } })
+      tx.userPermissionOverride.findMany({ where: { userId: user.id }, select: { permissionId: true, granted: true } }),
+      tx.$queryRawUnsafe<Array<{ version: number }>>(`SELECT "version" FROM "SchoolSessionEpoch" WHERE "schoolId"=$1 LIMIT 1`, directory.schoolId),
+      tx.$queryRawUnsafe<Array<{ version: number }>>(`SELECT "version" FROM "SchoolUserSessionEpoch" WHERE "schoolId"=$1 AND "userId"=$2 LIMIT 1`, directory.schoolId, user.id),
     ]);
     const roleEntries = roles.map(({ role }) => ({ name: role.name, key: role.key?.trim() || roleKeyForName(role.name) }));
     const roleKeys = roleEntries.map((role) => role.key);
@@ -83,6 +85,8 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
       name: user.name,
       status: user.status,
       passwordHash: user.passwordHash,
+      schoolSessionEpoch: Number(schoolEpochRows[0]?.version ?? 0),
+      userSessionEpoch: Number(userEpochRows[0]?.version ?? 0),
       userRoles: roles,
       permissionOverrides
     });
