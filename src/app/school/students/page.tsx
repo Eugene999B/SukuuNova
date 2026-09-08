@@ -17,6 +17,8 @@ import "./students-light-theme.css";
 import "./students-light-overrides.css";
 import "@/components/students/add-student-dialog.css";
 
+type StudentActionState = { message: string | null };
+
 function createIndexNumber() {
   const year = new Date().getFullYear();
   return `SN-${year}-${String(randomInt(0, 1_000_000)).padStart(6, "0")}`;
@@ -33,46 +35,53 @@ async function getStudentsPageData(schoolId: string) {
   }), 30);
 }
 
-async function createStudent(formData: FormData) {
+async function createStudent(_previousState: StudentActionState, formData: FormData): Promise<StudentActionState> {
   "use server";
-  const session = await requireSchoolSession();
-  const name = String(formData.get("name") ?? "").trim();
-  const dobRaw = String(formData.get("dob") ?? "").trim();
-  const classId = String(formData.get("classId") ?? "").trim();
-  const guardianName = String(formData.get("guardianName") ?? "").trim();
-  const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
-  const guardianRelationship = String(formData.get("guardianRelationship") ?? "Parent/Guardian").trim() || "Parent/Guardian";
-  const photoData = String(formData.get("photoData") ?? "").trim();
-  if (!name) throw new Error("Student name is required.");
-  if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large. Capture a smaller photo and try again.");
-  if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
-  await withTenant(session.schoolId, async (tx) => {
-    await requirePermission(tx, session.userId, "students:write");
-    if (classId) {
-      const schoolClass = await tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } });
-      if (!schoolClass) throw new Error("The selected class does not belong to this school.");
-    }
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${session.schoolId}`}))`;
-    let indexNumber = createIndexNumber();
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const exists = await tx.student.findUnique({ where: { schoolId_admissionNo: { schoolId: session.schoolId, admissionNo: indexNumber } }, select: { id: true } });
-      if (!exists) break;
-      indexNumber = createIndexNumber();
-    }
-    let student;
-    try {
-      student = await tx.student.create({ data: { schoolId: session.schoolId, name, admissionNo: indexNumber, dob: dobRaw ? new Date(`${dobRaw}T00:00:00.000Z`) : null, classId: classId || null, status: "active", photoUrl: photoData || null } });
-    } catch (error) {
-      if ((error as { code?: string }).code === "P2002") throw new Error("A learner with this index number was just created. Try again.");
-      throw error;
-    }
-    if (guardianName && guardianPhone) {
-      const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
-      await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });
-    }
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
-  });
-  revalidatePath("/school/students");
+  try {
+    const session = await requireSchoolSession();
+    const name = String(formData.get("name") ?? "").trim();
+    const dobRaw = String(formData.get("dob") ?? "").trim();
+    const classId = String(formData.get("classId") ?? "").trim();
+    const guardianName = String(formData.get("guardianName") ?? "").trim();
+    const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
+    const guardianRelationship = String(formData.get("guardianRelationship") ?? "Parent/Guardian").trim() || "Parent/Guardian";
+    const photoData = String(formData.get("photoData") ?? "").trim();
+    if (!name) throw new Error("Student name is required.");
+    if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large. Capture a smaller photo and try again.");
+    if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
+    await withTenant(session.schoolId, async (tx) => {
+      await requirePermission(tx, session.userId, "students:write");
+      if (classId) {
+        const schoolClass = await tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } });
+        if (!schoolClass) throw new Error("The selected class does not belong to this school.");
+      }
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${session.schoolId}`}))`;
+      let indexNumber = createIndexNumber();
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const exists = await tx.student.findUnique({ where: { schoolId_admissionNo: { schoolId: session.schoolId, admissionNo: indexNumber } }, select: { id: true } });
+        if (!exists) break;
+        indexNumber = createIndexNumber();
+      }
+      let student;
+      try {
+        student = await tx.student.create({ data: { schoolId: session.schoolId, name, admissionNo: indexNumber, dob: dobRaw ? new Date(`${dobRaw}T00:00:00.000Z`) : null, classId: classId || null, status: "active", photoUrl: photoData || null } });
+      } catch (error) {
+        if ((error as { code?: string }).code === "P2002") throw new Error("A learner with this index number was just created. Try again.");
+        throw error;
+      }
+      if (guardianName && guardianPhone) {
+        const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
+        await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });
+      }
+      await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
+    });
+    revalidatePath("/school/students");
+    return { message: null };
+  } catch (error) {
+    console.error("Student registration action failed", error);
+    return { message: error instanceof Error && error.message ? error.message : "Student registration could not be completed. Nothing was saved. Please try again." };
+  }
+  // Successful server actions redirect after the transaction has committed.
   redirect("/school/students");
 }
 
