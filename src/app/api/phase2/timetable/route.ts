@@ -35,19 +35,22 @@ export async function GET(request: Request) {
     const teacherId = url.searchParams.get("teacherId") ?? "";
     const data = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "calendar:manage");
-      const [school, classes, subjects, activeUsers, slots, assignments, academic] = await Promise.all([
+      const [school, classes, subjects, activeUsers, slots, assignments, teachingAssignments, academic] = await Promise.all([
         tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true } }),
         tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true } }),
         tx.subject.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
         tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, userRoles: { select: { role: { select: { key: true, name: true } } } } } }),
         tx.timetableSlot.findMany({ where: { schoolId: session.schoolId }, include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } }, teacher: { select: { id: true, name: true } } }, orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }] }),
         tx.substituteAssignment.findMany({ where: { schoolId: session.schoolId }, include: { timetableSlot: { include: { class: true, subject: true } }, substituteTeacher: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 50 }),
+        tx.classSubjectTeacher.findMany({ where: { schoolId: session.schoolId }, select: { classId: true, subjectId: true, teacherId: true } }),
         getAcademicEngineConfig(tx),
       ]);
       const teachers = activeUsers
         .filter((user) => user.userRoles.some(({ role }) => isTeachingRoleKey(roleKeyForName(role.key?.trim() || role.name))))
         .map(({ id, name }) => ({ id, name }));
-      return { school, classes, subjects, teachers, slots, assignments, timetableConfig: academic.timetable, teacherGrid: view === "teacher" && teacherId ? await getTeacherWeeklyGrid(tx, { schoolId: session.schoolId, teacherId }) : undefined };
+      const eligibleTeacherIds = new Set(teachers.map((teacher) => teacher.id));
+      const validTeachingAssignments = teachingAssignments.filter((assignment) => eligibleTeacherIds.has(assignment.teacherId));
+      return { school, classes, subjects, teachers, slots, assignments, teachingAssignments: validTeachingAssignments, timetableConfig: academic.timetable, teacherGrid: view === "teacher" && teacherId ? await getTeacherWeeklyGrid(tx, { schoolId: session.schoolId, teacherId }) : undefined };
     });
     return NextResponse.json(data);
   } catch (error) {
