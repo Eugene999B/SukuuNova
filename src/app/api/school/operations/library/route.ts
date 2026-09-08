@@ -28,7 +28,7 @@ async function requireLinkedStudentForBorrower(
   studentId: string,
   canManage: boolean,
 ) {
-  if (canManage) return;
+  if (canManage || !(await hasPermission(tx, userId, "parents:read_linked"))) return;
   const link = await tx.studentGuardian.findFirst({
     where: { studentId, guardian: { userId } },
     select: { studentId: true },
@@ -40,11 +40,14 @@ export async function GET() {
   try {
     const session = await requireSchoolSession();
     const result = await withTenant(session.schoolId, async (tx) => {
-      const canManage = await hasPermission(tx, session.userId, "library:manage");
-      const canBorrow = await hasPermission(tx, session.userId, "library:borrow");
+      const [canManage, canBorrow, guardianScoped] = await Promise.all([
+        hasPermission(tx, session.userId, "library:manage"),
+        hasPermission(tx, session.userId, "library:borrow"),
+        hasPermission(tx, session.userId, "parents:read_linked"),
+      ]);
       if (!canManage && !canBorrow) throw new AppError("You do not have permission to access the library.", 403, "FORBIDDEN");
       const books = await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT * FROM "P3LibraryBook" WHERE "schoolId"=$1 ORDER BY "title"`, session.schoolId);
-      const loans = canManage
+      const loans = canManage || !guardianScoped
         ? await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT *, CASE WHEN "status"='borrowed' AND "dueAt"<CURRENT_TIMESTAMP THEN 'overdue' ELSE "status" END AS "displayStatus" FROM "P3LibraryLoan" WHERE "schoolId"=$1 ORDER BY "borrowedAt" DESC LIMIT 300`, session.schoolId)
         : await tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT l.*, CASE WHEN l."status"='borrowed' AND l."dueAt"<CURRENT_TIMESTAMP THEN 'overdue' ELSE l."status" END AS "displayStatus" FROM "P3LibraryLoan" l WHERE l."schoolId"=$1 AND l."studentId" IN (SELECT sg."studentId" FROM "StudentGuardian" sg INNER JOIN "Guardian" g ON g."id"=sg."guardianId" AND g."schoolId"=sg."schoolId" WHERE sg."schoolId"=$1 AND g."userId"=$2) ORDER BY l."borrowedAt" DESC LIMIT 100`, session.schoolId, session.userId);
       return { books, loans, canManage, canBorrow };
