@@ -4,7 +4,8 @@ import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
 import { hasPermission } from "./rbac";
 
-async function assertTermOpen(tx: TenantDb, schoolId: string, termId: string) {
+async function lockTerm(tx: TenantDb, schoolId: string, termId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${schoolId}:${termId}`}))`;
   const term = await tx.term.findFirst({ where: { id: termId, schoolId }, select: { id: true, isLocked: true, name: true } });
   if (!term) throw new AppError("The selected term does not belong to this school.", 400, "INVALID_TERM");
   if (term.isLocked) throw new AppError(`Term "${term.name}" is locked. Academic records can no longer be changed.`, 409, "TERM_LOCKED");
@@ -19,7 +20,7 @@ async function assertScoreMutable(tx: TenantDb, schoolId: string, studentId: str
 function canTeach(assignment: { teacherId: string } | null, classTeacher: { id: string } | null): boolean { return !!assignment || !!classTeacher; }
 
 export async function createAssessment(tx: TenantDb, input: { schoolId: string; actorId: string; termId: string; classId: string; subjectId: string; name: string; type: string; weight: number; maxScore: number; }) {
-  await assertTermOpen(tx, input.schoolId, input.termId);
+  await lockTerm(tx, input.schoolId, input.termId);
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   if (!canWriteAll) {
     if (!(await hasPermission(tx, input.actorId, "scores:write:assigned"))) throw new ForbiddenError("Assessment creation is not permitted.");
@@ -47,7 +48,7 @@ export async function createAssessment(tx: TenantDb, input: { schoolId: string; 
 export async function enterScore(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; value: number; status?: "present" | "absent" | "excused"; }) {
   const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true, maxScore: true } });
   if (!assessment) throw new AppError("Assessment not found in this school.", 404, "NOT_FOUND");
-  await assertTermOpen(tx, input.schoolId, assessment.termId);
+  await lockTerm(tx, input.schoolId, assessment.termId);
   await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
@@ -61,7 +62,6 @@ export async function enterScore(tx: TenantDb, input: { schoolId: string; actorI
   if (!student || student.classId !== assessment.classId) throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
   if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
   const status = input.status ?? "present";
-  if (status !== "present" && status !== "absent" && status !== "excused") throw new AppError("Score status must be present, absent, or excused.", 400, "INVALID_SCORE_STATUS");
   const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
   const score = await tx.score.upsert({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } }, update: { value: new Prisma.Decimal(input.value), status, enteredBy: input.actorId, enteredAt: new Date() }, create: { schoolId: input.schoolId, studentId: input.studentId, subjectId: assessment.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(input.value), status, enteredBy: input.actorId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: previous ? "score.updated" : "score.created", entityType: "Score", entityId: score.id, before: previous, after: score });
@@ -71,7 +71,7 @@ export async function enterScore(tx: TenantDb, input: { schoolId: string; actorI
 export async function clearScore(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; }) {
   const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true } });
   if (!assessment) throw new AppError("Assessment not found in this school.", 404, "NOT_FOUND");
-  await assertTermOpen(tx, input.schoolId, assessment.termId);
+  await lockTerm(tx, input.schoolId, assessment.termId);
   await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   if (!canWriteAll) {
