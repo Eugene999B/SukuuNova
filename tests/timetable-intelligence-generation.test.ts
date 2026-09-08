@@ -4,7 +4,7 @@ vi.mock("../src/lib/rbac", () => ({ requirePermission: vi.fn().mockResolvedValue
 vi.mock("../src/lib/audit", () => ({ appendSchoolAudit: vi.fn().mockResolvedValue(undefined) }));
 
 import type { TenantDb } from "../src/lib/db";
-import { generateBalancedTimetable } from "../src/lib/timetable-engine-v2";
+import { dayBlocks, generateBalancedTimetable } from "../src/lib/timetable-engine-v2";
 
 const config = {
   timetableConfig: {
@@ -114,5 +114,42 @@ describe("intelligent timetable generation", () => {
     expect(result.changes.additions).toHaveLength(2);
     expect(create).not.toHaveBeenCalled();
     expect(deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("keeps explicit teaching periods distinct for each configured day", () => {
+    const monday = {
+      dayOfWeek: 1,
+      name: "Monday",
+      enabled: true,
+      start: "08:00",
+      end: "10:00",
+      periods: [
+        { period: 1, start: "08:00", end: "08:40" },
+        { period: 2, start: "08:40", end: "09:20" },
+      ],
+    };
+    const friday = {
+      dayOfWeek: 5,
+      name: "Friday",
+      enabled: true,
+      start: "09:00",
+      end: "10:00",
+      periods: [{ period: 1, start: "09:00", end: "09:40" }],
+    };
+    const timetable = {
+      days: [monday, friday],
+      periodMinutes: 40,
+      breaks: [],
+      periodsPerDay: 2,
+      published: false,
+    };
+
+    expect(dayBlocks(monday, timetable).periods).toEqual([
+      { period: 1, start: "08:00", end: "08:40" },
+      { period: 2, start: "08:40", end: "09:20" },
+    ]);
+    expect(dayBlocks(friday, timetable).periods).toEqual([
+      { period: 1, start: "09:00", end: "09:40" },
+    ]);
   });
 });
