@@ -1,5 +1,6 @@
 "use server";
 
+import { TEACHING_ROLE_KEYS } from "@/lib/authorization";
 import { withTenant } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { requirePermission } from "@/lib/rbac";
@@ -7,7 +8,6 @@ import { appendSchoolAudit } from "@/lib/audit";
 import { AppError } from "@/lib/errors";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; message: string };
-const teacherRoleKeys = ["teacher", "class_teacher", "subject_teacher", "assistant_teacher", "teaching_assistant"];
 const HOUSE_COLORS = ["var(--color-danger)", "var(--color-brand)", "var(--color-warning)", "var(--color-text-muted)", "var(--color-brand-hover)", "var(--color-danger)"];
 
 /** Never echo raw database errors (constraint/table names) to the UI. */
@@ -28,7 +28,7 @@ export async function createClass(input: { level: string; name: string; classTea
       const duplicate = await tx.class.findFirst({ where: { name }, select: { id: true, name: true, level: true } });
       if (duplicate) return { ok: false, message: `Class “${duplicate.name}” already exists in this school.` };
       if (teacherId) {
-        const teacher = await tx.user.findFirst({ where: { id: teacherId, status: "active", userRoles: { some: { role: { key: { in: teacherRoleKeys } } } } }, select: { id: true, name: true } });
+        const teacher = await tx.user.findFirst({ where: { id: teacherId, status: "active", userRoles: { some: { role: { key: { in: [...TEACHING_ROLE_KEYS] } } } } }, select: { id: true, name: true } });
         if (!teacher) return { ok: false, message: "Choose an active teaching staff member. The selected account is not eligible to be a class teacher." };
         const assigned = await tx.class.findFirst({ where: { classTeacherId: teacherId }, select: { id: true, name: true } });
         if (assigned) return { ok: false, message: `${teacher.name} is already the class teacher for ${assigned.name}.` };
