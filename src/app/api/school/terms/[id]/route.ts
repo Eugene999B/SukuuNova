@@ -21,7 +21,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       await requirePermission(tx, session.userId, "settings:manage_school");
       const before = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!before) throw new AppError("Term not found.", 404, "NOT_FOUND");
+      // Lock ordering is shared with score/homework/lesson/report-card mutations:
+      // academic-year terms first, then the individual term.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-year-terms:${session.schoolId}:${before.academicYearId}`}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${session.schoolId}:${id}`}))`;
       const current = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!current) throw new AppError("Term not found.", 404, "NOT_FOUND");
       const nextLocked = input.isLocked ?? current.isLocked;
