@@ -32,11 +32,14 @@ export async function createTerm(input: {
   orderedDates(input.startDate, input.endDate);
   return withTenant(input.schoolId, async (tx) => {
     await requirePermission(tx, input.actorId, "calendar:manage");
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-year-terms:${input.schoolId}:${input.academicYearId}`}))`;
     const year = await tx.academicYear.findFirst({ where: { id: input.academicYearId, schoolId: input.schoolId }, select: { id: true, startDate: true, endDate: true } });
     if (!year) throw new AppError("The selected academic year does not belong to this school.", 400, "INVALID_ACADEMIC_YEAR");
     if (input.startDate < year.startDate || input.endDate > year.endDate) {
       throw new AppError("Term dates must fall inside the academic year.", 400, "TERM_OUTSIDE_YEAR");
     }
+    const overlap = await tx.term.findFirst({ where: { schoolId: input.schoolId, academicYearId: input.academicYearId, startDate: { lt: input.endDate }, endDate: { gt: input.startDate } }, select: { name: true } });
+    if (overlap) throw new AppError(`Term dates overlap ${overlap.name}.`, 409, "TERM_OVERLAP");
     const term = await tx.term.create({ data: {
       schoolId: input.schoolId, academicYearId: year.id, name: input.name.trim(),
       startDate: input.startDate, endDate: input.endDate
