@@ -11,6 +11,10 @@ function object(value: Prisma.JsonValue | null | undefined): Record<string, Pris
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.JsonValue> : {};
 }
 
+function configBoolean(raw: Record<string, Prisma.JsonValue>, key: string, fallback: boolean) {
+  return typeof raw[key] === "boolean" ? Boolean(raw[key]) : fallback;
+}
+
 export function readManualPromotionDecision(value: Prisma.JsonValue | null | undefined): PromotionDecision | null {
   const raw = object(value);
   return raw.manualPromotionDecision === "promoted" || raw.manualPromotionDecision === "not_promoted" ? raw.manualPromotionDecision : null;
@@ -30,6 +34,71 @@ async function finalTermContext(tx: TenantDb, schoolId: string, termId: string) 
   });
   const final = terms[config.finalTermNumber - 1] ?? null;
   return { config, term, final, terms };
+}
+
+async function freezeApprovedPresentation(tx: TenantDb, input: {
+  schoolId: string;
+  reportCardId: string;
+  studentId: string;
+  termId: string;
+  calculationSnapshot: Prisma.JsonValue | null;
+}) {
+  const [settings, term] = await Promise.all([
+    tx.schoolSettings.findUnique({
+      where: { schoolId: input.schoolId },
+      select: {
+        reportCardConfig: true,
+        reportCardTemplateId: true,
+        showOverallPosition: true,
+        showSubjectPosition: true,
+        positionScope: true,
+      },
+    }),
+    tx.term.findFirst({
+      where: { id: input.termId, schoolId: input.schoolId },
+      select: { startDate: true, endDate: true },
+    }),
+  ]);
+  if (!settings || !term) return input.calculationSnapshot;
+
+  const raw = object(settings.reportCardConfig);
+  const workflow = readReportWorkflowConfig(settings.reportCardConfig, settings.reportCardTemplateId);
+  const attendanceRows = await tx.attendanceEvent.findMany({
+    where: {
+      schoolId: input.schoolId,
+      studentId: input.studentId,
+      type: "in",
+      attendanceDate: { gte: term.startDate, lte: term.endDate },
+    },
+    select: { attendanceDate: true, isLate: true },
+  });
+  const presentDays = new Set(attendanceRows.map((row) => row.attendanceDate.toISOString().slice(0, 10))).size;
+  const lateDays = attendanceRows.filter((row) => row.isLate).length;
+  const snapshot = object(input.calculationSnapshot);
+  const reportPresentation = {
+    showOverallPosition: Boolean(settings.showOverallPosition) && workflow.showOverallPosition && configBoolean(raw, "includePosition", true),
+    showSubjectPosition: Boolean(settings.showSubjectPosition) && workflow.showSubjectPosition && configBoolean(raw, "includeSubjectPosition", true),
+    showStudentPhoto: workflow.showStudentPhoto,
+    showAttendance: workflow.showAttendance && configBoolean(raw, "includeAttendance", true),
+    showPromotion: workflow.showPromotion,
+    showClassTeacherRemark: workflow.showClassTeacherRemark && configBoolean(raw, "includeTeacherRemark", true),
+    showHeadteacherRemark: workflow.showHeadteacherRemark && configBoolean(raw, "includeHeadRemark", true),
+  };
+  const nextSnapshot = {
+    ...snapshot,
+    reportPresentation,
+    attendance: { presentDays, lateDays },
+    presentationFrozenAt: new Date().toISOString(),
+    positionScope: typeof snapshot.positionScope === "string"
+      ? snapshot.positionScope
+      : settings.positionScope === "year_group" ? "year_group" : "class",
+  } as Prisma.InputJsonObject;
+
+  await tx.reportCard.updateMany({
+    where: { id: input.reportCardId, schoolId: input.schoolId, status: "approved" },
+    data: { calculationSnapshot: nextSnapshot },
+  });
+  return nextSnapshot;
 }
 
 export async function setReportPromotionDecision(tx: TenantDb, input: {
@@ -99,8 +168,17 @@ export async function applyApprovedPromotion(tx: TenantDb, input: {
     },
   });
   if (!report || report.status !== "approved" || !report.student.classId) return { applied: false, reason: "not_applicable" as const };
-  const decision = readManualPromotionDecision(report.calculationSnapshot);
+
+  const frozenSnapshot = await freezeApprovedPresentation(tx, {
+    schoolId: input.schoolId,
+    reportCardId: report.id,
+    studentId: report.student.id,
+    termId: report.termId,
+    calculationSnapshot: report.calculationSnapshot,
+  });
+  const decision = readManualPromotionDecision(frozenSnapshot);
   if (decision !== "promoted") return { applied: false, reason: decision === "not_promoted" ? "not_promoted" as const : "no_manual_decision" as const };
+
   const context = await finalTermContext(tx, input.schoolId, report.termId);
   if (!context.final || context.final.id !== report.termId) return { applied: false, reason: "not_final_term" as const };
   if (!context.config.autoApplyPromotion) return { applied: false, reason: "automatic_progression_disabled" as const };
