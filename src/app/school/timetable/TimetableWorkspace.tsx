@@ -1,11 +1,273 @@
 "use client";
-import { useEffect,useMemo,useState } from "react";
-import { CalendarClock,Check,Clock3,Plus,Printer,RefreshCw,Settings2,Sparkles,X } from "lucide-react";
 
-type C={id:string;name:string;level:string|null}; type T={id:string;name:string}; type S={id:string;name:string}; type A={id:string;classId:string;subjectId:string;teacherId:string;class:C;subject:S;teacher:T}; type Slot={id:string;classId:string;subjectId:string;teacherId:string;dayOfWeek:number;period:number;venue?:string|null;class:C;subject:S;teacher:T}; type P={period:number;start:string;end:string}; type D={dayOfWeek:number;name:string;enabled:boolean;start:string;end:string;periods?:P[]}; type B={name:string;start:string;end:string}; type Config={days:D[];periodMinutes:number;breaks:B[];periodsPerDay:number;periods?:P[];published:boolean;weeklyPeriods?:Record<string,number>;rooms?:Array<{id:string;name:string;type?:string}>;teacherUnavailability?:Record<string,string[]>;roomRequirements?:Record<string,{roomType?:string;room?:string}>;doublePeriodSubjects?:Record<string,number>}; type Data={school:{name:string;uniqueCode:string;logoUrl?:string|null}|null;classes:C[];subjects:S[];teachers:T[];slots:Slot[];assignments:A[];timetableConfig:Config};
-const DAYS=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-const m=(v:string)=>{const [h,x]=v.split(":").map(Number);return h*60+x}; const c=(n:number)=>`${String(Math.floor(n/60)).padStart(2,"0")}:${String(n%60).padStart(2,"0")}`; const ft=(v:string)=>{const [h,x]=v.split(":").map(Number);return `${h%12||12}:${String(x).padStart(2,"0")} ${h>=12?"PM":"AM"}`};
-function derive(start:string,end:string,duration:number,breaks:B[],limit:number){const out:P[]=[];let cur=m(start),i=1;const finish=m(end),bs=[...breaks].sort((a,b)=>m(a.start)-m(b.start));while(cur<finish&&i<=Math.min(16,Math.max(1,limit))){const inside=bs.find(b=>m(b.start)<=cur&&m(b.end)>cur);if(inside){cur=m(inside.end);continue}const next=cur+duration;const crossing=bs.find(b=>m(b.start)>cur&&m(b.start)<next);if(crossing){cur=m(crossing.end);continue}if(next>finish)break;out.push({period:i++,start:c(cur),end:c(next)});cur=next}return out}
-export default function TimetableWorkspace(){const [data,setData]=useState<Data|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState(""),[notice,setNotice]=useState(""),[view,setView]=useState<"class"|"teacher">("class"),[classId,setClassId]=useState(""),[teacherId,setTeacherId]=useState(""),[settings,setSettings]=useState(false),[generating,setGenerating]=useState(false),[editor,setEditor]=useState<{day:number;period:number;slot?:Slot}|null>(null);const load=async()=>{setLoading(true);setError("");try{const r=await fetch("/api/phase2/timetable",{cache:"no-store"});const d=await r.json();if(!r.ok)throw new Error(d.message||"Could not load timetable.");setData(d);setClassId(v=>v||d.classes[0]?.id||"")}catch(e){setError(e instanceof Error?e.message:"Could not load timetable.")}finally{setLoading(false)}};useEffect(()=>{void load()},[]);const days=useMemo(()=>data?.timetableConfig.days.filter(d=>d.enabled&&d.dayOfWeek<=6)||[],[data]);const periods=useMemo(()=>{if(!data||!days[0])return [];const p=days[0].periods?.length?days[0].periods:data.timetableConfig.periods;return p?.length?p:derive(days[0].start,days[0].end,data.timetableConfig.periodMinutes,data.timetableConfig.breaks,data.timetableConfig.periodsPerDay)},[data,days]);const events=useMemo(()=>{if(!data)return [];return [...periods.map(p=>({kind:"lesson" as const,start:m(p.start),p})),...(data.timetableConfig.breaks||[]).map(b=>({kind:"break" as const,start:m(b.start),b}))].sort((a,b)=>a.start-b.start||((a.kind==="break")?-1:1))},[data,periods]);const slots=useMemo(()=>data?.slots.filter(s=>view==="class"?s.classId===classId:(teacherId?s.teacherId===teacherId:false))||[],[data,view,classId,teacherId]);const map=useMemo(()=>new Map(slots.map(s=>[`${s.dayOfWeek}:${s.period}`,s])),[slots]);const name=view==="class"?(data?.classes.find(x=>x.id===classId)?.name||"Select a class"):(data?.teachers.find(x=>x.id===teacherId)?.name||"Select a teacher");const call=async(body:unknown)=>{const r=await fetch("/api/phase2/timetable",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.message||d.error||"Action failed");return d};const generate=async()=>{setGenerating(true);setError("");setNotice("");try{const r=await fetch("/api/school/academic-engine",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"generate",replaceExisting:false,classIds:view==="class"&&classId?[classId]:undefined})});const d=await r.json();if(!r.ok)throw new Error(d.message||d.error||"Generation failed");setNotice(d.message||`Scheduled ${d.scheduled??"lessons"}.`);await load()}catch(e){setError(e instanceof Error?e.message:"Generation failed")}finally{setGenerating(false)}};const saveConfig=async(next:Config)=>{const r=await fetch("/api/school/academic-engine",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"save",timetable:next})});const d=await r.json();if(!r.ok)throw new Error(d.message||"Could not save schedule rules.");setNotice("Schedule settings saved.");await load()};if(loading)return <div className="tt-modern-loading"><Clock3 size={18}/><div><strong>Loading timetable workspace</strong><span>Reading classes, teachers and scheduling rules…</span></div></div>;if(!data)return <div className="tt-modern-error"><strong>Timetable unavailable</strong><p>{error}</p><button onClick={()=>void load()}>Retry</button></div>;return <div className="tt-modern-workspace"><header className="tt-modern-header"><div><span className="tt-eyebrow"><CalendarClock size={14}/> SMART TIMETABLE</span><h1>{name}</h1><p>Define the school day once, then let SukuuNova calculate a balanced, conflict-free weekly schedule.</p></div><div className="tt-header-actions"><button className="tt-btn ghost" onClick={()=>setSettings(v=>!v)}><Settings2 size={15}/>{settings?"Back to timetable":"Schedule settings"}</button><button className="tt-btn primary" disabled={generating} onClick={()=>void generate()}><Sparkles size={15}/>{generating?"Generating…":"Generate timetable"}</button></div></header>{notice?<div className="tt-alert success"><Check size={15}/>{notice}</div>:null}{error?<div className="tt-alert error"><X size={15}/>{error}</div>:null}{settings?<SettingsPanel data={data} onSave={saveConfig}/>:<><section className="tt-control-bar"><div className="tt-view-switch"><button className={view==="class"?"active":""} onClick={()=>setView("class")}>Class timetable</button><button className={view==="teacher"?"active":""} onClick={()=>setView("teacher")}>Teacher timetable</button></div>{view==="class"?<select value={classId} onChange={e=>setClassId(e.target.value)}><option value="">Select class</option>{data.classes.map(x=><option key={x.id} value={x.id}>{x.level?`${x.level} · `:""}{x.name}</option>)}</select>:<select value={teacherId} onChange={e=>setTeacherId(e.target.value)}><option value="">Select teacher</option>{data.teachers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>}<span className="tt-toolbar-meta">{days.length} days · {periods.length} teaching periods/day</span><button className="tt-icon-btn" onClick={()=>void load()} aria-label="Refresh"><RefreshCw size={15}/></button><a className="tt-icon-btn" href={`/school/timetable/print${view==="class"&&classId?`?classId=${encodeURIComponent(classId)}`:""}`} aria-label="Print"><Printer size={15}/></a></section><section className="tt-grid-card"><div className="tt-grid-heading"><div><span className="tt-eyebrow">WEEKLY VIEW</span><h2>{name}</h2><p>Time runs across the top. Days run down the left. Break and lunch are shared school-wide bands.</p></div><div className="tt-legend"><span className="lesson-dot"/> Lesson <span className="break-dot"/> Break / lunch</div></div>{!days.length||!periods.length?<div className="tt-selection-empty"><Settings2 size={22}/><h2>Configure the school day first</h2><p>Set the working days, school hours, lesson duration, periods, break and lunch.</p><button className="tt-btn primary" onClick={()=>setSettings(true)}>Open schedule settings</button></div>:<div className="tt-table-scroll"><div className="tt-table" style={{gridTemplateColumns:`96px repeat(${events.length},minmax(142px,1fr))`}}><div className="tt-corner"><span>DAY</span><small>TIME →</small></div>{events.map((e,i)=>e.kind==="break"?<div className="tt-break-header" key={`h${i}`}><strong>{e.b.name}</strong><span>{ft(e.b.start)}–{ft(e.b.end)}</span></div>:<div className="tt-period-header" key={`h${i}`}><strong>P{e.p.period}</strong><span>{ft(e.p.start)}–{ft(e.p.end)}</span></div>)}{days.map(d=><div key={d.dayOfWeek} style={{display:"contents"}}><div className="tt-day-label"><strong>{d.name.slice(0,3).toUpperCase()}</strong><span>{d.name}</span></div>{events.map((e,i)=>e.kind==="break"?<div className="tt-break-cell" key={`${d.dayOfWeek}b${i}`}><span>{e.b.name}</span></div>:<button className={`tt-lesson-cell ${map.has(`${d.dayOfWeek}:${e.p.period}`)?"filled":"empty"}`} key={`${d.dayOfWeek}-${e.p.period}`} onClick={()=>setEditor({day:d.dayOfWeek,period:e.p.period,slot:map.get(`${d.dayOfWeek}:${e.p.period}`)})}>{map.has(`${d.dayOfWeek}:${e.p.period}`)?<><span className="tt-subject">{map.get(`${d.dayOfWeek}:${e.p.period}`)!.subject.name}</span><span className="tt-teacher">{map.get(`${d.dayOfWeek}:${e.p.period}`)!.teacher.name}</span><small>{map.get(`${d.dayOfWeek}:${e.p.period}`)!.venue?.replace(/^room:/,"")||""}</small></>:<span className="tt-add"><Plus size={13}/> open</span>}</button>)}</div>)}</div></div>}</section><section className="tt-intelligence"><div><span className="tt-eyebrow">SCHEDULING ENGINE</span><h2>Configuration drives generation.</h2><p>The generator uses the existing SukuuNova scheduling engine to respect weekly targets, teacher availability, room rules and existing commitments.</p></div><div className="tt-intelligence-list"><span><Check size={14}/> Teacher collisions rejected</span><span><Check size={14}/> Class collisions rejected</span><span><Check size={14}/> Room conflicts checked</span><span><Check size={14}/> Unscheduled work explained</span></div></section></>}{editor?<LessonEditor data={data} value={editor} onClose={()=>setEditor(null)} onDone={async()=>{setEditor(null);await load()}} call={call}/>:null}</div>}
-function LessonEditor({data,value,onClose,onDone,call}:{data:Data;value:{day:number;period:number;slot?:Slot};onClose:()=>void;onDone:()=>Promise<void>;call:(b:unknown)=>Promise<unknown>}){const s=value.slot;const [classId,setClassId]=useState(s?.classId||data.classes[0]?.id||"");const [subjectId,setSubjectId]=useState(s?.subjectId||"");const [teacherId,setTeacherId]=useState(s?.teacherId||"");const [venue,setVenue]=useState(s?.venue||"");const [busy,setBusy]=useState(false);const [msg,setMsg]=useState("");const run=async(b:unknown)=>{setBusy(true);setMsg("");try{await call(b);await onDone()}catch(e){setMsg(e instanceof Error?e.message:"Could not save lesson.")}finally{setBusy(false)}};return <div className="tt-drawer"><aside className="tt-drawer-panel"><div className="tt-drawer-head"><div><span className="tt-eyebrow">{s?"LESSON":"ADD LESSON"}</span><h2>{s?s.subject.name:"Place a lesson"}</h2><p>Period {value.period} on {data.timetableConfig.days.find(d=>d.dayOfWeek===value.day)?.name||"the selected day"}.</p></div><button className="tt-close" onClick={onClose}><X size={17}/></button></div>{s?<div className="tt-form"><div className="tt-form-note">{s.teacher.name} · {s.class.name}{s.venue?` · ${s.venue}`:""}</div><div className="tt-form-actions"><button className="tt-btn danger" disabled={busy} onClick={()=>void run({action:"deleteSlot",slotId:s.id})}>Delete</button><button className="tt-btn ghost" onClick={onClose}>Close</button></div></div>:<div className="tt-form"><label>Class<select value={classId} onChange={e=>setClassId(e.target.value)}>{data.classes.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label><label>Subject<select value={subjectId} onChange={e=>setSubjectId(e.target.value)}><option value="">Choose subject</option>{data.subjects.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label><label>Teacher<select value={teacherId} onChange={e=>setTeacherId(e.target.value)}><option value="">Choose teacher</option>{data.teachers.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label><label>Room / venue<input value={venue} onChange={e=>setVenue(e.target.value)} placeholder="Optional"/></label><div className="tt-form-actions"><button className="tt-btn ghost" onClick={onClose}>Cancel</button><button className="tt-btn primary" disabled={busy||!classId||!subjectId||!teacherId} onClick={()=>void run({action:"saveSlot",classId,subjectId,teacherId,dayOfWeek:value.day,period:value.period,venue:venue||undefined})}>Add lesson</button></div></div>}{msg?<div className="tt-alert error" style={{marginTop:12}}><X size={13}/>{msg}</div>:null}</aside></div>}
-function SettingsPanel({data,onSave}:{data:Data;onSave:(c:Config)=>Promise<void>}){const base=data.timetableConfig;const [start,setStart]=useState(base.days[0]?.start||"07:30");const [end,setEnd]=useState(base.days[0]?.end||"15:00");const [duration,setDuration]=useState(base.periodMinutes||40);const [limit,setLimit]=useState(base.periodsPerDay||8);const [days,setDays]=useState(base.days.filter(d=>d.enabled).map(d=>d.dayOfWeek));const [breaks,setBreaks]=useState<B[]>(base.breaks?.length?base.breaks:[{name:"Break",start:"09:50",end:"10:10"},{name:"Lunch",start:"12:10",end:"12:50"}]);const [weekly,setWeekly]=useState<Record<string,number>>(base.weeklyPeriods||{});const ps=derive(start,end,duration,breaks,limit);const save=()=>void onSave({...base,periodMinutes:duration,periodsPerDay:ps.length,periods:ps,breaks,days:DAYS.map((name,i)=>({dayOfWeek:i+1,name,enabled:days.includes(i+1),start,end,periods:ps})),weeklyPeriods:Object.fromEntries(Object.entries(weekly).filter(([,v])=>v>0))});return <div className="tt-settings-shell"><div className="tt-settings-main"><div className="tt-settings-intro"><span className="tt-eyebrow"><Settings2 size={14}/> SCHOOL SCHEDULE</span><h2>Tell SukuuNova how the school day works.</h2><p>Set timetable capacity and weekly teaching targets. These rules are used by the scheduling engine.</p></div><div className="tt-settings-grid"><section className="tt-setting-card"><h3>Working days</h3><div className="tt-day-pills">{DAYS.map((d,i)=><button key={d} className={days.includes(i+1)?"active":""} onClick={()=>setDays(v=>v.includes(i+1)?v.filter(x=>x!==i+1):[...v,i+1])}>{d.slice(0,3)}</button>)}</div></section><section className="tt-setting-card"><h3>School hours</h3><div className="tt-fields"><label>Starts<input type="time" value={start} onChange={e=>setStart(e.target.value)}/></label><label>Ends<input type="time" value={end} onChange={e=>setEnd(e.target.value)}/></label></div></section><section className="tt-setting-card"><h3>Lesson structure</h3><div className="tt-fields"><label>Minutes per lesson<input type="number" min={20} max={180} value={duration} onChange={e=>setDuration(Number(e.target.value))}/></label><label>Maximum periods<input type="number" min={1} max={16} value={limit} onChange={e=>setLimit(Number(e.target.value))}/></label></div><div className="tt-preview-strip"><strong>{ps.length} usable periods</strong><span>{ps[0]?`${ft(ps[0].start)}–${ft(ps[ps.length-1].end)}`:"No usable periods"}</span></div></section><section className="tt-setting-card"><div className="tt-card-head"><div><h3>Break & lunch</h3><p>Shared time bands across the school.</p></div><button className="tt-small-btn" onClick={()=>setBreaks(v=>[...v,{name:"Activity",start:"14:00",end:"14:15"}])}>Add block</button></div>{breaks.map((b,i)=><div className="tt-break-row" key={i}><input value={b.name} onChange={e=>setBreaks(v=>v.map((x,n)=>n===i?{...x,name:e.target.value}:x))}/><input type="time" value={b.start} onChange={e=>setBreaks(v=>v.map((x,n)=>n===i?{...x,start:e.target.value}:x))}/><input type="time" value={b.end} onChange={e=>setBreaks(v=>v.map((x,n)=>n===i?{...x,end:e.target.value}:x))}/><button onClick={()=>setBreaks(v=>v.filter((_,n)=>n!==i))}><X size={13}/></button></div>)}</section></div><section className="tt-requirements-card"><div className="tt-card-head"><div><span className="tt-eyebrow">WEEKLY TEACHING TARGETS</span><h3>How many periods for each class subject?</h3><p>Set the weekly target for every class + subject assignment.</p></div><span>{data.assignments.length} assignments</span></div><div className="tt-requirements-table"><div className="req-head"><span>Class</span><span>Subject</span><span>Teacher</span><span>Periods</span></div>{data.assignments.map(a=>{const k=`${a.classId}:${a.subjectId}:${a.teacherId}`;return <label className="req-row" key={k}><span>{a.class.name}</span><strong>{a.subject.name}</strong><span>{a.teacher.name}</span><input type="number" min={0} max={10} value={weekly[k]??2} onChange={e=>setWeekly(v=>({...v,[k]:Number(e.target.value)}))}/></label>})}</div></section><div className="tt-settings-footer"><button className="tt-btn primary" disabled={!days.length||!ps.length} onClick={save}><Check size={15}/> Save schedule rules</button></div></div><aside className="tt-settings-side"><div className="tt-side-card"><span className="tt-eyebrow">LIVE CAPACITY</span><h3>{ps.length} periods per day</h3><p>{days.length} working days · {duration} minutes per lesson.</p></div><div className="tt-side-card"><span className="tt-eyebrow">GENERATOR</span><h3>Then generate</h3><p>The engine validates teacher, class, room and availability constraints before placing lessons.</p></div></aside></div>}
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Check, Clock3, Plus, Printer, RefreshCw, Sparkles, X } from "lucide-react";
+
+type ClassItem = { id: string; name: string; level: string | null };
+type Person = { id: string; name: string };
+type Slot = {
+  id: string;
+  classId: string;
+  subjectId: string;
+  teacherId: string;
+  dayOfWeek: number;
+  period: number;
+  venue?: string | null;
+  class: ClassItem;
+  subject: Person;
+  teacher: Person;
+};
+type Period = { period: number; start: string; end: string };
+type Day = { dayOfWeek: number; name: string; enabled: boolean; periods?: Period[] };
+type TimetableConfig = { days: Day[]; periods?: Period[]; periodsPerDay: number; periodMinutes: number; breaks?: { name: string; start: string; end: string }[] };
+type Data = {
+  school: { name: string; uniqueCode: string; logoUrl?: string | null } | null;
+  classes: ClassItem[];
+  subjects: Person[];
+  teachers: Person[];
+  slots: Slot[];
+  timetableConfig: TimetableConfig;
+};
+
+type Editor = { day: number; period: number; slot?: Slot };
+
+function toMinutes(value: string) {
+  const [h, m] = value.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function fromMinutes(value: number) {
+  return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+}
+
+function formatTime(value: string) {
+  const [h, m] = value.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+}
+
+function buildPeriods(config: TimetableConfig, day?: Day) {
+  if (day?.periods?.length) return day.periods.slice(0, Math.min(16, config.periodsPerDay));
+  if (config.periods?.length) return config.periods.slice(0, Math.min(16, config.periodsPerDay));
+  const start = toMinutes("08:00");
+  return Array.from({ length: Math.min(16, Math.max(1, config.periodsPerDay || 8)) }, (_, index) => {
+    const s = start + index * (config.periodMinutes || 40);
+    return { period: index + 1, start: fromMinutes(s), end: fromMinutes(s + (config.periodMinutes || 40)) };
+  });
+}
+
+export default function TimetableWorkspace() {
+  const [data, setData] = useState<Data | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [view, setView] = useState<"class" | "teacher">("class");
+  const [selectedClass, setSelectedClass] = useState("");
+  const [selectedTeacher, setSelectedTeacher] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [editor, setEditor] = useState<Editor | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch("/api/phase2/timetable", { cache: "no-store" });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Could not load timetable.");
+      setData(payload);
+      setSelectedClass((current) => current || payload.classes?.[0]?.id || "");
+      setSelectedTeacher((current) => current || payload.teachers?.[0]?.id || "");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not load timetable.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const days = useMemo(() => data?.timetableConfig.days.filter((day) => day.enabled).sort((a, b) => a.dayOfWeek - b.dayOfWeek) ?? [], [data]);
+  const periods = useMemo(() => buildPeriods(data?.timetableConfig ?? { days: [], periodsPerDay: 8, periodMinutes: 40 }, days[0]), [data, days]);
+  const activeId = view === "class" ? selectedClass : selectedTeacher;
+  const activeName = view === "class"
+    ? data?.classes.find((item) => item.id === selectedClass)?.name ?? "Choose a class"
+    : data?.teachers.find((item) => item.id === selectedTeacher)?.name ?? "Choose a teacher";
+
+  const visibleSlots = useMemo(() => {
+    if (!data || !activeId) return [];
+    return data.slots.filter((slot) => view === "class" ? slot.classId === activeId : slot.teacherId === activeId);
+  }, [data, activeId, view]);
+  const slotMap = useMemo(() => new Map(visibleSlots.map((slot) => [`${slot.dayOfWeek}:${slot.period}`, slot])), [visibleSlots]);
+
+  const action = async (body: unknown) => {
+    const response = await fetch("/api/phase2/timetable", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || payload.error || "Timetable action failed.");
+    return payload;
+  };
+
+  const generate = async () => {
+    setGenerating(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch("/api/school/academic-engine", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "generate",
+          replaceExisting: false,
+          classIds: view === "class" && selectedClass ? [selectedClass] : undefined,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.error || "Timetable generation failed.");
+      setNotice(payload.message || `Generated ${payload.scheduled ?? "the timetable"}.`);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Timetable generation failed.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="tt-modern-loading"><Clock3 size={18} /><div><strong>Loading timetable</strong><span>Getting the latest classes, teachers and lessons…</span></div></div>;
+  }
+
+  if (!data) {
+    return <div className="tt-modern-error"><strong>Timetable could not be loaded</strong><p>{error || "Please try again."}</p><button className="tt-btn primary" onClick={() => void load()}>Try again</button></div>;
+  }
+
+  const printUrl = view === "teacher"
+    ? `/school/timetable/print?view=teacher&teacherId=${encodeURIComponent(selectedTeacher)}`
+    : `/school/timetable/print?view=class&classId=${encodeURIComponent(selectedClass)}`;
+
+  return (
+    <div className="tt-modern-workspace">
+      <header className="tt-modern-header">
+        <div>
+          <span className="tt-eyebrow"><CalendarDays size={14} /> TIMETABLE</span>
+          <h1>{activeName}</h1>
+          <p>See the actual weekly timetable first. Generate or print it when it is ready.</p>
+        </div>
+        <div className="tt-header-actions">
+          <a className="tt-btn ghost" href={printUrl}><Printer size={15} /> Print timetable</a>
+          <button className="tt-btn primary" disabled={generating} onClick={() => void generate()}><Sparkles size={15} />{generating ? "Generating…" : "Generate timetable"}</button>
+        </div>
+      </header>
+
+      {notice ? <div className="tt-alert success"><Check size={15} />{notice}</div> : null}
+      {error ? <div className="tt-alert error"><X size={15} />{error}</div> : null}
+
+      {!days.length || !periods.length ? (
+        <section className="tt-selection-empty">
+          <CalendarDays size={24} />
+          <h2>No timetable schedule is configured yet</h2>
+          <p>Set the school's working days and teaching periods in Academic Setup, then return here to generate the timetable.</p>
+          <a className="tt-btn primary" href="/school/academics/setup">Open academic setup</a>
+        </section>
+      ) : (
+        <>
+          <section className="tt-control-bar">
+            <div className="tt-view-switch">
+              <button className={view === "class" ? "active" : ""} onClick={() => setView("class")}>Class timetable</button>
+              <button className={view === "teacher" ? "active" : ""} onClick={() => setView("teacher")}>Teacher timetable</button>
+            </div>
+            {view === "class" ? (
+              <select aria-label="Choose class" value={selectedClass} onChange={(event) => setSelectedClass(event.target.value)}>
+                {data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}
+              </select>
+            ) : (
+              <select aria-label="Choose teacher" value={selectedTeacher} onChange={(event) => setSelectedTeacher(event.target.value)}>
+                {data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            )}
+            <span className="tt-toolbar-meta">{days.length} days · {periods.length} periods</span>
+            <button className="tt-icon-btn" onClick={() => void load()} aria-label="Refresh timetable"><RefreshCw size={15} /></button>
+          </section>
+
+          <section className="tt-grid-card">
+            <div className="tt-grid-heading">
+              <div><span className="tt-eyebrow">WEEKLY TIMETABLE</span><h2>{activeName}</h2><p>Day, time, subject and teacher are shown together in every lesson.</p></div>
+            </div>
+            <div className="tt-table-scroll">
+              <table className="tt-simple-table">
+                <thead><tr><th>Period</th>{days.map((day) => <th key={day.dayOfWeek}>{day.name}</th>)}</tr></thead>
+                <tbody>
+                  {periods.map((period) => (
+                    <tr key={period.period}>
+                      <th><strong>Period {period.period}</strong><span>{formatTime(period.start)}–{formatTime(period.end)}</span></th>
+                      {days.map((day) => {
+                        const slot = slotMap.get(`${day.dayOfWeek}:${period.period}`);
+                        return (
+                          <td key={`${day.dayOfWeek}:${period.period}`}>
+                            {slot ? (
+                              <button className="tt-simple-lesson filled" onClick={() => setEditor({ day: day.dayOfWeek, period: period.period, slot })}>
+                                <strong>{slot.subject.name}</strong>
+                                <span>{view === "class" ? slot.teacher.name : slot.class.name}</span>
+                                {slot.venue ? <small>{slot.venue.replace(/^room:/, "")}</small> : null}
+                              </button>
+                            ) : (
+                              <button className="tt-simple-lesson empty" onClick={() => setEditor({ day: day.dayOfWeek, period: period.period })}><Plus size={13} /> Add lesson</button>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </>
+      )}
+
+      {editor ? <LessonEditor data={data} value={editor} close={() => setEditor(null)} done={async () => { setEditor(null); await load(); }} action={action} /> : null}
+    </div>
+  );
+}
+
+function LessonEditor({ data, value, close, done, action }: { data: Data; value: Editor; close: () => void; done: () => Promise<void>; action: (body: unknown) => Promise<unknown> }) {
+  const slot = value.slot;
+  const [classId, setClassId] = useState(slot?.classId || data.classes[0]?.id || "");
+  const [subjectId, setSubjectId] = useState(slot?.subjectId || "");
+  const [teacherId, setTeacherId] = useState(slot?.teacherId || "");
+  const [venue, setVenue] = useState(slot?.venue?.replace(/^room:/, "") || "");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const run = async (body: unknown) => {
+    setBusy(true);
+    setMessage("");
+    try { await action(body); await done(); }
+    catch (cause) { setMessage(cause instanceof Error ? cause.message : "Could not save the lesson."); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="tt-drawer">
+      <aside className="tt-drawer-panel">
+        <div className="tt-drawer-head">
+          <div><span className="tt-eyebrow">{slot ? "LESSON" : "ADD LESSON"}</span><h2>{slot?.subject.name || "Add a lesson"}</h2><p>Period {value.period} · {data.timetableConfig.days.find((day) => day.dayOfWeek === value.day)?.name}</p></div>
+          <button className="tt-close" onClick={close} aria-label="Close"><X size={17} /></button>
+        </div>
+        {slot ? (
+          <div className="tt-form"><div className="tt-form-note">{slot.class.name} · {slot.teacher.name}{slot.venue ? ` · ${slot.venue.replace(/^room:/, "")}` : ""}</div><div className="tt-form-actions"><button className="tt-btn danger" disabled={busy} onClick={() => void run({ action: "deleteSlot", slotId: slot.id })}>Delete lesson</button><button className="tt-btn ghost" onClick={close}>Close</button></div></div>
+        ) : (
+          <div className="tt-form">
+            <label>Class<select value={classId} onChange={(event) => setClassId(event.target.value)}>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label>Subject<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)}><option value="">Choose subject</option>{data.subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label>Teacher<select value={teacherId} onChange={(event) => setTeacherId(event.target.value)}><option value="">Choose teacher</option>{data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+            <label>Room / venue<input value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Optional" /></label>
+            <div className="tt-form-actions"><button className="tt-btn ghost" onClick={close}>Cancel</button><button className="tt-btn primary" disabled={busy || !classId || !subjectId || !teacherId} onClick={() => void run({ action: "saveSlot", classId, subjectId, teacherId, dayOfWeek: value.day, period: value.period, venue: venue || undefined })}>Add lesson</button></div>
+          </div>
+        )}
+        {message ? <div className="tt-alert error" role="alert"><X size={13} />{message}</div> : null}
+      </aside>
+    </div>
+  );
+}
