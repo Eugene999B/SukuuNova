@@ -5,7 +5,6 @@ import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { requirePermission } from "@/lib/rbac";
 import { withTenant } from "@/lib/db";
-import { ensureIdentityCardsForSchool } from "@/lib/identity-card-service";
 import "@/app/school/students/students-workspace.css";
 import "@/components/students/add-student-dialog.css";
 import "@/app/school/students/students-light-overrides.css";
@@ -27,7 +26,7 @@ async function createStudent(formData: FormData) {
   const photoData = String(formData.get("photoData") ?? "").trim();
 
   if (!name) throw new Error("Student name is required.");
-  if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 1_000_000)) throw new Error("Student photo is invalid or too large.");
+  if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large.");
   if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
 
   await withTenant(session.schoolId, async (tx) => {
@@ -67,10 +66,6 @@ async function createStudent(formData: FormData) {
       house = [...houses].sort((a, b) => (counts.get(a.id)! - counts.get(b.id)!) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))[0] ?? null;
       if (house) await tx.student.update({ where: { id: student.id }, data: { houseId: house.id } });
     }
-
-    const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
-    if (!school?.uniqueCode) throw new Error("School identity configuration is incomplete.");
-    await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
 
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, houseId: house?.id ?? null, houseName: house?.name ?? null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
   });
