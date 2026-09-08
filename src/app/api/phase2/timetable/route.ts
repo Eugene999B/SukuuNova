@@ -7,11 +7,20 @@ import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
 import { isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
-import { confirmSubstitute, createTimetableSlot, deleteTimetableSlot, getTeacherWeeklyGrid, moveTimetableSlot, suggestSubstitutes, swapTimetableSlots } from "@/lib/timetable-service";
+import { confirmSubstitute, createTimetableSlot, deleteTimetableSlot, getTeacherWeeklyGrid, moveTimetableSlot, suggestSubstitutes, swapTimetableSlots, updateTimetableSlot } from "@/lib/timetable-service";
 
+const slotFields = {
+  classId: z.string().min(1),
+  subjectId: z.string().min(1),
+  teacherId: z.string().min(1),
+  dayOfWeek: z.number().int().min(1).max(6),
+  period: z.number().int().min(1).max(16),
+  venue: z.string().max(60).optional(),
+};
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("saveSlot"), classId: z.string(), subjectId: z.string(), teacherId: z.string(), dayOfWeek: z.number().int().min(1).max(6), period: z.number().int().min(1).max(16), venue: z.string().max(60).optional() }),
-  z.object({ action: z.literal("deleteSlot"), slotId: z.string() }),
+  z.object({ action: z.literal("saveSlot"), ...slotFields }),
+  z.object({ action: z.literal("updateSlot"), slotId: z.string().min(1), ...slotFields }),
+  z.object({ action: z.literal("deleteSlot"), slotId: z.string().min(1) }),
   z.object({ action: z.literal("swapSlots"), slotIdA: z.string().min(1), slotIdB: z.string().min(1) }),
   z.object({ action: z.literal("moveSlot"), slotId: z.string().min(1), dayOfWeek: z.number().int().min(1).max(6), period: z.number().int().min(1).max(16) }),
   z.object({ action: z.literal("suggest"), absentTeacherId: z.string(), day: z.coerce.date(), period: z.number().int().positive(), asOf: z.coerce.date().optional() }),
@@ -54,6 +63,7 @@ export async function POST(request: Request) {
       const common = { schoolId: session.schoolId, actorId: session.userId };
       switch (input.action) {
         case "saveSlot": return createTimetableSlot(tx, { ...common, ...input });
+        case "updateSlot": return updateTimetableSlot(tx, { ...common, ...input });
         case "deleteSlot": return deleteTimetableSlot(tx, { ...common, slotId: input.slotId });
         case "swapSlots": return swapTimetableSlots(tx, { ...common, slotIdA: input.slotIdA, slotIdB: input.slotIdB });
         case "moveSlot": return moveTimetableSlot(tx, { ...common, slotId: input.slotId, dayOfWeek: input.dayOfWeek, period: input.period });
