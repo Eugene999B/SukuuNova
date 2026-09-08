@@ -27,8 +27,8 @@ export default async function TimetablePrintPage({ searchParams }: { searchParam
     const title = mode === "class" ? (classes.find((item) => item.id === classId)?.name || "Class timetable") : (visible[0]?.teacher.name || "Teacher timetable");
     const config = academic.timetable as Parameters<typeof dayBlocks>[1];
     const days = config.days.filter((day) => day.enabled && day.dayOfWeek >= 1 && day.dayOfWeek <= 6).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-    const blocks = days[0] ? dayBlocks(days[0], config).blocks : [];
-    return { school, title, mode, days, blocks, slots: visible, rooms: config.rooms ?? [] };
+    const blocksByDay = Object.fromEntries(days.map((day) => [day.dayOfWeek, dayBlocks(day, config).blocks]));
+    return { school, title, mode, days, blocksByDay, slots: visible, rooms: config.rooms ?? [] };
   });
   if (!data) notFound();
   return <AutoPrintTimetable data={data} />;
