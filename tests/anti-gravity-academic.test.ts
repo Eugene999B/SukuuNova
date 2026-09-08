@@ -69,6 +69,7 @@ describe("anti-gravity academic invariants", () => {
   it("rejects scores above max and negative scores", async () => {
     const { enterScore } = await import("../src/lib/gradebook-service");
     const tx = {
+      $executeRaw: vi.fn().mockResolvedValue(0),
       assessment: { findFirst: vi.fn().mockResolvedValue({ id: "a", classId: "c", subjectId: "s", termId: "t", maxScore: 20 }) },
       term: { findFirst: vi.fn().mockResolvedValue({ id: "t", isLocked: false, name: "T1" }) },
       reportCard: { findFirst: vi.fn().mockResolvedValue(null) },
@@ -82,6 +83,7 @@ describe("anti-gravity academic invariants", () => {
   it("blocks score entry when the report is finalized", async () => {
     const { enterScore } = await import("../src/lib/gradebook-service");
     const tx = {
+      $executeRaw: vi.fn().mockResolvedValue(0),
       assessment: { findFirst: vi.fn().mockResolvedValue({ id: "a", classId: "c", subjectId: "s", termId: "t", maxScore: 20 }) },
       term: { findFirst: vi.fn().mockResolvedValue({ id: "t", isLocked: false, name: "T1" }) },
       reportCard: { findFirst: vi.fn().mockResolvedValue({ id: "rc", status: "approved" }) },

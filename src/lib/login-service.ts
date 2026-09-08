@@ -1,7 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { compare } from "bcryptjs";
 import { UnauthorizedError } from "./errors";
-import { roleKeyForName } from "./authorization";
+import { resolveSchoolWorkspace, roleKeyForName } from "./authorization";
 import { authorizationVersion } from "./auth";
 
 const LOGIN_FAILURE = "Invalid credentials or inactive account.";
@@ -87,23 +87,7 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
       permissionOverrides
     });
 
-    const schoolWorkspaceRoles = new Set([
-      "owner",
-      "administrator",
-      "principal",
-      "vice_principal",
-      "academic_coordinator",
-      "department_head",
-      "accountant",
-      "hr_officer",
-      "admissions_officer",
-      "front_desk_security",
-      "transport_officer"
-    ]);
-    const teacherWorkspaceRoles = new Set(["teacher", "class_teacher", "subject_teacher"]);
-    const hasSchoolWorkspaceRole = roleKeys.some((key) => schoolWorkspaceRoles.has(key));
-    const hasTeacherWorkspaceRole = roleKeys.some((key) => teacherWorkspaceRoles.has(key));
-    const portal = hasSchoolWorkspaceRole ? "school" : hasTeacherWorkspaceRole ? "teacher" : "school";
+    const portal = resolveSchoolWorkspace(roleKeys);
     return { userId: user.id, schoolId: user.schoolId, name: user.name, schoolName: school.name, portal, roles: roleEntries.map((role) => role.name), roleKeys, needsPasswordChange: Boolean(user.needsPasswordChange), authorizationVersion: authVersion };
   });
 }

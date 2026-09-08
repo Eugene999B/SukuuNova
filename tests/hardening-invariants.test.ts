@@ -123,6 +123,7 @@ describe("Hardening Invariants", () => {
       expect(config.assessment).toBeDefined();
     });
   });
+
   describe("Report card approval resilience", () => {
     it("approves report card even if guardian phone is missing for notification", async () => {
       const originalUrl = process.env.SMS_PROVIDER_URL;
@@ -135,6 +136,7 @@ describe("Hardening Invariants", () => {
       try {
         let currentStatus = "submitted";
         const tx = {
+          $executeRaw: vi.fn().mockResolvedValue(0),
           reportCard: {
             findFirst: vi.fn().mockImplementation(async () => ({
               id: "rc-1",
@@ -205,10 +207,8 @@ describe("Hardening Invariants", () => {
       };
 
       const webhookResponse = await middleware(webhookRequest as never);
-      // Webhook route is not blocked by 401 Unauthorized
       expect(webhookResponse.status).not.toBe(401);
 
-      // Verify that other phase4 endpoints require authentication (return 401)
       const protectedRequest = {
         nextUrl: {
           pathname: "/api/phase4/emergency",

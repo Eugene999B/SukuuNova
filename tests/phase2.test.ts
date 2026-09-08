@@ -115,6 +115,12 @@ describe("Phase 2 differentiator safety gates", () => {
       subjectId = (await tx.subject.create({
         data: { schoolId: fixture.schoolId, name: "Phase 2 Subject " + fixture.schoolId }
       })).id;
+      await tx.classSubjectTeacher.createMany({
+        data: [
+          { schoolId: fixture.schoolId, classId, subjectId, teacherId: staffId },
+          { schoolId: fixture.schoolId, classId: otherClassId, subjectId, teacherId: otherStaffId },
+        ]
+      });
       studentId = (await tx.student.create({
         data: {
           schoolId: fixture.schoolId,

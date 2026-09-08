@@ -3,6 +3,7 @@ import {
   isTeachingRoleKey,
   resolveSchoolWorkspace,
   roleKeyForName,
+  TEACHING_ROLE_KEYS,
 } from "../src/lib/authorization";
 
 describe("school authorization role model", () => {
@@ -22,6 +23,14 @@ describe("school authorization role model", () => {
     expect(resolveSchoolWorkspace(["principal", "class_teacher"])).toBe("school");
     expect(resolveSchoolWorkspace(["department_head", "subject_teacher"])).toBe("school");
     expect(resolveSchoolWorkspace(["accountant", "class_teacher"])).toBe("school");
+  });
+
+  it("keeps teacher selection on canonical role keys", () => {
+    expect([...TEACHING_ROLE_KEYS]).toEqual(expect.arrayContaining(["teacher", "class_teacher", "subject_teacher", "academic_coordinator", "department_head"]));
+    expect(TEACHING_ROLE_KEYS.has("class-teacher")).toBe(false);
+    expect(TEACHING_ROLE_KEYS.has("subject-teacher")).toBe(false);
+    expect(TEACHING_ROLE_KEYS.has("principal")).toBe(false);
+    expect(TEACHING_ROLE_KEYS.has("owner")).toBe(false);
   });
 
   it("does not infer a teaching security role from arbitrary display names", () => {

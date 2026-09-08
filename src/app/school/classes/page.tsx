@@ -1,19 +1,18 @@
 import { unstable_cache } from "next/cache";
 import { AppShell } from "@/components/AppShell";
+import { TEACHING_ROLE_KEYS } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { ClassesHousesWorkspace } from "./ClassesHousesWorkspace";
 import "./classes-houses.css";
 
-const TEACHER_ROLE_KEYS = ["teacher", "class-teacher", "subject-teacher", "assistant-teacher", "teaching-assistant"];
-
 async function readClassesWorkspace(schoolId: string) {
   return withTenant(schoolId, async (tx) => {
     const [school, classes, teachers, houses, learners] = await Promise.all([
       tx.school.findUnique({ where: { id: schoolId }, select: { name: true, uniqueCode: true } }),
       tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, classTeacher: { select: { id: true, name: true } }, _count: { select: { students: true, subjectAssignments: true, timetableSlots: true } } } }),
-      tx.user.findMany({ where: { schoolId, status: "active", userRoles: { some: { role: { key: { in: TEACHER_ROLE_KEYS } } } } }, orderBy: { name: "asc" }, select: { id: true, name: true, classTeacherFor: { select: { id: true, name: true } } } }),
+      tx.user.findMany({ where: { schoolId, status: "active", userRoles: { some: { role: { key: { in: [...TEACHING_ROLE_KEYS] } } } } }, orderBy: { name: "asc" }, select: { id: true, name: true, classTeacherFor: { select: { id: true, name: true } } } }),
       tx.$queryRaw<Array<{ id: string; name: string; code: string; color: string | null; description: string | null; isActive: boolean; studentCount: number }>>`SELECT h."id",h."name",h."code",h."color",h."description",h."isActive",COUNT(s."id")::int AS "studentCount" FROM "House" h LEFT JOIN "Student" s ON s."houseId"=h."id" AND s."schoolId"=h."schoolId" AND s."status"='active' WHERE h."schoolId"=${schoolId} GROUP BY h."id",h."name",h."code",h."color",h."description",h."isActive" ORDER BY h."name" ASC`,
       tx.$queryRaw<Array<{ id: string; name: string; admissionNo: string; className: string | null; classLevel: string | null; houseId: string | null; houseName: string | null }>>`SELECT s."id",s."name",s."admissionNo",c."name" AS "className",c."level" AS "classLevel",h."id" AS "houseId",h."name" AS "houseName" FROM "Student" s LEFT JOIN "Class" c ON c."id"=s."classId" AND c."schoolId"=s."schoolId" LEFT JOIN "House" h ON h."id"=s."houseId" AND h."schoolId"=s."schoolId" WHERE s."schoolId"=${schoolId} AND s."status"='active' ORDER BY s."name" ASC LIMIT 300`,
     ]);

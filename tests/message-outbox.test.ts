@@ -9,7 +9,7 @@ describe("message outbox", () => {
     await withTenant(fixture.schoolId, async (tx) => {
       const rows = await enqueueNotification(tx, {
         schoolId: fixture.schoolId, recipientType: "user", recipientId: fixture.memberId,
-        recipientPhone: "+233240000000", body: "Queued test", templateKey: "school_announcement"
+        recipientPhone: "+233240000000", body: "Queued test", templateKey: "school_announcement", channels: "sms"
       });
       expect(rows.length).toBeGreaterThan(0);
       expect(rows.every((row) => row.status === "queued")).toBe(true);

@@ -17,7 +17,7 @@ export default async function TimetablePrintPage({ searchParams }: { searchParam
       getAcademicEngineConfig(tx),
     ]);
     if (!school) return null;
-    const mode = params.view === "teacher" ? "teacher" : "class";
+    const mode: "class" | "teacher" = params.view === "teacher" ? "teacher" : "class";
     const classId = mode === "class" ? (params.classId || classes[0]?.id || "") : "";
     const teacherId = mode === "teacher" ? (params.teacherId || "") : "";
     if (mode === "class" && !classId) return null;
