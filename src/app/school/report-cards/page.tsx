@@ -8,6 +8,7 @@ import { hasPermission, requirePermission } from "@/lib/rbac";
 import { generateReportCard, submitReportCard } from "@/lib/report-card-service";
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 import { calculateIntelligentReportCard } from "@/lib/report-card-intelligence";
+import "./report-cards.css";
 
 function origin() {
   return (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/+$/g, "");
@@ -200,24 +201,6 @@ export default async function ReportCardsPage({ searchParams }: { searchParams: 
           </section>
         ) : data.students.length ? <section className="reports-empty"><h2>No report card for this student yet</h2><p>Generate the class reports above, then return here and use <b>Print report card</b>.</p></section> : null}
       </main>
-      <style jsx>{`
-        .simple-reports{max-width:1400px;margin:0 auto;padding:8px 0 40px;color:var(--sn-ink)}
-        .reports-header{display:flex;justify-content:space-between;gap:24px;align-items:center;padding:20px 0}
-        .reports-header h1{font-size:30px;margin:4px 0}.reports-header p{margin:0;color:var(--sn-muted)}
-        .reports-kicker{font-size:11px;letter-spacing:.14em;font-weight:800;color:var(--sn-muted)}
-        .reports-picker,.reports-list-card,.report-result-card,.reports-empty{border:1px solid var(--sn-line);background:var(--sn-surface);border-radius:16px;padding:18px;margin-top:14px}
-        .reports-picker form{display:flex;justify-content:space-between;gap:14px;align-items:end}.reports-picker form>div{display:grid;grid-template-columns:repeat(3,minmax(180px,1fr));gap:12px;flex:1}
-        .reports-picker label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700}.reports-picker select{min-height:42px;border:1px solid var(--sn-line);border-radius:10px;background:var(--sn-canvas);color:inherit;padding:0 10px}
-        .report-action{border:1px solid var(--sn-line);background:var(--sn-canvas);color:inherit;border-radius:10px;padding:9px 13px;font-weight:750;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}.report-action.primary{background:var(--sn-ink);color:var(--sn-surface);border-color:var(--sn-ink)}.report-action.small{padding:6px 9px;font-size:12px}
-        .reports-list-heading,.result-heading,.result-print-actions,.result-footer,.result-flow{display:flex;align-items:center;justify-content:space-between;gap:12px}.reports-list-heading h2,.result-heading h2{margin:4px 0 0;font-size:20px}
-        .reports-list{margin-top:14px}.report-row{display:flex;justify-content:space-between;gap:18px;align-items:center;padding:12px 0;border-top:1px solid var(--sn-line)}.report-row.active{background:var(--sn-canvas);padding:12px;border-radius:10px}.report-row>div:first-child{display:flex;flex-direction:column;gap:3px}.report-row span{color:var(--sn-muted);font-size:12px}.report-row-status{display:flex;align-items:center;gap:10px}
-        .status{display:inline-flex;padding:5px 8px;border-radius:999px;background:var(--sn-canvas);border:1px solid var(--sn-line);font-size:11px;font-weight:800}.status.sent,.status.approved{background:var(--color-success-soft)}.status.submitted{background:var(--color-info-soft)}.status.missing{background:transparent;color:var(--sn-muted)}
-        .result-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.result-summary>div{border:1px solid var(--sn-line);border-radius:12px;padding:12px;background:var(--sn-canvas)}.result-summary span,.result-summary strong{display:block}.result-summary span{font-size:11px;color:var(--sn-muted)}.result-summary strong{font-size:20px;margin-top:5px}
-        .result-table-wrap{overflow:auto}.result-table-wrap table{width:100%;border-collapse:collapse;min-width:650px}.result-table-wrap th,.result-table-wrap td{padding:10px;border-bottom:1px solid var(--sn-line);text-align:left}.result-table-wrap th{font-size:11px;color:var(--sn-muted);text-transform:uppercase;letter-spacing:.04em}
-        .result-footer{border-top:1px solid var(--sn-line);margin-top:16px;padding-top:16px;align-items:flex-start}.result-footer p{margin:5px 0 12px;max-width:750px}.reports-empty h1,.reports-empty h2{margin-top:0}.report-notice{margin:12px 0;padding:11px 13px;border:1px solid var(--sn-line);border-radius:10px;background:var(--sn-canvas)}
-        @media(max-width:900px){.reports-picker form,.reports-header,.result-heading,.result-footer{flex-direction:column;align-items:stretch}.reports-picker form>div{grid-template-columns:1fr}.result-summary{grid-template-columns:repeat(2,1fr)}}
-        @media print{.simple-reports{display:none}}
-      `}</style>
     </AppShell>
   );
 }
