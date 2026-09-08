@@ -42,7 +42,7 @@ async function freezeApprovedPresentation(tx: TenantDb, input: {
   studentId: string;
   termId: string;
   calculationSnapshot: Prisma.JsonValue | null;
-}) {
+}): Promise<Prisma.JsonValue | null> {
   const [settings, term] = await Promise.all([
     tx.schoolSettings.findUnique({
       where: { schoolId: input.schoolId },
@@ -89,16 +89,14 @@ async function freezeApprovedPresentation(tx: TenantDb, input: {
     reportPresentation,
     attendance: { presentDays, lateDays },
     presentationFrozenAt: new Date().toISOString(),
-    positionScope: typeof snapshot.positionScope === "string"
-      ? snapshot.positionScope
-      : settings.positionScope === "year_group" ? "year_group" : "class",
+    positionScope: settings.positionScope === "year_group" ? "year_group" : "class",
   } as Prisma.InputJsonObject;
 
   await tx.reportCard.updateMany({
     where: { id: input.reportCardId, schoolId: input.schoolId, status: "approved" },
     data: { calculationSnapshot: nextSnapshot },
   });
-  return nextSnapshot;
+  return nextSnapshot as unknown as Prisma.JsonValue;
 }
 
 export async function setReportPromotionDecision(tx: TenantDb, input: {
