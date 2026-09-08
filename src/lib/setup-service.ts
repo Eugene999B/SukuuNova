@@ -1,8 +1,8 @@
 import { appendSchoolAudit } from "./audit";
+import { isTeachingRoleKey, roleKeyForName } from "./authorization";
 import { withTenant } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { requirePermission } from "./rbac";
-const teachingRoleKeys = new Set(["class_teacher", "subject_teacher", "academic_coordinator", "department_head", "principal", "vice_principal", "owner"]);
 
 async function requireActiveTeachingUser(tx: Parameters<typeof requirePermission>[0], schoolId: string, userId: string) {
   const user = await tx.user.findFirst({
@@ -10,7 +10,7 @@ async function requireActiveTeachingUser(tx: Parameters<typeof requirePermission
     select: { id: true, name: true, userRoles: { select: { role: { select: { key: true, name: true } } } } }
   });
   if (!user) throw new AppError("The selected teacher account is not active.", 400, "INVALID_TEACHER");
-  const isTeaching = user.userRoles.some(({ role }) => teachingRoleKeys.has(role.key?.trim() || role.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")));
+  const isTeaching = user.userRoles.some(({ role }) => isTeachingRoleKey(role.key?.trim() || roleKeyForName(role.name)));
   if (!isTeaching) throw new ForbiddenError("Only active teaching or academic leadership accounts can be assigned to classes and subjects.");
   return user;
 }
