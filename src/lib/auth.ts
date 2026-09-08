@@ -80,6 +80,8 @@ export type SchoolAuthorizationState = {
   name: string;
   status: string;
   passwordHash: string;
+  schoolSessionEpoch: number;
+  userSessionEpoch: number;
   userRoles: Array<{ role: { id: string; name: string; key: string | null; rolePermissions: Array<{ permissionId: string }> } }>;
   permissionOverrides: Array<{ permissionId: string; granted: boolean }>;
 };
@@ -99,6 +101,8 @@ export function authorizationVersion(state: SchoolAuthorizationState): string {
     schoolId: state.schoolId,
     status: state.status,
     passwordHash: state.passwordHash,
+    schoolSessionEpoch: state.schoolSessionEpoch,
+    userSessionEpoch: state.userSessionEpoch,
     roles: state.userRoles
       .map(({ role }) => ({ id: role.id, name: role.name, key: role.key, permissions: role.rolePermissions.map((permission) => permission.permissionId).sort() }))
       .sort((a, b) => a.id.localeCompare(b.id)),
@@ -116,7 +120,17 @@ export function platformAuthorizationVersion(state: PlatformAuthorizationState):
 export async function getSchoolAuthorizationState(userId: string, schoolId: string): Promise<SchoolAuthorizationState | null> {
   return rawDb.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", schoolId);
-    return tx.user.findUnique({ where: { id: userId }, select: { id: true, schoolId: true, name: true, status: true, passwordHash: true, userRoles: { select: { role: { select: { id: true, name: true, key: true, rolePermissions: { select: { permissionId: true } } } } } }, permissionOverrides: { select: { permissionId: true, granted: true } } } });
+    const [user, schoolEpochRows, userEpochRows] = await Promise.all([
+      tx.user.findUnique({ where: { id: userId }, select: { id: true, schoolId: true, name: true, status: true, passwordHash: true, userRoles: { select: { role: { select: { id: true, name: true, key: true, rolePermissions: { select: { permissionId: true } } } } } }, permissionOverrides: { select: { permissionId: true, granted: true } } } }),
+      tx.$queryRawUnsafe<Array<{ version: number }>>(`SELECT "version" FROM "SchoolSessionEpoch" WHERE "schoolId"=$1 LIMIT 1`, schoolId),
+      tx.$queryRawUnsafe<Array<{ version: number }>>(`SELECT "version" FROM "SchoolUserSessionEpoch" WHERE "schoolId"=$1 AND "userId"=$2 LIMIT 1`, schoolId, userId),
+    ]);
+    if (!user) return null;
+    return {
+      ...user,
+      schoolSessionEpoch: Number(schoolEpochRows[0]?.version ?? 0),
+      userSessionEpoch: Number(userEpochRows[0]?.version ?? 0),
+    };
   });
 }
 
@@ -143,9 +157,13 @@ export async function createSchoolSessionToken(session: Omit<SchoolSession, "aut
   return signSchoolSessionToken({ ...session, name: state.name, authorizationVersion: authorizationVersion(state) }, expiresInSeconds);
 }
 
-export function createSchoolSessionTokenFromAuthorizationVersion(session: Omit<SchoolSession, "authorizationVersion"> | SchoolSession, authorizationVersionValue: string, expiresInSeconds = SESSION_SECONDS): Promise<string> {
+export async function createSchoolSessionTokenFromAuthorizationVersion(session: Omit<SchoolSession, "authorizationVersion"> | SchoolSession, authorizationVersionValue: string, expiresInSeconds = SESSION_SECONDS): Promise<string> {
   if (!authorizationVersionValue) throw new UnauthorizedError("Invalid school authorization state.");
-  return signSchoolSessionToken({ ...session, authorizationVersion: authorizationVersionValue }, expiresInSeconds);
+  // Re-read the authorization state at token issuance so a concurrent platform
+  // session revocation cannot be bypassed by a login that began just before it.
+  const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
+  if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This school account is no longer active.");
+  return signSchoolSessionToken({ ...session, name: state.name, authorizationVersion: authorizationVersion(state) }, expiresInSeconds);
 }
 
 export async function createPlatformSessionToken(session: Omit<PlatformSession, "authorizationVersion"> | PlatformSession): Promise<string> {
