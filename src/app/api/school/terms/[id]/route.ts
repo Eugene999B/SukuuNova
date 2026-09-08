@@ -7,16 +7,8 @@ import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 
-const patchSchema = z.object({
-  name: z.string().trim().min(2).max(80),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date(),
-  isLocked: z.boolean().optional()
-});
-
-function termStatus(startDate: Date, endDate: Date, now = new Date()) {
-  return now < startDate ? "upcoming" : now > endDate ? "completed" : "current";
-}
+const patchSchema = z.object({ name: z.string().trim().min(2).max(80), startDate: z.coerce.date(), endDate: z.coerce.date(), isLocked: z.boolean().optional() });
+function termStatus(startDate: Date, endDate: Date, now = new Date()) { return now < startDate ? "upcoming" : now > endDate ? "completed" : "current"; }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -27,24 +19,24 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (input.endDate <= input.startDate) throw new AppError("Term end date must be after its start.", 400, "INVALID_TERM_RANGE");
     const term = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${session.schoolId}:${id}`}))`;
       const before = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!before) throw new AppError("Term not found.", 404, "NOT_FOUND");
-      const nextLocked = input.isLocked ?? before.isLocked;
-      if (before.isLocked && !nextLocked) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-year-terms:${session.schoolId}:${before.academicYearId}`}))`;
+      const current = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
+      if (!current) throw new AppError("Term not found.", 404, "NOT_FOUND");
+      const nextLocked = input.isLocked ?? current.isLocked;
+      if (current.isLocked && !nextLocked) {
         const canReopen = await requirePermission(tx, session.userId, "academic:manage").then(() => true).catch(() => false);
         if (!canReopen) throw new ForbiddenError("Only an academic administrator can reopen a locked term.");
         const finalized = await tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: { in: ["approved", "sent"] } } });
         if (finalized > 0) throw new AppError(`This term has ${finalized} finalized report card(s). Reopen is blocked to protect issued results.`, 409, "TERM_HAS_FINALIZED_REPORTS");
       }
-      if (before.isLocked && (input.name !== before.name || input.startDate.getTime() !== before.startDate.getTime() || input.endDate.getTime() !== before.endDate.getTime())) {
-        throw new AppError("A locked term cannot be edited. Reopen it first.", 409, "TERM_LOCKED");
-      }
-      if (input.startDate < before.academicYear.startDate || input.endDate > before.academicYear.endDate) throw new AppError("Term dates must sit inside the academic year.", 400, "TERM_OUTSIDE_YEAR");
-      const overlap = await tx.term.findFirst({ where: { schoolId: session.schoolId, academicYearId: before.academicYearId, id: { not: id }, startDate: { lt: input.endDate }, endDate: { gt: input.startDate } } });
+      if (current.isLocked && (input.name !== current.name || input.startDate.getTime() !== current.startDate.getTime() || input.endDate.getTime() !== current.endDate.getTime())) throw new AppError("A locked term cannot be edited. Reopen it first.", 409, "TERM_LOCKED");
+      if (input.startDate < current.academicYear.startDate || input.endDate > current.academicYear.endDate) throw new AppError("Term dates must sit inside the academic year.", 400, "TERM_OUTSIDE_YEAR");
+      const overlap = await tx.term.findFirst({ where: { schoolId: session.schoolId, academicYearId: current.academicYearId, id: { not: id }, startDate: { lt: input.endDate }, endDate: { gt: input.startDate } } });
       if (overlap) throw new AppError(`Term dates overlap ${overlap.name}.`, 409, "TERM_OVERLAP");
       const updated = await tx.term.update({ where: { id }, data: { name: input.name, startDate: input.startDate, endDate: input.endDate, isLocked: nextLocked } });
-      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: nextLocked !== before.isLocked ? (nextLocked ? "academic.term_locked" : "academic.term_reopened") : "academic.term_updated", entityType: "Term", entityId: id, before, after: updated });
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: nextLocked !== current.isLocked ? (nextLocked ? "academic.term_locked" : "academic.term_reopened") : "academic.term_updated", entityType: "Term", entityId: id, before: current, after: updated });
       return updated;
     });
     return NextResponse.json({ ok: true, term, status: termStatus(term.startDate, term.endDate) });
