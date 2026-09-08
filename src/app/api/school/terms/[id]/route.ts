@@ -21,16 +21,15 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       await requirePermission(tx, session.userId, "settings:manage_school");
       const before = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!before) throw new AppError("Term not found.", 404, "NOT_FOUND");
-      // Lock ordering is shared with score/homework/lesson/report-card mutations:
-      // academic-year terms first, then the individual term.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-year-terms:${session.schoolId}:${before.academicYearId}`}))`;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${session.schoolId}:${id}`}))`;
       const current = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!current) throw new AppError("Term not found.", 404, "NOT_FOUND");
       const nextLocked = input.isLocked ?? current.isLocked;
       if (current.isLocked && !nextLocked) {
-        const canReopen = await requirePermission(tx, session.userId, "academic:manage").then(() => true).catch(() => false);
-        if (!canReopen) throw new ForbiddenError("Only an academic administrator can reopen a locked term.");
+        // Reopening is an academic-calendar operation. Use the existing
+        // canonical calendar permission rather than an unregistered key.
+        await requirePermission(tx, session.userId, "calendar:manage");
         const finalized = await tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: { in: ["approved", "sent"] } } });
         if (finalized > 0) throw new AppError(`This term has ${finalized} finalized report card(s). Reopen is blocked to protect issued results.`, 409, "TERM_HAS_FINALIZED_REPORTS");
       }
