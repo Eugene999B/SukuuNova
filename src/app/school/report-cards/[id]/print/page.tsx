@@ -5,7 +5,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { getSchoolAuthorization } from "@/lib/authorization";
-import { calculateIntelligentReportCard } from "@/lib/report-card-intelligence";
+import { getReportCardPrintData } from "@/lib/report-card-print-data";
 import { signaturesForReport } from "@/lib/report-card-signatures";
 
 export default async function ReportCardPrintPage({ params }: { params: Promise<{ id: string }> }) {
@@ -27,7 +27,7 @@ export default async function ReportCardPrintPage({ params }: { params: Promise<
       if (!assigned) throw new Error("Teachers may only view report cards for their assigned classes.");
     }
     const [report, signatures] = await Promise.all([
-      calculateIntelligentReportCard(tx, { schoolId: session.schoolId, reportId: id }),
+      getReportCardPrintData(tx, { schoolId: session.schoolId, reportId: id }),
       signaturesForReport(tx, { schoolId: session.schoolId, reportId: id }),
     ]);
     return { report, signatures };
