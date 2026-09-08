@@ -17,6 +17,7 @@ type AcademicLockTx = Parameters<typeof createAssessment>[0] & Parameters<typeof
 describe("academic term locking", () => {
   it("rejects assessment creation when the term is locked", async () => {
     const tx = {
+      $executeRaw: vi.fn().mockResolvedValue(0),
       term: { findFirst: vi.fn().mockResolvedValue({ id: "term-1", isLocked: true, name: "Term 1" }) },
     } as unknown as AcademicLockTx;
 
@@ -29,6 +30,7 @@ describe("academic term locking", () => {
 
   it("rejects score entry when the assessment belongs to a locked term", async () => {
     const tx = {
+      $executeRaw: vi.fn().mockResolvedValue(0),
       assessment: { findFirst: vi.fn().mockResolvedValue({ id: "assessment-1", classId: "class-1", subjectId: "subject-1", termId: "term-1", maxScore: 100 }) },
       term: { findFirst: vi.fn().mockResolvedValue({ id: "term-1", isLocked: true, name: "Term 1" }) },
     } as unknown as AcademicLockTx;
