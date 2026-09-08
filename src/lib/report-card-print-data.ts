@@ -2,7 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { reportAttendanceForTerm } from "@/lib/report-card-attendance";
-import { calculateIntelligentReportCard, readReportCardConfig } from "@/lib/report-card-intelligence";
+import { calculateIntelligentReportCard, readGradeScale, readReportCardConfig } from "@/lib/report-card-intelligence";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
 
 export type FrozenPromotionDecision = "promoted" | "not_promoted" | "decision_required";
@@ -41,7 +41,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
   const snapshot = object(report.calculationSnapshot);
   const frozen = Boolean(snapshot.rankingFrozenAt) && Array.isArray(snapshot.assessments);
   if (!frozen) {
-    const [live, attendance] = await Promise.all([
+    const [live, attendance, liveSettings] = await Promise.all([
       calculateIntelligentReportCard(tx, input),
       reportAttendanceForTerm(tx, {
         schoolId: input.schoolId,
@@ -49,8 +49,9 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
         startDate: report.term.startDate,
         endDate: report.term.endDate,
       }),
+      tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { gradingScale: true } }),
     ]);
-    return { ...live, attendance };
+    return { ...live, attendance, gradingScale: readGradeScale(liveSettings?.gradingScale) };
   }
 
   const [school, settings] = await Promise.all([
@@ -60,6 +61,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
       select: {
         gradeCaWeight: true,
         gradeExamWeight: true,
+        gradingScale: true,
         reportCardTemplateId: true,
         reportCardConfig: true,
         showOverallPosition: true,
@@ -145,6 +147,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
       ca: typeof grading.ca === "number" ? grading.ca : Number(settings.gradeCaWeight),
       exam: typeof grading.exam === "number" ? grading.exam : Number(settings.gradeExamWeight),
     },
+    gradingScale: readGradeScale(settings.gradingScale),
     results,
     summary: { total: numberOrNull(snapshot.overallTotal), average: numberOrNull(snapshot.average), grade: stringOrNull(snapshot.overallGrade) },
     position: numberOrNull(snapshot.overallPosition),
