@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
+import { AppError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
 import { isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
+import { dayBlocks } from "@/lib/timetable-engine-v2";
 import { confirmSubstitute, createTimetableSlot, deleteTimetableSlot, getTeacherWeeklyGrid, moveTimetableSlot, suggestSubstitutes, swapTimetableSlots, updateTimetableSlot } from "@/lib/timetable-service";
 
 const slotFields = {
@@ -67,6 +68,30 @@ export async function POST(request: Request) {
       if (input.action === "saveSlot" || input.action === "updateSlot" || input.action === "deleteSlot" || input.action === "swapSlots" || input.action === "moveSlot") {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`timetable-generation:${session.schoolId}`}))`;
       }
+
+      if (input.action === "saveSlot" || input.action === "updateSlot" || input.action === "moveSlot" || input.action === "swapSlots") {
+        const academic = await getAcademicEngineConfig(tx);
+        const assertConfiguredPeriod = (dayOfWeek: number, period: number) => {
+          const day = academic.timetable.days.find((candidate) => candidate.dayOfWeek === dayOfWeek && candidate.enabled);
+          if (!day) throw new AppError("This day is not enabled in the timetable setup.", 409, "TIMETABLE_DAY_NOT_CONFIGURED");
+          const valid = dayBlocks(day, academic.timetable).periods.some((candidate) => candidate.period === period);
+          if (!valid) throw new AppError("This teaching period is not configured for the selected day.", 409, "TIMETABLE_PERIOD_NOT_CONFIGURED");
+        };
+
+        if (input.action === "saveSlot" || input.action === "updateSlot" || input.action === "moveSlot") {
+          assertConfiguredPeriod(input.dayOfWeek, input.period);
+        } else {
+          const [slotA, slotB] = await Promise.all([
+            tx.timetableSlot.findFirst({ where: { id: input.slotIdA, schoolId: session.schoolId }, select: { dayOfWeek: true, period: true } }),
+            tx.timetableSlot.findFirst({ where: { id: input.slotIdB, schoolId: session.schoolId }, select: { dayOfWeek: true, period: true } }),
+          ]);
+          if (slotA && slotB) {
+            assertConfiguredPeriod(slotB.dayOfWeek, slotB.period);
+            assertConfiguredPeriod(slotA.dayOfWeek, slotA.period);
+          }
+        }
+      }
+
       switch (input.action) {
         case "saveSlot": return createTimetableSlot(tx, { ...common, ...input });
         case "updateSlot": return updateTimetableSlot(tx, { ...common, ...input });
