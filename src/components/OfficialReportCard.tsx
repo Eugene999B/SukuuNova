@@ -37,6 +37,7 @@ type Data = {
   promotionDecision: "promoted" | "not_promoted" | "decision_required";
   reportSettings: {
     themeId: string;
+    positionScope: "class" | "year_group";
     showOverallPosition: boolean;
     showSubjectPosition: boolean;
     showAttendance: boolean;
@@ -71,6 +72,8 @@ export default function OfficialReportCard({ data, signatures, embedded = false 
     : data.promotionDecision === "not_promoted"
       ? "NOT PROMOTED"
       : "DECISION REQUIRED";
+  const positionScopeLabel = data.reportSettings.positionScope === "year_group" ? "Year-group" : "Class";
+  const positionDenominator = data.rankedCount || data.classSize;
   const vars = {
     ["--report-primary" as string]: theme.primary,
     ["--report-accent" as string]: theme.accent,
@@ -126,7 +129,7 @@ export default function OfficialReportCard({ data, signatures, embedded = false 
           <div><small>Total marks</small><b>{formatNumber(data.summary.total)} / {data.results.length * 100}</b></div>
           <div><small>Overall average</small><b>{formatNumber(data.summary.average)}%</b></div>
           <div><small>Overall grade</small><b>{data.summary.grade ?? "—"}</b></div>
-          {data.reportSettings.showOverallPosition ? <div><small>Class position</small><b>{ordinal(data.position)} / {data.classSize}</b></div> : null}
+          {data.reportSettings.showOverallPosition ? <div><small>{positionScopeLabel} position</small><b>{ordinal(data.position)} / {positionDenominator || "—"}</b></div> : null}
         </section>
 
         {data.reportSettings.showAttendance || data.reportSettings.showPromotion ? <section className="info-grid">
