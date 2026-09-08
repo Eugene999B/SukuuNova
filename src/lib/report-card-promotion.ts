@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { appendSchoolAudit } from "@/lib/audit";
 import { AppError, ForbiddenError } from "@/lib/errors";
+import { reportAttendanceForTerm } from "@/lib/report-card-attendance";
 import { requirePermission } from "@/lib/rbac";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
 
@@ -65,17 +66,12 @@ async function freezeApprovedPresentation(tx: TenantDb, input: {
 
   const raw = object(settings.reportCardConfig);
   const workflow = readReportWorkflowConfig(settings.reportCardConfig, settings.reportCardTemplateId);
-  const attendanceRows = await tx.attendanceEvent.findMany({
-    where: {
-      schoolId: input.schoolId,
-      studentId: input.studentId,
-      type: "in",
-      attendanceDate: { gte: term.startDate, lte: term.endDate },
-    },
-    select: { attendanceDate: true, isLate: true },
+  const attendance = await reportAttendanceForTerm(tx, {
+    schoolId: input.schoolId,
+    studentId: input.studentId,
+    startDate: term.startDate,
+    endDate: term.endDate,
   });
-  const presentDays = new Set(attendanceRows.map((row) => row.attendanceDate.toISOString().slice(0, 10))).size;
-  const lateDays = attendanceRows.filter((row) => row.isLate).length;
   const snapshot = object(input.calculationSnapshot);
   const reportPresentation = {
     showOverallPosition: Boolean(settings.showOverallPosition) && workflow.showOverallPosition && configBoolean(raw, "includePosition", true),
@@ -89,7 +85,14 @@ async function freezeApprovedPresentation(tx: TenantDb, input: {
   const nextSnapshot = {
     ...snapshot,
     reportPresentation,
-    attendance: { presentDays, lateDays },
+    attendance: {
+      presentDays: attendance.present,
+      lateDays: attendance.late,
+      expectedDays: attendance.expectedDays,
+      absentDays: attendance.absent,
+      attendanceRate: attendance.attendanceRate,
+      totalRecorded: attendance.totalRecorded,
+    },
     behaviorRatingFields: settings.behaviorRatingFields ?? null,
     watermark: settings.reportCardWatermark ?? "",
     presentationFrozenAt: new Date().toISOString(),
