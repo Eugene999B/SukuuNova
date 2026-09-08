@@ -145,11 +145,11 @@ describe("intelligent timetable generation", () => {
     };
 
     expect(dayBlocks(monday, timetable).periods).toEqual([
-      { period: 1, start: "08:00", end: "08:40" },
-      { period: 2, start: "08:40", end: "09:20" },
+      { period: 1, start: 480, end: 520 },
+      { period: 2, start: 520, end: 560 },
     ]);
     expect(dayBlocks(friday, timetable).periods).toEqual([
-      { period: 1, start: "09:00", end: "09:40" },
+      { period: 1, start: 540, end: 580 },
     ]);
   });
 });
