@@ -1,5 +1,6 @@
 import { randomInt } from "node:crypto";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { AddStudentDialog } from "@/components/students/AddStudentDialog";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
