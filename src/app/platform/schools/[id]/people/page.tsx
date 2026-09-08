@@ -13,16 +13,19 @@ export default async function PlatformSchoolPeoplePage({ params }: { params: Pro
   await requirePlatformPermission(session, "schools.view");
   const { id } = await params;
   await requireSchoolScope(session, id);
-  const canImpersonate = await hasPlatformPermission(session, "schools.impersonate");
+  const [canImpersonate, canSecurity] = await Promise.all([
+    hasPlatformPermission(session, "schools.impersonate"),
+    hasPlatformPermission(session, "security.manage"),
+  ]);
   const result = await withTenant(id, async (tx) => {
     const school = await tx.school.findUnique({ where: { id }, select: { id: true, name: true, uniqueCode: true, status: true } });
     if (!school) return null;
-    const people = await tx.user.findMany({ orderBy: { name: "asc" }, take: 250, select: { id: true, name: true, email: true, phone: true, status: true, userRoles: { select: { role: { select: { name: true, key: true } } } } } });
-    return { school, people: people.map((person) => ({ id: person.id, name: person.name, email: person.email, phone: person.phone, status: person.status, role: person.userRoles.map((item) => item.role.key || item.role.name).filter(Boolean).join(" · ") || "No assigned role" })) };
+    const people = await tx.user.findMany({ orderBy: { name: "asc" }, take: 1000, select: { id: true, name: true, email: true, phone: true, status: true, needsPasswordChange: true, guardianProfiles: { select: { id: true } }, userRoles: { select: { role: { select: { name: true, key: true } } } } } });
+    return { school, people: people.map((person) => ({ id: person.id, name: person.name, email: person.email, phone: person.phone, status: person.status, needsPasswordChange: person.needsPasswordChange, isGuardian: person.guardianProfiles.length > 0, role: person.userRoles.map((item) => item.role.key || item.role.name).filter(Boolean).join(" · ") || "No assigned role" })) };
   });
   if (!result) notFound();
-  return <AppShell universe="platform" title={`${result.school.name} · People`} subtitle="People and access." active="Schools">
-    <div className="app-banner"><div><span className="app-eyebrow">SCHOOL 360 · PEOPLE</span><h3>{result.school.name}</h3><p>{result.school.uniqueCode} · {result.school.status} · Platform operators stay within the selected school scope.</p></div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Link className="app-pill" href={`/platform/schools/${encodeURIComponent(id)}`}>Back to School 360</Link><Link className="app-pill" href={`/platform/schools/${encodeURIComponent(id)}/activity`}>Activity Center</Link></div></div>
-    <PlatformSchoolPeopleConsole schoolId={id} people={result.people} canImpersonate={canImpersonate} />
+  return <AppShell universe="platform" title={`${result.school.name} · People`} subtitle="People, logins and access control." active="Schools">
+    <div className="app-banner"><div><span className="app-eyebrow">SCHOOL 360 · PEOPLE</span><h3>{result.school.name}</h3><p>{result.school.uniqueCode} · {result.school.status} · Inspect and repair school accounts without leaving the selected tenant scope.</p></div><div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><Link className="app-pill" href={`/platform/schools/${encodeURIComponent(id)}`}>Back to School 360</Link><Link className="app-pill" href={`/platform/schools/${encodeURIComponent(id)}/activity`}>Activity Center</Link></div></div>
+    <PlatformSchoolPeopleConsole schoolId={id} people={result.people} canImpersonate={canImpersonate} canSecurity={canSecurity} />
   </AppShell>;
 }
