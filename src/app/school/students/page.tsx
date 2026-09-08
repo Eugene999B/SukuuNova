@@ -12,7 +12,6 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { cachedSchoolRead } from "@/lib/school-cache";
 import { requirePermission } from "@/lib/rbac";
-import { ensureIdentityCardsForSchool } from "@/lib/identity-card-service";
 import "./students-workspace.css";
 import "./students-light-theme.css";
 import "./students-light-overrides.css";
@@ -45,14 +44,15 @@ async function createStudent(formData: FormData) {
   const guardianRelationship = String(formData.get("guardianRelationship") ?? "Parent/Guardian").trim() || "Parent/Guardian";
   const photoData = String(formData.get("photoData") ?? "").trim();
   if (!name) throw new Error("Student name is required.");
-  if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 1_000_000)) throw new Error("Student photo is invalid or too large. Capture a smaller photo and try again.");
+  if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large. Capture a smaller photo and try again.");
   if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:write");
     if (classId) {
-      const schoolClass = await tx.class.findUnique({ where: { id: classId }, select: { id: true } });
+      const schoolClass = await tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } });
       if (!schoolClass) throw new Error("The selected class does not belong to this school.");
     }
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${session.schoolId}`}))`;
     let indexNumber = createIndexNumber();
     for (let attempt = 0; attempt < 8; attempt += 1) {
       const exists = await tx.student.findUnique({ where: { schoolId_admissionNo: { schoolId: session.schoolId, admissionNo: indexNumber } }, select: { id: true } });
@@ -70,9 +70,6 @@ async function createStudent(formData: FormData) {
       const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
       await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });
     }
-    const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
-    if (!school?.uniqueCode) throw new Error("The school's identification code is missing.");
-    await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
     await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
   });
   revalidatePath("/school/students");
