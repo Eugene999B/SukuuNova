@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 import { StudentPhotoCapture } from "@/components/students/StudentPhotoCapture";
 import { OptimisticSubmitButton } from "@/components/ui/OptimisticSubmitButton";
 import { Tooltip } from "@/components/ui/Tooltip";
 
 type SchoolClass = { id: string; name: string; level: string | null; _count: { students: number } };
-type CreateStudentAction = (formData: FormData) => Promise<void>;
+type StudentActionState = { message: string | null };
+type CreateStudentAction = (previousState: StudentActionState, formData: FormData) => Promise<StudentActionState>;
 
 type Props = {
   classes: SchoolClass[];
@@ -37,6 +38,7 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
   const [open, setOpen] = useState(initialOpen);
   const [step, setStep] = useState(0);
   const [actionError, setActionError] = useState("");
+  const [actionState, formAction] = useActionState(action, { message: null });
 
   useEffect(() => {
     setOpen(initialOpen);
@@ -56,6 +58,10 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
     };
   }, [open]);
 
+  useEffect(() => {
+    if (actionState.message) setActionError(actionState.message);
+  }, [actionState.message]);
+
   function openDialog() {
     setStep(0);
     setActionError("");
@@ -70,20 +76,16 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
     window.history.replaceState(null, "", "/school/students");
   }
 
-  async function submit(formData: FormData) {
-    setActionError("");
-    const photoData = String(formData.get("photoData") ?? "");
+  function prepareSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+    const photoData = String(new FormData(form).get("photoData") ?? "");
     if (photoData.length > 800_000) {
+      event.preventDefault();
       setActionError("The student photo is too large to submit. Please capture the photo again or upload a smaller image.");
       setStep(3);
       return;
     }
-    try {
-      await action(formData);
-    } catch (error) {
-      console.error("Student registration failed", error);
-      setActionError(error instanceof Error && error.message ? error.message : "Student registration could not be completed. Nothing was saved. Please try again.");
-    }
+    setActionError("");
   }
 
   return (
@@ -117,7 +119,7 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
 
             {actionError ? <div className="dialog-callout" role="alert"><span className="callout-icon">!</span><div><strong>Student was not created</strong><p>{actionError}</p><button type="button" className="text-link" onClick={() => setActionError("")}>Dismiss</button></div></div> : null}
 
-            <form action={submit} className="student-dialog-form">
+            <form action={formAction} onSubmit={prepareSubmit} className="student-dialog-form">
               <div className="student-dialog-body">
                 <div className="dialog-panel" hidden={step !== 0} aria-hidden={step !== 0}>
                   <div className="dialog-panel-heading"><div><span className="eyebrow">Step 1</span><h3>Start with the learner</h3><p>Enter the essentials that identify this student throughout SukuuNova.</p></div><span className="panel-badge">Required</span></div>
