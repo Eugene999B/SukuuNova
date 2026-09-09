@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowRight,
@@ -57,7 +58,7 @@ type Props = {
   focusDescription?: string;
   focus?: IntelligenceFocusItem[];
   actions?: IntelligenceAction[];
-  children?: React.ReactNode;
+  children?: ReactNode;
 };
 
 function InsightIcon({ severity }: { severity: IntelligenceInsight["severity"] }) {
