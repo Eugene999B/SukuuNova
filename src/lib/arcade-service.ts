@@ -3,7 +3,7 @@ import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
-import { ARCADE_GAMES, createArcadeQuestions, initialDifficulty, nextDifficulty, schoolDay, learningStreak, type ArcadeGame, type ArcadeQuestion } from "./arcade-content";
+import { canGenerateArcadeContent, createArcadeGameQuestions, initialDifficulty, nextDifficulty, schoolDay, learningStreak, type ArcadeQuestion } from "./arcade-content";
 import { allowedAgeBandsForStandard, arcadeGame, recommendedAgeBand, standardBandFromClassLevel, type ArcadeAgeBand } from "./arcade-catalog";
 import { effectiveArcadeCatalog } from "./arcade-settings";
 import { arcadeLeaderboard, type ArcadeLeaderboardPeriod, type ArcadeLeaderboardScope } from "./arcade-leaderboard";
@@ -51,7 +51,7 @@ function publicRound(round: RoundRow | ArcadeRound) {
     answers: round.answers as string[], correct: complete ? round.correct : null, xp: round.xp, stars: round.stars,
     ageBand: meta.ageBand ?? null, standardBand: meta.standardBand ?? null, engine: meta.engine ?? "choice_quiz",
     roundLength: meta.roundLength ?? questions.length, score: complete ? (meta.score ?? 0) : null, challengeMode: meta.challengeMode ?? false,
-    questions: questions.map((question) => ({ id: question.id, prompt: question.prompt, options: question.options, ...(complete ? { answer: question.answer, explanation: question.explanation } : {}) })),
+    questions: questions.map((item) => ({ id: item.id, prompt: item.prompt, options: item.options, ...(complete ? { answer: item.answer, explanation: item.explanation } : {}) })),
   };
 }
 function publicCatalog(catalog: Awaited<ReturnType<typeof effectiveArcadeCatalog>>, standardBand: ReturnType<typeof standardBandFromClassLevel>, allowedAges: ArcadeAgeBand[]) {
@@ -102,6 +102,7 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   const catalog = await effectiveArcadeCatalog(tx, context.schoolId);
   const effective = catalog.find((item) => item.gameKey === input.game)!;
   if (!effective.live || !effective.enabled) throw new AppError("This game is not available for play yet.", 409, "GAME_NOT_AVAILABLE");
+  if (!canGenerateArcadeContent(input.game)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
   const standardBand = standardBandFromClassLevel(child.class?.level ?? null);
   if (!effective.effectiveStandardBands.includes(standardBand)) throw new AppError("This game is not enabled for the learner's school standard.", 400, "GAME_STANDARD_MISMATCH");
   const permittedAgeBands = allowedAgeBandsForStandard(standardBand).filter((age) => effective.effectiveAgeBands.includes(age));
@@ -110,7 +111,6 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   const roundLength = input.roundLength ?? effective.effectiveRoundLength;
   if (!effective.roundLengths.includes(roundLength)) throw new AppError("Choose one of this game's supported round lengths.", 400, "ROUND_LENGTH_NOT_ALLOWED");
   const challengeMode = Boolean(input.challengeMode && effective.timedChallengesEnabled);
-  if (!ARCADE_GAMES.includes(input.game as ArcadeGame)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
 
   await lockChild(tx, context.schoolId, child.id);
   const activeRows = await tx.$queryRaw<RoundRow[]>`
@@ -118,15 +118,16 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
     FROM "ArcadeRound" WHERE "schoolId"=${context.schoolId} AND "studentId"=${child.id} AND "game"=${input.game} AND "status"='in_progress' LIMIT 1
   `;
   if (activeRows[0]) return publicRound(activeRows[0]);
-  const recent = await tx.arcadeRound.findMany({ where: { schoolId: context.schoolId, studentId: child.id, game: input.game, status: "completed" }, select: { difficulty: true, correct: true }, orderBy: { completedAt: "desc" }, take: 3 });
+  const recent = await tx.$queryRaw<Array<{ difficulty: number; correct: number; roundLength: number }>>`
+    SELECT "difficulty","correct","roundLength" FROM "ArcadeRound"
+    WHERE "schoolId"=${context.schoolId} AND "studentId"=${child.id} AND "game"=${input.game} AND "status"='completed'
+    ORDER BY "completedAt" DESC LIMIT 3
+  `;
   const suggested = nextDifficulty(initialDifficulty(child.class?.level ?? null), recent);
   const difficulty = Math.max(effective.difficultyMin, Math.min(effective.difficultyMax, input.easier ? Math.max(1, suggested - 1) : suggested));
-  const questions = createArcadeQuestions(input.game as ArcadeGame, difficulty);
-  if (questions.length !== roundLength) {
-    if (roundLength !== 5) throw new AppError("This learning pack currently supports five-question rounds while the larger game engine is being expanded.", 409, "ROUND_LENGTH_CONTENT_PENDING");
-  }
+  const questions = createArcadeGameQuestions(input.game, difficulty, roundLength);
   const id = createId();
-  const snapshot = { version: 1, gameKey: input.game, ageBand, standardBand, engine: effective.engine, roundLength: questions.length, challengeMode, timerPolicy: effective.timerPolicy };
+  const snapshot = { version: 2, gameKey: input.game, ageBand, standardBand, engine: effective.engine, roundLength: questions.length, challengeMode, timerPolicy: effective.timerPolicy };
   await tx.$executeRaw`
     INSERT INTO "ArcadeRound" ("id","schoolId","studentId","game","difficulty","questions","answers","ageBand","standardBand","engine","roundLength","challengeMode","settingsSnapshot")
     VALUES (${id},${context.schoolId},${child.id},${input.game},${difficulty},${JSON.stringify(questions)}::jsonb,${JSON.stringify(questions.map(() => ""))}::jsonb,${ageBand},${standardBand},${effective.engine},${questions.length},${challengeMode},${JSON.stringify(snapshot)}::jsonb)
@@ -156,7 +157,7 @@ export async function saveArcadeRound(tx: TenantDb, context: Context, input: { r
     await tx.$executeRaw`UPDATE "ArcadeRound" SET "answers"=${JSON.stringify(input.answers)}::jsonb WHERE "id"=${round.id} AND "schoolId"=${context.schoolId} AND "status"='in_progress'`;
     return publicRound((await roundRow(tx, context.schoolId, round.id))!);
   }
-  const correct = questions.filter((question, index) => question.answer === input.answers[index]).length;
+  const correct = questions.filter((item, index) => item.answer === input.answers[index]).length;
   const accuracy = questions.length ? correct / questions.length : 0;
   const xp = correct * 10;
   const stars = accuracy === 1 ? 3 : accuracy >= 0.6 ? 2 : accuracy >= 0.2 ? 1 : 0;
