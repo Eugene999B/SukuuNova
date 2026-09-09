@@ -11,8 +11,6 @@ export type NavGroup = { label: string; items: NavItem[] };
 export function SidebarNav({ groups, active, storageScope = "default" }: { groups: NavGroup[]; active: string; storageScope?: string }) {
   const pathname = usePathname();
   const storageKey = `sukuunova-sidebar-groups:${storageScope}`;
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-
   const activeLabel = useMemo(() => {
     const matches = groups
       .flatMap((group) => group.items.map((item) => ({ ...item, group: group.label })))
@@ -21,26 +19,41 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
     return matches[0]?.label ?? active;
   }, [groups, pathname, active]);
 
+  const activeGroupLabel = useMemo(
+    () => groups.find((group) => group.items.some((item) => item.label === activeLabel))?.label,
+    [activeLabel, groups],
+  );
+
+  const defaultCollapsed = useMemo(
+    () => Object.fromEntries(groups.map((group) => [group.label, group.label !== activeGroupLabel])),
+    [activeGroupLabel, groups],
+  );
+
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(defaultCollapsed);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey);
-      if (saved) setCollapsed(JSON.parse(saved) as Record<string, boolean>);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Record<string, boolean>;
+        setCollapsed({ ...defaultCollapsed, ...parsed, ...(activeGroupLabel ? { [activeGroupLabel]: false } : {}) });
+      } else {
+        setCollapsed(defaultCollapsed);
+      }
     } catch {
-      setCollapsed({});
+      setCollapsed(defaultCollapsed);
     }
-  }, [storageKey]);
+  }, [activeGroupLabel, defaultCollapsed, storageKey]);
 
   useEffect(() => {
-    const activeGroup = groups.find((group) => group.items.some((item) => item.label === activeLabel));
-    if (!activeGroup || !collapsed[activeGroup.label]) return;
-
+    if (!activeGroupLabel || !collapsed[activeGroupLabel]) return;
     setCollapsed((current) => {
-      if (!current[activeGroup.label]) return current;
-      const next = { ...current, [activeGroup.label]: false };
+      if (!current[activeGroupLabel]) return current;
+      const next = { ...current, [activeGroupLabel]: false };
       try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch {}
       return next;
     });
-  }, [activeLabel, collapsed, groups, storageKey]);
+  }, [activeGroupLabel, collapsed, storageKey]);
 
   const toggleGroup = (label: string) => {
     setCollapsed((current) => {
@@ -56,7 +69,7 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
         const isCollapsed = Boolean(collapsed[group.label]);
         return (
           <div className={`app-nav-group ${isCollapsed ? "is-collapsed" : ""}`} key={group.label}>
-            <button type="button" className="app-nav-group-toggle" onClick={() => toggleGroup(group.label)} aria-expanded={!isCollapsed} title={`Toggle ${group.label}`}>
+            <button type="button" className="app-nav-group-toggle" onClick={() => toggleGroup(group.label)} aria-expanded={!isCollapsed} title={`${isCollapsed ? "Open" : "Close"} ${group.label}`}>
               <span className="app-nav-label">{group.label}</span>
               <ChevronDown size={13} aria-hidden="true" className="app-nav-chevron" />
             </button>
