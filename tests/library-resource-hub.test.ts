@@ -24,6 +24,8 @@ async function setup() {
       { schoolId: fixture.schoolId, guardianId: guardian.id, studentId: student.id, relationship: "Parent", isPrimary: true },
       { schoolId: fixture.schoolId, guardianId: guardian.id, studentId: sibling.id, relationship: "Parent", isPrimary: false },
     ] });
+    const borrowPermission = await tx.permission.findUniqueOrThrow({ where: { key: "library:borrow" } });
+    await tx.userPermissionOverride.create({ data: { schoolId: fixture.schoolId, userId: fixture.memberId, permissionId: borrowPermission.id, granted: true } });
     const digital = await libraryAction(tx, fixture.schoolId, fixture.ownerId, { action: "createBook", title: "Protected Science Reader", category: "Science", copies: 1, materialType: "pdf", fileUrl: "/library-files/science.pdf" });
     const restricted = await libraryAction(tx, fixture.schoolId, fixture.ownerId, { action: "createBook", title: "Assigned Revision Pack", category: "Mathematics", copies: 1, materialType: "pdf", fileUrl: "/library-files/revision.pdf", visibility: "restricted" });
     const physical = await libraryAction(tx, fixture.schoolId, fixture.ownerId, { action: "createBook", title: "Physical Novel", category: "Literature", copies: 1 });
@@ -59,6 +61,13 @@ describe("protected library + student resource hub", () => {
     await expect(withTenant(f.schoolId, tx => libraryContentAccess(tx, { kind: "guardian", ...f.guardianContext, studentId: f.unrelatedId }, f.digitalId, "read"))).rejects.toMatchObject({ status: 403 });
     const download = await withTenant(f.schoolId, tx => libraryContentAccess(tx, { kind: "guardian", ...f.guardianContext, studentId: f.studentId }, f.digitalId, "download"));
     expect(download.downloadAllowed).toBe(true);
+  });
+
+  it("blocks a general staff borrower from guessing restricted content ids", async () => {
+    const f = await setup();
+    const normal = await withTenant(f.schoolId, tx => libraryContentAccess(tx, { kind: "school", schoolId: f.schoolId, userId: f.memberId }, f.digitalId, "read"));
+    expect(normal.id).toBe(f.digitalId);
+    await expect(withTenant(f.schoolId, tx => libraryContentAccess(tx, { kind: "school", schoolId: f.schoolId, userId: f.memberId }, f.restrictedId, "read"))).rejects.toMatchObject({ code: "RESOURCE_RESTRICTED", status: 403 });
   });
 
   it("keeps restricted resources hidden until assigned to that learner or class", async () => {
