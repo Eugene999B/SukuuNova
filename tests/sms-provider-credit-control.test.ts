@@ -120,12 +120,16 @@ describe("platform-owned SMS inventory and school resale wallet",()=>{
     expect(school.wallet.smsBalance).toBe(200);
     expect(Number(school.platformInventory.sms)).toBe(beforeSms+400);
     expect(school.ledger.find(row=>row.reference===`TEST-SALE-${fixture.schoolId}`)).toMatchObject({entryType:"allocation",quantity:200,balanceAfter:200});
+    inventory=await getMessagingInventory(platformSession);
+    expect(inventory.ledger.find(row=>row.reference===`TEST-SALE-${fixture.schoolId}`)).toMatchObject({entryType:"allocation",quantity:-200,balanceAfter:beforeSms+400,schoolId:fixture.schoolId});
 
     await adjustMessagingBalance(platformSession,{schoolId:fixture.schoolId,channel:"sms",quantity:-50,unitCost:0.018,unitPrice:0.03,reference:`TEST-RETURN-${fixture.schoolId}`});
     school=await getMessagingWallet(platformSession,fixture.schoolId);
     expect(school.wallet.smsBalance).toBe(150);
     expect(Number(school.platformInventory.sms)).toBe(beforeSms+450);
     expect(school.ledger.find(row=>row.reference===`TEST-RETURN-${fixture.schoolId}`)).toMatchObject({entryType:"refund",quantity:-50,balanceAfter:150});
+    inventory=await getMessagingInventory(platformSession);
+    expect(inventory.ledger.find(row=>row.reference===`TEST-RETURN-${fixture.schoolId}`)).toMatchObject({entryType:"refund",quantity:50,balanceAfter:beforeSms+450,schoolId:fixture.schoolId});
 
     // Restore shared platform inventory so this regression leaves no global stock behind.
     await adjustMessagingInventory(platformSession,{channel:"sms",quantity:-450,providerKey:"arkesel",reference:`TEST-CLEANUP-${fixture.schoolId}`});
