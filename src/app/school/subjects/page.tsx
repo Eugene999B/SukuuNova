@@ -6,6 +6,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import "./subjects.css";
+import "./subjects-simple.css";
 
 async function createSubject(formData: FormData) {
   "use server";
@@ -125,30 +126,25 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
   const totalAssignments = data.subjects.reduce((sum, subject) => sum + subject.teacherAssignments.length, 0);
   const ready = data.subjects.filter((subject) => subject.teacherAssignments.length > 0).length;
   const selectedAssignments = selectedSubject?.teacherAssignments ?? [];
+  const subjectInUse = selectedSubject ? Boolean(selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots) : false;
 
   return (
-    <AppShell universe="school" title="Subjects" subtitle="Subjects and assignments." active="Subjects" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
-      <div className="subjects-page">
+    <AppShell universe="school" title="Subjects" subtitle="Find a subject, connect teachers and classes, and keep setup out of the way until needed." active="Subjects" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+      <div className="subjects-page subjects-simple">
         <section className="subjects-header">
-          <div>
-            <span className="subjects-kicker">ACADEMICS</span>
-            <h2>Subjects</h2>
-            
-          </div>
+          <div><span className="subjects-kicker">ACADEMICS</span><h2>Subject catalogue</h2></div>
           <SubjectCreateDialog action={createSubject} />
         </section>
 
-        <section className="subjects-stats">
+        <section className="subjects-stats" aria-label="Subject summary">
           <div><span>Subjects</span><strong>{data.subjects.length}</strong></div>
           <div><span>Assigned</span><strong>{ready}</strong></div>
           <div><span>Teaching links</span><strong>{totalAssignments}</strong></div>
         </section>
 
         <section className="subjects-toolbar">
-          <form method="get" className="subjects-search">
-            <span>⌕</span><input name="q" defaultValue={query} placeholder="Search subjects" /><button type="submit">Search</button>
-          </form>
-          <div className="subjects-toolbar-actions"><Link href="/school/classes">Classes</Link><Link href="/school/timetable">Timetable</Link><Link href="/school/academics/performance">Gradebook</Link></div>
+          <form method="get" className="subjects-search"><span>⌕</span><input name="q" defaultValue={query} placeholder="Search subjects" /><button type="submit">Search</button></form>
+          <div className="subjects-toolbar-actions"><Link href="/school/classes">Classes</Link><Link href="/school/timetable">Timetable</Link><Link href="/school/gradebook">Gradebook</Link></div>
         </section>
 
         <div className="subjects-layout">
@@ -170,26 +166,26 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
 
           <aside className="subject-detail-card">
             {selectedSubject ? <>
-              <div className="subject-detail-top"><div><span className="subjects-kicker">SUBJECT</span><h3>{selectedSubject.name}</h3></div><span className="subject-count-pill">{selectedSubject.teacherAssignments.length} links</span></div>
+              <div className="subject-detail-top"><div><span className="subjects-kicker">SELECTED SUBJECT</span><h3>{selectedSubject.name}</h3></div><span className="subject-count-pill">{selectedSubject.teacherAssignments.length} teaching link{selectedSubject.teacherAssignments.length === 1 ? "" : "s"}</span></div>
+              <div className="subject-detail-metrics"><div><span>Classes</span><strong>{new Set(selectedAssignments.map((assignment) => assignment.class.id)).size}</strong></div><div><span>Assessments</span><strong>{selectedSubject._count.assessments}</strong></div><div><span>Timetable</span><strong>{selectedSubject._count.timetableSlots}</strong></div></div>
 
-              <div className="subject-detail-metrics">
-                <div><span>Classes</span><strong>{new Set(selectedAssignments.map((assignment) => assignment.class.id)).size}</strong></div>
-                <div><span>Assessments</span><strong>{selectedSubject._count.assessments}</strong></div>
-                <div><span>Timetable</span><strong>{selectedSubject._count.timetableSlots}</strong></div>
-              </div>
+              <section className="subject-detail-primary"><span className="subjects-kicker">PRIMARY ACTION</span><h4>Connect this subject to teaching</h4><SubjectAssignDialog subjectId={selectedSubject.id} subjectName={selectedSubject.name} teachers={data.teachers} classes={data.classes} action={assignSubject} /></section>
 
-              <div className="subject-detail-section"><div className="subject-section-head"><div><span className="subjects-kicker">TEACHING</span><h4>Assign to classes</h4></div></div>
-                <SubjectAssignDialog subjectId={selectedSubject.id} subjectName={selectedSubject.name} teachers={data.teachers} classes={data.classes} action={assignSubject} />
-              </div>
+              <details className="sn-progressive subject-settings">
+                <summary>Teaching assignments ({selectedAssignments.length})</summary>
+                <div className="sn-progressive-body">
+                  <div className="assignment-list">{selectedAssignments.length ? selectedAssignments.map((assignment) => <div className="assignment-row" key={`${assignment.class.id}:${assignment.teacher.id}`}><div><strong>{assignment.class.level ? `${assignment.class.level} · ` : ""}{assignment.class.name}</strong><span>{assignment.teacher.name}</span></div><form action={removeAssignment}><input type="hidden" name="subjectId" value={selectedSubject.id}/><input type="hidden" name="classId" value={assignment.class.id}/><input type="hidden" name="teacherId" value={assignment.teacher.id}/><button type="submit" aria-label={`Remove ${assignment.teacher.name} from ${assignment.class.name}`}>Remove</button></form></div>) : <div className="assignment-empty">No teacher assignments yet.</div>}</div>
+                </div>
+              </details>
 
-              <div className="subject-detail-section"><div className="subject-section-head"><div><span className="subjects-kicker">CURRENT LINKS</span><h4>Teaching assignments</h4></div></div>
-                <div className="assignment-list">{selectedAssignments.length ? selectedAssignments.map((assignment) => <div className="assignment-row" key={`${assignment.class.id}:${assignment.teacher.id}`}><div><strong>{assignment.class.level ? `${assignment.class.level} · ` : ""}{assignment.class.name}</strong><span>{assignment.teacher.name}</span></div><form action={removeAssignment}><input type="hidden" name="subjectId" value={selectedSubject.id}/><input type="hidden" name="classId" value={assignment.class.id}/><input type="hidden" name="teacherId" value={assignment.teacher.id}/><button type="submit" aria-label={`Remove ${assignment.teacher.name} from ${assignment.class.name}`}>Remove</button></form></div>) : <div className="assignment-empty">No teacher assignments yet.</div>}</div>
-              </div>
-
-              <div className="subject-detail-section compact"><div className="subject-section-head"><div><span className="subjects-kicker">RENAME</span><h4>Subject name</h4></div></div><form action={updateSubject} className="rename-form"><input type="hidden" name="subjectId" value={selectedSubject.id}/><input name="name" required defaultValue={selectedSubject.name}/><button type="submit">Save</button></form></div>
-
-              <div className="subject-danger"><form action={deleteSubject}><input type="hidden" name="subjectId" value={selectedSubject.id}/><span>{selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots ? "In use — keep academic history intact." : "No academic records depend on this subject."}</span><button type="submit" disabled={Boolean(selectedSubject._count.teacherAssignments || selectedSubject._count.assessments || selectedSubject._count.scores || selectedSubject._count.timetableSlots)}>Delete subject</button></form></div>
-            </> : <div className="subject-empty detail"><strong>Start with your subject catalogue</strong></div>}
+              <details className="sn-progressive subject-settings">
+                <summary>Rename or delete subject</summary>
+                <div className="sn-progressive-body subject-admin-row">
+                  <section className="subject-admin-card"><h4>Rename subject</h4><form action={updateSubject} className="rename-form"><input type="hidden" name="subjectId" value={selectedSubject.id}/><input name="name" required defaultValue={selectedSubject.name}/><button type="submit">Save</button></form></section>
+                  <section className="subject-admin-card subject-danger"><h4>Delete subject</h4><form action={deleteSubject}><input type="hidden" name="subjectId" value={selectedSubject.id}/><span>{subjectInUse ? "This subject is in use, so its academic history must be preserved." : "No academic records depend on this subject."}</span><button type="submit" disabled={subjectInUse}>Delete subject</button></form></section>
+                </div>
+              </details>
+            </> : <div className="subject-empty detail"><strong>Choose a subject to manage it.</strong></div>}
           </aside>
         </div>
       </div>
