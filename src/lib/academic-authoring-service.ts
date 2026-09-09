@@ -4,6 +4,11 @@ import type { TenantDb } from "./db";
 import { requirePermission } from "./rbac";
 import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
+import {
+  ensureHomeworkAcademicDelivery,
+  publishHomeworkAcademicDelivery,
+  syncHomeworkAcademicDelivery,
+} from "./homework-academic-bridge";
 
 const identity = { id: z.string().min(1).max(100), expectedUpdatedAt: z.string().datetime(), title: z.string().trim().min(3).max(160) };
 export const lessonEditSchema = z.object({
@@ -57,8 +62,69 @@ export async function editLessonPlan(tx: TenantDb, actor: Actor, input: z.infer<
 
 export async function editHomework(tx: TenantDb, actor: Actor, input: z.infer<typeof homeworkEditSchema>) {
   const current = await editableWork(tx, actor, "homework", input.id, input.expectedUpdatedAt, input.dueDate);
-  const changed = await tx.$executeRaw`UPDATE "Homework" SET "title"=${input.title},"instructions"=${input.instructions},"dueDate"=${input.dueDate},"points"=${input.points ?? null},"assignmentStatus"=${input.assignmentStatus},"reviewStatus"='not_reviewed',"reviewerId"=NULL,"reviewedAt"=NULL,"updatedAt"=GREATEST(CURRENT_TIMESTAMP,"updatedAt" + INTERVAL '1 millisecond') WHERE "id"=${input.id} AND "schoolId"=${actor.schoolId} AND "updatedAt"=${current.updatedAt}`;
+  const linkRows = await tx.$queryRaw<Array<{ academicWorkId: string | null }>>`
+    SELECT "academicWorkId" FROM "Homework" WHERE "id"=${input.id} AND "schoolId"=${actor.schoolId} LIMIT 1
+  `;
+  let academicWorkId = linkRows[0]?.academicWorkId ?? null;
+  const points = input.points ?? null;
+
+  if (!academicWorkId && current.termId && points != null) {
+    academicWorkId = await ensureHomeworkAcademicDelivery(tx, {
+      schoolId: actor.schoolId,
+      actorId: actor.actorId,
+      termId: current.termId,
+      classId: current.classId,
+      subjectId: current.subjectId,
+      title: input.title,
+      instructions: input.instructions,
+      dueDate: input.dueDate,
+      points,
+    });
+  }
+  if (academicWorkId) {
+    if (points == null) throw new AppError("Interactive homework must keep a positive points value.", 409, "HOMEWORK_DELIVERY_REQUIRES_POINTS");
+    await syncHomeworkAcademicDelivery(tx, {
+      schoolId: actor.schoolId,
+      actorId: actor.actorId,
+      academicWorkId,
+      termId: current.termId,
+      classId: current.classId,
+      subjectId: current.subjectId,
+      title: input.title,
+      instructions: input.instructions,
+      dueDate: input.dueDate,
+      points,
+    });
+  }
+  if (input.assignmentStatus === "assigned") {
+    if (!academicWorkId) {
+      throw new AppError("Choose a term and points before assigning homework so learners receive a real submission activity.", 409, "HOMEWORK_DELIVERY_REQUIRES_TERM_POINTS");
+    }
+    await publishHomeworkAcademicDelivery(tx, actor.schoolId, actor.actorId, academicWorkId);
+  }
+
+  const changed = await tx.$executeRaw`
+    UPDATE "Homework"
+    SET "title"=${input.title},
+        "instructions"=${input.instructions},
+        "dueDate"=${input.dueDate},
+        "points"=${points},
+        "assignmentStatus"=${input.assignmentStatus},
+        "academicWorkId"=COALESCE(${academicWorkId},"academicWorkId"),
+        "reviewStatus"='not_reviewed',
+        "reviewerId"=NULL,
+        "reviewedAt"=NULL,
+        "updatedAt"=GREATEST(CURRENT_TIMESTAMP,"updatedAt" + INTERVAL '1 millisecond')
+    WHERE "id"=${input.id} AND "schoolId"=${actor.schoolId} AND "updatedAt"=${current.updatedAt}
+  `;
   if (changed !== 1) throw new AppError("This work changed. Refresh before editing again.", 409, "CONCURRENT_UPDATE");
-  await appendSchoolAudit(tx, { ...actor, action: "homework.content_updated", entityType: "Homework", entityId: input.id, before: { title: current.title, assignmentStatus: current.status }, after: { title: input.title, assignmentStatus: input.assignmentStatus } });
-  return { ok: true };
+  await appendSchoolAudit(tx, {
+    ...actor,
+    action: "homework.content_updated",
+    entityType: "Homework",
+    entityId: input.id,
+    before: { title: current.title, assignmentStatus: current.status },
+    after: { title: input.title, assignmentStatus: input.assignmentStatus, academicWorkId },
+  });
+  return { ok: true, academicWorkId };
 }
