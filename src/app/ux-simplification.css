@@ -150,6 +150,110 @@
   padding: 16px 18px 18px !important;
 }
 
+/* Academic work pages should show the work, not repeat a second navigation essay. */
+.sn-page-body :where(.lessons-shell, .homework-shell, .terms-workspace, .simple-reports) {
+  gap: 12px !important;
+}
+
+.sn-page-body :where(.lessons-hero, .homework-hero, .terms-hero, .reports-header) {
+  padding: 15px 17px !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+  background: var(--sn-surface) !important;
+  border-color: var(--sn-line) !important;
+}
+
+.sn-page-body :where(.lessons-hero h2, .homework-hero h2, .terms-hero h2, .reports-header h1) {
+  margin-block: 3px !important;
+  font-size: clamp(19px, 2.2vw, 24px) !important;
+  line-height: 1.15 !important;
+}
+
+.sn-page-body :where(.lessons-pills, .lessons-chain, .homework-chain, .workflow-handoff) {
+  display: none !important;
+}
+
+.sn-page-body :where(.lessons-kpis, .homework-kpis) {
+  gap: 7px !important;
+}
+
+.sn-page-body :where(.lessons-kpis article, .homework-kpis article) {
+  padding: 10px 11px !important;
+  border-radius: 11px !important;
+  box-shadow: none !important;
+}
+
+.sn-page-body :where(.lessons-kpis strong, .homework-kpis strong) {
+  font-size: 18px !important;
+}
+
+.sn-page-body :where(.lessons-tabs, .homework-tabs) {
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.sn-page-body :where(.lesson-row, .homework-row) {
+  padding: 11px 12px !important;
+  border-radius: 11px !important;
+}
+
+.sn-page-body .calendar-overview,
+.sn-page-body .term-manager {
+  gap: 10px !important;
+}
+
+.sn-page-body :where(.calendar-card, .term-detail-card) {
+  box-shadow: none !important;
+  border-radius: 14px !important;
+}
+
+.sn-page-body .connected-grid {
+  gap: 6px !important;
+}
+
+.sn-page-body .connected-grid > div {
+  padding: 9px 10px !important;
+  border-radius: 10px !important;
+}
+
+.sn-page-body .reports-list {
+  max-height: 320px;
+  overflow-y: auto;
+  overscroll-behavior-block: contain;
+}
+
+.sn-page-body :where(.reports-list-card, .report-result-card, .reports-picker) {
+  box-shadow: none !important;
+  border-radius: 14px !important;
+}
+
+.sn-page-body .result-summary {
+  gap: 7px !important;
+}
+
+.sn-page-body .result-summary > div {
+  padding: 10px !important;
+  border-radius: 10px !important;
+}
+
+/* Library keeps its features but drops the oversized showcase header. */
+.library-simple-shell > div > section:first-child {
+  padding: 16px 18px !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+}
+
+.library-simple-shell > div > section:first-child h1 {
+  font-size: clamp(20px, 2.3vw, 26px) !important;
+  line-height: 1.15 !important;
+}
+
+.library-simple-shell > div > section:first-child p {
+  font-size: 11px !important;
+  line-height: 1.5 !important;
+}
+
 /* Dense desktop data still needs to remain reachable on phones. */
 .sn-page-body :where(.table-wrap, .table-scroll, .data-table-wrap, .gradebook-table-wrap) {
   max-width: 100%;
@@ -174,6 +278,10 @@
   .sn-page-body {
     max-width: none;
   }
+
+  .sn-page-body :where(.lessons-kpis, .homework-kpis, .connected-grid, .result-summary) {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }
 
 @media (max-width: 640px) {
@@ -196,6 +304,15 @@
   .sn-page-body :where(.hero-actions, .academic-page-actions, .platform-hero-actions) {
     width: 100%;
     gap: 8px !important;
+  }
+
+  .sn-page-body :where(.lessons-hero p, .homework-hero p, .terms-hero p, .reports-header p),
+  .library-simple-shell > div > section:first-child p {
+    display: none !important;
+  }
+
+  .sn-page-body .reports-list {
+    max-height: 260px;
   }
 
   .sn-progressive > summary {
