@@ -119,9 +119,7 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   const catalog = await effectiveArcadeCatalog(tx, context.schoolId);
   const effective = catalog.find((item) => item.gameKey === input.game)!;
   if (!effective.live || !effective.enabled) throw new AppError("This game is not available for play yet.", 409, "GAME_NOT_AVAILABLE");
-  const baseContent = canGenerateArcadeContent(input.game);
-  const interactionContent = canGenerateArcadeInteractionContent(input.game);
-  if (!baseContent && !interactionContent) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
+  if (!canGenerateArcadeContent(input.game) && !canGenerateArcadeInteractionContent(input.game)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
   const standardBand = standardBandFromClassLevel(child.class?.level ?? null);
   if (!effective.effectiveStandardBands.includes(standardBand)) throw new AppError("This game is not available for the learner's school standard.", 409, "GAME_NOT_AVAILABLE");
   const permittedAgeBands = allowedAgeBandsForStandard(standardBand).filter((age) => effective.effectiveAgeBands.includes(age));
@@ -144,9 +142,14 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   `;
   const suggested = nextDifficulty(initialDifficulty(child.class?.level ?? null), recent);
   const difficulty = Math.max(effective.difficultyMin, Math.min(effective.difficultyMax, input.easier ? Math.max(1, suggested - 1) : suggested));
-  const questions: StoredArcadeQuestion[] = baseContent
-    ? createArcadeGameQuestions(input.game, difficulty, roundLength)
-    : createArcadeInteractionQuestions(input.game, difficulty, roundLength);
+  let questions: StoredArcadeQuestion[];
+  if (canGenerateArcadeContent(input.game)) {
+    questions = createArcadeGameQuestions(input.game, difficulty, roundLength);
+  } else if (canGenerateArcadeInteractionContent(input.game)) {
+    questions = createArcadeInteractionQuestions(input.game, difficulty, roundLength);
+  } else {
+    throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
+  }
   const id = createId();
   const snapshot = { version: 1, gameKey: input.game, ageBand, standardBand, engine: effective.engine, roundLength: questions.length, challengeMode, timerPolicy: effective.timerPolicy };
   await tx.$executeRaw`
