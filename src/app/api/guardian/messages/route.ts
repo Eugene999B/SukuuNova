@@ -35,7 +35,15 @@ export async function POST(request:Request){
     const m=await tx.message.findFirst({where:{id:value.messageId,schoolId:session.schoolId,recipientId:session.userId,channel:"in_app"},select:{id:true,body:true,templateVariables:true}});
     if(!m)return NextResponse.json({error:"NOT_FOUND",message:"Message not found."},{status:404});
     const p=meta(m.templateVariables);
-    await tx.message.update({where:{id:m.id},data:{status:"read",templateVariables:payload(String(p.title||m.body.split("\n")[0]),typeof p.senderId==="string"?p.senderId:"system",typeof p.senderName==="string"?p.senderName:"School communication",{...p,readAt:new Date().toISOString()})}});
+    const readMeta={...p,readAt:new Date().toISOString()};
+    await tx.message.update({where:{id:m.id},data:{status:"read",templateVariables:JSON.parse(JSON.stringify({
+      title:String(p.title||m.body.split("\n")[0]),
+      senderType:typeof p.senderType==="string"?p.senderType:"school_user",
+      senderId:typeof p.senderId==="string"?p.senderId:"system",
+      senderName:typeof p.senderName==="string"?p.senderName:"School communication",
+      attachments:Array.isArray(p.attachments)?p.attachments:[],
+      ...readMeta
+    }))}});
     return NextResponse.json({ok:true});
    }
    const input=sendSchema.parse(raw);
