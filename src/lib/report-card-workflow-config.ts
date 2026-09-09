@@ -1,10 +1,13 @@
 import type { Prisma } from "@prisma/client";
 import { reportCardThemeById } from "@/lib/report-card-themes";
+import { parseSignatureVectorEvidence, type SignatureVectorEvidence } from "@/lib/signature-vector";
 
 export type SignatureProfile = {
   dataUrl: string;
   updatedAt: string;
   sha256?: string;
+  vectorEvidence?: SignatureVectorEvidence;
+  vectorSha256?: string;
 };
 
 export type SignatureSlot = {
@@ -52,7 +55,17 @@ function readSignatureProfiles(value: Prisma.JsonValue | undefined): Record<stri
     const dataUrl = typeof row.dataUrl === "string" ? row.dataUrl : "";
     const updatedAt = typeof row.updatedAt === "string" ? row.updatedAt : "";
     const sha256 = typeof row.sha256 === "string" && /^[a-f0-9]{64}$/i.test(row.sha256) ? row.sha256.toLowerCase() : undefined;
-    if (dataUrl.startsWith("data:image/png;base64,") && updatedAt) output[userId] = { dataUrl, updatedAt, ...(sha256 ? { sha256 } : {}) };
+    const vectorEvidence = parseSignatureVectorEvidence(row.vectorEvidence);
+    const vectorSha256 = typeof row.vectorSha256 === "string" && /^[a-f0-9]{64}$/i.test(row.vectorSha256) ? row.vectorSha256.toLowerCase() : undefined;
+    if (dataUrl.startsWith("data:image/png;base64,") && updatedAt) {
+      output[userId] = {
+        dataUrl,
+        updatedAt,
+        ...(sha256 ? { sha256 } : {}),
+        ...(vectorEvidence ? { vectorEvidence } : {}),
+        ...(vectorEvidence && vectorSha256 ? { vectorSha256 } : {}),
+      };
+    }
   }
   return output;
 }
