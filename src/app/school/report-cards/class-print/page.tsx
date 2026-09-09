@@ -49,7 +49,7 @@ export default async function ClassReportPrintPage({ searchParams }: { searchPar
         return { kind: "denied" as const, message: "Only the school academic team or assigned teachers can print class reports." };
       }
       const assigned = selectedClass.classTeacherId === session.userId || Boolean(
-        await tx.classSubjectTeacher.findFirst({ where: { schoolId: session.schoolId, classId, teacherId: session.userId }, select: { id: true } }),
+        await tx.classSubjectTeacher.findFirst({ where: { schoolId: session.schoolId, classId, teacherId: session.userId }, select: { classId: true } }),
       );
       if (!assigned) {
         return { kind: "denied" as const, message: "Teachers may print report cards only for classes assigned to them." };
