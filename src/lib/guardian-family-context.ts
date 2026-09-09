@@ -21,6 +21,21 @@ export function filterGuardianReleasedScores<T extends { assessment: { termId: s
   return scores.filter((score) => releasedTerms.has(score.assessment.termId));
 }
 
+export function guardianAcademicContextStudentId(request: Request) {
+  const url = new URL(request.url);
+  const explicit = url.searchParams.get("studentId")?.trim();
+  if (explicit) return explicit;
+  const referer = request.headers.get("referer");
+  if (!referer) return undefined;
+  try {
+    const page = new URL(referer);
+    if (page.origin !== url.origin || page.pathname.replace(/\/$/, "") !== "/guardian/academic") return undefined;
+    return page.searchParams.get("studentId")?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getGuardianFamilyContext(tx: TenantDb, input: {
   schoolId: string;
   guardianId: string;
