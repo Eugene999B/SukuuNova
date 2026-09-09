@@ -1,5 +1,14 @@
 # Astra progress
 
+## Learning Arcade batch
+- Three reusable practice engines: Math Sprint, Word Builder and Logic Lab; five-question rounds with explanatory feedback.
+- Persistent child-specific drafts, server marking, idempotent completion, XP/stars/levels/badges, recent results and timezone-aware streak.
+- Class-level starting difficulty, sustained-performance progression and easier new rounds.
+- Guardian dashboard entry, child switcher, keyboard/touch UI, parent progress, saved rounds and readable result history.
+- ArcadeRound Prisma model, tenant helper registration, same-school foreign keys, partial unique active-round index and FORCE RLS migration.
+- Eight regression tests cover concurrent/retried rounds, isolation, RLS, invalid answers, progression, content and timezone dates.
+- Full GitHub verification pending. Arcade is a first implementation, not all nine suggested games; school-specific content packs and browser/mobile certification remain outstanding.
+
 ## Efficient mark-entry batch
 - Spreadsheet paste supports mark/status columns, A/E shortcuts, blank-row preservation and all-or-nothing validation.
 - Enter/arrow keyboard navigation, explicit Present/Absent/Excused states, recorded/dirty counts and save confirmation.

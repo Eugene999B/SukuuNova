@@ -120,6 +120,7 @@ model School {
   deviceIdentities    DeviceIdentity[]
   deviceAttendanceReceipts DeviceAttendanceReceipt[]
   identityCards       IdentityCard[]
+  arcadeRounds ArcadeRound[]
 }
 
 model SchoolSettings {
@@ -361,6 +362,7 @@ model Student {
   @@unique([schoolId, admissionNo])
   @@index([schoolId])
   @@index([schoolId, classId])
+  arcadeRounds ArcadeRound[]
 }
 
 model Guardian {
@@ -1021,4 +1023,25 @@ model IdentityCard {
   @@index([schoolId, personType, status])
   @@index([schoolId, serial])
   @@index([schoolId, expiresAt])
+}
+
+model ArcadeRound {
+  id          String   @id @default(cuid())
+  schoolId    String
+  studentId   String
+  game        String
+  difficulty  Int
+  questions   Json
+  answers     Json     @default("[]")
+  status      String   @default("in_progress")
+  correct     Int      @default(0)
+  xp          Int      @default(0)
+  stars       Int      @default(0)
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  localDate   String?
+  school      School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  student     Student  @relation(fields: [studentId, schoolId], references: [id, schoolId], onDelete: Restrict)
+  @@unique([id, schoolId])
+  @@index([schoolId, studentId, completedAt])
 }

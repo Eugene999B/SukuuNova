@@ -314,6 +314,12 @@ Important family information includes identity, released attendance/results, rep
 
 WhatsApp is an access channel, not a free-form AI-to-database backdoor. The assistant must verify guardian context, resolve authorized children, classify supported intents, query only needed data and refuse unsupported requests rather than guessing.
 
+## Learning Arcade
+
+Guardians can open Learning Arcade from the family dashboard. Math Sprint, Word Builder and Logic Lab share five-question rounds with keyboard/touch controls, saved answers and post-round teaching feedback. Each active linked child has separate practice history, XP, stars, levels, achievements and a school-timezone learning streak. Starting difficulty follows class level; sustained performance adjusts it, and families can request easier new rounds. Progress displays practice accuracy rather than claiming curriculum mastery.
+
+The server generates questions and checks answers. Active answer keys stay private; completion retries return the same award. Tenant RLS, same-school foreign keys and current guardian relationships protect ArcadeRound records. Arcade practice does not write official grades. There are no purchases, timers or chance-based rewards. Current content covers arithmetic/equations, vocabulary/grammar and number patterns; further game types and school-authored packs remain future work.
+
 ## Academic integrity
 
 Scores must be checked against the correct school, class, subject and assessment. Locked/published academic records must not be casually modified. Report cards follow a deliberate lifecycle:

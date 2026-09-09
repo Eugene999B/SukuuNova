@@ -6,7 +6,7 @@ import { runtimeEnv } from "./env";
 void runtimeEnv;
 
 const TENANT_MODELS = new Set([
-  "School", "SchoolSettings", "User", "Role", "RolePermission", "UserRole", "UserPermissionOverride",
+  "ArcadeRound", "School", "SchoolSettings", "User", "Role", "RolePermission", "UserRole", "UserPermissionOverride",
   "SchoolPasswordResetToken", "AuditLogSchool", "AcademicYear", "CalendarEvent", "Term", "Student",
   "Guardian", "StudentGuardian", "Class", "Subject", "ClassSubjectTeacher", "AttendanceEvent", "Assessment",
   "Score", "ReportCard", "FeeItem", "Invoice", "InvoiceLine", "Payment", "PaymentReversal", "Message",
@@ -26,6 +26,7 @@ const UPDATE_OPERATIONS = new Set(["update", "updateMany", "updateManyAndReturn"
 const DELETE_OPERATIONS = new Set(["delete", "deleteMany"]);
 // Models with @@unique([id, schoolId]) alongside @id(id): singular lookups must use id_schoolId compound.
 const COMPOUND_ID_MODELS = new Set([
+  "ArcadeRound",
   "User", "Role", "SchoolPasswordResetToken", "AuditLogSchool", "AcademicYear", "CalendarEvent", "Term",
   "Student", "Guardian", "House", "Class", "Subject", "AttendanceEvent", "Assessment", "Score",
   "ReportCard", "FeeItem", "Invoice", "Payment", "PaymentReversal", "Message", "TimetableSlot",
