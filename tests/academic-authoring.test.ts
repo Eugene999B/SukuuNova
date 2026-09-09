@@ -28,19 +28,66 @@ async function setup(kind: "lesson" | "homework", status = "draft") {
   return { ...fixture, ...result, id };
 }
 function lessonInput(fixture: { id: string; updatedAt: string }) {
-  return { id: fixture.id, expectedUpdatedAt: fixture.updatedAt, title: "Revised lesson",
-    content: "Revised teaching activities", plannedDate: new Date("2026-09-15"), status: "submitted" as const };
+  return {
+    id: fixture.id,
+    expectedUpdatedAt: fixture.updatedAt,
+    title: "Revised lesson",
+    objective: "Learners will apply the concept accurately.",
+    content: "Revised teaching activities and pacing notes.",
+    topic: "Fractions",
+    subTopic: "Equivalent fractions",
+    curriculumObjective: "Use models to identify equivalent fractions.",
+    learningOutcomes: "Learners can identify and explain equivalent fractions using models.",
+    priorKnowledge: "Learners can name numerator and denominator.",
+    materials: "Fraction strips and learner workbooks.",
+    introduction: "Review halves and quarters with a quick visual warm-up.",
+    development: "Model equivalent fractions, guide paired practice, then complete independent examples.",
+    differentiatedActivities: "Use pre-cut strips for support and open-ended equivalence challenges for extension.",
+    assessment: "Check exit tickets and two independent equivalent-fraction examples.",
+    conclusion: "Learners explain one equivalence relationship to a partner.",
+    homework: "Find three examples of equivalent fractions.",
+    resources: [{ label: "Fraction guide", url: "https://example.com/fractions" }],
+    plannedDate: new Date("2026-09-15"),
+    status: "submitted" as const,
+  };
+}
+async function grantReview(fixture: Awaited<ReturnType<typeof setup>>) {
+  await withTenant(fixture.schoolId, (tx) => tx.userPermissionOverride.create({ data: {
+    schoolId: fixture.schoolId,
+    userId: fixture.memberId,
+    permissionId: fixture.permissionIds.get("lesson_plans:review")!,
+    granted: true,
+  } }));
+}
+async function patchAs(fixture: Awaited<ReturnType<typeof setup>>, userId: string, body: Record<string, unknown>) {
+  session.schoolId = fixture.schoolId;
+  session.userId = userId;
+  return transitionLesson(new Request("http://localhost/api/school/lesson-plans", {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }));
 }
 
 describe("connected academic authoring", () => {
-  it("lets an author correct and resubmit a returned lesson while rejecting stale edits", async () => {
+  it("lets an author correct and resubmit a returned structured lesson while rejecting stale edits", async () => {
     const fixture = await setup("lesson", "changes_requested");
     const actor = { schoolId: fixture.schoolId, actorId: fixture.ownerId };
     await withTenant(fixture.schoolId, (tx) => editLessonPlan(tx, actor, lessonInput(fixture)));
     await expect(withTenant(fixture.schoolId, (tx) => editLessonPlan(tx, actor, lessonInput(fixture))))
       .rejects.toMatchObject({ code: "CONCURRENT_UPDATE" });
-    const rows = await withTenant(fixture.schoolId, (tx) => tx.$queryRaw<Array<{ title: string; status: string }>>`SELECT "title","status" FROM "LessonPlan" WHERE "id"=${fixture.id} AND "schoolId"=${fixture.schoolId}`);
-    expect(rows[0]).toMatchObject({ title: "Revised lesson", status: "submitted" });
+    const rows = await withTenant(fixture.schoolId, (tx) => tx.$queryRaw<Array<{ title: string; topic: string | null; status: string; submittedAt: Date | null }>>`SELECT "title","topic","status","submittedAt" FROM "LessonPlan" WHERE "id"=${fixture.id} AND "schoolId"=${fixture.schoolId}`);
+    expect(rows[0]).toMatchObject({ title: "Revised lesson", topic: "Fractions", status: "submitted" });
+    expect(rows[0].submittedAt).toBeInstanceOf(Date);
+  });
+
+  it("requires the core professional sections before a lesson can be submitted", async () => {
+    const fixture = await setup("lesson");
+    const actor = { schoolId: fixture.schoolId, actorId: fixture.ownerId };
+    await expect(withTenant(fixture.schoolId, (tx) => editLessonPlan(tx, actor, { ...lessonInput(fixture), assessment: "" })))
+      .rejects.toMatchObject({ code: "LESSON_PLAN_INCOMPLETE", status: 400 });
+    const row = await withTenant(fixture.schoolId, (tx) => tx.$queryRaw<Array<{ status: string }>>`SELECT "status" FROM "LessonPlan" WHERE "id"=${fixture.id}`);
+    expect(row[0].status).toBe("draft");
   });
 
   it("rejects another author's edits and cross-school IDs", async () => {
@@ -66,15 +113,43 @@ describe("connected academic authoring", () => {
       .rejects.toMatchObject({ code: "WORK_NOT_EDITABLE" });
   });
 
-  it("allows an approved lesson's author to mark it completed", async () => {
+  it("requires reviewer reasons for returned work and preserves every review decision", async () => {
+    const fixture = await setup("lesson", "submitted");
+    await grantReview(fixture);
+    const missingReason = await patchAs(fixture, fixture.memberId, { id: fixture.id, status: "changes_requested", reviewNote: "Strengthen the assessment evidence." });
+    expect(missingReason.status).toBe(400);
+
+    const returned = await patchAs(fixture, fixture.memberId, { id: fixture.id, status: "changes_requested", reviewReason: "assessment", reviewNote: "Strengthen the assessment evidence." });
+    expect(returned.status).toBe(200);
+
+    const forbiddenApproval = await patchAs(fixture, fixture.memberId, { id: fixture.id, status: "approved", reviewNote: "Approved without resubmission." });
+    expect(forbiddenApproval.status).toBe(409);
+
+    const changed = await withTenant(fixture.schoolId, (tx) => tx.$queryRaw<Array<{ updatedAt: Date }>>`SELECT "updatedAt" FROM "LessonPlan" WHERE "id"=${fixture.id}`);
+    await withTenant(fixture.schoolId, (tx) => editLessonPlan(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId }, lessonInput({ id: fixture.id, updatedAt: changed[0].updatedAt.toISOString() })));
+
+    const approved = await patchAs(fixture, fixture.memberId, { id: fixture.id, status: "approved", reviewNote: "The revised assessment now matches the outcomes." });
+    expect(approved.status).toBe(200);
+    const history = await withTenant(fixture.schoolId, (tx) => tx.$queryRaw<Array<{ decision: string; reasonCode: string | null; note: string | null }>>`SELECT "decision","reasonCode","note" FROM "LessonPlanReview" WHERE "schoolId"=${fixture.schoolId} AND "lessonPlanId"=${fixture.id} ORDER BY "createdAt" ASC`);
+    expect(history).toEqual([
+      { decision: "changes_requested", reasonCode: "assessment", note: "Strengthen the assessment evidence." },
+      { decision: "approved", reasonCode: null, note: "The revised assessment now matches the outcomes." },
+    ]);
+  });
+
+  it("requires reflection before completion and allows the author to archive completed evidence", async () => {
     const fixture = await setup("lesson", "approved");
-    session.schoolId = fixture.schoolId;
-    session.userId = fixture.ownerId;
-    const response = await transitionLesson(new Request("http://localhost/api/school/lesson-plans", {
-      method: "PATCH", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: fixture.id, status: "completed" })
-    }));
-    expect(response.status).toBe(200);
+    const missingReflection = await patchAs(fixture, fixture.ownerId, { id: fixture.id, status: "completed" });
+    expect(missingReflection.status).toBe(400);
+    const completed = await patchAs(fixture, fixture.ownerId, { id: fixture.id, status: "completed", reflection: "Most learners met the outcome; reteach the final example to the support group." });
+    expect(completed.status).toBe(200);
+    const archived = await patchAs(fixture, fixture.ownerId, { id: fixture.id, status: "archived" });
+    expect(archived.status).toBe(200);
+    const row = await withTenant(fixture.schoolId, (tx) => tx.$queryRaw<Array<{ status: string; reflection: string | null; completedAt: Date | null; archivedAt: Date | null }>>`SELECT "status","reflection","completedAt","archivedAt" FROM "LessonPlan" WHERE "id"=${fixture.id}`);
+    expect(row[0].status).toBe("archived");
+    expect(row[0].reflection).toContain("Most learners met the outcome");
+    expect(row[0].completedAt).toBeInstanceOf(Date);
+    expect(row[0].archivedAt).toBeInstanceOf(Date);
   });
 
   it("edits and publishes a homework draft without permitting later content mutation", async () => {
