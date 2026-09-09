@@ -98,6 +98,7 @@ const schoolGroups: Group[] = [
     { icon: Table2, label: "Gradebook", href: "/school/gradebook", primary: true },
     { icon: GraduationCap, label: "Exams & Assessments", href: "/school/exams" },
     { icon: FileText, label: "Report Cards", href: "/school/report-cards" },
+    { icon: BookOpen, label: "Library & Resources", href: "/school/library" },
     { icon: Settings2, label: "Academic Setup", href: "/school/academics/setup" },
     { icon: CalendarDays, label: "Terms & Calendar", href: "/school/terms" },
   ] },
@@ -170,6 +171,7 @@ const guardianGroups: Group[] = [
     { icon: UsersRound, label: "My Children", href: "/guardian/children", primary: true },
     { icon: CircleCheckBig, label: "Attendance", href: "/guardian/attendance" },
     { icon: GraduationCap, label: "Academics", href: "/guardian/academics" },
+    { icon: BookOpen, label: "Library & Resources", href: "/guardian/library" },
     { icon: WalletCards, label: "Fees & Receipts", href: "/guardian/fees" },
     { icon: Mail, label: "Messages", href: "/guardian/messages" },
     { icon: Gamepad2, label: "Learning Arcade", href: "/guardian/arcade" },
@@ -255,7 +257,15 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         { label: "Home", href: "/dashboard", icon: LayoutDashboard },
         { label: "Attendance", href: "/school/attendance", icon: CircleCheckBig },
         { label: "Gradebook", href: "/school/gradebook", icon: Table2 },
-        { label: "Fees", href: "/school/fees", icon: Wallet },
+        { label: "Messages", href: "/school/communications/messages", icon: Mail },
+      ];
+    }
+    if (universe === "guardian") {
+      return [
+        { label: "Home", href: "/guardian", icon: LayoutDashboard },
+        { label: "Children", href: "/guardian/children", icon: UsersRound },
+        { label: "Academics", href: "/guardian/academics", icon: GraduationCap },
+        { label: "Messages", href: "/guardian/messages", icon: Mail },
       ];
     }
     if (universe === "teacher") {
@@ -263,176 +273,27 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         { label: "Home", href: "/teacher", icon: LayoutDashboard },
         { label: "Attendance", href: "/teacher/attendance", icon: CircleCheckBig },
         { label: "Gradebook", href: "/teacher/gradebook", icon: Table2 },
-        { label: "Homework", href: "/teacher/homework", icon: ClipboardPenLine },
+        { label: "Messages", href: "/teacher/messages", icon: Mail },
       ];
     }
-    if (universe === "guardian") {
-      return [
-        { label: "Home", href: "/guardian", icon: LayoutDashboard },
-        { label: "Children", href: "/guardian/children", icon: UsersRound },
-        { label: "Attendance", href: "/guardian/attendance", icon: CircleCheckBig },
-        { label: "Fees", href: "/guardian/fees", icon: WalletCards },
-      ];
-    }
-    return [
-      { label: "Overview", href: "/platform", icon: LayoutDashboard },
-      { label: "Schools", href: "/platform/schools", icon: School },
-      { label: "Health", href: "/platform/health", icon: Activity },
-      { label: "Billing", href: "/platform/billing", icon: WalletCards },
-    ];
-  }, [universe]);
+    return visiblePlatformItems.slice(0,4).map((item)=>({label:item.label,href:item.href,icon:item.icon}));
+  }, [universe, visiblePlatformItems]);
 
-  const accountSettingsHref = universe === "platform" ? "/account/settings" : universe === "guardian" ? "/guardian/settings" : universe === "teacher" ? "/teacher/settings" : "/account/security";
-  const accountSettingsLabel = universe === "school" ? "Account security" : "My settings";
-
-  return (
-    <div className={`app-shell app-shell-${universe} ${compact ? "is-compact" : ""} ${mobileDrawerOpen ? "is-drawer-open" : ""}`}>
-      {mobileDrawerOpen && (
-        <div className="app-mobile-backdrop" onClick={() => setMobileDrawerOpen(false)} aria-hidden="true" />
-      )}
-
-      <aside className={`app-sidebar ${mobileDrawerOpen ? "is-open-mobile" : ""}`}>
-        <div className="app-sidebar-top-bar">
-          <Link href="/" className="app-brand" onClick={() => setMobileDrawerOpen(false)}>
-            <span className="app-brand-mark">S</span>
-            <span className="app-brand-copy">
-              <strong>SukuuNova</strong>
-              <small>{universe === "platform" ? "Platform Control" : isGuardian ? "Guardian Portal" : isTeacher ? "Teacher Workspace" : "School Workspace"}</small>
-            </span>
-          </Link>
-          <button type="button" className="app-drawer-close" onClick={() => setMobileDrawerOpen(false)} aria-label="Close menu">
-            <X size={20} aria-hidden="true" />
-          </button>
-        </div>
-
-        <div className="app-school-chip">
-          <span className="app-chip-avatar">{avatar}</span>
-          <span>
-            <b>{universe === "platform" ? "SukuuNova Network" : schoolName}</b>
-            <small>{universe === "platform" ? "Operator workspace" : `${schoolCode}${schoolCode ? " · " : ""}School account`}</small>
-          </span>
-        </div>
-
-        <SidebarNav groups={normalize(groups)} active={active} storageScope={preferenceScope} />
-
-        <div className="app-sidebar-bottom">
-          <div className="app-help">
-            <Link href={universe === "platform" ? utilityHref : isGuardian ? "/guardian/messages" : "/school/help"}>
-              <CircleHelp size={16} aria-hidden="true" />
-              <span>Help & Support</span>
-            </Link>
-          </div>
-          <div className="app-user-mini">
-            <span className="app-user-avatar">{avatar}</span>
-            <span>
-              <b>{userName}</b>
-              <small>{role}</small>
-            </span>
-          </div>
-          <div className="app-account-actions">
-            <Link href={accountSettingsHref} className="app-account-link">
-              <Settings size={15} aria-hidden="true" />
-              <span>{accountSettingsLabel}</span>
-            </Link>
-            <LogoutButton universe={universe === "platform" ? "platform" : universe === "guardian" ? "guardian" : "school"} />
-          </div>
-          <button type="button" className="app-collapse-button" onClick={toggleCompact} aria-label={compact ? "Expand sidebar" : "Collapse sidebar"}>
-            {compact ? <Settings2 size={15} aria-hidden="true" /> : <span>Collapse sidebar</span>}
-          </button>
-        </div>
-      </aside>
-
-      <main className="app-main">
-        <header className="app-topbar">
-          <div className="app-topbar-left">
-            <button
-              type="button"
-              className="app-mobile-menu-btn"
-              onClick={() => setMobileDrawerOpen(true)}
-              aria-label="Open navigation menu"
-            >
-              <Menu size={22} aria-hidden="true" />
-            </button>
-            <div className="app-topbar-title">
-              <div className="app-breadcrumb">
-                <span>SukuuNova</span>
-                <span className="app-breadcrumb-sep">/</span>
-                <span className="app-breadcrumb-current">{universe === "platform" ? "Platform Control" : schoolName}</span>
-              </div>
-              <h1>{title}</h1>
-              <p>{subtitle}</p>
-            </div>
-          </div>
-
-          <div className="app-top-actions">
-            <button
-              type="button"
-              className="app-search"
-              onClick={() => setPaletteOpen(true)}
-              aria-label="Open command palette"
-            >
-              <Search size={16} aria-hidden="true" />
-              <span className="app-search-text">{universe === "platform" ? "Search schools, logs…" : "Search anything..."}</span>
-              <kbd className="app-search-kbd">⌘K</kbd>
-            </button>
-
-            <ThemeSwitcher />
-
-            <Link className="app-icon-button" href={utilityHref} aria-label={utilityLabel} title={utilityLabel}>
-              <BellRing size={18} aria-hidden="true" />
-              <i className="app-bell-dot" />
-            </Link>
-          </div>
-        </header>
-
-        <div className="app-content">
-          <PageHeader title={title} description={subtitle} />
-          <div className="sn-page-body">{children}</div>
-        </div>
-      </main>
-
-      <nav className="app-bottom-nav" aria-label="Mobile quick navigation">
-        {bottomNavItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = active === item.label;
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`app-bottom-nav-item ${isActive ? "is-active" : ""}`}
-            >
-              <Icon size={20} aria-hidden="true" />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-        <button
-          type="button"
-          className="app-bottom-nav-item"
-          onClick={() => setMobileDrawerOpen(true)}
-          aria-label="More navigation options"
-        >
-          <Menu size={20} aria-hidden="true" />
-          <span>More</span>
-        </button>
-      </nav>
-
-      <CommandPalette
-        items={paletteItems}
-        open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
-        liveSearchEndpoint={universe === "school" ? "/api/search" : undefined}
-      />
-
-      <SpeedDialActions
-        universe={universe}
-        onOpenShortcuts={() => setShortcutsOpen(true)}
-      />
-
-      <KeyboardShortcutsModal
-        open={shortcutsOpen}
-        onClose={() => setShortcutsOpen(false)}
-      />
-    </div>
-  );
+  return <div className={`app-shell ${compact ? "sidebar-compact" : ""}`}>
+    <aside className={`app-sidebar ${mobileDrawerOpen ? "mobile-open" : ""}`}>
+      <div className="app-sidebar-brand"><div className="app-sidebar-brandmark"><School size={20}/></div><div><strong>SukuuNova</strong><span>{schoolName}</span></div><button className="app-sidebar-close" onClick={()=>setMobileDrawerOpen(false)} aria-label="Close navigation"><X size={18}/></button></div>
+      <SidebarNav groups={normalize(groups)} active={active} compact={compact} onNavigate={()=>setMobileDrawerOpen(false)} />
+      <div className="app-sidebar-bottom"><ThemeSwitcher compact={compact}/><button type="button" className="app-sidebar-utility" onClick={()=>setShortcutsOpen(true)}><CircleHelp size={17}/>{!compact&&<span>Keyboard shortcuts</span>}</button><LogoutButton compact={compact} universe={universe}/></div>
+    </aside>
+    {mobileDrawerOpen&&<button aria-label="Close navigation overlay" className="app-sidebar-backdrop" onClick={()=>setMobileDrawerOpen(false)}/>} 
+    <main className="app-main">
+      <div className="app-topbar"><div className="app-topbar-left"><button className="app-mobile-menu" onClick={()=>setMobileDrawerOpen(true)} aria-label="Open navigation"><Menu size={19}/></button><button className="app-compact-toggle" onClick={toggleCompact} aria-label="Toggle compact sidebar">{compact?"›":"‹"}</button><button className="app-command-trigger" onClick={()=>setPaletteOpen(true)}><Search size={15}/><span>Search or jump to…</span><kbd>Ctrl K</kbd></button></div><div className="app-topbar-actions"><Link href={utilityHref} className="app-topbar-icon" aria-label={utilityLabel}><BellRing size={17}/></Link><button className="app-avatar" type="button" onClick={()=>setPaletteOpen(true)} title={userName}>{avatar}</button></div></div>
+      <PageHeader title={title} subtitle={subtitle}/>
+      <div className="app-page-content">{children}</div>
+    </main>
+    <nav className="app-mobile-bottom-nav" aria-label="Mobile quick navigation">{bottomNavItems.map((item)=><Link key={item.href} href={item.href} className={active===item.label?"active":""}><item.icon size={18}/><span>{item.label}</span></Link>)}</nav>
+    <SpeedDialActions universe={universe}/>
+    <CommandPalette open={paletteOpen} onClose={()=>setPaletteOpen(false)} items={paletteItems}/>
+    <KeyboardShortcutsModal open={shortcutsOpen} onClose={()=>setShortcutsOpen(false)}/>
+  </div>;
 }
