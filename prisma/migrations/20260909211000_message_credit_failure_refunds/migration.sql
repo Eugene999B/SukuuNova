@@ -79,3 +79,21 @@ BEGIN
   RETURN refund_units;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION sukuunova_refund_failed_message_credit_trigger()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."status"='failed' AND OLD."status" IS DISTINCT FROM 'failed' AND NEW."channel" IN ('sms','whatsapp') THEN
+    PERFORM sukuunova_refund_failed_message_credit(NEW."schoolId",NEW."id");
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS sukuunova_message_failure_credit_refund ON "Message";
+CREATE TRIGGER sukuunova_message_failure_credit_refund
+AFTER UPDATE OF "status" ON "Message"
+FOR EACH ROW
+EXECUTE FUNCTION sukuunova_refund_failed_message_credit_trigger();
