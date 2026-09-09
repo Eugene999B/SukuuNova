@@ -1,27 +1,85 @@
-import Link from "next/link";
-import { ArrowRight, CircleAlert, FileText, ReceiptText, WalletCards } from "lucide-react";
+import { RoleIntelligenceHome, type IntelligenceInsight } from "@/components/RoleIntelligenceHome";
 
-type FinanceStats = { invoices: number; payments: number; pendingFeeAdjustments: number };
+type FinanceStats = {
+  invoices: number;
+  payments: number;
+  pendingFeeAdjustments: number;
+  feeItems: number;
+  students: number;
+};
+
 type Props = { name: string; school: string; code: string; role: string; stats: FinanceStats };
 
 export function FinanceDashboard({ name, school, code, role, stats }: Props) {
   const firstName = name.trim().split(/\s+/)[0] || name;
-  return <div className="finance-command-center">
-    <section className="finance-hero"><div><span className="finance-eyebrow">Finance workspace</span><h1>Good morning, {firstName}.</h1><p>Start with the invoices and payment work that needs your attention today.</p></div><div className="finance-identity"><strong>{school}</strong><span>{code} · {role}</span></div></section>
-    <section className="finance-work-grid">
-      <Link href="/school/fees/invoices?status=unpaid" className="finance-work-card"><span className="finance-work-icon"><ReceiptText size={18} aria-hidden="true" /></span><div><span>Unpaid invoices</span><strong>{stats.invoices}</strong><p>Open invoice records and follow up on balances.</p></div><ArrowRight size={17} aria-hidden="true" /></Link>
-      <Link href="/school/fees/payments" className="finance-work-card"><span className="finance-work-icon"><WalletCards size={18} aria-hidden="true" /></span><div><span>Payment records</span><strong>{stats.payments}</strong><p>Review collections and receipts.</p></div><ArrowRight size={17} aria-hidden="true" /></Link>
-      <Link href="/school/fees/overview" className="finance-work-card"><span className="finance-work-icon"><CircleAlert size={18} aria-hidden="true" /></span><div><span>Adjustments to review</span><strong>{stats.pendingFeeAdjustments}</strong><p>Fee adjustments waiting for approval.</p></div><ArrowRight size={17} aria-hidden="true" /></Link>
-    </section>
-    <section className="finance-lower-grid"><article className="finance-panel"><div className="finance-panel-head"><div><span className="finance-eyebrow">Today</span><h2>Useful shortcuts</h2></div></div><div className="finance-shortcuts">
-      <Link href="/school/fees/payments"><strong>Record payment</strong><span>Post a collection against an invoice.</span><ArrowRight size={15} aria-hidden="true" /></Link>
-      <Link href="/school/fees/invoices"><strong>Find invoice</strong><span>Search invoices by learner or term.</span><ArrowRight size={15} aria-hidden="true" /></Link>
-      <Link href="/school/fees/reports"><strong>Finance reports</strong><span>Review collections and balances.</span><ArrowRight size={15} aria-hidden="true" /></Link>
-      <Link href="/school/fees/payroll"><strong>Payroll</strong><span>Open payroll when you have access.</span><ArrowRight size={15} aria-hidden="true" /></Link>
-    </div></article><article className="finance-panel"><div className="finance-panel-head"><div><span className="finance-eyebrow">Record overview</span><h2>Finance at a glance</h2></div></div><div className="finance-metrics">
-      <div><span>Invoice records</span><strong>{stats.invoices}</strong></div><div><span>Payment records</span><strong>{stats.payments}</strong></div><div><span>Adjustments pending</span><strong>{stats.pendingFeeAdjustments}</strong></div>
-    </div><Link className="finance-all-link" href="/school/fees"><FileText size={14} aria-hidden="true" /> Open Finance <ArrowRight size={14} aria-hidden="true" /></Link></article></section>
-  </div>;
+  const insights: IntelligenceInsight[] = [];
+
+  if (stats.pendingFeeAdjustments > 0) {
+    insights.push({
+      title: "Fee adjustments are waiting for approval",
+      detail: `${stats.pendingFeeAdjustments} adjustment${stats.pendingFeeAdjustments === 1 ? "" : "s"} still need review before the fee ledger is fully settled.`,
+      href: "/school/fees/overview",
+      actionLabel: "Review",
+      severity: "warning",
+    });
+  }
+  if (stats.feeItems === 0) {
+    insights.push({
+      title: "The school has no fee structure yet",
+      detail: "Create fee items before issuing reliable learner invoices for the current term.",
+      href: "/school/fees",
+      actionLabel: "Set up fees",
+      severity: "critical",
+    });
+  }
+  if (stats.invoices > 0 && stats.payments === 0) {
+    insights.push({
+      title: "Invoices exist but no payments have been recorded",
+      detail: "Open collections and confirm whether receipts still need to be posted or reconciled.",
+      href: "/school/fees/payments",
+      actionLabel: "Open payments",
+      severity: "warning",
+    });
+  }
+  if (stats.payments > 0) {
+    insights.push({
+      title: "Collection activity is flowing through the system",
+      detail: `${stats.payments} payment record${stats.payments === 1 ? " is" : "s are"} available for receipts, reconciliation and reporting.`,
+      href: "/school/fees/payments",
+      actionLabel: "Review",
+      severity: "positive",
+    });
+  }
+
+  return <RoleIntelligenceHome
+    eyebrow={`Finance intelligence · ${role}`}
+    title={`Good morning, ${firstName}. Know what the money workflow needs next.`}
+    description="This home is focused on collections, fee setup, approvals and finance exceptions instead of general school administration."
+    identity={`${school} · ${code}`}
+    primaryAction={{ label: "Record payment", href: "/school/fees/payments" }}
+    secondaryAction={{ label: "Finance reports", href: "/school/fees/reports" }}
+    metrics={[
+      { label: "Invoice records", value: stats.invoices, detail: "Invoices currently in the school ledger.", href: "/school/fees/invoices" },
+      { label: "Payment records", value: stats.payments, detail: "Collections and receipts captured in SukuuNova.", href: "/school/fees/payments", tone: stats.payments > 0 ? "good" : "warn" },
+      { label: "Adjustments pending", value: stats.pendingFeeAdjustments, detail: "Exceptions still waiting for approval.", href: "/school/fees/overview", tone: stats.pendingFeeAdjustments > 0 ? "warn" : "good" },
+      { label: "Fee items", value: stats.feeItems, detail: `${stats.students} learner${stats.students === 1 ? "" : "s"} can be billed from the configured structure.`, href: "/school/fees", tone: stats.feeItems > 0 ? "good" : "critical" },
+    ]}
+    insights={insights}
+    focusTitle="Finance focus"
+    focusDescription="A compact view of the records that drive collections and reconciliation."
+    focus={[
+      { label: "Collections", detail: "Review posted payments and generate receipts.", value: `${stats.payments}`, href: "/school/fees/payments" },
+      { label: "Billing", detail: "Open learner invoices and outstanding balances.", value: `${stats.invoices}`, href: "/school/fees/invoices" },
+      { label: "Approval queue", detail: "Resolve fee changes that still need a second review.", value: `${stats.pendingFeeAdjustments}`, href: "/school/fees/overview" },
+      { label: "Fee structure", detail: "Keep school charges and billing items current.", value: `${stats.feeItems}`, href: "/school/fees" },
+    ]}
+    actions={[
+      { label: "Record payment", detail: "Post a collection against an invoice.", href: "/school/fees/payments" },
+      { label: "Find invoice", detail: "Search learner and term invoices.", href: "/school/fees/invoices" },
+      { label: "Finance reports", detail: "Review collections, balances and trends.", href: "/school/fees/reports" },
+      { label: "Payroll", detail: "Open payroll when your role permits it.", href: "/school/fees/payroll" },
+    ]}
+  />;
 }
 
-export const financeDashboardStyles = `.finance-command-center{display:grid;gap:18px;max-width:1180px;margin:0 auto;padding:4px 0 36px}.finance-hero,.finance-panel{border:1px solid var(--color-border);background:var(--color-surface);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm)}.finance-hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;padding:28px}.finance-eyebrow{display:block;color:var(--color-brand);font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.12em}.finance-hero h1{margin:7px 0;color:var(--color-text-primary);font-size:30px;letter-spacing:-.04em}.finance-hero p{margin:0;color:var(--color-text-secondary);font-size:12px}.finance-identity{text-align:right}.finance-identity strong,.finance-identity span{display:block}.finance-identity strong{color:var(--color-text-primary);font-size:12px}.finance-identity span{margin-top:4px;color:var(--color-text-muted);font-size:10px}.finance-work-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.finance-work-card{display:flex;align-items:flex-start;gap:12px;padding:18px;border:1px solid var(--color-border);border-radius:var(--radius-lg);background:var(--color-surface);color:var(--color-text-primary);text-decoration:none;box-shadow:var(--shadow-sm)}.finance-work-card:hover{border-color:var(--color-brand);background:var(--color-surface-soft);transform:translateY(-1px)}.finance-work-card>div{min-width:0;flex:1}.finance-work-icon{width:38px;height:38px;flex:none;display:grid;place-items:center;border-radius:10px;background:var(--color-brand-soft);color:var(--color-brand)}.finance-work-card div>span{display:block;color:var(--color-text-secondary);font-size:10px;font-weight:750}.finance-work-card strong{display:block;margin:5px 0;font-size:26px;letter-spacing:-.04em}.finance-work-card p{margin:0;color:var(--color-text-muted);font-size:9px;line-height:1.5}.finance-work-card>svg{margin-top:5px;color:var(--color-brand)}.finance-lower-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:18px}.finance-panel{padding:22px}.finance-panel h2{margin:5px 0 0;color:var(--color-text-primary);font-size:18px;letter-spacing:-.025em}.finance-shortcuts{display:grid;gap:4px;margin-top:16px}.finance-shortcuts a{display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid var(--color-border);color:var(--color-text-primary);text-decoration:none}.finance-shortcuts strong{display:block;font-size:10px}.finance-shortcuts span{display:block;margin-top:3px;color:var(--color-text-muted);font-size:8px}.finance-shortcuts svg{color:var(--color-brand)}.finance-metrics{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-top:16px;border:1px solid var(--color-border);border-radius:10px;overflow:hidden}.finance-metrics div{padding:15px;background:var(--color-surface-soft)}.finance-metrics span{display:block;color:var(--color-text-muted);font-size:8px}.finance-metrics strong{display:block;margin-top:5px;color:var(--color-text-primary);font-size:22px}.finance-all-link{display:inline-flex;align-items:center;gap:6px;margin-top:15px;color:var(--color-brand);font-size:10px;font-weight:800;text-decoration:none}@media(max-width:820px){.finance-work-grid,.finance-lower-grid{grid-template-columns:1fr}.finance-hero{display:block}.finance-identity{text-align:left;margin-top:14px}}@media(max-width:520px){.finance-hero{padding:20px}.finance-hero h1{font-size:25px}.finance-panel{padding:18px}}`;
+export const financeDashboardStyles = "";
