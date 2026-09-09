@@ -14,11 +14,28 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("submit"), studentId: z.string().min(1), workId: z.string().min(1), answers: z.array(answerSchema).max(200).optional() }),
 ]);
 
+export function guardianAcademicContextStudentId(request: Request) {
+  const url = new URL(request.url);
+  const explicit = url.searchParams.get("studentId")?.trim();
+  if (explicit) return explicit;
+  const referer = request.headers.get("referer");
+  if (!referer) return undefined;
+  try {
+    const page = new URL(referer);
+    if (page.origin !== url.origin || page.pathname.replace(/\/$/, "") !== "/guardian/academic") return undefined;
+    return page.searchParams.get("studentId")?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const session = await requireGuardianSession();
     const url = new URL(request.url);
-    const studentId = url.searchParams.get("studentId") || undefined;
+    // The referer fallback is only an initial UI-context hint. getGuardianAcademicOverview still verifies
+    // that the requested learner is linked to this guardian before returning any learner data.
+    const studentId = guardianAcademicContextStudentId(request);
     const subjectId = url.searchParams.get("subjectId") ?? undefined;
     return await withTenant(session.schoolId, async (tx) => NextResponse.json(await getGuardianAcademicOverview(tx, { schoolId: session.schoolId, guardianId: session.guardianId, studentId, subjectId }), { headers: { "Cache-Control": "no-store" } }));
   } catch (error) { return routeError(error); }
