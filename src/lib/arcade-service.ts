@@ -42,6 +42,11 @@ function isInteractionQuestion(question: StoredArcadeQuestion): question is Arca
 function isResponseQuestion(question: StoredArcadeQuestion): question is ArcadeResponseQuestion {
   return "kind" in question && (question.kind === "path" || question.kind === "build" || question.kind === "typed");
 }
+function gradeStoredQuestion(question: StoredArcadeQuestion, answer: string) {
+  if (isInteractionQuestion(question)) return correctArcadeInteractionAnswer(question, answer);
+  if (isResponseQuestion(question)) return correctArcadeResponseAnswer(question, answer);
+  return question.answer === answer;
+}
 async function requireCurrentGuardian(tx: TenantDb, context: Context) {
   const guardian = await tx.guardian.findFirst({ where: { id: context.guardianId, schoolId: context.schoolId, userId: context.userId }, select: { id: true } });
   if (!guardian) throw new ForbiddenError("This guardian account is no longer linked.");
@@ -66,18 +71,19 @@ async function roundRow(tx: TenantDb, schoolId: string, roundId: string) {
 function publicRound(round: RoundRow | ArcadeRound) {
   const complete = round.status === "completed";
   const questions = round.questions as unknown as StoredArcadeQuestion[];
+  const answers = round.answers as string[];
   const meta = round as ArcadeRound & Partial<RoundMeta>;
   return {
     id: round.id, studentId: round.studentId, game: round.game, difficulty: round.difficulty, status: round.status,
-    answers: round.answers as string[], correct: complete ? round.correct : null, xp: round.xp, stars: round.stars,
+    answers, correct: complete ? round.correct : null, xp: round.xp, stars: round.stars,
     ageBand: meta.ageBand ?? null, standardBand: meta.standardBand ?? null, engine: meta.engine ?? "choice_quiz",
     roundLength: meta.roundLength ?? questions.length, score: complete ? (meta.score ?? 0) : null, challengeMode: meta.challengeMode ?? false,
-    questions: questions.map((item) => ({
+    questions: questions.map((item, index) => ({
       id: item.id,
       kind: "kind" in item ? item.kind : "choice",
       prompt: item.prompt,
       options: item.options,
-      ...(complete ? { answer: item.answer, explanation: item.explanation } : {}),
+      ...(complete ? { answer: item.answer, explanation: item.explanation, correct: gradeStoredQuestion(item, answers[index] ?? "") } : {}),
     })),
   };
 }
@@ -200,11 +206,7 @@ export async function saveArcadeRound(tx: TenantDb, context: Context, input: { r
     await tx.$executeRaw`UPDATE "ArcadeRound" SET "answers"=${JSON.stringify(input.answers)}::jsonb WHERE "id"=${round.id} AND "schoolId"=${context.schoolId} AND "status"='in_progress'`;
     return publicRound((await roundRow(tx, context.schoolId, round.id))!);
   }
-  const correct = questions.filter((item, index) => {
-    if (isInteractionQuestion(item)) return correctArcadeInteractionAnswer(item, input.answers[index]);
-    if (isResponseQuestion(item)) return correctArcadeResponseAnswer(item, input.answers[index]);
-    return item.answer === input.answers[index];
-  }).length;
+  const correct = questions.filter((item, index) => gradeStoredQuestion(item, input.answers[index] ?? "")).length;
   const accuracy = questions.length ? correct / questions.length : 0;
   const xp = correct * 10;
   const stars = accuracy === 1 ? 3 : accuracy >= 0.6 ? 2 : accuracy >= 0.2 ? 1 : 0;
