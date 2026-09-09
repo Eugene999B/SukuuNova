@@ -45,7 +45,7 @@ export async function libraryOverview(tx: TenantDb, schoolId: string, userId: st
     tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT * FROM "P3LibraryBook" WHERE "schoolId"=$1 ORDER BY "title"`,schoolId),
     tx.$queryRawUnsafe<Record<string, unknown>[]>(`SELECT l.*,b."title" AS "bookTitle",s."name" AS "studentName", CASE WHEN l."status"='borrowed' AND l."dueAt"<CURRENT_TIMESTAMP THEN 'overdue' ELSE l."status" END AS "displayStatus" FROM "P3LibraryLoan" l JOIN "P3LibraryBook" b ON b."id"=l."bookId" AND b."schoolId"=l."schoolId" JOIN "Student" s ON s."id"=l."studentId" AND s."schoolId"=l."schoolId" WHERE l."schoolId"=$1 AND ($3::boolean OR l."studentId"=ANY($2::text[])) ORDER BY l."borrowedAt" DESC LIMIT 300`,schoolId,students.map(student=>student.id),canManage)
   ]);
-  return { books: books.map(book=>({...book,fileUrl:safeResourceUrl(book.fileUrl),coverUrl:safeResourceUrl(book.coverUrl)})), loans, students: students.filter(student=>student.status==="active"), canManage, canBorrow:canManage||canBorrow };
+  return { books: books.map((book): Record<string, unknown> =>({...book,fileUrl:safeResourceUrl(book.fileUrl),coverUrl:safeResourceUrl(book.coverUrl)})), loans, students: students.filter(student=>student.status==="active"), canManage, canBorrow:canManage||canBorrow };
 }
 export async function libraryAction(tx: TenantDb, schoolId: string, userId: string, body: Record<string, unknown>) {
   const action = text(body.action,"action",80);

@@ -67,7 +67,7 @@ describe("connected library circulation", () => {
     const loan = await withTenant(f.schoolId,tx=>mutatePhase3(tx,f.schoolId,f.ownerId,"library",{action:"borrow",bookId:f.bookId,studentId:f.studentId,dueAt})) as {id:string};
     const overview = await withTenant(f.schoolId,tx=>libraryOverview(tx,f.schoolId,f.ownerId));
     expect(overview.loans[0].id).toBe(loan.id);
-    expect(new Date(String(overview.loans[0].dueAt)).toISOString()).toBe(dueAt);
+    expect((overview.loans[0].dueAt as Date).toISOString()).toBe(dueAt);
     await expect(withTenant(f.schoolId,tx=>libraryAction(tx,f.schoolId,f.ownerId,{action:"updateBook",bookId:f.bookId,fileUrl:"javascript:alert(1)"}))).rejects.toMatchObject({code:"INVALID_RESOURCE_URL"});
     await expect(withTenant(f.schoolId,tx=>libraryAction(tx,f.schoolId,f.ownerId,{action:"updateBook",bookId:"missing",title:"Missing"}))).rejects.toMatchObject({status:404});
   });
