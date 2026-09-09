@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookCopy, BookMarked, BookOpen, BookmarkPlus, Download, LibraryBig, LockKeyhole, Search, ShieldCheck, Sparkles, UsersRound } from "lucide-react";
 
-type Row = Record<string, unknown>;
+type Row = Record<string, unknown> & { dueAt?: string | null };
 type Props = { schoolName: string };
 const endpoint = "/api/school/operations/library";
 const text = (value: unknown, fallback = "—") => typeof value === "string" && value.trim() ? value : fallback;
