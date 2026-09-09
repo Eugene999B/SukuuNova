@@ -10,7 +10,7 @@ export type NavGroup = { label: string; items: NavItem[] };
 
 export function SidebarNav({ groups, active, storageScope = "default" }: { groups: NavGroup[]; active: string; storageScope?: string }) {
   const pathname = usePathname();
-  const storageKey = `sukuunova-sidebar-groups:${storageScope}`;
+  const storageKey = `sukuunova-sidebar-groups:v2:${storageScope}`;
   const activeLabel = useMemo(() => {
     const matches = groups
       .flatMap((group) => group.items.map((item) => ({ ...item, group: group.label })))
