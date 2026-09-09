@@ -1,9 +1,12 @@
 import { db, withTenant } from "@/lib/db";
 import { processMessageBatchOnce } from "@/lib/message-outbox";
 import { dispatchQueuedTransportAlerts, reconcileTransportAlertDeliveries } from "./transport-alert-dispatcher";
+import { refreshRunningTrackerCertifications } from "./tracker-certification-service";
 
 export type TransportWorkerSummary = {
   schoolsExamined: number;
+  trackerCertificationsExamined: number;
+  trackerCertificationsPassed: number;
   transportAlertsDispatched: number;
   transportAlertsSkipped: number;
   messageJobsQueued: number;
@@ -14,6 +17,7 @@ export type TransportWorkerSummary = {
 
 export async function processTransportWorkerCycle(options: {
   schoolId?: string;
+  certificationLimitPerSchool?: number;
   alertLimitPerSchool?: number;
   messageBatchSize?: number;
 } = {}): Promise<TransportWorkerSummary> {
@@ -23,6 +27,8 @@ export async function processTransportWorkerCycle(options: {
   });
   const summary: TransportWorkerSummary = {
     schoolsExamined: directories.length,
+    trackerCertificationsExamined: 0,
+    trackerCertificationsPassed: 0,
     transportAlertsDispatched: 0,
     transportAlertsSkipped: 0,
     messageJobsQueued: 0,
@@ -32,6 +38,14 @@ export async function processTransportWorkerCycle(options: {
   };
 
   for (const directory of directories) {
+    const certification = await withTenant(directory.schoolId, (tx) => refreshRunningTrackerCertifications(
+      tx,
+      directory.schoolId,
+      options.certificationLimitPerSchool ?? 50,
+    ));
+    summary.trackerCertificationsExamined += certification.examined;
+    summary.trackerCertificationsPassed += certification.passed;
+
     const dispatch = await withTenant(directory.schoolId, (tx) => dispatchQueuedTransportAlerts(
       tx,
       directory.schoolId,
