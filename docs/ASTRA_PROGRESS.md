@@ -7,7 +7,10 @@
 - Guardian dashboard entry, child switcher, keyboard/touch UI, parent progress, saved rounds and readable result history.
 - ArcadeRound Prisma model, tenant helper registration, same-school foreign keys, partial unique active-round index and FORCE RLS migration.
 - Eight regression tests cover concurrent/retried rounds, isolation, RLS, invalid answers, progression, content and timezone dates.
-- Full GitHub verification pending. Arcade is a first implementation, not all nine suggested games; school-specific content packs and browser/mobile certification remain outstanding.
+- Verified code SHA: 671239a0c62c96d053583e70c5a663d3d491cab8.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34315592472 — 200 tests in 43 files; Prisma, restricted-role migrations, typecheck, lint and production build passed.
+- Twelve files committed together directly on main. This documentation-only checkpoint skips redundant CI.
+- Arcade is a first implementation, not all nine suggested games; school-specific content packs and production browser/mobile certification remain outstanding.
 
 ## Efficient mark-entry batch
 - Spreadsheet paste supports mark/status columns, A/E shortcuts, blank-row preservation and all-or-nothing validation.
@@ -74,10 +77,11 @@
 - Foreign keys are NOT VALID for legacy rows, intentionally. New writes are checked; audit existing relationships before validating historical data.
 - 20260909121000_guardian_contact_schema_alignment: align optional Guardian.phone with Prisma.
 - 20260909130000_academic_work_assessment_link: nullable, unique assessment link with same-school foreign key; legacy rows linked only when unambiguous.
+- 20260909150000_learning_arcade: ArcadeRound persistence, same-school relationships, one active round per child/game, constraints and FORCE RLS.
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: efficient teacher academic mark entry; connected batch complete and verified in GitHub Actions. Next product subsystem: Learning Arcade, reusing guardian linked-child authorization.
+- Current subsystem: Learning Arcade initial connected release, verified in GitHub Actions. Next: student learning/resource workflows and remaining Owner-reviewed role upgrades.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
@@ -88,7 +92,7 @@
 1. Audit legacy academic tenant relationships and add a safe validation migration.
 2. Provide an explicit Owner-reviewed upgrade workflow for existing role defaults.
 3. Connect teacher assignment navigation and legacy homework to the existing submission engine; expand question types and attempt policies.
-4. Complete guardian multi-child learning progress and Learning Arcade.
+4. Expand Arcade games/content and student learning/resource workflows; verify production guardian/mobile journeys.
 5. Continue canonical grading/history verification, remaining operational modules and whole-system journeys.
 
 The full mission is NOT complete. No production browser/mobile journey was certified in this pass. Finance, library, transport, feeding, communications, arcade and remaining requested expansions still require incremental investigation.
