@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+import type { SignatureVectorEvidence } from "@/lib/signature-vector";
 import {
   signatureDocumentBindingSha256,
   verifySignatureDocumentBindingSha256,
@@ -43,10 +44,10 @@ function safeSignature(dataUrl?: string, sha256?: string) {
   };
 }
 
-function safeVector(evidence: unknown, sha256?: string) {
+function safeVector(evidence?: SignatureVectorEvidence, sha256?: string) {
   if (!evidence) return { sha256: undefined, integrity: undefined as SignatureSnapshot["signatureVectorIntegrity"] };
   if (!sha256) return { sha256: undefined, integrity: "legacy" as const };
-  const verified = verifySignatureVectorSha256(evidence as never, sha256);
+  const verified = verifySignatureVectorSha256(evidence, sha256);
   return {
     sha256: verified ? sha256.toLowerCase() : undefined,
     integrity: verified ? "verified" as const : "failed" as const,
