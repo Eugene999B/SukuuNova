@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createId } from "@paralleldrive/cuid2";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture, rawDb } from "./helpers";
-import { startGuardianSubmission, saveGuardianSubmission, submitGuardianSubmission, reviewTeacherSubmission } from "../src/lib/teacher-academic-submission-service";
+import { getGuardianAcademicOverview, startGuardianSubmission, saveGuardianSubmission, submitGuardianSubmission, reviewTeacherSubmission } from "../src/lib/teacher-academic-submission-service";
 
 async function setup() {
   const fixture = await createTenantFixture();
@@ -20,7 +20,7 @@ async function setup() {
     const assessment = await tx.assessment.create({ data: { schoolId: fixture.schoolId, termId: term.id, classId: classroom.id, subjectId: subject.id, name: "Guardian work", type: "homework", weight: 100, maxScore: 10 } });
     await tx.$executeRaw`INSERT INTO "TeacherAcademicWork" ("id","schoolId","termId","classId","subjectId","teacherId","kind","title","workDate","weekNumber","maxScore","markingMode","answerGuide","dueAt","status") VALUES (${workId},${fixture.schoolId},${term.id},${classroom.id},${subject.id},${fixture.ownerId},'homework','Guardian work','2026-09-01',1,10,'auto','["teacher-private-guide"]'::jsonb,${new Date(Date.now()+86400000)},'published')`;
     await tx.$executeRaw`INSERT INTO "TeacherAcademicQuestion" ("id","schoolId","workId","position","type","prompt","points","options","acceptedAnswers") VALUES (${questionId},${fixture.schoolId},${workId},1,'multiple_choice','Choose the answer',10,'["3","4"]'::jsonb,'["4"]'::jsonb)`;
-    return { termId: term.id, studentId: student.id, siblingId: sibling.id, unrelatedId: unrelated.id, guardianId: guardian.id, assessmentId: assessment.id };
+    return { subjectId: subject.id, termId: term.id, studentId: student.id, siblingId: sibling.id, unrelatedId: unrelated.id, guardianId: guardian.id, assessmentId: assessment.id };
   });
   return { ...fixture, ...ids, workId, questionId };
 }
@@ -35,6 +35,11 @@ describe("guardian assignment security", () => {
     expect(result.questions[0]).not.toHaveProperty("acceptedAnswers");
     expect(result.work).not.toHaveProperty("answerGuide");
     expect(JSON.stringify(result)).not.toContain("teacher-private-guide");
+    for (const subjectId of [undefined, fixture.subjectId]) {
+      const overview = await withTenant(fixture.schoolId, (tx) => getGuardianAcademicOverview(tx, { ...context(fixture), subjectId }));
+      expect(overview.works.map((work) => work.id)).toEqual([fixture.workId]);
+      expect(overview.students).toHaveLength(2);
+    }
   });
 
   it("makes concurrent starts idempotent and keeps sibling attempts separate", async () => {
