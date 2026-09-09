@@ -89,7 +89,7 @@ export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId:
   ]);
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
   const timestamp = new Date();
-  if (input.type === "in" && input.method !== "manual") assertAutomatedAttendanceWindow(policy, "staff", timestamp);
+  if (input.method !== "manual") assertAutomatedAttendanceWindow(policy, "staff", timestamp, input.type);
   const day = attendanceDate(timestamp, policy.timezone);
   if (await isAttendanceBlocked(tx, input.schoolId, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   const periodSetting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
@@ -140,8 +140,8 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   const timestamp = input.timestamp ?? new Date();
   if (Number.isNaN(timestamp.getTime())) throw new AppError("Invalid attendance timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
   if (timestamp.getTime() > Date.now() + 5 * 60 * 1000) throw new AppError("Attendance timestamp cannot be more than 5 minutes in the future.", 400, "ATTENDANCE_TIMESTAMP_IN_FUTURE");
-  if (input.type === "in" && input.method !== "manual") {
-    assertAutomatedAttendanceWindow(policy, input.target.staffId ? "staff" : "student", timestamp);
+  if (input.method !== "manual") {
+    assertAutomatedAttendanceWindow(policy, input.target.staffId ? "staff" : "student", timestamp, input.type);
   }
   const day = attendanceDate(timestamp, policy.timezone);
   if (await isAttendanceBlocked(tx, input.schoolId, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");

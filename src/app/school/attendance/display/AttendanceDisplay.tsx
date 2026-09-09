@@ -5,6 +5,19 @@ import encodeQR from "qr";
 
 type DisplayLocation = { latitude: number; longitude: number; accuracyM?: number };
 type ChallengeMeta = { refreshAfterSeconds: number; requireFace: boolean; presenceMode: "network_or_location" | "location" | "network" };
+type ApiBody = { message?: string; error?: string; result?: { token?: string; expiresAt?: string; refreshAfterSeconds?: number; requireFace?: boolean; presenceMode?: ChallengeMeta["presenceMode"] }; refreshAfterSeconds?: number };
+
+async function responseBody(response: Response): Promise<ApiBody> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try { return await response.json() as ApiBody; } catch { return {}; }
+  }
+  const text = await response.text();
+  if (response.status === 401 || response.status === 403 || /sign[ -]?in|login/i.test(text)) {
+    return { message: "This attendance-display session is no longer authorised. Sign in again with the designated display account, then reopen the station." };
+  }
+  return { message: response.ok ? undefined : "The attendance service returned an unexpected response. The station will retry automatically." };
+}
 
 export default function AttendanceDisplay({ schoolName }: { schoolName: string }) {
   const [token, setToken] = useState("");
@@ -26,7 +39,6 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setError("");
     try {
       const response = await fetch("/api/school/attendance/staff-qr", {
         method: "POST",
@@ -34,19 +46,23 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
         cache: "no-store",
         body: JSON.stringify({ action: "challenge", displayLocation: location ?? null })
       });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.message ?? body.error ?? "Unable to refresh the school check-in code.");
-      setToken(body.result.token);
-      setExpiresAt(new Date(body.result.expiresAt));
+      const body = await responseBody(response);
+      if (!response.ok) throw new Error(body.message ?? body.error ?? "Unable to refresh the school attendance code.");
+      const nextToken = body.result?.token;
+      const nextExpiry = body.result?.expiresAt;
+      if (!nextToken || !nextExpiry) throw new Error("The attendance service did not return a complete QR challenge. The station will retry automatically.");
+      setToken(nextToken);
+      setExpiresAt(new Date(nextExpiry));
       setMeta({
-        refreshAfterSeconds: Number(body.result.refreshAfterSeconds ?? body.refreshAfterSeconds ?? 60),
-        requireFace: Boolean(body.result.requireFace),
-        presenceMode: body.result.presenceMode ?? "network_or_location",
+        refreshAfterSeconds: Number(body.result?.refreshAfterSeconds ?? body.refreshAfterSeconds ?? 60),
+        requireFace: Boolean(body.result?.requireFace),
+        presenceMode: body.result?.presenceMode ?? "network_or_location",
       });
+      setError("");
     } catch (err) {
-      setToken("");
-      setExpiresAt(null);
-      setError(err instanceof Error ? err.message : "Unable to refresh the school check-in code.");
+      // Keep the current challenge on screen until its own signed expiry. A transient
+      // refresh failure should not blank a still-valid school station.
+      setError(err instanceof Error ? err.message : "Unable to refresh the school attendance code. The station will retry automatically.");
     } finally {
       setLoading(false);
     }
@@ -54,17 +70,17 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    if (!token) return;
-    const timer = window.setTimeout(() => void refresh(), Math.max(30, meta.refreshAfterSeconds) * 1000);
-    return () => window.clearTimeout(timer);
-  }, [meta.refreshAfterSeconds, refresh, token]);
+    const timer = window.setInterval(() => void refresh(), Math.max(30, meta.refreshAfterSeconds) * 1000);
+    return () => window.clearInterval(timer);
+  }, [meta.refreshAfterSeconds, refresh]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const svg = useMemo(() => token ? encodeQR(token, "svg", { ecc: "high", border: 4, scale: 8 }) : "", [token]);
+  const stillValid = Boolean(token && expiresAt && expiresAt.getTime() > clock);
+  const svg = useMemo(() => stillValid ? encodeQR(token, "svg", { ecc: "high", border: 4, scale: 8 }) : "", [stillValid, token]);
   const remaining = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - clock) / 1000)) : 0;
   const presenceLabel = meta.presenceMode === "network" ? "school network" : meta.presenceMode === "location" ? "school location" : "school network or location";
 
@@ -72,24 +88,24 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
     <div className="attendance-live-frame">
       <header className="attendance-live-header">
         <div>
-          <span>SukuuNova Attendance · Live Staff Check-In</span>
+          <span>SukuuNova Attendance · Live Staff Station</span>
           <h1>{schoolName}</h1>
-          <p>Scan the live code with your signed-in staff account. The code rotates automatically and cannot be reused by the same account.</p>
+          <p>Use this same live code for staff arrival and departure. Each signed-in staff account chooses the valid action before scanning.</p>
         </div>
         <div className="attendance-live-clock"><small>Code changes in</small><strong>{remaining}s</strong><span>{meta.refreshAfterSeconds}s rotation</span></div>
       </header>
 
       <section className="attendance-live-stage">
         <div className="attendance-live-qr">
-          {svg ? <div aria-label="Live school staff check-in QR code" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="attendance-live-empty">{loading ? "Generating secure check-in code…" : "QR code unavailable"}</div>}
+          {svg ? <div aria-label="Live school staff attendance QR code" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="attendance-live-empty">{loading ? "Generating secure attendance code…" : "Waiting for a fresh QR code…"}</div>}
         </div>
         <aside className="attendance-live-guide">
           <span className="attendance-live-kicker">Verification path</span>
           <ol>
-            <li><b>1</b><div><strong>Open School Check-In</strong><small>Use your own signed-in staff account.</small></div></li>
-            <li><b>2</b><div><strong>Scan this live code</strong><small>A screenshot quickly becomes useless because the code rotates.</small></div></li>
+            <li><b>1</b><div><strong>Choose Arriving or Leaving</strong><small>The scanner recommends the next valid action from today's attendance state.</small></div></li>
+            <li><b>2</b><div><strong>Scan this live code</strong><small>A screenshot quickly becomes useless because the signed challenge rotates.</small></div></li>
             <li><b>3</b><div><strong>Prove school presence</strong><small>Verification uses {presenceLabel}.</small></div></li>
-            <li><b>4</b><div><strong>{meta.requireFace ? "Verify your face" : "Attendance is recorded"}</strong><small>{meta.requireFace ? "The face must match the same staff account that scanned the code." : "The server applies the school's late and closing-time rules."}</small></div></li>
+            <li><b>4</b><div><strong>{meta.requireFace ? "Verify your face" : "Attendance is recorded"}</strong><small>{meta.requireFace ? "The face must match the same staff account that scanned the code." : "The server applies the school's configured arrival or departure window."}</small></div></li>
           </ol>
           <div className="attendance-live-status">
             <strong>{location ? "Display location ready" : "Display location unavailable"}</strong>

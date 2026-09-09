@@ -6,7 +6,14 @@ import "./staff-checkin.css";
 
 type Location = { latitude: number; longitude: number; accuracyM?: number } | null;
 type Phase = "loading" | "qr" | "face" | "submitting" | "done" | "error";
+type Direction = "in" | "out";
 type QrPolicy = { enabled: boolean; requireFace: boolean; rotationSeconds: number; presenceMode: string };
+type AttendanceState = {
+  state: "not_checked_in" | "checked_in" | "checked_out";
+  suggestedType: Direction;
+  canScan: boolean;
+  lastTimestamp?: string | null;
+};
 
 async function currentLocation(): Promise<Location> {
   if (!navigator.geolocation) return null;
@@ -25,12 +32,14 @@ export default function StaffQrScanner() {
   const faceStreamRef = useRef<MediaStream | null>(null);
   const busyRef = useRef(false);
   const [policy, setPolicy] = useState<QrPolicy | null>(null);
+  const [attendanceState, setAttendanceState] = useState<AttendanceState | null>(null);
+  const [direction, setDirection] = useState<Direction>("in");
   const [phase, setPhase] = useState<Phase>("loading");
   const [message, setMessage] = useState("Loading your school's attendance rules…");
   const [token, setToken] = useState("");
   const [location, setLocation] = useState<Location>(null);
   const [idempotencyKey, setIdempotencyKey] = useState("");
-  const [result, setResult] = useState<{ late?: boolean; verification?: string; time?: string } | null>(null);
+  const [result, setResult] = useState<{ type?: Direction; late?: boolean; verification?: string; time?: string } | null>(null);
 
   const stopAllCameras = useCallback(() => {
     qrStopRef.current?.();
@@ -41,22 +50,35 @@ export default function StaffQrScanner() {
 
   useEffect(() => () => stopAllCameras(), [stopAllCameras]);
 
+  const loadState = useCallback(async () => {
+    const response = await fetch("/api/school/attendance/staff-qr", { cache: "no-store" });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.message ?? body.error ?? "Could not load attendance rules.");
+    if (!body.qr?.enabled) throw new Error("Rotating QR attendance is currently disabled by your school.");
+    const current = body.currentAttendance as AttendanceState;
+    setPolicy(body.qr);
+    setAttendanceState(current);
+    setDirection(current.suggestedType ?? "in");
+    return current;
+  }, []);
+
   useEffect(() => {
     void (async () => {
       try {
-        const response = await fetch("/api/school/attendance/staff-qr", { cache: "no-store" });
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.message ?? body.error ?? "Could not load attendance rules.");
-        if (!body.qr?.enabled) throw new Error("Rotating QR attendance is currently disabled by your school.");
-        setPolicy(body.qr);
+        const current = await loadState();
+        if (!current.canScan) {
+          setPhase("done");
+          setMessage("Your attendance is already closed for today. A supervisor can correct it if another entry is genuinely required.");
+          return;
+        }
         setPhase("qr");
-        setMessage("Point your rear camera at the live school QR code.");
+        setMessage(current.suggestedType === "out" ? "You are currently checked in. Scan the live code to record that you are leaving school." : "Point your rear camera at the live school QR code to record your arrival.");
       } catch (error) {
         setPhase("error");
         setMessage(error instanceof Error ? error.message : "Could not load attendance rules.");
       }
     })();
-  }, []);
+  }, [loadState]);
 
   useEffect(() => {
     if (phase !== "qr" || !policy) return;
@@ -94,7 +116,7 @@ export default function StaffQrScanner() {
             setIdempotencyKey(requestKey);
             if (activePolicy.requireFace) {
               setPhase("face");
-              setMessage("Now verify your face. This proves the signed-in account holder is physically checking in.");
+              setMessage(`Now verify your face. This proves the signed-in account holder is physically ${direction === "out" ? "leaving" : "arriving at"} school.`);
             } else {
               setPhase("submitting");
               await submit(decoded, scanLocation, requestKey);
@@ -115,7 +137,7 @@ export default function StaffQrScanner() {
       qrStopRef.current?.();
       qrStopRef.current = null;
     };
-  }, [phase, policy]);
+  }, [direction, phase, policy]);
 
   useEffect(() => {
     if (phase !== "face") return;
@@ -150,24 +172,26 @@ export default function StaffQrScanner() {
       const response = await fetch("/api/school/attendance/staff-qr", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "scan", token: scanToken, location: scanLocation, idempotencyKey: requestKey, ...(faceImage ? { faceImage } : {}) })
+        body: JSON.stringify({ action: "scan", token: scanToken, type: direction, location: scanLocation, idempotencyKey: requestKey, ...(faceImage ? { faceImage } : {}) })
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.message ?? body.error ?? "Unable to complete school check-in.");
+      if (!response.ok) throw new Error(body.message ?? body.error ?? `Unable to complete school ${direction === "out" ? "check-out" : "check-in"}.`);
       stopAllCameras();
-      setResult({ late: Boolean(body.result?.event?.isLate), verification: body.result?.verification, time: body.result?.event?.timestamp });
+      const eventType = body.result?.event?.type as Direction | undefined;
+      setResult({ type: eventType, late: Boolean(body.result?.event?.isLate), verification: body.result?.verification, time: body.result?.event?.timestamp });
       setPhase("done");
-      setMessage(body.result?.event?.isLate ? "Checked in successfully. The school attendance rule marked this arrival late." : "Checked in successfully and marked on time.");
+      setMessage(eventType === "out" ? "Checked out successfully. Your departure is now recorded." : body.result?.event?.isLate ? "Checked in successfully. The school attendance rule marked this arrival late." : "Checked in successfully and marked on time.");
+      await loadState();
     } catch (error) {
       setPhase("error");
-      setMessage(error instanceof Error ? error.message : "Unable to complete school check-in.");
+      setMessage(error instanceof Error ? error.message : `Unable to complete school ${direction === "out" ? "check-out" : "check-in"}.`);
     }
   }
 
   async function captureFace() {
     if (!videoRef.current || !token || !idempotencyKey) return;
     setPhase("submitting");
-    setMessage("Matching your face to your signed-in staff account…");
+    setMessage(`Matching your face to your signed-in staff account before ${direction === "out" ? "check-out" : "check-in"}…`);
     const video = videoRef.current;
     const width = video.videoWidth || 720;
     const height = video.videoHeight || 720;
@@ -189,40 +213,48 @@ export default function StaffQrScanner() {
     await submit(token, location, idempotencyKey, faceImage);
   }
 
-  function restart() {
+  function restart(nextDirection = direction) {
     stopAllCameras();
     busyRef.current = false;
+    setDirection(nextDirection);
     setToken("");
     setLocation(null);
     setIdempotencyKey("");
     setResult(null);
-    setMessage("Point your rear camera at the current live school QR code.");
+    setMessage(`Point your rear camera at the current live school QR code to record ${nextDirection === "out" ? "departure" : "arrival"}.`);
     setPhase("qr");
   }
+
+  const directionLocked = phase === "face" || phase === "submitting";
 
   return <main className="staff-checkin-shell">
     <section className="staff-checkin-card">
       <header className="staff-checkin-header">
-        <div><span>Staff attendance</span><h1>School Check-In</h1><p>Secure attendance in a few seconds. Your school decides the time window and verification level.</p></div>
+        <div><span>Staff attendance</span><h1>School Attendance Scan</h1><p>Use the same rotating school QR for arrival and departure. The system recommends the next valid action from your attendance state.</p></div>
         <div className={`staff-checkin-state ${phase}`}><small>Status</small><strong>{phase === "done" ? "Recorded" : phase === "face" ? "Face proof" : phase === "qr" ? "Scan QR" : phase === "submitting" ? "Verifying" : phase === "error" ? "Needs attention" : "Starting"}</strong></div>
       </header>
 
-      <div className="staff-checkin-progress" aria-label="Check-in progress">
+      <div className="staff-checkin-direction" aria-label="Attendance direction">
+        <button type="button" className={direction === "in" ? "active" : ""} disabled={directionLocked || attendanceState?.state === "checked_out"} onClick={() => restart("in")}><strong>Arriving</strong><small>Check in to school</small></button>
+        <button type="button" className={direction === "out" ? "active" : ""} disabled={directionLocked || attendanceState?.state !== "checked_in"} onClick={() => restart("out")}><strong>Leaving</strong><small>Check out from school</small></button>
+      </div>
+
+      <div className="staff-checkin-progress" aria-label="Attendance scan progress">
         <span className={phase !== "loading" ? "active" : ""}>1 · Live QR</span>
         <span className={phase === "face" || phase === "submitting" || phase === "done" ? "active" : ""}>2 · {policy?.requireFace ? "Face proof" : "School presence"}</span>
-        <span className={phase === "done" ? "active" : ""}>3 · Attendance</span>
+        <span className={phase === "done" ? "active" : ""}>3 · {direction === "out" ? "Departure" : "Arrival"}</span>
       </div>
 
       {phase !== "done" ? <div className="staff-checkin-camera"><video ref={videoRef} autoPlay muted playsInline aria-label={phase === "face" ? "Front camera for staff face verification" : "Camera for scanning school QR code"} /><div className="staff-checkin-camera-label">{phase === "face" ? "Look directly at the camera" : phase === "qr" ? "Place the live QR inside the frame" : "Please wait"}</div></div> : null}
 
-      <div className={`staff-checkin-message ${phase === "error" ? "error" : phase === "done" ? "success" : ""}`} role="status"><strong>{phase === "error" ? "Check-in could not finish" : phase === "done" ? "Attendance recorded" : "Secure check-in"}</strong><p>{message}</p></div>
+      <div className={`staff-checkin-message ${phase === "error" ? "error" : phase === "done" ? "success" : ""}`} role="status"><strong>{phase === "error" ? "Attendance scan could not finish" : phase === "done" ? "Attendance recorded" : direction === "out" ? "Secure check-out" : "Secure check-in"}</strong><p>{message}</p></div>
 
-      {phase === "face" ? <button className="staff-checkin-primary" type="button" onClick={() => void captureFace()}>Verify my face & check in</button> : null}
+      {phase === "face" ? <button className="staff-checkin-primary" type="button" onClick={() => void captureFace()}>Verify my face &amp; {direction === "out" ? "check out" : "check in"}</button> : null}
 
-      {phase === "done" && result ? <div className="staff-checkin-receipt"><div><span>Arrival</span><strong>{result.late ? "Late" : "On time"}</strong></div><div><span>Verification</span><strong>{result.verification ?? "Secure QR"}</strong></div><div><span>Recorded</span><strong>{result.time ? new Date(result.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Now"}</strong></div></div> : null}
+      {phase === "done" && result ? <div className="staff-checkin-receipt"><div><span>{result.type === "out" ? "Departure" : "Arrival"}</span><strong>{result.type === "out" ? "Checked out" : result.late ? "Late" : "On time"}</strong></div><div><span>Verification</span><strong>{result.verification ?? "Secure QR"}</strong></div><div><span>Recorded</span><strong>{result.time ? new Date(result.time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Now"}</strong></div></div> : null}
 
       <footer className="staff-checkin-actions">
-        {phase === "error" ? <button type="button" onClick={restart}>Scan a fresh code</button> : null}
+        {phase === "error" ? <button type="button" onClick={() => restart()}>Scan a fresh code</button> : null}
         <Link href="/teacher">Back to Teacher Portal</Link>
         {phase === "done" ? <Link className="primary" href="/school/attendance">Attendance overview</Link> : null}
       </footer>
