@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { BarChart3, CalendarDays, ClipboardList, FileText, LayoutGrid, Settings2, Table2 } from "lucide-react";
+import "./academic-workspace-nav.css";
 
 type Item = { key: string; label: string; href: string; icon: typeof LayoutGrid };
 
