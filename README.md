@@ -149,7 +149,7 @@ Important default roles include:
 - Parent
 - Student
 
-The school owner can assign custom roles and individual grants/denies.
+The school owner can assign custom roles and individual grants/denies. Default-role synchronization creates missing roles with baseline permissions and preserves existing role identities and permission sets, including intentional restrictions. A custom role that shares a system role's name is never automatically converted into that system role.
 
 **Frontend visibility is not authorization.** Sensitive actions must be checked on the server.
 

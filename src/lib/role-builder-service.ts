@@ -12,16 +12,24 @@ export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
     permissionIds.set(key, row.id);
   }
   for (const roleName of DEFAULT_ROLE_NAMES) {
-    const role = await tx.role.upsert({
+    // Existing roles are school policy, including deliberately removed rights.
+    // A matching custom name must never be promoted into system authority.
+    await tx.role.upsert({
       where: { schoolId_name: { schoolId, name: roleName } },
-      update: { isSystem: true, key: roleKeyForName(roleName) },
-      create: { schoolId, name: roleName, key: roleKeyForName(roleName), isSystem: true }
+      update: {},
+      create: {
+        schoolId,
+        name: roleName,
+        key: roleKeyForName(roleName),
+        isSystem: true,
+        rolePermissions: {
+          create: [...new Set(DEFAULT_ROLE_PERMISSIONS[roleName])].map((key) => ({
+            schoolId,
+            permissionId: permissionIds.get(key)!
+          }))
+        }
+      }
     });
-    for (const permissionKey of DEFAULT_ROLE_PERMISSIONS[roleName]) {
-      const permissionId = permissionIds.get(permissionKey);
-      if (!permissionId) continue;
-      await tx.rolePermission.upsert({ where: { roleId_permissionId: { roleId: role.id, permissionId } }, update: { schoolId }, create: { schoolId, roleId: role.id, permissionId } });
-    }
   }
 }
 
