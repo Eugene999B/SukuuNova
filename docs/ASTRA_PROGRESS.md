@@ -3,7 +3,9 @@
 ## Legacy ownership role protection
 - Custom-role editing/deletion now protects roles carrying effective Owner identity even when legacy metadata marks them as custom.
 - Protected ownership roles are excluded from custom-builder controls. Custom Owner-named roles with an explicit custom key remain editable without promotion.
-- Four regression cases cover canonical and legacy Owner keys plus ordinary custom-role behavior. GitHub verification pending. No migration.
+- Four regression cases cover canonical and legacy Owner keys plus ordinary custom-role behavior. Verified code SHA: 38995a86614b11b6e07683289427b2fb7b8b9b1b.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34324734812 — 247 tests in 47 files; Prisma/migrations, typecheck, lint and production build passed.
+- No migration. This documentation-only checkpoint skips redundant CI. The full mission and production browser verification remain outstanding.
 
 ## Recruitment retry completion
 - Successful application retries compare against the recorded answers, preserving receipts after question edits or vacancy closure.
