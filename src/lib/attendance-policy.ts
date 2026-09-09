@@ -53,7 +53,7 @@ const DEFAULT_POLICY: AttendancePolicy = {
   qr: {
     enabled: true,
     rotationSeconds: 60,
-    requireFace: false,
+    requireFace: true,
     presenceMode: "network_or_location",
   },
   devices: {
