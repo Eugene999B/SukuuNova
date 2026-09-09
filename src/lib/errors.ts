@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import { NextResponse } from "next/server";
 
 export class AppError extends Error {
@@ -36,6 +37,13 @@ export class RateLimitError extends AppError {
 }
 
 export function routeError(error: unknown): NextResponse {
+  if (error instanceof ZodError) {
+    return NextResponse.json(
+      { error: "VALIDATION_ERROR", message: error.issues.map((issue) => issue.message).join(" "),
+        issues: error.issues.map(({ path, message }) => ({ path, message })) },
+      { status: 400 }
+    );
+  }
   if (error instanceof AppError) {
     const response = NextResponse.json(
       { error: error.code, message: error.message },

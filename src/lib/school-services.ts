@@ -1,3 +1,4 @@
+import { lockSchoolAccess, requireOwnerContinuity } from "./owner-governance";
 import { getSchoolAuthorization, requireCanAssignRoles, requireCanGrantPermissions, roleKeyForName } from "./authorization";
 import { hash } from "bcryptjs";
 import type { Prisma } from "@prisma/client";
@@ -95,6 +96,7 @@ export async function setRolePermissions(input: {
   permissionKeys: string[];
 }) {
   return withTenant(input.schoolId, async (tx) => {
+    await lockSchoolAccess(tx, input.schoolId);
     await requirePermission(tx, input.actorId, "settings:manage_roles");
     const role = await tx.role.findUniqueOrThrow({ where: { id: input.roleId } });
     const access = await getSchoolAuthorization(tx, input.actorId);
@@ -143,8 +145,10 @@ export async function setUserRoles(input: {
   roleIds: string[];
 }) {
   return withTenant(input.schoolId, async (tx) => {
+    await lockSchoolAccess(tx, input.schoolId);
     await requirePermission(tx, input.actorId, "settings:manage_roles");
     await requireCanAssignRoles(tx, input.actorId, input.userId, input.roleIds);
+    await requireOwnerContinuity(tx, input.schoolId, input.userId, { roleIds: input.roleIds });
     const before = await tx.userRole.findMany({
       where: { userId: input.userId },
       select: { roleId: true }
@@ -188,6 +192,7 @@ export async function setUserPermissionOverride(input: {
   granted: boolean;
 }) {
   return withTenant(input.schoolId, async (tx) => {
+    await lockSchoolAccess(tx, input.schoolId);
     await requirePermission(tx, input.actorId, "settings:manage_roles");
     const access = await getSchoolAuthorization(tx, input.actorId);
     const target = await tx.user.findUniqueOrThrow({
