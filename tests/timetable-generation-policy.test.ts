@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const generateBalancedTimetable = vi.fn();
-const appendSchoolAudit = vi.fn().mockResolvedValue(undefined);
-const getAcademicEngineConfig = vi.fn();
+const mocks = vi.hoisted(() => ({
+  generateBalancedTimetable: vi.fn(),
+  appendSchoolAudit: vi.fn().mockResolvedValue(undefined),
+  getAcademicEngineConfig: vi.fn(),
+}));
 
-vi.mock("../src/lib/timetable-engine-v2", () => ({ generateBalancedTimetable }));
-vi.mock("../src/lib/audit", () => ({ appendSchoolAudit }));
-vi.mock("../src/lib/academic-engine", () => ({ getAcademicEngineConfig }));
+vi.mock("../src/lib/timetable-engine-v2", () => ({ generateBalancedTimetable: mocks.generateBalancedTimetable }));
+vi.mock("../src/lib/audit", () => ({ appendSchoolAudit: mocks.appendSchoolAudit }));
+vi.mock("../src/lib/academic-engine", () => ({ getAcademicEngineConfig: mocks.getAcademicEngineConfig }));
 
 import type { TenantDb } from "../src/lib/db";
 import { generateSchoolTimetable, readTimetableExtensions } from "../src/lib/timetable-generation-policy";
@@ -59,7 +61,8 @@ function plan(additions: Array<{ classId: string; subjectId: string; teacherId: 
 describe("timetable generation policy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getAcademicEngineConfig.mockResolvedValue({
+    mocks.appendSchoolAudit.mockResolvedValue(undefined);
+    mocks.getAcademicEngineConfig.mockResolvedValue({
       timetable: { days: [], periodMinutes: 40, breaks: [], periodsPerDay: 8, published: false },
       assessment: {},
       reportCard: {},
@@ -81,7 +84,7 @@ describe("timetable generation policy", () => {
   });
 
   it("rejects a generation preview that exceeds the configured subject lessons per day", async () => {
-    generateBalancedTimetable.mockResolvedValue(plan([
+    mocks.generateBalancedTimetable.mockResolvedValue(plan([
       { classId: "classA", subjectId: "math", teacherId: "teacherA", dayOfWeek: 1 },
       { classId: "classA", subjectId: "math", teacherId: "teacherA", dayOfWeek: 1 },
     ]));
@@ -97,7 +100,7 @@ describe("timetable generation policy", () => {
   it("publishes a successful generated timetable while preserving the selected print theme", async () => {
     const preview = plan([{ classId: "classA", subjectId: "math", teacherId: "teacherA", dayOfWeek: 1 }]);
     const applied = { ...preview, dryRun: false };
-    generateBalancedTimetable.mockResolvedValueOnce(preview).mockResolvedValueOnce(applied);
+    mocks.generateBalancedTimetable.mockResolvedValueOnce(preview).mockResolvedValueOnce(applied);
     const tx = fakeTx();
 
     const result = await generateSchoolTimetable(tx, {
@@ -117,7 +120,7 @@ describe("timetable generation policy", () => {
         }),
       }),
     }));
-    expect(appendSchoolAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+    expect(mocks.appendSchoolAudit).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       action: "timetable.published_after_generation",
     }));
   });
