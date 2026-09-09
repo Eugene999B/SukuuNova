@@ -15,9 +15,9 @@ type Student = {
 
 type SchoolClass = { id: string; name: string; level: string | null };
 
-export function StudentDirectory({ students, classes }: { students: Student[]; classes: SchoolClass[] }) {
+export function StudentDirectory({ students, classes, initialClassId = "all" }: { students: Student[]; classes: SchoolClass[]; initialClassId?: string }) {
   const [query, setQuery] = useState("");
-  const [classId, setClassId] = useState("all");
+  const [classId, setClassId] = useState(classes.some((item) => item.id === initialClassId) ? initialClassId : initialClassId === "unassigned" ? "unassigned" : "all");
   const [status, setStatus] = useState("active");
 
   const filtered = useMemo(() => {
