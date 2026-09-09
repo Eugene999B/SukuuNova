@@ -1,0 +1,132 @@
+/* SukuuNova UX simplification layer
+   Keeps pages task-first, spacious and usable on small screens without
+   changing domain logic. Loaded after the existing product styles. */
+
+/* AppShell already presents the page title and description in the topbar.
+   Do not repeat the same heading immediately inside the content canvas. */
+.app-content > .sn-page-header {
+  display: none;
+}
+
+.app-content {
+  padding-top: clamp(18px, 2.2vw, 28px) !important;
+}
+
+.sn-page-body {
+  width: 100%;
+  max-width: 1480px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.sn-page-body > :first-child,
+.sn-page-body > :first-child > :first-child {
+  margin-top: 0;
+}
+
+/* A calmer content rhythm across school, teacher, guardian and platform pages. */
+.sn-page-body :where(h1, h2, h3) {
+  text-wrap: balance;
+}
+
+.sn-page-body :where(p) {
+  text-wrap: pretty;
+}
+
+.sn-page-body :where(input, select, textarea, button, a):focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--sn-primary) 32%, transparent);
+  outline-offset: 2px;
+}
+
+/* Shared progressive-disclosure surface. Use for secondary information that
+   should not compete with the user's primary task. */
+.sn-progressive {
+  border: 1px solid var(--sn-line);
+  border-radius: 14px;
+  background: var(--sn-surface);
+  overflow: clip;
+}
+
+.sn-progressive > summary {
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--sn-ink);
+  font-weight: 750;
+}
+
+.sn-progressive > summary::-webkit-details-marker {
+  display: none;
+}
+
+.sn-progressive > summary::after {
+  content: "+";
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 26px;
+  border-radius: 999px;
+  background: var(--sn-surface-2);
+  color: var(--sn-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.sn-progressive[open] > summary::after {
+  content: "−";
+}
+
+.sn-progressive-body {
+  padding: 0 16px 16px;
+  color: var(--sn-ink-2);
+}
+
+/* Dense desktop data still needs to remain reachable on phones. */
+.sn-page-body :where(.table-wrap, .table-scroll, .data-table-wrap, .gradebook-table-wrap) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 900px) {
+  .app-breadcrumb {
+    display: none !important;
+  }
+
+  .app-topbar-title p {
+    display: none;
+  }
+
+  .app-content {
+    padding-top: 16px !important;
+  }
+
+  .sn-page-body {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-content {
+    padding-inline: 14px !important;
+  }
+
+  .sn-page-body :where(.button, button, [role="button"]) {
+    min-height: 42px;
+  }
+
+  .sn-progressive > summary {
+    padding-inline: 14px;
+  }
+
+  .sn-progressive-body {
+    padding-inline: 14px;
+  }
+}
