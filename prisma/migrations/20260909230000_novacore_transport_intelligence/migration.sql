@@ -173,20 +173,21 @@ CREATE UNIQUE INDEX "P3TrackerEvent_id_schoolId_key" ON "P3TrackerEvent"("id","s
 CREATE INDEX "P3TrackerEvent_schoolId_trackerDeviceId_receivedAt_idx" ON "P3TrackerEvent"("schoolId","trackerDeviceId","receivedAt");
 CREATE INDEX "P3VehicleLocation_schoolId_tripId_reportedAt_idx" ON "P3VehicleLocation"("schoolId","tripId","reportedAt");
 
-ALTER TABLE "P3TrackerDevice" ADD CONSTRAINT "P3TrackerDevice_vehicle_fkey" FOREIGN KEY ("vehicleId","schoolId") REFERENCES "P3Vehicle"("id","schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
+-- Composite tenant foreign keys use RESTRICT rather than SET NULL so deleting a related row can never null the non-null schoolId.
+ALTER TABLE "P3TrackerDevice" ADD CONSTRAINT "P3TrackerDevice_vehicle_fkey" FOREIGN KEY ("vehicleId","schoolId") REFERENCES "P3Vehicle"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "P3RouteShapePoint" ADD CONSTRAINT "P3RouteShapePoint_route_fkey" FOREIGN KEY ("routeId","schoolId") REFERENCES "P3BusRoute"("id","schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "P3TransportTrip" ADD CONSTRAINT "P3TransportTrip_route_fkey" FOREIGN KEY ("routeId","schoolId") REFERENCES "P3BusRoute"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "P3TransportTrip" ADD CONSTRAINT "P3TransportTrip_vehicle_fkey" FOREIGN KEY ("vehicleId","schoolId") REFERENCES "P3Vehicle"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "P3TransportTrip" ADD CONSTRAINT "P3TransportTrip_tracker_fkey" FOREIGN KEY ("trackerDeviceId","schoolId") REFERENCES "P3TrackerDevice"("id","schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "P3TransportTrip" ADD CONSTRAINT "P3TransportTrip_tracker_fkey" FOREIGN KEY ("trackerDeviceId","schoolId") REFERENCES "P3TrackerDevice"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "P3StudentTransportAssignment" ADD CONSTRAINT "P3StudentTransportAssignment_route_fkey" FOREIGN KEY ("routeId","schoolId") REFERENCES "P3BusRoute"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "P3StudentTransportAssignment" ADD CONSTRAINT "P3StudentTransportAssignment_vehicle_fkey" FOREIGN KEY ("vehicleId","schoolId") REFERENCES "P3Vehicle"("id","schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "P3PickupPoint" ADD CONSTRAINT "P3PickupPoint_route_fkey" FOREIGN KEY ("routeId","schoolId") REFERENCES "P3BusRoute"("id","schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "P3StudentTransportAssignment" ADD CONSTRAINT "P3StudentTransportAssignment_vehicle_fkey" FOREIGN KEY ("vehicleId","schoolId") REFERENCES "P3Vehicle"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "P3PickupPoint" ADD CONSTRAINT "P3PickupPoint_route_fkey" FOREIGN KEY ("routeId","schoolId") REFERENCES "P3BusRoute"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "P3GeofenceState" ADD CONSTRAINT "P3GeofenceState_trip_fkey" FOREIGN KEY ("tripId","schoolId") REFERENCES "P3TransportTrip"("id","schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "P3GeofenceState" ADD CONSTRAINT "P3GeofenceState_pickup_fkey" FOREIGN KEY ("pickupPointId","schoolId") REFERENCES "P3PickupPoint"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "P3TransportAlert" ADD CONSTRAINT "P3TransportAlert_trip_fkey" FOREIGN KEY ("tripId","schoolId") REFERENCES "P3TransportTrip"("id","schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "P3TrackerEvent" ADD CONSTRAINT "P3TrackerEvent_tracker_fkey" FOREIGN KEY ("trackerDeviceId","schoolId") REFERENCES "P3TrackerDevice"("id","schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
-ALTER TABLE "P3VehicleLocation" ADD CONSTRAINT "P3VehicleLocation_tracker_fkey" FOREIGN KEY ("trackerDeviceId","schoolId") REFERENCES "P3TrackerDevice"("id","schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE "P3VehicleLocation" ADD CONSTRAINT "P3VehicleLocation_trip_fkey" FOREIGN KEY ("tripId","schoolId") REFERENCES "P3TransportTrip"("id","schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "P3VehicleLocation" ADD CONSTRAINT "P3VehicleLocation_tracker_fkey" FOREIGN KEY ("trackerDeviceId","schoolId") REFERENCES "P3TrackerDevice"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "P3VehicleLocation" ADD CONSTRAINT "P3VehicleLocation_trip_fkey" FOREIGN KEY ("tripId","schoolId") REFERENCES "P3TransportTrip"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 DO $$
 DECLARE r RECORD;
