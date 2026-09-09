@@ -19,7 +19,7 @@ export async function GET() {
       if (!overview.canManage) return { ...overview, classes: [], subjects: [] };
       const [classes, subjects] = await Promise.all([
         tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, select: { id: true, name: true, level: true } }),
-        tx.subject.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, select: { id: true, name: true, code: true } }),
+        tx.subject.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
       ]);
       return { ...overview, classes, subjects };
     });
