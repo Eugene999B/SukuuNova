@@ -143,7 +143,7 @@ DO $$ BEGIN
     ALTER TABLE "P3LibraryCopy" ADD CONSTRAINT "P3LibraryCopy_book_fkey" FOREIGN KEY ("bookId","schoolId") REFERENCES "P3LibraryBook"("id","schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='P3LibraryLoan_copy_fkey') THEN
-    ALTER TABLE "P3LibraryLoan" ADD CONSTRAINT "P3LibraryLoan_copy_fkey" FOREIGN KEY ("copyId","schoolId") REFERENCES "P3LibraryCopy"("id","schoolId") ON DELETE SET NULL ON UPDATE CASCADE;
+    ALTER TABLE "P3LibraryLoan" ADD CONSTRAINT "P3LibraryLoan_copy_fkey" FOREIGN KEY ("copyId","schoolId") REFERENCES "P3LibraryCopy"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='P3LibraryReadingProgress_book_fkey') THEN
     ALTER TABLE "P3LibraryReadingProgress" ADD CONSTRAINT "P3LibraryReadingProgress_book_fkey" FOREIGN KEY ("bookId","schoolId") REFERENCES "P3LibraryBook"("id","schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
