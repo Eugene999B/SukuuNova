@@ -1,20 +1,38 @@
+import { ShieldCheck, UserCog, UsersRound, Wrench } from "lucide-react";
 import DefaultRoleUpgradeReview from "@/components/DefaultRoleUpgradeReview";
+import { AppShell } from "@/components/AppShell";
+import { SettingsHero, SettingsRouteCard, SettingsSection } from "@/components/SettingsHub";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { previewDefaultRoleUpgrades } from "@/lib/default-role-upgrade-service";
-import "./roles-workspace.css";
-import Link from "next/link";
-import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
+import "@/components/settings-hub.css";
+import "./roles-workspace.css";
+
+const rolePurpose: Record<string, string> = {
+  Owner: "Ultimate school authority. Keep ownership separate from normal daily work.",
+  Administrator: "Broad school operations, account administration and system management.",
+  Principal: "School leadership, academic oversight and operational approvals.",
+  "Vice Principal": "Deputy leadership, monitoring and operational support.",
+  "Academic Coordinator": "Academic quality, readiness, reviews and curriculum coordination.",
+  "Department Head": "Department-level teaching quality, results and lesson-plan review.",
+  Accountant: "Finance, collections, billing, approvals and financial reporting.",
+  "HR Officer": "Staff administration, recruitment, attendance and payroll workflows.",
+  "Admissions Officer": "Admissions, enrolment and learner intake workflows.",
+  "Class Teacher": "Assigned-class attendance, classroom work and class-teacher reporting duties.",
+  "Subject Teacher": "Teaching, assessment and academic work for assigned classes and subjects.",
+  "Front Desk/Gate Security": "Visitors, attendance support, identity and authorised pickup workflows.",
+  "Transport Officer": "Transport operations and assigned learner transport workflows.",
+  Parent: "Relationship-scoped family access only.",
+  Student: "Learner-facing access only.",
+};
 
 export default async function RolesPage() {
   const session = await requireSchoolSession();
-
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "settings:manage_roles");
-
-    const [school, roles, permissions] = await Promise.all([
+    const [school, roles, permissions, access] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.role.findMany({
         orderBy: [{ isSystem: "desc" }, { name: "asc" }],
@@ -26,115 +44,99 @@ export default async function RolesPage() {
           _count: { select: { rolePermissions: true, userRoles: true } },
         },
       }),
-      tx.permission.findMany({ orderBy: { key: "asc" }, select: { id: true, key: true, description: true } }),
+      tx.permission.count(),
+      getSchoolAuthorization(tx, session.userId),
     ]);
-
-    const access = await getSchoolAuthorization(tx, session.userId);
     const upgradePreview = access.isOwner ? await previewDefaultRoleUpgrades(tx, { schoolId: session.schoolId, actorId: session.userId }) : null;
-    return { school, roles, permissions, upgradePreview };
+    return { school, roles, permissions, access, upgradePreview };
   });
 
   if (!data.school) return null;
+  const systemRoles = data.roles.filter((role) => role.isSystem);
+  const customRoles = data.roles.filter((role) => !role.isSystem);
+  const assignedUsers = data.roles.reduce((sum, role) => sum + role._count.userRoles, 0);
 
   return (
-    <AppShell
-      universe="school"
-      title="Roles & Permissions"
-      subtitle="Roles."
-      active="Roles & Permissions"
-      schoolName={data.school.name}
-      schoolCode={data.school.uniqueCode}
-      userName={session.name}
-    >
-      <div className="space-y-5">
-        <section className="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,.14)]">
-          <span className="text-[9px] font-black uppercase tracking-[.16em] text-emerald-300">Access governance</span>
-          <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-2xl font-black tracking-tight">Real role inventory</h2>
+    <AppShell universe="school" title="Roles & Permissions" subtitle="Understand school roles and govern access safely." active="Roles & Permissions" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+      <div className="settings-hub">
+        <SettingsHero
+          eyebrow="Access governance"
+          title="Start with a person's job. Fine-tune permissions only when needed."
+          description="Roles are reusable responsibility bundles such as Principal, Accountant or Subject Teacher. Individual grants and denials belong on the person's access profile, so you do not need to build a new role for every exception."
+          contextLabel="School access model"
+          contextValue={`${systemRoles.length} system roles · ${customRoles.length} custom roles`}
+          contextMeta={`${assignedUsers} role assignments · ${data.permissions} available permissions`}
+        />
+
+        <SettingsSection title="What are you trying to do?" description="Choose the shortest route instead of editing permission lists blindly.">
+          <div className="settings-route-grid">
+            <SettingsRouteCard href="/school/settings/access" icon={UsersRound} title="Change one person's access" description="Select an account, assign its normal role, then review inherited rights, direct grants, direct denials and effective access." action="Open People & Access" />
+            <SettingsRouteCard href="/school/settings/access" icon={UserCog} title="Create or activate an account" description="Create a non-staff login or activate an existing staff profile without duplicating the person." action="Manage accounts" />
+            <SettingsRouteCard href="/school/staff" icon={UsersRound} title="Create a teacher or staff profile" description="Teachers should begin in Staff & Teachers so their class and subject relationships stay connected to the same identity." action="Open staff directory" />
+            <SettingsRouteCard href="/school/settings" icon={Wrench} title="Back to Settings Home" description="Return to school-wide configuration, academic setup, reports, calendar and communication settings." action="Open Settings Home" />
+          </div>
+        </SettingsSection>
+
+        <section className="settings-focus-panel">
+          <header>
+            <span className="settings-hub-eyebrow">Role catalogue</span>
+            <h2>Default school jobs</h2>
+            <p>These are the reusable roles SukuuNova understands. Permission totals are shown for transparency, but the role's purpose should be the main decision.</p>
+          </header>
+          <div className="settings-focus-body">
+            <div className="role-governance-grid">
+              {systemRoles.map((role) => (
+                <article className="role-governance-card" key={role.id}>
+                  <div className="role-governance-card-head">
+                    <span className="role-governance-badge">System role</span>
+                    <span>{role._count.userRoles} {role._count.userRoles === 1 ? "account" : "accounts"}</span>
+                  </div>
+                  <h3>{role.name}</h3>
+                  <p>{rolePurpose[role.name] ?? "A standard SukuuNova responsibility bundle for this school."}</p>
+                  <small>{role._count.rolePermissions} inherited permissions</small>
+                </article>
+              ))}
             </div>
-            <Link href="/school/settings/access" className="rounded-xl bg-white px-4 py-2.5 text-[10px] font-black text-slate-950 hover:bg-slate-100">
-              Open Sub-accounts & Access
-            </Link>
           </div>
         </section>
 
-        <div className="grid gap-4 md:grid-cols-3">
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <span className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">Roles</span>
-            <strong className="mt-2 block text-2xl font-black text-slate-950">{data.roles.length}</strong>
-            <span className="mt-1 block text-[10px] text-slate-500">System and custom roles in this school.</span>
-          </article>
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <span className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">Permissions</span>
-            <strong className="mt-2 block text-2xl font-black text-slate-950">{data.permissions.length}</strong>
-            <span className="mt-1 block text-[10px] text-slate-500">Available permission definitions.</span>
-          </article>
-          <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <span className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">Assigned accounts</span>
-            <strong className="mt-2 block text-2xl font-black text-slate-950">{data.roles.reduce((sum, role) => sum + role._count.userRoles, 0)}</strong>
-            <span className="mt-1 block text-[10px] text-slate-500">Role assignments across school users.</span>
-          </article>
-        </div>
-
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <span className="text-[9px] font-black uppercase tracking-[.12em] text-emerald-700">Role catalogue</span>
-              <h3 className="mt-1 text-base font-black text-slate-950">Configured roles</h3>
-            </div>
-            <span className="text-[10px] text-slate-500">Permission totals are database-backed.</span>
-          </div>
-
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[680px] border-separate border-spacing-y-2 text-left">
-              <thead>
-                <tr className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">
-                  <th className="px-3 py-2">Role</th>
-                  <th className="px-3 py-2">Type</th>
-                  <th className="px-3 py-2">Permissions</th>
-                  <th className="px-3 py-2">Assigned users</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.roles.map((role) => (
-                  <tr key={role.id}>
-                    <td className="rounded-l-xl border-y border-l border-slate-200 bg-slate-50 px-3 py-3">
-                      <strong className="block text-xs font-black text-slate-900">{role.name}</strong>
-                      {role.key ? <span className="mt-1 block text-[9px] text-slate-500">{role.key}</span> : null}
-                    </td>
-                    <td className="border-y border-slate-200 bg-slate-50 px-3 py-3 text-[10px] font-bold text-slate-600">
-                      {role.isSystem ? "System" : "Custom"}
-                    </td>
-                    <td className="border-y border-slate-200 bg-slate-50 px-3 py-3 text-[10px] font-bold text-slate-700">
-                      {role._count.rolePermissions}
-                    </td>
-                    <td className="rounded-r-xl border-y border-r border-slate-200 bg-slate-50 px-3 py-3 text-[10px] font-bold text-slate-700">
-                      {role._count.userRoles}
-                    </td>
-                  </tr>
+        {customRoles.length > 0 ? (
+          <section className="settings-focus-panel">
+            <header>
+              <span className="settings-hub-eyebrow">School-defined roles</span>
+              <h2>Custom responsibility bundles</h2>
+              <p>Use custom roles for real recurring jobs that do not fit the defaults. One-off exceptions are better handled as direct grants or denials on the person's account.</p>
+            </header>
+            <div className="settings-focus-body">
+              <div className="role-governance-grid">
+                {customRoles.map((role) => (
+                  <article className="role-governance-card" key={role.id}>
+                    <div className="role-governance-card-head"><span className="role-governance-badge custom">Custom</span><span>{role._count.userRoles} {role._count.userRoles === 1 ? "account" : "accounts"}</span></div>
+                    <h3>{role.name}</h3>
+                    <p>School-defined role. Review its permission bundle before assigning it to more people.</p>
+                    <small>{role._count.rolePermissions} inherited permissions</small>
+                  </article>
                 ))}
-                {data.roles.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="rounded-xl border border-dashed border-slate-300 px-4 py-8 text-center text-xs text-slate-500">
-                      No roles are configured for this school.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
-        {data.upgradePreview && <DefaultRoleUpgradeReview initialPreview={data.upgradePreview} />}
+        {data.upgradePreview ? (
+          <section className="settings-focus-panel">
+            <header>
+              <span className="settings-hub-eyebrow">Owner review</span>
+              <h2>Keep default roles current without overwriting school decisions</h2>
+              <p>SukuuNova can identify newer default rights that are missing from older system roles. The Owner reviews and selects upgrades; custom roles and direct user overrides remain preserved.</p>
+            </header>
+            <div className="settings-focus-body"><DefaultRoleUpgradeReview initialPreview={data.upgradePreview} /></div>
+          </section>
+        ) : null}
 
-        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-          <h3 className="text-sm font-black text-emerald-950">How access is changed</h3>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Link href="/school/settings/access" className="rounded-xl bg-slate-950 px-4 py-2.5 text-[10px] font-black text-white hover:bg-slate-800">Manage users & access</Link>
-            <Link href="/school/staff" className="rounded-xl border border-emerald-300 bg-white px-4 py-2.5 text-[10px] font-black text-emerald-900 hover:bg-emerald-100">Open staff directory</Link>
-          </div>
-        </section>
+        <div className="settings-hub-note">
+          <strong><ShieldCheck size={14} aria-hidden="true" /> Effective access is what matters.</strong>
+          <p>A user's final authority is their role rights plus direct grants, minus direct denials. Use People & Access to see that effective result before saving sensitive changes.</p>
+        </div>
       </div>
     </AppShell>
   );
