@@ -23,6 +23,7 @@ export const attendanceControlSchema = z.object({
   student: z.object({
     verificationOpenTime: hhmm,
     verificationCloseTime: hhmm,
+    checkoutCloseTime: hhmm,
     manualRegisterCloseTime: hhmm
   }),
   qr: z.object({
@@ -57,6 +58,7 @@ export const DEFAULT_ATTENDANCE_CONTROL_CONFIG: AttendanceControlConfig = {
   student: {
     verificationOpenTime: "05:00",
     verificationCloseTime: "11:00",
+    checkoutCloseTime: "18:00",
     manualRegisterCloseTime: "18:00"
   },
   qr: {
@@ -186,8 +188,8 @@ export async function assertAttendanceVerificationWindow(
 
   const rules = input.target === "staff" ? config.staff : config.student;
   const open = minutesOf(rules.verificationOpenTime);
-  const close = input.target === "staff" && input.type === "out"
-    ? minutesOf(config.staff.checkoutCloseTime)
+  const close = input.type === "out"
+    ? minutesOf(input.target === "staff" ? config.staff.checkoutCloseTime : config.student.checkoutCloseTime)
     : minutesOf(rules.verificationCloseTime);
 
   if (clock.minutes < open) {
