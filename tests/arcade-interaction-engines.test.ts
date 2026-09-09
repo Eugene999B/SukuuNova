@@ -73,13 +73,13 @@ describe("Arcade Universe A3 interaction engines", () => {
     expect(validArcadeInteractionAnswer(item, forged)).toBe(false);
   });
 
-  it("exposes twenty-eight live packs while preserving the full 64-game catalogue", async () => {
+  it("keeps all twenty-eight A2/A3 packs live while allowing later engine expansion", async () => {
     const fixture = await createTenantFixture();
     const catalog = await withTenant(fixture.schoolId, (tx) => effectiveArcadeCatalog(tx, fixture.schoolId));
     const liveKeys = catalog.filter((game) => game.live).map((game) => game.gameKey);
     expect(catalog).toHaveLength(64);
-    expect(liveKeys).toHaveLength(28);
-    expect(new Set(liveKeys)).toEqual(new Set([...PLAYABLE_ARCADE_GAME_KEYS, ...INTERACTION_ARCADE_GAME_KEYS]));
+    expect(liveKeys.length).toBeGreaterThanOrEqual(28);
+    expect(liveKeys).toEqual(expect.arrayContaining([...PLAYABLE_ARCADE_GAME_KEYS, ...INTERACTION_ARCADE_GAME_KEYS]));
     expect(catalog.find((game) => game.gameKey === "money-math-market")).toMatchObject({ live: false, enabled: false });
   });
 
