@@ -67,6 +67,28 @@ export async function enrollFace(
   return { id: enrollment.id, studentId: enrollment.studentId, staffId: enrollment.staffId, enrolledAt: enrollment.enrolledAt };
 }
 
+export async function verifyExpectedStaffFace(
+  tx: TenantDb,
+  input: { schoolId: string; staffId: string; image: string },
+  provider: FaceProvider = awsFaceProvider,
+) {
+  const [settings, staff, enrollment] = await Promise.all([
+    tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { faceMatchThreshold: true } }),
+    tx.user.findFirst({ where: { id: input.staffId, schoolId: input.schoolId, status: "active" }, select: { id: true } }),
+    tx.faceEnrollment.findFirst({ where: { schoolId: input.schoolId, staffId: input.staffId }, select: { id: true } }),
+  ]);
+  if (!settings || !staff) throw new AppError("Active staff account not found.", 404, "STAFF_NOT_FOUND");
+  if (!enrollment) throw new AppError("Your face is not enrolled for attendance. Ask an authorised school administrator to complete face enrollment first.", 409, "STAFF_FACE_NOT_ENROLLED");
+
+  const match = await provider.searchFace({ collectionId: collectionId(input.schoolId), imageBytes: imageBytes(input.image) });
+  const expectedExternalId = `staff:${input.staffId}`;
+  const confidence = match.confidence ?? null;
+  if (match.externalId !== expectedExternalId || confidence === null || confidence < Number(settings.faceMatchThreshold)) {
+    throw new AppError("Face verification did not match the signed-in staff account. Try again in good lighting or use the authorised fallback workflow.", 403, "STAFF_FACE_MISMATCH");
+  }
+  return { verified: true as const, confidence };
+}
+
 export async function matchFaceAttendance(
   tx: TenantDb,
   input: { schoolId: string; actorId?: string; image: string; deviceId?: string; type: "in" | "out"; deviceAuthenticated?: boolean; periodId?: string; timestamp?: Date },
