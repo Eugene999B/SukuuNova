@@ -3,9 +3,18 @@ import { enqueueNotification, processMessageBatchOnce } from "../src/lib/message
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 
+async function createSmsFixture() {
+  const fixture = await createTenantFixture();
+  await withTenant(fixture.schoolId, (tx) => tx.$executeRawUnsafe(
+    `INSERT INTO "PlatformMessagingWallet" ("schoolId","smsBalance","whatsappBalance","status","updatedAt") VALUES ($1,1000,1000,'active',CURRENT_TIMESTAMP) ON CONFLICT ("schoolId") DO UPDATE SET "smsBalance"=1000,"whatsappBalance"=1000,"status"='active',"updatedAt"=CURRENT_TIMESTAMP`,
+    fixture.schoolId,
+  ));
+  return fixture;
+}
+
 describe("message outbox", () => {
   it("queues a notification without calling an external provider", async () => {
-    const fixture = await createTenantFixture();
+    const fixture = await createSmsFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       const rows = await enqueueNotification(tx, {
         schoolId: fixture.schoolId, recipientType: "user", recipientId: fixture.memberId,
@@ -19,7 +28,7 @@ describe("message outbox", () => {
   });
 
   it("delivers queued work in the worker and records the attempt", async () => {
-    const fixture = await createTenantFixture();
+    const fixture = await createSmsFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.message.create({ data: {
         schoolId: fixture.schoolId, channel: "sms", recipientType: "user", recipientId: fixture.memberId,
@@ -37,7 +46,7 @@ describe("message outbox", () => {
   });
 
   it("requeues a temporary provider failure", async () => {
-    const fixture = await createTenantFixture();
+    const fixture = await createSmsFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.message.create({ data: {
         schoolId: fixture.schoolId, channel: "sms", recipientType: "user", recipientId: fixture.memberId,
@@ -54,7 +63,7 @@ describe("message outbox", () => {
   });
 
   it("dead-letters permanent provider failures", async () => {
-    const fixture = await createTenantFixture();
+    const fixture = await createSmsFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.message.create({ data: {
         schoolId: fixture.schoolId, channel: "sms", recipientType: "user", recipientId: fixture.memberId,
@@ -70,7 +79,7 @@ describe("message outbox", () => {
   });
 
   it("claims queued work so a second worker cannot process it twice", async () => {
-    const fixture = await createTenantFixture();
+    const fixture = await createSmsFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.message.create({ data: {
         schoolId: fixture.schoolId, channel: "sms", recipientType: "user", recipientId: fixture.memberId,
@@ -88,7 +97,7 @@ describe("message outbox", () => {
   });
 
   it("reclaims an expired sending lease", async () => {
-    const fixture = await createTenantFixture();
+    const fixture = await createSmsFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.message.create({ data: {
         schoolId: fixture.schoolId, channel: "sms", recipientType: "user", recipientId: fixture.memberId,
@@ -106,7 +115,7 @@ describe("message outbox", () => {
   });
 
   it("fences a stale worker so it cannot overwrite a newer lease owner", async () => {
-    const fixture = await createTenantFixture();
+    const fixture = await createSmsFixture();
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.message.create({ data: {
         schoolId: fixture.schoolId, channel: "sms", recipientType: "user", recipientId: fixture.memberId,
