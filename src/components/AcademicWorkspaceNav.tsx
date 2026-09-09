@@ -2,19 +2,19 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, BarChart3, CalendarDays, ClipboardList, FileText, LayoutGrid, Settings2, Table2 } from "lucide-react";
+import { BarChart3, CalendarDays, ClipboardList, FileText, LayoutGrid, Settings2, Table2 } from "lucide-react";
 
-type Item = { key: string; label: string; description: string; href: string; icon: typeof LayoutGrid };
+type Item = { key: string; label: string; href: string; icon: typeof LayoutGrid };
 
 const items: Item[] = [
-  { key: "readiness", label: "Readiness", description: "Check the academic chain", href: "/school/academics/health", icon: LayoutGrid },
-  { key: "setup", label: "Academic setup", description: "Rules, periods and reporting", href: "/school/academics/setup", icon: Settings2 },
-  { key: "calendar", label: "Terms & calendar", description: "Academic years and terms", href: "/school/terms", icon: CalendarDays },
-  { key: "timetable", label: "Timetable", description: "Teaching time and classes", href: "/school/timetable", icon: CalendarDays },
-  { key: "assessments", label: "Assessments", description: "Assessment structures", href: "/school/exams", icon: ClipboardList },
-  { key: "gradebook", label: "Gradebook", description: "Enter and moderate marks", href: "/school/gradebook/studio", icon: Table2 },
-  { key: "performance", label: "Performance", description: "Understand class results", href: "/school/academics/performance", icon: BarChart3 },
-  { key: "reports", label: "Report cards", description: "Turn results into reports", href: "/school/report-cards", icon: FileText },
+  { key: "readiness", label: "Readiness", href: "/school/academics/health", icon: LayoutGrid },
+  { key: "setup", label: "Academic setup", href: "/school/academics/setup", icon: Settings2 },
+  { key: "calendar", label: "Terms & calendar", href: "/school/terms", icon: CalendarDays },
+  { key: "timetable", label: "Timetable", href: "/school/timetable", icon: CalendarDays },
+  { key: "assessments", label: "Assessments", href: "/school/exams", icon: ClipboardList },
+  { key: "gradebook", label: "Gradebook", href: "/school/gradebook/studio", icon: Table2 },
+  { key: "performance", label: "Performance", href: "/school/academics/performance", icon: BarChart3 },
+  { key: "reports", label: "Report cards", href: "/school/report-cards", icon: FileText },
 ];
 
 function contextHref(item: Item, params: URLSearchParams): string {
@@ -40,27 +40,27 @@ function contextHref(item: Item, params: URLSearchParams): string {
 
 export function AcademicWorkspaceNav({ current }: { current: string }) {
   const searchParams = useSearchParams();
+  const activeItem = items.find((item) => item.key === current) ?? items[0];
+  const ActiveIcon = activeItem.icon;
 
   return (
-    <nav className="academic-workspace-nav" aria-label="Academic workflow">
-      <div className="academic-workspace-nav-intro">
-        <span className="academic-workspace-overline">Academic workflow</span>
-        <strong>One connected school model</strong>
-        <small>Setup sets the rules. Terms define the period. Teaching produces results, and reports use the same context.</small>
-      </div>
-      <div className="academic-workspace-nav-items">
+    <details className="academic-workspace-switcher">
+      <summary>
+        <span className="academic-workspace-switcher-current"><ActiveIcon size={15} aria-hidden="true" /><span><small>Academic tool</small><strong>{activeItem.label}</strong></span></span>
+        <span className="academic-workspace-switcher-action">Switch tool</span>
+      </summary>
+      <nav className="academic-workspace-nav-items" aria-label="Academic workflow">
         {items.map((item) => {
           const Icon = item.icon;
           const active = current === item.key;
           return (
             <Link key={item.key} href={contextHref(item, searchParams)} className={`academic-workspace-nav-item ${active ? "is-active" : ""}`} aria-current={active ? "page" : undefined}>
-              <span className="academic-workspace-nav-icon"><Icon size={16} aria-hidden="true" /></span>
-              <span className="academic-workspace-nav-copy"><strong>{item.label}</strong><small>{item.description}</small></span>
-              <ArrowRight size={14} aria-hidden="true" className="academic-workspace-nav-arrow" />
+              <Icon size={15} aria-hidden="true" />
+              <span>{item.label}</span>
             </Link>
           );
         })}
-      </div>
-    </nav>
+      </nav>
+    </details>
   );
 }
