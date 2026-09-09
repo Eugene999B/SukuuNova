@@ -32,7 +32,21 @@ export async function GET() {
     const session = await requireSchoolSession();
     return await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "transport:manage");
-      return NextResponse.json(await getSchoolTransportControl(tx, session.schoolId), { headers: { "Cache-Control": "private, no-store" } });
+      const [control, openIncidents] = await Promise.all([
+        getSchoolTransportControl(tx, session.schoolId),
+        tx.$queryRawUnsafe(
+          `SELECT i."id",i."tripId",i."trackerDeviceId",i."type",i."severity",i."status",i."openedAt",i."evidence",
+                  tr."routeId",r."name" AS "routeName",tr."vehicleId",v."registrationNumber"
+           FROM "P3TransportIncident" i
+           JOIN "P3TransportTrip" tr ON tr."id"=i."tripId" AND tr."schoolId"=i."schoolId"
+           JOIN "P3BusRoute" r ON r."id"=tr."routeId" AND r."schoolId"=tr."schoolId"
+           JOIN "P3Vehicle" v ON v."id"=tr."vehicleId" AND v."schoolId"=tr."schoolId"
+           WHERE i."schoolId"=$1 AND i."status"='open'
+           ORDER BY CASE i."severity" WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END, i."openedAt" ASC`,
+          session.schoolId,
+        ),
+      ]);
+      return NextResponse.json({ ...control, openIncidents }, { headers: { "Cache-Control": "private, no-store" } });
     });
   } catch (error) { return routeError(error); }
 }
