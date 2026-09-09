@@ -177,6 +177,26 @@ export async function POST(request: Request) {
 
       const presenceVerification = sameNetwork && geoVerified ? "network+location" : sameNetwork ? "network" : "location";
       const verification = `qr+${presenceVerification}${policy.qr.requireFace ? "+face" : ""}`;
+      const verificationMeta = {
+        networkMatch: sameNetwork,
+        locationMatch: geoVerified,
+        ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}),
+        locationReason: geoReason,
+        ...(faceConfidence !== undefined ? { faceConfidence } : {}),
+        idempotencyKey: input.idempotencyKey,
+      };
+
+      // Claim this challenge for this staff account before writing attendance. If the
+      // same person races/replays the code, QR_REPLAY aborts before any attendance row
+      // can be created. Other staff may still claim the same live school challenge.
+      await consumeStaffAttendanceQr(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        challengeId: verified.challengeId,
+        nonce: verified.nonce,
+        verification,
+        meta: verificationMeta,
+      });
 
       try {
         const event = await recordStaffSelfAttendance(tx, {
@@ -190,22 +210,6 @@ export async function POST(request: Request) {
             locationMatch: geoVerified,
             ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}),
             ...(faceConfidence !== undefined ? { faceConfidence } : {}),
-          }
-        });
-
-        await consumeStaffAttendanceQr(tx, {
-          schoolId: session.schoolId,
-          actorId: session.userId,
-          challengeId: verified.challengeId,
-          nonce: verified.nonce,
-          verification,
-          meta: {
-            networkMatch: sameNetwork,
-            locationMatch: geoVerified,
-            ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}),
-            locationReason: geoReason,
-            ...(faceConfidence !== undefined ? { faceConfidence } : {}),
-            idempotencyKey: input.idempotencyKey,
           }
         });
 
@@ -223,23 +227,8 @@ export async function POST(request: Request) {
         return { event, verification };
       } catch (error) {
         if (!(error instanceof AppError)) throw error;
-        await consumeStaffAttendanceQr(tx, {
-          schoolId: session.schoolId,
-          actorId: session.userId,
-          challengeId: verified.challengeId,
-          nonce: verified.nonce,
-          verification,
-          meta: {
-            networkMatch: sameNetwork,
-            locationMatch: geoVerified,
-            ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}),
-            locationReason: geoReason,
-            ...(faceConfidence !== undefined ? { faceConfidence } : {}),
-            outcome: "rejected",
-            errorCode: error.code,
-            idempotencyKey: input.idempotencyKey,
-          }
-        });
+        // The verified challenge remains consumed for this staff account so a failed
+        // attendance state (for example already checked in) cannot be retried/replayed.
         return { error };
       }
     });
