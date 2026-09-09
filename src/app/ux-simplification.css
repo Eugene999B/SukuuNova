@@ -38,6 +38,30 @@
   outline-offset: 2px;
 }
 
+/* Existing module heroes are kept for context, but no longer dominate the page. */
+.sn-page-body :where(.module-hero, .students-hero, .academic-page-hero, .settings-hero, .search-hero, .platform-hero) {
+  padding: clamp(16px, 2vw, 22px) !important;
+  border-radius: 16px !important;
+  margin-bottom: 14px !important;
+}
+
+.sn-page-body :where(.module-hero, .students-hero, .academic-page-hero, .settings-hero, .search-hero, .platform-hero) :where(h1, h2) {
+  font-size: clamp(22px, 2.4vw, 30px) !important;
+  line-height: 1.14 !important;
+  margin-block: 4px 6px !important;
+}
+
+.sn-page-body :where(.module-hero, .students-hero, .academic-page-hero, .settings-hero, .search-hero, .platform-hero) p {
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  max-width: 72ch;
+}
+
+/* Remove repeated decorative language on pages that already have a clear title. */
+.sn-page-body :where(.eyebrow, .module-overline, .academic-page-overline, .platform-eyebrow) {
+  letter-spacing: .06em !important;
+}
+
 /* Shared progressive-disclosure surface. Use for secondary information that
    should not compete with the user's primary task. */
 .sn-progressive {
@@ -120,6 +144,19 @@
 
   .sn-page-body :where(.button, button, [role="button"]) {
     min-height: 42px;
+  }
+
+  .sn-page-body :where(.module-hero, .students-hero, .academic-page-hero, .settings-hero, .search-hero, .platform-hero) {
+    padding: 14px !important;
+  }
+
+  .sn-page-body :where(.module-hero, .students-hero, .academic-page-hero, .settings-hero, .search-hero, .platform-hero) p {
+    display: none;
+  }
+
+  .sn-page-body :where(.hero-actions, .academic-page-actions, .platform-hero-actions) {
+    width: 100%;
+    gap: 8px !important;
   }
 
   .sn-progressive > summary {
