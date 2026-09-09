@@ -6,7 +6,10 @@
 - Snapshot reads preserve stored values separately from grading projections. Updates and clears detect concurrent changes; any failed cell rolls back the batch.
 - Status-only edits are included; canonical entry rejects nonzero absent/excused marks. Locked terms are read-only in the sheet.
 - Eight new regressions cover batch saves, stale/concurrent clears, rollback, authorization, finalized reports, context and snapshot reads.
-- GitHub verification pending. No migration. Production browser verification remains outstanding.
+- Verified code SHA: 4123823622fb0c0bd3cf53217bab760d4063193f.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34321319943 — 223 tests in 45 files; Prisma/migrations, typecheck, lint and production build passed.
+- Ten files changed in this connected batch. CI identified a second shared-grid consumer; teacher context now supplies snapshots, term lock and sheet styling too.
+- No migration. This documentation-only checkpoint skips redundant CI. Production browser verification remains outstanding.
 
 ## Recruitment completion batch
 - Restored missing vacancy/application metadata with a new additive migration; added unique public submission keys.
@@ -55,7 +58,7 @@
 - Verified code SHA: 781fba175447138f763e67072a62888602784a35.
 - Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34302273822 — 192 tests in 42 files, Prisma/migrations, typecheck, lint and production build passed.
 - Nine related files committed together directly on main. This documentation-only checkpoint skips redundant CI.
-- Production browser/mobile verification remains outstanding; the existing general GradebookEntryGrid still uses its older individual-cell workflow.
+- Production browser/mobile verification remains outstanding; the general GradebookEntryGrid has since been upgraded in the batch above.
 
 ## Guardian learning batch
 - Final answers save and submit atomically; a failed save cannot finalize stale answers.
@@ -117,7 +120,7 @@
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: recruitment intake, candidate pipeline and governed staff conversion, unified and verified in GitHub Actions. Next: remaining academic/governance integration and operational journeys.
+- Current subsystem: school and teacher general gradebook sheets, atomic batch writes and clear conflict protection, verified in GitHub Actions. Next: remaining academic/governance integration and operational journeys.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
