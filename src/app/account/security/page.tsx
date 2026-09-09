@@ -1,17 +1,17 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { compare, hash } from "bcryptjs";
-import Link from "next/link";
+import { KeyRound, LockKeyhole, ShieldCheck, UserCog, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { SettingsHero, SettingsRouteCard, SettingsSection } from "@/components/SettingsHub";
+import { getSchoolAuthorization } from "@/lib/authorization";
 import { GUARDIAN_COOKIE, getGuardianSession, createGuardianSessionToken, requireGuardianSession } from "@/lib/guardian-auth";
 import { getPlatformSession, getSchoolSession, requirePlatformSession, requireSchoolSession, createPlatformSessionToken, createSchoolSessionToken, PLATFORM_COOKIE, PLATFORM_SESSION_SECONDS, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
 import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
-import { headers } from "next/headers";
-import "./security.css";
+import "@/components/settings-hub.css";
 
 async function throttlePasswordChange(identity: string) {
-  // 5 attempts per account per 15 minutes on the current-password check.
   await recordLoginAttempt("password-change", identity, requestIp(await headers()));
 }
 
@@ -36,24 +36,25 @@ async function changePassword(formData: FormData) {
     });
     const responseCookies = await cookies();
     responseCookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ ...currentGuardian, needsPasswordChange: false }), sessionCookieOptions());
-    redirect("/guardian");
+    redirect("/guardian/settings");
   }
 
   const school = await getSchoolSession();
   if (school) {
     const currentSchool = await requireSchoolSession();
     await throttlePasswordChange(`school:${currentSchool.schoolId}:${currentSchool.userId}`);
-    await withTenant(currentSchool.schoolId, async (tx) => {
+    const workspace = await withTenant(currentSchool.schoolId, async (tx) => {
       const user = await tx.user.findUnique({ where: { id: currentSchool.userId }, select: { passwordHash: true } });
       if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
       const now = new Date();
       await tx.user.update({ where: { id: currentSchool.userId }, data: { passwordHash: await hash(next, 12) } });
       await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: currentSchool.schoolId, userId: currentSchool.userId, usedAt: null }, data: { usedAt: now } });
+      return (await getSchoolAuthorization(tx, currentSchool.userId)).workspace;
     });
     const responseCookies = await cookies();
     const token = await createSchoolSessionToken({ kind: "school", userId: currentSchool.userId, schoolId: currentSchool.schoolId, name: currentSchool.name, authorizationVersion: currentSchool.authorizationVersion, impersonationId: currentSchool.impersonationId, impersonatedByAdminId: currentSchool.impersonatedByAdminId });
     responseCookies.set(SCHOOL_COOKIE, token, sessionCookieOptions());
-    redirect("/dashboard");
+    redirect(workspace === "teacher" ? "/teacher/settings" : "/dashboard");
   }
 
   const platform = await getPlatformSession();
@@ -70,19 +71,71 @@ async function changePassword(formData: FormData) {
     const responseCookies = await cookies();
     responseCookies.set(PLATFORM_COOKIE, await createPlatformSessionToken(currentPlatform), sessionCookieOptions(PLATFORM_SESSION_SECONDS));
     responseCookies.delete(SCHOOL_COOKIE);
-    redirect("/platform");
+    redirect("/account/settings");
   }
   redirect("/");
 }
 
-function SecurityBody({ name, required, target }: { name: string; required: boolean; target: string }) {
-  const familyView = target === "guardian portal";
-  return <div className="security-centre">
-    <div className="security-hero"><div><span className="security-kicker">Account protection</span><h2>{required ? "Secure your account before continuing" : "Your SukuuNova security centre"}</h2></div><div className="security-score"><span>Security posture</span><strong>{required ? "Action required" : "Protected"}</strong></div></div>
-    <div className="security-grid security-grid-top"><section className="security-card security-card-password"><div className="security-card-head"><div><span className="security-label">Credentials</span><h3>Change password</h3></div><span className="security-icon">●</span></div><form action={changePassword} className="security-form"><label>Current password<input name="currentPassword" type="password" autoComplete="current-password" required /></label><label>New password<input name="newPassword" type="password" autoComplete="new-password" minLength={12} required /></label><label>Confirm new password<input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} required /></label><button type="submit">Update password</button></form></section><section className="security-card"><div className="security-card-head"><div><span className="security-label">Protection</span><h3>Security checklist</h3></div><span className="security-status-good">Ready</span></div><div className="security-checklist"><div><span className="check">✓</span><div><strong>Password protection</strong><small>Active for this account</small></div></div><div><span className="check">✓</span><div><strong>School-scoped access</strong><small>Permissions are governed by the school workspace</small></div></div><div><span className="pending">•</span><div><strong>Multi-factor authentication</strong><small>Not enabled for this account</small></div></div><div><span className="pending">•</span><div><strong>Session & device review</strong><small>Not available yet</small></div></div></div></section></div>
-    {!familyView && <div className="security-grid security-grid-three"><section className="security-card"><span className="security-label">Account recovery</span><h3>Recovery & sign-in</h3><div className="security-link-list"><Link href="/account/security">Password & recovery <span>→</span></Link><Link href={target === "school workspace" ? "/school/settings/access" : "/account/security"}>Access & delegated accounts <span>→</span></Link></div></section><section className="security-card"><span className="security-label">Access governance</span><h3>Who can reach school data?</h3><div className="security-link-list"><Link href="/school/settings/roles">Roles & permissions <span>→</span></Link><Link href="/school/settings/access">Sub-accounts & access <span>→</span></Link></div></section><section className="security-card"><span className="security-label">Security operations</span><h3>Recommended controls</h3><ul className="security-mini-list"><li>Require stronger passwords for privileged roles</li><li>Review dormant accounts before term changes</li><li>Use least-privilege roles for delegated administrators</li><li>Keep communication and data exports permission-controlled</li></ul></section></div>}
-    {!familyView && <section className="security-card security-future"><div><span className="security-label">Security roadmap</span><h3>Advanced account controls</h3><p>MFA, passkeys, active-session revocation, recovery codes, trusted devices, security alerts and privileged-action re-authentication remain future controls and are not presented as active features.</p></div></section>}
-  </div>;
+type SecurityUniverse = "platform" | "school" | "teacher" | "guardian";
+
+function SecurityBody({ universe, required, accountName }: { universe: SecurityUniverse; required: boolean; accountName: string }) {
+  const related = universe === "platform" ? [
+    { href: "/account/settings", icon: UserCog, title: "My settings", description: "Return to your personal platform workspace preferences." },
+    { href: "/platform/admins", icon: UsersRound, title: "Platform workers", description: "Review worker roles and permissions separately from your own password." },
+    { href: "/platform/audit", icon: ShieldCheck, title: "Security audit", description: "Review privileged platform actions when your role permits it." },
+  ] : universe === "guardian" ? [
+    { href: "/guardian/settings", icon: UserCog, title: "Guardian settings", description: "Return to your family account, linked children and privacy information." },
+    { href: "/guardian/messages", icon: UsersRound, title: "School messages", description: "Contact the school through the communication available to your guardian account." },
+  ] : universe === "teacher" ? [
+    { href: "/teacher/settings", icon: UserCog, title: "My teacher settings", description: "Return to your teacher account, teaching profile and connected work areas." },
+    { href: "/teacher", icon: UsersRound, title: "Teaching profile", description: "Review the classes and subjects currently connected to this account." },
+  ] : [
+    { href: "/school/settings", icon: UserCog, title: "Settings Home", description: "Return to school-wide configuration and specialist settings." },
+    { href: "/school/settings/access", icon: UsersRound, title: "People & Access", description: "Manage other school accounts without sharing this password." },
+    { href: "/school/settings/roles", icon: ShieldCheck, title: "Roles & Permissions", description: "Review reusable school roles and governed access." },
+  ];
+
+  return (
+    <div className="settings-hub">
+      <SettingsHero
+        eyebrow="Account security"
+        title={required ? "Change your temporary password before continuing." : "Protect this account without mixing security with permissions."}
+        description="Your password protects this login. Roles and permissions control what the login may do. Keeping those two ideas separate makes account administration safer and easier to understand."
+        contextLabel="Account"
+        contextValue={accountName}
+        contextMeta={required ? "Password change required" : "Password protected"}
+      />
+
+      <section className="settings-focus-panel">
+        <header>
+          <span className="settings-hub-eyebrow">Password</span>
+          <h2>{required ? "Set a new private password" : "Change password"}</h2>
+          <p>Use at least 12 characters. Your current password is required so another person cannot change it from an unlocked session.</p>
+        </header>
+        <div className="settings-focus-body">
+          <form action={changePassword} className="security-settings-form">
+            <label className="settings-field"><span>Current password</span><input name="currentPassword" type="password" autoComplete="current-password" required /></label>
+            <label className="settings-field"><span>New password</span><input name="newPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
+            <label className="settings-field"><span>Confirm new password</span><input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
+            <div className="settings-save-row"><span className="security-password-guidance"><LockKeyhole size={14} aria-hidden="true" /> Avoid reusing a password from email, banking or another school system.</span><button type="submit" className="settings-primary-action"><KeyRound size={14} aria-hidden="true" /> Update password</button></div>
+          </form>
+        </div>
+      </section>
+
+      {!required ? (
+        <SettingsSection title="Related account controls" description="These actions are separate from changing your password.">
+          <div className="settings-route-grid">
+            {related.map((item) => <SettingsRouteCard key={item.href} href={item.href} icon={item.icon} title={item.title} description={item.description} action="Open" />)}
+          </div>
+        </SettingsSection>
+      ) : null}
+
+      <div className="settings-hub-note">
+        <strong>Security features are shown only when they actually exist.</strong>
+        <p>SukuuNova will not display pretend MFA, trusted-device or session controls on this page. Platform and School 360 session-revocation tools remain in their real authorised workflows.</p>
+      </div>
+    </div>
+  );
 }
 
 export default async function SecurityPage({ searchParams }: { searchParams: Promise<{ required?: string }> }) {
@@ -91,7 +144,24 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
   const platform = await getPlatformSession();
   if (!guardian && !school && !platform) redirect("/");
   const required = (await searchParams).required === "1" || Boolean(guardian?.needsPasswordChange);
-  if (school) { const schoolRecord = await withTenant(school.schoolId, (tx) => tx.school.findUnique({ where: { id: school.schoolId }, select: { name: true, uniqueCode: true } })); if (!schoolRecord) redirect("/dashboard"); return <AppShell universe="school" title="Account Security" subtitle="Account security." active="Account security" schoolName={schoolRecord.name} schoolCode={schoolRecord.uniqueCode} userName={school.name}><SecurityBody name={school.name} required={required} target="school workspace" /></AppShell>; }
-  if (platform) return <AppShell universe="platform" title="Account Security" subtitle="Protect your SukuuNova platform administrator account." active="Platform Settings" userName={platform.name}><SecurityBody name={platform.name} required={required} target="platform control" /></AppShell>;
-  return <main className="guardian-security-shell"><div className="guardian-security-inner"><SecurityBody name="your guardian account" required={required} target="guardian portal" /></div></main>;
+
+  if (school) {
+    const data = await withTenant(school.schoolId, async (tx) => {
+      const [schoolRecord, access] = await Promise.all([
+        tx.school.findUnique({ where: { id: school.schoolId }, select: { name: true, uniqueCode: true } }),
+        getSchoolAuthorization(tx, school.userId),
+      ]);
+      return schoolRecord ? { schoolRecord, workspace: access.workspace, role: access.roles.map((role) => role.name).join(" · ") } : null;
+    });
+    if (!data) redirect("/dashboard");
+    const universe = data.workspace === "teacher" ? "teacher" : "school";
+    return <AppShell universe={universe} title="Account Security" subtitle="Password and login protection." active="Account Security" schoolName={data.schoolRecord.name} schoolCode={data.schoolRecord.uniqueCode} userName={school.name} role={data.role || (universe === "teacher" ? "Teacher" : "School account")}><SecurityBody universe={universe} accountName={school.name} required={required} /></AppShell>;
+  }
+
+  if (platform) {
+    return <AppShell universe="platform" title="Account Security" subtitle="Password and login protection." active="Account Security" userName={platform.name} role={platform.role}><SecurityBody universe="platform" accountName={platform.name} required={required} /></AppShell>;
+  }
+
+  const currentGuardian = await requireGuardianSession();
+  return <AppShell universe="guardian" title="Account Security" subtitle="Password and family-login protection." active="Account Security" schoolName={currentGuardian.schoolName} userName="Guardian" role="Guardian"><SecurityBody universe="guardian" accountName="Guardian account" required={required} /></AppShell>;
 }
