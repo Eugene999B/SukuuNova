@@ -6,7 +6,9 @@
 - Review revisions bind the baseline, existing rights, role identity, assignments and overrides. Stale or replayed approvals fail, and all selected roles apply atomically.
 - Rechecks active Owner authority and role-control permission; canonical system keys are required. No role-name promotion.
 - Shared school governance locking now covers default synchronization and custom-role mutation alongside upgrade approval.
-- Eleven new integration regressions. GitHub verification pending. No migration. Production browser verification remains outstanding.
+- Eleven new integration regressions. Verified code SHA: 64e298606ee1eab2886ec54568d7162862dc7fed.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34322414559 — 234 tests in 46 files; Prisma/migrations, typecheck, lint and production build passed.
+- Nine files committed together directly on GitHub. No migration. This documentation-only checkpoint skips redundant CI. Production browser verification remains outstanding.
 
 ## General gradebook batch
 - Replaced per-cell autosaves with explicit atomic saves, up to 500 changed cells per class/subject/term.
@@ -128,7 +130,7 @@
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: school and teacher general gradebook sheets, atomic batch writes and clear conflict protection, verified in GitHub Actions. Next: remaining academic/governance integration and operational journeys.
+- Current subsystem: selective Owner-reviewed default-role upgrades, verified in GitHub Actions. Next: remaining academic integration, operational modules and production journeys.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
@@ -137,7 +139,7 @@
 
 ## Remaining mission / next 5
 1. Recruitment metadata drift is repaired; audit legacy academic tenant relationships before validating old foreign keys.
-2. Provide an explicit Owner-reviewed upgrade workflow for existing role defaults.
+2. Owner-reviewed default upgrades are implemented and CI-verified; exercise the role review and approval journey in production browser QA.
 3. Connect teacher assignment navigation and legacy homework to the existing submission engine; expand question types and attempt policies.
 4. Expand Arcade games/content and student learning/resource workflows; verify production guardian/mobile journeys.
 5. Continue canonical grading/history verification, remaining operational modules and whole-system journeys.
