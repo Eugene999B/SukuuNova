@@ -3,7 +3,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-type Point = { x: number; y: number; pressure: number };
+type PointerKind = "mouse" | "pen" | "touch" | "unknown";
+type Point = { x: number; y: number; pressure: number; time: number; pointerType: PointerKind };
 type Stroke = { points: Point[]; width: number };
 
 type SignaturePadProps = {
@@ -14,17 +15,37 @@ type SignaturePadProps = {
 
 const CANVAS_WIDTH = 960;
 const CANVAS_HEIGHT = 280;
-const MIN_WIDTH = 1.25;
-const MAX_WIDTH = 5.5;
+const MIN_WIDTH = 1.15;
+const MAX_WIDTH = 6.2;
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function midpoint(a: Point, b: Point) {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+}
+
+function pointerKind(value: string): PointerKind {
+  if (value === "mouse" || value === "pen" || value === "touch") return value;
+  return "unknown";
 }
 
 function inkColor() {
   if (typeof window === "undefined") return "currentColor";
   const value = getComputedStyle(document.documentElement).getPropertyValue("--color-text-primary").trim();
   return value || "currentColor";
+}
+
+function segmentWidth(stroke: Stroke, index: number) {
+  const current = stroke.points[index];
+  const previous = stroke.points[Math.max(0, index - 1)];
+  const elapsed = Math.max(1, current.time - previous.time);
+  const velocity = Math.hypot(current.x - previous.x, current.y - previous.y) / elapsed;
+  const velocityFactor = clamp(1 - velocity / 2.25, 0.28, 1);
+  const pressure = current.pointerType === "pen" ? clamp(current.pressure || 0.5, 0.08, 1) : 0.5;
+  const pressureFactor = current.pointerType === "pen" ? 0.55 + pressure * 0.8 : 0.72 + velocityFactor * 0.58;
+  return clamp(stroke.width * pressureFactor, MIN_WIDTH, MAX_WIDTH);
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
@@ -35,27 +56,35 @@ function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
   ctx.fillStyle = inkColor();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
+
   if (points.length === 1) {
-    const radius = Math.max(MIN_WIDTH, stroke.width * Math.max(.45, points[0].pressure || .5)) / 2;
+    const radius = segmentWidth(stroke, 0) / 2;
     ctx.beginPath();
     ctx.arc(points[0].x, points[0].y, radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     return;
   }
-  ctx.beginPath();
-  ctx.moveTo(points[0].x, points[0].y);
-  for (let index = 1; index < points.length - 1; index += 1) {
+
+  for (let index = 1; index < points.length; index += 1) {
+    const previous = points[index - 1];
     const current = points[index];
-    const next = points[index + 1];
-    const mid = midpoint(current, next);
-    ctx.lineWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, stroke.width * Math.max(.45, current.pressure || .5)));
-    ctx.quadraticCurveTo(current.x, current.y, mid.x, mid.y);
+    const start = index === 1 ? previous : midpoint(points[index - 2], previous);
+    const end = index === points.length - 1 ? current : midpoint(previous, current);
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.quadraticCurveTo(previous.x, previous.y, end.x, end.y);
+    ctx.lineWidth = (segmentWidth(stroke, index - 1) + segmentWidth(stroke, index)) / 2;
+    ctx.stroke();
   }
-  const last = points[points.length - 1];
-  ctx.lineTo(last.x, last.y);
-  ctx.stroke();
   ctx.restore();
+}
+
+function drawStrokes(canvas: HTMLCanvasElement, strokes: Stroke[]) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  strokes.forEach((stroke) => drawStroke(ctx, stroke));
 }
 
 function trimmedPng(canvas: HTMLCanvasElement) {
@@ -111,8 +140,8 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
     if (baseImage) {
       const image = new Image();
       image.onload = () => {
-        const maxW = canvas.width * .82;
-        const maxH = canvas.height * .72;
+        const maxW = canvas.width * 0.82;
+        const maxH = canvas.height * 0.72;
         const ratio = Math.min(maxW / image.width, maxH / image.height, 1);
         const w = image.width * ratio;
         const h = image.height * ratio;
@@ -127,14 +156,23 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
 
   useEffect(() => { redraw(); }, [redraw]);
 
-  const position = (event: React.PointerEvent<HTMLCanvasElement>): Point => {
+  const position = (event: Pick<PointerEvent, "clientX" | "clientY" | "pressure" | "timeStamp" | "pointerType">): Point => {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
     return {
       x: (event.clientX - rect.left) * (canvas.width / rect.width),
       y: (event.clientY - rect.top) * (canvas.height / rect.height),
-      pressure: event.pressure > 0 ? event.pressure : .55,
+      pressure: event.pressure > 0 ? event.pressure : 0.5,
+      time: event.timeStamp,
+      pointerType: pointerKind(event.pointerType),
     };
+  };
+
+  const emitStrokes = (next: Stroke[]) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    drawStrokes(canvas, next);
+    onChange?.(trimmedPng(canvas));
   };
 
   const start = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -142,7 +180,7 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
     event.preventDefault();
     canvasRef.current?.setPointerCapture(event.pointerId);
     if (baseImage && strokes.length === 0) setBaseImage("");
-    activeStroke.current = { width, points: [position(event)] };
+    activeStroke.current = { width, points: [position(event.nativeEvent)] };
     setRedoStack([]);
   };
 
@@ -152,21 +190,12 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
     const events = typeof event.nativeEvent.getCoalescedEvents === "function"
       ? event.nativeEvent.getCoalescedEvents()
       : [event.nativeEvent];
-    const canvas = canvasRef.current!;
-    const rect = canvas.getBoundingClientRect();
-    for (const native of events) {
-      activeStroke.current.points.push({
-        x: (native.clientX - rect.left) * (canvas.width / rect.width),
-        y: (native.clientY - rect.top) * (canvas.height / rect.height),
-        pressure: native.pressure > 0 ? native.pressure : .55,
-      });
-    }
+    for (const native of events) activeStroke.current.points.push(position(native));
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    drawStrokes(canvas, strokes);
     const ctx = canvas.getContext("2d");
-    if (ctx) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      strokes.forEach((stroke) => drawStroke(ctx, stroke));
-      drawStroke(ctx, activeStroke.current);
-    }
+    if (ctx) drawStroke(ctx, activeStroke.current);
   };
 
   const finish = (event?: React.PointerEvent<HTMLCanvasElement>) => {
@@ -175,15 +204,11 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
       event.preventDefault();
       if (canvasRef.current?.hasPointerCapture(event.pointerId)) canvasRef.current.releasePointerCapture(event.pointerId);
     }
-    const next = [...strokes, activeStroke.current];
+    const completed = activeStroke.current;
     activeStroke.current = null;
+    const next = [...strokes, completed];
     setStrokes(next);
-    requestAnimationFrame(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const data = trimmedPng(canvas);
-      onChange?.(data);
-    });
+    emitStrokes(next);
   };
 
   const clear = () => {
@@ -191,6 +216,8 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
     setBaseImage("");
     setStrokes([]);
     setRedoStack([]);
+    const canvas = canvasRef.current;
+    if (canvas) drawStrokes(canvas, []);
     onChange?.("");
   };
 
@@ -200,15 +227,16 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
     const next = strokes.slice(0, -1);
     setStrokes(next);
     setRedoStack((current) => [...current, removed]);
-    requestAnimationFrame(() => onChange?.(canvasRef.current ? trimmedPng(canvasRef.current) : ""));
+    emitStrokes(next);
   };
 
   const redo = () => {
     if (disabled || !redoStack.length) return;
     const restored = redoStack[redoStack.length - 1];
+    const next = [...strokes, restored];
     setRedoStack((current) => current.slice(0, -1));
-    setStrokes((current) => [...current, restored]);
-    requestAnimationFrame(() => onChange?.(canvasRef.current ? trimmedPng(canvasRef.current) : ""));
+    setStrokes(next);
+    emitStrokes(next);
   };
 
   const status = useMemo(() => baseImage || strokes.length ? "Signature present" : "No signature drawn", [baseImage, strokes.length]);
@@ -216,7 +244,7 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
   return (
     <div className="signature-pad-shell">
       <div className="signature-pad-toolbar" aria-label="Signature controls">
-        <div className="signature-pad-status"><strong>{status}</strong><span>Transparent PNG · mouse, touch or stylus</span></div>
+        <div className="signature-pad-status"><strong>{status}</strong><span>Natural ink · velocity smoothing · stylus pressure</span></div>
         <div className="signature-pad-controls">
           <label>Pen <input aria-label="Signature pen thickness" type="range" min="1.5" max="5" step=".25" value={width} disabled={disabled} onChange={(event) => setWidth(Number(event.target.value))} /></label>
           <button type="button" onClick={undo} disabled={disabled || !strokes.length}>Undo</button>
@@ -239,7 +267,7 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
         />
         <span className="signature-pad-guide" aria-hidden="true" />
       </div>
-      <p className="signature-pad-note">This is an electronic document signature, not biometric authentication. SukuuNova stores only the image you choose to save.</p>
+      <p className="signature-pad-note">This is an electronic document signature, not biometric authentication. Stylus pressure is used only to render natural ink; SukuuNova stores the signature image you choose to save.</p>
     </div>
   );
 }
