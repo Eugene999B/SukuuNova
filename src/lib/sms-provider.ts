@@ -110,7 +110,9 @@ export async function sendSmsThroughProvider(providerKey: SmsProviderKey, input:
     const body = await jsonResponse(response);
     if (!response.ok) throw new Error(`Hubtel SMS HTTP ${response.status}`);
     const data = asRecord(body.data);
-    return { providerKey, providerMessageId: firstString(data.messageId, data.message_id, body.messageId, body.message_id), creditsUsed: positiveInt(data.rate ?? body.rate) };
+    // Hubtel's rate fields represent monetary routing price, not an SMS-segment quantity.
+    // Keep provider credit usage unset unless Hubtel exposes a documented segment count.
+    return { providerKey, providerMessageId: firstString(data.messageId, data.message_id, body.messageId, body.message_id) };
   }
 
   const url = process.env.SMS_PROVIDER_URL, token = process.env.SMS_PROVIDER_TOKEN;
