@@ -22,7 +22,8 @@ const PLATFORM_LANDING_ROUTES = [
   ["security.manage", "/platform/health"],
 ] as const;
 
-const providerName = (key: string) => ({ arkesel: "Arkesel", sailup: "Sailup", hubtel: "Hubtel", generic: "Custom gateway" }[key] ?? "Arkesel");
+const PROVIDER_NAMES: Record<string, string> = { arkesel: "Arkesel", sailup: "Sailup", hubtel: "Hubtel", generic: "Custom gateway" };
+const providerName = (key: string) => PROVIDER_NAMES[key] ?? "Arkesel";
 
 export default async function PlatformPage() {
   const session = await requirePlatformSession();
