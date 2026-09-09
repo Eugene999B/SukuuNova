@@ -5,12 +5,12 @@ import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
+import { replaceDirectionalRouteShape } from "@/lib/novacore/directional-route-service";
 import { getSchoolTransportControl, reviewPickupPoint } from "@/lib/novacore/family-transport-service";
 import {
   assignStudentTransport,
   finishTransportTrip,
   registerCertifiedTracker,
-  replaceRouteShape,
   startTransportTrip,
 } from "@/lib/novacore/transport-operations-service";
 import { provisionTrackerGatewayBinding } from "@/lib/novacore/tracker-gateway-service";
@@ -20,7 +20,7 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("registerTracker"), vehicleId: z.string().min(1), imei: z.string().regex(/^\d{14,20}$/), model: z.literal("FMC130"), simIccid: z.string().trim().max(40).optional(), simMsisdn: z.string().trim().max(40).optional(), apn: z.string().trim().max(100).optional() }),
   z.object({ action: z.literal("provisionTracker"), trackerDeviceId: z.string().min(1), imei: z.string().regex(/^\d{14,20}$/) }),
   z.object({ action: z.literal("assignStudent"), studentId: z.string().min(1), routeId: z.string().min(1), vehicleId: z.string().min(1).nullable().optional(), morningEnabled: z.boolean(), afternoonEnabled: z.boolean() }),
-  z.object({ action: z.literal("replaceRouteShape"), routeId: z.string().min(1), points: z.array(z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) })).min(2).max(5000) }),
+  z.object({ action: z.literal("replaceRouteShape"), routeId: z.string().min(1), direction: z.enum(["morning", "afternoon"]), points: z.array(z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) })).min(2).max(5000) }),
   z.object({ action: z.literal("startTrip"), routeId: z.string().min(1), vehicleId: z.string().min(1), trackerDeviceId: z.string().min(1), direction: z.enum(["morning", "afternoon"]) }),
   z.object({ action: z.literal("finishTrip"), tripId: z.string().min(1) }),
 ]);
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       switch (input.action) {
         case "reviewPickup": return reviewPickupPoint(tx, { ...common, pickupPointId: input.pickupPointId, decision: input.decision, note: input.note });
         case "assignStudent": return assignStudentTransport(tx, { ...common, studentId: input.studentId, routeId: input.routeId, vehicleId: input.vehicleId, morningEnabled: input.morningEnabled, afternoonEnabled: input.afternoonEnabled });
-        case "replaceRouteShape": return replaceRouteShape(tx, { ...common, routeId: input.routeId, points: input.points });
+        case "replaceRouteShape": return replaceDirectionalRouteShape(tx, { ...common, routeId: input.routeId, direction: input.direction, points: input.points });
         case "startTrip": return startTransportTrip(tx, { ...common, routeId: input.routeId, vehicleId: input.vehicleId, trackerDeviceId: input.trackerDeviceId, direction: input.direction });
         case "finishTrip": return finishTransportTrip(tx, { ...common, tripId: input.tripId });
       }
