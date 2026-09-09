@@ -9,6 +9,7 @@ type CertificationRow = {
   trackerDeviceId: string;
   startedAt: Date;
   status: string;
+  createdBy: string;
 };
 
 type EventRow = {
@@ -69,7 +70,7 @@ export async function refreshTrackerCertification(tx: TenantDb, input: {
   now?: Date;
 }) {
   const rows = await tx.$queryRawUnsafe<CertificationRow[]>(
-    `SELECT "id","trackerDeviceId","startedAt","status"
+    `SELECT "id","trackerDeviceId","startedAt","status","createdBy"
      FROM "P3TrackerCertification"
      WHERE "schoolId"=$1 AND "trackerDeviceId"=$2 AND "status"='running'
      ORDER BY "startedAt" DESC LIMIT 1`,
@@ -112,14 +113,50 @@ export async function refreshTrackerCertification(tx: TenantDb, input: {
   );
 
   if (result.passed) {
-    await tx.$executeRawUnsafe(
+    const activated = await tx.$executeRawUnsafe(
       `UPDATE "P3TrackerDevice" SET "status"='active',"updatedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$1 AND "id"=$2 AND "status"='testing'`,
       input.schoolId,
       input.trackerDeviceId,
     );
+    if (Number(activated ?? 0) > 0) {
+      await appendSchoolAudit(tx, {
+        schoolId: input.schoolId,
+        actorId: certification.createdBy,
+        action: "transport.tracker_certification_passed",
+        entityType: "P3TrackerCertification",
+        entityId: certification.id,
+        after: {
+          trackerDeviceId: input.trackerDeviceId,
+          acceptedPackets: result.acceptedPackets,
+          rejectedPackets: result.rejectedPackets,
+          acceptedRatio: result.acceptedRatio,
+          maxHeartbeatGapSeconds: result.maxHeartbeatGapSeconds,
+          algorithmVersion: result.algorithmVersion,
+        },
+      });
+    }
   }
 
   return { certificationId: certification.id, ...result, status: result.passed ? "passed" as const : "running" as const };
+}
+
+export async function refreshRunningTrackerCertifications(tx: TenantDb, schoolId: string, limit = 50) {
+  const safeLimit = Math.max(1, Math.min(200, Math.floor(limit)));
+  const rows = await tx.$queryRawUnsafe<Array<{ trackerDeviceId: string }>>(
+    `SELECT "trackerDeviceId" FROM "P3TrackerCertification"
+     WHERE "schoolId"=$1 AND "status"='running'
+     ORDER BY "startedAt" ASC LIMIT $2`,
+    schoolId,
+    safeLimit,
+  );
+  let passed = 0;
+  let running = 0;
+  for (const row of rows) {
+    const result = await refreshTrackerCertification(tx, { schoolId, trackerDeviceId: row.trackerDeviceId });
+    if (result?.passed) passed += 1;
+    else running += 1;
+  }
+  return { examined: rows.length, passed, running };
 }
 
 export async function failStaleTrackerCertification(tx: TenantDb, input: {
@@ -130,7 +167,7 @@ export async function failStaleTrackerCertification(tx: TenantDb, input: {
 }) {
   const maximumRunMinutes = Math.max(5, Math.min(120, input.maximumRunMinutes ?? 30));
   const rows = await tx.$queryRawUnsafe<CertificationRow[]>(
-    `SELECT "id","trackerDeviceId","startedAt","status"
+    `SELECT "id","trackerDeviceId","startedAt","status","createdBy"
      FROM "P3TrackerCertification"
      WHERE "schoolId"=$1 AND "trackerDeviceId"=$2 AND "status"='running'
      ORDER BY "startedAt" DESC LIMIT 1`,
