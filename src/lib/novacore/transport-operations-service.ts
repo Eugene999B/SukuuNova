@@ -2,7 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { appendSchoolAudit } from "@/lib/audit";
-import type { GeoPoint } from "./transport";
+import { startTrackerCertification } from "./tracker-certification-service";
 
 function validImei(value: string) {
   return /^\d{14,20}$/.test(value);
@@ -54,7 +54,12 @@ export async function registerCertifiedTracker(tx: TenantDb, input: {
     entityId: id,
     after: { vehicleId: input.vehicleId, model: input.model, codec: "8E", status: "testing" },
   });
-  return { id, vehicleId: input.vehicleId, imei: input.imei, model: input.model, status: "testing" };
+  const certification = await startTrackerCertification(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    trackerDeviceId: id,
+  });
+  return { id, vehicleId: input.vehicleId, imei: input.imei, model: input.model, status: "testing", certification };
 }
 
 export async function assignStudentTransport(tx: TenantDb, input: {
@@ -113,41 +118,6 @@ export async function assignStudentTransport(tx: TenantDb, input: {
   return { id, studentId: input.studentId, routeId: input.routeId };
 }
 
-export async function replaceRouteShape(tx: TenantDb, input: {
-  schoolId: string;
-  actorId: string;
-  routeId: string;
-  points: GeoPoint[];
-}) {
-  if (input.points.length < 2 || input.points.length > 5000) throw new AppError("A route shape needs between 2 and 5,000 points.", 400, "INVALID_ROUTE_SHAPE_SIZE");
-  for (const point of input.points) {
-    if (!Number.isFinite(point.latitude) || point.latitude < -90 || point.latitude > 90 || !Number.isFinite(point.longitude) || point.longitude < -180 || point.longitude > 180) {
-      throw new AppError("Route geometry contains an invalid coordinate.", 400, "INVALID_ROUTE_SHAPE_POINT");
-    }
-  }
-  const route = await tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "P3BusRoute" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, input.schoolId, input.routeId);
-  if (!route[0]) throw new AppError("Transport route was not found.", 404, "TRANSPORT_ROUTE_NOT_FOUND");
-  const payload = input.points.map((point, sequence) => ({ id: createId(), sequence, latitude: point.latitude, longitude: point.longitude }));
-  await tx.$executeRawUnsafe(`DELETE FROM "P3RouteShapePoint" WHERE "schoolId"=$1 AND "routeId"=$2`, input.schoolId, input.routeId);
-  await tx.$executeRawUnsafe(
-    `INSERT INTO "P3RouteShapePoint" ("id","schoolId","routeId","sequence","latitude","longitude")
-     SELECT p.id,$1,$2,p.sequence,p.latitude,p.longitude
-     FROM jsonb_to_recordset($3::jsonb) AS p(id text,sequence integer,latitude numeric,longitude numeric)`,
-    input.schoolId,
-    input.routeId,
-    JSON.stringify(payload),
-  );
-  await appendSchoolAudit(tx, {
-    schoolId: input.schoolId,
-    actorId: input.actorId,
-    action: "transport.route_shape_replaced",
-    entityType: "P3BusRoute",
-    entityId: input.routeId,
-    after: { pointCount: payload.length },
-  });
-  return { routeId: input.routeId, pointCount: payload.length };
-}
-
 export async function startTransportTrip(tx: TenantDb, input: {
   schoolId: string;
   actorId: string;
@@ -157,15 +127,25 @@ export async function startTransportTrip(tx: TenantDb, input: {
   direction: "morning" | "afternoon";
 }) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`transport-trip:${input.schoolId}:${input.vehicleId}`}))`;
-  const [routes, vehicles, trackers, active] = await Promise.all([
+  const [routes, vehicles, trackers, active, routeShape] = await Promise.all([
     tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "P3BusRoute" WHERE "schoolId"=$1 AND "id"=$2 AND "status"='active' LIMIT 1`, input.schoolId, input.routeId),
     tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "P3Vehicle" WHERE "schoolId"=$1 AND "id"=$2 AND "status"='active' LIMIT 1`, input.schoolId, input.vehicleId),
-    tx.$queryRawUnsafe<Array<{ id: string; vehicleId: string | null; status: string }>>(`SELECT "id","vehicleId","status" FROM "P3TrackerDevice" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, input.schoolId, input.trackerDeviceId),
+    tx.$queryRawUnsafe<Array<{ id: string; vehicleId: string | null; status: string; lastSeenAt: Date | null }>>(`SELECT "id","vehicleId","status","lastSeenAt" FROM "P3TrackerDevice" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, input.schoolId, input.trackerDeviceId),
     tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "P3TransportTrip" WHERE "schoolId"=$1 AND "vehicleId"=$2 AND "status"='active' LIMIT 1`, input.schoolId, input.vehicleId),
+    tx.$queryRawUnsafe<Array<{ count: bigint }>>(`SELECT COUNT(*)::bigint AS "count" FROM "P3RouteShapePoint" WHERE "schoolId"=$1 AND "routeId"=$2 AND "direction"=$3`, input.schoolId, input.routeId, input.direction),
   ]);
   if (!routes[0]) throw new AppError("Choose an active transport route.", 404, "TRANSPORT_ROUTE_NOT_FOUND");
   if (!vehicles[0]) throw new AppError("Choose an active school vehicle.", 404, "TRANSPORT_VEHICLE_NOT_FOUND");
-  if (!trackers[0] || trackers[0].vehicleId !== input.vehicleId || trackers[0].status === "blocked" || trackers[0].status === "retired") throw new AppError("Choose a working tracker assigned to this vehicle.", 409, "TRACKER_NOT_READY");
+  const tracker = trackers[0];
+  if (!tracker || tracker.vehicleId !== input.vehicleId || tracker.status !== "active") {
+    throw new AppError("This vehicle needs a successfully certified active tracker before a live trip can start.", 409, "TRACKER_NOT_CERTIFIED");
+  }
+  if (!tracker.lastSeenAt || Date.now() - tracker.lastSeenAt.getTime() > 120_000) {
+    throw new AppError("The certified tracker is not reporting a fresh heartbeat. Check power, SIM/APN and network before starting the trip.", 409, "TRACKER_NOT_LIVE");
+  }
+  if (Number(routeShape[0]?.count ?? 0n) < 2) {
+    throw new AppError(`Add the ${input.direction} route geometry before starting a live trip.`, 409, "ROUTE_SHAPE_REQUIRED");
+  }
   if (active[0]) throw new AppError("This vehicle already has an active trip.", 409, "TRANSPORT_TRIP_ALREADY_ACTIVE");
 
   const id = createId();
