@@ -1,10 +1,22 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
-  signatureDocumentBindingSha256,
+  signatureDocumentBindingHmac,
   signatureImageSha256,
-  verifySignatureDocumentBindingSha256,
+  verifySignatureDocumentBindingHmac,
 } from "../src/lib/signature-integrity";
 import { readSignatureSnapshot } from "../src/lib/report-card-signatures";
+
+const previousBindingSecret = process.env.SIGNATURE_BINDING_SECRET;
+const testBindingSecret = "sukuunova-signature-binding-test-secret-0123456789abcdef";
+
+beforeAll(() => {
+  process.env.SIGNATURE_BINDING_SECRET = testBindingSecret;
+});
+
+afterAll(() => {
+  if (previousBindingSecret === undefined) delete process.env.SIGNATURE_BINDING_SECRET;
+  else process.env.SIGNATURE_BINDING_SECRET = previousBindingSecret;
+});
 
 const dataUrl = `data:image/png;base64,${Buffer.from("sukuunova-signature-test").toString("base64")}`;
 const imageSha256 = signatureImageSha256(dataUrl);
@@ -19,23 +31,34 @@ const bindingInput = {
 };
 
 describe("signature document binding", () => {
-  it("is stable for the exact signer, document and signature version", () => {
-    const digest = signatureDocumentBindingSha256(bindingInput);
-    expect(digest).toMatch(/^[a-f0-9]{64}$/);
-    expect(signatureDocumentBindingSha256({ ...bindingInput })).toBe(digest);
-    expect(verifySignatureDocumentBindingSha256(bindingInput, digest)).toBe(true);
+  it("is stable for the exact signer, document, signature version and server secret", () => {
+    const mac = signatureDocumentBindingHmac(bindingInput);
+    expect(mac).toMatch(/^[a-f0-9]{64}$/);
+    expect(signatureDocumentBindingHmac({ ...bindingInput })).toBe(mac);
+    expect(verifySignatureDocumentBindingHmac(bindingInput, mac)).toBe(true);
   });
 
   it("changes when report, signer role, signature time or vector hash changes", () => {
-    const digest = signatureDocumentBindingSha256(bindingInput);
-    expect(signatureDocumentBindingSha256({ ...bindingInput, documentId: "report-2" })).not.toBe(digest);
-    expect(signatureDocumentBindingSha256({ ...bindingInput, role: "Class Teacher" })).not.toBe(digest);
-    expect(signatureDocumentBindingSha256({ ...bindingInput, signatureUpdatedAt: "2026-09-09T22:01:00.000Z" })).not.toBe(digest);
-    expect(signatureDocumentBindingSha256({ ...bindingInput, vectorSha256: "b".repeat(64) })).not.toBe(digest);
+    const mac = signatureDocumentBindingHmac(bindingInput);
+    expect(signatureDocumentBindingHmac({ ...bindingInput, documentId: "report-2" })).not.toBe(mac);
+    expect(signatureDocumentBindingHmac({ ...bindingInput, role: "Class Teacher" })).not.toBe(mac);
+    expect(signatureDocumentBindingHmac({ ...bindingInput, signatureUpdatedAt: "2026-09-09T22:01:00.000Z" })).not.toBe(mac);
+    expect(signatureDocumentBindingHmac({ ...bindingInput, vectorSha256: "b".repeat(64) })).not.toBe(mac);
+  });
+
+  it("cannot be reproduced with a different server secret", () => {
+    const mac = signatureDocumentBindingHmac(bindingInput);
+    process.env.SIGNATURE_BINDING_SECRET = "different-sukuunova-signature-secret-0123456789abcdef";
+    try {
+      expect(signatureDocumentBindingHmac(bindingInput)).not.toBe(mac);
+      expect(verifySignatureDocumentBindingHmac(bindingInput, mac)).toBe(false);
+    } finally {
+      process.env.SIGNATURE_BINDING_SECRET = testBindingSecret;
+    }
   });
 
   it("verifies a frozen report signature and suppresses ink if its document binding is tampered", () => {
-    const digest = signatureDocumentBindingSha256(bindingInput);
+    const mac = signatureDocumentBindingHmac(bindingInput);
     const calculationSnapshot = {
       signatureSnapshot: [{
         userId: "user-1",
@@ -47,7 +70,7 @@ describe("signature document binding", () => {
         signatureIntegrity: "verified",
         signatureVectorSha256: bindingInput.vectorSha256,
         signatureVectorIntegrity: "verified",
-        documentBindingSha256: digest,
+        documentBindingHmac: mac,
         documentBindingIntegrity: "verified",
       }],
     } as never;
