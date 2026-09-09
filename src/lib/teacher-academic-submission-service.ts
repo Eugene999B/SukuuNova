@@ -235,7 +235,7 @@ export async function submitGuardianSubmission(tx: TenantDb, input: { schoolId: 
   const status = reviewRequired ? "review_required" : "graded";
   await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicSubmission" SET "submittedAt"=NOW(),"status"=$1,"totalAwarded"=$2,"updatedAt"=NOW() WHERE "id"=$3 AND "schoolId"=$4`, status, total, submission.id, input.schoolId);
   let gradebookSync: { synced: boolean; selectedAttemptNumber: number | null; scoreId: string | null; reason: "manual_override" | null } | null = null;
-  if (!reviewRequired && assessment && guard) gradebookSync = await syncAttemptGradebook(tx, { schoolId: input.schoolId, actorId: work.teacherId, work, studentId: student.id, assessmentId: assessment.id, guard, strict: false });
+  if (!reviewRequired && assessment && guard) gradebookSync = await syncAttemptGradebook(tx, { schoolId: input.schoolId, actorId: work.teacherId, work, studentId: student.id, assessmentId: assessment.id, guard, strict: submission.attemptNumber === 1 });
   return { submissionId: submission.id, attemptNumber: submission.attemptNumber, status, totalAwarded: reviewRequired ? null : total, maxScore: Number(work.maxScore), gradebookSync };
 }
 
