@@ -4,6 +4,7 @@ import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import TimetableWorkspace from "./TimetableWorkspace";
 import "./timetable-v4.css";
+import "./timetable-simple.css";
 
 export default async function TimetablePage() {
   const session = await requireSchoolSession();
