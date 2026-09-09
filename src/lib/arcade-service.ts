@@ -11,6 +11,13 @@ import {
   validArcadeInteractionAnswer,
   type ArcadeInteractionQuestion,
 } from "./arcade-interaction-content";
+import {
+  canGenerateArcadeResponseContent,
+  correctArcadeResponseAnswer,
+  createArcadeResponseQuestions,
+  validArcadeResponseAnswer,
+  type ArcadeResponseQuestion,
+} from "./arcade-response-content";
 import { allowedAgeBandsForStandard, arcadeGame, recommendedAgeBand, standardBandFromClassLevel, type ArcadeAgeBand } from "./arcade-catalog";
 import { effectiveArcadeCatalog } from "./arcade-settings";
 import { arcadeLeaderboard, type ArcadeLeaderboardPeriod, type ArcadeLeaderboardScope } from "./arcade-leaderboard";
@@ -27,10 +34,13 @@ type RoundMeta = {
 };
 type RoundRow = ArcadeRound & RoundMeta;
 type Child = { id: string; name: string; classId: string | null; class: { name: string; level: string | null } | null };
-type StoredArcadeQuestion = ArcadeQuestion | ArcadeInteractionQuestion;
+type StoredArcadeQuestion = ArcadeQuestion | ArcadeInteractionQuestion | ArcadeResponseQuestion;
 
 function isInteractionQuestion(question: StoredArcadeQuestion): question is ArcadeInteractionQuestion {
-  return "kind" in question;
+  return "kind" in question && (question.kind === "match" || question.kind === "sort" || question.kind === "classify");
+}
+function isResponseQuestion(question: StoredArcadeQuestion): question is ArcadeResponseQuestion {
+  return "kind" in question && (question.kind === "path" || question.kind === "build" || question.kind === "typed");
 }
 async function requireCurrentGuardian(tx: TenantDb, context: Context) {
   const guardian = await tx.guardian.findFirst({ where: { id: context.guardianId, schoolId: context.schoolId, userId: context.userId }, select: { id: true } });
@@ -64,7 +74,7 @@ function publicRound(round: RoundRow | ArcadeRound) {
     roundLength: meta.roundLength ?? questions.length, score: complete ? (meta.score ?? 0) : null, challengeMode: meta.challengeMode ?? false,
     questions: questions.map((item) => ({
       id: item.id,
-      kind: isInteractionQuestion(item) ? item.kind : "choice",
+      kind: "kind" in item ? item.kind : "choice",
       prompt: item.prompt,
       options: item.options,
       ...(complete ? { answer: item.answer, explanation: item.explanation } : {}),
@@ -119,7 +129,7 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   const catalog = await effectiveArcadeCatalog(tx, context.schoolId);
   const effective = catalog.find((item) => item.gameKey === input.game)!;
   if (!effective.live || !effective.enabled) throw new AppError("This game is not available for play yet.", 409, "GAME_NOT_AVAILABLE");
-  if (!canGenerateArcadeContent(input.game) && !canGenerateArcadeInteractionContent(input.game)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
+  if (!canGenerateArcadeContent(input.game) && !canGenerateArcadeInteractionContent(input.game) && !canGenerateArcadeResponseContent(input.game)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
   const standardBand = standardBandFromClassLevel(child.class?.level ?? null);
   if (!effective.effectiveStandardBands.includes(standardBand)) throw new AppError("This game is not available for the learner's school standard.", 409, "GAME_NOT_AVAILABLE");
   const permittedAgeBands = allowedAgeBandsForStandard(standardBand).filter((age) => effective.effectiveAgeBands.includes(age));
@@ -147,6 +157,8 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
     questions = createArcadeGameQuestions(input.game, difficulty, roundLength);
   } else if (canGenerateArcadeInteractionContent(input.game)) {
     questions = createArcadeInteractionQuestions(input.game, difficulty, roundLength);
+  } else if (canGenerateArcadeResponseContent(input.game)) {
+    questions = createArcadeResponseQuestions(input.game, difficulty, roundLength);
   } else {
     throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
   }
@@ -178,7 +190,9 @@ export async function saveArcadeRound(tx: TenantDb, context: Context, input: { r
   const answersValid = input.answers.length === questions.length && input.answers.every((answer, index) => {
     if (answer === "") return true;
     const item = questions[index];
-    return isInteractionQuestion(item) ? validArcadeInteractionAnswer(item, answer) : item.options.includes(answer);
+    if (isInteractionQuestion(item)) return validArcadeInteractionAnswer(item, answer);
+    if (isResponseQuestion(item)) return validArcadeResponseAnswer(item, answer);
+    return item.options.includes(answer);
   });
   if (!answersValid) throw new AppError("Use the displayed game controls for each answer.", 400, "INVALID_ANSWERS");
   if (input.finish && input.answers.some((answer) => !answer)) throw new AppError(`Answer all ${questions.length} questions before finishing, or save and return later.`, 400, "INCOMPLETE_ROUND");
@@ -186,7 +200,11 @@ export async function saveArcadeRound(tx: TenantDb, context: Context, input: { r
     await tx.$executeRaw`UPDATE "ArcadeRound" SET "answers"=${JSON.stringify(input.answers)}::jsonb WHERE "id"=${round.id} AND "schoolId"=${context.schoolId} AND "status"='in_progress'`;
     return publicRound((await roundRow(tx, context.schoolId, round.id))!);
   }
-  const correct = questions.filter((item, index) => isInteractionQuestion(item) ? correctArcadeInteractionAnswer(item, input.answers[index]) : item.answer === input.answers[index]).length;
+  const correct = questions.filter((item, index) => {
+    if (isInteractionQuestion(item)) return correctArcadeInteractionAnswer(item, input.answers[index]);
+    if (isResponseQuestion(item)) return correctArcadeResponseAnswer(item, input.answers[index]);
+    return item.answer === input.answers[index];
+  }).length;
   const accuracy = questions.length ? correct / questions.length : 0;
   const xp = correct * 10;
   const stars = accuracy === 1 ? 3 : accuracy >= 0.6 ? 2 : accuracy >= 0.2 ? 1 : 0;
