@@ -3,7 +3,10 @@
 ## Recruitment retry completion
 - Successful application retries compare against the recorded answers, preserving receipts after question edits or vacancy closure.
 - Canonical key ordering handles PostgreSQL JSONB ordering; changed payloads still conflict and new applications still validate current screening questions.
-- Two new regression scenarios. GitHub verification pending. No migration.
+- Two new regression scenarios. Verified code SHA: bc039ce4c1dcba3bc19518df17fe3188b3d336cf.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34323826630 — 243 tests in 47 files; Prisma/migrations, typecheck, lint and production build passed.
+- No migration. All work ran directly on GitHub. This documentation-only checkpoint skips redundant CI.
+- Budget checkpoint: recruitment receipt fix complete. The wider mission remains open; production browser/mobile verification, remaining academic integration and operational modules are not certified complete.
 
 ## Gradebook term context batch
 - Replaced newest-term selection in the teacher gradebook with a shared school-local calendar selector.
