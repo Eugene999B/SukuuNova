@@ -1,12 +1,28 @@
 # Astra progress
 
 ## Verified current checkpoint
-- Current verified code SHA before this documentation-only checkpoint: `e8d68072867c16aed5db7802368b3d4b40e1dc1a`.
-- Full Build verification: GitHub Actions run `34381148702` — SUCCESS.
+- Current verified code SHA before this documentation-only checkpoint: `58ccba6c54d5a3d45cc3415079eb9af6d5010178`.
+- Full Build verification: GitHub Actions run `34385055602` — SUCCESS.
 - 82 migrations applied under a `NOSUPERUSER NOBYPASSRLS` PostgreSQL test role; Prisma generation/validation, TypeScript, design-token/pilot/navigation lint, ESLint, all tests and optimized production build passed.
-- Test result: **280 tests in 54 files passed**. Production build generated all 225 static pages successfully.
+- Test result: **285 tests in 55 files passed**.
 - Repository work in these tranches ran directly on GitHub; no local checkout and no history rewrite.
 - This documentation-only checkpoint records already verified code and does not require a redundant CI run.
+
+## Guardian multi-child + messaging boundary completion
+- Centralized guardian family scope in `guardian-family-context.ts`; a guardian session resolves only learners linked through that guardian record, and guessed/unlinked learner IDs are denied rather than falling back to another child.
+- Attendance, Academics/Results, Assignments and Fees now preserve an explicit selected-child context. Multi-child guardians can switch between All children and each linked learner without mixing records.
+- Learner detail links carry the child context into Attendance, Results, Fees and the richer interactive academic workspace.
+- Released-score visibility is now child-specific: a sibling's published report for a term cannot make another sibling's unreleased score visible.
+- The interactive `/guardian/academic` workspace preserves the initial selected child when entered from a learner/result view. URL/referer context is only a same-origin UI hint; the academic service still independently verifies the guardian-child relationship before returning learner data.
+- Guardian Messages page and API now use the dedicated guardian session rather than the school-session authenticator, and the Guardian row is revalidated against the session before inbox/send/read operations.
+- Guardian direct messages remain staff-directed; family accounts cannot use the route to message other family accounts.
+- Read state is stored in message metadata as `readAt` while the delivery lifecycle status remains intact. Marking an incoming school message read preserves its original sender identity and attachments.
+- Tenant-transaction authorization errors are awaited inside the route try/catch so stale or unlinked guardian sessions return the intended HTTP authorization response.
+- Outgoing guardian message audits reference the real created Message ID instead of a synthetic timestamp identifier.
+- Regression coverage includes linked/unlinked child scope, guessed-ID denial, sibling release isolation, same-origin initial academic context, foreign-context rejection, guardian-only messaging, sender preservation, read-state semantics, real-ID auditing and stale Guardian linkage.
+- No migration was required for this tranche.
+- Verified code SHA: `58ccba6c54d5a3d45cc3415079eb9af6d5010178`.
+- Full Build SUCCESS: run `34385055602` — 82 restricted-role migrations, TypeScript, lint, **285 tests in 55 files**, and optimized production build passed.
 
 ## Structured lesson planning + academic review
 - Rebuilt the existing LessonPlan workflow additively instead of creating a duplicate planning system.
@@ -46,6 +62,7 @@
 - Manual mark entry uses explicit atomic saves, spreadsheet paste, Present/Absent/Excused status, optimistic score snapshots, term locks and finalized-report protection.
 - Gradebook term selection is school-calendar aware and invalid/overlapping term states require explicit resolution rather than silent fallback.
 - Guardian academic state is child-specific; child switching clears stale data and linked guardians share the same underlying learner work state.
+- The broader guardian portal now uses the same relationship-scoped child model for learner context across attendance, released academics, fees and academic entry points.
 
 ## Other recently verified batches
 - Learning Arcade: reusable round engine, Math Sprint/Word Builder/Logic Lab, persistent drafts, server marking, XP/stars/levels/badges, recent results, school timezone streaks, progression and guardian child switching. First implementation is verified, but the broader game/content mission is not complete.
@@ -63,29 +80,32 @@
 - `20260909183000_teacher_academic_attempt_history`: multi-attempt submission identity/history.
 - `20260909184000_structured_lesson_planning`: structured LessonPlan fields, lifecycle timestamps and FORCE-RLS LessonPlanReview history.
 - Prior repair migrations for Guardian contact alignment, assessment links, Learning Arcade, library metadata and recruitment metadata remain additive; do not modify already deployed migrations.
+- Guardian multi-child/message completion required no migration; it tightened application-layer relationship scope, released-data filtering and authentication boundaries over the existing schema.
 
 ## Architecture / current subsystem
-- Current verified subsystem: connected teacher/guardian academic delivery, gradebook synchronization, configurable learner attempts, structured lesson planning and human academic review.
+- Current verified subsystem: connected teacher/guardian academic delivery, gradebook synchronization, configurable learner attempts, structured lesson planning/human academic review, and relationship-scoped guardian family context across core family modules.
 - `TeacherAcademicWork` remains the canonical learner assignment/submission engine. Extend it rather than creating another response/marking engine.
 - `Homework` is intentionally bridged into TeacherAcademicWork for learner delivery.
 - `LessonPlan` remains a separate planning/review artefact because it represents teacher preparation and leadership quality assurance, not a learner submission. Its structured lifecycle and review history are now first-class rather than a thin legacy form.
-- Sensitive areas remain authorization, owner governance, school access, academic authoring, teacher academic submission, gradebook canonical entry, reporting and tenant DB wrappers. Preserve audit/RLS/lock patterns when extending them.
+- Guardian portal child selection is a view/context concern only; authorization is always re-established from Guardian-to-Student relationships server-side.
+- Guardian messaging uses the dedicated guardian authentication boundary and existing Message delivery model; read receipts are metadata, not a new delivery status.
+- Sensitive areas remain authorization, owner governance, school access, academic authoring, guardian family scope, teacher academic submission, gradebook canonical entry, reporting and tenant DB wrappers. Preserve audit/RLS/lock patterns when extending them.
 
 ## Known unresolved / operational items
-- Production browser/mobile journeys have not yet been certified for the latest academic retry and structured lesson-review tranches. CI/build verification is complete; live UX/deployment verification is separate.
+- Production browser/mobile journeys have not yet been certified for the latest academic retry, structured lesson-review and guardian multi-child tranches. CI/build verification is complete; live UX/deployment verification is separate.
 - The scheduled `SukuuNova risk scan` currently stops because GitHub Actions secret `RISK_SCAN_CRON_SECRET` is missing/empty. This is a deployment/repository configuration blocker, not a reason to weaken the endpoint or workflow check.
 - Build/lint currently contains warnings but no errors, including existing React hook/image warnings and `jose` Edge Runtime CompressionStream/DecompressionStream warnings. They are not failures but should be cleaned during the whole-system pass.
-- Draft PR #85 (`fix/dashboard-workforce-kpi`) is unrelated to these academic tranches and must not be merged blindly.
+- Draft PR #85 (`fix/dashboard-workforce-kpi`) is unrelated to these academic/guardian tranches and must not be merged blindly.
 - Transport, feeding/canteen, wider communications, leadership intelligence, deeper library workflows, expanded Arcade/student learning and whole-system production journeys still require investigation/completion.
 
 ## Remaining mission / next 5
-1. Audit the broader guardian multi-child experience beyond the academic workspace: dashboard/module child context, stale-state protection, permissions and consistent child switching. Reuse the already-connected child-specific academic state rather than introducing a second selector model.
-2. Expand Learning Arcade/student learning content beyond the current three games, while preserving the existing round/progression engine and school/child isolation.
-3. Deepen student learning/resource and library workflows: student-specific mapping, circulation/history pagination and copy/accession-level needs only where they materially improve the real school flow.
-4. Continue operational modules in priority order: finance integrity/UX, transport, feeding/canteen and unified communications, reusing existing phase services instead of replacing them.
-5. Complete leadership/whole-system verification: analytics/exception queues, role-aware mobile UX, cross-tenant/IDOR checks, audit coverage, production browser journeys, then configure the missing risk-scan secret and certify scheduled operations.
+1. Expand Learning Arcade/student learning content beyond the current three games, while preserving the existing round/progression engine, school/child isolation and guardian context model.
+2. Deepen student learning/resource and library workflows: student-specific mapping, circulation/history pagination and copy/accession-level needs only where they materially improve the real school flow.
+3. Continue operational modules in priority order: finance integrity/UX, transport, feeding/canteen and unified communications, reusing existing phase services instead of replacing them.
+4. Complete leadership intelligence and exception workflows: role-aware analytics/queues, mobile behavior, cross-tenant/IDOR checks and audit coverage across the remaining school operations.
+5. Run whole-system production/browser/deployment journeys across school, teacher, guardian and platform roles; clean remaining build warnings where material, configure the missing risk-scan secret, and certify scheduled/production operations.
 
-The full mission is **not complete**. The academic retry and lesson-review tranches are complete and CI-verified, but production journey certification and the remaining operational/student-facing expansions are still open.
+The full mission is **not complete**. The academic retry, structured lesson-review and guardian multi-child/message-boundary tranches are complete and CI-verified, but production journey certification and the remaining operational/student-facing expansions are still open.
 
 ## Concurrency discipline
 - Recheck `main` and every affected blob immediately before editing.
