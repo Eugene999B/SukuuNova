@@ -231,7 +231,7 @@ export function optimizeTimetable(input: TimetableOptimizerInput): TimetableOpti
 
   const demands: TimetableDemand[] = [...input.demands]
     .filter((demand) => demand.id && demand.classId && demand.subjectId && demand.teacherId && Number.isFinite(demand.occurrences) && demand.occurrences > 0)
-    .map((demand) => ({ ...demand, occurrences: clampInt(demand.occurrences, 1, 40), blockSize: demand.blockSize === 2 ? 2 : 1 }))
+    .map((demand): TimetableDemand => ({ ...demand, occurrences: clampInt(demand.occurrences, 1, 40), blockSize: demand.blockSize === 2 ? 2 : 1 }))
     .sort((a, b) => a.id.localeCompare(b.id));
   const tasks: Task[] = demands.flatMap((demand) => Array.from({ length: demand.occurrences }, (_, occurrenceIndex) => ({ demand, occurrenceIndex })));
   const taskByKey = new Map(tasks.map((task) => [taskKey(task), task]));
