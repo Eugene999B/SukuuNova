@@ -6,7 +6,10 @@
 - Unsaved marks prompt before context changes and browser unload; duplicate actions are blocked while saving.
 - Canonical enterScore checks optional last-seen score snapshots under the term lock; teacher sheet requires snapshots. A conflict rolls back all rows.
 - Added eight paste, concurrent-write, status and batch-rollback regressions. No schema changes.
-- GitHub verification pending for this batch.
+- Verified code SHA: 781fba175447138f763e67072a62888602784a35.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34302273822 — 192 tests in 42 files, Prisma/migrations, typecheck, lint and production build passed.
+- Nine related files committed together directly on main. This documentation-only checkpoint skips redundant CI.
+- Production browser/mobile verification remains outstanding; the existing general GradebookEntryGrid still uses its older individual-cell workflow.
 
 ## Guardian learning batch
 - Final answers save and submit atomically; a failed save cannot finalize stale answers.
@@ -61,10 +64,11 @@
 - 20260909120000_teacher_academic_tenant_safety: FORCE RLS on TeacherAcademicWork/Question/Submission/Answer/Note; composite same-school foreign keys.
 - Foreign keys are NOT VALID for legacy rows, intentionally. New writes are checked; audit existing relationships before validating historical data.
 - 20260909121000_guardian_contact_schema_alignment: align optional Guardian.phone with Prisma.
+- 20260909130000_academic_work_assessment_link: nullable, unique assessment link with same-school foreign key; legacy rows linked only when unambiguous.
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: guardian assignments and academic data protection; connected teacher workflow batch complete and verified in GitHub Actions.
+- Current subsystem: efficient teacher academic mark entry; connected batch complete and verified in GitHub Actions. Next product subsystem: Learning Arcade, reusing guardian linked-child authorization.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
