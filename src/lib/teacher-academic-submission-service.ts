@@ -11,6 +11,7 @@ type WorkRow = {
   id: string; schoolId: string; termId: string; classId: string; subjectId: string;
   title: string; kind: string; instructions: string | null; maxScore: Prisma.Decimal;
   answerGuide: unknown; markingMode: string; dueAt: Date | null; status: string;
+  weekNumber: number; workNumber: number; workDate: Date;
 };
 type QuestionRow = {
   id: string; position: number; type: string; prompt: string; points: Prisma.Decimal;
@@ -47,7 +48,7 @@ function suggestedWrittenScore(response: string, guide: string[], points: number
   };
 }
 async function getWork(tx: TenantDb, schoolId: string, workId: string) {
-  const rows = await tx.$queryRawUnsafe<WorkRow[]>(`SELECT "id","schoolId","termId","classId","subjectId","title","kind","instructions","maxScore","markingMode","answerGuide","dueAt","status" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, workId, schoolId);
+  const rows = await tx.$queryRawUnsafe<WorkRow[]>(`SELECT "id","schoolId","termId","classId","subjectId","title","kind","instructions","maxScore","markingMode","answerGuide","dueAt","status","weekNumber","workNumber","workDate" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, workId, schoolId);
   const work = rows[0];
   if (!work) throw new AppError("Academic work was not found.", 404, "NOT_FOUND");
   if (work.status !== "published") throw new AppError("This activity is not currently published.", 409, "WORK_NOT_PUBLISHED");
@@ -62,9 +63,10 @@ async function assertLinkedStudent(tx: TenantDb, schoolId: string, guardianId: s
 export async function getGuardianAcademicOverview(tx: TenantDb, input: { schoolId: string; guardianId: string; studentId?: string; subjectId?: string }) {
   const students = await tx.$queryRawUnsafe<Array<{ id: string; name: string; admissionNo: string; classId: string | null; className: string | null }>>(`SELECT s."id",s."name",s."admissionNo",s."classId",c."name" AS "className" FROM "Student" s INNER JOIN "StudentGuardian" sg ON sg."studentId"=s."id" AND sg."schoolId"=s."schoolId" LEFT JOIN "Class" c ON c."id"=s."classId" AND c."schoolId"=s."schoolId" WHERE sg."schoolId"=$1 AND sg."guardianId"=$2 AND s."status"='active' ORDER BY s."name" ASC`, input.schoolId, input.guardianId);
   const selected = input.studentId ? students.find((student) => student.id === input.studentId) : students[0];
+  if (input.studentId && !selected) throw new ForbiddenError("You can only access academic work belonging to a linked child.");
   if (!selected) return { students, selectedStudent: null, subjects: [], works: [], notes: [] };
   await assertLinkedStudent(tx, input.schoolId, input.guardianId, selected.id);
-  const subjects = await tx.$queryRawUnsafe<Array<{ id: string; name: string }>>(`SELECT DISTINCT sub."id",sub."name" FROM "TeacherAcademicWork" w INNER JOIN "Subject" sub ON sub."id"=w."subjectId" AND sub."schoolId"=w."schoolId" WHERE w."schoolId"=$1 AND w."classId"=$2 AND w."status"='published' ORDER BY sub."name" ASC`, input.schoolId, selected.classId);
+  const subjects = await tx.$queryRawUnsafe<Array<{ id: string; name: string }>>(`SELECT sub."id",sub."name" FROM "Subject" sub WHERE sub."schoolId"=$1 AND (EXISTS (SELECT 1 FROM "TeacherAcademicWork" w WHERE w."schoolId"=sub."schoolId" AND w."subjectId"=sub."id" AND w."classId"=$2 AND w."status"='published') OR EXISTS (SELECT 1 FROM "TeacherAcademicNote" n WHERE n."schoolId"=sub."schoolId" AND n."subjectId"=sub."id" AND n."classId"=$2 AND n."status"='published')) ORDER BY sub."name" ASC`, input.schoolId, selected.classId);
   const filter = input.subjectId ? ` AND w."subjectId"=$3` : "";
   const params: unknown[] = input.subjectId ? [input.schoolId, selected.classId, input.subjectId] : [input.schoolId, selected.classId];
   const works = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT w."id",w."termId",w."classId",w."subjectId",w."kind",w."title",w."instructions",w."workDate",w."weekNumber",w."workNumber",w."maxScore",w."markingMode",w."dueAt",w."status",sub."name" AS "subjectName",COALESCE(ts."status",'not_started') AS "submissionStatus",CASE WHEN ts."status"='graded' THEN ts."totalAwarded" ELSE NULL END AS "totalAwarded" FROM "TeacherAcademicWork" w INNER JOIN "Subject" sub ON sub."id"=w."subjectId" AND sub."schoolId"=w."schoolId" LEFT JOIN "TeacherAcademicSubmission" ts ON ts."workId"=w."id" AND ts."studentId"=$${params.length + 1} AND ts."schoolId"=w."schoolId" WHERE w."schoolId"=$1 AND w."classId"=$2${filter} AND w."status"='published' ORDER BY w."workDate" DESC,w."workNumber" ASC`, ...params, selected.id);
@@ -102,7 +104,7 @@ export async function startGuardianSubmission(tx: TenantDb, input: { schoolId: s
   const submission = await loadSubmission(tx, input.schoolId, student.id, work.id);
   const questions = await tx.$queryRawUnsafe<QuestionRow[]>(`SELECT "id","position","type","prompt","points","options","acceptedAnswers" FROM "TeacherAcademicQuestion" WHERE "workId"=$1 AND "schoolId"=$2 ORDER BY "position" ASC`, work.id, input.schoolId);
   const answers = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT "questionId","responseText","responseData","awardedScore","markingMode","markerComment" FROM "TeacherAcademicAnswer" WHERE "submissionId"=$1 ORDER BY "questionId"`, submission?.id);
-  const publicWork = { id: work.id, schoolId: work.schoolId, termId: work.termId, classId: work.classId, subjectId: work.subjectId, title: work.title, kind: work.kind, instructions: work.instructions, maxScore: work.maxScore, markingMode: work.markingMode, dueAt: work.dueAt, status: work.status };
+  const publicWork = { weekNumber: work.weekNumber, workNumber: work.workNumber, workDate: work.workDate, id: work.id, schoolId: work.schoolId, termId: work.termId, classId: work.classId, subjectId: work.subjectId, title: work.title, kind: work.kind, instructions: work.instructions, maxScore: work.maxScore, markingMode: work.markingMode, dueAt: work.dueAt, status: work.status };
   const released = submission?.status === "graded";
   return {
     work: publicWork,
@@ -209,4 +211,10 @@ export async function reviewTeacherSubmission(tx: TenantDb, input: { schoolId: s
   await tx.score.update({ where: { id: score.id }, data: { remarks: input.reviewNotes ?? null } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.teacherId, action: "academic_submission.reviewed", entityType: "TeacherAcademicSubmission", entityId: input.submissionId, after: { totalAwarded: total, status: "graded", reviewNotes: input.reviewNotes ?? null } });
   return { submissionId: input.submissionId, totalAwarded: total, status: "graded" };
+}
+
+/** Save the exact final answers and submit within the caller's tenant transaction. */
+export async function finalizeGuardianSubmission(tx: TenantDb, input: Parameters<typeof saveGuardianSubmission>[1]) {
+  await saveGuardianSubmission(tx, input);
+  return submitGuardianSubmission(tx, input);
 }

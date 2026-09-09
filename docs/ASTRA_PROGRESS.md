@@ -1,5 +1,15 @@
 # Astra progress
 
+## Guardian learning batch
+- Final answers save and submit atomically; a failed save cannot finalize stale answers.
+- Activities bind to a specific child; stale overview responses are discarded and child switches clear old learning data.
+- Submitted and graded work reopens read-only with released answer marks and teacher feedback.
+- Progress counts use the selected child's returned activities; all-subject selection stays consistent.
+- Subjects with published notes appear even without assignments; invalid child selection is explicitly denied.
+- Native activity dialog provides keyboard focus containment; saves/submissions prevent duplicate clicks and show errors inside the dialog.
+- Guardian academic responses use no-store. Added five transaction/isolation/filter/result regressions.
+- GitHub verification pending for this batch.
+
 ## Current connected academic batch
 - Stable work-to-assessment links replace title-only lookup; legacy links are adopted only when unambiguous.
 - Manual marks use canonical gradebook permission, term, finalized-report, validation and audit rules.
