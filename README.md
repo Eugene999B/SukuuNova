@@ -86,6 +86,8 @@ Conceptual academic flow:
 
 **Academic year → term → class → subject → teacher → assessment → score → moderation → report card → approval → publication**
 
+Teachers can reopen and edit their lesson drafts or plans returned for revision, then resubmit the same record. Approved lesson content stays protected; its author can mark the lesson completed. Homework drafts can be edited and assigned from the existing editor. Content edits verify the current teaching assignment, term lock, author and last-seen update timestamp. Published homework content cannot be silently rewritten through this editor.
+
 ### Attendance and safety
 
 Attendance supports ordinary class registers as well as physical/device and biometric directions. Existing concepts include class attendance, staff attendance, attendance history, exception handling, device registration, device identity, attendance receipts, idempotency/nonce protections, face enrollment and face-match review.
