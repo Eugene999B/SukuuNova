@@ -18,6 +18,13 @@ import {
   validArcadeResponseAnswer,
   type ArcadeResponseQuestion,
 } from "./arcade-response-content";
+import {
+  canGenerateArcadeWorldContent,
+  correctArcadeWorldAnswer,
+  createArcadeWorldQuestions,
+  validArcadeWorldAnswer,
+  type ArcadeWorldQuestion,
+} from "./arcade-world-content";
 import { allowedAgeBandsForStandard, arcadeGame, recommendedAgeBand, standardBandFromClassLevel, type ArcadeAgeBand } from "./arcade-catalog";
 import { effectiveArcadeCatalog } from "./arcade-settings";
 import { arcadeLeaderboard, type ArcadeLeaderboardPeriod, type ArcadeLeaderboardScope } from "./arcade-leaderboard";
@@ -34,7 +41,7 @@ type RoundMeta = {
 };
 type RoundRow = ArcadeRound & RoundMeta;
 type Child = { id: string; name: string; classId: string | null; class: { name: string; level: string | null } | null };
-type StoredArcadeQuestion = ArcadeQuestion | ArcadeInteractionQuestion | ArcadeResponseQuestion;
+type StoredArcadeQuestion = ArcadeQuestion | ArcadeInteractionQuestion | ArcadeResponseQuestion | ArcadeWorldQuestion;
 
 function isInteractionQuestion(question: StoredArcadeQuestion): question is ArcadeInteractionQuestion {
   return "kind" in question && (question.kind === "match" || question.kind === "sort" || question.kind === "classify");
@@ -42,9 +49,13 @@ function isInteractionQuestion(question: StoredArcadeQuestion): question is Arca
 function isResponseQuestion(question: StoredArcadeQuestion): question is ArcadeResponseQuestion {
   return "kind" in question && (question.kind === "path" || question.kind === "build" || question.kind === "typed");
 }
+function isWorldQuestion(question: StoredArcadeQuestion): question is ArcadeWorldQuestion {
+  return "kind" in question && ["choice_plus", "match_plus", "sort_plus", "grid", "map", "memory", "simulation"].includes(question.kind);
+}
 function gradeStoredQuestion(question: StoredArcadeQuestion, answer: string) {
   if (isInteractionQuestion(question)) return correctArcadeInteractionAnswer(question, answer);
   if (isResponseQuestion(question)) return correctArcadeResponseAnswer(question, answer);
+  if (isWorldQuestion(question)) return correctArcadeWorldAnswer(question, answer);
   return question.answer === answer;
 }
 async function requireCurrentGuardian(tx: TenantDb, context: Context) {
@@ -83,6 +94,7 @@ function publicRound(round: RoundRow | ArcadeRound) {
       kind: "kind" in item ? item.kind : "choice",
       prompt: item.prompt,
       options: item.options,
+      ...("scene" in item && item.scene ? { scene: item.scene } : {}),
       ...(complete ? { answer: item.answer, explanation: item.explanation, correct: gradeStoredQuestion(item, answers[index] ?? "") } : {}),
     })),
   };
@@ -135,7 +147,7 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   const catalog = await effectiveArcadeCatalog(tx, context.schoolId);
   const effective = catalog.find((item) => item.gameKey === input.game)!;
   if (!effective.live || !effective.enabled) throw new AppError("This game is not available for play yet.", 409, "GAME_NOT_AVAILABLE");
-  if (!canGenerateArcadeContent(input.game) && !canGenerateArcadeInteractionContent(input.game) && !canGenerateArcadeResponseContent(input.game)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
+  if (!canGenerateArcadeContent(input.game) && !canGenerateArcadeInteractionContent(input.game) && !canGenerateArcadeResponseContent(input.game) && !canGenerateArcadeWorldContent(input.game)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
   const standardBand = standardBandFromClassLevel(child.class?.level ?? null);
   if (!effective.effectiveStandardBands.includes(standardBand)) throw new AppError("This game is not available for the learner's school standard.", 409, "GAME_NOT_AVAILABLE");
   const permittedAgeBands = allowedAgeBandsForStandard(standardBand).filter((age) => effective.effectiveAgeBands.includes(age));
@@ -165,6 +177,8 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
     questions = createArcadeInteractionQuestions(input.game, difficulty, roundLength);
   } else if (canGenerateArcadeResponseContent(input.game)) {
     questions = createArcadeResponseQuestions(input.game, difficulty, roundLength);
+  } else if (canGenerateArcadeWorldContent(input.game)) {
+    questions = createArcadeWorldQuestions(input.game, difficulty, roundLength);
   } else {
     throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
   }
@@ -198,6 +212,7 @@ export async function saveArcadeRound(tx: TenantDb, context: Context, input: { r
     const item = questions[index];
     if (isInteractionQuestion(item)) return validArcadeInteractionAnswer(item, answer);
     if (isResponseQuestion(item)) return validArcadeResponseAnswer(item, answer);
+    if (isWorldQuestion(item)) return validArcadeWorldAnswer(item, answer);
     return item.options.includes(answer);
   });
   if (!answersValid) throw new AppError("Use the displayed game controls for each answer.", 400, "INVALID_ANSWERS");

@@ -42,7 +42,6 @@ describe("Arcade Universe A4 response engines", () => {
       ["fraction-forge", "build"], ["punctuation-patrol", "build"], ["binary-basics", "build"],
       ["spelling-sprint", "typed"], ["keyboard-ninja", "typed"],
     ]);
-
     for (const game of RESPONSE_ARCADE_GAME_KEYS) {
       for (const difficulty of [1, 2, 3, 4, 5]) {
         const questions = createArcadeResponseQuestions(game, difficulty, 3);
@@ -79,7 +78,6 @@ describe("Arcade Universe A4 response engines", () => {
     expect(spelling.kind).toBe("typed");
     expect(correctArcadeResponseAnswer(spelling, `  ${spelling.answer.toUpperCase()}  `)).toBe(true);
     expect(validArcadeResponseAnswer(spelling, "   ")).toBe(false);
-
     const keyboard = createArcadeResponseQuestions("keyboard-ninja", 2, 1)[0];
     expect(keyboard.kind).toBe("typed");
     expect(keyboard.caseSensitive).toBe(true);
@@ -87,7 +85,7 @@ describe("Arcade Universe A4 response engines", () => {
     expect(correctArcadeResponseAnswer(keyboard, keyboard.answer.toLocaleLowerCase())).toBe(keyboard.answer === keyboard.answer.toLocaleLowerCase());
   });
 
-  it("exposes exactly forty runtime-ready packs while preserving the 64-game catalogue", async () => {
+  it("keeps the verified first forty runtime packs live while allowing later expansion", async () => {
     const fixture = await createTenantFixture();
     const catalog = await withTenant(fixture.schoolId, (tx) => effectiveArcadeCatalog(tx, fixture.schoolId));
     const liveKeys = catalog.filter((game) => game.live).map((game) => game.gameKey);
@@ -95,18 +93,15 @@ describe("Arcade Universe A4 response engines", () => {
     expect(catalog).toHaveLength(64);
     expect(expected).toHaveLength(40);
     expect(new Set(expected).size).toBe(40);
-    expect(liveKeys).toHaveLength(40);
-    expect(new Set(liveKeys)).toEqual(new Set(expected));
+    expect(liveKeys.length).toBeGreaterThanOrEqual(40);
+    expect(liveKeys).toEqual(expect.arrayContaining(expected));
   });
 
   it("plays a path-choice round privately and returns authoritative per-task grading only after completion", async () => {
     const fixture = await setup("Primary 1", "Nana Path");
-    const round = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, {
-      studentId: fixture.studentId, game: "subtraction-rescue", ageBand: "age_6_8", roundLength: 5,
-    }));
+    const round = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, { studentId: fixture.studentId, game: "subtraction-rescue", ageBand: "age_6_8", roundLength: 5 }));
     expect(round).toMatchObject({ engine: "path_choice", difficulty: 1, standardBand: "basic_1_3", ageBand: "age_6_8", roundLength: 5 });
     expect(round.questions.every((item) => item.kind === "path" && !("answer" in item) && !("explanation" in item) && !("correct" in item))).toBe(true);
-
     const questions = await storedQuestions(fixture.schoolId, round.id);
     const answers = questions.map((item, index) => index === 0 ? item.options.find((option) => option !== item.answer)! : item.answer);
     const completed = await withTenant(fixture.schoolId, (tx) => saveArcadeRound(tx, fixture.context, { roundId: round.id, answers, finish: true }));
@@ -118,29 +113,20 @@ describe("Arcade Universe A4 response engines", () => {
 
   it("saves and resumes a tile-builder round and rejects duplicate or forged tiles", async () => {
     const fixture = await setup("Primary 5", "Abena Builder");
-    const round = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, {
-      studentId: fixture.studentId, game: "fraction-forge", ageBand: "age_9_11", roundLength: 5,
-    }));
+    const round = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, { studentId: fixture.studentId, game: "fraction-forge", ageBand: "age_9_11", roundLength: 5 }));
     expect(round).toMatchObject({ engine: "tile_builder", difficulty: 2, standardBand: "basic_4_6", roundLength: 5 });
     expect(round.questions.every((item) => item.kind === "build" && !("answer" in item))).toBe(true);
-
     const questions = await storedQuestions(fixture.schoolId, round.id);
     const correct = questions.map((item) => item.answer);
     const firstOrder = JSON.parse(correct[0]) as string[];
     const reversedFirst = JSON.stringify([...firstOrder].reverse());
     const draft = [reversedFirst, "", "", "", ""];
     await withTenant(fixture.schoolId, (tx) => saveArcadeRound(tx, fixture.context, { roundId: round.id, answers: draft, finish: false }));
-    const resumed = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, {
-      studentId: fixture.studentId, game: "fraction-forge", ageBand: "age_9_11", roundLength: 5,
-    }));
+    const resumed = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, { studentId: fixture.studentId, game: "fraction-forge", ageBand: "age_9_11", roundLength: 5 }));
     expect(resumed.id).toBe(round.id);
     expect(resumed.answers).toEqual(draft);
-
     const duplicate = JSON.stringify(firstOrder.map((value, index) => index === firstOrder.length - 1 ? firstOrder[0] : value));
-    await expect(withTenant(fixture.schoolId, (tx) => saveArcadeRound(tx, fixture.context, {
-      roundId: round.id, answers: [duplicate, ...correct.slice(1)], finish: true,
-    }))).rejects.toMatchObject({ code: "INVALID_ANSWERS", status: 400 });
-
+    await expect(withTenant(fixture.schoolId, (tx) => saveArcadeRound(tx, fixture.context, { roundId: round.id, answers: [duplicate, ...correct.slice(1)], finish: true }))).rejects.toMatchObject({ code: "INVALID_ANSWERS", status: 400 });
     const completed = await withTenant(fixture.schoolId, (tx) => saveArcadeRound(tx, fixture.context, { roundId: round.id, answers: correct, finish: true }));
     expect(completed).toMatchObject({ correct: 5, xp: 50, stars: 3, score: 10200 });
     expect(completed.questions.every((item) => item.correct === true)).toBe(true);
@@ -148,9 +134,7 @@ describe("Arcade Universe A4 response engines", () => {
 
   it("grades typed spelling case-insensitively and exact keyboard-copy tasks case-sensitively", async () => {
     const fixture = await setup("Primary 5", "Kojo Typist");
-    const spellingRound = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, {
-      studentId: fixture.studentId, game: "spelling-sprint", ageBand: "age_9_11", roundLength: 5,
-    }));
+    const spellingRound = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, { studentId: fixture.studentId, game: "spelling-sprint", ageBand: "age_9_11", roundLength: 5 }));
     expect(spellingRound).toMatchObject({ engine: "typed_response", difficulty: 2 });
     expect(spellingRound.questions.every((item) => item.kind === "typed" && !("answer" in item) && !("correct" in item))).toBe(true);
     const spellingQuestions = await storedQuestions(fixture.schoolId, spellingRound.id);
@@ -158,12 +142,9 @@ describe("Arcade Universe A4 response engines", () => {
     const spellingCompleted = await withTenant(fixture.schoolId, (tx) => saveArcadeRound(tx, fixture.context, { roundId: spellingRound.id, answers: spellingAnswers, finish: true }));
     expect(spellingCompleted.correct).toBe(5);
     expect(spellingCompleted.questions.every((item) => item.correct === true)).toBe(true);
-
-    const keyboardRound = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, {
-      studentId: fixture.studentId, game: "keyboard-ninja", ageBand: "age_9_11", roundLength: 5,
-    }));
+    const keyboardRound = await withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, { studentId: fixture.studentId, game: "keyboard-ninja", ageBand: "age_9_11", roundLength: 5 }));
     const keyboardQuestions = await storedQuestions(fixture.schoolId, keyboardRound.id);
-    const keyboardAnswers = keyboardQuestions.map((item, index) => index === 0 ? item.answer.toLocaleLowerCase() : item.answer);
+    const keyboardAnswers = keyboardQuestions.map((item, answerIndex) => answerIndex === 0 ? item.answer.toLocaleLowerCase() : item.answer);
     const expectedCorrect = keyboardQuestions[0].answer === keyboardQuestions[0].answer.toLocaleLowerCase() ? 5 : 4;
     const keyboardCompleted = await withTenant(fixture.schoolId, (tx) => saveArcadeRound(tx, fixture.context, { roundId: keyboardRound.id, answers: keyboardAnswers, finish: true }));
     expect(keyboardCompleted.correct).toBe(expectedCorrect);
