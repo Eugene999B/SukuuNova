@@ -14,7 +14,7 @@ function payload(title:string,id:string,name:string,extra:Record<string,unknown>
 export async function GET(){
  try{
   const session=await requireGuardianSession();
-  return withTenant(session.schoolId,async tx=>{
+  return await withTenant(session.schoolId,async tx=>{
    const linked=await tx.guardian.findFirst({where:{id:session.guardianId,schoolId:session.schoolId,userId:session.userId},select:{id:true}});
    if(!linked)throw new ForbiddenError("Guardian messaging is not available for this account.");
    const rows=await tx.message.findMany({where:{schoolId:session.schoolId,channel:"in_app",recipientId:session.userId},orderBy:{createdAt:"desc"},take:100,select:{id:true,body:true,status:true,createdAt:true,templateVariables:true,mediaUrl:true}});
@@ -27,7 +27,7 @@ export async function POST(request:Request){
  try{
   const session=await requireGuardianSession();
   const raw=await request.json();
-  return withTenant(session.schoolId,async tx=>{
+  return await withTenant(session.schoolId,async tx=>{
    const linked=await tx.guardian.findFirst({where:{id:session.guardianId,schoolId:session.schoolId,userId:session.userId},select:{id:true}});
    if(!linked)throw new ForbiddenError("Guardian messaging is not available for this account.");
    if(raw?.action==="mark_read"){
@@ -36,7 +36,7 @@ export async function POST(request:Request){
     if(!m)return NextResponse.json({error:"NOT_FOUND",message:"Message not found."},{status:404});
     const p=meta(m.templateVariables);
     const readMeta={...p,readAt:new Date().toISOString()};
-    await tx.message.update({where:{id:m.id},data:{status:"read",templateVariables:JSON.parse(JSON.stringify({
+    await tx.message.update({where:{id:m.id},data:{templateVariables:JSON.parse(JSON.stringify({
       title:String(p.title||m.body.split("\n")[0]),
       senderType:typeof p.senderType==="string"?p.senderType:"school_user",
       senderId:typeof p.senderId==="string"?p.senderId:"system",
