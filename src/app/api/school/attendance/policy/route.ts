@@ -7,6 +7,7 @@ import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 import { attendancePolicySchema, readAttendancePolicy } from "@/lib/attendance-policy";
+import { requireSchoolFeatureInTransaction } from "@/lib/feature-flags";
 
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
 const patchSchema = z.object({
@@ -34,6 +35,9 @@ export async function PATCH(request: Request) {
     const input = await parseJson(request, patchSchema);
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
+      if (input.policy.qr.requireFace) {
+        await requireSchoolFeatureInTransaction(tx, session.schoolId, "face_recognition");
+      }
       const before = await readAttendancePolicy(tx, session.schoolId);
 
       await tx.schoolSettings.update({
