@@ -88,6 +88,7 @@ describe("guardian assignment security", () => {
 
   it("uses gradebook term protections when a teacher reviews a submitted attempt", async () => {
     const fixture = await setup();
+    await withTenant(fixture.schoolId, (tx) => tx.$executeRaw`UPDATE "TeacherAcademicWork" SET "markingMode"='review' WHERE "id"=${fixture.workId} AND "schoolId"=${fixture.schoolId}`);
     await withTenant(fixture.schoolId, (tx) => saveGuardianSubmission(tx, { ...context(fixture), answers: [{ questionId: fixture.questionId, responseData: "4" }] }));
     const submitted = await withTenant(fixture.schoolId, (tx) => submitGuardianSubmission(tx, context(fixture)));
     await withTenant(fixture.schoolId, (tx) => tx.term.update({ where: { id: fixture.termId }, data: { isLocked: true } }));
