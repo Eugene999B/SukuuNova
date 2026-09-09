@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { beforeEach, describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
 import { decryptEmbeddingRef } from "../src/lib/face-crypto";
-import { enrollFace, reviewFaceMatch } from "../src/lib/face-service";
+import { enrollFace, matchFaceAttendance, reviewFaceMatch } from "../src/lib/face-service";
 import type { FaceProvider } from "../src/lib/face-provider";
 import { addApprovedPickup, attemptPickup, reviewPickupRequest } from "../src/lib/pickup-service";
 import { getVisiblePayslipPdf, visiblePayslips } from "../src/lib/payroll-service";
@@ -180,6 +180,36 @@ describe("Phase 2 differentiator safety gates", () => {
       expect(stored?.embeddingRef).not.toContain("provider-face-id-must-not-be-plain");
       expect(decryptEmbeddingRef(stored!.embeddingRef)).toBe("provider-face-id-must-not-be-plain");
       expect(stored?.consentByGuardianId).toBe(guardianId);
+    });
+  });
+
+  it("records face-terminal attendance using authenticated device context without a staff actor", async () => {
+    const image = Buffer.concat([Buffer.from("89504e470d0a1a0a", "hex"), Buffer.alloc(100)]).toString("base64");
+    const provider: FaceProvider = {
+      async indexFace() { return { faceId: "phase2-device-staff-face" }; },
+      async searchFace() { return { externalId: `staff:${staffId}`, confidence: 99 }; }
+    };
+
+    await withTenant(fixture.schoolId, async (tx) => {
+      await enrollFace(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        target: { staffId },
+        image
+      }, provider);
+
+      const recorded = await matchFaceAttendance(tx, {
+        schoolId: fixture.schoolId,
+        image,
+        deviceId,
+        type: "in",
+        deviceAuthenticated: true,
+        timestamp: new Date("2026-09-09T08:05:00.000Z")
+      }, provider);
+
+      expect(recorded.status).toBe("recorded");
+      if (recorded.status !== "recorded") throw new Error("Expected authenticated face device attendance to record.");
+      expect(recorded.event).toMatchObject({ staffId, deviceId, method: "face", type: "in" });
     });
   });
 
