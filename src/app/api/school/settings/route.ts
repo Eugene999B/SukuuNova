@@ -7,8 +7,22 @@ import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 
+const logoUrl = z.union([
+  z.null(),
+  z.string().max(1_500_000).refine(
+    (value) =>
+      /^data:image\/(png|jpeg|webp);base64,/i.test(value) ||
+      /^https:\/\//i.test(value),
+    "School logo must be a PNG, JPG, WebP data image or a secure HTTPS image URL.",
+  ),
+]);
+
 const patchSchema = z.object({
-  school: z.object({ name: z.string().trim().min(2).max(160), uniqueCode: z.string().trim().min(2).max(80) }).optional(),
+  school: z.object({
+    name: z.string().trim().min(2).max(160),
+    uniqueCode: z.string().trim().min(2).max(80).optional(),
+    logoUrl: logoUrl.optional(),
+  }).optional(),
   settings: z.object({
     expectedResumptionTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
     attendanceGraceMinutes: z.number().int().min(0).max(180),
@@ -16,8 +30,8 @@ const patchSchema = z.object({
     gradeCaWeight: z.number().min(0).max(100),
     gradeExamWeight: z.number().min(0).max(100),
     allowPartialReportCards: z.boolean(),
-    smsSenderId: z.string().max(20).optional()
-  }).optional()
+    smsSenderId: z.string().max(20).optional(),
+  }).optional(),
 });
 
 export async function GET() {
@@ -25,17 +39,19 @@ export async function GET() {
     const session = await requireSchoolSession();
     const data = await withTenant(session.schoolId, async (tx) => {
       const [school, settings, academicYears, terms] = await Promise.all([
-        tx.school.findUnique({ where: { id: session.schoolId }, select: { id: true, name: true, uniqueCode: true, status: true } }),
+        tx.school.findUnique({ where: { id: session.schoolId }, select: { id: true, name: true, uniqueCode: true, status: true, logoUrl: true } }),
         tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId } }),
         tx.academicYear.findMany({ where: { schoolId: session.schoolId }, orderBy: { startDate: "desc" } }),
-        tx.term.findMany({ where: { schoolId: session.schoolId }, include: { academicYear: { select: { id: true, name: true, startDate: true, endDate: true } } }, orderBy: [{ startDate: "desc" }, { name: "asc" }] })
+        tx.term.findMany({ where: { schoolId: session.schoolId }, include: { academicYear: { select: { id: true, name: true, startDate: true, endDate: true } } }, orderBy: [{ startDate: "desc" }, { name: "asc" }] }),
       ]);
       if (!school) throw new AppError("School not found.", 404, "NOT_FOUND");
       return { school, settings, academicYears, terms };
     });
     const now = new Date();
     return NextResponse.json({ ...data, terms: data.terms.map((term) => ({ ...term, status: now < term.startDate ? "upcoming" : now > term.endDate ? "completed" : "current" })) });
-  } catch (error) { return routeError(error); }
+  } catch (error) {
+    return routeError(error);
+  }
 }
 
 export async function PATCH(request: Request) {
@@ -49,18 +65,42 @@ export async function PATCH(request: Request) {
       await requirePermission(tx, session.userId, "settings:manage_school");
       const beforeSchool = await tx.school.findUnique({ where: { id: session.schoolId } });
       const beforeSettings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId } });
+      if (!beforeSchool) throw new AppError("School not found.", 404, "NOT_FOUND");
+
       let school = beforeSchool;
       if (input.school) {
-        const requestedCode = input.school.uniqueCode.trim().toLowerCase();
-        if (requestedCode !== beforeSchool?.uniqueCode) {
-          throw new AppError("School code cannot be changed after provisioning because it anchors guardian links, IDs, and QR codes.", 409, "SCHOOL_CODE_IMMUTABLE");
+        if (input.school.uniqueCode) {
+          const requestedCode = input.school.uniqueCode.trim().toLowerCase();
+          if (requestedCode !== beforeSchool.uniqueCode) {
+            throw new AppError("School code cannot be changed after provisioning because it anchors guardian links, IDs, and QR codes.", 409, "SCHOOL_CODE_IMMUTABLE");
+          }
         }
-        school = await tx.school.update({ where: { id: session.schoolId }, data: { name: input.school.name } });
+        school = await tx.school.update({
+          where: { id: session.schoolId },
+          data: {
+            name: input.school.name,
+            ...(input.school.logoUrl !== undefined ? { logoUrl: input.school.logoUrl } : {}),
+          },
+        });
       }
-      const settings = input.settings ? await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: input.settings }) : beforeSettings;
-      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "settings.school_workspace_updated", entityType: "SchoolSettings", entityId: session.schoolId, before: { school: beforeSchool, settings: beforeSettings }, after: { school, settings } });
+
+      const settings = input.settings
+        ? await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: input.settings })
+        : beforeSettings;
+
+      await appendSchoolAudit(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        action: "settings.school_workspace_updated",
+        entityType: "SchoolSettings",
+        entityId: session.schoolId,
+        before: { school: beforeSchool, settings: beforeSettings },
+        after: { school, settings },
+      });
       return { school, settings };
     });
     return NextResponse.json({ ok: true, ...result });
-  } catch (error) { return routeError(error); }
+  } catch (error) {
+    return routeError(error);
+  }
 }
