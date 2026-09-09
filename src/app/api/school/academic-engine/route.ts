@@ -6,7 +6,7 @@ import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { generateSchoolTimetable, readTimetableExtensions } from "@/lib/timetable-generation-policy";
 import { getAcademicEngineConfig, saveAcademicEngineConfig } from "@/lib/academic-engine";
-import { previewNovaCoreTimetable } from "@/lib/novacore/timetable-preview-service";
+import { previewNovaCoreTimetableWithShadow } from "@/lib/novacore/timetable-shadow-service";
 
 const period = z.object({ period: z.number().int().min(1).max(16), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) });
 const day = z.object({ dayOfWeek: z.number().int().min(1).max(7), name: z.string().min(2).max(20), enabled: z.boolean(), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/), periods: z.array(period).max(16).optional() });
@@ -164,7 +164,7 @@ export async function POST(request: Request) {
       }
 
       if (input.action === "novacorePreview") {
-        return NextResponse.json(await previewNovaCoreTimetable(tx, {
+        return NextResponse.json(await previewNovaCoreTimetableWithShadow(tx, {
           schoolId: session.schoolId,
           actorId: session.userId,
           mode: input.mode,
