@@ -8,7 +8,10 @@
 - Subjects with published notes appear even without assignments; invalid child selection is explicitly denied.
 - Native activity dialog provides keyboard focus containment; saves/submissions prevent duplicate clicks and show errors inside the dialog.
 - Guardian academic responses use no-store. Added five transaction/isolation/filter/result regressions.
-- GitHub verification pending for this batch.
+- Verified code SHA: 8dcd6e792c714ef1f776f4e6d1916f33653d69ba.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34301477352 — 184 tests in 41 files, migrations, Prisma checks, typecheck, lint and production build passed.
+- Five files changed directly on GitHub. This documentation-only checkpoint skips redundant CI.
+- Production browser/deployment verification and Learning Arcade remain outstanding.
 
 ## Current connected academic batch
 - Stable work-to-assessment links replace title-only lookup; legacy links are adopted only when unambiguous.
