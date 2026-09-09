@@ -38,7 +38,7 @@ export default async function ReportCardPrintPage({ params }: { params: Promise<
         return { kind: "denied" as const, message: "Only the school academic team or assigned teachers can view report cards." };
       }
       const assigned = gate.student.class.classTeacherId === session.userId || Boolean(
-        await tx.classSubjectTeacher.findFirst({ where: { schoolId: session.schoolId, classId: gate.student.class.id, teacherId: session.userId }, select: { id: true } }),
+        await tx.classSubjectTeacher.findFirst({ where: { schoolId: session.schoolId, classId: gate.student.class.id, teacherId: session.userId }, select: { classId: true } }),
       );
       if (!assigned) {
         return { kind: "denied" as const, message: "Teachers may view report cards only for classes assigned to them." };
