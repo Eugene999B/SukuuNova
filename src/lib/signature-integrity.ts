@@ -1,7 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { canonicalSignatureVector, type SignatureVectorEvidence } from "@/lib/signature-vector";
 
 const PNG_PREFIX = "data:image/png;base64,";
+const DOCUMENT_BINDING_VERSION = "sukuunova-signature-binding-v2-hmac-sha256";
 
 export type SignatureDocumentBindingInput = {
   schoolId: string;
@@ -31,7 +32,7 @@ function normalizedBinding(input: SignatureDocumentBindingInput) {
   if (!/^[a-f0-9]{64}$/i.test(input.imageSha256)) throw new Error("Signature image hash is invalid.");
   if (input.vectorSha256 && !/^[a-f0-9]{64}$/i.test(input.vectorSha256)) throw new Error("Signature vector hash is invalid.");
   return {
-    version: "sukuunova-signature-binding-v1",
+    version: DOCUMENT_BINDING_VERSION,
     schoolId: input.schoolId,
     documentType: input.documentType,
     documentId: input.documentId,
@@ -43,20 +44,30 @@ function normalizedBinding(input: SignatureDocumentBindingInput) {
   };
 }
 
-export function signatureDocumentBindingSha256(input: SignatureDocumentBindingInput) {
-  return createHash("sha256").update(JSON.stringify(normalizedBinding(input)), "utf8").digest("hex");
+function bindingSecret() {
+  const source = process.env.SIGNATURE_BINDING_SECRET?.trim() || process.env.SCHOOL_AUTH_SECRET?.trim();
+  if (!source || source.length < 32) throw new Error("Signature document binding secret is not configured securely.");
+  return createHmac("sha256", Buffer.from(source, "utf8"))
+    .update("SukuuNova:signature-document-binding:key:v2", "utf8")
+    .digest();
 }
 
-function verifySha256(actualHex: string, expectedSha256: string) {
-  if (!/^[a-f0-9]{64}$/i.test(expectedSha256)) return false;
+export function signatureDocumentBindingHmac(input: SignatureDocumentBindingInput) {
+  return createHmac("sha256", bindingSecret())
+    .update(JSON.stringify(normalizedBinding(input)), "utf8")
+    .digest("hex");
+}
+
+function verifyHex(actualHex: string, expectedHex: string) {
+  if (!/^[a-f0-9]{64}$/i.test(expectedHex)) return false;
   const actual = Buffer.from(actualHex, "hex");
-  const expected = Buffer.from(expectedSha256, "hex");
+  const expected = Buffer.from(expectedHex, "hex");
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
 export function verifySignatureImageSha256(dataUrl: string, expectedSha256: string) {
   try {
-    return verifySha256(signatureImageSha256(dataUrl), expectedSha256);
+    return verifyHex(signatureImageSha256(dataUrl), expectedSha256);
   } catch {
     return false;
   }
@@ -64,15 +75,15 @@ export function verifySignatureImageSha256(dataUrl: string, expectedSha256: stri
 
 export function verifySignatureVectorSha256(evidence: SignatureVectorEvidence, expectedSha256: string) {
   try {
-    return verifySha256(signatureVectorSha256(evidence), expectedSha256);
+    return verifyHex(signatureVectorSha256(evidence), expectedSha256);
   } catch {
     return false;
   }
 }
 
-export function verifySignatureDocumentBindingSha256(input: SignatureDocumentBindingInput, expectedSha256: string) {
+export function verifySignatureDocumentBindingHmac(input: SignatureDocumentBindingInput, expectedHmac: string) {
   try {
-    return verifySha256(signatureDocumentBindingSha256(input), expectedSha256);
+    return verifyHex(signatureDocumentBindingHmac(input), expectedHmac);
   } catch {
     return false;
   }
