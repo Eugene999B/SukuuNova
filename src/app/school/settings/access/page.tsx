@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { permissionGroup, permissionLabel, permissionDescription, permissionRisk } from "@/lib/permission-catalog";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
@@ -45,6 +46,7 @@ const emptyForm: FormState = { name: "", email: "", phone: "", password: "" };
 
 const rolePurpose: Record<string, string> = {
   Owner: "Full school control and oversight.",
+  Administrator: "School operations, account management and system administration.",
   Principal: "School leadership, oversight and academic/operational approvals.",
   "Vice Principal": "Deputy leadership, academic monitoring and operational support.",
   "Academic Coordinator": "Owns academic quality checks, review and coordination.",
@@ -59,42 +61,6 @@ const rolePurpose: Record<string, string> = {
   Parent: "Linked child/family access only.",
   Student: "Learner access only.",
 };
-
-const permissionGroups: Record<string, string> = {
-  lesson_plans: "Lesson planning",
-  homework: "Homework",
-  scores: "Results & gradebook",
-  report_cards: "Report cards",
-  exams: "Exams & assessments",
-  classes: "Classes & curriculum",
-  attendance: "Attendance",
-  analytics: "Analytics",
-  reports: "Reports",
-  students: "Students",
-  finance: "Finance",
-  fees: "Fees",
-  payroll: "Payroll",
-  users: "Accounts",
-  settings: "Settings",
-  roles: "Roles",
-  calendar: "Calendar",
-  library: "Library",
-  transport: "Transport",
-  feeding: "Feeding",
-  assets: "Assets",
-  recruitment: "Recruitment",
-  risk_flags: "Safeguarding",
-  ai_drafts: "AI assistance",
-  offline: "Offline",
-  parents: "Family links",
-  templates: "Templates",
-  visitors: "Visitors",
-  broadcast: "Broadcasts",
-};
-
-function permissionGroup(key: string) {
-  return permissionGroups[key.split(":")[0]] ?? key.split(":")[0];
-}
 
 function initials(name: string) {
   return name
@@ -124,7 +90,7 @@ function AccessPageInner() {
     try {
       const response = await fetch("/api/school/access");
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Could not load access settings.");
+      if (!response.ok) throw new Error(payload.message || payload.error || "Could not load access settings.");
       setData(payload as Data);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load access settings.");
@@ -143,13 +109,18 @@ function AccessPageInner() {
   }, [data, searchParams, selectedId]);
 
   const selected = data?.users.find((user) => user.id === selectedId);
+  const inheritedKeys = useMemo(() => new Set(
+    (data?.roles ?? []).filter((role) => draftRoles.includes(role.name))
+      .flatMap((role) => (role.rolePermissions ?? []).map(({ permission }) => permission.key))
+  ), [data, draftRoles]);
+  const effectiveKeys = new Set([...inheritedKeys, ...grantKeys].filter((key) => !denyKeys.includes(key)));
   const pendingStaff = (data?.users ?? []).filter((user) => user.status === "pending");
 
   const filteredPermissions = useMemo(() => {
     const query = search.trim().toLowerCase();
     return (data?.permissions ?? []).filter((permission) => {
       if (!query) return true;
-      return permission.key.toLowerCase().includes(query) || (permission.description ?? "").toLowerCase().includes(query);
+      return permissionLabel(permission.key).toLowerCase().includes(query) || permissionGroup(permission.key).toLowerCase().includes(query) || permission.key.toLowerCase().includes(query) || (permission.description ?? "").toLowerCase().includes(query);
     });
   }, [data, search]);
 
@@ -167,8 +138,8 @@ function AccessPageInner() {
     setHandoff(null);
     setSelectedId(user.id);
     setDraftRoles(user.userRoles.map((entry) => entry.role.name));
-    setGrantKeys(user.permissionOverrides.filter((entry) => entry.granted).map((entry) => entry.permission.key));
-    setDenyKeys(user.permissionOverrides.filter((entry) => !entry.granted).map((entry) => entry.permission.key));
+    setGrantKeys((user.permissionOverrides ?? []).filter((entry) => entry.granted).map((entry) => entry.permission.key));
+    setDenyKeys((user.permissionOverrides ?? []).filter((entry) => !entry.granted).map((entry) => entry.permission.key));
     setForm({ name: user.name, email: user.email ?? "", phone: user.phone ?? "", password: "" });
     setSearch("");
   }
@@ -201,7 +172,7 @@ function AccessPageInner() {
         body: JSON.stringify({ ...form, roleNames }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Could not create account.");
+      if (!response.ok) throw new Error(payload.message || payload.error || "Could not create account.");
       setMessage(`Account for ${payload.name} created with ${roleNames.join(" + ")}.`);
       setForm(emptyForm);
       setRoleNames([]);
@@ -237,7 +208,7 @@ function AccessPageInner() {
         }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Could not update account.");
+      if (!response.ok) throw new Error(payload.message || payload.error || "Could not update account.");
       if (activating) {
         setHandoff({
           name: selected.name,
@@ -268,7 +239,7 @@ function AccessPageInner() {
         body: JSON.stringify({ userId: user.id, status: nextStatus }),
       });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error || "Could not update status.");
+      if (!response.ok) throw new Error(payload.message || payload.error || "Could not update status.");
       setMessage(`${user.name} is now ${nextStatus}.`);
       await load();
     } catch (error) {
@@ -441,22 +412,25 @@ function AccessPageInner() {
                 <div className="permission-toolbar">
                   <div>
                     <b className="field-label">Direct permissions for {selected.name}</b>
-                    <small>Grant adds a right. Deny overrides an inherited role.</small>
+                    <small>Draft preview: role rights {inheritedKeys.size} · direct grants {grantKeys.length} · direct denials {denyKeys.length} · effective rights {effectiveKeys.size}.</small>
+                    <small>Denials take precedence. Pending or suspended accounts cannot use these rights until active. Save profile to apply changes.</small>
                   </div>
-                  <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filter permissions…" />
+                  <input aria-label="Filter permissions" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Filter permissions…" />
                 </div>
+                {!data?.canManage ? <p>Detailed permission profiles require account-management access.</p> : null}
                 <div className="permission-list">
-                  {groupedPermissions.map(([group, permissions]) => (
+                  {(data?.canManage ? groupedPermissions : []).map(([group, permissions]) => (
                     <div className="permission-group" key={group}>
                       <b>{group}</b>
                       {permissions.map((permission) => (
                         <div className="permission-row" key={permission.key}>
                           <span>
-                            <strong>{permission.key}</strong>
-                            <small>{permission.description || "School permission"}</small>
+                            <strong>{permissionLabel(permission.key)}{permissionRisk(permission.key) === "critical" ? " · HIGH IMPACT" : ""}</strong>
+                            <small>{permissionDescription(permission.key)}</small>
+                            <small>Role: {inheritedKeys.has(permission.key) ? "Granted" : "Not granted"} · Direct: {denyKeys.includes(permission.key) ? "Denied" : grantKeys.includes(permission.key) ? "Granted" : "Inherited"} · Effective: {effectiveKeys.has(permission.key) ? "Allowed" : "Denied"}</small>
                           </span>
-                          <button type="button" className={grantKeys.includes(permission.key) ? "on grant" : ""} onClick={() => data?.canControlRoles && setPermission(permission.key, "grant")} disabled={!data?.canControlRoles}>Grant</button>
-                          <button type="button" className={denyKeys.includes(permission.key) ? "on deny" : ""} onClick={() => data?.canControlRoles && setPermission(permission.key, "deny")} disabled={!data?.canControlRoles}>Deny</button>
+                          <button type="button" className={grantKeys.includes(permission.key) ? "on grant" : ""} onClick={() => data?.canControlRoles && setPermission(permission.key, "grant")} aria-pressed={grantKeys.includes(permission.key)} aria-label={`Grant ${permissionLabel(permission.key)}`} disabled={!data?.canControlRoles}>Grant</button>
+                          <button type="button" className={denyKeys.includes(permission.key) ? "on deny" : ""} onClick={() => data?.canControlRoles && setPermission(permission.key, "deny")} aria-pressed={denyKeys.includes(permission.key)} aria-label={`Deny ${permissionLabel(permission.key)}`} disabled={!data?.canControlRoles}>Deny</button>
                         </div>
                       ))}
                     </div>
@@ -484,7 +458,7 @@ function AccessPageInner() {
           </section>
         ) : null}
 
-        {message ? <div className="access-message">{message}</div> : null}
+        {message ? <div className="access-message" role="status" aria-live="polite">{message}</div> : null}
 
         <section className="access-footer">
           <div>

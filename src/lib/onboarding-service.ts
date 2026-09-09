@@ -1,3 +1,5 @@
+import { roleKeyForName } from "./authorization";
+import { permissionDescription } from "./permission-catalog";
 import { createId } from "@paralleldrive/cuid2";
 import { hash } from "bcryptjs";
 import { db, withTenant } from "./db";
@@ -36,7 +38,7 @@ export async function onboardSchool(input: {
     const permission = await db.permission.upsert({
       where: { key },
       update: {},
-      create: { key, description: "SukuuNova permission: " + key }
+      create: { key, description: permissionDescription(key) }
     });
     permissionIds.set(key, permission.id);
   }
@@ -54,7 +56,7 @@ export async function onboardSchool(input: {
         data: {
           schoolId,
           name,
-          key: name.toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+          key: roleKeyForName(name),
           isSystem: true
         }
       });

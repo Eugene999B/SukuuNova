@@ -1,3 +1,5 @@
+import { roleKeyForName } from "./authorization";
+import { permissionDescription } from "./permission-catalog";
 import { hash } from "bcryptjs";
 import { createId } from "@paralleldrive/cuid2";
 import { db, rawDb, withTenant } from "./db";
@@ -55,7 +57,7 @@ export async function onboardPlatformSchool(input: Input) {
 
   const permissionIds = new Map<string, string>();
   for (const key of DEFAULT_PERMISSIONS) {
-    const permission = await db.permission.upsert({ where: { key }, update: {}, create: { key, description: "SukuuNova permission: " + key } });
+    const permission = await db.permission.upsert({ where: { key }, update: {}, create: { key, description: permissionDescription(key) } });
     permissionIds.set(key, permission.id);
   }
 
@@ -84,7 +86,7 @@ export async function onboardPlatformSchool(input: Input) {
 
       const roleIds = new Map<string, string>();
       for (const name of DEFAULT_ROLE_NAMES) {
-        const role = await tx.role.create({ data: { schoolId, name, key: name.toLowerCase().replace(/[^a-z0-9]+/g, "_"), isSystem: true } });
+        const role = await tx.role.create({ data: { schoolId, name, key: roleKeyForName(name), isSystem: true } });
         roleIds.set(name, role.id);
         await tx.rolePermission.createMany({ data: DEFAULT_ROLE_PERMISSIONS[name].map((key) => ({ schoolId, roleId: role.id, permissionId: permissionIds.get(key)! })) });
       }

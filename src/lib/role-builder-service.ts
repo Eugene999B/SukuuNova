@@ -1,3 +1,4 @@
+import { permissionDescription } from "./permission-catalog";
 import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
@@ -9,7 +10,7 @@ import { roleKeyForName, requireCanGrantPermissions, getSchoolAuthorization } fr
 export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
   const permissionIds = new Map<string,string>();
   for (const key of DEFAULT_PERMISSIONS) {
-    const row = await tx.permission.upsert({ where: { key }, update: {}, create: { key, description: "SukuuNova baseline permission: " + key } });
+    const row = await tx.permission.upsert({ where: { key }, update: { description: permissionDescription(key) }, create: { key, description: permissionDescription(key) } });
     permissionIds.set(key, row.id);
   }
   for (const roleName of DEFAULT_ROLE_NAMES) {

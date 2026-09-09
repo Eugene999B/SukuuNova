@@ -11,7 +11,8 @@ const DEPARTMENT_HEAD_PERMISSIONS:readonly PermissionKey[]=["students:read","rep
 const TEACHING_CORE=["lesson_plans:manage","homework:manage_assigned","scores:write:assigned","attendance:view_own","attendance:staff_scan","report_cards:view","exams:manage","exams:take","offline:sync","ai_drafts:accept"] as const;
 export const DEFAULT_ROLE_PERMISSIONS:Record<string,readonly PermissionKey[]>={
   Owner: DEFAULT_PERMISSIONS,
-  Principal: [...LEADERSHIP_PERMISSIONS,"payments:reverse"],
+  Administrator: DEFAULT_PERMISSIONS.filter((key) => key !== "students:delete"),
+  Principal: DEFAULT_PERMISSIONS.filter((key) => key !== "students:delete"),
   "Vice Principal": [...LEADERSHIP_PERMISSIONS,"payments:reverse"],
   "Academic Coordinator": ACADEMIC_COORDINATOR_PERMISSIONS,
   "Department Head": DEPARTMENT_HEAD_PERMISSIONS,

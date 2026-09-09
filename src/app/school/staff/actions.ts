@@ -7,6 +7,7 @@ import type { TenantDb } from "@/lib/db";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { hasPermission } from "@/lib/rbac";
 import { roleKeyForName, isTeachingRoleKey } from "@/lib/authorization";
+import { DEFAULT_ROLE_PERMISSIONS } from "@/lib/default-rbac";
 import { staffRolePermissionKeys } from "@/lib/staff-role-presets";
 
 export type StaffCreateResult = { ok: true; name: string; status: "pending"; message: string } | { ok: false; message: string };
@@ -81,22 +82,34 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
       if (existing) return { ok: false, message: "That phone number is already used by a school account." };
     }
 
-    const role = await tx.role.upsert({
+    const existingRole = await tx.role.findUnique({
       where: { schoolId_name: { schoolId: session.schoolId, name: roleName } },
-      update: { key: roleKey },
-      create: { schoolId: session.schoolId, name: roleName, key: roleKey, isSystem: false }
+      include: { rolePermissions: { include: { permission: true } } }
     });
-
-    const permissionKeys = staffRolePermissionKeys(roleName);
-    const permissions = await tx.permission.findMany({ where: { key: { in: permissionKeys as string[] } }, select: { id: true } });
+    const permissionKeys = [...new Set(existingRole
+      ? existingRole.rolePermissions.map(({ permission }) => permission.key)
+      : DEFAULT_ROLE_PERMISSIONS[roleName] ?? staffRolePermissionKeys(roleName))];
+    if (!actorIsOwner) {
+      for (const key of permissionKeys) {
+        if (!(await hasPermission(tx, session.userId, key))) {
+          return { ok: false, message: "You cannot assign permissions your account does not have. Ask the school Owner to assign this role." };
+        }
+      }
+    }
+    const permissions = await tx.permission.findMany({ where: { key: { in: permissionKeys } }, select: { id: true } });
     if (permissions.length !== permissionKeys.length) return { ok: false, message: "This role's permission preset is not fully installed. Update the school permission catalogue before creating this staff record." };
-    await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
-    await tx.rolePermission.createMany({ data: permissions.map((permission) => ({ schoolId: session.schoolId, roleId: role.id, permissionId: permission.id })) });
+    // Adding a person must not rewrite the access of everyone already in this role.
+    const role = existingRole ?? await tx.role.create({
+      data: { schoolId: session.schoolId, name: roleName, key: roleKey, isSystem: Object.prototype.hasOwnProperty.call(DEFAULT_ROLE_PERMISSIONS, roleName) }
+    });
+    if (!existingRole && permissions.length) {
+      await tx.rolePermission.createMany({ data: permissions.map((permission) => ({ schoolId: session.schoolId, roleId: role.id, permissionId: permission.id })) });
+    }
 
     const placeholderPasswordHash = await hash(randomUUID() + randomUUID(), 12);
     let user;
     try {
-      user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: placeholderPasswordHash, status: "pending" }, select: { id: true, name: true, email: true, phone: true, status: true } });
+      user = await tx.user.create({ data: { schoolId: session.schoolId, name, email, phone, passwordHash: placeholderPasswordHash, status: "pending", needsPasswordChange: true }, select: { id: true, name: true, email: true, phone: true, status: true } });
     } catch (error) {
       if ((error as { code?: string }).code === "P2002") {
         return { ok: false as const, message: "That email or phone number was just used by another account. Refresh and try again." };

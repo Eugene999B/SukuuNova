@@ -136,6 +136,7 @@ Important default roles include:
 
 - Owner
 - Principal
+- Administrator
 - Vice Principal
 - Academic Coordinator
 - Department Head
@@ -149,7 +150,7 @@ Important default roles include:
 - Parent
 - Student
 
-The school owner can assign custom roles and individual grants/denies. Default-role synchronization creates missing roles with baseline permissions and preserves existing role identities and permission sets, including intentional restrictions. A custom role that shares a system role's name is never automatically converted into that system role.
+The school owner can assign custom roles and individual grants/denies. New Principal and Administrator roles receive broad operational permissions, while Owner assignment and Owner account changes remain protected. Existing school role permissions are preserved. Access settings show readable permission labels, high-impact warnings, and a preview of inherited, directly granted, directly denied and effective rights. Creating staff preserves the selected role's existing permissions. Temporary passwords created or reset through account management require replacement at first login. Default-role synchronization creates missing roles with baseline permissions and preserves existing role identities and permission sets, including intentional restrictions. A custom role that shares a system role's name is never automatically converted into that system role.
 
 **Frontend visibility is not authorization.** Sensitive actions must be checked on the server.
 

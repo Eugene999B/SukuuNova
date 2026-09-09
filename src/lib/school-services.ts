@@ -1,3 +1,4 @@
+import { getSchoolAuthorization, requireCanAssignRoles, requireCanGrantPermissions, roleKeyForName } from "./authorization";
 import { hash } from "bcryptjs";
 import type { Prisma } from "@prisma/client";
 import { appendSchoolAudit } from "./audit";
@@ -28,7 +29,8 @@ export async function createSchoolUser(input: {
         name: input.name.trim(),
         email: input.email?.trim().toLowerCase(),
         phone: input.phone?.trim(),
-        passwordHash: await hash(input.password, 12)
+        passwordHash: await hash(input.password, 12),
+        needsPasswordChange: true
       },
       select: {
         id: true,
@@ -95,6 +97,11 @@ export async function setRolePermissions(input: {
   return withTenant(input.schoolId, async (tx) => {
     await requirePermission(tx, input.actorId, "settings:manage_roles");
     const role = await tx.role.findUniqueOrThrow({ where: { id: input.roleId } });
+    const access = await getSchoolAuthorization(tx, input.actorId);
+    if (!access.isOwner && (role.key?.trim() || roleKeyForName(role.name)) === "owner") {
+      throw new ForbiddenError("Only the school Owner can modify Owner permissions.");
+    }
+    await requireCanGrantPermissions(tx, input.actorId, input.permissionKeys);
     const before = await tx.rolePermission.findMany({
       where: { roleId: role.id },
       include: { permission: true }
@@ -137,6 +144,7 @@ export async function setUserRoles(input: {
 }) {
   return withTenant(input.schoolId, async (tx) => {
     await requirePermission(tx, input.actorId, "settings:manage_roles");
+    await requireCanAssignRoles(tx, input.actorId, input.userId, input.roleIds);
     const before = await tx.userRole.findMany({
       where: { userId: input.userId },
       select: { roleId: true }
@@ -181,6 +189,15 @@ export async function setUserPermissionOverride(input: {
 }) {
   return withTenant(input.schoolId, async (tx) => {
     await requirePermission(tx, input.actorId, "settings:manage_roles");
+    const access = await getSchoolAuthorization(tx, input.actorId);
+    const target = await tx.user.findUniqueOrThrow({
+      where: { id: input.userId },
+      select: { userRoles: { select: { role: { select: { key: true, name: true } } } } }
+    });
+    if (!access.isOwner && target.userRoles.some(({ role }) => (role.key?.trim() || roleKeyForName(role.name)) === "owner")) {
+      throw new ForbiddenError("Only the school Owner can modify the Owner account.");
+    }
+    if (input.granted) await requireCanGrantPermissions(tx, input.actorId, [input.permissionKey]);
     const permission = await tx.permission.findUniqueOrThrow({
       where: { key: input.permissionKey }
     });
