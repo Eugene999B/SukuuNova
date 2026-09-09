@@ -104,7 +104,7 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   if (!effective.live || !effective.enabled) throw new AppError("This game is not available for play yet.", 409, "GAME_NOT_AVAILABLE");
   if (!canGenerateArcadeContent(input.game)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
   const standardBand = standardBandFromClassLevel(child.class?.level ?? null);
-  if (!effective.effectiveStandardBands.includes(standardBand)) throw new AppError("This game is not enabled for the learner's school standard.", 400, "GAME_STANDARD_MISMATCH");
+  if (!effective.effectiveStandardBands.includes(standardBand)) throw new AppError("This game is not available for the learner's school standard.", 409, "GAME_NOT_AVAILABLE");
   const permittedAgeBands = allowedAgeBandsForStandard(standardBand).filter((age) => effective.effectiveAgeBands.includes(age));
   const ageBand = input.ageBand ?? recommendedAgeBand(standardBand);
   if (!permittedAgeBands.includes(ageBand)) throw new AppError("Choose an age band suitable for this learner's school standard.", 400, "AGE_BAND_NOT_ALLOWED");
@@ -127,7 +127,7 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   const difficulty = Math.max(effective.difficultyMin, Math.min(effective.difficultyMax, input.easier ? Math.max(1, suggested - 1) : suggested));
   const questions = createArcadeGameQuestions(input.game, difficulty, roundLength);
   const id = createId();
-  const snapshot = { version: 2, gameKey: input.game, ageBand, standardBand, engine: effective.engine, roundLength: questions.length, challengeMode, timerPolicy: effective.timerPolicy };
+  const snapshot = { version: 1, gameKey: input.game, ageBand, standardBand, engine: effective.engine, roundLength: questions.length, challengeMode, timerPolicy: effective.timerPolicy };
   await tx.$executeRaw`
     INSERT INTO "ArcadeRound" ("id","schoolId","studentId","game","difficulty","questions","answers","ageBand","standardBand","engine","roundLength","challengeMode","settingsSnapshot")
     VALUES (${id},${context.schoolId},${child.id},${input.game},${difficulty},${JSON.stringify(questions)}::jsonb,${JSON.stringify(questions.map(() => ""))}::jsonb,${ageBand},${standardBand},${effective.engine},${questions.length},${challengeMode},${JSON.stringify(snapshot)}::jsonb)
