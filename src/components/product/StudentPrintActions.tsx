@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { Fingerprint } from "lucide-react";
 import { useState } from "react";
 
 export function StudentPrintActions({ studentId, studentName }: { studentId: string; studentName: string }) {
@@ -30,6 +32,9 @@ export function StudentPrintActions({ studentId, studentName }: { studentId: str
 
   return (
     <div className="product-print-actions" aria-live="polite">
+      <Link className="button secondary" href={`/school/students/${encodeURIComponent(studentId)}/biometrics`}>
+        <Fingerprint size={15} aria-hidden="true" /> Biometric identity
+      </Link>
       <button type="button" className="button secondary" onClick={downloadIdCard} disabled={state.kind === "working"} aria-busy={state.kind === "working"}>
         {state.kind === "working" ? "Preparing PDF…" : "Print ID card"}
       </button>
