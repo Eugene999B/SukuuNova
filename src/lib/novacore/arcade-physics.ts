@@ -302,7 +302,6 @@ function fixedStep(world: PhysicsWorld) {
     if (!contacts.length) break;
     for (const contact of contacts) resolveContact(contact);
   }
-  for (const body of world.bodies) body.force = vec();
   world.simulationSeconds += dt;
 }
 
@@ -321,6 +320,7 @@ export function stepPhysicsWorld(world: PhysicsWorld, frameDeltaSeconds: number)
     world.droppedSeconds += world.accumulatorSeconds - retained;
     world.accumulatorSeconds = retained;
   }
+  if (subSteps > 0) for (const body of world.bodies) body.force = vec();
   return {
     subSteps,
     alpha: clamp(world.accumulatorSeconds / world.fixedDeltaSeconds, 0, 1),
