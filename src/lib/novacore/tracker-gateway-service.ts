@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { ensureDatabaseRoleSafe, rawDb, withTenant } from "@/lib/db";
 import { decodeTeltonikaCodec8E, type TeltonikaCodec8ERecord } from "./teltonika-codec8e";
+import { processLiveTransportLocation, type ActiveTransportTrip } from "./transport-live-engine";
 import { validateGpsSample, type GpsSample } from "./transport";
 
 export type TrackerGatewayBinding = {
@@ -16,6 +17,7 @@ export type TrackerIngestResult = {
   recordCount: number;
   storedLocations: number;
   rejectedLocations: number;
+  guardianAlertsQueued: number;
   acknowledgement: Buffer;
 };
 
@@ -33,6 +35,50 @@ export async function resolveTrackerGatewayBinding(imei: string): Promise<Tracke
   );
   const binding = rows[0] ?? null;
   return binding?.status === "active" ? binding : null;
+}
+
+export async function provisionTrackerGatewayBinding(input: { schoolId: string; trackerDeviceId: string; imei: string }) {
+  const imeiHash = hashTrackerImei(input.imei);
+  await withTenant(input.schoolId, async (tx) => {
+    const rows = await tx.$queryRawUnsafe<Array<{ id: string; imei: string }>>(
+      `SELECT "id","imei" FROM "P3TrackerDevice" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`,
+      input.schoolId,
+      input.trackerDeviceId,
+    );
+    if (!rows[0] || rows[0].imei !== input.imei) throw new Error("Tracker binding does not match the tenant device inventory.");
+  });
+
+  await ensureDatabaseRoleSafe();
+  await rawDb.$transaction(async (tx) => {
+    const sameHash = await tx.$queryRawUnsafe<Array<{ schoolId: string; trackerDeviceId: string }>>(
+      `SELECT "schoolId","trackerDeviceId" FROM "TrackerGatewayBinding" WHERE "imeiHash"=$1 LIMIT 1`,
+      imeiHash,
+    );
+    if (sameHash[0] && (sameHash[0].schoolId !== input.schoolId || sameHash[0].trackerDeviceId !== input.trackerDeviceId)) {
+      throw new Error("This tracker IMEI is already bound to another SukuuNova device.");
+    }
+    const sameDevice = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+      `SELECT "id" FROM "TrackerGatewayBinding" WHERE "schoolId"=$1 AND "trackerDeviceId"=$2 LIMIT 1`,
+      input.schoolId,
+      input.trackerDeviceId,
+    );
+    if (sameDevice[0]) {
+      await tx.$executeRawUnsafe(
+        `UPDATE "TrackerGatewayBinding" SET "imeiHash"=$1,"status"='active',"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$2`,
+        imeiHash,
+        sameDevice[0].id,
+      );
+    } else {
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "TrackerGatewayBinding" ("id","imeiHash","schoolId","trackerDeviceId","status") VALUES ($1,$2,$3,$4,'active')`,
+        createId(),
+        imeiHash,
+        input.schoolId,
+        input.trackerDeviceId,
+      );
+    }
+  });
+  return { schoolId: input.schoolId, trackerDeviceId: input.trackerDeviceId, imeiHash };
 }
 
 function recordPayload(record: TeltonikaCodec8ERecord) {
@@ -59,7 +105,7 @@ type TrackerRow = {
   status: string;
 };
 
-type TripRow = { id: string; routeId: string; vehicleId: string };
+type TripRow = ActiveTransportTrip;
 
 function gpsSample(record: TeltonikaCodec8ERecord): GpsSample {
   return {
@@ -75,6 +121,7 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
   const decoded = decodeTeltonikaCodec8E(packet);
   const binding = await resolveTrackerGatewayBinding(imei);
   if (!binding) throw new Error("Tracker is not provisioned or is disabled.");
+  const imeiHash = hashTrackerImei(imei);
 
   return withTenant(binding.schoolId, async (tx) => {
     const trackers = await tx.$queryRawUnsafe<TrackerRow[]>(
@@ -87,7 +134,7 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
     if (!tracker.vehicleId) throw new Error("Tracker is not assigned to a vehicle.");
 
     const activeTrips = await tx.$queryRawUnsafe<TripRow[]>(
-      `SELECT "id","routeId","vehicleId" FROM "P3TransportTrip" WHERE "schoolId"=$1 AND "vehicleId"=$2 AND "status"='active' ORDER BY "startedAt" DESC NULLS LAST LIMIT 1`,
+      `SELECT "id","routeId","vehicleId","direction" FROM "P3TransportTrip" WHERE "schoolId"=$1 AND "vehicleId"=$2 AND "status"='active' ORDER BY "startedAt" DESC NULLS LAST LIMIT 1`,
       binding.schoolId,
       tracker.vehicleId,
     );
@@ -108,6 +155,7 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
 
     let storedLocations = 0;
     let rejectedLocations = 0;
+    let guardianAlertsQueued = 0;
 
     for (const record of decoded.records) {
       const sample = gpsSample(record);
@@ -119,11 +167,11 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
       const reason = accepted ? null : validation.reason;
 
       await tx.$executeRawUnsafe(
-        `INSERT INTO "P3TrackerEvent" ("id","schoolId","trackerDeviceId","imei","eventType","reportedAt","accepted","rejectionReason","payload") VALUES ($1,$2,$3,$4,'avl_location',to_timestamp($5/1000.0),$6,$7,$8::jsonb)`,
+        `INSERT INTO "P3TrackerEvent" ("id","schoolId","trackerDeviceId","imeiHash","eventType","reportedAt","accepted","rejectionReason","payload") VALUES ($1,$2,$3,$4,'avl_location',to_timestamp($5/1000.0),$6,$7,$8::jsonb)`,
         createId(),
         binding.schoolId,
         tracker.id,
-        imei,
+        imeiHash,
         record.timestampMs,
         accepted,
         reason,
@@ -151,6 +199,17 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
       );
       storedLocations += 1;
       previous = sample;
+
+      if (activeTrip) {
+        const live = await processLiveTransportLocation(
+          tx,
+          binding.schoolId,
+          activeTrip,
+          { latitude: record.gps.latitude, longitude: record.gps.longitude },
+          new Date(record.timestampMs),
+        );
+        guardianAlertsQueued += live.guardianAlertsQueued;
+      }
     }
 
     await tx.$executeRawUnsafe(
@@ -172,6 +231,7 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
       recordCount: decoded.recordCount,
       storedLocations,
       rejectedLocations,
+      guardianAlertsQueued,
       acknowledgement: decoded.acknowledgement,
     };
   });
