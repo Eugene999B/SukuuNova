@@ -7,6 +7,7 @@ import { matchFaceAttendance } from "@/lib/face-service";
 import { matchFingerprintAttendance, matchCardAttendance } from "@/lib/device-identity-service";
 import { enforceDeviceAttendanceRateLimit } from "@/lib/device-rate-limit";
 import { requestIp } from "@/lib/rate-limit";
+import { assertAttendanceVerificationWindow } from "@/lib/attendance-control";
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 
@@ -14,6 +15,7 @@ const schema = z.object({
   schoolCode: z.string().trim().min(2).max(80),
   deviceSerial: z.string().trim().min(2).max(120),
   kind: z.enum(["face", "fingerprint", "card"]),
+  personType: z.enum(["student", "staff"]).optional(),
   idempotencyKey: z.string().trim().min(8).max(200),
   capturedAt: z.string().datetime().optional(),
   type: z.enum(["in", "out"]),
@@ -105,6 +107,26 @@ export async function POST(request: Request) {
       if (Number.isNaN(capturedAt.getTime())) {
         throw new AppError("Invalid device capture timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
       }
+      const serverReceivedAt = new Date();
+
+      let inferredTarget: "student" | "staff" | undefined = input.personType;
+      if (!inferredTarget && input.kind !== "face" && input.externalId) {
+        const identity = await tx.deviceIdentity.findFirst({
+          where: { schoolId: directory.schoolId, deviceKind: input.kind, externalId: input.externalId },
+          select: { studentId: true, staffId: true }
+        });
+        inferredTarget = identity?.staffId ? "staff" : identity?.studentId ? "student" : undefined;
+      }
+
+      await assertAttendanceVerificationWindow(tx, {
+        schoolId: directory.schoolId,
+        target: inferredTarget ?? "student",
+        method: input.kind,
+        type: input.type,
+        timestamp: capturedAt,
+        receivedAt: serverReceivedAt,
+        automated: true
+      });
 
       try {
         await tx.deviceAttendanceReceipt.create({
@@ -135,11 +157,15 @@ export async function POST(request: Request) {
         throw error;
       }
 
-      const serverReceivedAt = new Date();
       await tx.device.update({
         where: { id: device.id },
         data: { lastSeenAt: serverReceivedAt }
       });
+      await tx.$executeRaw`
+        UPDATE "AttendanceDeviceProfile"
+        SET "lastHeartbeatAt" = ${serverReceivedAt}, "statusMessage" = 'Attendance event received', "updatedAt" = CURRENT_TIMESTAMP
+        WHERE "schoolId" = ${directory.schoolId} AND "deviceId" = ${device.id}
+      `;
 
       const deviationMs = Math.abs(serverReceivedAt.getTime() - capturedAt.getTime());
       if (deviationMs > 10_000) {
@@ -190,6 +216,13 @@ export async function POST(request: Request) {
       }
 
       if (recorded.status !== "recorded") return recorded;
+
+      if (input.personType) {
+        const actualType = recorded.event.staffId ? "staff" : recorded.event.studentId ? "student" : null;
+        if (actualType !== input.personType) {
+          throw new AppError("The biometric identity does not match the event person type.", 409, "DEVICE_PERSON_TYPE_MISMATCH");
+        }
+      }
 
       const receipt = await tx.deviceAttendanceReceipt.findFirstOrThrow({
         where: { deviceId: device.id, idempotencyKey: input.idempotencyKey },
