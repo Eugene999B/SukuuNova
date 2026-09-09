@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { signatureImageSha256 } from "../src/lib/signature-integrity";
+import { signatureImageSha256, verifySignatureImageSha256 } from "../src/lib/signature-integrity";
 
 describe("signature integrity", () => {
   it("hashes decoded PNG bytes deterministically", () => {
@@ -8,7 +8,15 @@ describe("signature integrity", () => {
     expect(signatureImageSha256(dataUrl)).toBe(signatureImageSha256(dataUrl));
   });
 
+  it("verifies the saved bytes and rejects later tampering", () => {
+    const original = "data:image/png;base64,QUJD";
+    const hash = signatureImageSha256(original);
+    expect(verifySignatureImageSha256(original, hash)).toBe(true);
+    expect(verifySignatureImageSha256("data:image/png;base64,QUJE", hash)).toBe(false);
+  });
+
   it("rejects non-PNG signature inputs", () => {
     expect(() => signatureImageSha256("data:image/jpeg;base64,QUJD")).toThrow(/PNG/);
+    expect(verifySignatureImageSha256("data:image/jpeg;base64,QUJD", "0".repeat(64))).toBe(false);
   });
 });
