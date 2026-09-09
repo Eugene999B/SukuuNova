@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { BookOpen, Gamepad2, LockKeyhole, Mail, ShieldCheck, UsersRound } from "lucide-react";
+import { BookOpen, Gamepad2, LockKeyhole, Mail, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { SettingsHero, SettingsRouteCard, SettingsSection } from "@/components/SettingsHub";
 import { withTenant } from "@/lib/db";
