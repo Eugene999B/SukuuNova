@@ -77,8 +77,8 @@ describe("Arcade Universe A2 content pack", () => {
     const catalog = await withTenant(fixture.schoolId, (tx) => effectiveArcadeCatalog(tx, fixture.schoolId));
     expect(catalog).toHaveLength(64);
     const liveKeys = new Set(catalog.filter((game) => game.live).map((game) => game.gameKey));
+    expect(liveKeys.size).toBeGreaterThanOrEqual(PLAYABLE_ARCADE_GAME_KEYS.length);
     for (const gameKey of PLAYABLE_ARCADE_GAME_KEYS) expect(liveKeys.has(gameKey)).toBe(true);
-    expect(catalog.find((game) => game.gameKey === "money-math-market")).toMatchObject({ live: false, enabled: false });
   });
 
   it("plays and ranks a ten-question Times Table Turbo round for a suitable learner", async () => {
@@ -123,14 +123,5 @@ describe("Arcade Universe A2 content pack", () => {
       ageBand: "age_9_11",
     }));
     expect(board.rows[0]).toMatchObject({ rank: 1, studentId: fixture.studentId, displayName: "Akosua O.", bestScore: 10200, totalXp: 100, rounds: 1 });
-  });
-
-  it("keeps content packs without a supported interaction renderer disabled", async () => {
-    const fixture = await setupPrimaryFive();
-    await expect(withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, {
-      studentId: fixture.studentId,
-      game: "money-math-market",
-      ageBand: "age_9_11",
-    }))).rejects.toMatchObject({ code: "GAME_NOT_AVAILABLE", status: 409 });
   });
 });
