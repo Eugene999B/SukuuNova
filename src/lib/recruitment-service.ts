@@ -84,13 +84,22 @@ async function insertApplicant(tx:TenantDb,schoolId:string,postingId:string,data
 }
 export async function applyToPublicPosting(tx:TenantDb,schoolId:string,token:string,body:unknown) {
   const input=publicApplicationSchema.parse(body),posting=await publicPosting(tx,schoolId,token);
-  const data=applicationData(posting,input),hash=createHash("sha256").update(JSON.stringify(data)).digest("hex");
-  const prior=await tx.$queryRawUnsafe<Array<{id:string;submissionHash:string}>>(`SELECT "id","submissionHash" FROM "P3Applicant" WHERE "schoolId"=$1 AND "postingId"=$2 AND "submissionKey"=$3`,schoolId,posting.id,input.submissionKey);
+  const prior=await tx.$queryRawUnsafe<Row[]>(`SELECT "id","name","email","phone","resumeUrl","coverLetter","answers" FROM "P3Applicant" WHERE "schoolId"=$1 AND "postingId"=$2 AND "submissionKey"=$3`,schoolId,posting.id,input.submissionKey);
   if(prior[0]) {
-    if(prior[0].submissionHash!==hash)throw new AppError("This submission reference already recorded different answers. Keep the original application reference.",409,"SUBMISSION_CONFLICT");
-    return {applicationId:prior[0].id};
+    // A receipt belongs to the recorded application, not today's screening template.
+    // PostgreSQL JSONB can reorder keys, so compare both payloads in the same stored-key order.
+    const recorded=prior[0],answers=recorded.answers as Record<string,string>;
+    const keys=Object.keys(answers).sort();
+    const conflict=()=>new AppError("This submission reference already recorded different answers. Keep the original application reference.",409,"SUBMISSION_CONFLICT");
+    if(Object.keys(input.answers).some(key=>!keys.includes(key)))throw conflict();
+    const originalQuestions={screeningQuestions:keys.map(id=>({id,label:id}))};
+    const retry=applicationData(originalQuestions,input);
+    const original={name:recorded.name,email:recorded.email,phone:recorded.phone,resumeUrl:recorded.resumeUrl,coverLetter:recorded.coverLetter,answers:Object.fromEntries(keys.map(key=>[key,answers[key]]))};
+    if(JSON.stringify(original)!==JSON.stringify(retry))throw conflict();
+    return {applicationId:String(recorded.id)};
   }
   requireOpen(posting);
+  const data=applicationData(posting,input),hash=createHash("sha256").update(JSON.stringify(data)).digest("hex");
   const result=await insertApplicant(tx,schoolId,String(posting.id),data,input.submissionKey,hash,null);
   return {applicationId:result.id};
 }

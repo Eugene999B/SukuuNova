@@ -1,5 +1,10 @@
 # Astra progress
 
+## Recruitment retry completion
+- Successful application retries compare against the recorded answers, preserving receipts after question edits or vacancy closure.
+- Canonical key ordering handles PostgreSQL JSONB ordering; changed payloads still conflict and new applications still validate current screening questions.
+- Two new regression scenarios. GitHub verification pending. No migration.
+
 ## Gradebook term context batch
 - Replaced newest-term selection in the teacher gradebook with a shared school-local calendar selector.
 - Both gradebook experiences require a unique active term or explicit selection; invalid IDs never fall back and overlapping terms require a choice.

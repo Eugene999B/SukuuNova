@@ -91,3 +91,28 @@ describe("recruitment workflow",()=>{
   expect(links[0].publicToken).toBe(links[1].publicToken);
  });
 });
+
+describe("recruitment receipts after vacancy edits",()=>{
+ it("retains the original receipt after screening questions and choices change",async()=>{
+  const f=await setup(),input=application();
+  const first=await withTenant(f.schoolId,tx=>applyToPublicPosting(tx,f.schoolId,f.posting.publicToken,input));
+  await withTenant(f.schoolId,tx=>recruitmentAction(tx,f.schoolId,f.ownerId,{action:"updatePosting",postingId:f.posting.id,screeningQuestions:[{id:"new_question",label:"New required question",required:true,type:"shortText"}]}));
+  const retry=await withTenant(f.schoolId,tx=>applyToPublicPosting(tx,f.schoolId,f.posting.publicToken,input));
+  expect(retry.applicationId).toBe(first.applicationId);
+  await expect(withTenant(f.schoolId,tx=>applyToPublicPosting(tx,f.schoolId,f.posting.publicToken,{...input,answers:{licence:"No"}}))).rejects.toMatchObject({code:"SUBMISSION_CONFLICT"});
+  await expect(withTenant(f.schoolId,tx=>applyToPublicPosting(tx,f.schoolId,f.posting.publicToken,{...input,submissionKey:randomUUID()}))).rejects.toMatchObject({code:"QUESTIONS_CHANGED"});
+ });
+ it("compares normalized answers independent of JSONB key order and preserves closed receipts",async()=>{
+  const f=await setup();
+  await withTenant(f.schoolId,tx=>recruitmentAction(tx,f.schoolId,f.ownerId,{action:"updatePosting",postingId:f.posting.id,screeningQuestions:[{id:"zz",label:"Last",type:"shortText"},{id:"a",label:"First",type:"shortText"},{id:"optional",label:"Optional",type:"shortText"}]}));
+  const input={...application(),answers:{zz:"  Last answer ",a:"First answer"}};
+  const first=await withTenant(f.schoolId,tx=>applyToPublicPosting(tx,f.schoolId,f.posting.publicToken,input));
+  await withTenant(f.schoolId,tx=>recruitmentAction(tx,f.schoolId,f.ownerId,{action:"updatePosting",postingId:f.posting.id,status:"closed",screeningQuestions:[]}));
+  const retry=await withTenant(f.schoolId,tx=>applyToPublicPosting(tx,f.schoolId,f.posting.publicToken,{...input,answers:{a:"First answer",zz:"Last answer",optional:""}}));
+  expect(retry.applicationId).toBe(first.applicationId);
+  for(const patch of [{name:"Other candidate"},{answers:{...input.answers,extra:"Injected"}}]){
+   await expect(withTenant(f.schoolId,tx=>applyToPublicPosting(tx,f.schoolId,f.posting.publicToken,{...input,...patch}))).rejects.toMatchObject({code:"SUBMISSION_CONFLICT"});
+  }
+  expect((await withTenant(f.schoolId,tx=>recruitmentOverview(tx,f.schoolId,f.ownerId))).applicants).toHaveLength(1);
+ });
+});
