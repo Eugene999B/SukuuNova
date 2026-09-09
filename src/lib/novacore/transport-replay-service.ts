@@ -16,6 +16,25 @@ type TripRow = {
   endedAt: Date | null;
 };
 
+type ReplayLocationRow = {
+  id: string;
+  rawLatitude: string;
+  rawLongitude: string;
+  latitude: string;
+  longitude: string;
+  speedKph: string;
+  heading: string | null;
+  reportedAt: Date;
+  quality: string;
+  source: string;
+  routeDistanceMeters: string | null;
+  routeProgressMeters: string | null;
+  routeRemainingMeters: string | null;
+  routeMatchConfidence: string | null;
+  routeDeviation: boolean;
+  algorithmVersion: string | null;
+};
+
 export async function getTransportTripReplay(tx: TenantDb, input: { schoolId: string; tripId: string }) {
   const trips = await tx.$queryRawUnsafe<TripRow[]>(
     `SELECT tr."id",tr."routeId",r."name" AS "routeName",tr."vehicleId",v."registrationNumber",v."name" AS "vehicleName",
@@ -47,7 +66,7 @@ export async function getTransportTripReplay(tx: TenantDb, input: { schoolId: st
       input.schoolId,
       trip.id,
     ),
-    tx.$queryRawUnsafe(
+    tx.$queryRawUnsafe<ReplayLocationRow[]>(
       `SELECT "id","latitude"::text AS "rawLatitude","longitude"::text AS "rawLongitude",
               COALESCE("normalizedLatitude","latitude")::text AS "latitude",
               COALESCE("normalizedLongitude","longitude")::text AS "longitude",
