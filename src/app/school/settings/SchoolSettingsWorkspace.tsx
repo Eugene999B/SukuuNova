@@ -1,44 +1,270 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import {
+  BellRing,
+  CalendarDays,
+  CheckCircle2,
+  ChevronRight,
+  Clock3,
+  FileText,
+  GraduationCap,
+  ImagePlus,
+  MessageSquareText,
+  School2,
+  ShieldCheck,
+  Smartphone,
+  UsersRound,
+} from "lucide-react";
+import { ChangeEvent, useMemo, useState } from "react";
 
-type Settings = { expectedResumptionTime:string; attendanceGraceMinutes:number; timezone:string; gradeCaWeight:number|string; gradeExamWeight:number|string; allowPartialReportCards:boolean; smsSenderId?:string|null };
-type Term = { id:string; name:string; startDate:string; endDate:string; status:"upcoming"|"current"|"completed"; academicYear:{id:string;name:string;startDate:string;endDate:string} };
-type Data = { school:{id:string;name:string;uniqueCode:string;status:string}; settings:Settings|null; academicYears:{id:string;name:string;startDate:string;endDate:string}[]; terms:Term[] };
+type Settings = {
+  expectedResumptionTime: string;
+  attendanceGraceMinutes: number;
+  timezone: string;
+  gradeCaWeight: number | string;
+  gradeExamWeight: number | string;
+  allowPartialReportCards: boolean;
+  smsSenderId?: string | null;
+};
 
-const defaults:Settings={expectedResumptionTime:"07:30",attendanceGraceMinutes:15,timezone:"Africa/Accra",gradeCaWeight:40,gradeExamWeight:60,allowPartialReportCards:false,smsSenderId:""};
-const iso=(v:string)=>new Date(v).toISOString().slice(0,10);
-const sections=[
- ["overview","Overview","School control centre"],["identity","Identity & branding","Name, code and public identity"],["academic","Academic rules","Grading and report safeguards"],["calendar","Academic calendar","Years, terms and operating dates"],["communication","Communication","SMS, WhatsApp and notices"],["security","Security & access","Accounts, roles and delegated access"],["automation","Automation","Rules that remove repetitive work"],["data","Data & privacy","Exports, retention and operational controls"]
-] as const;
+type Term = {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: "upcoming" | "current" | "completed";
+  academicYear: { id: string; name: string; startDate: string; endDate: string };
+};
 
-export default function SchoolSettingsWorkspace({initial,dataSession}:{initial:Data;dataSession:{name:string}}){
- const [section,setSection]=useState<(typeof sections)[number][0]>("overview"); const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
- const [school,setSchool]=useState(initial.school); const [settings,setSettings]=useState<Settings>(initial.settings??defaults);
- const current=useMemo(()=>initial.terms.find(t=>t.status==="current")??initial.terms.find(t=>t.status==="upcoming")??initial.terms[0],[initial.terms]);
- const save=async()=>{setBusy(true);setMessage("");try{const r=await fetch("/api/school/settings",{method:"PATCH",headers:{"content-type":"application/json"},body:JSON.stringify({school,settings})});const j=await r.json();if(!r.ok)throw new Error(j.error??"Unable to save");setMessage("School settings saved successfully.");}catch(e){setMessage(e instanceof Error?e.message:"Unable to save settings.");}finally{setBusy(false);}};
- return <div className="sn-settings-v2">
-   <header className="sn-settings-head"><div><span className="sn-kicker">SUKUUNOVA · SCHOOL CONTROL</span><h2>Everything that defines how your school operates.</h2><p>Set the rules once. Keep academics, attendance, communication, finance, access and reporting aligned to the same school identity.</p></div><div className="sn-settings-head-actions"><span className="sn-live-badge">● {school.status}</span><button className="sn-primary" onClick={save} disabled={busy}>{busy?"Saving…":"Save changes"}</button></div></header>
-   {message&&<div className="sn-settings-message">{message}</div>}
-   <div className="sn-settings-layout">
-     <aside className="sn-settings-nav"><div className="sn-settings-school"><div className="sn-school-monogram">{school.name.slice(0,1).toUpperCase()}</div><div><strong>{school.name}</strong><small>{school.uniqueCode} · School account</small></div></div><div className="sn-nav-title">CONTROL AREAS</div>{sections.map(([id,label,detail])=><button key={id} onClick={()=>setSection(id)} className={section===id?"is-active":""}><span>{label}</span><small>{detail}</small></button>)}</aside>
-     <main className="sn-settings-main">
-       {section==="overview"&&<><div className="sn-section-intro"><span>Overview</span><h3>School control centre</h3><p>{dataSession.name}, these are the areas that shape the entire SukuuNova workspace.</p></div><div className="sn-control-grid">{sections.slice(1).map(([id,label,detail])=><button key={id} className="sn-control-card" onClick={()=>setSection(id)}><div className="sn-control-icon">{id==="identity"?"ID":id==="academic"?"A":id==="calendar"?"CAL":id==="communication"?"MSG":id==="security"?"SEC":id==="automation"?"AUTO":"DATA"}</div><strong>{label}</strong><span>{detail}</span><b>Configure →</b></button>)}</div><div className="sn-status-grid"><div><small>Current term</small><strong>{current?.name??"Not configured"}</strong><span>{current?`${iso(current.startDate)} → ${iso(current.endDate)}`:"Create your first term"}</span></div><div><small>Grade weighting</small><strong>{Number(settings.gradeCaWeight)}% CA · {Number(settings.gradeExamWeight)}% Exam</strong><span>{Number(settings.gradeCaWeight)+Number(settings.gradeExamWeight)===100?"Balanced at 100%":"Review weighting"}</span></div><div><small>Attendance start</small><strong>{settings.expectedResumptionTime}</strong><span>{settings.attendanceGraceMinutes} minute grace period</span></div></div></>}
-       {section==="identity"&&<Section title="Identity & branding" detail="These values appear across school documents, exports, portals and official communication."><div className="sn-form-grid"><Field label="School name" value={school.name} onChange={v=>setSchool({...school,name:v})}/><Field label="School code" value={school.uniqueCode} onChange={v=>setSchool({...school,uniqueCode:v.toUpperCase()})}/><ReadOnly label="Account status" value={school.status}/><ReadOnly label="Signed-in administrator" value={dataSession.name}/></div><div className="sn-info"><strong>Document identity</strong><span>Keep the school name, code and stored logo consistent so generated report cards, receipts, exports and future certificates carry one trusted identity.</span></div><div className="sn-integration-grid"><Integration title="Download your SukuuNova handout" state="Print" detail="A printable guide to your system, ready to share with your staff." href="/school/settings/handout"/></div></Section>}
-       {section==="academic"&&<Section title="Academic rules" detail="Control how grades, report cards and academic safeguards behave across the school."><div className="sn-form-grid"><Field type="number" label="Continuous assessment weight (%)" value={String(settings.gradeCaWeight)} onChange={v=>setSettings({...settings,gradeCaWeight:Number(v)})}/><Field type="number" label="Exam weight (%)" value={String(settings.gradeExamWeight)} onChange={v=>setSettings({...settings,gradeExamWeight:Number(v)})}/><ReadOnly label="Total" value={`${Number(settings.gradeCaWeight)+Number(settings.gradeExamWeight)}%`}/></div><Toggle label="Allow partial report cards" detail="Allow authorised staff to publish reports when some eligible results are still missing." checked={settings.allowPartialReportCards} onChange={v=>setSettings({...settings,allowPartialReportCards:v})}/><div className="sn-link-row"><Link href="/school/academics/setup">Academic setup →</Link><Link href="/school/gradebook">Gradebook →</Link><Link href="/school/report-cards">Report cards →</Link></div></Section>}
-       {section==="calendar"&&<Section title="Academic calendar" detail="Dates drive term-aware academic, attendance, finance and reporting workflows."><div className="sn-form-grid"><Field label="Timezone" value={settings.timezone} onChange={v=>setSettings({...settings,timezone:v})}/><Field label="Expected resumption time" type="time" value={settings.expectedResumptionTime} onChange={v=>setSettings({...settings,expectedResumptionTime:v})}/><Field label="Attendance grace period (minutes)" type="number" value={String(settings.attendanceGraceMinutes)} onChange={v=>setSettings({...settings,attendanceGraceMinutes:Number(v)})}/></div><div className="sn-term-list">{initial.terms.slice(0,6).map(t=><div key={t.id}><div><strong>{t.name}</strong><span>{t.academicYear.name}</span></div><b className={`term-${t.status}`}>{t.status}</b><small>{iso(t.startDate)} → {iso(t.endDate)}</small></div>)}</div><Link href="/school/terms" className="sn-primary-link">Manage full calendar →</Link></Section>}
-       {section==="communication"&&<Section title="Communication control" detail="Centralise how SukuuNova informs families, teachers and staff. Provider configuration can be managed without changing the school identity."><div className="sn-integration-grid"><Integration title="Parent portal" state="Ready" detail="In-app notices, messages and documents." href="/school/communications/messages"/><Integration title="SMS" state="Configure" detail="Sender identity, future credit controls and delivery policy." href="/school/communications/settings"/><Integration title="WhatsApp" state="Configure" detail="Business sender, approved templates and media delivery." href="/school/communications/settings"/><Integration title="Automations" state="Configure" detail="Payments, attendance, transport and report-card triggers." href="/school/communications/settings"/></div><Field label="SMS sender ID" value={settings.smsSenderId??""} onChange={v=>setSettings({...settings,smsSenderId:v})} /></Section>}
-       {section==="security"&&<Section title="Security & access" detail="Give the owner total control while letting trusted people work without sharing the owner's account."><div className="sn-integration-grid"><Integration title="Roles & permissions" state="Open" detail="Define what administrators, IT, finance, teachers and other roles can see and change." href="/school/settings/roles"/><Integration title="Sub-accounts" state="Open" detail="Create an IT administrator, delegated administrator or operational account." href="/school/settings/access"/><Integration title="Account security" state="Open" detail="Password, MFA and account-protection controls." href="/account/security"/></div><div className="sn-info"><strong>Recommended owner model</strong><span>Keep the owner account reserved for school-wide control. Delegate day-to-day operations to separate accounts with narrowly scoped permissions.</span></div></Section>}
-       {section==="automation"&&<Section title="Automation centre" detail="Turn recurring school events into dependable actions instead of manual work."><div className="sn-rule-list">{[["Report card approved","Resolve linked guardian automatically and prepare the report-card document for the configured delivery channel."],["Fee payment received","Notify the linked parent and keep the payment confirmation in the communication history."],["Student absent","Alert the appropriate guardian based on the school's attendance rules."],["Transport boarding","Send a guardian update when a linked student boards or leaves a configured route."],["Event approaching","Send scheduled reminders to the audience attached to the event."]].map(([a,b])=><div key={a}><span className="sn-rule-dot"/><div><strong>{a}</strong><small>{b}</small></div><span className="sn-ready">Rule ready</span></div>)}</div><Link href="/school/communications/settings" className="sn-primary-link">Configure communication automation →</Link></Section>}
-       {section==="data"&&<Section title="Data & privacy" detail="Keep school records portable, controlled and easy to audit."><div className="sn-integration-grid"><Integration title="Downloads & exports" state="Open" detail="Produce CSV, Excel, JSON and branded PDF outputs." href="/school/downloads"/><Integration title="Reports" state="Open" detail="Build and review operational reports by domain." href="/school/reports"/><Integration title="School analytics" state="Open" detail="Management dashboards and decision signals." href="/school/reports/analytics"/><Integration title="Support" state="Open" detail="Guidance, troubleshooting and support requests." href="/school/help"/></div><div className="sn-info"><strong>Data principle</strong><span>Keep exports purposeful and permission-controlled. Branded official documents should use the school's stored identity and generated timestamps.</span></div></Section>}
-     </main>
-   </div>
- </div>;
+type Data = {
+  school: { id: string; name: string; uniqueCode: string; status: string; logoUrl: string | null };
+  settings: Settings | null;
+  academicYears: { id: string; name: string; startDate: string; endDate: string }[];
+  terms: Term[];
+};
+
+const defaults: Settings = {
+  expectedResumptionTime: "07:30",
+  attendanceGraceMinutes: 15,
+  timezone: "Africa/Accra",
+  gradeCaWeight: 40,
+  gradeExamWeight: 60,
+  allowPartialReportCards: false,
+  smsSenderId: "",
+};
+
+function dateLabel(value: string) {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
 }
 
-function Section({title,detail,children}:{title:string;detail:string;children:React.ReactNode}){return <section className="sn-settings-section"><div className="sn-section-intro"><span>Control area</span><h3>{title}</h3><p>{detail}</p></div>{children}</section>}
-function Field({label,value,onChange,type="text"}:{label:string;value:string;onChange:(v:string)=>void;type?:string}){return <label className="sn-field"><span>{label}</span><input type={type} value={value} onChange={e=>onChange(e.target.value)}/></label>}
-function ReadOnly({label,value}:{label:string;value:string}){return <div className="sn-readonly"><span>{label}</span><strong>{value}</strong></div>}
-function Toggle({label,detail,checked,onChange}:{label:string;detail:string;checked:boolean;onChange:(v:boolean)=>void}){return <label className="sn-toggle"><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)}/><span><strong>{label}</strong><small>{detail}</small></span><i/></label>}
-function Integration({title,state,detail,href}:{title:string;state:string;detail:string;href:string}){return <Link href={href} className="sn-integration"><div><strong>{title}</strong><small>{detail}</small></div><span>{state} ↗</span></Link>}
+export default function SchoolSettingsWorkspace({ initial }: { initial: Data }) {
+  const [school, setSchool] = useState(initial.school);
+  const [settings, setSettings] = useState<Settings>(initial.settings ?? defaults);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [messageKind, setMessageKind] = useState<"success" | "error">("success");
+
+  const currentTerm = useMemo(
+    () => initial.terms.find((term) => term.status === "current") ?? initial.terms.find((term) => term.status === "upcoming") ?? initial.terms[0],
+    [initial.terms],
+  );
+  const weightTotal = Number(settings.gradeCaWeight) + Number(settings.gradeExamWeight);
+  const gradingReady = Math.abs(weightTotal - 100) < 0.001;
+
+  const save = async () => {
+    if (!gradingReady) {
+      setMessageKind("error");
+      setMessage("Continuous assessment and exam weights must add up to 100% before you save.");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/school/settings", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          school: { name: school.name, logoUrl: school.logoUrl },
+          settings: {
+            ...settings,
+            gradeCaWeight: Number(settings.gradeCaWeight),
+            gradeExamWeight: Number(settings.gradeExamWeight),
+            attendanceGraceMinutes: Number(settings.attendanceGraceMinutes),
+            smsSenderId: settings.smsSenderId?.trim() || "",
+          },
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Unable to save school settings.");
+      if (payload.school) {
+        setSchool((current) => ({ ...current, name: payload.school.name, logoUrl: payload.school.logoUrl ?? current.logoUrl }));
+      }
+      setMessageKind("success");
+      setMessage("School settings saved. These defaults now apply across SukuuNova.");
+    } catch (error) {
+      setMessageKind("error");
+      setMessage(error instanceof Error ? error.message : "Unable to save school settings.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const uploadLogo = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      setMessageKind("error");
+      setMessage("Use a PNG, JPG or WebP image for the school logo.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 1_000_000) {
+      setMessageKind("error");
+      setMessage("The school logo must be 1 MB or smaller.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== "string") return;
+      setSchool((current) => ({ ...current, logoUrl: reader.result as string }));
+      setMessage("");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="school-settings-simple">
+      <header className="school-settings-titlebar">
+        <div>
+          <span className="settings-label">SCHOOL-WIDE SETTINGS</span>
+          <h1>Set up the school once, then let every module use the same rules.</h1>
+          <p>Only settings that affect the whole school live here. Personal theme preferences belong to your own account settings.</p>
+        </div>
+        <button className="settings-save" type="button" onClick={() => void save()} disabled={busy || !gradingReady}>
+          {busy ? "Saving…" : "Save school settings"}
+        </button>
+      </header>
+
+      {message ? <div className={`settings-feedback ${messageKind}`}>{message}</div> : null}
+
+      <nav className="settings-jump" aria-label="School settings sections">
+        <a href="#school-profile">School profile</a>
+        <a href="#school-day">School day</a>
+        <a href="#academics">Academics</a>
+        <a href="#people-access">People & access</a>
+        <a href="#communication-documents">Communication & documents</a>
+      </nav>
+
+      <section id="school-profile" className="settings-panel">
+        <div className="settings-panel-heading">
+          <div className="settings-step-icon"><School2 size={20} /></div>
+          <div><span>1 · SCHOOL PROFILE</span><h2>Your official school identity</h2><p>This name and logo are reused on report cards, timetable prints, ID cards, receipts and other official documents.</p></div>
+        </div>
+        <div className="school-profile-grid">
+          <div className="school-logo-editor">
+            <div className="school-logo-preview">
+              {school.logoUrl ? <img src={school.logoUrl} alt={`${school.name} logo`} /> : <School2 size={34} />}
+            </div>
+            <div>
+              <strong>School logo</strong>
+              <p>Use a clear square or crest-style PNG, JPG or WebP. Maximum 1 MB.</p>
+              <label className="settings-upload">
+                <ImagePlus size={15} /> Choose logo
+                <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadLogo} />
+              </label>
+              {school.logoUrl ? <button className="settings-text-button" type="button" onClick={() => setSchool((current) => ({ ...current, logoUrl: null }))}>Remove logo</button> : null}
+            </div>
+          </div>
+          <div className="settings-form-grid">
+            <label className="settings-field"><span>School name</span><input value={school.name} onChange={(event) => setSchool((current) => ({ ...current, name: event.target.value }))} /></label>
+            <div className="settings-readonly"><span>School code</span><strong>{school.uniqueCode}</strong><small>This permanent code protects guardian links, ID/QR references and integrations.</small></div>
+            <div className="settings-readonly"><span>School account</span><strong>{school.status}</strong><small>Platform-controlled account status.</small></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="school-day" className="settings-panel">
+        <div className="settings-panel-heading">
+          <div className="settings-step-icon"><Clock3 size={20} /></div>
+          <div><span>2 · SCHOOL DAY & ATTENDANCE</span><h2>Set the normal arrival rules</h2><p>These simple defaults are used by attendance summaries. Fingerprint, face, QR opening/closing windows and device rules are configured in Attendance Control.</p></div>
+        </div>
+        <div className="settings-form-grid three">
+          <label className="settings-field"><span>Expected arrival time</span><input type="time" value={settings.expectedResumptionTime} onChange={(event) => setSettings((current) => ({ ...current, expectedResumptionTime: event.target.value }))} /><small>Example: 07:30 means learners/staff are expected by 7:30 AM.</small></label>
+          <label className="settings-field"><span>Late grace period</span><div className="settings-input-suffix"><input type="number" min="0" max="180" value={settings.attendanceGraceMinutes} onChange={(event) => setSettings((current) => ({ ...current, attendanceGraceMinutes: Number(event.target.value) }))} /><b>minutes</b></div><small>After this grace period, attendance can be classified as late.</small></label>
+          <label className="settings-field"><span>School timezone</span><input value={settings.timezone} onChange={(event) => setSettings((current) => ({ ...current, timezone: event.target.value }))} /><small>Ghana schools normally use Africa/Accra.</small></label>
+        </div>
+        <div className="settings-action-row">
+          <SettingsLink icon={<Smartphone size={18} />} title="Attendance & Devices" detail="Configure fingerprint, face, rotating QR, opening/closing windows and manual registers." href="/school/devices" />
+          <SettingsLink icon={<CalendarDays size={18} />} title="School calendar & holidays" detail="Set term dates, holidays and non-school days used by attendance and reports." href="/school/calendar" />
+        </div>
+      </section>
+
+      <section id="academics" className="settings-panel">
+        <div className="settings-panel-heading">
+          <div className="settings-step-icon"><GraduationCap size={20} /></div>
+          <div><span>3 · ACADEMICS</span><h2>Academic year, grading and reporting defaults</h2><p>Keep the everyday academic rules here. Detailed class, subject, teacher and timetable setup stays inside Academic Setup.</p></div>
+        </div>
+        <div className="settings-current-term">
+          <div><span>Current / next term</span><strong>{currentTerm?.name ?? "No term configured"}</strong><small>{currentTerm ? `${currentTerm.academicYear.name} · ${dateLabel(currentTerm.startDate)} – ${dateLabel(currentTerm.endDate)}` : "Create an academic year and terms before entering results."}</small></div>
+          <Link href="/school/terms">Manage academic year & terms <ChevronRight size={15} /></Link>
+        </div>
+        <div className="settings-form-grid three">
+          <label className="settings-field"><span>Continuous assessment</span><div className="settings-input-suffix"><input type="number" min="0" max="100" value={settings.gradeCaWeight} onChange={(event) => setSettings((current) => ({ ...current, gradeCaWeight: Number(event.target.value) }))} /><b>%</b></div><small>Contribution of classwork, homework, quizzes and other CA.</small></label>
+          <label className="settings-field"><span>Terminal examination</span><div className="settings-input-suffix"><input type="number" min="0" max="100" value={settings.gradeExamWeight} onChange={(event) => setSettings((current) => ({ ...current, gradeExamWeight: Number(event.target.value) }))} /><b>%</b></div><small>Contribution of the end-of-term examination.</small></label>
+          <div className={`settings-weight-total ${gradingReady ? "ready" : "error"}`}><span>Total result weighting</span><strong>{weightTotal}%</strong><small>{gradingReady ? "Ready — the final subject result is normalized to 100%." : "CA + Exam must equal 100%."}</small></div>
+        </div>
+        <label className="settings-checkbox-row"><input type="checkbox" checked={settings.allowPartialReportCards} onChange={(event) => setSettings((current) => ({ ...current, allowPartialReportCards: event.target.checked }))} /><span><strong>Allow partial report cards</strong><small>Only enable this if the school intentionally allows a report to be issued while some eligible subject results are missing.</small></span></label>
+        <div className="settings-action-row three">
+          <SettingsLink icon={<GraduationCap size={18} />} title="Academic Setup" detail="Classes, subjects, assigned teachers and assessment structure." href="/school/academics/setup" />
+          <SettingsLink icon={<CalendarDays size={18} />} title="Timetable Setup" detail="School periods, breaks and weekly subject lesson requirements." href="/school/timetable/setup" />
+          <SettingsLink icon={<FileText size={18} />} title="Report Card Setup" detail="Grading bands, themes, signers, positions and promotion rules." href="/school/settings/reporting/intelligence" />
+        </div>
+      </section>
+
+      <section id="people-access" className="settings-panel">
+        <div className="settings-panel-heading">
+          <div className="settings-step-icon"><UsersRound size={20} /></div>
+          <div><span>4 · PEOPLE & ACCESS</span><h2>Who can use SukuuNova, and what can they do?</h2><p>Start with normal job roles. Only use individual permission overrides when a person genuinely needs an exception.</p></div>
+        </div>
+        <div className="settings-action-row three">
+          <SettingsLink icon={<UsersRound size={18} />} title="Staff & Teachers" detail="Create staff identities and connect teaching responsibilities." href="/school/staff" />
+          <SettingsLink icon={<ShieldCheck size={18} />} title="People & Access" detail="Activate accounts, assign roles and review effective access." href="/school/settings/access" />
+          <SettingsLink icon={<ShieldCheck size={18} />} title="Roles & Permissions" detail="Understand and configure what each school role is allowed to do." href="/school/settings/roles" />
+        </div>
+      </section>
+
+      <section id="communication-documents" className="settings-panel">
+        <div className="settings-panel-heading">
+          <div className="settings-step-icon"><MessageSquareText size={20} /></div>
+          <div><span>5 · COMMUNICATION & DOCUMENTS</span><h2>School messages and official output</h2><p>Set the sender identity here, then use the dedicated workspaces for delivery rules, document templates and exports.</p></div>
+        </div>
+        <div className="settings-form-grid">
+          <label className="settings-field"><span>SMS sender ID</span><input maxLength={20} value={settings.smsSenderId ?? ""} onChange={(event) => setSettings((current) => ({ ...current, smsSenderId: event.target.value }))} placeholder="e.g. EUGENEACADEMY" /><small>The name families see when the configured SMS provider supports sender IDs.</small></label>
+          <div className="settings-readonly"><span>Official document identity</span><strong>{school.logoUrl ? "Logo ready" : "Logo still needed"}</strong><small>The school name and logo above are reused by supported official documents.</small></div>
+        </div>
+        <div className="settings-action-row three">
+          <SettingsLink icon={<BellRing size={18} />} title="Communication Settings" detail="SMS, WhatsApp, notices and communication automations." href="/school/communications/settings" />
+          <SettingsLink icon={<FileText size={18} />} title="Downloads & Exports" detail="Create school documents and data exports from one place." href="/school/downloads" />
+          <SettingsLink icon={<CheckCircle2 size={18} />} title="Account Security" detail="Password and security controls for your own signed-in account." href="/account/security" />
+        </div>
+      </section>
+
+      <div className="settings-bottom-save">
+        <div><strong>Finished changing school-wide settings?</strong><span>Save once. Connected SukuuNova modules will use the updated values.</span></div>
+        <button className="settings-save" type="button" onClick={() => void save()} disabled={busy || !gradingReady}>{busy ? "Saving…" : "Save school settings"}</button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsLink({ icon, title, detail, href }: { icon: React.ReactNode; title: string; detail: string; href: string }) {
+  return (
+    <Link href={href} className="settings-link-card">
+      <div className="settings-link-icon">{icon}</div>
+      <div><strong>{title}</strong><span>{detail}</span></div>
+      <ChevronRight size={16} />
+    </Link>
+  );
+}
