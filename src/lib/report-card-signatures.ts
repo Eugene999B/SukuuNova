@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+import { verifySignatureImageSha256 } from "@/lib/signature-integrity";
 
 type SignatureSnapshot = {
   userId: string;
@@ -8,10 +9,23 @@ type SignatureSnapshot = {
   name: string;
   signatureDataUrl?: string;
   signatureUpdatedAt?: string;
+  signatureSha256?: string;
+  signatureIntegrity?: "verified" | "legacy" | "failed";
 };
 
 function object(value: Prisma.JsonValue | null | undefined): Record<string, Prisma.JsonValue> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.JsonValue> : {};
+}
+
+function safeSignature(dataUrl?: string, sha256?: string) {
+  if (!dataUrl) return { dataUrl: undefined, sha256: undefined, integrity: undefined as SignatureSnapshot["signatureIntegrity"] };
+  if (!sha256) return { dataUrl, sha256: undefined, integrity: "legacy" as const };
+  const verified = verifySignatureImageSha256(dataUrl, sha256);
+  return {
+    dataUrl: verified ? dataUrl : undefined,
+    sha256: verified ? sha256.toLowerCase() : undefined,
+    integrity: verified ? "verified" as const : "failed" as const,
+  };
 }
 
 export function readSignatureSnapshot(value: Prisma.JsonValue | null | undefined): SignatureSnapshot[] {
@@ -24,12 +38,17 @@ export function readSignatureSnapshot(value: Prisma.JsonValue | null | undefined
     const role = typeof row.role === "string" ? row.role : "";
     const name = typeof row.name === "string" ? row.name : "";
     if (!userId || !role || !name) return [];
+    const rawDataUrl = typeof row.signatureDataUrl === "string" ? row.signatureDataUrl : undefined;
+    const rawSha = typeof row.signatureSha256 === "string" && /^[a-f0-9]{64}$/i.test(row.signatureSha256) ? row.signatureSha256 : undefined;
+    const safe = safeSignature(rawDataUrl, rawSha);
     return [{
       userId,
       role,
       name,
-      signatureDataUrl: typeof row.signatureDataUrl === "string" ? row.signatureDataUrl : undefined,
+      signatureDataUrl: safe.dataUrl,
       signatureUpdatedAt: typeof row.signatureUpdatedAt === "string" ? row.signatureUpdatedAt : undefined,
+      signatureSha256: safe.sha256,
+      signatureIntegrity: safe.integrity,
     }];
   });
 }
@@ -52,12 +71,15 @@ export async function resolveCurrentReportSignatures(tx: TenantDb, schoolId: str
     const user = byId.get(slot.userId);
     if (!user) return [];
     const profile = config.signatureProfiles[slot.userId];
+    const safe = safeSignature(profile?.dataUrl, profile?.sha256);
     return [{
       userId: user.id,
       role: slot.role,
       name: user.name,
-      signatureDataUrl: profile?.dataUrl,
+      signatureDataUrl: safe.dataUrl,
       signatureUpdatedAt: profile?.updatedAt,
+      signatureSha256: safe.sha256,
+      signatureIntegrity: safe.integrity,
     }];
   });
 }
