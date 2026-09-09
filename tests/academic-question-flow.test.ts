@@ -20,7 +20,7 @@ async function setup() {
 }
 
 describe("broader question types in the connected learner flow", () => {
-  it("keeps answer keys private and auto-grades structured responses", async () => {
+  it("keeps answer keys private, auto-grades structured responses and records the gradebook score", async () => {
     const f = await setup();
     const work = await withTenant(f.schoolId, tx => createTeacherAcademicWork(tx, {
       schoolId: f.schoolId,
@@ -61,6 +61,8 @@ describe("broader question types in the connected learner flow", () => {
     }));
     expect(result.status).toBe("graded");
     expect(result.totalAwarded).toBe(10);
+    const score = await withTenant(f.schoolId, tx => tx.score.findFirst({ where: { studentId: f.studentId } }));
+    expect(Number(score?.value)).toBe(10);
     const released = await withTenant(f.schoolId, tx => startGuardianSubmission(tx, context));
     expect(released.answers).toHaveLength(4);
     expect(released.answers.every(answer => Number(answer.awardedScore) > 0)).toBe(true);
