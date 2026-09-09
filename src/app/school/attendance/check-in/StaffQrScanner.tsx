@@ -60,6 +60,7 @@ export default function StaffQrScanner() {
 
   useEffect(() => {
     if (phase !== "qr" || !policy) return;
+    const activePolicy = policy;
     let cancelled = false;
     async function startQrCamera() {
       try {
@@ -73,26 +74,34 @@ export default function StaffQrScanner() {
         const canvas = new QRCanvas();
         const cancelLoop = frameLoop(async () => {
           if (busyRef.current) return;
-          const decoded = camera.readFrame(canvas);
-          if (!decoded) return;
           busyRef.current = true;
-          camera.stop();
-          cancelLoop();
-          qrStopRef.current = null;
-          setMessage("QR verified by your camera. Checking school presence…");
-          const scanLocation = await currentLocation();
-          const requestKey = crypto.randomUUID();
-          setToken(decoded);
-          setLocation(scanLocation);
-          setIdempotencyKey(requestKey);
-          if (policy.requireFace) {
-            setPhase("face");
-            setMessage("Now verify your face. This proves the signed-in account holder is physically checking in.");
-          } else {
-            setPhase("submitting");
-            await submit(decoded, scanLocation, requestKey);
+          try {
+            const rawDecoded = await camera.readFrame(canvas);
+            const decoded = typeof rawDecoded === "string"
+              ? rawDecoded
+              : Array.isArray(rawDecoded)
+                ? rawDecoded.find((item): item is string => typeof item === "string")
+                : undefined;
+            if (!decoded || cancelled) return;
+            camera.stop();
+            cancelLoop();
+            qrStopRef.current = null;
+            setMessage("QR verified by your camera. Checking school presence…");
+            const scanLocation = await currentLocation();
+            const requestKey = crypto.randomUUID();
+            setToken(decoded);
+            setLocation(scanLocation);
+            setIdempotencyKey(requestKey);
+            if (activePolicy.requireFace) {
+              setPhase("face");
+              setMessage("Now verify your face. This proves the signed-in account holder is physically checking in.");
+            } else {
+              setPhase("submitting");
+              await submit(decoded, scanLocation, requestKey);
+            }
+          } finally {
+            busyRef.current = false;
           }
-          busyRef.current = false;
         });
         qrStopRef.current = () => { cancelLoop(); camera.stop(); };
       } catch (error) {
