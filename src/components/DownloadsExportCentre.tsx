@@ -89,7 +89,7 @@ function preparePrintWindow(title: string) {
   if (!printWindow) return null;
   try { printWindow.opener = null; } catch { /* browser may prevent assignment */ }
   printWindow.document.open();
-  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${htmlEscape(title)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:#111}p{color:#555}</style></head><body><h1>Preparing document…</h1><p>SukuuNova is loading the current school data. This window will update automatically.</p></body></html>`);
+  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${htmlEscape(title)}</title><style>body{font-family:Arial,sans-serif;padding:32px;color:black}p{color:dimgray}</style></head><body><h1>Preparing document…</h1><p>SukuuNova is loading the current school data. This window will update automatically.</p></body></html>`);
   printWindow.document.close();
   return printWindow;
 }
@@ -97,7 +97,7 @@ function preparePrintWindow(title: string) {
 function showPrintError(printWindow: Window, message: string) {
   if (printWindow.closed) return;
   printWindow.document.open();
-  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print unavailable</title><style>body{font-family:Arial,sans-serif;max-width:680px;margin:48px auto;padding:24px;color:#111}p{line-height:1.6;color:#555}</style></head><body><h1>Document could not be prepared</h1><p>${htmlEscape(message)}</p><p>Close this window, correct the issue if needed, and try again.</p></body></html>`);
+  printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Print unavailable</title><style>body{font-family:Arial,sans-serif;max-width:680px;margin:48px auto;padding:24px;color:black}p{line-height:1.6;color:dimgray}</style></head><body><h1>Document could not be prepared</h1><p>${htmlEscape(message)}</p><p>Close this window, correct the issue if needed, and try again.</p></body></html>`);
   printWindow.document.close();
 }
 
