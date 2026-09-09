@@ -8,10 +8,10 @@ import { requirePermission } from "@/lib/rbac";
 import { replaceDirectionalRouteShape } from "@/lib/novacore/directional-route-service";
 import { getSchoolTransportControl, reviewPickupPoint } from "@/lib/novacore/family-transport-service";
 import { startTrackerCertification } from "@/lib/novacore/tracker-certification-service";
+import { registerTrackerWithGateway } from "@/lib/novacore/tracker-registration-coordinator";
 import {
   assignStudentTransport,
   finishTransportTrip,
-  registerCertifiedTracker,
   startTransportTrip,
 } from "@/lib/novacore/transport-operations-service";
 import { provisionTrackerGatewayBinding } from "@/lib/novacore/tracker-gateway-service";
@@ -57,11 +57,17 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
 
     if (input.action === "registerTracker") {
-      const tracker = await withTenant(session.schoolId, async (tx) => {
-        await requirePermission(tx, session.userId, "transport:manage");
-        return registerCertifiedTracker(tx, { schoolId: session.schoolId, actorId: session.userId, ...input });
+      await withTenant(session.schoolId, (tx) => requirePermission(tx, session.userId, "transport:manage"));
+      const { tracker, binding } = await registerTrackerWithGateway({
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        vehicleId: input.vehicleId,
+        imei: input.imei,
+        model: input.model,
+        simIccid: input.simIccid,
+        simMsisdn: input.simMsisdn,
+        apn: input.apn,
       });
-      const binding = await provisionTrackerGatewayBinding({ schoolId: session.schoolId, trackerDeviceId: tracker.id, imei: input.imei });
       return NextResponse.json({ ok: true, tracker: { ...tracker, imei: undefined }, binding: { ...binding, imeiHash: undefined } }, { status: 201 });
     }
 
