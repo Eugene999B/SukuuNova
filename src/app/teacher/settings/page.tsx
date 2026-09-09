@@ -35,7 +35,7 @@ export default async function TeacherSettingsPage() {
             <SettingsRouteCard href="/teacher/timetable" icon={CalendarClock} title="My timetable" description="See the timetable generated from the school's class, subject and teacher assignments." action="Open timetable" />
             <SettingsRouteCard href="/teacher/gradebook" icon={GraduationCap} title="My gradebook" description="Enter and review marks only for the classes and subjects assigned to you." action="Open gradebook" />
             <SettingsRouteCard href="/teacher/homework" icon={ClipboardPenLine} title="Homework & exercises" description="Create and manage work for your assigned classes and subjects." action="Open homework" />
-            <SettingsRouteCard href="/teacher/messages" icon={Mail} title="Messages" description="Read and send communication available to your teaching account." action="Open messages" />
+            <SettingsRouteCard href="/teacher/module?view=My%20Messages" icon={Mail} title="Messages" description="Read and send communication available to your teaching account." action="Open messages" />
           </div>
         </SettingsSection>
 
