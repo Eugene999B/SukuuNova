@@ -7,6 +7,22 @@ ALTER TABLE "P3VehicleLocation" ADD COLUMN "accuracyMeters" DECIMAL(8,2);
 ALTER TABLE "P3VehicleLocation" ADD COLUMN "quality" TEXT NOT NULL DEFAULT 'accepted';
 ALTER TABLE "P3VehicleLocation" ADD COLUMN "ingestedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
 
+-- Global gateway routing contains no location data and no plaintext IMEI. It exists only so a raw TCP connection
+-- can be resolved to one tenant before the gateway enters the normal withTenant/RLS transaction.
+CREATE TABLE "TrackerGatewayBinding" (
+  "id" TEXT NOT NULL,
+  "imeiHash" TEXT NOT NULL,
+  "schoolId" TEXT NOT NULL,
+  "trackerDeviceId" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'active',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "TrackerGatewayBinding_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX "TrackerGatewayBinding_imeiHash_key" ON "TrackerGatewayBinding"("imeiHash");
+CREATE UNIQUE INDEX "TrackerGatewayBinding_schoolId_trackerDeviceId_key" ON "TrackerGatewayBinding"("schoolId","trackerDeviceId");
+CREATE INDEX "TrackerGatewayBinding_schoolId_status_idx" ON "TrackerGatewayBinding"("schoolId","status");
+
 CREATE TABLE "P3TrackerDevice" (
   "id" TEXT NOT NULL,
   "schoolId" TEXT NOT NULL,
