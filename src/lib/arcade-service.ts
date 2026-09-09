@@ -4,6 +4,13 @@ import type { TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
 import { canGenerateArcadeContent, createArcadeGameQuestions, initialDifficulty, nextDifficulty, schoolDay, learningStreak, type ArcadeQuestion } from "./arcade-content";
+import {
+  canGenerateArcadeInteractionContent,
+  correctArcadeInteractionAnswer,
+  createArcadeInteractionQuestions,
+  validArcadeInteractionAnswer,
+  type ArcadeInteractionQuestion,
+} from "./arcade-interaction-content";
 import { allowedAgeBandsForStandard, arcadeGame, recommendedAgeBand, standardBandFromClassLevel, type ArcadeAgeBand } from "./arcade-catalog";
 import { effectiveArcadeCatalog } from "./arcade-settings";
 import { arcadeLeaderboard, type ArcadeLeaderboardPeriod, type ArcadeLeaderboardScope } from "./arcade-leaderboard";
@@ -20,7 +27,11 @@ type RoundMeta = {
 };
 type RoundRow = ArcadeRound & RoundMeta;
 type Child = { id: string; name: string; classId: string | null; class: { name: string; level: string | null } | null };
+type StoredArcadeQuestion = ArcadeQuestion | ArcadeInteractionQuestion;
 
+function isInteractionQuestion(question: StoredArcadeQuestion): question is ArcadeInteractionQuestion {
+  return "kind" in question;
+}
 async function requireCurrentGuardian(tx: TenantDb, context: Context) {
   const guardian = await tx.guardian.findFirst({ where: { id: context.guardianId, schoolId: context.schoolId, userId: context.userId }, select: { id: true } });
   if (!guardian) throw new ForbiddenError("This guardian account is no longer linked.");
@@ -44,14 +55,20 @@ async function roundRow(tx: TenantDb, schoolId: string, roundId: string) {
 }
 function publicRound(round: RoundRow | ArcadeRound) {
   const complete = round.status === "completed";
-  const questions = round.questions as unknown as ArcadeQuestion[];
+  const questions = round.questions as unknown as StoredArcadeQuestion[];
   const meta = round as ArcadeRound & Partial<RoundMeta>;
   return {
     id: round.id, studentId: round.studentId, game: round.game, difficulty: round.difficulty, status: round.status,
     answers: round.answers as string[], correct: complete ? round.correct : null, xp: round.xp, stars: round.stars,
     ageBand: meta.ageBand ?? null, standardBand: meta.standardBand ?? null, engine: meta.engine ?? "choice_quiz",
     roundLength: meta.roundLength ?? questions.length, score: complete ? (meta.score ?? 0) : null, challengeMode: meta.challengeMode ?? false,
-    questions: questions.map((item) => ({ id: item.id, prompt: item.prompt, options: item.options, ...(complete ? { answer: item.answer, explanation: item.explanation } : {}) })),
+    questions: questions.map((item) => ({
+      id: item.id,
+      kind: isInteractionQuestion(item) ? item.kind : "choice",
+      prompt: item.prompt,
+      options: item.options,
+      ...(complete ? { answer: item.answer, explanation: item.explanation } : {}),
+    })),
   };
 }
 function publicCatalog(catalog: Awaited<ReturnType<typeof effectiveArcadeCatalog>>, standardBand: ReturnType<typeof standardBandFromClassLevel>, allowedAges: ArcadeAgeBand[]) {
@@ -102,7 +119,9 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   const catalog = await effectiveArcadeCatalog(tx, context.schoolId);
   const effective = catalog.find((item) => item.gameKey === input.game)!;
   if (!effective.live || !effective.enabled) throw new AppError("This game is not available for play yet.", 409, "GAME_NOT_AVAILABLE");
-  if (!canGenerateArcadeContent(input.game)) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
+  const baseContent = canGenerateArcadeContent(input.game);
+  const interactionContent = canGenerateArcadeInteractionContent(input.game);
+  if (!baseContent && !interactionContent) throw new AppError("This game's learning pack is still being prepared.", 409, "GAME_CONTENT_NOT_READY");
   const standardBand = standardBandFromClassLevel(child.class?.level ?? null);
   if (!effective.effectiveStandardBands.includes(standardBand)) throw new AppError("This game is not available for the learner's school standard.", 409, "GAME_NOT_AVAILABLE");
   const permittedAgeBands = allowedAgeBandsForStandard(standardBand).filter((age) => effective.effectiveAgeBands.includes(age));
@@ -125,7 +144,9 @@ export async function startArcadeRound(tx: TenantDb, context: Context, input: { 
   `;
   const suggested = nextDifficulty(initialDifficulty(child.class?.level ?? null), recent);
   const difficulty = Math.max(effective.difficultyMin, Math.min(effective.difficultyMax, input.easier ? Math.max(1, suggested - 1) : suggested));
-  const questions = createArcadeGameQuestions(input.game, difficulty, roundLength);
+  const questions: StoredArcadeQuestion[] = baseContent
+    ? createArcadeGameQuestions(input.game, difficulty, roundLength)
+    : createArcadeInteractionQuestions(input.game, difficulty, roundLength);
   const id = createId();
   const snapshot = { version: 1, gameKey: input.game, ageBand, standardBand, engine: effective.engine, roundLength: questions.length, challengeMode, timerPolicy: effective.timerPolicy };
   await tx.$executeRaw`
@@ -150,14 +171,19 @@ export async function saveArcadeRound(tx: TenantDb, context: Context, input: { r
   const round = await roundRow(tx, context.schoolId, input.roundId);
   if (!round) throw new AppError("Practice round not found.", 404, "NOT_FOUND");
   if (round.status === "completed") return publicRound(round);
-  const questions = round.questions as unknown as ArcadeQuestion[];
-  if (input.answers.length !== questions.length || input.answers.some((answer, index) => answer !== "" && !questions[index].options.includes(answer))) throw new AppError("Choose one of the displayed answers for each question.", 400, "INVALID_ANSWERS");
+  const questions = round.questions as unknown as StoredArcadeQuestion[];
+  const answersValid = input.answers.length === questions.length && input.answers.every((answer, index) => {
+    if (answer === "") return true;
+    const item = questions[index];
+    return isInteractionQuestion(item) ? validArcadeInteractionAnswer(item, answer) : item.options.includes(answer);
+  });
+  if (!answersValid) throw new AppError("Use the displayed game controls for each answer.", 400, "INVALID_ANSWERS");
   if (input.finish && input.answers.some((answer) => !answer)) throw new AppError(`Answer all ${questions.length} questions before finishing, or save and return later.`, 400, "INCOMPLETE_ROUND");
   if (!input.finish) {
     await tx.$executeRaw`UPDATE "ArcadeRound" SET "answers"=${JSON.stringify(input.answers)}::jsonb WHERE "id"=${round.id} AND "schoolId"=${context.schoolId} AND "status"='in_progress'`;
     return publicRound((await roundRow(tx, context.schoolId, round.id))!);
   }
-  const correct = questions.filter((item, index) => item.answer === input.answers[index]).length;
+  const correct = questions.filter((item, index) => isInteractionQuestion(item) ? correctArcadeInteractionAnswer(item, input.answers[index]) : item.answer === input.answers[index]).length;
   const accuracy = questions.length ? correct / questions.length : 0;
   const xp = correct * 10;
   const stars = accuracy === 1 ? 3 : accuracy >= 0.6 ? 2 : accuracy >= 0.2 ? 1 : 0;
