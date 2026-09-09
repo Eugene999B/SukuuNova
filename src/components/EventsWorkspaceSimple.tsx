@@ -22,14 +22,15 @@ export default function EventsWorkspaceSimple(){
 
   async function submit(event:FormEvent<HTMLFormElement>){
     event.preventDefault();setBusy(true);setMessage("");
-    const form=new FormData(event.currentTarget);
+    const formElement=event.currentTarget;
+    const form=new FormData(formElement);
     const payload:Row={action:"create_event",audience:"guardians",channel:"sms"};
     form.forEach((value,key)=>{if(value!=="")payload[key]=String(value);});
     try{
       const response=await fetch("/api/school/communications",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(payload)});
       const body=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(body.message||"Could not create event.");
-      event.currentTarget.reset();setOpen(false);setMessage(body.message||"Event created.");await load();
+      formElement.reset();setOpen(false);setMessage(body.message||"Event created.");await load();
     }catch(error){setMessage(error instanceof Error?error.message:"Could not create event.");}finally{setBusy(false);}
   }
 
