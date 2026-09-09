@@ -1,3 +1,4 @@
+import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
 import { AppError } from "./errors";
@@ -14,22 +15,21 @@ export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
   for (const roleName of DEFAULT_ROLE_NAMES) {
     // Existing roles are school policy, including deliberately removed rights.
     // A matching custom name must never be promoted into system authority.
-    await tx.role.upsert({
+    const newRoleId = createId();
+    const role = await tx.role.upsert({
       where: { schoolId_name: { schoolId, name: roleName } },
       update: {},
-      create: {
-        schoolId,
-        name: roleName,
-        key: roleKeyForName(roleName),
-        isSystem: true,
-        rolePermissions: {
-          create: [...new Set(DEFAULT_ROLE_PERMISSIONS[roleName])].map((key) => ({
-            schoolId,
-            permissionId: permissionIds.get(key)!
-          }))
-        }
-      }
+      create: { id: newRoleId, schoolId, name: roleName, key: roleKeyForName(roleName), isSystem: true }
     });
+    if (role.id === newRoleId) {
+      await tx.rolePermission.createMany({
+        data: [...new Set(DEFAULT_ROLE_PERMISSIONS[roleName])].map((key) => ({
+          schoolId,
+          roleId: role.id,
+          permissionId: permissionIds.get(key)!
+        }))
+      });
+    }
   }
 }
 
