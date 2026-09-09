@@ -4,6 +4,7 @@ import { requireGuardianSession } from "@/lib/guardian-auth";
 import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { routeError } from "@/lib/errors";
+import { guardianAcademicContextStudentId } from "@/lib/guardian-family-context";
 import { finalizeGuardianSubmission, getGuardianAcademicOverview, retryGuardianSubmission, saveGuardianSubmission, startGuardianSubmission, submitGuardianSubmission } from "@/lib/teacher-academic-submission-service";
 
 const answerSchema = z.object({ questionId: z.string().min(1), responseText: z.string().max(20000).optional(), responseData: z.unknown().optional() });
@@ -13,21 +14,6 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save"), studentId: z.string().min(1), workId: z.string().min(1), answers: z.array(answerSchema).max(200) }),
   z.object({ action: z.literal("submit"), studentId: z.string().min(1), workId: z.string().min(1), answers: z.array(answerSchema).max(200).optional() }),
 ]);
-
-export function guardianAcademicContextStudentId(request: Request) {
-  const url = new URL(request.url);
-  const explicit = url.searchParams.get("studentId")?.trim();
-  if (explicit) return explicit;
-  const referer = request.headers.get("referer");
-  if (!referer) return undefined;
-  try {
-    const page = new URL(referer);
-    if (page.origin !== url.origin || page.pathname.replace(/\/$/, "") !== "/guardian/academic") return undefined;
-    return page.searchParams.get("studentId")?.trim() || undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 export async function GET(request: Request) {
   try {
