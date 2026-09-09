@@ -5,7 +5,7 @@ import { Calculator, CheckCircle2, CreditCard, MessageSquare, RefreshCw, WalletC
 
 type School = { id: string; name: string; uniqueCode: string; status: string; studentCount: number; subscriptionPlan?: { name: string; price: number | string } | null };
 type Billing = { activeStudents: number; calculatedTotal: number; school: School; billing: { billingMode: "flat" | "per_student"; currency: string; studentRate: number; flatRate: number; billingDay: number; graceDays: number; trialDays: number; minimumCharge: number; maximumCharge: number | null; active: boolean } };
-type Messaging = { school: { id: string; name: string; uniqueCode: string }; wallet: { smsBalance: number; whatsappBalance: number; smsSellRate: string | number; whatsappSellRate: string | number; smsCostRate: string | number; whatsappCostRate: string | number; lowBalanceThreshold: number }; ledger: Array<{ id: string; channel: string; entryType: string; quantity: number; balanceAfter: number; unitPrice: string | null; notes: string | null; createdAt: string }> };
+type Messaging = { school: { id: string; name: string; uniqueCode: string }; wallet: { smsBalance: number; whatsappBalance: number; smsSellRate: string | number; whatsappSellRate: string | number; smsCostRate: string | number; whatsappCostRate: string | number; lowBalanceThreshold: number }; platformInventory: { sms?: number; whatsapp?: number }; ledger: Array<{ id: string; channel: string; entryType: string; quantity: number; balanceAfter: number; unitPrice: string | null; notes: string | null; createdAt: string }> };
 
 const money = (currency: string, value: number) => `${currency === "GHS" ? "₵" : currency + " "}${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -40,7 +40,10 @@ export default function PlatformBillingStudio() {
         const data = await messagingResponse.json() as Messaging;
         setMessaging(data);
         const wallet = data.wallet;
-        setRates({ sellRate: channel === "sms" ? Number(wallet.smsSellRate) : Number(wallet.whatsappSellRate), costRate: channel === "sms" ? Number(wallet.smsCostRate) : Number(wallet.whatsappCostRate), lowBalanceThreshold: wallet.lowBalanceThreshold });
+        const sellRate=channel === "sms" ? Number(wallet.smsSellRate) : Number(wallet.whatsappSellRate);
+        const costRate=channel === "sms" ? Number(wallet.smsCostRate) : Number(wallet.whatsappCostRate);
+        setRates({ sellRate, costRate, lowBalanceThreshold: wallet.lowBalanceThreshold });
+        setAllocation(current=>({...current,unitCost:costRate,unitPrice:sellRate}));
       }
     } finally { setBusy(false); }
   }
@@ -48,7 +51,7 @@ export default function PlatformBillingStudio() {
   useEffect(() => { void loadSchools(); }, []);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadSchool(schoolId); }, [schoolId]);
-  useEffect(() => { if (!messaging) return; const w = messaging.wallet; setRates({ sellRate: channel === "sms" ? Number(w.smsSellRate) : Number(w.whatsappSellRate), costRate: channel === "sms" ? Number(w.smsCostRate) : Number(w.whatsappCostRate), lowBalanceThreshold: w.lowBalanceThreshold }); }, [channel, messaging]);
+  useEffect(() => { if (!messaging) return; const w = messaging.wallet; const sellRate=channel === "sms" ? Number(w.smsSellRate) : Number(w.whatsappSellRate),costRate=channel === "sms" ? Number(w.smsCostRate) : Number(w.whatsappCostRate); setRates({ sellRate, costRate, lowBalanceThreshold: w.lowBalanceThreshold }); setAllocation(current=>({...current,unitCost:costRate,unitPrice:sellRate})); }, [channel, messaging]);
 
   const selectedSchool = useMemo(() => schools.find((s) => s.id === schoolId) ?? null, [schoolId, schools]);
   const estimatedTotal = useMemo(() => {
@@ -56,6 +59,10 @@ export default function PlatformBillingStudio() {
     const base = draft.billingMode === "per_student" ? billing.activeStudents * Number(draft.studentRate) : Number(draft.flatRate);
     return Math.min(draft.maximumCharge == null ? Number.POSITIVE_INFINITY : Number(draft.maximumCharge), Math.max(Number(draft.minimumCharge) || 0, base));
   }, [billing, draft]);
+  const platformAvailable=Number(messaging?.platformInventory?.[channel]??0);
+  const positiveAllocation=Math.max(0,Math.trunc(allocation.quantity));
+  const allocationSale=positiveAllocation*Number(allocation.unitPrice||0);
+  const allocationCost=positiveAllocation*Number(allocation.unitCost||0);
   const saveBilling = async () => {
     setBusy(true); setMessage("");
     try {
@@ -75,13 +82,14 @@ export default function PlatformBillingStudio() {
     } finally { setBusy(false); }
   };
   const allocate = async () => {
-    if (!allocation.quantity) { setMessage("Enter a positive or negative credit quantity."); return; }
+    if (!allocation.quantity) { setMessage("Enter a positive allocation or a negative quantity to return credits from the school."); return; }
+    if(allocation.quantity>0&&allocation.quantity>platformAvailable){setMessage(`Only ${platformAvailable.toLocaleString()} ${channel.toUpperCase()} platform credits are available to allocate.`);return;}
     setBusy(true); setMessage("");
     try {
       const response = await fetch("/api/platform/control-plane", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "allocateMessaging", schoolId, channel, ...allocation }) });
       const data = await response.json() as { message?: string; error?: string };
-      setMessage(response.ok ? `${allocation.quantity > 0 ? "Credits allocated" : "Credit adjustment recorded"} for ${channel === "sms" ? "SMS" : "WhatsApp"}.` : (data.message ?? data.error ?? "Unable to update credits."));
-      if (response.ok) { setAllocation({ quantity: 0, unitCost: 0, unitPrice: 0, reference: "", notes: "" }); await loadSchool(schoolId); }
+      setMessage(response.ok ? `${allocation.quantity > 0 ? "Credits allocated to the school" : "Credits returned to platform inventory"} for ${channel === "sms" ? "SMS" : "WhatsApp"}.` : (data.message ?? data.error ?? "Unable to update credits."));
+      if (response.ok) { setAllocation({ quantity: 0, unitCost: rates.costRate, unitPrice: rates.sellRate, reference: "", notes: "" }); await loadSchool(schoolId); }
     } finally { setBusy(false); }
   };
 
@@ -103,15 +111,15 @@ export default function PlatformBillingStudio() {
     </div>}
     {tab === "subscription" && !billing && <div className="app-card app-panel platform-empty"><strong>Choose a school to configure subscription billing.</strong><span>Each school can use the same central platform but have its own billing basis and rate.</span></div>}
     {tab === "messaging" && messaging && <div className="platform-studio-grid">
-      <section className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">PREPAID RESELLING</span><h2>{messaging.school.name}</h2><p>These balances are separate from subscription billing. Allocate credits you purchased from your provider, then charge schools using your own retail rate.</p></div><MessageSquare size={20}/></div>
-        <div className="platform-credit-cards"><div><span>SMS balance</span><strong>{messaging.wallet.smsBalance.toLocaleString()}</strong><small>message units</small></div><div><span>WhatsApp balance</span><strong>{messaging.wallet.whatsappBalance.toLocaleString()}</strong><small>message units</small></div></div>
+      <section className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">PREPAID RESELLING</span><h2>{messaging.school.name}</h2><p>Allocate only credits already held by SukuuNova. Your platform stock and the school's resale wallet move together in one audited transaction.</p></div><MessageSquare size={20}/></div>
+        <div className="platform-credit-cards"><div><span>School SMS balance</span><strong>{messaging.wallet.smsBalance.toLocaleString()}</strong><small>credits owned by this school</small></div><div><span>Your SMS inventory</span><strong>{Number(messaging.platformInventory.sms??0).toLocaleString()}</strong><small>credits still available to sell</small></div><div><span>School WhatsApp balance</span><strong>{messaging.wallet.whatsappBalance.toLocaleString()}</strong><small>credits owned by this school</small></div><div><span>Your WhatsApp inventory</span><strong>{Number(messaging.platformInventory.whatsapp??0).toLocaleString()}</strong><small>credits still available to sell</small></div></div>
         <div className="platform-channel-toggle"><button type="button" className={channel === "sms" ? "is-active" : ""} onClick={() => setChannel("sms")}>SMS</button><button type="button" className={channel === "whatsapp" ? "is-active" : ""} onClick={() => setChannel("whatsapp")}>WhatsApp</button></div>
         <div className="platform-form-grid"><label><span>Your selling price / unit</span><input type="number" min="0" step="0.0001" value={rates.sellRate} onChange={(e) => setRates({ ...rates, sellRate: Number(e.target.value) })}/></label><label><span>Your provider cost / unit</span><input type="number" min="0" step="0.0001" value={rates.costRate} onChange={(e) => setRates({ ...rates, costRate: Number(e.target.value) })}/></label><label><span>Low-balance alert threshold</span><input type="number" min="0" value={rates.lowBalanceThreshold} onChange={(e) => setRates({ ...rates, lowBalanceThreshold: Number(e.target.value) })}/></label></div>
         <div className="platform-margin"><span>Margin per unit</span><strong>{money("GHS", Math.max(0, rates.sellRate - rates.costRate))}</strong><small>Estimated margin on each sold message unit.</small></div>
         <button type="button" className="app-action" onClick={() => void saveRates()} disabled={busy}><CreditCard size={14}/><strong>Save resale pricing</strong></button>
-        <div className="platform-credit-allocation"><div className="app-card-head"><div><h3>Allocate or adjust credits</h3><p>Positive numbers allocate provider-backed capacity to the school; negative numbers record a correction/refund.</p></div></div><div className="platform-form-grid"><label><span>Quantity</span><input type="number" step="1" value={allocation.quantity} onChange={(e) => setAllocation({ ...allocation, quantity: Number(e.target.value) })}/></label><label><span>Your acquisition cost / unit</span><input type="number" min="0" step="0.0001" value={allocation.unitCost} onChange={(e) => setAllocation({ ...allocation, unitCost: Number(e.target.value) })}/></label><label><span>Your sale price / unit</span><input type="number" min="0" step="0.0001" value={allocation.unitPrice} onChange={(e) => setAllocation({ ...allocation, unitPrice: Number(e.target.value) })}/></label><label><span>Reference</span><input value={allocation.reference} onChange={(e) => setAllocation({ ...allocation, reference: e.target.value })} placeholder="Provider purchase / school invoice ref"/></label><label style={{ gridColumn: "1 / -1" }}><span>Notes</span><input value={allocation.notes} onChange={(e) => setAllocation({ ...allocation, notes: e.target.value })} placeholder="e.g. 5,000 SMS credits bought at provider rate"/></label></div><button type="button" className="app-action" onClick={() => void allocate()} disabled={busy}><WalletCards size={14}/><strong>Post credit allocation</strong></button></div>
+        <div className="platform-credit-allocation"><div className="app-card-head"><div><h3>Sell / allocate credits</h3><p>Positive quantities move credits from your inventory to the school. Negative quantities revoke unused credits and return them to your platform inventory.</p></div></div><div className="platform-form-grid"><label><span>Quantity</span><input type="number" step="1" value={allocation.quantity} onChange={(e) => setAllocation({ ...allocation, quantity: Number(e.target.value) })}/></label><label><span>Your acquisition cost / unit</span><input type="number" min="0" step="0.0001" value={allocation.unitCost} onChange={(e) => setAllocation({ ...allocation, unitCost: Number(e.target.value) })}/></label><label><span>Your sale price / unit</span><input type="number" min="0" step="0.0001" value={allocation.unitPrice} onChange={(e) => setAllocation({ ...allocation, unitPrice: Number(e.target.value) })}/></label><label><span>Reference</span><input value={allocation.reference} onChange={(e) => setAllocation({ ...allocation, reference: e.target.value })} placeholder="School invoice / payment reference"/></label><label style={{ gridColumn: "1 / -1" }}><span>Notes</span><input value={allocation.notes} onChange={(e) => setAllocation({ ...allocation, notes: e.target.value })} placeholder="e.g. School purchased 200 SMS credits"/></label></div>{allocation.quantity>0&&<div className="platform-calculation-card"><div><span className="platform-calculation-label">Allocation preview</span><strong>{positiveAllocation.toLocaleString()} of {platformAvailable.toLocaleString()} available</strong><small>Sale value {money("GHS",allocationSale)} · acquisition {money("GHS",allocationCost)} · estimated margin {money("GHS",Math.max(0,allocationSale-allocationCost))}</small></div><WalletCards size={22}/></div>}<button type="button" className="app-action" onClick={() => void allocate()} disabled={busy||(allocation.quantity>0&&allocation.quantity>platformAvailable)}><WalletCards size={14}/><strong>{allocation.quantity<0?"Return credits to platform":"Post school allocation"}</strong></button></div>
       </section>
-      <aside className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">AUDITABLE LEDGER</span><h2>Recent credit activity</h2><p>Every allocation and correction stays separate from school subscription invoices.</p></div></div>{messaging.ledger.map((entry) => <div className="platform-ledger-row" key={entry.id}><div><strong>{entry.channel === "sms" ? "SMS" : "WhatsApp"} · {entry.entryType}</strong><span>{entry.quantity > 0 ? "+" : ""}{entry.quantity.toLocaleString()} units · balance {entry.balanceAfter.toLocaleString()}</span></div><small>{new Date(entry.createdAt).toLocaleString()}</small></div>)}{messaging.ledger.length === 0 && <div className="platform-empty"><strong>No credit entries yet.</strong><span>This school has not received a communication credit allocation.</span></div>}</aside>
+      <aside className="app-card app-panel"><div className="app-card-head"><div><span className="app-eyebrow">AUDITABLE LEDGER</span><h2>Recent credit activity</h2><p>Every allocation, consumption and refund stays separate from school subscription invoices.</p></div></div>{messaging.ledger.map((entry) => <div className="platform-ledger-row" key={entry.id}><div><strong>{entry.channel === "sms" ? "SMS" : "WhatsApp"} · {entry.entryType}</strong><span>{entry.quantity > 0 ? "+" : ""}{entry.quantity.toLocaleString()} units · balance {entry.balanceAfter.toLocaleString()}</span></div><small>{new Date(entry.createdAt).toLocaleString()}</small></div>)}{messaging.ledger.length === 0 && <div className="platform-empty"><strong>No credit entries yet.</strong><span>This school has not received a communication credit allocation.</span></div>}</aside>
     </div>}
     {tab === "messaging" && !messaging && <div className="app-card app-panel platform-empty"><strong>Choose a school to manage its SMS/WhatsApp wallet.</strong><span>This ledger is intentionally independent from platform subscription billing.</span></div>}
   </div>;
