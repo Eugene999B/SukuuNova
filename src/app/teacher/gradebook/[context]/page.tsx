@@ -6,6 +6,8 @@ import { hasPermission } from "@/lib/rbac";
 import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/academic-engine";
 import GradebookEntryGrid from "@/components/GradebookEntryGrid";
 import "@/app/school/module-workspace.css";
+import "@/app/school/academic-workspace.css";
+import "@/app/school/gradebook/studio/gradebook-entry.css";
 
 export default async function TeacherGradebookContextPage({ params }: { params: Promise<{ context: string }> }) {
   const session = await requireSchoolSession();
@@ -34,7 +36,7 @@ export default async function TeacherGradebookContextPage({ params }: { params: 
         <Link className="button secondary" href="/teacher/gradebook">← My gradebooks</Link>
       </section>
       <section className="module-metrics"><article><span>Learners</span><strong>{data.performance.rows.length}</strong></article><article><span>Assessments</span><strong>{data.performance.assessments.length}</strong></article></section>
-      <section className="module-card" id="marks"><div className="module-section-title"><div><span>Focused mark sheet</span><h3>Enter marks</h3></div></div>{data.performance.assessments.length===0?<div className="module-empty"><strong>No assessments configured yet.</strong><span>Ask an academic administrator to configure the assessment structure.</span><Link className="button secondary" href="/teacher/gradebook">Back to assignments</Link></div>:<GradebookEntryGrid assessments={data.performance.assessments} rules={{ categories: data.performance.config.categories, rounding: data.performance.config.rounding, missingScorePolicy: data.performance.config.missingScorePolicy }} rows={data.performance.rows.map((row)=>({student:row.student,total:row.total,scores:row.scores.map((score)=>({assessmentId:score.assessmentId,rawScore:score.rawScore,maxScore:score.maxScore,status:(score as { status?: string }).status ?? null}))}))}/>}</section>
+      <section className="module-card" id="marks"><div className="module-section-title"><div><span>Focused mark sheet</span><h3>Enter marks</h3></div></div>{data.performance.assessments.length===0?<div className="module-empty"><strong>No assessments configured yet.</strong><span>Ask an academic administrator to configure the assessment structure.</span><Link className="button secondary" href="/teacher/gradebook">Back to assignments</Link></div>:<GradebookEntryGrid key={context + ":" + data.selectedTerm.id} locked={data.selectedTerm.isLocked} assessments={data.performance.assessments} rules={{ categories: data.performance.config.categories, rounding: data.performance.config.rounding, missingScorePolicy: data.performance.config.missingScorePolicy }} rows={data.performance.rows.map((row)=>({student:row.student,total:row.total,scores:row.scores.map((score)=>({assessmentId:score.assessmentId,expected:score.expected,rawScore:score.rawScore,maxScore:score.maxScore,status:(score as { status?: string }).status ?? null}))}))}/>}</section>
     </div>
   </AppShell>;
 }
