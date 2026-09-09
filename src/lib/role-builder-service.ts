@@ -4,11 +4,16 @@ import { AppError } from "./errors";
 import { requirePermission } from "./rbac";
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } from "./default-rbac";
 import { roleKeyForName, requireCanGrantPermissions, getSchoolAuthorization } from "./authorization";
+import { permissionCatalogEntry, permissionDescription } from "./permission-catalog";
 
 export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
   const permissionIds = new Map<string,string>();
   for (const key of DEFAULT_PERMISSIONS) {
-    const row = await tx.permission.upsert({ where: { key }, update: {}, create: { key, description: "SukuuNova baseline permission: " + key } });
+    const row = await tx.permission.upsert({
+      where: { key },
+      update: { description: permissionDescription(key) },
+      create: { key, description: permissionDescription(key) },
+    });
     permissionIds.set(key, row.id);
   }
   for (const roleName of DEFAULT_ROLE_NAMES) {
@@ -45,7 +50,7 @@ export async function customRoleBuilderData(tx: TenantDb, actorId: string) {
     tx.permission.findMany({ orderBy: { key: "asc" } }),
     tx.role.findMany({ where: { schoolId: actor.schoolId, isSystem: false }, include: { rolePermissions: { include: { permission: true } } }, orderBy: { name: "asc" } })
   ]);
-  return { permissions, roles };
+  return { permissions, roles, permissionCatalog: permissions.map((permission) => permissionCatalogEntry(permission.key)) };
 }
 
 export async function createCustomRole(tx: TenantDb, input: { schoolId: string; actorId: string; name: string; permissionKeys: string[] }) {
