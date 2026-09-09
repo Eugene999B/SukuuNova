@@ -6,7 +6,9 @@
 - Added teacher term selectors, preserved term context across assignment links/back navigation, and readable missing-calendar/assessment states.
 - Teacher sheets use the school's grading scale and retain locked-term read-only controls. Assignment-list access now checks score-entry permission.
 - Removed redundant route-parameter decoding and reject malformed teaching contexts.
-- Seven calendar/context regressions. GitHub verification pending. No migration. Production browser verification remains outstanding.
+- Seven calendar/context regressions. Verified code SHA: ce943a90ebfb163a9cfc1104ebd5d5e5243ca5bb.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34323050420 — 241 tests in 47 files; Prisma/migrations, typecheck, lint and production build passed.
+- Seven files committed together directly on GitHub. No migration. This documentation-only checkpoint skips redundant CI. Production browser verification remains outstanding.
 
 ## Owner-reviewed default-role upgrades
 - Added a selective Owner review in Roles & Permissions with readable permission labels, risk, assigned/active account counts and direct-denial impact.
@@ -138,7 +140,7 @@
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: selective Owner-reviewed default-role upgrades, verified in GitHub Actions. Next: remaining academic integration, operational modules and production journeys.
+- Current subsystem: consistent school/teacher gradebook term selection and navigation, verified in GitHub Actions. Next: remaining academic integration, operational modules and production journeys.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
