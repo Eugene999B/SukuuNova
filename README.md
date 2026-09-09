@@ -304,6 +304,8 @@ Fee waivers, scholarships and consequential financial adjustments should use exp
 
 Guardians should see only their authorized linked children and only information released to the family.
 
+The guardian academic-work engine separates attempts for linked children, keeps answer keys and teacher guidance on the server, and freezes submitted responses. Provisional marks remain hidden until grading completes. Teacher-reviewed results pass through the canonical gradebook service, including term and report-history protections. The raw academic-work, question, submission, answer and note tables enforce tenant RLS and same-school relationships.
+
 Important family information includes identity, released attendance/results, report cards, school messages, fee balances and relevant calendar information.
 
 WhatsApp is an access channel, not a free-form AI-to-database backdoor. The assistant must verify guardian context, resolve authorized children, classify supported intents, query only needed data and refuse unsupported requests rather than guessing.
