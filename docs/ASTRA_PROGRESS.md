@@ -7,7 +7,11 @@
 - Idempotent issue/return retries, common book-lock order, active learner checks and circulation/catalogue audits.
 - Resource URL validation suppresses unsafe stored links; nonexistent catalogue updates return 404.
 - Fixed shared form lifetime and double-click handling in SchoolLifeStudio.
-- Seven library regressions added. Full GitHub verification pending; no schema changes.
+- Seven library regressions added. Verified code SHA: a63f6c2a0240c2f8b34fbab8369589e75338211c.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34318881498 — 207 tests in 44 files; Prisma/migrations, typecheck, lint and production build passed.
+- CI exposed metadata lost by historical operations-table recreation. A new additive migration restores library fields/indexes; historical migrations and existing data remain intact.
+- Nine files changed in this batch, including the repair migration. This documentation-only checkpoint skips redundant CI.
+- Next investigation: recruitment metadata may have been lost by the same historical recreation; verify its current schema and API tests.
 - Student-specific portal mapping, library history pagination, accession-level copies and production browser verification remain outstanding.
 
 ## Learning Arcade batch
@@ -88,10 +92,11 @@
 - 20260909121000_guardian_contact_schema_alignment: align optional Guardian.phone with Prisma.
 - 20260909130000_academic_work_assessment_link: nullable, unique assessment link with same-school foreign key; legacy rows linked only when unambiguous.
 - 20260909150000_learning_arcade: ArcadeRound persistence, same-school relationships, one active round per child/game, constraints and FORCE RLS.
+- 20260909160000_restore_library_metadata: restore missing rich catalogue fields and indexes with IF NOT EXISTS; no data replacement.
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: Learning Arcade initial connected release, verified in GitHub Actions. Next: student learning/resource workflows and remaining Owner-reviewed role upgrades.
+- Current subsystem: library circulation, unified and verified in GitHub Actions. Next: inspect recruitment schema drift identified in the same operations-table restoration history.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
@@ -99,7 +104,7 @@
 - Tests added: default-rbac-sync, school-access-security, leadership-governance, platform-onboarding, owner-continuity, validation-response, academic-authoring, guardian-academic-security.
 
 ## Remaining mission / next 5
-1. Audit legacy academic tenant relationships and add a safe validation migration.
+1. Investigate recruitment metadata drift; audit legacy academic tenant relationships before validating old foreign keys.
 2. Provide an explicit Owner-reviewed upgrade workflow for existing role defaults.
 3. Connect teacher assignment navigation and legacy homework to the existing submission engine; expand question types and attempt policies.
 4. Expand Arcade games/content and student learning/resource workflows; verify production guardian/mobile journeys.
