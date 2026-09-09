@@ -1,5 +1,13 @@
 # Astra progress
 
+## Owner-reviewed default-role upgrades
+- Added a selective Owner review in Roles & Permissions with readable permission labels, risk, assigned/active account counts and direct-denial impact.
+- Additive upgrades preserve extra permissions, account overrides, role identity and custom roles; preview never provisions or broadens roles.
+- Review revisions bind the baseline, existing rights, role identity, assignments and overrides. Stale or replayed approvals fail, and all selected roles apply atomically.
+- Rechecks active Owner authority and role-control permission; canonical system keys are required. No role-name promotion.
+- Shared school governance locking now covers default synchronization and custom-role mutation alongside upgrade approval.
+- Eleven new integration regressions. GitHub verification pending. No migration. Production browser verification remains outstanding.
+
 ## General gradebook batch
 - Replaced per-cell autosaves with explicit atomic saves, up to 500 changed cells per class/subject/term.
 - Added mark/status spreadsheet paste, keyboard navigation, dirty counts, discard, clear confirmation and navigation/unload protection.

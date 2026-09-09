@@ -6,6 +6,8 @@ The product goal is to become the operating system of a school: one connected en
 
 > **Important:** This repository is for **SukuuNova only**. Do not import assumptions, code, styling or workflows from another product or repository unless deliberately adapted to SukuuNova.
 
+School Owners can review missing default permissions from Roles & Permissions and selectively apply them across system roles. The review shows assigned-account counts, permission risk and direct denials; stale reviews are rejected. Upgrades preserve existing permissions, custom roles and direct overrides, and record each selected change in audit history.
+
 ## Product identity
 
 - **Repository:** `Eugene999B/SukuuNova`

@@ -1,3 +1,7 @@
+import DefaultRoleUpgradeReview from "@/components/DefaultRoleUpgradeReview";
+import { getSchoolAuthorization } from "@/lib/authorization";
+import { previewDefaultRoleUpgrades } from "@/lib/default-role-upgrade-service";
+import "./roles-workspace.css";
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
@@ -25,7 +29,9 @@ export default async function RolesPage() {
       tx.permission.findMany({ orderBy: { key: "asc" }, select: { id: true, key: true, description: true } }),
     ]);
 
-    return { school, roles, permissions };
+    const access = await getSchoolAuthorization(tx, session.userId);
+    const upgradePreview = access.isOwner ? await previewDefaultRoleUpgrades(tx, { schoolId: session.schoolId, actorId: session.userId }) : null;
+    return { school, roles, permissions, upgradePreview };
   });
 
   if (!data.school) return null;
@@ -119,6 +125,8 @@ export default async function RolesPage() {
             </table>
           </div>
         </section>
+
+        {data.upgradePreview && <DefaultRoleUpgradeReview initialPreview={data.upgradePreview} />}
 
         <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
           <h3 className="text-sm font-black text-emerald-950">How access is changed</h3>

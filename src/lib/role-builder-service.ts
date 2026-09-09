@@ -1,3 +1,4 @@
+import { lockSchoolAccess } from "./owner-governance";
 import { permissionDescription } from "./permission-catalog";
 import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "./db";
@@ -8,6 +9,7 @@ import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } fro
 import { roleKeyForName, requireCanGrantPermissions, getSchoolAuthorization } from "./authorization";
 
 export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
+  await lockSchoolAccess(tx, schoolId);
   const permissionIds = new Map<string,string>();
   for (const key of DEFAULT_PERMISSIONS) {
     const row = await tx.permission.upsert({ where: { key }, update: { description: permissionDescription(key) }, create: { key, description: permissionDescription(key) } });
@@ -58,6 +60,7 @@ export async function customRoleBuilderData(tx: TenantDb, actorId: string) {
 }
 
 export async function createCustomRole(tx: TenantDb, input: { schoolId: string; actorId: string; name: string; permissionKeys: string[] }) {
+  await lockSchoolAccess(tx, input.schoolId);
   await requirePermission(tx, input.actorId, "roles:create_custom");
   const access = await getSchoolAuthorization(tx, input.actorId);
   await syncDefaultRbac(tx, input.schoolId);
@@ -70,6 +73,7 @@ export async function createCustomRole(tx: TenantDb, input: { schoolId: string; 
 }
 
 export async function updateCustomRole(tx: TenantDb, input: { schoolId: string; actorId: string; roleId: string; name: string; permissionKeys: string[] }) {
+  await lockSchoolAccess(tx, input.schoolId);
   await requirePermission(tx, input.actorId, "roles:create_custom");
   const access = await getSchoolAuthorization(tx, input.actorId);
   await syncDefaultRbac(tx, input.schoolId);
@@ -88,6 +92,7 @@ export async function updateCustomRole(tx: TenantDb, input: { schoolId: string; 
 }
 
 export async function deleteCustomRole(tx: TenantDb, input: { schoolId: string; actorId: string; roleId: string }) {
+  await lockSchoolAccess(tx, input.schoolId);
   await requirePermission(tx, input.actorId, "roles:create_custom");
   const role = await tx.role.findUnique({ where: { id: input.roleId } });
   if (!role) throw new AppError("Custom role not found.", 404, "NOT_FOUND");
