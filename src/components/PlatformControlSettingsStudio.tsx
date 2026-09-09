@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { CheckCircle2, LockKeyhole, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import "./settings-hub.css";
@@ -125,7 +126,7 @@ export default function PlatformControlSettingsStudio() {
   );
 }
 
-function PolicySection({ icon: Icon, eyebrow, title, description, children }: { icon: typeof Settings2; eyebrow: string; title: string; description: string; children: React.ReactNode }) {
+function PolicySection({ icon: Icon, eyebrow, title, description, children }: { icon: typeof Settings2; eyebrow: string; title: string; description: string; children: ReactNode }) {
   return <section><div className="settings-hub-section-head"><div><span className="settings-hub-eyebrow">{eyebrow}</span><h2>{title}</h2><p>{description}</p></div><span className="settings-route-icon"><Icon size={18} aria-hidden="true" /></span></div><div style={{ marginTop: 18 }}>{children}</div></section>;
 }
 
