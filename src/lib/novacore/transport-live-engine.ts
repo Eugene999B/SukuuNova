@@ -1,11 +1,16 @@
 import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "@/lib/db";
+import { matchPointToRoute, routeDistanceBetweenMatches, type RouteMatch } from "./route-matching";
 import {
+  estimateEta,
   haversineDistanceMeters,
   nextGeofenceState,
+  type GeofenceDecision,
   type GeofenceMemory,
   type GeoPoint,
 } from "./transport";
+
+export const PICKUP_PREDICTION_VERSION = "transport-pickup-v1.1.0";
 
 export type ActiveTransportTrip = {
   id: string;
@@ -27,6 +32,22 @@ type StateRow = {
   consecutiveSamples: number;
 };
 
+type HistoricalSpeedRow = { averageSpeedKph: string | null };
+
+export type LiveTransportLocationContext = {
+  routeShape?: GeoPoint[];
+  vehicleRouteMatch?: RouteMatch | null;
+  speedKph?: number | null;
+};
+
+export type PickupProgress = {
+  directDistanceMeters: number;
+  routeDistanceMeters: number | null;
+  decisionDistanceMeters: number;
+  pickupRouteMatch: RouteMatch | null;
+  pickupPassed: boolean;
+};
+
 export type LiveTransportProcessingResult = {
   pickupsEvaluated: number;
   transitions: number;
@@ -39,12 +60,76 @@ function directionColumn(direction: string) {
   return "true";
 }
 
+export function derivePickupProgress(input: {
+  vehiclePoint: GeoPoint;
+  pickupPoint: GeoPoint;
+  routeShape?: GeoPoint[];
+  vehicleRouteMatch?: RouteMatch | null;
+  passedToleranceMeters?: number;
+}): PickupProgress {
+  const directDistanceMeters = haversineDistanceMeters(input.vehiclePoint, input.pickupPoint);
+  const routeShape = input.routeShape ?? [];
+  const vehicleMatch = input.vehicleRouteMatch ?? null;
+  const pickupRouteMatch = routeShape.length >= 2 ? matchPointToRoute(input.pickupPoint, routeShape) : null;
+  const passedToleranceMeters = input.passedToleranceMeters ?? 120;
+
+  if (!vehicleMatch || !pickupRouteMatch || vehicleMatch.confidence < 0.2 || pickupRouteMatch.confidence < 0.2) {
+    return {
+      directDistanceMeters,
+      routeDistanceMeters: null,
+      decisionDistanceMeters: directDistanceMeters,
+      pickupRouteMatch,
+      pickupPassed: false,
+    };
+  }
+
+  const signedRemaining = pickupRouteMatch.distanceAlongRouteMeters - vehicleMatch.distanceAlongRouteMeters;
+  const pickupPassed = signedRemaining < -passedToleranceMeters;
+  const routeDistanceMeters = pickupPassed ? 0 : routeDistanceBetweenMatches(vehicleMatch, pickupRouteMatch);
+  return {
+    directDistanceMeters,
+    routeDistanceMeters,
+    decisionDistanceMeters: pickupPassed ? directDistanceMeters : Math.max(directDistanceMeters, routeDistanceMeters),
+    pickupRouteMatch,
+    pickupPassed,
+  };
+}
+
+function passedDecision(memory: GeofenceMemory, distanceMeters: number): GeofenceDecision {
+  if (memory.state === "passed") {
+    return { state: "passed", previousDistanceMeters: distanceMeters, consecutiveSamples: 0, transitioned: false, notification: null };
+  }
+  return { state: "passed", previousDistanceMeters: distanceMeters, consecutiveSamples: 0, transitioned: true, notification: null };
+}
+
+async function historicalRouteSpeedKph(tx: TenantDb, schoolId: string, trip: ActiveTransportTrip) {
+  const rows = await tx.$queryRawUnsafe<HistoricalSpeedRow[]>(
+    `SELECT AVG(l."speedKph")::text AS "averageSpeedKph"
+     FROM "P3VehicleLocation" l
+     JOIN "P3TransportTrip" t ON t."id"=l."tripId" AND t."schoolId"=l."schoolId"
+     WHERE l."schoolId"=$1
+       AND t."routeId"=$2
+       AND t."direction"=$3
+       AND t."id"<>$4
+       AND l."quality"='accepted'
+       AND l."speedKph" BETWEEN 5 AND 90
+       AND l."reportedAt" >= CURRENT_TIMESTAMP - INTERVAL '30 days'`,
+    schoolId,
+    trip.routeId,
+    trip.direction,
+    trip.id,
+  );
+  const value = rows[0]?.averageSpeedKph == null ? null : Number(rows[0].averageSpeedKph);
+  return value != null && Number.isFinite(value) ? value : null;
+}
+
 export async function processLiveTransportLocation(
   tx: TenantDb,
   schoolId: string,
   trip: ActiveTransportTrip,
   point: GeoPoint,
   reportedAt: Date,
+  context: LiveTransportLocationContext = {},
 ): Promise<LiveTransportProcessingResult> {
   const pickups = await tx.$queryRawUnsafe<PickupRow[]>(
     `SELECT p."id",p."studentId",p."latitude"::text,p."longitude"::text
@@ -67,13 +152,19 @@ export async function processLiveTransportLocation(
     reportedAt,
   );
 
+  const routeHistoricalSpeedKph = pickups.length
+    ? await historicalRouteSpeedKph(tx, schoolId, trip)
+    : null;
   let transitions = 0;
   let guardianAlertsQueued = 0;
 
   for (const pickup of pickups) {
-    const distanceMeters = haversineDistanceMeters(point, {
-      latitude: Number(pickup.latitude),
-      longitude: Number(pickup.longitude),
+    const pickupPoint = { latitude: Number(pickup.latitude), longitude: Number(pickup.longitude) };
+    const progress = derivePickupProgress({
+      vehiclePoint: point,
+      pickupPoint,
+      routeShape: context.routeShape,
+      vehicleRouteMatch: context.vehicleRouteMatch,
     });
     const existing = await tx.$queryRawUnsafe<StateRow[]>(
       `SELECT "state","previousDistanceMeters"::text,"consecutiveSamples"
@@ -89,19 +180,30 @@ export async function processLiveTransportLocation(
       previousDistanceMeters: existing[0].previousDistanceMeters == null ? null : Number(existing[0].previousDistanceMeters),
       consecutiveSamples: existing[0].consecutiveSamples,
     } : { state: "outside", previousDistanceMeters: null, consecutiveSamples: 0 };
-    const decision = nextGeofenceState(memory, distanceMeters);
+
+    const decision = progress.pickupPassed
+      ? passedDecision(memory, progress.directDistanceMeters)
+      : nextGeofenceState(memory, progress.decisionDistanceMeters);
     if (decision.transitioned) transitions += 1;
+
+    const etaDistanceMeters = progress.routeDistanceMeters ?? progress.directDistanceMeters;
+    const eta = progress.pickupPassed ? { minutes: null, confidenceMinutes: null, effectiveSpeedKph: null } : estimateEta({
+      remainingMeters: etaDistanceMeters,
+      currentSpeedKph: context.speedKph,
+      routeHistoricalSpeedKph,
+      uncertaintyRatio: progress.routeDistanceMeters == null ? 0.4 : 0.25,
+    });
 
     const transitionAt = decision.transitioned ? reportedAt : null;
     await tx.$executeRawUnsafe(
       `INSERT INTO "P3GeofenceState"
-        ("id","schoolId","tripId","studentId","pickupPointId","state","previousDistanceMeters","consecutiveSamples","approachingAt","arrivingAt","arrivedAt","passedAt","updatedAt")
+        ("id","schoolId","tripId","studentId","pickupPointId","state","previousDistanceMeters","consecutiveSamples","approachingAt","arrivingAt","arrivedAt","passedAt","etaMinutes","etaConfidenceMinutes","routeRemainingMeters","predictionVersion","updatedAt")
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,
          CASE WHEN $6='approaching' THEN $9 ELSE NULL END,
          CASE WHEN $6='arriving' THEN $9 ELSE NULL END,
          CASE WHEN $6='arrived' THEN $9 ELSE NULL END,
          CASE WHEN $6='passed' THEN $9 ELSE NULL END,
-         CURRENT_TIMESTAMP)
+         $10,$11,$12,$13,CURRENT_TIMESTAMP)
        ON CONFLICT ("schoolId","tripId","studentId") DO UPDATE SET
          "pickupPointId"=EXCLUDED."pickupPointId",
          "state"=EXCLUDED."state",
@@ -111,6 +213,10 @@ export async function processLiveTransportLocation(
          "arrivingAt"=COALESCE("P3GeofenceState"."arrivingAt",EXCLUDED."arrivingAt"),
          "arrivedAt"=COALESCE("P3GeofenceState"."arrivedAt",EXCLUDED."arrivedAt"),
          "passedAt"=COALESCE("P3GeofenceState"."passedAt",EXCLUDED."passedAt"),
+         "etaMinutes"=EXCLUDED."etaMinutes",
+         "etaConfidenceMinutes"=EXCLUDED."etaConfidenceMinutes",
+         "routeRemainingMeters"=EXCLUDED."routeRemainingMeters",
+         "predictionVersion"=EXCLUDED."predictionVersion",
          "updatedAt"=CURRENT_TIMESTAMP`,
       createId(),
       schoolId,
@@ -118,14 +224,18 @@ export async function processLiveTransportLocation(
       pickup.studentId,
       pickup.id,
       decision.state,
-      distanceMeters,
+      progress.decisionDistanceMeters,
       decision.consecutiveSamples,
       transitionAt,
+      eta.minutes,
+      eta.confidenceMinutes,
+      progress.routeDistanceMeters,
+      PICKUP_PREDICTION_VERSION,
     );
 
     if (!decision.transitioned || !decision.notification) continue;
     const guardians = await tx.studentGuardian.findMany({
-      where: { studentId: pickup.studentId },
+      where: { schoolId, studentId: pickup.studentId },
       select: { guardianId: true },
     });
     for (const guardian of guardians) {
@@ -142,7 +252,15 @@ export async function processLiveTransportLocation(
         guardian.guardianId,
         decision.notification,
         idempotencyKey,
-        JSON.stringify({ pickupPointId: pickup.id, distanceMeters: Math.round(distanceMeters), reportedAt: reportedAt.toISOString() }),
+        JSON.stringify({
+          pickupPointId: pickup.id,
+          directDistanceMeters: Math.round(progress.directDistanceMeters),
+          routeDistanceMeters: progress.routeDistanceMeters == null ? null : Math.round(progress.routeDistanceMeters),
+          etaMinutes: eta.minutes,
+          etaConfidenceMinutes: eta.confidenceMinutes,
+          predictionVersion: PICKUP_PREDICTION_VERSION,
+          reportedAt: reportedAt.toISOString(),
+        }),
       );
       guardianAlertsQueued += Number(inserted ?? 0);
     }
