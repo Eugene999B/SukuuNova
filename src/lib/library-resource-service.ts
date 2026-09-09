@@ -6,7 +6,7 @@ import { getGuardianFamilyContext } from "./guardian-family-context";
 import { hasPermission, requirePermission } from "./rbac";
 import { safeResourceUrl } from "./resource-url";
 
-type Row = Record<string, unknown>;
+type Row = Record<string, unknown> & { id?: string; bookId?: string; title?: string; author?: string | null };
 export type GuardianLibraryContext = { schoolId: string; guardianId: string; userId: string };
 export type LibraryContentActor =
   | { kind: "guardian"; schoolId: string; guardianId: string; userId: string; studentId: string }
@@ -246,15 +246,18 @@ export async function schoolLibraryResourceAction(tx: TenantDb, schoolId: string
 }
 
 export async function libraryContentAccess(tx: TenantDb, actor: LibraryContentActor, bookId: string, mode: "read" | "download") {
+  let schoolCanManage = false;
   if (actor.kind === "school") {
     const [manage, borrow] = await Promise.all([hasPermission(tx, actor.userId, "library:manage"), hasPermission(tx, actor.userId, "library:borrow")]);
     if (!manage && !borrow) throw new AppError("You do not have permission to open library resources.", 403, "FORBIDDEN");
+    schoolCanManage = manage;
   } else {
     await requireGuardianBook(tx, { schoolId: actor.schoolId, guardianId: actor.guardianId, userId: actor.userId }, actor.studentId, bookId);
   }
-  const book = await tx.$queryRawUnsafe<Array<{ id: string; title: string; fileUrl: string | null; readerEnabled: boolean; downloadAllowed: boolean; archivedAt: Date | null }>>(`SELECT "id","title","fileUrl","readerEnabled","downloadAllowed","archivedAt" FROM "P3LibraryBook" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, actor.schoolId, bookId);
+  const book = await tx.$queryRawUnsafe<Array<{ id: string; title: string; fileUrl: string | null; readerEnabled: boolean; downloadAllowed: boolean; visibility: string; archivedAt: Date | null }>>(`SELECT "id","title","fileUrl","readerEnabled","downloadAllowed","visibility","archivedAt" FROM "P3LibraryBook" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, actor.schoolId, bookId);
   const resource = book[0];
   if (!resource || resource.archivedAt) throw new AppError("Library resource not found.", 404, "RESOURCE_NOT_FOUND");
+  if (actor.kind === "school" && !schoolCanManage && resource.visibility === "restricted") throw new AppError("This restricted resource is available only through an assigned learner context or library management.", 403, "RESOURCE_RESTRICTED");
   if (!resource.fileUrl || !safeResourceUrl(resource.fileUrl)) throw new AppError("This resource has no protected digital source.", 409, "DIGITAL_SOURCE_MISSING");
   if (!resource.readerEnabled) throw new AppError("Online reading is disabled for this resource.", 403, "READER_DISABLED");
   if (mode === "download" && !resource.downloadAllowed) throw new AppError("The school has made this resource read-only. Downloading is not permitted.", 403, "DOWNLOAD_DISABLED");
