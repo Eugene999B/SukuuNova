@@ -1,5 +1,10 @@
 # Astra progress
 
+## Legacy ownership role protection
+- Custom-role editing/deletion now protects roles carrying effective Owner identity even when legacy metadata marks them as custom.
+- Protected ownership roles are excluded from custom-builder controls. Custom Owner-named roles with an explicit custom key remain editable without promotion.
+- Four regression cases cover canonical and legacy Owner keys plus ordinary custom-role behavior. GitHub verification pending. No migration.
+
 ## Recruitment retry completion
 - Successful application retries compare against the recorded answers, preserving receipts after question edits or vacancy closure.
 - Canonical key ordering handles PostgreSQL JSONB ordering; changed payloads still conflict and new applications still validate current screening questions.

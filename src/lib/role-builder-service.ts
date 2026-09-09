@@ -36,6 +36,10 @@ export async function syncDefaultRbac(tx: TenantDb, schoolId: string) {
   }
 }
 
+function isProtectedRole(role: { isSystem: boolean; key: string | null; name: string }) {
+  return role.isSystem || (role.key?.trim() || roleKeyForName(role.name)) === "owner";
+}
+
 async function permissionRows(tx: TenantDb, keys: string[]) {
   const unique = [...new Set(keys)];
   const rows = await tx.permission.findMany({ where: { key: { in: unique } } });
@@ -56,7 +60,7 @@ export async function customRoleBuilderData(tx: TenantDb, actorId: string) {
     tx.permission.findMany({ orderBy: { key: "asc" } }),
     tx.role.findMany({ where: { schoolId: actor.schoolId, isSystem: false }, include: { rolePermissions: { include: { permission: true } } }, orderBy: { name: "asc" } })
   ]);
-  return { permissions, roles };
+  return { permissions, roles: roles.filter(role => !isProtectedRole(role)) };
 }
 
 export async function createCustomRole(tx: TenantDb, input: { schoolId: string; actorId: string; name: string; permissionKeys: string[] }) {
@@ -79,7 +83,7 @@ export async function updateCustomRole(tx: TenantDb, input: { schoolId: string; 
   await syncDefaultRbac(tx, input.schoolId);
   const role = await tx.role.findUnique({ where: { id: input.roleId } });
   if (!role) throw new AppError("Custom role not found.", 404, "NOT_FOUND");
-  if (role.isSystem) throw new AppError("System roles cannot be edited in the custom-role builder.", 403, "SYSTEM_ROLE_PROTECTED");
+  if (isProtectedRole(role)) throw new AppError("System and ownership roles cannot be edited in the custom-role builder.", 403, "SYSTEM_ROLE_PROTECTED");
   const permissions = await permissionRows(tx, input.permissionKeys);
   if (!access.isOwner) await requireCanGrantPermissions(tx, input.actorId, input.permissionKeys);
   await tx.rolePermission.deleteMany({ where: { roleId: role.id } });
@@ -96,7 +100,7 @@ export async function deleteCustomRole(tx: TenantDb, input: { schoolId: string; 
   await requirePermission(tx, input.actorId, "roles:create_custom");
   const role = await tx.role.findUnique({ where: { id: input.roleId } });
   if (!role) throw new AppError("Custom role not found.", 404, "NOT_FOUND");
-  if (role.isSystem) throw new AppError("System roles cannot be deleted.", 403, "SYSTEM_ROLE_PROTECTED");
+  if (isProtectedRole(role)) throw new AppError("System and ownership roles cannot be deleted.", 403, "SYSTEM_ROLE_PROTECTED");
   await tx.role.delete({ where: { id: role.id } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "custom_role.deleted", entityType: "Role", entityId: role.id, before: { name: role.name, key: role.key } });
 }

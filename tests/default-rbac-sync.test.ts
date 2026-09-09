@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
-import { syncDefaultRbac } from "../src/lib/role-builder-service";
+import { syncDefaultRbac, updateCustomRole, deleteCustomRole, customRoleBuilderData } from "../src/lib/role-builder-service";
 import { getSchoolAuthorization } from "../src/lib/authorization";
 import { DEFAULT_ROLE_PERMISSIONS } from "../src/lib/default-rbac";
 import { createTenantFixture } from "./helpers";
@@ -63,5 +63,37 @@ describe("safe default role synchronization", () => {
       expect(role.rolePermissions.map((right) => right.permission.key).sort())
         .toEqual([...new Set(DEFAULT_ROLE_PERMISSIONS.Principal)].sort());
     });
+  });
+});
+
+describe("ownership roles with legacy custom metadata", () => {
+  it.each(["owner", null, ""])("protects ownership when key is %s and the system flag is missing", async key => {
+    const f = await createTenantFixture();
+    const role = await withTenant(f.schoolId, async tx => {
+      const created = await tx.role.create({ data: { schoolId: f.schoolId, name: "Owner", key, isSystem: false } });
+      await tx.userRole.create({ data: { schoolId: f.schoolId, userId: f.memberId, roleId: created.id } });
+      return created;
+    });
+    const input = { schoolId: f.schoolId, actorId: f.ownerId, roleId: role.id };
+    await expect(withTenant(f.schoolId, tx => updateCustomRole(tx, { ...input, name: "Renamed", permissionKeys: [] }))).rejects.toMatchObject({ code: "SYSTEM_ROLE_PROTECTED" });
+    await expect(withTenant(f.schoolId, tx => deleteCustomRole(tx, input))).rejects.toMatchObject({ code: "SYSTEM_ROLE_PROTECTED" });
+    const result = await withTenant(f.schoolId, async tx => ({
+      access: await getSchoolAuthorization(tx, f.memberId),
+      builder: await customRoleBuilderData(tx, f.ownerId),
+    }));
+    expect(result.access.isOwner).toBe(true);
+    expect(result.builder.roles.some(item => item.id === role.id)).toBe(false);
+  });
+  it("keeps an ordinary custom Owner-named role editable without granting ownership", async () => {
+    const f = await createTenantFixture();
+    const role = await withTenant(f.schoolId, async tx => {
+      const created = await tx.role.create({ data: { schoolId: f.schoolId, name: "Owner", key: "custom_owner", isSystem: false } });
+      await tx.userRole.create({ data: { schoolId: f.schoolId, userId: f.memberId, roleId: created.id } });
+      return created;
+    });
+    await withTenant(f.schoolId, tx => updateCustomRole(tx, { schoolId: f.schoolId, actorId: f.ownerId, roleId: role.id, name: "Office helpers", permissionKeys: ["students:read"] }));
+    expect((await withTenant(f.schoolId, tx => getSchoolAuthorization(tx, f.memberId))).isOwner).toBe(false);
+    await withTenant(f.schoolId, tx => deleteCustomRole(tx, { schoolId: f.schoolId, actorId: f.ownerId, roleId: role.id }));
+    expect(await withTenant(f.schoolId, tx => tx.role.count({ where: { id: role.id } }))).toBe(0);
   });
 });
