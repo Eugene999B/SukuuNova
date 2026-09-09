@@ -1,9 +1,11 @@
 import { createHash } from "node:crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { ensureDatabaseRoleSafe, rawDb, withTenant } from "@/lib/db";
+import { getDirectionalRouteShape } from "./directional-route-service";
+import { deriveLiveLocationIntelligence } from "./location-intelligence";
 import { decodeTeltonikaCodec8E, type TeltonikaCodec8ERecord } from "./teltonika-codec8e";
 import { processLiveTransportLocation, type ActiveTransportTrip } from "./transport-live-engine";
-import { validateGpsSample, type GpsSample } from "./transport";
+import { validateGpsSample, type GpsSample, type SmoothedGpsSample } from "./transport";
 
 export type TrackerGatewayBinding = {
   schoolId: string;
@@ -94,6 +96,9 @@ function recordPayload(record: TeltonikaCodec8ERecord) {
 type LocationRow = {
   latitude: string;
   longitude: string;
+  normalizedLatitude: string | null;
+  normalizedLongitude: string | null;
+  routeProgressMeters: string | null;
   speedKph: string;
   heading: string | null;
   reportedAt: Date;
@@ -139,9 +144,19 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
       tracker.vehicleId,
     );
     const activeTrip = activeTrips[0] ?? null;
+    const routeShape = activeTrip
+      ? await getDirectionalRouteShape(tx, {
+          schoolId: binding.schoolId,
+          routeId: activeTrip.routeId,
+          direction: activeTrip.direction as "morning" | "afternoon",
+        })
+      : [];
 
     const latest = await tx.$queryRawUnsafe<LocationRow[]>(
-      `SELECT "latitude"::text,"longitude"::text,"speedKph"::text,"heading"::text,"reportedAt" FROM "P3VehicleLocation" WHERE "schoolId"=$1 AND "vehicleId"=$2 AND "quality"='accepted' ORDER BY "reportedAt" DESC LIMIT 1`,
+      `SELECT "latitude"::text,"longitude"::text,"normalizedLatitude"::text,"normalizedLongitude"::text,"routeProgressMeters"::text,"speedKph"::text,"heading"::text,"reportedAt"
+       FROM "P3VehicleLocation"
+       WHERE "schoolId"=$1 AND "vehicleId"=$2 AND "quality"='accepted'
+       ORDER BY "reportedAt" DESC LIMIT 1`,
       binding.schoolId,
       tracker.vehicleId,
     );
@@ -152,6 +167,14 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
       headingDeg: latest[0].heading == null ? null : Number(latest[0].heading),
       reportedAt: latest[0].reportedAt,
     } : null;
+    let previousSmoothed: SmoothedGpsSample | null = latest[0] ? {
+      latitude: Number(latest[0].normalizedLatitude ?? latest[0].latitude),
+      longitude: Number(latest[0].normalizedLongitude ?? latest[0].longitude),
+      reportedAtMs: latest[0].reportedAt.getTime(),
+      speedKph: Number(latest[0].speedKph),
+      headingDeg: latest[0].heading == null ? null : Number(latest[0].heading),
+    } : null;
+    let previousRouteProgressMeters = latest[0]?.routeProgressMeters == null ? null : Number(latest[0].routeProgressMeters);
 
     let storedLocations = 0;
     let rejectedLocations = 0;
@@ -183,8 +206,17 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
         continue;
       }
 
+      const intelligence = deriveLiveLocationIntelligence({
+        sample,
+        previousSmoothed,
+        previousRouteProgressMeters,
+        route: routeShape,
+      });
+      const match = intelligence.routeMatch;
       await tx.$executeRawUnsafe(
-        `INSERT INTO "P3VehicleLocation" ("id","schoolId","vehicleId","routeId","trackerDeviceId","tripId","latitude","longitude","speedKph","heading","reportedAt","source","quality") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,to_timestamp($11/1000.0),'teltonika','accepted')`,
+        `INSERT INTO "P3VehicleLocation"
+          ("id","schoolId","vehicleId","routeId","trackerDeviceId","tripId","latitude","longitude","normalizedLatitude","normalizedLongitude","speedKph","heading","reportedAt","source","quality","routeDistanceMeters","routeProgressMeters","routeRemainingMeters","routeMatchConfidence","routeDeviation","algorithmVersion")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,to_timestamp($13/1000.0),'teltonika','accepted',$14,$15,$16,$17,$18,$19)`,
         createId(),
         binding.schoolId,
         tracker.vehicleId,
@@ -193,20 +225,31 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
         activeTrip?.id ?? null,
         record.gps.latitude,
         record.gps.longitude,
+        intelligence.normalized.latitude,
+        intelligence.normalized.longitude,
         record.gps.speedKph,
         record.gps.angleDegrees,
         record.timestampMs,
+        match?.distanceToRouteMeters ?? null,
+        match?.distanceAlongRouteMeters ?? null,
+        match?.remainingRouteMeters ?? null,
+        match?.confidence ?? null,
+        intelligence.routeDeviation,
+        intelligence.algorithmVersion,
       );
       storedLocations += 1;
       previous = sample;
+      previousSmoothed = intelligence.smoothed;
+      if (match) previousRouteProgressMeters = match.distanceAlongRouteMeters;
 
       if (activeTrip) {
         const live = await processLiveTransportLocation(
           tx,
           binding.schoolId,
           activeTrip,
-          { latitude: record.gps.latitude, longitude: record.gps.longitude },
+          intelligence.normalized,
           new Date(record.timestampMs),
+          { routeShape, vehicleRouteMatch: match, speedKph: intelligence.smoothed.speedKph },
         );
         guardianAlertsQueued += live.guardianAlertsQueued;
       }
