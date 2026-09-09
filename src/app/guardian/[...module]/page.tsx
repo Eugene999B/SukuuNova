@@ -7,7 +7,7 @@ import { DataCard } from "@/components/ui/DataCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { withTenant } from "@/lib/db";
 import { requireGuardianSession } from "@/lib/guardian-auth";
-import { getGuardianFamilyContext } from "@/lib/guardian-family-context";
+import { filterGuardianReleasedScores, getGuardianFamilyContext } from "@/lib/guardian-family-context";
 import "@/app/globals.css";
 
 type Props = { params: Promise<{ module: string[] }>; searchParams: Promise<{ studentId?: string }> };
@@ -62,10 +62,7 @@ export default async function GuardianModulePage({ params, searchParams }: Props
   const title = !childId && selectedChild ? `${titleBase} · ${selectedChild.name}` : titleBase;
   const subtitle = !childId && selectedChild ? `${subtitleBase} Showing ${selectedChild.name} only.` : subtitleBase;
 
-  const visibleScores = (student: typeof data.children[number]) => {
-    const releasedTerms = new Set(student.reportCards.map((report) => report.termId));
-    return student.scores.filter((score) => releasedTerms.has(score.assessment.termId));
-  };
+  const visibleScores = (student: typeof data.children[number]) => filterGuardianReleasedScores(student.scores, student.reportCards);
   const totalAttendance = data.children.reduce((n, s) => n + s.attendanceEvents.length, 0);
   const totalResults = data.children.reduce((n, s) => n + visibleScores(s).length, 0);
   const netPaid = (payments: Array<{ amount: unknown; reversals: Array<{ amount: unknown }> }>) =>
