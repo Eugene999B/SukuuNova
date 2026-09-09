@@ -30,7 +30,14 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     return await withTenant(session.schoolId, async (tx) => {
       const common = { schoolId: session.schoolId, guardianId: session.guardianId, studentId: input.studentId, workId: input.workId };
-      if (input.action === "start") return NextResponse.json(await startGuardianSubmission(tx, { ...common, attemptNumber: input.attemptNumber }), { headers: { "Cache-Control": "no-store" } });
+      if (input.action === "start") {
+        const result = await startGuardianSubmission(tx, { ...common, attemptNumber: input.attemptNumber });
+        if (result.canRetry) {
+          const term = await tx.term.findFirst({ where: { id: result.work.termId, schoolId: session.schoolId }, select: { isLocked: true } });
+          if (term?.isLocked) result.canRetry = false;
+        }
+        return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
+      }
       if (input.action === "retry") return NextResponse.json(await retryGuardianSubmission(tx, common), { headers: { "Cache-Control": "no-store" } });
       if (input.action === "save") return NextResponse.json(await saveGuardianSubmission(tx, { ...common, answers: input.answers }), { headers: { "Cache-Control": "no-store" } });
       if (input.answers) return NextResponse.json(await finalizeGuardianSubmission(tx, { ...common, answers: input.answers }), { headers: { "Cache-Control": "no-store" } });
