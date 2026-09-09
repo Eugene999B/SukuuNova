@@ -1,4 +1,5 @@
 import type { TenantDb } from "@/lib/db";
+import { fingerprintNovaCoreInput, recordNovaCoreDecision } from "./decision-ledger";
 import { compareTimetableQuality, scoreTimetableQuality, type TimetableQualityPlacement } from "./timetable-quality";
 import { previewNovaCoreTimetable, type NovaCoreTimetablePreviewInput } from "./timetable-preview-service";
 
@@ -13,6 +14,7 @@ type CurrentSlot = {
 };
 
 export async function previewNovaCoreTimetableWithShadow(tx: TenantDb, input: NovaCoreTimetablePreviewInput) {
+  const startedAt = Date.now();
   const preview = await previewNovaCoreTimetable(tx, input);
   const classes = input.classIds?.length
     ? new Set(input.classIds)
@@ -50,12 +52,67 @@ export async function previewNovaCoreTimetableWithShadow(tx: TenantDb, input: No
     roomId: row.venue,
   })), preview.coverage.requestedPeriods);
   const candidateQuality = scoreTimetableQuality(candidateRows, preview.coverage.requestedPeriods);
-  return {
+  const comparison = compareTimetableQuality(currentQuality, candidateQuality);
+  const response = {
     ...preview,
     shadow: {
       current: currentQuality,
       candidate: candidateQuality,
-      comparison: compareTimetableQuality(currentQuality, candidateQuality),
+      comparison,
     },
   };
+
+  const inputFingerprint = fingerprintNovaCoreInput({
+    mode: preview.mode,
+    requestedClassIds: [...(input.classIds ?? [])].sort(),
+    lockedSlotIds: [...(input.lockedSlotIds ?? [])].sort(),
+    maxSearchNodes: input.maxSearchNodes ?? null,
+    currentSlots: current.map((row) => ({
+      id: row.id,
+      classId: row.classId,
+      subjectId: row.subjectId,
+      teacherId: row.teacherId,
+      dayOfWeek: row.dayOfWeek,
+      period: row.period,
+      venue: row.venue,
+    })).sort((a, b) => a.id.localeCompare(b.id)),
+  });
+  const diagnosticReasons = Object.entries(preview.diagnostics.reasons)
+    .filter(([, count]) => count > 0)
+    .map(([reason]) => reason);
+  await recordNovaCoreDecision(tx, {
+    schoolId: input.schoolId,
+    algorithmKey: "timetable.constraint-solver",
+    entityType: "TimetablePreview",
+    entityId: input.schoolId,
+    inputFingerprint,
+    reasonCodes: [
+      `status:${preview.status}`,
+      comparison.candidateWins ? "candidate_wins" : "candidate_not_better",
+      ...(preview.searchLimitReached ? ["search_limit_reached"] : []),
+      ...(preview.diagnostics.dailyLimitViolations.length ? ["daily_limit_violation"] : []),
+      ...diagnosticReasons,
+    ],
+    outputSummary: {
+      status: preview.status,
+      solverScore: preview.score,
+      nodesVisited: preview.nodesVisited,
+      searchLimitReached: preview.searchLimitReached,
+      requestedPeriods: preview.coverage.requestedPeriods,
+      satisfiedPeriods: preview.coverage.satisfiedPeriods,
+      generatedPeriods: preview.coverage.generatedPeriods,
+      currentQualityScore: currentQuality.score,
+      candidateQualityScore: candidateQuality.score,
+      candidateWins: comparison.candidateWins,
+      scoreImprovementPercent: comparison.scoreImprovementPercent,
+      hardConflictDelta: comparison.hardConflictDelta,
+      teacherIdleGapDelta: comparison.teacherIdleGapDelta,
+      repeatedAssignmentDayDelta: comparison.repeatedAssignmentDayDelta,
+      warningCount: preview.warnings.length,
+    },
+    shadowGroupKey: `timetable:${inputFingerprint}`,
+    latencyMs: Date.now() - startedAt,
+  });
+
+  return response;
 }
