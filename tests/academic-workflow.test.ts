@@ -1,10 +1,11 @@
+import { getClassSubjectPerformance } from "../src/lib/academic-engine";
 import { describe, expect, it } from "vitest";
 import { createId } from "@paralleldrive/cuid2";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 import { createTeacherAcademicWork, publishTeacherAcademicWork, saveTeacherWorkMarks, createTeacherAcademicNote, publishTeacherAcademicNote, getTeacherAcademicRoster } from "../src/lib/teacher-academic-workspace-service";
 import { startGuardianSubmission, saveGuardianSubmission, submitGuardianSubmission, reviewTeacherSubmission } from "../src/lib/teacher-academic-submission-service";
-import { enterScore } from "../src/lib/gradebook-service";
+import { enterScore, clearScore, saveGradebookChanges } from "../src/lib/gradebook-service";
 import { validateAcademicQuestions } from "../src/lib/academic-work-validation";
 
 async function setup() {
@@ -165,4 +166,95 @@ describe("connected teacher academic workflow", () => {
     await expect(withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [{ studentId: f.siblingId, value: 4, status: "absent" }] }))).rejects.toMatchObject({ code: "INVALID_SCORE" });
   });
 
+});
+
+describe("general gradebook batch and clears", () => {
+  const scoreInput = (f: Awaited<ReturnType<typeof setup>>) => ({ schoolId: f.schoolId, actorId: f.ownerId, studentId: f.studentId, assessmentId: f.assessmentId });
+  it("saves multiple learners and returns snapshots suitable for a second save", async () => {
+    const f = await setup();
+    const common = scoreInput(f);
+    const changes = [f.studentId, f.siblingId].map(studentId => ({ action: "score" as const, studentId, assessmentId: f.assessmentId, value: 7, status: "present" as const, expected: null }));
+    const results = await withTenant(f.schoolId, tx => saveGradebookChanges(tx, { ...common, changes }));
+    expect(results).toHaveLength(2);
+    const expected = results[0].expected!;
+    await withTenant(f.schoolId, tx => saveGradebookChanges(tx, { ...common, changes: [{ ...changes[0], value: 8, expected: { ...expected, status: "present" } }] }));
+    expect(Number((await withTenant(f.schoolId, tx => tx.score.findFirstOrThrow({ where: { id: expected.id } }))).value)).toBe(8);
+  });
+
+  it("rejects stale clearing without deleting another teacher's changed mark", async () => {
+    const f = await setup(), input = scoreInput(f);
+    const original = await withTenant(f.schoolId, tx => enterScore(tx, { ...input, value: 5 }));
+    const expected = { id: original.id, value: 5, status: original.status, enteredAt: original.enteredAt.toISOString() };
+    await withTenant(f.schoolId, tx => enterScore(tx, { ...input, value: 9 }));
+    await expect(withTenant(f.schoolId, tx => clearScore(tx, { ...input, expected }))).rejects.toMatchObject({ code: "SCORE_CONFLICT" });
+    expect(Number((await withTenant(f.schoolId, tx => tx.score.findFirstOrThrow({ where: { id: original.id } }))).value)).toBe(9);
+  });
+
+  it("rolls back a clear when a later batch mark conflicts", async () => {
+    const f = await setup(), input = scoreInput(f);
+    const original = await withTenant(f.schoolId, tx => enterScore(tx, { ...input, value: 5 }));
+    await withTenant(f.schoolId, tx => enterScore(tx, { ...input, studentId: f.siblingId, value: 8 }));
+    await expect(withTenant(f.schoolId, tx => saveGradebookChanges(tx, { ...input, changes: [
+      { action: "clearScore", studentId: f.studentId, assessmentId: f.assessmentId, expected: { id: original.id, value: 5, status: "present", enteredAt: original.enteredAt.toISOString() } },
+      { action: "score", studentId: f.siblingId, assessmentId: f.assessmentId, value: 6, status: "present", expected: null },
+    ] }))).rejects.toMatchObject({ code: "SCORE_CONFLICT" });
+    expect(await withTenant(f.schoolId, tx => tx.score.count({}))).toBe(2);
+  });
+
+  it("rejects duplicate cells and absent marks with a nonzero value", async () => {
+    const f = await setup(), input = scoreInput(f);
+    const change = { action: "score" as const, studentId: f.studentId, assessmentId: f.assessmentId, value: 5, status: "present" as const, expected: null };
+    await expect(withTenant(f.schoolId, tx => saveGradebookChanges(tx, { ...input, changes: [change, change] }))).rejects.toThrow(/only once/);
+    await expect(withTenant(f.schoolId, tx => enterScore(tx, { ...input, value: 3, status: "absent" }))).rejects.toMatchObject({ code: "INVALID_SCORE" });
+    expect(await withTenant(f.schoolId, tx => tx.score.count({}))).toBe(0);
+  });
+
+  it("serializes a clear and update against the same recorded snapshot", async () => {
+    const f = await setup(), input = scoreInput(f);
+    const score = await withTenant(f.schoolId, tx => enterScore(tx, { ...input, value: 5 }));
+    const expected = { id: score.id, value: 5, status: score.status, enteredAt: score.enteredAt.toISOString() };
+    const outcomes = await Promise.allSettled([
+      withTenant(f.schoolId, tx => clearScore(tx, { ...input, expected })),
+      withTenant(f.schoolId, tx => enterScore(tx, { ...input, value: 8, expected })),
+    ]);
+    expect(outcomes.filter(outcome => outcome.status === "fulfilled")).toHaveLength(1);
+    const failed = outcomes.find(outcome => outcome.status === "rejected");
+    expect(failed?.status === "rejected" ? failed.reason : null).toMatchObject({ code: "SCORE_CONFLICT" });
+  });
+
+  it("denies unauthorized, cross-school, locked and finalized batch writes", async () => {
+    const f = await setup(), other = await setup(), input = scoreInput(f);
+    const change = { action: "score" as const, studentId: f.studentId, assessmentId: f.assessmentId, value: 5, status: "present" as const, expected: null };
+    await expect(withTenant(f.schoolId, tx => saveGradebookChanges(tx, { ...input, actorId: f.memberId, changes: [change] }))).rejects.toMatchObject({ status: 403 });
+    await expect(withTenant(f.schoolId, tx => saveGradebookChanges(tx, { ...input, changes: [{ ...change, assessmentId: other.assessmentId }] }))).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await withTenant(f.schoolId, tx => tx.term.update({ where: { id: f.termId }, data: { isLocked: true } }));
+    await expect(withTenant(f.schoolId, tx => saveGradebookChanges(tx, { ...input, changes: [change] }))).rejects.toMatchObject({ code: "TERM_LOCKED" });
+    await withTenant(f.schoolId, async tx => {
+      await tx.term.update({ where: { id: f.termId }, data: { isLocked: false } });
+      await tx.reportCard.create({ data: { schoolId: f.schoolId, studentId: f.studentId, termId: f.termId, status: "approved" } });
+    });
+    await expect(withTenant(f.schoolId, tx => saveGradebookChanges(tx, { ...input, changes: [change] }))).rejects.toMatchObject({ code: "REPORT_FINALIZED" });
+    expect(await withTenant(f.schoolId, tx => tx.score.count({}))).toBe(0);
+  });
+});
+
+describe("gradebook context and snapshot reads", () => {
+  it("returns the stored excused mark snapshot separately from its grading projection", async () => {
+    const f = await setup();
+    const score = await withTenant(f.schoolId, tx => enterScore(tx, { schoolId: f.schoolId, actorId: f.ownerId, studentId: f.studentId, assessmentId: f.assessmentId, value: 0, status: "excused" }));
+    const sheet = await withTenant(f.schoolId, tx => getClassSubjectPerformance(tx, f.classId, f.subjectId, f.termId));
+    const cell = sheet.rows.find(row => row.student.id === f.studentId)!.scores[0];
+    expect(cell.rawScore).toBeNull();
+    expect(cell.expected).toEqual({ id: score.id, value: 0, status: "excused", enteredAt: score.enteredAt.toISOString() });
+    expect(sheet.rows.find(row => row.student.id === f.siblingId)!.scores[0].expected).toBeNull();
+  });
+  it("rejects mixed subject contexts before changing any score", async () => {
+    const f = await setup();
+    const otherAssessment = await withTenant(f.schoolId, async tx => {
+      const subject = await tx.subject.create({ data: { schoolId: f.schoolId, name: "Second subject" } });
+      return tx.assessment.create({ data: { schoolId: f.schoolId, termId: f.termId, classId: f.classId, subjectId: subject.id, name: "Second", type: "ca", maxScore: 10, weight: 100 } });
+    });
+    await expect(withTenant(f.schoolId, tx => saveGradebookChanges(tx, { schoolId: f.schoolId, actorId: f.ownerId, changes: [f.assessmentId, otherAssessment.id].map(assessmentId => ({ action: "score", studentId: f.studentId, assessmentId, value: 7, status: "present", expected: null })) }))).rejects.toMatchObject({ code: "INVALID_CONTEXT" });
+    expect(await withTenant(f.schoolId, tx => tx.score.count({}))).toBe(0);
+  });
 });

@@ -1,18 +1,20 @@
+import { gradebookChangesSchema, scoreExpectationSchema } from "@/lib/gradebook-input";
 import { NextResponse } from "next/server";
 import { ForbiddenError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
-import { clearScore, createAssessment, enterScore } from "@/lib/gradebook-service";
+import { clearScore, createAssessment, enterScore, saveGradebookChanges } from "@/lib/gradebook-service";
 import { visibleStudents } from "@/lib/sis-service";
 import { getAcademicEngineConfig, getClassSubjectPerformance } from "@/lib/academic-engine";
 import { z } from "zod";
 
 const schema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("batch"), changes: gradebookChangesSchema }),
   z.object({ action: z.literal("assessment"), termId: z.string().min(1).max(100), classId: z.string().min(1).max(100), subjectId: z.string().min(1).max(100), name: z.string().trim().min(1).max(160), type: z.string().trim().min(1).max(40), weight: z.number().finite().positive().max(100), maxScore: z.number().finite().positive().max(1_000_000) }),
-  z.object({ action: z.literal("score"), studentId: z.string().min(1).max(100), assessmentId: z.string().min(1).max(100), value: z.number().finite().nonnegative().max(1_000_000), status: z.enum(["present", "absent", "excused"]).optional() }),
-  z.object({ action: z.literal("clearScore"), studentId: z.string().min(1).max(100), assessmentId: z.string().min(1).max(100) })
+  z.object({ action: z.literal("score"), studentId: z.string().min(1).max(100), assessmentId: z.string().min(1).max(100), value: z.number().finite().nonnegative().max(1_000_000), status: z.enum(["present", "absent", "excused"]).optional(), expected: scoreExpectationSchema.optional() }),
+  z.object({ action: z.literal("clearScore"), expected: scoreExpectationSchema.optional(), studentId: z.string().min(1).max(100), assessmentId: z.string().min(1).max(100) })
 ]);
 
 export async function GET(request: Request) {
@@ -54,7 +56,7 @@ export async function GET(request: Request) {
       ]);
       return { students, assessments, scores, performance, assessmentRules: config.assessment };
     });
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return routeError(error); }
 }
 
@@ -64,10 +66,11 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       const common = { schoolId: session.schoolId, actorId: session.userId };
+      if (input.action === "batch") return saveGradebookChanges(tx, { ...common, changes: input.changes });
       if (input.action === "assessment") return createAssessment(tx, { ...common, ...input });
       if (input.action === "clearScore") return clearScore(tx, { ...common, ...input });
       return enterScore(tx, { ...common, ...input });
     });
-    return NextResponse.json({ ok: true, result });
+    return NextResponse.json({ ok: true, result }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return routeError(error); }
 }

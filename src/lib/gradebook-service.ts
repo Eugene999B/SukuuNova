@@ -1,3 +1,4 @@
+import { gradebookChangesSchema, type GradebookChange } from "./gradebook-input";
 import { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
@@ -64,18 +65,15 @@ export async function enterScore(tx: TenantDb, input: { schoolId: string; actorI
   if (!student || student.classId !== assessment.classId) throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
   if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
   const status = input.status ?? "present";
+  if (!["present", "absent", "excused"].includes(status) || (status !== "present" && input.value !== 0)) throw new AppError("Absent and excused marks must be zero.", 400, "INVALID_SCORE");
   const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
-  if (input.expected !== undefined) {
-    const expected = input.expected;
-    const matches = expected === null ? !previous : !!previous && previous.id === expected.id && Number(previous.value) === expected.value && previous.status === expected.status && previous.enteredAt.toISOString() === expected.enteredAt;
-    if (!matches) throw new AppError("A mark changed after you opened this sheet. Reload the latest marks and reapply your edits. Nothing in this batch was saved.", 409, "SCORE_CONFLICT");
-  }
+  assertScoreExpectation(previous, input.expected);
   const score = await tx.score.upsert({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } }, update: { value: new Prisma.Decimal(input.value), status, enteredBy: input.actorId, enteredAt: new Date() }, create: { schoolId: input.schoolId, studentId: input.studentId, subjectId: assessment.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(input.value), status, enteredBy: input.actorId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: previous ? "score.updated" : "score.created", entityType: "Score", entityId: score.id, before: previous, after: score });
   return score;
 }
 
-export async function clearScore(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; }) {
+export async function clearScore(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; expected?: ScoreExpectation; }) {
   const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true } });
   if (!assessment) throw new AppError("Assessment not found in this school.", 404, "NOT_FOUND");
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
@@ -89,8 +87,37 @@ export async function clearScore(tx: TenantDb, input: { schoolId: string; actorI
   await lockTerm(tx, input.schoolId, assessment.termId);
   await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
   const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
+  assertScoreExpectation(previous, input.expected);
+  if (!previous && input.expected === null) return { cleared: true };
   if (!previous) throw new AppError("No score recorded for this student and assessment.", 404, "NOT_FOUND");
   await tx.score.delete({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "score.cleared", entityType: "Score", entityId: previous.id, before: previous });
   return { cleared: true };
+}
+
+function assertScoreExpectation(previous: { id: string; value: Prisma.Decimal; status: string; enteredAt: Date } | null, expected: ScoreExpectation | undefined) {
+  if (expected === undefined) return;
+  const matches = expected === null ? !previous : !!previous && previous.id === expected.id && Number(previous.value) === expected.value && previous.status === expected.status && previous.enteredAt.toISOString() === expected.enteredAt;
+  if (!matches) throw new AppError("A mark changed after you opened this sheet. Reload the latest marks and reapply your edits. Nothing in this batch was saved.", 409, "SCORE_CONFLICT");
+}
+
+/** Caller supplies one withTenant transaction, so any rejected cell rolls back the entire sheet. */
+export async function saveGradebookChanges(tx: TenantDb, input: { schoolId: string; actorId: string; changes: GradebookChange[] }) {
+  const changes = gradebookChangesSchema.parse(input.changes);
+  const assessmentIds = [...new Set(changes.map(change => change.assessmentId))];
+  const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, id: { in: assessmentIds } }, select: { id: true, termId: true, classId: true, subjectId: true } });
+  if (assessments.length !== assessmentIds.length) throw new AppError("An assessment no longer exists in this school.", 404, "NOT_FOUND");
+  if (new Set(assessments.map(item => item.termId + ":" + item.classId + ":" + item.subjectId)).size !== 1) throw new AppError("Save one class, subject and term at a time.", 400, "INVALID_CONTEXT");
+  const results = [];
+  for (const change of changes) {
+    const common = { schoolId: input.schoolId, actorId: input.actorId, ...change };
+    if (change.action === "clearScore") {
+      await clearScore(tx, common);
+      results.push({ studentId: change.studentId, assessmentId: change.assessmentId, expected: null });
+    } else {
+      const score = await enterScore(tx, { ...common, value: change.value, status: change.status });
+      results.push({ studentId: change.studentId, assessmentId: change.assessmentId, expected: { id: score.id, value: Number(score.value), status: score.status, enteredAt: score.enteredAt.toISOString() } });
+    }
+  }
+  return results;
 }

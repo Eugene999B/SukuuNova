@@ -190,6 +190,8 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
                   </div>
                 ) : (
                   <GradebookEntryGrid
+                    key={contextQuery}
+                    locked={data.selectedTerm?.isLocked ?? true}
                     assessments={data.performance.assessments}
                     rules={{
                       categories: data.config.assessment.categories,
@@ -202,6 +204,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
                       total: row.total,
                       scores: row.scores.map((score) => ({
                         assessmentId: score.assessmentId,
+                        expected: score.expected,
                         rawScore: score.rawScore,
                         maxScore: score.maxScore,
                         status: (score as { status?: string }).status ?? null,

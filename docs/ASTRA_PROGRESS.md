@@ -1,5 +1,13 @@
 # Astra progress
 
+## General gradebook batch
+- Replaced per-cell autosaves with explicit atomic saves, up to 500 changed cells per class/subject/term.
+- Added mark/status spreadsheet paste, keyboard navigation, dirty counts, discard, clear confirmation and navigation/unload protection.
+- Snapshot reads preserve stored values separately from grading projections. Updates and clears detect concurrent changes; any failed cell rolls back the batch.
+- Status-only edits are included; canonical entry rejects nonzero absent/excused marks. Locked terms are read-only in the sheet.
+- Eight new regressions cover batch saves, stale/concurrent clears, rollback, authorization, finalized reports, context and snapshot reads.
+- GitHub verification pending. No migration. Production browser verification remains outstanding.
+
 ## Recruitment completion batch
 - Restored missing vacancy/application metadata with a new additive migration; added unique public submission keys.
 - Unified legacy and school recruitment services; implemented candidate stage changes, conflict checks, application review and staff conversion controls.
