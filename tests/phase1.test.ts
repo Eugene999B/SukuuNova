@@ -34,6 +34,10 @@ describe("Phase 1 MVP security and workflow gates", () => {
           notificationChannels: ["sms"],
         },
       });
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "PlatformMessagingWallet" ("schoolId","smsBalance","whatsappBalance","status","updatedAt") VALUES ($1,1000,0,'active',CURRENT_TIMESTAMP) ON CONFLICT ("schoolId") DO UPDATE SET "smsBalance"=1000,"status"='active',"updatedAt"=CURRENT_TIMESTAMP`,
+        fixture.schoolId,
+      );
 
       const year = await tx.academicYear.create({
         data: {
