@@ -1,12 +1,16 @@
 import { db, withTenant } from "@/lib/db";
 import { processMessageBatchOnce } from "@/lib/message-outbox";
 import { dispatchQueuedTransportAlerts, reconcileTransportAlertDeliveries } from "./transport-alert-dispatcher";
+import { refreshActiveTransportIncidents } from "./transport-incident-service";
 import { refreshRunningTrackerCertifications } from "./tracker-certification-service";
 
 export type TransportWorkerSummary = {
   schoolsExamined: number;
   trackerCertificationsExamined: number;
   trackerCertificationsPassed: number;
+  incidentsOpened: number;
+  incidentsResolved: number;
+  incidentsUpdated: number;
   transportAlertsDispatched: number;
   transportAlertsSkipped: number;
   messageJobsQueued: number;
@@ -29,6 +33,9 @@ export async function processTransportWorkerCycle(options: {
     schoolsExamined: directories.length,
     trackerCertificationsExamined: 0,
     trackerCertificationsPassed: 0,
+    incidentsOpened: 0,
+    incidentsResolved: 0,
+    incidentsUpdated: 0,
     transportAlertsDispatched: 0,
     transportAlertsSkipped: 0,
     messageJobsQueued: 0,
@@ -45,6 +52,11 @@ export async function processTransportWorkerCycle(options: {
     ));
     summary.trackerCertificationsExamined += certification.examined;
     summary.trackerCertificationsPassed += certification.passed;
+
+    const incidents = await withTenant(directory.schoolId, (tx) => refreshActiveTransportIncidents(tx, directory.schoolId));
+    summary.incidentsOpened += incidents.opened;
+    summary.incidentsResolved += incidents.resolved;
+    summary.incidentsUpdated += incidents.updated;
 
     const dispatch = await withTenant(directory.schoolId, (tx) => dispatchQueuedTransportAlerts(
       tx,
