@@ -1,3 +1,5 @@
+import { ensureWorkAssessment } from "./academic-work-gradebook";
+import { hasPermission } from "./rbac";
 import { enterScore } from "./gradebook-service";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
@@ -159,7 +161,7 @@ export async function submitGuardianSubmission(tx: TenantDb, input: { schoolId: 
   const answerRows = await tx.$queryRawUnsafe<Array<{ questionId: string; responseText: string | null; responseData: unknown }>>(`SELECT "questionId","responseText","responseData" FROM "TeacherAcademicAnswer" WHERE "submissionId"=$1`, submission.id);
   const graded = await gradeAnswers(questions, new Map(answerRows.map((answer) => [answer.questionId, answer])), work.answerGuide, work.markingMode);
   const total = graded.reduce((sum, item) => sum + Number(item.score), 0);
-  const reviewRequired = graded.some((item) => item.markingMode === "manual" || item.markingMode === "suggested") || work.markingMode === "review";
+  const reviewRequired = graded.some((item) => item.markingMode === "manual" || item.markingMode === "suggested") || work.markingMode !== "auto" || questions.length === 0;
   for (const item of graded) await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicAnswer" SET "awardedScore"=$1,"markingMode"=$2,"markerComment"=$3,"updatedAt"=NOW() WHERE "submissionId"=$4 AND "questionId"=$5 AND "schoolId"=$6`, item.score, item.markingMode, item.suggestedScore === undefined ? item.reason : `Suggested score: ${item.suggestedScore}. Teacher review required. ${item.reason}`, submission.id, item.questionId, input.schoolId);
   const status = reviewRequired ? "review_required" : "graded";
   await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicSubmission" SET "submittedAt"=NOW(),"status"=$1,"totalAwarded"=$2,"updatedAt"=NOW() WHERE "id"=$3`, status, total, submission.id);
@@ -168,6 +170,8 @@ export async function submitGuardianSubmission(tx: TenantDb, input: { schoolId: 
 async function assertTeacherContext(tx: TenantDb, schoolId: string, teacherId: string, workId: string) {
   const rows = await tx.$queryRawUnsafe<Array<{ classId: string; subjectId: string }>>(`SELECT "classId","subjectId" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, workId, schoolId);
   if (!rows[0]) throw new AppError("Work not found.", 404, "NOT_FOUND");
+  if (await hasPermission(tx, teacherId, "scores:write:all")) return;
+  if (!(await hasPermission(tx, teacherId, "scores:write:assigned"))) throw new ForbiddenError("Teacher review is not permitted.");
   const [assignment, classTeacher] = await Promise.all([
     tx.classSubjectTeacher.findFirst({ where: { schoolId, teacherId, classId: rows[0].classId, subjectId: rows[0].subjectId }, select: { teacherId: true } }),
     tx.class.findFirst({ where: { schoolId, id: rows[0].classId, classTeacherId: teacherId }, select: { id: true } })
@@ -176,7 +180,7 @@ async function assertTeacherContext(tx: TenantDb, schoolId: string, teacherId: s
 }
 export async function getTeacherReviewQueue(tx: TenantDb, input: { schoolId: string; teacherId: string; workId: string }) {
   await assertTeacherContext(tx, input.schoolId, input.teacherId, input.workId);
-  return tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT s."id" AS "submissionId",st."id" AS "studentId",st."name" AS "studentName",s."status",s."totalAwarded",s."submittedAt",s."reviewedAt",s."reviewNotes" FROM "TeacherAcademicSubmission" s INNER JOIN "Student" st ON st."id"=s."studentId" AND st."schoolId"=s."schoolId" WHERE s."schoolId"=$1 AND s."workId"=$2 ORDER BY CASE WHEN s."status"='review_required' THEN 0 ELSE 1 END,s."submittedAt" ASC NULLS LAST`, input.schoolId, input.workId);
+  return tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT s."id" AS "submissionId",st."id" AS "studentId",st."name" AS "studentName",s."status",s."totalAwarded",s."submittedAt",s."reviewedAt",s."reviewNotes" FROM "TeacherAcademicSubmission" s INNER JOIN "Student" st ON st."id"=s."studentId" AND st."schoolId"=s."schoolId" WHERE s."schoolId"=$1 AND s."workId"=$2 AND s."status" IN ('submitted','review_required','graded') ORDER BY CASE WHEN s."status"='review_required' THEN 0 ELSE 1 END,s."submittedAt" ASC NULLS LAST`, input.schoolId, input.workId);
 }
 export async function reviewTeacherSubmission(tx: TenantDb, input: { schoolId: string; teacherId: string; submissionId: string; reviewNotes?: string; answers: Array<{ questionId: string; awardedScore: number; markerComment?: string }> }) {
   const rows = await tx.$queryRawUnsafe<Array<{ id: string; workId: string; studentId: string }>>(`SELECT "id","workId","studentId" FROM "TeacherAcademicSubmission" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, input.submissionId, input.schoolId);
@@ -187,13 +191,15 @@ export async function reviewTeacherSubmission(tx: TenantDb, input: { schoolId: s
   await assertTeacherContext(tx, input.schoolId, input.teacherId, submission.workId);
   const workRows = await tx.$queryRawUnsafe<Array<{ termId: string; classId: string; subjectId: string; title: string }>>(`SELECT "termId","classId","subjectId","title" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, submission.workId, input.schoolId);
   const work = workRows[0]; if (!work) throw new AppError("Work not found.",404,"NOT_FOUND");
-  const assessment = await tx.assessment.findFirst({ where: { schoolId: input.schoolId, termId: work.termId, classId: work.classId, subjectId: work.subjectId, name: work.title }, select: { id: true, maxScore: true } });
-  if (!assessment) throw new AppError("The corresponding gradebook assessment does not exist yet. Save the work mark first.",409,"ASSESSMENT_NOT_READY");
+  const assessment = await ensureWorkAssessment(tx, input.schoolId, submission.workId, input.teacherId);
+  const questionIds = await tx.$queryRawUnsafe<Array<{ id: string }>>('SELECT "id" FROM "TeacherAcademicQuestion" WHERE "schoolId"=$1 AND "workId"=$2', input.schoolId, submission.workId);
+  const supplied = new Set(input.answers.map(answer => answer.questionId));
+  if (!questionIds.length || supplied.size !== input.answers.length || questionIds.length !== supplied.size || questionIds.some(question => !supplied.has(question.id))) throw new AppError("Review every question exactly once before finalizing.", 400, "INCOMPLETE_REVIEW");
   for (const answer of input.answers) {
     const q = await tx.$queryRawUnsafe<Array<{ points: Prisma.Decimal }>>(`SELECT "points" FROM "TeacherAcademicQuestion" WHERE "id"=$1 AND "workId"=$2 AND "schoolId"=$3 LIMIT 1`, answer.questionId, submission.workId, input.schoolId);
     if (!q[0]) throw new AppError("Question not found.",400,"INVALID_QUESTION");
     if (!Number.isFinite(answer.awardedScore) || answer.awardedScore < 0 || new Prisma.Decimal(answer.awardedScore).greaterThan(q[0].points)) throw new AppError("Awarded marks cannot exceed question points.",400,"INVALID_SCORE");
-    await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicAnswer" SET "awardedScore"=$1,"markingMode"='manual_review',"markerComment"=$2,"updatedAt"=NOW() WHERE "submissionId"=$3 AND "questionId"=$4`, answer.awardedScore, answer.markerComment ?? null, input.submissionId, answer.questionId);
+    await tx.$executeRawUnsafe(`INSERT INTO "TeacherAcademicAnswer"("id","schoolId","submissionId","questionId","awardedScore","markingMode","markerComment") VALUES($1,$2,$3,$4,$5,'manual_review',$6) ON CONFLICT ("submissionId","questionId") DO UPDATE SET "awardedScore"=EXCLUDED."awardedScore","markingMode"='manual_review',"markerComment"=EXCLUDED."markerComment","updatedAt"=NOW()`, `taa_${randomUUID().replaceAll("-", "").slice(0, 24)}`, input.schoolId, input.submissionId, answer.questionId, answer.awardedScore, answer.markerComment ?? null);
   }
   const totalRows = await tx.$queryRawUnsafe<Array<{ total: Prisma.Decimal | null }>>(`SELECT COALESCE(SUM("awardedScore"),0) AS "total" FROM "TeacherAcademicAnswer" WHERE "submissionId"=$1`, input.submissionId);
   const total = Number(totalRows[0]?.total ?? 0);

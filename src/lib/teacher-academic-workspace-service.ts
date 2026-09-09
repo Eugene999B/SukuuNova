@@ -1,3 +1,6 @@
+import { enterScore } from "./gradebook-service";
+import { ensureWorkAssessment } from "./academic-work-gradebook";
+import { validateAcademicQuestions } from "./academic-work-validation";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
@@ -12,6 +15,7 @@ type MarkMode = "manual" | "auto" | "review";
 async function assertTeacherCanUseContext(tx: TenantDb, schoolId: string, teacherId: string, classId: string, subjectId: string) {
   const canAll = await hasPermission(tx, teacherId, "scores:write:all");
   if (canAll) return;
+  if (!(await hasPermission(tx, teacherId, "scores:write:assigned"))) throw new ForbiddenError("Teacher academic access is not permitted.");
   const [assignment, classTeacher] = await Promise.all([
     tx.classSubjectTeacher.findFirst({ where: { schoolId, teacherId, classId, subjectId }, select: { teacherId: true } }),
     tx.class.findFirst({ where: { schoolId, id: classId, classTeacherId: teacherId }, select: { id: true } }),
@@ -20,30 +24,34 @@ async function assertTeacherCanUseContext(tx: TenantDb, schoolId: string, teache
 }
 
 async function assertTermOpen(tx: TenantDb, schoolId: string, termId: string) {
-  const term = await tx.term.findFirst({ where: { schoolId, id: termId }, select: { id: true, name: true, isLocked: true } });
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"term-mutation:" + schoolId + ":" + termId}))`;
+  const term = await tx.term.findFirst({ where: { schoolId, id: termId }, select: { id: true, name: true, isLocked: true, startDate: true, endDate: true } });
   if (!term) throw new AppError("The selected term is not available in this school.", 400, "INVALID_TERM");
   if (term.isLocked) throw new AppError(`Term "${term.name}" is locked.`, 409, "TERM_LOCKED");
   return term;
 }
 
 export async function getTeacherAcademicContexts(tx: TenantDb, schoolId: string, teacherId: string) {
+  const canAll = await hasPermission(tx, teacherId, "scores:write:all");
+  if (!canAll && !(await hasPermission(tx, teacherId, "scores:write:assigned"))) throw new ForbiddenError("Teacher academic access is not permitted.");
   const [assignments, terms] = await Promise.all([
     tx.classSubjectTeacher.findMany({
-      where: { schoolId, teacherId },
+      where: { schoolId, ...(canAll ? {} : { OR: [{ teacherId }, { class: { classTeacherId: teacherId } }] }) },
       include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } } },
       orderBy: [{ classId: "asc" }, { subjectId: "asc" }],
     }),
     tx.term.findMany({ where: { schoolId }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true }, orderBy: { startDate: "desc" } }),
   ]);
-  return { assignments, terms };
+  return { assignments: Array.from(new Map(assignments.map(assignment => [assignment.classId + ":" + assignment.subjectId, assignment])).values()), terms };
 }
 
 export async function getTeacherAcademicRoster(tx: TenantDb, input: { schoolId: string; teacherId: string; classId: string; subjectId: string; termId: string }) {
   await assertTeacherCanUseContext(tx, input.schoolId, input.teacherId, input.classId, input.subjectId);
-  await assertTermOpen(tx, input.schoolId, input.termId);
+  const term = await tx.term.findFirst({ where: { schoolId: input.schoolId, id: input.termId }, select: { id: true } });
+  if (!term) throw new AppError("Term not found.", 404, "NOT_FOUND");
   const [students, works, assessments, notes] = await Promise.all([
     tx.student.findMany({ where: { schoolId: input.schoolId, classId: input.classId, status: "active" }, select: { id: true, name: true, admissionNo: true }, orderBy: { name: "asc" } }),
-    tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"title","kind","workDate","weekNumber","workNumber","maxScore","markingMode","status","dueAt" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "workDate" DESC,"workNumber" ASC`, input.schoolId, input.classId, input.subjectId, input.termId),
+    tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"assessmentId","title","kind","workDate","weekNumber","workNumber","maxScore","markingMode","status","dueAt" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "workDate" DESC,"workNumber" ASC`, input.schoolId, input.classId, input.subjectId, input.termId),
     tx.assessment.findMany({ where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, termId: input.termId }, select: { id: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true, status: true } } }, orderBy: { name: "asc" } }),
     tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"title","weekNumber","status","publishedAt","content" FROM "TeacherAcademicNote" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "updatedAt" DESC`, input.schoolId, input.classId, input.subjectId, input.termId),
   ]);
@@ -56,10 +64,14 @@ export async function createTeacherAcademicWork(tx: TenantDb, input: {
   maxScore: number; markingMode: MarkMode; dueAt?: string | null; answerGuide?: unknown; questionList?: Array<{ type: string; prompt: string; points: number; options?: string[]; acceptedAnswers?: string[] }>;
 }) {
   await assertTeacherCanUseContext(tx, input.schoolId, input.teacherId, input.classId, input.subjectId);
-  await assertTermOpen(tx, input.schoolId, input.termId);
+  const term = await assertTermOpen(tx, input.schoolId, input.termId);
+  const date = new Date(input.workDate + "T00:00:00.000Z");
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== input.workDate || date < term.startDate || date > term.endDate) throw new AppError("Work date must be a valid date inside the selected term.", 400, "INVALID_WORK_DATE");
+  if (input.dueAt && (!Number.isFinite(Date.parse(input.dueAt)) || Date.parse(input.dueAt) < date.getTime())) throw new AppError("The deadline must follow the work date.", 400, "INVALID_DUE_DATE");
+  validateAcademicQuestions(input.questionList ?? [], input.maxScore, input.markingMode);
   if (!WORK_KINDS.includes(input.kind)) throw new AppError("Unsupported work type.", 400, "INVALID_WORK_KIND");
   if (!input.title.trim()) throw new AppError("A title is required.", 400, "INVALID_WORK");
-  if (!Number.isFinite(input.weekNumber) || input.weekNumber < 1 || input.weekNumber > 60) throw new AppError("Week must be between 1 and 60.", 400, "INVALID_WEEK");
+  if (!Number.isInteger(input.weekNumber) || input.weekNumber < 1 || input.weekNumber > 60) throw new AppError("Week must be between 1 and 60.", 400, "INVALID_WEEK");
   if (!Number.isInteger(input.workNumber) || input.workNumber < 1 || input.workNumber > 50) throw new AppError("Work number must be between 1 and 50.", 400, "INVALID_WORK_NUMBER");
   if (!Number.isFinite(input.maxScore) || input.maxScore <= 0 || input.maxScore > 100000) throw new AppError("Maximum mark must be positive.", 400, "INVALID_MAX_SCORE");
   const id = `taw_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
@@ -74,21 +86,19 @@ export async function createTeacherAcademicWork(tx: TenantDb, input: {
 }
 
 export async function publishTeacherAcademicWork(tx: TenantDb, input: { schoolId: string; teacherId: string; workId: string }) {
-  const rows = await tx.$queryRawUnsafe<Array<{ id: string; classId: string; subjectId: string; status: string }>>(`SELECT id,"classId","subjectId","status" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, input.workId, input.schoolId);
+  const rows = await tx.$queryRawUnsafe<Array<{ id: string; termId: string; classId: string; subjectId: string; status: string }>>(`SELECT id,"termId","classId","subjectId","status" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, input.workId, input.schoolId);
   const work = rows[0];
   if (!work) throw new AppError("Work not found.", 404, "NOT_FOUND");
   await assertTeacherCanUseContext(tx, input.schoolId, input.teacherId, work.classId, work.subjectId);
+  await assertTermOpen(tx, input.schoolId, work.termId);
+  const detail = await tx.$queryRawUnsafe<Array<{ maxScore: Prisma.Decimal; markingMode: string }>>('SELECT "maxScore","markingMode" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "id"=$2', input.schoolId, work.id);
+  const questions = await tx.$queryRawUnsafe<Array<{ type: string; prompt: string; points: Prisma.Decimal; options: string[]; acceptedAnswers: string[] }>>('SELECT "type","prompt","points","options","acceptedAnswers" FROM "TeacherAcademicQuestion" WHERE "schoolId"=$1 AND "workId"=$2 ORDER BY "position"', input.schoolId, work.id);
+  validateAcademicQuestions(questions.map(question => ({ ...question, points: Number(question.points) })), Number(detail[0].maxScore), detail[0].markingMode);
+  await ensureWorkAssessment(tx, input.schoolId, work.id, input.teacherId);
   if (work.status === "published") return work;
   await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicWork" SET "status"='published',"publishedAt"=NOW(),"updatedAt"=NOW() WHERE "id"=$1 AND "schoolId"=$2`, input.workId, input.schoolId);
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.teacherId, action: "academic_work.published", entityType: "TeacherAcademicWork", entityId: work.id });
   return { ...work, status: "published" };
-}
-
-async function findOrCreateAssessment(tx: TenantDb, input: { schoolId: string; teacherId: string; termId: string; classId: string; subjectId: string; title: string; kind: string; maxScore: number }) {
-  const existing = await tx.assessment.findFirst({ where: { schoolId: input.schoolId, termId: input.termId, classId: input.classId, subjectId: input.subjectId, name: input.title }, select: { id: true, maxScore: true } });
-  if (existing) return existing;
-  const assessment = await tx.assessment.create({ data: { schoolId: input.schoolId, termId: input.termId, classId: input.classId, subjectId: input.subjectId, name: input.title, type: input.kind, weight: new Prisma.Decimal(100), maxScore: new Prisma.Decimal(input.maxScore) } });
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.teacherId, action: "assessment.created_from_academic_work", entityType: "Assessment", entityId: assessment.id, after: assessment });
-  return assessment;
 }
 
 export async function saveTeacherWorkMarks(tx: TenantDb, input: { schoolId: string; teacherId: string; workId: string; marks: Array<{ studentId: string; value: number; status?: "present" | "absent" | "excused" }> }) {
@@ -97,13 +107,12 @@ export async function saveTeacherWorkMarks(tx: TenantDb, input: { schoolId: stri
   if (!work) throw new AppError("Work not found.", 404, "NOT_FOUND");
   await assertTeacherCanUseContext(tx, input.schoolId, input.teacherId, work.classId, work.subjectId);
   await assertTermOpen(tx, input.schoolId, work.termId);
-  const assessment = await findOrCreateAssessment(tx, { ...input, termId: work.termId, classId: work.classId, subjectId: work.subjectId, title: work.title, kind: work.kind, maxScore: Number(work.maxScore) });
+  if (!input.marks.length || new Set(input.marks.map(mark => mark.studentId)).size !== input.marks.length) throw new AppError("Provide marks for distinct students.", 400, "INVALID_MARKS");
+  const assessment = await ensureWorkAssessment(tx, input.schoolId, work.id, input.teacherId);
   let saved = 0;
   for (const mark of input.marks) {
-    const student = await tx.student.findFirst({ where: { schoolId: input.schoolId, id: mark.studentId, classId: work.classId }, select: { id: true } });
-    if (!student) throw new AppError("A selected student is not in this class.", 400, "INVALID_STUDENT");
-    if (!Number.isFinite(mark.value) || mark.value < 0 || new Prisma.Decimal(mark.value).greaterThan(assessment.maxScore)) throw new AppError(`Mark must be from 0 to ${assessment.maxScore.toString()}.`, 400, "INVALID_SCORE");
-    await tx.score.upsert({ where: { studentId_assessmentId: { studentId: mark.studentId, assessmentId: assessment.id } }, update: { value: new Prisma.Decimal(mark.value), status: mark.status ?? "present", enteredBy: input.teacherId, enteredAt: new Date() }, create: { schoolId: input.schoolId, studentId: mark.studentId, subjectId: work.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(mark.value), status: mark.status ?? "present", enteredBy: input.teacherId } });
+    if (mark.status && !["present", "absent", "excused"].includes(mark.status)) throw new AppError("Unsupported attendance status.", 400, "INVALID_STATUS");
+    await enterScore(tx, { schoolId: input.schoolId, actorId: input.teacherId, studentId: mark.studentId, assessmentId: assessment.id, value: mark.value, status: mark.status });
     saved += 1;
   }
   return { saved, assessmentId: assessment.id };
@@ -120,10 +129,13 @@ export async function createTeacherAcademicNote(tx: TenantDb, input: { schoolId:
 }
 
 export async function publishTeacherAcademicNote(tx: TenantDb, input: { schoolId: string; teacherId: string; noteId: string }) {
-  const rows = await tx.$queryRawUnsafe<Array<{ id: string; classId: string; subjectId: string; status: string }>>(`SELECT id,"classId","subjectId","status" FROM "TeacherAcademicNote" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, input.noteId, input.schoolId);
+  const rows = await tx.$queryRawUnsafe<Array<{ id: string; termId: string; classId: string; subjectId: string; status: string }>>(`SELECT id,"termId","classId","subjectId","status" FROM "TeacherAcademicNote" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, input.noteId, input.schoolId);
   const note = rows[0];
   if (!note) throw new AppError("Note not found.", 404, "NOT_FOUND");
   await assertTeacherCanUseContext(tx, input.schoolId, input.teacherId, note.classId, note.subjectId);
+  await assertTermOpen(tx, input.schoolId, note.termId);
+  if (note.status === "published") return note;
   await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicNote" SET "status"='published',"publishedAt"=NOW(),"updatedAt"=NOW() WHERE "id"=$1 AND "schoolId"=$2`, input.noteId, input.schoolId);
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.teacherId, action: "academic_note.published", entityType: "TeacherAcademicNote", entityId: note.id });
   return { ...note, status: "published" };
 }

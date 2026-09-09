@@ -88,6 +88,8 @@ Conceptual academic flow:
 
 Teachers can reopen and edit their lesson drafts or plans returned for revision, then resubmit the same record. Approved lesson content stays protected; its author can mark the lesson completed. Homework drafts can be edited and assigned from the existing editor. Content edits verify the current teaching assignment, term lock, author and last-seen update timestamp. Published homework content cannot be silently rewritten through this editor.
 
+Published academic activities now link to a stable gradebook assessment. Manual mark entry and teacher review use the same term and finalized-report protections. The Teacher Academic Studio loads existing marks, leaves blank cells unchanged, opens learner review and publishes saved notes. Review shows submitted answers and requires a mark for every question. Question points must match the activity maximum; manual activities require teacher release even when objective answers can be scored automatically.
+
 ### Attendance and safety
 
 Attendance supports ordinary class registers as well as physical/device and biometric directions. Existing concepts include class attendance, staff attendance, attendance history, exception handling, device registration, device identity, attendance receipts, idempotency/nonce protections, face enrollment and face-match review.

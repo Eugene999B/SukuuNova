@@ -1,5 +1,15 @@
 # Astra progress
 
+## Current connected academic batch
+- Stable work-to-assessment links replace title-only lookup; legacy links are adopted only when unambiguous.
+- Manual marks use canonical gradebook permission, term, finalized-report, validation and audit rules.
+- Publishing validates questions and creates the assessment; review no longer requires a placeholder mark.
+- Teacher review requires every question exactly once, displays learner answers, and preserves unanswered questions with explicit zeroes.
+- Studio preserves blank cells, reloads existing marks, links review queues and publishes saved notes; locked terms remain readable.
+- Manual marking requires teacher release; objective auto marking remains available.
+- Added question/date validation and a nullable same-school assessment-link migration.
+- GitHub Actions verification pending for this batch; previous verified checkpoint follows.
+
 ## Verified checkpoint
 - Main/code SHA before this documentation-only checkpoint: f8952080022b8bdd8b8dda6af3299a54581f299c.
 - Full Build verification: https://github.com/Eugene999B/SukuuNova/actions/runs/34298587865 — SUCCESS.
@@ -28,7 +38,7 @@
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: guardian assignments and academic data protection; current atomic batch complete and verified.
+- Current subsystem: guardian assignments and academic data protection; connected teacher workflow batch awaiting CI.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
