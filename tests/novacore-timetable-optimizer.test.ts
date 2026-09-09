@@ -65,6 +65,30 @@ describe("NovaCore timetable optimizer", () => {
     expect(new Set(result.placements.map((placement) => placement.dayOfWeek)).size).toBe(2);
   });
 
+  it("counts single and double demands together for the same daily assignment limit", () => {
+    const result = optimizeTimetable({
+      slots,
+      demands: [
+        { id: "science:double", groupId: "class-a:science:teacher-1", classId: "class-a", subjectId: "science", teacherId: "teacher-1", occurrences: 1, blockSize: 2, maxPerDay: 2 },
+        { id: "science:single", groupId: "class-a:science:teacher-1", classId: "class-a", subjectId: "science", teacherId: "teacher-1", occurrences: 1, blockSize: 1, maxPerDay: 2 },
+      ],
+    });
+    expect(result.status).not.toBe("infeasible");
+    const double = result.placements.find((placement) => placement.demandId === "science:double")!;
+    const single = result.placements.find((placement) => placement.demandId === "science:single")!;
+    expect(double.dayOfWeek).not.toBe(single.dayOfWeek);
+  });
+
+  it("counts preserved assignment periods before placing a new double block", () => {
+    const result = optimizeTimetable({
+      slots,
+      fixedPlacements: [{ classId: "class-a", teacherId: "teacher-1", dayOfWeek: 1, period: 1, groupId: "class-a:science:teacher-1" }],
+      demands: [{ id: "science:double", groupId: "class-a:science:teacher-1", classId: "class-a", subjectId: "science", teacherId: "teacher-1", occurrences: 1, blockSize: 2, maxPerDay: 2 }],
+    });
+    expect(result.status).not.toBe("infeasible");
+    expect(result.placements[0].dayOfWeek).toBe(2);
+  });
+
   it("honours teacher unavailability as a hard constraint", () => {
     const result = optimizeTimetable({
       slots: [{ dayOfWeek: 1, period: 1 }, { dayOfWeek: 1, period: 2 }],
