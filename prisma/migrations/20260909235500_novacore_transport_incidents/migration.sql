@@ -20,7 +20,8 @@ CREATE TABLE "P3TransportIncident" (
 );
 
 CREATE UNIQUE INDEX "P3TransportIncident_id_schoolId_key" ON "P3TransportIncident"("id","schoolId");
-CREATE UNIQUE INDEX "P3TransportIncident_schoolId_idempotencyKey_key" ON "P3TransportIncident"("schoolId","idempotencyKey");
+CREATE INDEX "P3TransportIncident_schoolId_idempotencyKey_idx" ON "P3TransportIncident"("schoolId","idempotencyKey");
+CREATE UNIQUE INDEX "P3TransportIncident_one_open_type_per_trip" ON "P3TransportIncident"("schoolId","tripId","type") WHERE "status"='open';
 CREATE INDEX "P3TransportIncident_schoolId_tripId_status_openedAt_idx" ON "P3TransportIncident"("schoolId","tripId","status","openedAt");
 
 ALTER TABLE "P3TransportIncident" ADD CONSTRAINT "P3TransportIncident_trip_fkey"
