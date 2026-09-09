@@ -62,7 +62,7 @@ export async function onboardSchool(input: {
       });
       roleIds.set(name, role.id);
       await tx.rolePermission.createMany({
-        data: DEFAULT_ROLE_PERMISSIONS[name].map((key) => ({
+        data: [...new Set(DEFAULT_ROLE_PERMISSIONS[name])].map((key) => ({
           schoolId,
           roleId: role.id,
           permissionId: permissionIds.get(key)!

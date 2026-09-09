@@ -1,3 +1,6 @@
+import { randomBytes } from "node:crypto";
+import type { z } from "zod";
+import { platformOnboardingSchema } from "./platform-onboarding-input";
 import { roleKeyForName } from "./authorization";
 import { permissionDescription } from "./permission-catalog";
 import { hash } from "bcryptjs";
@@ -7,52 +10,24 @@ import { appendPlatformAudit, appendSchoolAudit } from "./audit";
 import { AppError, ForbiddenError } from "./errors";
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_NAMES, DEFAULT_ROLE_PERMISSIONS } from "./default-rbac";
 
-type Input = {
-  adminId: string;
-  adminRole: string;
-  uniqueCode: string;
-  schoolName: string;
-  schoolType?: string;
-  country?: string;
-  region?: string;
-  city?: string;
-  address?: string;
-  schoolPhone?: string;
-  schoolEmail?: string;
-  ownerName: string;
-  ownerEmail: string;
-  ownerPhone?: string;
-  ownerPassword: string;
-  currency: string;
-  billingMode: "flat" | "per_student";
-  studentRate: number;
-  flatRate: number;
-  billingDay: number;
-  graceDays: number;
-  trialDays: number;
-  timezone: string;
-};
+type Input = z.input<typeof platformOnboardingSchema> & { adminId: string; adminRole: string };
 
-export async function onboardPlatformSchool(input: Input) {
-  if (input.adminRole !== "super_admin") throw new ForbiddenError("Only Super Admin can create new platform schools.");
+export async function onboardPlatformSchool(rawInput: Input) {
+  if (rawInput.adminRole !== "super_admin") throw new ForbiddenError("Only Super Admin can create new platform schools.");
+  const parsed = platformOnboardingSchema.safeParse(rawInput);
+  if (!parsed.success) throw new AppError(parsed.error.issues.map((issue) => issue.message).join(" "), 400, "INVALID_ONBOARDING");
+  const input = { ...parsed.data, adminId: rawInput.adminId, adminRole: rawInput.adminRole };
   const uniqueCode = input.uniqueCode.trim().toLowerCase();
   if (!/^[a-z0-9-]{3,40}$/.test(uniqueCode)) throw new AppError("School code must be 3-40 lowercase letters, numbers, or hyphens.", 400, "INVALID_SCHOOL_CODE");
   if (input.ownerPassword.length < 12) throw new AppError("Owner password must contain at least 12 characters.", 400, "WEAK_PASSWORD");
   if (input.studentRate < 0 || input.flatRate < 0) throw new AppError("Billing rates cannot be negative.", 400, "INVALID_BILLING_RATE");
 
-  const [schoolDuplicate, directoryDuplicate] = await Promise.all([
-    rawDb.school.findUnique({ where: { uniqueCode }, select: { id: true, name: true, status: true } }),
-    rawDb.schoolLoginDirectory.findUnique({ where: { uniqueCode }, select: { schoolId: true } }),
-  ]);
-  if (schoolDuplicate) {
-    throw new AppError(`School login code “${uniqueCode}” is already assigned to “${schoolDuplicate.name}”. Choose a different code.`, 409, "DUPLICATE_SCHOOL_CODE");
-  }
+  const directoryDuplicate = await rawDb.schoolLoginDirectory.findUnique({
+    where: { uniqueCode }, select: { schoolId: true }
+  });
   if (directoryDuplicate) {
-    const directorySchool = await rawDb.school.findUnique({ where: { id: directoryDuplicate.schoolId }, select: { id: true, name: true, status: true } });
-    if (directorySchool) {
-      throw new AppError(`School login code “${uniqueCode}” is already reserved by “${directorySchool.name}”. Choose a different code.`, 409, "DUPLICATE_SCHOOL_CODE");
-    }
-    await rawDb.schoolLoginDirectory.delete({ where: { schoolId: directoryDuplicate.schoolId } });
+    // A school hidden by RLS is not an orphan. Never delete its login directory.
+    throw new AppError(`School login code “${uniqueCode}” is already reserved. Choose a different code.`, 409, "DUPLICATE_SCHOOL_CODE");
   }
 
   const permissionIds = new Map<string, string>();
@@ -63,6 +38,10 @@ export async function onboardPlatformSchool(input: Input) {
 
   const schoolId = createId();
   const ownerPasswordHash = await hash(input.ownerPassword, 12);
+  const leadership = await Promise.all(input.leadership.map(async (person) => {
+    const temporaryPassword = randomBytes(24).toString("base64url");
+    return { ...person, temporaryPassword, passwordHash: await hash(temporaryPassword, 12) };
+  }));
   try {
     return await withTenant(schoolId, async (tx) => {
       const school = await tx.school.create({ data: { id: schoolId, uniqueCode, name: input.schoolName.trim() } });
@@ -88,11 +67,26 @@ export async function onboardPlatformSchool(input: Input) {
       for (const name of DEFAULT_ROLE_NAMES) {
         const role = await tx.role.create({ data: { schoolId, name, key: roleKeyForName(name), isSystem: true } });
         roleIds.set(name, role.id);
-        await tx.rolePermission.createMany({ data: DEFAULT_ROLE_PERMISSIONS[name].map((key) => ({ schoolId, roleId: role.id, permissionId: permissionIds.get(key)! })) });
+        await tx.rolePermission.createMany({ data: [...new Set(DEFAULT_ROLE_PERMISSIONS[name])].map((key) => ({ schoolId, roleId: role.id, permissionId: permissionIds.get(key)! })) });
       }
 
       const owner = await tx.user.create({ data: { schoolId, name: input.ownerName.trim(), email: input.ownerEmail.trim().toLowerCase(), phone: input.ownerPhone || null, passwordHash: ownerPasswordHash, needsPasswordChange: true } });
       await tx.userRole.create({ data: { schoolId, userId: owner.id, roleId: roleIds.get("Owner")! } });
+
+      const leadershipAccounts = [];
+      for (const person of leadership) {
+        const user = await tx.user.create({
+          data: { schoolId, name: person.name, email: person.email, passwordHash: person.passwordHash, needsPasswordChange: true },
+          select: { id: true, name: true, email: true }
+        });
+        await tx.userRole.create({ data: { schoolId, userId: user.id, roleId: roleIds.get(person.role)! } });
+        await appendSchoolAudit(tx, {
+          schoolId, actorId: owner.id, action: "user.provisioned", entityType: "User", entityId: user.id,
+          after: { name: user.name, email: user.email, role: person.role, needsPasswordChange: true }
+        });
+        leadershipAccounts.push({ ...user, role: person.role, temporaryPassword: person.temporaryPassword });
+      }
+
 
       await tx.$executeRawUnsafe(
         `INSERT INTO "PlatformSchoolBillingConfig" ("schoolId","billingMode","currency","studentRate","flatRate","billingDay","graceDays","trialDays","minimumCharge","maximumCharge","active","autoGenerateInvoices","invoiceDueDays","taxPercent","discountPercent","invoicePrefix","sendBillingNotifications","updatedAt")
@@ -106,7 +100,7 @@ export async function onboardPlatformSchool(input: Input) {
 
       await appendSchoolAudit(tx, { schoolId, actorId: owner.id, action: "school.onboarded", entityType: "School", entityId: schoolId, after: { uniqueCode, ownerId: owner.id } });
       await appendPlatformAudit({ actorId: input.adminId, action: "school.onboarded", targetSchoolId: schoolId, targetEntity: "School", meta: { uniqueCode, ownerId: owner.id, billingMode: input.billingMode, currency: input.currency, timezone: input.timezone } }, tx);
-      return { school, ownerId: owner.id, billing: { billingMode: input.billingMode, currency: input.currency, studentRate: input.studentRate, flatRate: input.flatRate, graceDays: input.graceDays, trialDays: input.trialDays }, messaging: { smsBalance: 0, whatsappBalance: 0 } };
+      return { school, ownerId: owner.id, leadership: leadershipAccounts, billing: { billingMode: input.billingMode, currency: input.currency, studentRate: input.studentRate, flatRate: input.flatRate, graceDays: input.graceDays, trialDays: input.trialDays }, messaging: { smsBalance: 0, whatsappBalance: 0 } };
     });
   } catch (error) {
     const code = (error as { code?: string }).code;

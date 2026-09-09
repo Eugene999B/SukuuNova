@@ -64,6 +64,8 @@ Shared navigation, typography, spacing, forms, tables, cards, status indicators,
 
 School onboarding and lifecycle, plans/subscriptions, platform billing, support, platform audit, school investigation, controlled impersonation and operational controls.
 
+School provisioning can also create separate Principal and Administrator accounts. Their generated temporary passwords appear only in the no-store provisioning response and the handoff panel; every new leadership account must replace its password at first login. Provisioning validates distinct leadership emails and the school timezone, creates accounts, role assignments, school settings, billing configuration, messaging wallet and audits in one tenant transaction, then links to School 360 with a first-setup checklist. Reusing a school login code never deletes the existing login directory.
+
 ### School administration
 
 School profile, school code/login identity, academic years, terms, calendar, roles, permissions, staff, students, guardians, houses, classes, subjects, teacher assignments, settings and appearance.
