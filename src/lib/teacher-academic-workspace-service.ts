@@ -11,6 +11,7 @@ import { hasPermission } from "./rbac";
 const WORK_KINDS = ["Classwork", "Homework", "Exercise", "Participation", "Quiz", "Exam"] as const;
 type WorkKind = typeof WORK_KINDS[number];
 type MarkMode = "manual" | "auto" | "review";
+type AttemptPolicy = "highest" | "latest";
 
 async function assertTeacherCanUseContext(tx: TenantDb, schoolId: string, teacherId: string, classId: string, subjectId: string) {
   const canAll = await hasPermission(tx, teacherId, "scores:write:all");
@@ -51,7 +52,7 @@ export async function getTeacherAcademicRoster(tx: TenantDb, input: { schoolId: 
   if (!term) throw new AppError("Term not found.", 404, "NOT_FOUND");
   const [students, works, assessments, notes] = await Promise.all([
     tx.student.findMany({ where: { schoolId: input.schoolId, classId: input.classId, status: "active" }, select: { id: true, name: true, admissionNo: true }, orderBy: { name: "asc" } }),
-    tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"assessmentId","title","kind","workDate","weekNumber","workNumber","maxScore","markingMode","status","dueAt" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "workDate" DESC,"workNumber" ASC`, input.schoolId, input.classId, input.subjectId, input.termId),
+    tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"assessmentId","title","kind","workDate","weekNumber","workNumber","maxScore","markingMode","status","dueAt","attemptLimit","attemptScorePolicy" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "workDate" DESC,"workNumber" ASC`, input.schoolId, input.classId, input.subjectId, input.termId),
     tx.assessment.findMany({ where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, termId: input.termId }, select: { id: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { id: true, studentId: true, value: true, status: true, enteredAt: true } } }, orderBy: { name: "asc" } }),
     tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"title","weekNumber","status","publishedAt","content" FROM "TeacherAcademicNote" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "updatedAt" DESC`, input.schoolId, input.classId, input.subjectId, input.termId),
   ]);
@@ -61,7 +62,7 @@ export async function getTeacherAcademicRoster(tx: TenantDb, input: { schoolId: 
 export async function createTeacherAcademicWork(tx: TenantDb, input: {
   schoolId: string; teacherId: string; termId: string; classId: string; subjectId: string;
   kind: WorkKind; title: string; instructions?: string; workDate: string; weekNumber: number; workNumber: number;
-  maxScore: number; markingMode: MarkMode; dueAt?: string | null; answerGuide?: unknown; questionList?: Array<{ type: string; prompt: string; points: number; options?: string[]; acceptedAnswers?: string[] }>;
+  maxScore: number; markingMode: MarkMode; attemptLimit?: number; attemptScorePolicy?: AttemptPolicy; dueAt?: string | null; answerGuide?: unknown; questionList?: Array<{ type: string; prompt: string; points: number; options?: string[]; acceptedAnswers?: string[] }>;
 }) {
   await assertTeacherCanUseContext(tx, input.schoolId, input.teacherId, input.classId, input.subjectId);
   const term = await assertTermOpen(tx, input.schoolId, input.termId);
@@ -74,14 +75,18 @@ export async function createTeacherAcademicWork(tx: TenantDb, input: {
   if (!Number.isInteger(input.weekNumber) || input.weekNumber < 1 || input.weekNumber > 60) throw new AppError("Week must be between 1 and 60.", 400, "INVALID_WEEK");
   if (!Number.isInteger(input.workNumber) || input.workNumber < 1 || input.workNumber > 50) throw new AppError("Work number must be between 1 and 50.", 400, "INVALID_WORK_NUMBER");
   if (!Number.isFinite(input.maxScore) || input.maxScore <= 0 || input.maxScore > 100000) throw new AppError("Maximum mark must be positive.", 400, "INVALID_MAX_SCORE");
+  const attemptLimit = input.attemptLimit ?? 1;
+  const attemptScorePolicy = input.attemptScorePolicy ?? "highest";
+  if (!Number.isInteger(attemptLimit) || attemptLimit < 1 || attemptLimit > 10) throw new AppError("Attempt limit must be between 1 and 10.", 400, "INVALID_ATTEMPT_LIMIT");
+  if (!["highest", "latest"].includes(attemptScorePolicy)) throw new AppError("Attempt score policy must keep either the highest or latest graded attempt.", 400, "INVALID_ATTEMPT_POLICY");
   const id = `taw_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
-  await tx.$executeRawUnsafe(`INSERT INTO "TeacherAcademicWork"("id","schoolId","termId","classId","subjectId","teacherId","kind","title","instructions","workDate","weekNumber","workNumber","maxScore","markingMode","answerGuide","dueAt","status") VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::date,$11,$12,$13,$14,$15::jsonb,$16::timestamptz,'draft')`, id, input.schoolId, input.termId, input.classId, input.subjectId, input.teacherId, input.kind, input.title.trim(), input.instructions?.trim() || null, input.workDate, input.weekNumber, input.workNumber, input.maxScore, input.markingMode, JSON.stringify(input.answerGuide ?? null), input.dueAt ?? null);
+  await tx.$executeRawUnsafe(`INSERT INTO "TeacherAcademicWork"("id","schoolId","termId","classId","subjectId","teacherId","kind","title","instructions","workDate","weekNumber","workNumber","maxScore","markingMode","attemptLimit","attemptScorePolicy","answerGuide","dueAt","status") VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::date,$11,$12,$13,$14,$15,$16,$17::jsonb,$18::timestamptz,'draft')`, id, input.schoolId, input.termId, input.classId, input.subjectId, input.teacherId, input.kind, input.title.trim(), input.instructions?.trim() || null, input.workDate, input.weekNumber, input.workNumber, input.maxScore, input.markingMode, attemptLimit, attemptScorePolicy, JSON.stringify(input.answerGuide ?? null), input.dueAt ?? null);
   for (let i = 0; i < (input.questionList ?? []).length; i += 1) {
     const q = input.questionList![i];
     const qId = `taq_${randomUUID().replaceAll("-", "").slice(0, 24)}`;
     await tx.$executeRawUnsafe(`INSERT INTO "TeacherAcademicQuestion"("id","schoolId","workId","position","type","prompt","points","options","acceptedAnswers") VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb)`, qId, input.schoolId, id, i + 1, q.type.slice(0, 40), q.prompt.trim().slice(0, 4000), q.points, JSON.stringify(q.options ?? []), JSON.stringify(q.acceptedAnswers ?? []));
   }
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.teacherId, action: "academic_work.created", entityType: "TeacherAcademicWork", entityId: id, after: { ...input, id } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.teacherId, action: "academic_work.created", entityType: "TeacherAcademicWork", entityId: id, after: { ...input, attemptLimit, attemptScorePolicy, id } });
   return { id };
 }
 
