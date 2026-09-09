@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ArrowRight, type LucideIcon } from "lucide-react";
 import "./settings-hub.css";
 
@@ -31,7 +32,7 @@ export function SettingsHero({ eyebrow, title, description, contextLabel, contex
 export function SettingsSection({ title, description, children }: {
   title: string;
   description?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="settings-hub-section">
