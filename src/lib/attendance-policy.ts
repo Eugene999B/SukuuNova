@@ -40,6 +40,7 @@ export const attendancePolicySchema = z.object({
 export type AttendancePolicy = z.infer<typeof attendancePolicySchema>;
 
 export type AttendancePolicyState = AttendancePolicy & {
+  configured: boolean;
   timezone: string;
   expectedResumptionTime: string;
   attendanceGraceMinutes: number;
@@ -87,9 +88,10 @@ export async function readAttendancePolicy(tx: TenantDb, schoolId: string): Prom
     }),
   ]);
 
-  const configured = policyFromAudit(revision?.after) ?? DEFAULT_POLICY;
+  const storedPolicy = policyFromAudit(revision?.after);
   return {
-    ...configured,
+    ...(storedPolicy ?? DEFAULT_POLICY),
+    configured: Boolean(storedPolicy),
     timezone: settings?.timezone || "Africa/Accra",
     expectedResumptionTime: settings?.expectedResumptionTime || "08:00",
     attendanceGraceMinutes: settings?.attendanceGraceMinutes ?? 0,
@@ -136,6 +138,9 @@ export function assertAutomatedAttendanceWindow(
   target: "staff" | "student",
   timestamp: Date,
 ) {
+  // Existing schools keep their historical behaviour until leadership explicitly
+  // saves the new policy. Once configured, the verification windows are authoritative.
+  if (!policy.configured) return automatedAttendanceWindow(policy, target, timestamp);
   const state = automatedAttendanceWindow(policy, target, timestamp);
   if (state.open) return state;
   if (state.beforeOpen) {
