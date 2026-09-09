@@ -2,17 +2,26 @@ export const DEFAULT_PERMISSIONS = [
   "students:read","students:write","students:delete","finance:read","finance:write","finance:approve","payroll:view_own","payroll:manage","settings:manage_roles","settings:manage_school","reports:generate","users:read","users:write","audit:read","calendar:manage","classes:manage","attendance:record","attendance:record_all","attendance:record_assigned","attendance:record_staff","attendance:view_own","attendance:review","attendance:display","attendance:staff_scan","attendance:pickup_approve","scores:write:assigned","scores:write:all","invoices:create","payments:record","payments:reverse","report_cards:submit","report_cards:approve","report_cards:view","parents:read_linked","roles:create_custom","visitors:log","templates:manage","transport:manage","transport:view","feeding:manage","exams:manage","exams:take","library:manage","library:borrow","assets:manage","fees:adjust","fees:approve","recruitment:manage","analytics:view","offline:sync","broadcast:emergency_send","risk_flags:view","ai_drafts:accept","lesson_plans:manage","lesson_plans:review","homework:manage_assigned","homework:review","academic_readiness:view","guardian_alerts:view","guardian_alerts:manage","communications:manage","exports:students","exports:staff","exports:attendance","exports:finance","exports:gradebook","identity_cards:manage","support:create","support:view_own","support:manage"
 ] as const;
 export type PermissionKey=(typeof DEFAULT_PERMISSIONS)[number];
+
 const SUPPORT_STAFF_PERMISSIONS:readonly PermissionKey[]=["support:create","support:view_own"];
-const LEADERSHIP_PERMISSIONS:readonly PermissionKey[]=[
-  "students:read","finance:read","payroll:view_own","settings:manage_school","reports:generate","users:read","audit:read","calendar:manage","classes:manage","attendance:record","attendance:record_all","attendance:record_staff","attendance:view_own","attendance:review","attendance:display","attendance:staff_scan","scores:write:all","report_cards:submit","report_cards:approve","report_cards:view","identity_cards:manage","exams:manage","library:manage","transport:view","feeding:manage","analytics:view","risk_flags:view","exports:students","exports:staff","exports:attendance","exports:finance","exports:gradebook","lesson_plans:review","homework:review","academic_readiness:view","guardian_alerts:view","guardian_alerts:manage","support:create","support:view_own","support:manage"
+
+// Owner remains the absolute school authority. Administrator and Principal are
+// deliberately near-owner operational roles, but destructive student deletion is
+// reserved for an Owner unless the Owner explicitly grants it as a user override.
+const NEAR_OWNER_LEADERSHIP_PERMISSIONS:readonly PermissionKey[]=DEFAULT_PERMISSIONS.filter((permission)=>permission!=="students:delete");
+
+const VICE_LEADERSHIP_PERMISSIONS:readonly PermissionKey[]=[
+  "students:read","students:write","finance:read","finance:write","payroll:view_own","settings:manage_school","reports:generate","users:read","users:write","audit:read","calendar:manage","classes:manage","attendance:record","attendance:record_all","attendance:record_staff","attendance:view_own","attendance:review","attendance:display","attendance:staff_scan","attendance:pickup_approve","scores:write:all","invoices:create","payments:record","payments:reverse","report_cards:submit","report_cards:approve","report_cards:view","visitors:log","templates:manage","transport:manage","transport:view","feeding:manage","exams:manage","library:manage","assets:manage","fees:adjust","fees:approve","recruitment:manage","analytics:view","broadcast:emergency_send","risk_flags:view","ai_drafts:accept","lesson_plans:review","homework:review","academic_readiness:view","guardian_alerts:view","guardian_alerts:manage","communications:manage","exports:students","exports:staff","exports:attendance","exports:finance","exports:gradebook","identity_cards:manage","support:create","support:view_own","support:manage"
 ];
 const ACADEMIC_COORDINATOR_PERMISSIONS:readonly PermissionKey[]=["students:read","users:read","reports:generate","calendar:manage","classes:manage","attendance:record","attendance:record_all","attendance:view_own","attendance:display","attendance:review","attendance:staff_scan","scores:write:all","report_cards:submit","report_cards:approve","report_cards:view","identity_cards:manage","exams:manage","analytics:view","risk_flags:view","lesson_plans:review","homework:review","academic_readiness:view","guardian_alerts:view","guardian_alerts:manage",...SUPPORT_STAFF_PERMISSIONS];
 const DEPARTMENT_HEAD_PERMISSIONS:readonly PermissionKey[]=["students:read","reports:generate","attendance:record","attendance:record_all","attendance:view_own","attendance:review","attendance:staff_scan","scores:write:all","report_cards:submit","report_cards:view","identity_cards:manage","exams:manage","analytics:view","risk_flags:view","lesson_plans:review","homework:review","academic_readiness:view","guardian_alerts:view",...SUPPORT_STAFF_PERMISSIONS];
 const TEACHING_CORE=["lesson_plans:manage","homework:manage_assigned","scores:write:assigned","attendance:view_own","attendance:staff_scan","report_cards:view","exams:manage","exams:take","offline:sync","ai_drafts:accept"] as const;
+
 export const DEFAULT_ROLE_PERMISSIONS:Record<string,readonly PermissionKey[]>={
   Owner: DEFAULT_PERMISSIONS,
-  Principal: [...LEADERSHIP_PERMISSIONS,"payments:reverse"],
-  "Vice Principal": [...LEADERSHIP_PERMISSIONS,"payments:reverse"],
+  Administrator: NEAR_OWNER_LEADERSHIP_PERMISSIONS,
+  Principal: NEAR_OWNER_LEADERSHIP_PERMISSIONS,
+  "Vice Principal": VICE_LEADERSHIP_PERMISSIONS,
   "Academic Coordinator": ACADEMIC_COORDINATOR_PERMISSIONS,
   "Department Head": DEPARTMENT_HEAD_PERMISSIONS,
   Accountant: ["students:read","finance:read","finance:write","finance:approve","invoices:create","payments:record","payments:reverse","reports:generate","payroll:view_own","feeding:manage","fees:adjust","fees:approve","analytics:view","exports:students","exports:finance",...SUPPORT_STAFF_PERMISSIONS],
