@@ -31,5 +31,12 @@ export default async function PayslipPrintPage({ params }: { params: Promise<{ i
   }).catch(() => null);
 
   if (!data) notFound();
-  return <AppShell universe="school" title="Payslip Print Studio" subtitle="Payslip." active="Payroll" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}><PayslipPrintStudio data={data} /></AppShell>;
+  return (
+    <AppShell universe="school" title="Payslip Print Studio" subtitle="Payslip." active="Payroll" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <a className="button primary" href={`/api/phase2/payroll/payslips/${encodeURIComponent(id)}/pdf?download=1`}>Download PDF</a>
+      </div>
+      <PayslipPrintStudio data={data} />
+    </AppShell>
+  );
 }
