@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookHeart, BookOpen, BookmarkCheck, Download, Heart, LibraryBig, LockKeyhole, Search, Sparkles } from "lucide-react";
 
-type Row = Record<string, unknown>;
+type Row = Record<string, unknown> & { id?: string };
 const text = (value: unknown, fallback = "—") => typeof value === "string" && value.trim() ? value : fallback;
 const number = (value: unknown) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; };
 const rows = (value: unknown): Row[] => Array.isArray(value) ? value.filter((item): item is Row => Boolean(item) && typeof item === "object") : [];
