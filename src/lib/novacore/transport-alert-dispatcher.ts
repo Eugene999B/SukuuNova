@@ -24,11 +24,9 @@ type AlertDetails = {
 
 type NotificationChannel = "sms" | "whatsapp";
 
-const TEMPLATE_BY_TYPE: Record<AlertRow["type"], NotificationTemplateKey> = {
-  approaching: "transport_approaching",
-  arriving: "transport_arriving",
-  arrived: "transport_arrived",
-};
+// Reuse the existing approved transport template family rather than inventing a second
+// WhatsApp contract. Variable 2 carries the precise approach/arrival state.
+const TRANSPORT_TEMPLATE: NotificationTemplateKey = "transport_boarding";
 
 function details(value: Prisma.JsonValue): AlertDetails {
   if (!value || Array.isArray(value) || typeof value !== "object") return {};
@@ -118,8 +116,7 @@ export async function dispatchQueuedTransportAlerts(tx: TenantDb, schoolId: stri
       continue;
     }
 
-    const templateKey = TEMPLATE_BY_TYPE[alert.type];
-    const channels = schoolChannels.filter((channel) => channel !== "whatsapp" || hasWhatsAppTemplate(settings?.whatsappTemplateConfig, templateKey));
+    const channels = schoolChannels.filter((channel) => channel !== "whatsapp" || hasWhatsAppTemplate(settings?.whatsappTemplateConfig, TRANSPORT_TEMPLATE));
     if (!channels.length) {
       skipped += 1;
       await tx.$executeRawUnsafe(
@@ -138,7 +135,7 @@ export async function dispatchQueuedTransportAlerts(tx: TenantDb, schoolId: stri
       recipientId: guardian.id,
       recipientPhone: guardian.phone,
       body: messageBody(alert.type, student.name, info),
-      templateKey,
+      templateKey: TRANSPORT_TEMPLATE,
       templateVariables: {
         "1": student.name,
         "2": eventLabel(alert.type),
