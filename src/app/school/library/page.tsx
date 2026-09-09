@@ -9,5 +9,5 @@ export default async function LibraryPage() {
   const session = await requireSchoolSession();
   const school = await withTenant(session.schoolId, tx => tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }));
   if (!school) notFound();
-  return <AppShell universe="school" title="Learning Library" subtitle="Reading, resources, circulation and digital access." active="Library" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><div className="school-life-surface"><LibraryStudio schoolName={school.name}/></div></AppShell>;
+  return <AppShell universe="school" title="Learning Library" subtitle="Reading, resources, circulation and digital access." active="Library" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><div className="school-life-surface library-simple-shell"><LibraryStudio schoolName={school.name}/></div></AppShell>;
 }
