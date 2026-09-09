@@ -13,6 +13,14 @@ export type GuardianFamilyChild = {
   isPrimary: boolean;
 };
 
+export function filterGuardianReleasedScores<T extends { assessment: { termId: string } }>(
+  scores: T[],
+  reportCards: Array<{ termId: string }>
+) {
+  const releasedTerms = new Set(reportCards.map((report) => report.termId));
+  return scores.filter((score) => releasedTerms.has(score.assessment.termId));
+}
+
 export async function getGuardianFamilyContext(tx: TenantDb, input: {
   schoolId: string;
   guardianId: string;
