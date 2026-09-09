@@ -121,7 +121,7 @@ export async function matchFaceAttendance(
     return { status: "manual_review" as const, reviewId: review.id, confidence };
   }
 
-  const event = await recordAttendance(tx, { schoolId: input.schoolId, actorId: input.actorId, target: enrollment.studentId ? { studentId: enrollment.studentId } : { staffId: enrollment.staffId! }, type: input.type, method: "face", confidenceScore: confidence, deviceId: input.deviceId, periodId: input.periodId, timestamp: input.timestamp });
+  const event = await recordAttendance(tx, { schoolId: input.schoolId, actorId: input.actorId, target: enrollment.studentId ? { studentId: enrollment.studentId } : { staffId: enrollment.staffId! }, type: input.type, method: "face", confidenceScore: confidence, deviceId: input.deviceId, deviceAuthenticated: input.deviceAuthenticated, periodId: input.periodId, timestamp: input.timestamp });
   return { status: "recorded" as const, event };
 }
 
