@@ -11,10 +11,45 @@ import {
 } from "./homework-academic-bridge";
 
 const identity = { id: z.string().min(1).max(100), expectedUpdatedAt: z.string().datetime(), title: z.string().trim().min(3).max(160) };
+const optionalText = (max: number) => z.string().trim().max(max).optional();
+export const lessonResourceSchema = z.object({
+  label: z.string().trim().min(1).max(160),
+  url: z.string().trim().url().max(2000),
+});
+export const lessonPlanFieldsSchema = z.object({
+  objective: optionalText(500),
+  content: z.string().trim().min(10).max(12000),
+  topic: optionalText(160),
+  subTopic: optionalText(160),
+  curriculumObjective: optionalText(1200),
+  learningOutcomes: optionalText(3000),
+  priorKnowledge: optionalText(2000),
+  materials: optionalText(3000),
+  introduction: optionalText(4000),
+  development: optionalText(12000),
+  differentiatedActivities: optionalText(5000),
+  assessment: optionalText(5000),
+  conclusion: optionalText(3000),
+  homework: optionalText(3000),
+  resources: z.array(lessonResourceSchema).max(20).default([]),
+});
+export type LessonPlanFields = z.infer<typeof lessonPlanFieldsSchema>;
+
+export function assertLessonSubmissionReady(input: LessonPlanFields) {
+  const missing = [
+    ["topic", input.topic],
+    ["learning outcomes", input.learningOutcomes],
+    ["development / learning activities", input.development],
+    ["assessment", input.assessment],
+  ].filter(([, value]) => !String(value ?? "").trim()).map(([label]) => label);
+  if (missing.length) throw new AppError(`Complete ${missing.join(", ")} before submitting this lesson plan for review.`, 400, "LESSON_PLAN_INCOMPLETE");
+}
+
 export const lessonEditSchema = z.object({
-  ...identity, objective: z.string().trim().max(500).optional(),
-  content: z.string().trim().min(10).max(12000), plannedDate: z.coerce.date(),
-  status: z.enum(["draft", "submitted"])
+  ...identity,
+  ...lessonPlanFieldsSchema.shape,
+  plannedDate: z.coerce.date(),
+  status: z.enum(["draft", "submitted"]),
 });
 export const homeworkEditSchema = z.object({
   ...identity, instructions: z.string().trim().min(5).max(12000),
@@ -30,7 +65,6 @@ async function editableWork(tx: TenantDb, actor: Actor, kind: "lesson" | "homewo
   const status = kind === "lesson" ? Prisma.sql`"status"` : Prisma.sql`"assignmentStatus"`;
   const seeds = await tx.$queryRaw<Array<{ termId: string | null }>>`SELECT "termId" FROM ${table} WHERE "id"=${id} AND "schoolId"=${actor.schoolId}`;
   if (!seeds[0]) throw new AppError("Academic work not found in this school.", 404, "NOT_FOUND");
-  // Match the workflow and term-lock ordering used by the status endpoints.
   if (seeds[0].termId) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"term-mutation:" + actor.schoolId + ":" + seeds[0].termId}))`;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${(kind === "lesson" ? "lesson-plan-workflow:" : "homework-workflow:") + actor.schoolId + ":" + id}))`;
   const rows = await tx.$queryRaw<Work[]>`SELECT "id","teacherId","classId","subjectId","termId",${status} AS "status","updatedAt","title" FROM ${table} WHERE "id"=${id} AND "schoolId"=${actor.schoolId}`;
@@ -54,9 +88,35 @@ async function editableWork(tx: TenantDb, actor: Actor, kind: "lesson" | "homewo
 
 export async function editLessonPlan(tx: TenantDb, actor: Actor, input: z.infer<typeof lessonEditSchema>) {
   const current = await editableWork(tx, actor, "lesson", input.id, input.expectedUpdatedAt, input.plannedDate);
-  const changed = await tx.$executeRaw`UPDATE "LessonPlan" SET "title"=${input.title},"objective"=${input.objective ?? null},"content"=${input.content},"plannedDate"=${input.plannedDate},"status"=${input.status},"updatedAt"=GREATEST(CURRENT_TIMESTAMP,"updatedAt" + INTERVAL '1 millisecond') WHERE "id"=${input.id} AND "schoolId"=${actor.schoolId} AND "updatedAt"=${current.updatedAt}`;
+  if (input.status === "submitted") assertLessonSubmissionReady(input);
+  const changed = await tx.$executeRaw`
+    UPDATE "LessonPlan"
+    SET "title"=${input.title},
+        "objective"=${input.objective ?? null},
+        "content"=${input.content},
+        "topic"=${input.topic ?? null},
+        "subTopic"=${input.subTopic ?? null},
+        "curriculumObjective"=${input.curriculumObjective ?? null},
+        "learningOutcomes"=${input.learningOutcomes ?? null},
+        "priorKnowledge"=${input.priorKnowledge ?? null},
+        "materials"=${input.materials ?? null},
+        "introduction"=${input.introduction ?? null},
+        "development"=${input.development ?? null},
+        "differentiatedActivities"=${input.differentiatedActivities ?? null},
+        "assessment"=${input.assessment ?? null},
+        "conclusion"=${input.conclusion ?? null},
+        "homework"=${input.homework ?? null},
+        "resources"=${JSON.stringify(input.resources ?? [])}::jsonb,
+        "plannedDate"=${input.plannedDate},
+        "status"=${input.status},
+        "submittedAt"=CASE WHEN ${input.status}='submitted' THEN CURRENT_TIMESTAMP ELSE "submittedAt" END,
+        "reviewerId"=CASE WHEN ${input.status}='submitted' THEN NULL ELSE "reviewerId" END,
+        "reviewNote"=CASE WHEN ${input.status}='submitted' THEN NULL ELSE "reviewNote" END,
+        "reviewedAt"=CASE WHEN ${input.status}='submitted' THEN NULL ELSE "reviewedAt" END,
+        "updatedAt"=GREATEST(CURRENT_TIMESTAMP,"updatedAt" + INTERVAL '1 millisecond')
+    WHERE "id"=${input.id} AND "schoolId"=${actor.schoolId} AND "updatedAt"=${current.updatedAt}`;
   if (changed !== 1) throw new AppError("This work changed. Refresh before editing again.", 409, "CONCURRENT_UPDATE");
-  await appendSchoolAudit(tx, { ...actor, action: "lesson_plan.content_updated", entityType: "LessonPlan", entityId: input.id, before: { title: current.title, status: current.status }, after: { title: input.title, status: input.status } });
+  await appendSchoolAudit(tx, { ...actor, action: "lesson_plan.content_updated", entityType: "LessonPlan", entityId: input.id, before: { title: current.title, status: current.status }, after: { title: input.title, status: input.status, topic: input.topic ?? null } });
   return { ok: true };
 }
 
