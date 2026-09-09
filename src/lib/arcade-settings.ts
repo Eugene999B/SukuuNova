@@ -2,6 +2,7 @@ import type { TenantDb } from "./db";
 import { ARCADE_GAME_CATALOG, type ArcadeAgeBand, type ArcadeGameDefinition, type ArcadeStandardBand } from "./arcade-catalog";
 import { canGenerateArcadeContent } from "./arcade-content";
 import { canGenerateArcadeInteractionContent } from "./arcade-interaction-content";
+import { canGenerateArcadeResponseContent } from "./arcade-response-content";
 
 type SettingRow = {
   gameKey: string;
@@ -39,7 +40,7 @@ export async function effectiveArcadeCatalog(tx: TenantDb, schoolId: string): Pr
   const settings = await arcadeSchoolSettings(tx, schoolId);
   return ARCADE_GAME_CATALOG.map((definition) => {
     const row = settings.get(definition.gameKey);
-    const contentReady = canGenerateArcadeContent(definition.gameKey) || canGenerateArcadeInteractionContent(definition.gameKey);
+    const contentReady = canGenerateArcadeContent(definition.gameKey) || canGenerateArcadeInteractionContent(definition.gameKey) || canGenerateArcadeResponseContent(definition.gameKey);
     const overrideLength = row?.defaultRoundLength ?? null;
     const effectiveRoundLength = overrideLength && definition.roundLengths.includes(overrideLength) ? overrideLength : definition.defaultRoundLength;
     return {
