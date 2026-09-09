@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import "./finance-evidence-dock-simple.css";
 
 export function FinanceEvidenceDock() {
   return (
