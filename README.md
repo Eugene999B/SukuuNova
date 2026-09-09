@@ -120,6 +120,8 @@ School meal operations, planning and daily service information.
 
 Physical and digital catalogue, borrowing, returns, due dates and overdue tracking. Digital resources may include textbooks, eBooks, PDFs, worksheets, past papers, audio, video and other documents.
 
+The library catalogue and legacy operations API share one circulation service. Library managers see school circulation; borrower-only accounts are limited to linked children or assigned classes. Named learner/material selectors, configurable loan duration, server-calculated overdue states and return controls complete the circulation desk. Issue/return retries preserve copy counts, and catalogue/circulation changes are audited. Unsafe legacy resource links are suppressed. Loan history currently returns the latest 300 records; full historical pagination and copy-level accession tracking remain future work.
+
 ### Assets and inventory
 
 Assets, stock/inventory, assignments, maintenance and retirement/disposal records.

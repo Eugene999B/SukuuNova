@@ -1,5 +1,15 @@
 # Astra progress
 
+## Library circulation batch
+- Unified current and legacy library APIs under one permission-scoped service.
+- Borrower-only accounts see linked children/assigned classes; managers retain school circulation.
+- Book/learner selectors, working loan duration and returns, accurate zero availability.
+- Idempotent issue/return retries, common book-lock order, active learner checks and circulation/catalogue audits.
+- Resource URL validation suppresses unsafe stored links; nonexistent catalogue updates return 404.
+- Fixed shared form lifetime and double-click handling in SchoolLifeStudio.
+- Seven library regressions added. Full GitHub verification pending; no schema changes.
+- Student-specific portal mapping, library history pagination, accession-level copies and production browser verification remain outstanding.
+
 ## Learning Arcade batch
 - Three reusable practice engines: Math Sprint, Word Builder and Logic Lab; five-question rounds with explanatory feedback.
 - Persistent child-specific drafts, server marking, idempotent completion, XP/stars/levels/badges, recent results and timezone-aware streak.
