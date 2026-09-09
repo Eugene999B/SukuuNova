@@ -27,6 +27,15 @@ function policy(overrides: Partial<AttendancePolicyState> = {}): AttendancePolic
   };
 }
 
+function capturedError(run: () => unknown) {
+  try {
+    run();
+    return null;
+  } catch (error) {
+    return error;
+  }
+}
+
 describe("attendance policy", () => {
   it("keeps legacy schools unrestricted until leadership explicitly saves the new window policy", () => {
     const legacy = policy({ configured: false });
@@ -40,11 +49,13 @@ describe("attendance policy", () => {
   });
 
   it("rejects automated verification before opening time", () => {
-    expect(() => assertAutomatedAttendanceWindow(policy(), "staff", new Date("2026-09-09T05:59:00.000Z"))).toThrowError(expect.objectContaining({ code: "ATTENDANCE_WINDOW_NOT_OPEN", status: 409 }));
+    const error = capturedError(() => assertAutomatedAttendanceWindow(policy(), "staff", new Date("2026-09-09T05:59:00.000Z")));
+    expect(error).toMatchObject({ code: "ATTENDANCE_WINDOW_NOT_OPEN", status: 409 });
   });
 
   it("rejects automated verification after closing time", () => {
-    expect(() => assertAutomatedAttendanceWindow(policy(), "staff", new Date("2026-09-09T09:31:00.000Z"))).toThrowError(expect.objectContaining({ code: "ATTENDANCE_WINDOW_CLOSED", status: 409 }));
+    const error = capturedError(() => assertAutomatedAttendanceWindow(policy(), "staff", new Date("2026-09-09T09:31:00.000Z")));
+    expect(error).toMatchObject({ code: "ATTENDANCE_WINDOW_CLOSED", status: 409 });
   });
 
   it("uses expected arrival plus grace minutes as the late cutoff", () => {
