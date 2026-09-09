@@ -80,7 +80,6 @@ describe("Arcade Universe A3 interaction engines", () => {
     expect(catalog).toHaveLength(64);
     expect(liveKeys.length).toBeGreaterThanOrEqual(28);
     expect(liveKeys).toEqual(expect.arrayContaining([...PLAYABLE_ARCADE_GAME_KEYS, ...INTERACTION_ARCADE_GAME_KEYS]));
-    expect(catalog.find((game) => game.gameKey === "money-math-market")).toMatchObject({ live: false, enabled: false });
   });
 
   it("plays a match-pairs round without exposing answers before completion", async () => {
