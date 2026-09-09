@@ -4,9 +4,10 @@ import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 
 describe("message enqueue idempotency", () => {
-  it("returns the same queued message for the same logical event", async () => {
+  it("returns the same queued message for the same logical event without charging twice", async () => {
     const fixture = await createTenantFixture();
     await withTenant(fixture.schoolId, async (tx) => {
+      await tx.$executeRawUnsafe(`INSERT INTO "PlatformMessagingWallet" ("schoolId","smsBalance","whatsappBalance","status","updatedAt") VALUES ($1,10,0,'active',CURRENT_TIMESTAMP)`, fixture.schoolId);
       const input = {
         schoolId: fixture.schoolId,
         recipientType: "guardian" as const,
@@ -25,6 +26,8 @@ describe("message enqueue idempotency", () => {
       expect(first).toHaveLength(1);
       expect(second[0]?.id).toBe(first[0]?.id);
       expect(await tx.message.count({ where: { schoolId: fixture.schoolId, idempotencyKey: { contains: "payment-created:payment-1:v1" } } })).toBe(1);
+      const wallet = await tx.$queryRawUnsafe<Array<{ smsBalance: number }>>(`SELECT "smsBalance" FROM "PlatformMessagingWallet" WHERE "schoolId"=$1`, fixture.schoolId);
+      expect(wallet[0]?.smsBalance).toBe(9);
     });
   });
 });

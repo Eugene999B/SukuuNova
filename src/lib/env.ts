@@ -35,8 +35,16 @@ const optionalSchema = z.object({
   AWS_REGION: optionalString,
   AWS_ACCESS_KEY_ID: optionalString,
   AWS_SECRET_ACCESS_KEY: optionalString,
+  ARKESEL_API_KEY: optionalString,
+  ARKESEL_SMS_URL: optionalUrl,
+  SAILUP_API_KEY: optionalString,
+  SAILUP_SMS_URL: optionalUrl,
+  HUBTEL_CLIENT_ID: optionalString,
+  HUBTEL_CLIENT_SECRET: optionalString,
+  HUBTEL_SMS_URL: optionalUrl,
   SMS_PROVIDER_URL: optionalUrl,
   SMS_PROVIDER_TOKEN: optionalString,
+  SMS_SENDER_ID: optionalString,
   EMAIL_PROVIDER_URL: optionalUrl,
   EMAIL_PROVIDER_TOKEN: optionalString,
   RISK_SCAN_CRON_SECRET: secretAtLeast(32),
@@ -77,6 +85,10 @@ export function validateRuntimeEnv() {
 
   if (optional.SMS_PROVIDER_TOKEN && !optional.SMS_PROVIDER_URL) {
     throw new Error("Invalid production environment configuration: SMS_PROVIDER_URL is required when SMS_PROVIDER_TOKEN is configured.");
+  }
+
+  if ((optional.HUBTEL_CLIENT_ID && !optional.HUBTEL_CLIENT_SECRET) || (!optional.HUBTEL_CLIENT_ID && optional.HUBTEL_CLIENT_SECRET)) {
+    throw new Error("Invalid production environment configuration: HUBTEL_CLIENT_ID and HUBTEL_CLIENT_SECRET must be configured together.");
   }
 
   if (optional.EMAIL_PROVIDER_URL && !optional.EMAIL_PROVIDER_TOKEN) {
