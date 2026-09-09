@@ -9,6 +9,8 @@ export type TimetableQualityPlacement = {
 
 export type TimetableQuality = {
   placements: number;
+  targetPlacements: number | null;
+  missingPlacements: number;
   classConflicts: number;
   teacherConflicts: number;
   roomConflicts: number;
@@ -26,7 +28,7 @@ function countDuplicates(keys: string[]) {
   return duplicates;
 }
 
-export function scoreTimetableQuality(placements: TimetableQualityPlacement[]): TimetableQuality {
+export function scoreTimetableQuality(placements: TimetableQualityPlacement[], targetPlacements?: number): TimetableQuality {
   const valid = placements.filter((placement) =>
     placement.classId
     && placement.subjectId
@@ -61,10 +63,14 @@ export function scoreTimetableQuality(placements: TimetableQualityPlacement[]): 
     for (let period = unique[0]; period <= unique[unique.length - 1]; period += 1) if (!occupied.has(period)) teacherIdleGaps += 1;
   }
 
+  const target = targetPlacements == null ? null : Math.max(0, Math.floor(targetPlacements));
+  const missingPlacements = target == null ? 0 : Math.max(0, target - valid.length);
   const hardConflicts = classConflicts + teacherConflicts + roomConflicts;
-  const score = hardConflicts * 10_000 + repeatedAssignmentDayPenalty * 10 + teacherIdleGaps;
+  const score = hardConflicts * 10_000 + missingPlacements * 1_000 + repeatedAssignmentDayPenalty * 10 + teacherIdleGaps;
   return {
     placements: valid.length,
+    targetPlacements: target,
+    missingPlacements,
     classConflicts,
     teacherConflicts,
     roomConflicts,
@@ -85,6 +91,7 @@ export function compareTimetableQuality(current: TimetableQuality, candidate: Ti
     scoreImprovementPercent: Math.round(improvement * 100) / 100,
     candidateWins: candidate.score < current.score,
     hardConflictDelta: candidate.hardConflicts - current.hardConflicts,
+    missingPlacementDelta: candidate.missingPlacements - current.missingPlacements,
     teacherIdleGapDelta: candidate.teacherIdleGaps - current.teacherIdleGaps,
     repeatedAssignmentDayDelta: candidate.repeatedAssignmentDayPenalty - current.repeatedAssignmentDayPenalty,
   };
