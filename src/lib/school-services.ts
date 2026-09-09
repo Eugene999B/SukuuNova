@@ -3,18 +3,24 @@ import { getSchoolAuthorization, requireCanAssignRoles, requireCanGrantPermissio
 import { hash } from "bcryptjs";
 import type { Prisma } from "@prisma/client";
 import { appendSchoolAudit } from "./audit";
-import { withTenant } from "./db";
+import { withTenant, type TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { requirePermission } from "./rbac";
 
-export async function createSchoolUser(input: {
+type CreateSchoolUserInput = {
   schoolId: string;
   actorId: string;
   name: string;
   email?: string;
   phone?: string;
   password: string;
-}) {
+};
+
+export async function createSchoolUser(input: CreateSchoolUserInput) {
+  return withTenant(input.schoolId, tx => createSchoolUserInTransaction(tx, input));
+}
+
+export async function createSchoolUserInTransaction(tx: TenantDb, input: CreateSchoolUserInput) {
   if (!input.email && !input.phone) {
     throw new ForbiddenError("A school user requires an email address or phone number.");
   }
@@ -22,38 +28,36 @@ export async function createSchoolUser(input: {
     throw new AppError("A new school user requires a password of 12–256 characters.", 400, "WEAK_PASSWORD");
   }
 
-  return withTenant(input.schoolId, async (tx) => {
-    await requirePermission(tx, input.actorId, "users:write");
-    const user = await tx.user.create({
-      data: {
-        schoolId: input.schoolId,
-        name: input.name.trim(),
-        email: input.email?.trim().toLowerCase(),
-        phone: input.phone?.trim(),
-        passwordHash: await hash(input.password, 12),
-        needsPasswordChange: true
-      },
-      select: {
-        id: true,
-        schoolId: true,
-        name: true,
-        email: true,
-        phone: true,
-        status: true,
-        createdAt: true
-      }
-    });
-
-    await appendSchoolAudit(tx, {
+  await requirePermission(tx, input.actorId, "users:write");
+  const user = await tx.user.create({
+    data: {
       schoolId: input.schoolId,
-      actorId: input.actorId,
-      action: "user.created",
-      entityType: "User",
-      entityId: user.id,
-      after: user
-    });
-    return user;
+      name: input.name.trim(),
+      email: input.email?.trim().toLowerCase(),
+      phone: input.phone?.trim(),
+      passwordHash: await hash(input.password, 12),
+      needsPasswordChange: true
+    },
+    select: {
+      id: true,
+      schoolId: true,
+      name: true,
+      email: true,
+      phone: true,
+      status: true,
+      createdAt: true
+    }
   });
+
+  await appendSchoolAudit(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    action: "user.created",
+    entityType: "User",
+    entityId: user.id,
+    after: user
+  });
+  return user;
 }
 
 export async function updateSchoolSettings(input: {

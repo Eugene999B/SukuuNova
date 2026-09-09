@@ -130,6 +130,8 @@ Assets, stock/inventory, assignments, maintenance and retirement/disposal record
 
 Staff records, salary structures, payroll runs, payslips, vacancies, applicants, interviews, offers and recruitment status.
 
+Recruitment uses one service for the school and legacy operations routes. Public intake checks vacancy status, deadlines, screening answers and resource links; a submission key makes retries idempotent. Reviewers can inspect applications and move candidates through stages with conflict checks. Hired candidates can become staff in one transaction using the normal account-creation and role-authority rules, including Owner protection and forced password changes. Date-only closing dates mean end of day UTC. The public form supports narrow screens and preserves retry identifiers.
+
 ### Examinations / CBT
 
 Assessments, examination schedules, mark entry, moderation, results and computer-based testing.

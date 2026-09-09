@@ -1,5 +1,15 @@
 # Astra progress
 
+## Recruitment completion batch
+- Restored missing vacancy/application metadata with a new additive migration; added unique public submission keys.
+- Unified legacy and school recruitment services; implemented candidate stage changes, conflict checks, application review and staff conversion controls.
+- Public intake validates required/choice answers, contact details, CV URLs and vacancy availability in one locked transaction. Same-key retries return one receipt.
+- Staff conversion now runs atomically with shared account creation, hiring prerequisite, role/Owner authorization, auditing and forced password change.
+- Stable public links under concurrent requests; partial vacancy edits preserve deadlines.
+- Public form retry protection, accessible inputs and responsive layout; pipeline includes legacy applied and converted candidates.
+- Eight new regressions. Full GitHub verification pending.
+- This completes a connected recruitment batch, not the entire mission. Production browser/deployment verification remains outstanding.
+
 ## Library circulation batch
 - Unified current and legacy library APIs under one permission-scoped service.
 - Borrower-only accounts see linked children/assigned classes; managers retain school circulation.
