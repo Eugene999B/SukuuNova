@@ -1,6 +1,14 @@
 import { AppError } from "./errors";
 
 export type AcademicQuestionInput = { type: string; prompt: string; points: number; options?: string[]; acceptedAnswers?: string[] };
+const canonical = (value: string) => value.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
+const distinct = (values: string[]) => new Set(values.map(canonical)).size === values.length;
+const sameSet = (left: string[], right: string[]) => {
+  const a = new Set(left.map(canonical));
+  const b = new Set(right.map(canonical));
+  return a.size === b.size && [...a].every(value => b.has(value));
+};
+
 export function validateAcademicQuestions(questions: AcademicQuestionInput[], maxScore: number, mode: string) {
   const fail = (message: string): never => { throw new AppError(message, 400, "INVALID_QUESTIONS"); };
   if (!["manual", "auto", "review"].includes(mode)) fail("Choose a supported marking mode.");
@@ -12,16 +20,28 @@ export function validateAcademicQuestions(questions: AcademicQuestionInput[], ma
   let total = 0;
   for (const [index, q] of questions.entries()) {
     const label = `Question ${index + 1}`;
-    if (!["multiple_choice", "true_false", "short_answer", "long_answer"].includes(q.type)) fail(`${label}: unsupported question type.`);
+    if (!["multiple_choice", "multiple_select", "true_false", "short_answer", "long_answer", "numeric", "fill_blank", "ordering"].includes(q.type)) fail(`${label}: unsupported question type.`);
     if (!q.prompt.trim() || q.prompt.length > 4000 || !Number.isFinite(q.points) || q.points <= 0 || q.points > 1000) fail(`${label}: supply a prompt and positive points (up to 1000).`);
     const options = (q.options ?? []).map(value => value.trim());
     const answers = (q.acceptedAnswers ?? []).map(value => value.trim());
     if ([...options, ...answers].some(value => !value || value.length > 500) || options.length > 20 || answers.length > 20) fail(`${label}: answer choices must be nonempty and at most 500 characters.`);
-    if (q.type === "multiple_choice") {
-      if (options.length < 2 || new Set(options.map(value => value.normalize("NFKC").toLowerCase())).size !== options.length) fail(`${label}: provide at least two distinct choices.`);
-      if (answers.length !== 1 || !options.includes(answers[0])) fail(`${label}: choose exactly one accepted answer from the choices.`);
+
+    if (["multiple_choice", "multiple_select", "ordering"].includes(q.type) && (options.length < 2 || !distinct(options))) fail(`${label}: provide at least two distinct choices.`);
+    if (q.type === "multiple_choice" && (answers.length !== 1 || !options.includes(answers[0]))) fail(`${label}: choose exactly one accepted answer from the choices.`);
+    if (q.type === "multiple_select") {
+      if (!answers.length || !distinct(answers) || answers.some(answer => !options.includes(answer))) fail(`${label}: accepted answers must be distinct choices from the option list.`);
     }
     if (q.type === "true_false" && (answers.length !== 1 || !["true", "false"].includes(answers[0].toLowerCase()))) fail(`${label}: the accepted answer must be true or false.`);
+    if (q.type === "numeric") {
+      if (!answers.length || answers.some(answer => !Number.isFinite(Number(answer)))) fail(`${label}: provide at least one numeric accepted answer.`);
+      if (options.length) fail(`${label}: numeric questions do not use answer choices.`);
+    }
+    if (q.type === "fill_blank") {
+      if (!q.prompt.includes("___")) fail(`${label}: include ___ in the prompt to show the blank.`);
+      if (!answers.length) fail(`${label}: provide at least one accepted answer for the blank.`);
+      if (options.length) fail(`${label}: fill-in-the-blank questions do not use answer choices.`);
+    }
+    if (q.type === "ordering" && (answers.length !== options.length || !distinct(answers) || !sameSet(options, answers))) fail(`${label}: accepted answers must contain every option exactly once in the correct order.`);
     if (mode === "auto" && (q.type === "long_answer" || (q.type === "short_answer" && !answers.length))) fail(`${label}: automatic marking requires objective questions with accepted answers.`);
     total += q.points;
   }
