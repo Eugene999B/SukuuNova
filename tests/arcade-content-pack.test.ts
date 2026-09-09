@@ -38,7 +38,7 @@ function assertQuestionQuality(questions: ArcadeQuestion[], expectedLength: numb
 }
 
 describe("Arcade Universe A2 content pack", () => {
-  it("has thirteen server-generated playable packs across difficulty 1–5", () => {
+  it("has thirteen server-generated base packs across difficulty 1–5", () => {
     expect(PLAYABLE_ARCADE_GAME_KEYS).toHaveLength(13);
     expect(new Set(PLAYABLE_ARCADE_GAME_KEYS).size).toBe(13);
     for (const game of PLAYABLE_ARCADE_GAME_KEYS) {
@@ -72,14 +72,13 @@ describe("Arcade Universe A2 content pack", () => {
     ])).toBe(4);
   });
 
-  it("reports thirteen content-ready games at runtime while preserving all 64 catalogue definitions", async () => {
+  it("keeps all thirteen A2 base packs live as the larger universe expands", async () => {
     const fixture = await createTenantFixture();
     const catalog = await withTenant(fixture.schoolId, (tx) => effectiveArcadeCatalog(tx, fixture.schoolId));
     expect(catalog).toHaveLength(64);
-    const live = catalog.filter((game) => game.live);
-    expect(live).toHaveLength(13);
-    expect(new Set(live.map((game) => game.gameKey))).toEqual(new Set(PLAYABLE_ARCADE_GAME_KEYS));
-    expect(catalog.find((game) => game.gameKey === "count-match")).toMatchObject({ live: false, enabled: false });
+    const liveKeys = new Set(catalog.filter((game) => game.live).map((game) => game.gameKey));
+    for (const gameKey of PLAYABLE_ARCADE_GAME_KEYS) expect(liveKeys.has(gameKey)).toBe(true);
+    expect(catalog.find((game) => game.gameKey === "money-math-market")).toMatchObject({ live: false, enabled: false });
   });
 
   it("plays and ranks a ten-question Times Table Turbo round for a suitable learner", async () => {
@@ -126,11 +125,11 @@ describe("Arcade Universe A2 content pack", () => {
     expect(board.rows[0]).toMatchObject({ rank: 1, studentId: fixture.studentId, displayName: "Akosua O.", bestScore: 10200, totalXp: 100, rounds: 1 });
   });
 
-  it("keeps content packs that do not yet have a renderer disabled", async () => {
+  it("keeps content packs without a supported interaction renderer disabled", async () => {
     const fixture = await setupPrimaryFive();
     await expect(withTenant(fixture.schoolId, (tx) => startArcadeRound(tx, fixture.context, {
       studentId: fixture.studentId,
-      game: "count-match",
+      game: "money-math-market",
       ageBand: "age_9_11",
     }))).rejects.toMatchObject({ code: "GAME_NOT_AVAILABLE", status: 409 });
   });
