@@ -21,7 +21,10 @@ describe("offline sync state machine", () => {
 
   it("applies an attendance operation, preserves its capture timestamp, and returns ALREADY_APPLIED on retry", async () => {
     const createdAt = new Date();
-    const capturedAt = new Date(createdAt.getTime() - 30 * 60 * 1000);
+    // The school fixture uses Africa/Accra (UTC). Keep the simulated capture on
+    // today's attendance date so this test remains deterministic around midnight.
+    const capturedAt = new Date(createdAt);
+    capturedAt.setUTCHours(0, 0, 0, 0);
     const operation = {
       clientOperationId: "offline-op-001", clientVersion: 1, baseEntityVersion: 0, entityId: studentId,
       operationType: "ATTENDANCE_RECORD" as const,
