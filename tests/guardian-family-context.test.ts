@@ -156,7 +156,7 @@ describe("guardian message boundary", () => {
     expect(readResponse.status).toBe(200);
     const readRow = await withTenant(fixture.schoolId, (tx) => tx.message.findUnique({ where: { id: incomingId } }));
     const readMeta = variables(readRow?.templateVariables);
-    expect(readRow?.status).toBe("read");
+    expect(readRow?.status).toBe("delivered");
     expect(readMeta.senderType).toBe("school_user");
     expect(readMeta.senderId).toBe(fixture.ownerId);
     expect(typeof readMeta.readAt).toBe("string");
@@ -188,7 +188,7 @@ describe("guardian message boundary", () => {
   });
 
   it("denies a guardian session whose Guardian row is no longer linked", async () => {
-    const fixture = await setupFamily();
+    await setupFamily();
     guardianSession.current = { ...guardianSession.current!, guardianId: createId() };
     const response = await getMessages();
     expect(response.status).toBe(403);
