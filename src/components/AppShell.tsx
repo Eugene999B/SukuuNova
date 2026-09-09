@@ -17,6 +17,7 @@ import {
   ClipboardPenLine,
   Download,
   FileText,
+  Gamepad2,
   GraduationCap,
   Headset,
   Inbox,
@@ -131,10 +132,10 @@ const schoolGroups: Group[] = [
     { icon: FileText, label: "Reports", href: "/school/reports" },
     { icon: Download, label: "Downloads & Exports", href: "/school/downloads" },
   ] },
-  { label: "Settings", items: [
+  { label: "Settings & Access", items: [
+    { icon: Settings, label: "Settings Home", href: "/school/settings", primary: true },
+    { icon: UserCog, label: "People & Access", href: "/school/settings/access" },
     { icon: ShieldCheck, label: "Roles & Permissions", href: "/school/settings/roles" },
-    { icon: UserCog, label: "Sub-accounts & Access", href: "/school/settings/access" },
-    { icon: Settings, label: "School Settings", href: "/school/settings" },
     { icon: CircleHelp, label: "Help & Support", href: "/school/help" },
   ] },
 ];
@@ -157,7 +158,8 @@ const teacherGroups: Group[] = [
     { icon: Megaphone, label: "Class Announcements", href: "/teacher/module?view=Class%20Announcements" },
   ] },
   { label: "Account", items: [
-    { icon: Settings, label: "Account Security", href: "/account/security" },
+    { icon: Settings, label: "My Settings", href: "/teacher/settings", primary: true },
+    { icon: ShieldCheck, label: "Account Security", href: "/account/security" },
     { icon: CircleHelp, label: "Help & Support", href: "/school/help" },
   ] },
 ];
@@ -170,6 +172,11 @@ const guardianGroups: Group[] = [
     { icon: GraduationCap, label: "Academics", href: "/guardian/academics" },
     { icon: WalletCards, label: "Fees & Receipts", href: "/guardian/fees" },
     { icon: Mail, label: "Messages", href: "/guardian/messages" },
+    { icon: Gamepad2, label: "Learning Arcade", href: "/guardian/arcade" },
+  ] },
+  { label: "Account", items: [
+    { icon: Settings, label: "Settings", href: "/guardian/settings", primary: true },
+    { icon: ShieldCheck, label: "Account Security", href: "/account/security" },
   ] },
 ];
 
@@ -194,6 +201,10 @@ const platformGroups: Group[] = [
     { icon: Workflow, label: "Worker School Scope", href: "/platform/admins/access", permission: "admins.manage" },
     { icon: ShieldCheck, label: "Audit Log", href: "/platform/audit", permission: "audit.view" },
     { icon: Settings2, label: "Platform Settings", href: "/platform/settings", permission: "settings.manage" },
+  ] },
+  { label: "Personal", items: [
+    { icon: Settings, label: "My Settings", href: "/account/settings" },
+    { icon: ShieldCheck, label: "Account Security", href: "/account/security" },
   ] },
 ];
 
@@ -238,7 +249,6 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
   const avatar = initials(userName);
   const toggleCompact = () => { setCompact((value) => { const next = !value; try { localStorage.setItem(`sukuunova-sidebar-compact:${preferenceScope}`, String(next)); } catch {} return next; }); };
 
-  // Bottom Navigation Items Tailored by Portal
   const bottomNavItems = useMemo(() => {
     if (universe === "school") {
       return [
@@ -272,14 +282,15 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
     ];
   }, [universe]);
 
+  const accountSettingsHref = universe === "platform" ? "/account/settings" : universe === "guardian" ? "/guardian/settings" : universe === "teacher" ? "/teacher/settings" : "/account/security";
+  const accountSettingsLabel = universe === "school" ? "Account security" : "My settings";
+
   return (
     <div className={`app-shell app-shell-${universe} ${compact ? "is-compact" : ""} ${mobileDrawerOpen ? "is-drawer-open" : ""}`}>
-      {/* Mobile Drawer Overlay */}
       {mobileDrawerOpen && (
         <div className="app-mobile-backdrop" onClick={() => setMobileDrawerOpen(false)} aria-hidden="true" />
       )}
 
-      {/* Main Sidebar / Mobile Drawer */}
       <aside className={`app-sidebar ${mobileDrawerOpen ? "is-open-mobile" : ""}`}>
         <div className="app-sidebar-top-bar">
           <Link href="/" className="app-brand" onClick={() => setMobileDrawerOpen(false)}>
@@ -319,9 +330,9 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
             </span>
           </div>
           <div className="app-account-actions">
-            <Link href={universe === "platform" ? "/account/settings" : "/account/security"} className="app-account-link">
+            <Link href={accountSettingsHref} className="app-account-link">
               <Settings size={15} aria-hidden="true" />
-              <span>{universe === "platform" ? "Account settings" : "Account security"}</span>
+              <span>{accountSettingsLabel}</span>
             </Link>
             <LogoutButton universe={universe === "platform" ? "platform" : universe === "guardian" ? "guardian" : "school"} />
           </div>
@@ -331,7 +342,6 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         </div>
       </aside>
 
-      {/* Main Content Area */}
       <main className="app-main">
         <header className="app-topbar">
           <div className="app-topbar-left">
@@ -381,7 +391,6 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
       <nav className="app-bottom-nav" aria-label="Mobile quick navigation">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
@@ -408,7 +417,6 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         </button>
       </nav>
 
-      {/* Command Palette */}
       <CommandPalette
         items={paletteItems}
         open={paletteOpen}
@@ -416,13 +424,11 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         liveSearchEndpoint={universe === "school" ? "/api/search" : undefined}
       />
 
-      {/* Floating Speed Dial / Quick Actions Hub */}
       <SpeedDialActions
         universe={universe}
         onOpenShortcuts={() => setShortcutsOpen(true)}
       />
 
-      {/* Interactive Keyboard Shortcuts Cheatsheet Modal */}
       <KeyboardShortcutsModal
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
