@@ -24,7 +24,7 @@ export async function GET() {
     const session = await requireSchoolSession();
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
-      const [control, settings, devices, identities, faceEnrollments] = await Promise.all([
+      const [control, settings, devices, identities, faceEnrollments, pendingFaceReviews, recentEvents] = await Promise.all([
         getAttendanceControlConfig(tx, session.schoolId),
         tx.schoolSettings.findUnique({
           where: { schoolId: session.schoolId },
@@ -37,7 +37,25 @@ export async function GET() {
         }),
         tx.device.count({ where: { schoolId: session.schoolId, status: "active" } }),
         tx.deviceIdentity.count({ where: { schoolId: session.schoolId } }),
-        tx.faceEnrollment.count({ where: { schoolId: session.schoolId } })
+        tx.faceEnrollment.count({ where: { schoolId: session.schoolId } }),
+        tx.faceMatchReview.count({ where: { schoolId: session.schoolId, status: "pending" } }),
+        tx.attendanceEvent.findMany({
+          where: { schoolId: session.schoolId },
+          orderBy: [{ timestamp: "desc" }, { id: "desc" }],
+          take: 30,
+          select: {
+            id: true,
+            type: true,
+            method: true,
+            timestamp: true,
+            attendanceDate: true,
+            isLate: true,
+            confidenceScore: true,
+            device: { select: { id: true, label: true, deviceSerial: true } },
+            student: { select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } },
+            staff: { select: { id: true, name: true } }
+          }
+        })
       ]);
       return {
         ...control,
@@ -50,8 +68,13 @@ export async function GET() {
         readiness: {
           activeDevices: devices,
           mappedHardwareIdentities: identities,
-          faceEnrollments
-        }
+          faceEnrollments,
+          pendingFaceReviews
+        },
+        recentEvents: recentEvents.map((event) => ({
+          ...event,
+          confidenceScore: event.confidenceScore === null ? null : Number(event.confidenceScore)
+        }))
       };
     });
     return NextResponse.json(result);
