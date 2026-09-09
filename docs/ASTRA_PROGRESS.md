@@ -7,7 +7,9 @@
 - Staff conversion now runs atomically with shared account creation, hiring prerequisite, role/Owner authorization, auditing and forced password change.
 - Stable public links under concurrent requests; partial vacancy edits preserve deadlines.
 - Public form retry protection, accessible inputs and responsive layout; pipeline includes legacy applied and converted candidates.
-- Eight new regressions. Full GitHub verification pending.
+- Eight new regressions. Verified code SHA: 318128c2ba50af77ff86f5015df76cb3d7b68cbf.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34320079632 — 215 tests in 45 files; Prisma/migrations, typecheck, lint and production build passed.
+- Eleven files committed together directly on GitHub. This documentation-only checkpoint skips redundant CI.
 - This completes a connected recruitment batch, not the entire mission. Production browser/deployment verification remains outstanding.
 
 ## Library circulation batch
@@ -103,10 +105,11 @@
 - 20260909130000_academic_work_assessment_link: nullable, unique assessment link with same-school foreign key; legacy rows linked only when unambiguous.
 - 20260909150000_learning_arcade: ArcadeRound persistence, same-school relationships, one active round per child/game, constraints and FORCE RLS.
 - 20260909160000_restore_library_metadata: restore missing rich catalogue fields and indexes with IF NOT EXISTS; no data replacement.
+- 20260909170000_recruitment_intake_repair: restore vacancy/application metadata, stable public tokens and unique public submission keys.
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: library circulation, unified and verified in GitHub Actions. Next: inspect recruitment schema drift identified in the same operations-table restoration history.
+- Current subsystem: recruitment intake, candidate pipeline and governed staff conversion, unified and verified in GitHub Actions. Next: remaining academic/governance integration and operational journeys.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
@@ -114,13 +117,13 @@
 - Tests added: default-rbac-sync, school-access-security, leadership-governance, platform-onboarding, owner-continuity, validation-response, academic-authoring, guardian-academic-security.
 
 ## Remaining mission / next 5
-1. Investigate recruitment metadata drift; audit legacy academic tenant relationships before validating old foreign keys.
+1. Recruitment metadata drift is repaired; audit legacy academic tenant relationships before validating old foreign keys.
 2. Provide an explicit Owner-reviewed upgrade workflow for existing role defaults.
 3. Connect teacher assignment navigation and legacy homework to the existing submission engine; expand question types and attempt policies.
 4. Expand Arcade games/content and student learning/resource workflows; verify production guardian/mobile journeys.
 5. Continue canonical grading/history verification, remaining operational modules and whole-system journeys.
 
-The full mission is NOT complete. No production browser/mobile journey was certified in this pass. Finance, library, transport, feeding, communications, arcade and remaining requested expansions still require incremental investigation.
+The full mission is NOT complete. No production browser/mobile journey was certified in this pass. Finance, transport, feeding, communications, advanced library/arcade features and remaining requested expansions still require investigation and completion.
 
 ## Concurrency
 Recheck main and affected blobs before editing. Preserve concurrent commits, use fast-forward-only updates, and validate meaningful code batches in GitHub Actions.
