@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
-import { generateBalancedTimetable } from "@/lib/timetable-engine-v2";
+import { generateSchoolTimetable, readTimetableExtensions } from "@/lib/timetable-generation-policy";
 import { getAcademicEngineConfig, saveAcademicEngineConfig } from "@/lib/academic-engine";
 
 const period = z.object({ period: z.number().int().min(1).max(16), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) });
@@ -21,6 +22,8 @@ const timetable = z.object({
   teacherUnavailability: z.record(z.string(), z.array(z.string().regex(/^[1-6]:([1-9]|1[0-6])$/)).max(96)).optional(),
   roomRequirements: z.record(z.string(), z.object({ roomType: z.string().max(60).optional(), room: z.string().max(60).optional() })).optional(),
   doublePeriodSubjects: z.record(z.string(), z.number().int().min(1).max(5)).optional(),
+  maxDailyPeriods: z.record(z.string(), z.number().int().min(1).max(6)).optional(),
+  printTheme: z.enum(["ghana_classic", "modern_blue", "heritage_green", "minimal_mono"]).optional(),
 });
 const assessment = z.object({ categories: z.array(z.object({ name: z.string().min(1).max(80), weight: z.number().min(0).max(100) })).min(1).max(16), rounding: z.enum(["nearest", "down", "up"]), missingScorePolicy: z.enum(["blank", "zero"]), allowTeacherOverride: z.boolean() });
 const report = z.object({ includePosition: z.boolean(), includeSubjectPosition: z.boolean(), includeAttendance: z.boolean(), includeTeacherRemark: z.boolean(), includeHeadRemark: z.boolean(), includeSignatures: z.boolean(), includeSchoolContacts: z.boolean(), rankMethod: z.enum(["total_average", "weighted_total"]), showGrades: z.boolean(), showClassAverage: z.boolean() });
@@ -75,11 +78,39 @@ export async function GET() {
   try {
     const session = await requireSchoolSession();
     return NextResponse.json(await withTenant(session.schoolId, async (tx) => {
-      const config = await getAcademicEngineConfig(tx);
-      const classes = await tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true } });
-      return { ...config, reportCard: legacyReportView(config.reportCard), classes };
+      const [config, settings, classes, assignments] = await Promise.all([
+        getAcademicEngineConfig(tx),
+        tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timetableConfig: true } }),
+        tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true } }),
+        tx.classSubjectTeacher.findMany({
+          where: { schoolId: session.schoolId },
+          include: {
+            class: { select: { id: true, name: true, level: true } },
+            subject: { select: { id: true, name: true } },
+            teacher: { select: { id: true, name: true, status: true } },
+          },
+          orderBy: [{ classId: "asc" }, { subjectId: "asc" }],
+        }),
+      ]);
+      const extensions = readTimetableExtensions(settings?.timetableConfig);
+      return {
+        ...config,
+        timetable: { ...config.timetable, ...extensions },
+        reportCard: legacyReportView(config.reportCard),
+        classes,
+        assignments: assignments.map((item) => ({
+          classId: item.classId,
+          subjectId: item.subjectId,
+          teacherId: item.teacherId,
+          class: item.class,
+          subject: item.subject,
+          teacher: item.teacher,
+        })),
+      };
     }));
-  } catch (error) { return routeError(error); }
+  } catch (error) {
+    return routeError(error);
+  }
 }
 
 export async function POST(request: Request) {
@@ -88,27 +119,42 @@ export async function POST(request: Request) {
     const input = schema.parse(await request.json());
     return await withTenant(session.schoolId, async (tx) => {
       if (input.action === "save") {
-        // Never hand the legacy report-card object to saveAcademicEngineConfig:
-        // that function historically replaces the entire JSON document. Save
-        // timetable/assessment first, then merge only the legacy presentation
-        // keys into the richer reporting configuration.
+        const currentSettings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timetableConfig: true, reportCardConfig: true } });
+        const currentExtensions = readTimetableExtensions(currentSettings?.timetableConfig);
+        const incomingTimetable = input.timetable;
+        const canonicalTimetable = incomingTimetable ? (() => {
+          const { maxDailyPeriods: _maxDailyPeriods, printTheme: _printTheme, ...rest } = incomingTimetable;
+          return rest;
+        })() : undefined;
+
         const result = await saveAcademicEngineConfig(tx, {
           schoolId: session.schoolId,
           actorId: session.userId,
-          timetable: input.timetable,
+          timetable: canonicalTimetable,
           assessment: input.assessment,
           reportCard: undefined,
         });
+
+        const extensions = {
+          maxDailyPeriods: incomingTimetable?.maxDailyPeriods ?? currentExtensions.maxDailyPeriods,
+          printTheme: incomingTimetable?.printTheme ?? currentExtensions.printTheme,
+        };
+        const extendedTimetable = { ...result.timetable, ...extensions };
+        await tx.schoolSettings.update({
+          where: { schoolId: session.schoolId },
+          data: { timetableConfig: extendedTimetable as unknown as Prisma.InputJsonValue },
+        });
+
         let reportCard = legacyReportView(result.reportCard);
         if (input.reportCard) {
-          const current = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { reportCardConfig: true } });
-          const merged = mergeLegacyReport(current?.reportCardConfig, input.reportCard);
+          const merged = mergeLegacyReport(currentSettings?.reportCardConfig, input.reportCard);
           await tx.schoolSettings.update({ where: { schoolId: session.schoolId }, data: { reportCardConfig: merged } });
           reportCard = legacyReportView(merged);
         }
-        return NextResponse.json({ ...result, reportCard });
+        return NextResponse.json({ ...result, timetable: extendedTimetable, reportCard });
       }
-      const result = await generateBalancedTimetable(tx, {
+
+      const result = await generateSchoolTimetable(tx, {
         schoolId: session.schoolId,
         actorId: session.userId,
         mode: input.mode,
@@ -119,5 +165,7 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(result);
     });
-  } catch (error) { return routeError(error); }
+  } catch (error) {
+    return routeError(error);
+  }
 }
