@@ -133,6 +133,7 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
     dayOfWeek: slot.dayOfWeek,
     period: slot.period,
     roomId: slot.venue && knownRoomIds.has(slot.venue) ? slot.venue : null,
+    groupId: classIds.has(slot.classId) ? assignmentKeyOf(slot) : undefined,
   }));
 
   const demands: TimetableDemand[] = [];
@@ -151,14 +152,14 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
     }
     const doublePairs = Math.min(doubles[row.subjectId] ?? 0, Math.floor(remainingPeriods / 2));
     const singles = remainingPeriods - doublePairs * 2;
-    const maxPerDay = extensions.maxDailyPeriods[baseKey];
     const common = {
+      groupId: baseKey,
       classId: row.classId,
       subjectId: row.subjectId,
       teacherId: row.teacherId,
       allowedRoomIds: requirement.room ? [requirement.room] : undefined,
       requiredRoomType: requirement.roomType,
-      maxPerDay: undefined,
+      maxPerDay: extensions.maxDailyPeriods[baseKey],
     };
     if (doublePairs) {
       const id = `${baseKey}:double`;
@@ -170,7 +171,6 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
       demands.push({ id, ...common, occurrences: singles, blockSize: 1 });
       assignmentByDemand.set(id, { classId: row.classId, subjectId: row.subjectId, teacherId: row.teacherId });
     }
-    if (maxPerDay && maxPerDay < 1) warnings.push(`${row.class.name} · ${row.subject.name} has an invalid daily maximum and it was ignored.`);
   }
 
   const teacherUnavailable = Object.entries(object(config.teacherUnavailability)).flatMap(([teacherId, raw]) =>
@@ -222,7 +222,7 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
       if (count > maximum) dailyLimitViolations.push({ assignmentKey: key, dayOfWeek: day.dayOfWeek, count, maximum });
     }
   }
-  if (dailyLimitViolations.length) warnings.push(`${dailyLimitViolations.length} daily lesson-limit violation(s) remain in this NovaCore candidate; it is preview-only and must not be applied as-is.`);
+  if (dailyLimitViolations.length) warnings.push(`${dailyLimitViolations.length} daily lesson-limit violation(s) remain in this candidate; it stays preview-only and cannot be promoted without resolving them.`);
 
   const requestedPeriods = assignments.reduce((sum, row) => sum + Math.max(1, Math.min(10, weekly[assignmentKeyOf(row)] ?? 2)), 0);
   return {
