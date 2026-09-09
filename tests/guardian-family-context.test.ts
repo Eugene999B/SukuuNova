@@ -1,7 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import { describe, expect, it, vi } from "vitest";
 import { withTenant } from "../src/lib/db";
-import { filterGuardianReleasedScores, getGuardianFamilyContext } from "../src/lib/guardian-family-context";
+import { filterGuardianReleasedScores, getGuardianFamilyContext, guardianAcademicContextStudentId } from "../src/lib/guardian-family-context";
 import { createTenantFixture } from "./helpers";
 
 const guardianSession = vi.hoisted(() => ({ current: null as null | {
@@ -21,7 +21,6 @@ vi.mock("@/lib/guardian-auth", () => ({
   }),
 }));
 
-import { guardianAcademicContextStudentId } from "../src/app/api/guardian/academic/route";
 import { GET as getMessages, POST as postMessage } from "../src/app/api/guardian/messages/route";
 
 async function setupFamily() {
