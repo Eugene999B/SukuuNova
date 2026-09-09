@@ -1,11 +1,32 @@
 "use client";
 
 import Link from "next/link";
+import {
+  CalendarDays,
+  Check,
+  Clock3,
+  Edit3,
+  LockKeyhole,
+  Plus,
+  Printer,
+  RefreshCw,
+  Settings2,
+  ShieldCheck,
+  Unlock,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, CalendarDays, Check, CheckCircle2, Clock3, Eye, LockKeyhole, Plus, Printer, RefreshCw, ShieldCheck, Sparkles, Unlock, WandSparkles, X } from "lucide-react";
 
 type ClassItem = { id: string; name: string; level: string | null };
 type Person = { id: string; name: string };
+type TeachingAssignment = {
+  classId: string;
+  subjectId: string;
+  teacherId: string;
+  class: ClassItem;
+  subject: Person;
+  teacher: Person;
+};
 type Slot = {
   id: string;
   classId: string;
@@ -22,81 +43,34 @@ type Period = { period: number; start: string; end: string };
 type Day = { dayOfWeek: number; name: string; enabled: boolean; start: string; end: string; periods?: Period[] };
 type TimetableConfig = {
   days: Day[];
-  periods?: Period[];
   periodsPerDay: number;
   periodMinutes: number;
+  published: boolean;
+  printTheme?: string;
   breaks?: { name: string; start: string; end: string }[];
   rooms?: { id: string; name: string; type?: string }[];
 };
 type Data = {
   school: { name: string; uniqueCode: string; logoUrl?: string | null } | null;
   classes: ClassItem[];
-  subjects: Person[];
   teachers: Person[];
   slots: Slot[];
+  teachingAssignments: TeachingAssignment[];
   timetableConfig: TimetableConfig;
 };
-
 type Editor = { day: number; period: number; slot?: Slot };
-type GenerationMode = "fill_gaps" | "rebuild" | "rebuild_preserving_locked";
-type GenerationScope = "class" | "school";
-type GenerationPlan = {
-  mode: GenerationMode;
-  dryRun: boolean;
-  scheduled: number;
-  warnings: string[];
-  metrics: {
-    targetLessons: number;
-    existingInScope: number;
-    preservedLessons: number;
-    generatedLessons: number;
-    removedLessons: number;
-    remainingBeforeGeneration: number;
-    coverageAfter: number;
-  };
-  changes: {
-    keepSlotIds: string[];
-    removeSlotIds: string[];
-    additions: Array<{
-      classId: string;
-      subjectId: string;
-      teacherId: string;
-      dayOfWeek: number;
-      period: number;
-      venue: string | null;
-      className: string;
-      subjectName: string;
-      teacherName: string;
-    }>;
-  };
-};
-
-type ScheduleRow = { kind: "period"; period: Period } | { kind: "break"; name: string; start: string; end: string };
+type GridColumn =
+  | { kind: "period"; period: number; start: string; end: string }
+  | { kind: "break"; name: string; start: string; end: string };
 
 function toMinutes(value: string) {
-  const [h, m] = value.split(":").map(Number);
-  return h * 60 + m;
+  const [hour, minute] = value.split(":").map(Number);
+  return (hour || 0) * 60 + (minute || 0);
 }
-
-function fromMinutes(value: number) {
-  return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
-}
-
 function formatTime(value: string) {
-  const [h, m] = value.split(":").map(Number);
-  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
+  const [hour, minute] = value.split(":").map(Number);
+  return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
 }
-
-function buildPeriods(config: TimetableConfig, day?: Day) {
-  if (day?.periods?.length) return day.periods.slice(0, Math.min(16, config.periodsPerDay));
-  if (config.periods?.length) return config.periods.slice(0, Math.min(16, config.periodsPerDay));
-  const start = toMinutes(day?.start || "08:00");
-  return Array.from({ length: Math.min(16, Math.max(1, config.periodsPerDay || 8)) }, (_, index) => {
-    const s = start + index * (config.periodMinutes || 40);
-    return { period: index + 1, start: fromMinutes(s), end: fromMinutes(s + (config.periodMinutes || 40)) };
-  });
-}
-
 function displayVenue(value: string | null | undefined, config: TimetableConfig) {
   if (!value) return "";
   if (value.startsWith("room:")) {
@@ -116,13 +90,7 @@ export default function TimetableWorkspace() {
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedTeacher, setSelectedTeacher] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
-  const [lockedSlotIds, setLockedSlotIds] = useState<Set<string>>(new Set());
-  const [generationOpen, setGenerationOpen] = useState(false);
-  const [generationMode, setGenerationMode] = useState<GenerationMode>("fill_gaps");
-  const [generationScope, setGenerationScope] = useState<GenerationScope>("class");
-  const [generationPlan, setGenerationPlan] = useState<GenerationPlan | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [applying, setApplying] = useState(false);
+  const [changingState, setChangingState] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -130,12 +98,13 @@ export default function TimetableWorkspace() {
     try {
       const response = await fetch("/api/phase2/timetable", { cache: "no-store" });
       const payload = await response.json();
-      if (!response.ok) throw new Error(payload.message || "Could not load timetable.");
+      if (!response.ok) throw new Error(payload.message || payload.error || "Could not load timetable.");
       setData(payload);
       setSelectedClass((current) => current || payload.classes?.[0]?.id || "");
       setSelectedTeacher((current) => current || payload.teachers?.[0]?.id || "");
-      const validIds = new Set<string>((payload.slots ?? []).map((slot: Slot) => slot.id));
-      setLockedSlotIds((current) => new Set([...current].filter((id) => validIds.has(id))));
+      if (new URLSearchParams(window.location.search).get("generated") === "1") {
+        setNotice("The new timetable was generated successfully and is now published.");
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not load timetable.");
     } finally {
@@ -146,335 +115,140 @@ export default function TimetableWorkspace() {
   useEffect(() => { void load(); }, []);
 
   const days = useMemo(() => data?.timetableConfig.days.filter((day) => day.enabled).sort((a, b) => a.dayOfWeek - b.dayOfWeek) ?? [], [data]);
-  const periods = useMemo(() => buildPeriods(data?.timetableConfig ?? { days: [], periodsPerDay: 8, periodMinutes: 40 }, days[0]), [data, days]);
-  const scheduleRows = useMemo<ScheduleRow[]>(() => {
-    const periodRows: ScheduleRow[] = periods.map((period) => ({ kind: "period", period }));
-    const breakRows: ScheduleRow[] = (data?.timetableConfig.breaks ?? []).map((item) => ({ kind: "break", ...item }));
-    return [...periodRows, ...breakRows].sort((a, b) => {
-      const aStart = a.kind === "period" ? a.period.start : a.start;
-      const bStart = b.kind === "period" ? b.period.start : b.start;
-      return toMinutes(aStart) - toMinutes(bStart);
-    });
-  }, [data, periods]);
+  const columns = useMemo<GridColumn[]>(() => {
+    if (!data || !days.length) return [];
+    const firstPeriods = days[0].periods ?? [];
+    const entries: GridColumn[] = [
+      ...firstPeriods.map((period) => ({ kind: "period" as const, ...period })),
+      ...(data.timetableConfig.breaks ?? []).map((item) => ({ kind: "break" as const, ...item })),
+    ];
+    return entries.sort((a, b) => toMinutes(a.start) - toMinutes(b.start) || (a.kind === "break" ? 1 : -1));
+  }, [data, days]);
+
   const activeId = view === "class" ? selectedClass : selectedTeacher;
   const activeName = view === "class"
     ? data?.classes.find((item) => item.id === selectedClass)?.name ?? "Choose a class"
     : data?.teachers.find((item) => item.id === selectedTeacher)?.name ?? "Choose a teacher";
-
   const visibleSlots = useMemo(() => {
     if (!data || !activeId) return [];
     return data.slots.filter((slot) => view === "class" ? slot.classId === activeId : slot.teacherId === activeId);
   }, [data, activeId, view]);
   const slotMap = useMemo(() => new Map(visibleSlots.map((slot) => [`${slot.dayOfWeek}:${slot.period}`, slot])), [visibleSlots]);
-  const currentClassName = data?.classes.find((item) => item.id === selectedClass)?.name ?? "Selected class";
-  const lockedInScope = useMemo(() => {
-    if (!data) return [];
-    return data.slots.filter((slot) => lockedSlotIds.has(slot.id) && (generationScope === "school" || slot.classId === selectedClass));
-  }, [data, lockedSlotIds, generationScope, selectedClass]);
+  const published = data?.timetableConfig.published ?? false;
+  const canManuallyEdit = !published && view === "class";
+
+  const setPublished = async (next: boolean) => {
+    setChangingState(true); setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/phase2/timetable", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "setPublished", published: next }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || payload.error || "Could not change timetable editing state.");
+      setNotice(next ? "Manual changes are finished. The timetable is published and locked again." : "Manual editing is open. Only configured class-subject-teacher assignments can be placed.");
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not change timetable editing state.");
+    } finally { setChangingState(false); }
+  };
 
   const action = async (body: unknown) => {
-    const response = await fetch("/api/phase2/timetable", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const response = await fetch("/api/phase2/timetable", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || payload.error || "Timetable action failed.");
     return payload;
   };
 
-  const openGeneration = () => {
-    setGenerationScope(view === "class" && selectedClass ? "class" : "school");
-    setGenerationMode("fill_gaps");
-    setGenerationPlan(null);
-    setGenerationOpen(true);
-    setError("");
-    setNotice("");
-  };
-
-  const requestGeneration = async (dryRun: boolean) => {
-    const response = await fetch("/api/school/academic-engine", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "generate",
-        mode: generationMode,
-        dryRun,
-        lockedSlotIds: generationMode === "rebuild_preserving_locked" ? lockedInScope.map((slot) => slot.id) : undefined,
-        classIds: generationScope === "class" && selectedClass ? [selectedClass] : undefined,
-      }),
-    });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.message || payload.error || "Timetable planning failed.");
-    return payload as GenerationPlan;
-  };
-
-  const previewGeneration = async () => {
-    setPreviewing(true);
-    setError("");
-    setNotice("");
-    try {
-      setGenerationPlan(await requestGeneration(true));
-    } catch (cause) {
-      setGenerationPlan(null);
-      setError(cause instanceof Error ? cause.message : "Timetable planning failed.");
-    } finally {
-      setPreviewing(false);
-    }
-  };
-
-  const applyGeneration = async () => {
-    if (!generationPlan) return;
-    setApplying(true);
-    setError("");
-    setNotice("");
-    try {
-      const applied = await requestGeneration(false);
-      setNotice(`Timetable updated: ${applied.metrics.generatedLessons} lesson(s) added, ${applied.metrics.removedLessons} replaced, ${applied.metrics.coverageAfter}% target coverage.`);
-      setGenerationOpen(false);
-      setGenerationPlan(null);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Timetable generation failed.");
-    } finally {
-      setApplying(false);
-    }
-  };
-
-  const toggleLock = (slotId: string) => {
-    setLockedSlotIds((current) => {
-      const next = new Set(current);
-      if (next.has(slotId)) next.delete(slotId);
-      else next.add(slotId);
-      return next;
-    });
-    setGenerationPlan(null);
-  };
-
-  if (loading) {
-    return <div className="tt-modern-loading"><Clock3 size={18} /><div><strong>Loading timetable</strong><span>Getting the latest classes, teachers and lessons…</span></div></div>;
-  }
-
-  if (!data) {
-    return <div className="tt-modern-error"><strong>Timetable could not be loaded</strong><p>{error || "Please try again."}</p><button className="tt-btn primary" onClick={() => void load()}>Try again</button></div>;
-  }
+  if (loading) return <div className="tt-v4-loading"><Clock3 size={18} /><div><strong>Loading official timetable</strong><span>Reading the published schedule and school timetable settings…</span></div></div>;
+  if (!data) return <div className="tt-v4-empty"><strong>Timetable could not be loaded.</strong><span>{error || "Please try again."}</span><button onClick={() => void load()}>Try again</button></div>;
 
   const printUrl = view === "teacher"
     ? `/school/timetable/print?view=teacher&teacherId=${encodeURIComponent(selectedTeacher)}`
     : `/school/timetable/print?view=class&classId=${encodeURIComponent(selectedClass)}`;
 
+  if (!days.length || !columns.length) {
+    return <div className="tt-v4-empty"><CalendarDays size={26} /><strong>Timetable setup is not complete.</strong><span>Configure the school week, periods, breaks and subject lesson requirements first.</span><Link href="/school/timetable/setup">Open Timetable Setup</Link></div>;
+  }
+
   return (
-    <div className="tt-modern-workspace">
-      <header className="tt-modern-header">
+    <div className="tt-v4">
+      <header className="tt-v4-head">
         <div>
-          <span className="tt-eyebrow"><CalendarDays size={14} /> TIMETABLE STUDIO</span>
+          <div className="tt-v4-eyebrow"><CalendarDays size={14} /> OFFICIAL SCHOOL TIMETABLE</div>
           <h1>{activeName}</h1>
-          <p>Build a conflict-safe weekly schedule, preview generation changes before they are applied, and lock lessons that must stay in place.</p>
+          <p>{published ? "This is the current published timetable. It stays fixed until authorised leadership opens Change timetable." : "Manual editing is open. Finish changes when the timetable is ready to become official again."}</p>
         </div>
-        <div className="tt-header-actions">
-          <Link className="tt-btn ghost" href={printUrl}><Printer size={15} /> Print timetable</Link>
-          <button className="tt-btn primary" onClick={openGeneration}><WandSparkles size={15} /> Plan timetable</button>
+        <div className="tt-v4-actions">
+          <Link href="/school/timetable/setup" className="secondary"><Settings2 size={15} /> Timetable setup</Link>
+          <Link href={printUrl} className="secondary"><Printer size={15} /> Print timetable</Link>
+          {published
+            ? <button className="primary" disabled={changingState} onClick={() => void setPublished(false)}><Edit3 size={15} /> Change timetable</button>
+            : <button className="primary" disabled={changingState || !data.slots.length} onClick={() => void setPublished(true)}><ShieldCheck size={15} /> Finish changes</button>}
         </div>
       </header>
 
-      {notice ? <div className="tt-alert success"><Check size={15} />{notice}</div> : null}
-      {error ? <div className="tt-alert error"><X size={15} />{error}</div> : null}
+      {notice ? <div className="tt-v4-notice success"><Check size={15} />{notice}</div> : null}
+      {error ? <div className="tt-v4-notice error"><X size={15} />{error}</div> : null}
 
-      <section className="tt-intelligence-strip">
-        <div><ShieldCheck size={17} /><span><strong>{data.slots.length}</strong> school lessons</span></div>
-        <div><CalendarDays size={17} /><span><strong>{visibleSlots.length}</strong> in this view</span></div>
-        <div><LockKeyhole size={17} /><span><strong>{lockedSlotIds.size}</strong> locked for rebuilds</span></div>
-        <div><Sparkles size={17} /><span>Teacher, class, room and availability conflicts checked</span></div>
+      <section className="tt-v4-summary">
+        <div><span>{published ? <LockKeyhole size={16} /> : <Unlock size={16} />}</span><strong>{published ? "Published" : "Editing"}</strong><small>{published ? "Locked against accidental changes" : "Remember to finish changes"}</small></div>
+        <div><span><CalendarDays size={16} /></span><strong>{days.length} days</strong><small>{columns.filter((item) => item.kind === "period").length} teaching periods in the standard day</small></div>
+        <div><span><GraduationBadge /></span><strong>{data.slots.length} lessons</strong><small>Across the whole school timetable</small></div>
       </section>
 
-      {generationOpen ? (
-        <GenerationStudio
-          mode={generationMode}
-          scope={generationScope}
-          className={currentClassName}
-          lockedCount={lockedInScope.length}
-          plan={generationPlan}
-          previewing={previewing}
-          applying={applying}
-          days={days}
-          onMode={(mode) => { setGenerationMode(mode); setGenerationPlan(null); }}
-          onScope={(scope) => { setGenerationScope(scope); setGenerationPlan(null); }}
-          onPreview={() => void previewGeneration()}
-          onApply={() => void applyGeneration()}
-          onClose={() => { setGenerationOpen(false); setGenerationPlan(null); }}
-        />
-      ) : null}
+      <section className="tt-v4-toolbar">
+        <div className="tt-v4-switch"><button className={view === "class" ? "active" : ""} onClick={() => setView("class")}>Class timetable</button><button className={view === "teacher" ? "active" : ""} onClick={() => setView("teacher")}>Teacher timetable</button></div>
+        {view === "class" ? <select aria-label="Choose class" value={selectedClass} onChange={(event) => setSelectedClass(event.target.value)}>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select> : <select aria-label="Choose teacher" value={selectedTeacher} onChange={(event) => setSelectedTeacher(event.target.value)}>{data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>}
+        <button className="tt-v4-refresh" onClick={() => void load()} aria-label="Refresh timetable"><RefreshCw size={15} /></button>
+      </section>
 
-      {!days.length || !periods.length ? (
-        <section className="tt-selection-empty">
-          <CalendarDays size={24} />
-          <h2>No timetable schedule is configured yet</h2>
-          <p>Set the school&apos;s working days and teaching periods in Academic Setup, then return here to plan the timetable.</p>
-          <Link className="tt-btn primary" href="/school/academics/setup">Open academic setup</Link>
-        </section>
-      ) : (
-        <>
-          <section className="tt-control-bar">
-            <div className="tt-view-switch">
-              <button className={view === "class" ? "active" : ""} onClick={() => setView("class")}>Class timetable</button>
-              <button className={view === "teacher" ? "active" : ""} onClick={() => setView("teacher")}>Teacher timetable</button>
-            </div>
-            {view === "class" ? (
-              <select aria-label="Choose class" value={selectedClass} onChange={(event) => { setSelectedClass(event.target.value); setGenerationPlan(null); }}>
-                {data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}
-              </select>
-            ) : (
-              <select aria-label="Choose teacher" value={selectedTeacher} onChange={(event) => setSelectedTeacher(event.target.value)}>
-                {data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
-            )}
-            <span className="tt-toolbar-meta">{days.length} days · {periods.length} teaching periods · {data.timetableConfig.breaks?.length ?? 0} breaks</span>
-            <button className="tt-icon-btn" onClick={() => void load()} aria-label="Refresh timetable"><RefreshCw size={15} /></button>
-          </section>
+      {!data.slots.length ? <section className="tt-v4-empty embedded"><strong>No timetable has been created yet.</strong><span>Use Timetable Setup to generate the official timetable automatically, or open manual design mode from setup.</span><Link href="/school/timetable/setup">Set up & generate timetable</Link></section> : null}
 
-          <section className="tt-grid-card">
-            <div className="tt-grid-heading">
-              <div><span className="tt-eyebrow">WEEKLY TIMETABLE</span><h2>{activeName}</h2><p>Click a lesson to edit it. Use the lock beside a lesson when it must survive a preserve-locked rebuild.</p></div>
-              <div className="tt-legend"><span><LockKeyhole size={12} /> Locked lessons are preserved only in preserve-locked mode.</span></div>
-            </div>
-            <div className="tt-table-scroll">
-              <table className="tt-simple-table">
-                <thead><tr><th>Time</th>{days.map((day) => <th key={day.dayOfWeek}>{day.name}</th>)}</tr></thead>
-                <tbody>
-                  {scheduleRows.map((row, rowIndex) => {
-                    if (row.kind === "break") {
-                      return <tr className="tt-break-row-grid" key={`break-${row.name}-${row.start}-${rowIndex}`}><th><strong>{row.name}</strong><span>{formatTime(row.start)}–{formatTime(row.end)}</span></th><td colSpan={days.length}><span>Break / non-teaching time</span></td></tr>;
-                    }
-                    const period = row.period;
-                    return (
-                      <tr key={`period-${period.period}`}>
-                        <th><strong>Period {period.period}</strong><span>{formatTime(period.start)}–{formatTime(period.end)}</span></th>
-                        {days.map((day) => {
-                          const slot = slotMap.get(`${day.dayOfWeek}:${period.period}`);
-                          const locked = slot ? lockedSlotIds.has(slot.id) : false;
-                          return (
-                            <td key={`${day.dayOfWeek}:${period.period}`}>
-                              {slot ? (
-                                <div className={`tt-simple-lesson filled ${locked ? "locked" : ""}`}>
-                                  <button className="tt-lesson-main" onClick={() => setEditor({ day: day.dayOfWeek, period: period.period, slot })}>
-                                    <strong>{slot.subject.name}</strong>
-                                    <span>{view === "class" ? slot.teacher.name : slot.class.name}</span>
-                                    {slot.venue ? <small>{displayVenue(slot.venue, data.timetableConfig)}</small> : null}
-                                  </button>
-                                  <button className="tt-lock-toggle" type="button" aria-label={locked ? "Unlock lesson" : "Lock lesson"} aria-pressed={locked} onClick={() => toggleLock(slot.id)}>{locked ? <LockKeyhole size={12} /> : <Unlock size={12} />}</button>
-                                </div>
-                              ) : (
-                                <button className="tt-simple-lesson empty" onClick={() => setEditor({ day: day.dayOfWeek, period: period.period })}><Plus size={13} /> Add lesson</button>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </>
-      )}
+      <section className="tt-v4-sheet">
+        <div className="tt-v4-sheet-title"><div><strong>{data.school?.name ?? "School"}</strong><span>{view === "class" ? `${activeName} · Class timetable` : `${activeName} · Teacher timetable`}</span></div><div>{published ? <><LockKeyhole size={13} /> Published timetable</> : <><Edit3 size={13} /> Manual design mode</>}</div></div>
+        <div className="tt-v4-scroll">
+          <table className="tt-v4-table">
+            <thead><tr><th className="day-heading">DAY</th>{columns.map((column, index) => column.kind === "break" ? <th className="break-heading" key={`break-${column.name}-${index}`}><strong>{column.name}</strong><span>{formatTime(column.start)}–{formatTime(column.end)}</span></th> : <th key={`period-${column.period}-${index}`}><strong>Period {column.period}</strong><span>{formatTime(column.start)}–{formatTime(column.end)}</span></th>)}</tr></thead>
+            <tbody>{days.map((day) => <tr key={day.dayOfWeek}><th className="day-cell"><strong>{day.name}</strong><span>{formatTime(day.start)}–{formatTime(day.end)}</span></th>{columns.map((column, index) => {
+              if (column.kind === "break") return <td className="break-cell" key={`break-${day.dayOfWeek}-${index}`}><strong>{column.name}</strong></td>;
+              const actualPeriod = day.periods?.find((item) => item.period === column.period);
+              if (!actualPeriod) return <td className="unavailable-cell" key={`${day.dayOfWeek}:${column.period}`}><span>Not used</span></td>;
+              const slot = slotMap.get(`${day.dayOfWeek}:${column.period}`);
+              if (slot) return <td className={`lesson-cell ${canManuallyEdit ? "editable" : ""}`} key={`${day.dayOfWeek}:${column.period}`}><button type="button" disabled={!canManuallyEdit} onClick={() => canManuallyEdit && setEditor({ day: day.dayOfWeek, period: column.period, slot })}><strong>{slot.subject.name}</strong><span>{view === "class" ? slot.teacher.name : slot.class.name}</span>{slot.venue ? <small>{displayVenue(slot.venue, data.timetableConfig)}</small> : null}{actualPeriod.start !== column.start || actualPeriod.end !== column.end ? <small>{formatTime(actualPeriod.start)}–{formatTime(actualPeriod.end)}</small> : null}</button></td>;
+              return <td className="empty-cell" key={`${day.dayOfWeek}:${column.period}`}>{canManuallyEdit ? <button type="button" onClick={() => setEditor({ day: day.dayOfWeek, period: column.period })}><Plus size={13} /> Place lesson</button> : <span>—</span>}</td>;
+            })}</tr>)}</tbody>
+          </table>
+        </div>
+      </section>
 
-      {editor ? <LessonEditor data={data} value={editor} close={() => setEditor(null)} done={async () => { setEditor(null); await load(); }} action={action} /> : null}
+      {!published ? <div className="tt-v4-edit-help"><Edit3 size={16} /><div><strong>Manual design mode is active.</strong><span>Click a class timetable cell to place or edit one of that class&apos;s existing subject-teacher assignments. Use “Finish changes” when the timetable is ready.</span></div></div> : null}
+      {editor ? <LessonEditor data={data} classId={selectedClass} value={editor} close={() => setEditor(null)} done={async () => { setEditor(null); await load(); }} action={action} /> : null}
     </div>
   );
 }
 
-function GenerationStudio({ mode, scope, className, lockedCount, plan, previewing, applying, days, onMode, onScope, onPreview, onApply, onClose }: {
-  mode: GenerationMode;
-  scope: GenerationScope;
-  className: string;
-  lockedCount: number;
-  plan: GenerationPlan | null;
-  previewing: boolean;
-  applying: boolean;
-  days: Day[];
-  onMode: (mode: GenerationMode) => void;
-  onScope: (scope: GenerationScope) => void;
-  onPreview: () => void;
-  onApply: () => void;
-  onClose: () => void;
-}) {
-  const modeCopy: Record<GenerationMode, { title: string; text: string }> = {
-    fill_gaps: { title: "Fill gaps", text: "Keep every lesson already on the timetable and add only the missing weekly periods." },
-    rebuild: { title: "Fresh rebuild", text: "Replace all lessons in the chosen scope with a newly balanced timetable." },
-    rebuild_preserving_locked: { title: "Rebuild + keep locks", text: "Keep only lessons you locked, rebuild everything else in the chosen scope around them." },
-  };
-  const dayName = (dayOfWeek: number) => days.find((day) => day.dayOfWeek === dayOfWeek)?.name ?? `Day ${dayOfWeek}`;
-
-  return (
-    <section className="tt-generation-studio" aria-label="Timetable generation planner">
-      <div className="tt-generation-head">
-        <div><span className="tt-eyebrow"><Sparkles size={13} /> INTELLIGENT GENERATION</span><h2>Preview the schedule before changing anything</h2><p>The preview is read-only. Applying the plan recalculates it under a school-level generation lock before writing.</p></div>
-        <button className="tt-icon-btn" type="button" onClick={onClose} aria-label="Close timetable planner"><X size={15} /></button>
-      </div>
-
-      <div className="tt-generation-options">
-        <div className="tt-option-group">
-          <strong>Generation mode</strong>
-          <div className="tt-mode-grid">
-            {(Object.keys(modeCopy) as GenerationMode[]).map((value) => <button key={value} className={mode === value ? "active" : ""} onClick={() => onMode(value)}><span>{modeCopy[value].title}</span><small>{modeCopy[value].text}</small></button>)}
-          </div>
-        </div>
-        <div className="tt-option-group scope">
-          <strong>Scope</strong>
-          <div className="tt-scope-buttons">
-            <button className={scope === "class" ? "active" : ""} onClick={() => onScope("class")}>{className}</button>
-            <button className={scope === "school" ? "active" : ""} onClick={() => onScope("school")}>Whole school</button>
-          </div>
-          {mode === "rebuild_preserving_locked" ? <p><LockKeyhole size={12} /> {lockedCount} locked lesson(s) inside this scope will be preserved. Lock or unlock lessons in the grid before previewing.</p> : null}
-        </div>
-      </div>
-
-      {!plan ? (
-        <div className="tt-preview-empty"><Eye size={18} /><div><strong>No changes have been made.</strong><span>Preview calculates additions, replacements, coverage and conflicts without writing to the timetable.</span></div><button className="tt-btn primary" disabled={previewing} onClick={onPreview}>{previewing ? "Calculating…" : "Preview plan"}</button></div>
-      ) : (
-        <div className="tt-plan-results">
-          <div className="tt-plan-metrics">
-            <div><small>Target lessons</small><strong>{plan.metrics.targetLessons}</strong></div>
-            <div><small>Keep</small><strong>{plan.metrics.preservedLessons}</strong></div>
-            <div><small>Add</small><strong>{plan.metrics.generatedLessons}</strong></div>
-            <div><small>Replace</small><strong>{plan.metrics.removedLessons}</strong></div>
-            <div><small>Coverage after</small><strong>{plan.metrics.coverageAfter}%</strong></div>
-          </div>
-          {plan.warnings.length ? <div className="tt-plan-warnings">{plan.warnings.map((warning) => <p key={warning}><AlertTriangle size={13} />{warning}</p>)}</div> : <div className="tt-plan-ok"><CheckCircle2 size={14} />No scheduling warnings in this preview.</div>}
-          <div className="tt-plan-detail">
-            <div><h3>Planned additions</h3><p>{plan.changes.additions.length ? `${plan.changes.additions.length} lesson(s) will be placed.` : "No new lessons are needed."}</p></div>
-            {plan.changes.additions.length ? <div className="tt-addition-list">{plan.changes.additions.slice(0, 10).map((addition, index) => <div key={`${addition.classId}-${addition.subjectId}-${addition.dayOfWeek}-${addition.period}-${index}`}><strong>{addition.subjectName}</strong><span>{addition.className} · {addition.teacherName}</span><small>{dayName(addition.dayOfWeek)} · Period {addition.period}</small></div>)}</div> : null}
-            {plan.changes.additions.length > 10 ? <small className="tt-more-note">+ {plan.changes.additions.length - 10} more planned lessons</small> : null}
-          </div>
-          <div className="tt-generation-actions"><button className="tt-btn ghost" disabled={previewing || applying} onClick={onPreview}><RefreshCw size={13} /> Recalculate preview</button><button className="tt-btn primary" disabled={applying} onClick={onApply}><ShieldCheck size={13} />{applying ? "Applying safely…" : "Apply this plan"}</button></div>
-        </div>
-      )}
-    </section>
-  );
+function GraduationBadge() {
+  return <span aria-hidden="true">TT</span>;
 }
 
-function LessonEditor({ data, value, close, done, action }: { data: Data; value: Editor; close: () => void; done: () => Promise<void>; action: (body: unknown) => Promise<unknown> }) {
-  const [classId, setClassId] = useState(value.slot?.classId ?? data.classes[0]?.id ?? "");
-  const [subjectId, setSubjectId] = useState(value.slot?.subjectId ?? data.subjects[0]?.id ?? "");
-  const [teacherId, setTeacherId] = useState(value.slot?.teacherId ?? data.teachers[0]?.id ?? "");
+function LessonEditor({ data, classId, value, close, done, action }: { data: Data; classId: string; value: Editor; close: () => void; done: () => Promise<void>; action: (body: unknown) => Promise<unknown> }) {
+  const valid = data.teachingAssignments.filter((assignment) => assignment.classId === classId);
+  const existingKey = value.slot ? `${value.slot.classId}:${value.slot.subjectId}:${value.slot.teacherId}` : "";
+  const firstKey = valid[0] ? `${valid[0].classId}:${valid[0].subjectId}:${valid[0].teacherId}` : existingKey;
+  const [assignmentValue, setAssignmentValue] = useState(existingKey || firstKey);
   const [venue, setVenue] = useState(displayVenue(value.slot?.venue, data.timetableConfig));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const chosen = valid.find((assignment) => `${assignment.classId}:${assignment.subjectId}:${assignment.teacherId}` === assignmentValue);
+  const staleExisting = value.slot && !valid.some((assignment) => `${assignment.classId}:${assignment.subjectId}:${assignment.teacherId}` === existingKey);
 
   const save = async () => {
+    if (!chosen) { setError("Choose a valid subject and teacher assignment for this class."); return; }
     setSaving(true); setError("");
     try {
-      await action({
-        action: value.slot ? "updateSlot" : "saveSlot",
-        ...(value.slot ? { slotId: value.slot.id } : {}),
-        classId,
-        subjectId,
-        teacherId,
-        dayOfWeek: value.day,
-        period: value.period,
-        venue: venue.trim() || undefined,
-      });
+      await action({ action: value.slot ? "updateSlot" : "saveSlot", ...(value.slot ? { slotId: value.slot.id } : {}), classId: chosen.classId, subjectId: chosen.subjectId, teacherId: chosen.teacherId, dayOfWeek: value.day, period: value.period, venue: venue.trim() || undefined });
       await done();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save lesson."); }
     finally { setSaving(false); }
@@ -488,21 +262,5 @@ function LessonEditor({ data, value, close, done, action }: { data: Data; value:
     finally { setSaving(false); }
   };
 
-  return (
-    <div className="tt-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}>
-      <section className="tt-editor" role="dialog" aria-modal="true" aria-labelledby="tt-editor-title">
-        <button className="tt-editor-close" type="button" onClick={close} aria-label="Close lesson editor"><X size={17} /></button>
-        <span className="tt-eyebrow">LESSON</span><h2 id="tt-editor-title">{value.slot ? "Edit lesson" : "Add lesson"}</h2><p>Day {value.day}, period {value.period}. Conflicts and teacher assignment rules are checked when you save.</p>
-        {error ? <div className="tt-alert error">{error}</div> : null}
-        <label>Class<select value={classId} onChange={(event) => setClassId(event.target.value)}>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label>Subject<select value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>{data.subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label>Teacher<select value={teacherId} onChange={(event) => setTeacherId(event.target.value)}>{data.teachers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-        <label>Room / venue<input value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="Optional room name" /></label>
-        <div className="tt-editor-actions">
-          {value.slot ? <button className="tt-btn danger" disabled={saving} onClick={() => void remove()}>Remove</button> : <span />}
-          <div><button className="tt-btn ghost" type="button" onClick={close}>Cancel</button><button className="tt-btn primary" disabled={saving || !classId || !subjectId || !teacherId} onClick={() => void save()}>{saving ? "Saving…" : "Save lesson"}</button></div>
-        </div>
-      </section>
-    </div>
-  );
+  return <div className="tt-v4-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) close(); }}><section className="tt-v4-modal" role="dialog" aria-modal="true" aria-labelledby="tt-v4-editor-title"><button className="close" type="button" onClick={close} aria-label="Close"><X size={17} /></button><span>MANUAL TIMETABLE</span><h2 id="tt-v4-editor-title">{value.slot ? "Edit placed lesson" : "Place a lesson"}</h2><p>Only subjects and teachers already assigned to this class can be used here. Change teaching assignments in Academic Setup, not in the timetable grid.</p>{error ? <div className="tt-v4-notice error">{error}</div> : null}{staleExisting ? <div className="tt-v4-notice error">This existing lesson no longer matches a current teaching assignment. Choose a valid assignment or remove the lesson.</div> : null}<label>Assigned subject & teacher<select value={assignmentValue} onChange={(event) => setAssignmentValue(event.target.value)}><option value="">Choose assignment</option>{valid.map((assignment) => { const key = `${assignment.classId}:${assignment.subjectId}:${assignment.teacherId}`; return <option value={key} key={key}>{assignment.subject.name} — {assignment.teacher.name}</option>; })}</select></label><label>Room / venue (optional)<input value={venue} onChange={(event) => setVenue(event.target.value)} placeholder="e.g. Science Lab" /></label><div className="tt-v4-modal-actions">{value.slot ? <button className="danger" disabled={saving} onClick={() => void remove()}>Remove lesson</button> : null}<button className="secondary" disabled={saving} onClick={close}>Cancel</button><button className="primary" disabled={saving || !chosen} onClick={() => void save()}>{saving ? "Saving…" : "Save lesson"}</button></div></section></div>;
 }
