@@ -3,8 +3,8 @@ import type { TenantDb } from "@/lib/db";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
 import type { SignatureVectorEvidence } from "@/lib/signature-vector";
 import {
-  signatureDocumentBindingSha256,
-  verifySignatureDocumentBindingSha256,
+  signatureDocumentBindingHmac,
+  verifySignatureDocumentBindingHmac,
   verifySignatureImageSha256,
   verifySignatureVectorSha256,
 } from "@/lib/signature-integrity";
@@ -19,7 +19,7 @@ type SignatureSnapshot = {
   signatureIntegrity?: "verified" | "legacy" | "failed";
   signatureVectorSha256?: string;
   signatureVectorIntegrity?: "verified" | "legacy" | "failed";
-  documentBindingSha256?: string;
+  documentBindingHmac?: string;
   documentBindingIntegrity?: "verified" | "legacy" | "failed" | "not_checked";
 };
 
@@ -56,7 +56,7 @@ function safeVector(evidence?: SignatureVectorEvidence, sha256?: string) {
 
 function bindingFor(snapshot: SignatureSnapshot, context: SignatureDocumentContext) {
   if (!snapshot.signatureSha256 || !snapshot.signatureUpdatedAt) return undefined;
-  return signatureDocumentBindingSha256({
+  return signatureDocumentBindingHmac({
     schoolId: context.schoolId,
     documentType: context.documentType,
     documentId: context.documentId,
@@ -88,12 +88,12 @@ export function readSignatureSnapshot(value: Prisma.JsonValue | null | undefined
       ? row.signatureVectorIntegrity
       : undefined;
     const signatureUpdatedAt = typeof row.signatureUpdatedAt === "string" ? row.signatureUpdatedAt : undefined;
-    const rawBinding = typeof row.documentBindingSha256 === "string" && /^[a-f0-9]{64}$/i.test(row.documentBindingSha256)
-      ? row.documentBindingSha256.toLowerCase()
+    const rawBinding = typeof row.documentBindingHmac === "string" && /^[a-f0-9]{64}$/i.test(row.documentBindingHmac)
+      ? row.documentBindingHmac.toLowerCase()
       : undefined;
     let documentBindingIntegrity: SignatureSnapshot["documentBindingIntegrity"] = rawBinding ? "not_checked" : "legacy";
     if (rawBinding && context && safe.sha256 && signatureUpdatedAt) {
-      const verified = verifySignatureDocumentBindingSha256({
+      const verified = verifySignatureDocumentBindingHmac({
         schoolId: context.schoolId,
         documentType: context.documentType,
         documentId: context.documentId,
@@ -115,7 +115,7 @@ export function readSignatureSnapshot(value: Prisma.JsonValue | null | undefined
       signatureIntegrity: safe.integrity,
       signatureVectorSha256: rawVectorSha,
       signatureVectorIntegrity: vectorIntegrity,
-      documentBindingSha256: rawBinding,
+      documentBindingHmac: rawBinding,
       documentBindingIntegrity,
     }];
   });
@@ -159,9 +159,9 @@ export async function resolveCurrentReportSignatures(
     };
     if (documentContext) {
       const context = { schoolId, ...documentContext };
-      const documentBindingSha256 = bindingFor(base, context);
-      if (documentBindingSha256) {
-        base.documentBindingSha256 = documentBindingSha256;
+      const documentBindingHmac = bindingFor(base, context);
+      if (documentBindingHmac) {
+        base.documentBindingHmac = documentBindingHmac;
         base.documentBindingIntegrity = "verified";
       }
     }
