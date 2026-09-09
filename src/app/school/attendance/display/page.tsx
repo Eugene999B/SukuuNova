@@ -1,9 +1,9 @@
-import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { syncDefaultRbac } from "@/lib/role-builder-service";
 import AttendanceDisplay from "./AttendanceDisplay";
+import "./attendance-display.css";
 
 export default async function AttendanceDisplayPage() {
   const session = await requireSchoolSession();
@@ -14,12 +14,5 @@ export default async function AttendanceDisplayPage() {
   });
   if (!school) throw new Error("School not found.");
 
-  return <>
-    <div className="hidden lg:block">
-      <AppShell universe="school" title="Staff Check-In Display" subtitle="Check-in code." active="Attendance" userName={session.name ?? ""} schoolName={school.name} schoolCode="" role="Attendance Display">
-        <div className="-mx-4 -my-4 lg:-mx-6 lg:-my-6"><AttendanceDisplay schoolName={school.name} /></div>
-      </AppShell>
-    </div>
-    <div className="lg:hidden"><AttendanceDisplay schoolName={school.name} /></div>
-  </>;
+  return <AttendanceDisplay schoolName={school.name} />;
 }
