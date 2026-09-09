@@ -205,22 +205,87 @@ export async function getGuardianTransportOverview(tx: TenantDb, input: { school
         assignment.routeId,
       );
       route = routes[0] ?? null;
-      const trips = await tx.$queryRawUnsafe<Array<{ id: string; direction: string; status: string; startedAt: Date | null; lastLocationAt: Date | null; vehicleId: string }>>(
-        `SELECT "id","direction","status","startedAt","lastLocationAt","vehicleId" FROM "P3TransportTrip" WHERE "schoolId"=$1 AND "routeId"=$2 AND "status"='active' ORDER BY "startedAt" DESC NULLS LAST LIMIT 1`,
+      const trips = await tx.$queryRawUnsafe<Array<{ id: string; direction: PickupDirection; status: string; startedAt: Date | null; lastLocationAt: Date | null; vehicleId: string; registrationNumber: string; vehicleName: string | null }>>(
+        `SELECT tr."id",tr."direction",tr."status",tr."startedAt",tr."lastLocationAt",tr."vehicleId",v."registrationNumber",v."name" AS "vehicleName"
+         FROM "P3TransportTrip" tr
+         JOIN "P3Vehicle" v ON v."id"=tr."vehicleId" AND v."schoolId"=tr."schoolId"
+         WHERE tr."schoolId"=$1 AND tr."routeId"=$2 AND tr."status"='active'
+         ORDER BY tr."startedAt" DESC NULLS LAST LIMIT 1`,
         input.schoolId,
         assignment.routeId,
       );
       if (trips[0]) {
-        const locations = await tx.$queryRawUnsafe<Array<{ latitude: string; longitude: string; speedKph: string; heading: string | null; reportedAt: Date }>>(
-          `SELECT "latitude"::text,"longitude"::text,"speedKph"::text,"heading"::text,"reportedAt" FROM "P3VehicleLocation" WHERE "schoolId"=$1 AND "tripId"=$2 AND "quality"='accepted' ORDER BY "reportedAt" DESC LIMIT 1`,
-          input.schoolId,
-          trips[0].id,
-        );
-        activeTrip = { ...trips[0], latestLocation: locations[0] ?? null };
+        const [locations, shape, geofence] = await Promise.all([
+          tx.$queryRawUnsafe<Array<{
+            latitude: string;
+            longitude: string;
+            rawLatitude: string;
+            rawLongitude: string;
+            speedKph: string;
+            heading: string | null;
+            reportedAt: Date;
+            routeDeviation: boolean;
+            routeDistanceMeters: string | null;
+            routeProgressMeters: string | null;
+            routeRemainingMeters: string | null;
+            routeMatchConfidence: string | null;
+            algorithmVersion: string | null;
+          }>>(
+            `SELECT COALESCE("normalizedLatitude","latitude")::text AS "latitude",
+                    COALESCE("normalizedLongitude","longitude")::text AS "longitude",
+                    "latitude"::text AS "rawLatitude","longitude"::text AS "rawLongitude",
+                    "speedKph"::text,"heading"::text,"reportedAt","routeDeviation",
+                    "routeDistanceMeters"::text,"routeProgressMeters"::text,"routeRemainingMeters"::text,
+                    "routeMatchConfidence"::text,"algorithmVersion"
+             FROM "P3VehicleLocation"
+             WHERE "schoolId"=$1 AND "tripId"=$2 AND "quality"='accepted'
+             ORDER BY "reportedAt" DESC LIMIT 1`,
+            input.schoolId,
+            trips[0].id,
+          ),
+          tx.$queryRawUnsafe<Array<{ latitude: string; longitude: string; sequence: number }>>(
+            `SELECT "latitude"::text,"longitude"::text,"sequence"
+             FROM "P3RouteShapePoint"
+             WHERE "schoolId"=$1 AND "routeId"=$2 AND "direction"=$3
+             ORDER BY "sequence" ASC`,
+            input.schoolId,
+            assignment.routeId,
+            trips[0].direction,
+          ),
+          tx.$queryRawUnsafe<Array<{
+            state: string;
+            etaMinutes: number | null;
+            etaConfidenceMinutes: number | null;
+            routeRemainingMeters: string | null;
+            predictionVersion: string | null;
+            approachingAt: Date | null;
+            arrivingAt: Date | null;
+            arrivedAt: Date | null;
+            passedAt: Date | null;
+            updatedAt: Date;
+          }>>(
+            `SELECT "state","etaMinutes","etaConfidenceMinutes","routeRemainingMeters"::text,"predictionVersion",
+                    "approachingAt","arrivingAt","arrivedAt","passedAt","updatedAt"
+             FROM "P3GeofenceState"
+             WHERE "schoolId"=$1 AND "tripId"=$2 AND "studentId"=$3 LIMIT 1`,
+            input.schoolId,
+            trips[0].id,
+            link.studentId,
+          ),
+        ]);
+        activeTrip = {
+          ...trips[0],
+          latestLocation: locations[0] ?? null,
+          routeShape: shape,
+          childProgress: geofence[0] ?? null,
+        };
       }
     }
     const alerts = await tx.$queryRawUnsafe<Array<{ id: string; type: string; status: string; queuedAt: Date; sentAt: Date | null; details: unknown }>>(
-      `SELECT "id","type","status","queuedAt","sentAt","details" FROM "P3TransportAlert" WHERE "schoolId"=$1 AND "guardianId"=$2 AND "studentId"=$3 ORDER BY "queuedAt" DESC LIMIT 20`,
+      `SELECT "id","type","status","queuedAt","sentAt","details"
+       FROM "P3TransportAlert"
+       WHERE "schoolId"=$1 AND "guardianId"=$2 AND "studentId"=$3
+       ORDER BY "queuedAt" DESC LIMIT 20`,
       input.schoolId,
       input.guardianId,
       link.studentId,
@@ -231,11 +296,63 @@ export async function getGuardianTransportOverview(tx: TenantDb, input: { school
 }
 
 export async function getSchoolTransportControl(tx: TenantDb, schoolId: string) {
-  const [pendingPickups, trackers, activeTrips, recentAlerts] = await Promise.all([
-    tx.$queryRawUnsafe(`SELECT p."id",p."studentId",s."name" AS "studentName",p."guardianId",g."name" AS "guardianName",p."routeId",p."direction",p."label",p."latitude"::text,p."longitude"::text,p."isTemporary",p."effectiveFrom",p."effectiveTo",p."requestedAt" FROM "P3PickupPoint" p JOIN "Student" s ON s."id"=p."studentId" AND s."schoolId"=p."schoolId" JOIN "Guardian" g ON g."id"=p."guardianId" AND g."schoolId"=p."schoolId" WHERE p."schoolId"=$1 AND p."status"='pending' ORDER BY p."requestedAt" ASC`, schoolId),
-    tx.$queryRawUnsafe(`SELECT t."id",t."vehicleId",v."registrationNumber",v."name" AS "vehicleName",t."model",t."status",t."firmwareVersion",t."lastSeenAt",t."lastPowerState",t."lastNetworkState" FROM "P3TrackerDevice" t LEFT JOIN "P3Vehicle" v ON v."id"=t."vehicleId" AND v."schoolId"=t."schoolId" WHERE t."schoolId"=$1 ORDER BY t."updatedAt" DESC`, schoolId),
-    tx.$queryRawUnsafe(`SELECT tr."id",tr."routeId",r."name" AS "routeName",tr."vehicleId",v."registrationNumber",tr."direction",tr."status",tr."startedAt",tr."lastLocationAt" FROM "P3TransportTrip" tr JOIN "P3BusRoute" r ON r."id"=tr."routeId" AND r."schoolId"=tr."schoolId" JOIN "P3Vehicle" v ON v."id"=tr."vehicleId" AND v."schoolId"=tr."schoolId" WHERE tr."schoolId"=$1 AND tr."status" IN ('scheduled','active') ORDER BY tr."serviceDate" ASC,tr."plannedStartAt" ASC NULLS LAST`, schoolId),
-    tx.$queryRawUnsafe(`SELECT "id","tripId","studentId","guardianId","type","channel","status","queuedAt","sentAt" FROM "P3TransportAlert" WHERE "schoolId"=$1 ORDER BY "queuedAt" DESC LIMIT 100`, schoolId),
+  const [pendingPickups, trackers, activeTrips, recentAlerts, routeReadiness] = await Promise.all([
+    tx.$queryRawUnsafe(
+      `SELECT p."id",p."studentId",s."name" AS "studentName",p."guardianId",g."name" AS "guardianName",p."routeId",p."direction",p."label",p."latitude"::text,p."longitude"::text,p."isTemporary",p."effectiveFrom",p."effectiveTo",p."requestedAt"
+       FROM "P3PickupPoint" p
+       JOIN "Student" s ON s."id"=p."studentId" AND s."schoolId"=p."schoolId"
+       JOIN "Guardian" g ON g."id"=p."guardianId" AND g."schoolId"=p."schoolId"
+       WHERE p."schoolId"=$1 AND p."status"='pending' ORDER BY p."requestedAt" ASC`,
+      schoolId,
+    ),
+    tx.$queryRawUnsafe(
+      `SELECT t."id",t."vehicleId",v."registrationNumber",v."name" AS "vehicleName",t."model",t."status",t."firmwareVersion",t."lastSeenAt",t."lastPowerState",t."lastNetworkState",
+              c."id" AS "certificationId",c."status" AS "certificationStatus",c."startedAt" AS "certificationStartedAt",c."endedAt" AS "certificationEndedAt",
+              c."acceptedPackets",c."rejectedPackets",c."acceptedRatio"::text,c."maxHeartbeatGapSeconds"::text,c."latestPacketAgeSeconds"::text,c."failureReasons",c."algorithmVersion" AS "certificationVersion"
+       FROM "P3TrackerDevice" t
+       LEFT JOIN "P3Vehicle" v ON v."id"=t."vehicleId" AND v."schoolId"=t."schoolId"
+       LEFT JOIN LATERAL (
+         SELECT * FROM "P3TrackerCertification" c0
+         WHERE c0."schoolId"=t."schoolId" AND c0."trackerDeviceId"=t."id"
+         ORDER BY c0."startedAt" DESC LIMIT 1
+       ) c ON true
+       WHERE t."schoolId"=$1 ORDER BY t."updatedAt" DESC`,
+      schoolId,
+    ),
+    tx.$queryRawUnsafe(
+      `SELECT tr."id",tr."routeId",r."name" AS "routeName",tr."vehicleId",v."registrationNumber",tr."direction",tr."status",tr."startedAt",tr."lastLocationAt",
+              loc."latitude",loc."longitude",loc."speedKph",loc."reportedAt",loc."routeDeviation",loc."routeMatchConfidence"
+       FROM "P3TransportTrip" tr
+       JOIN "P3BusRoute" r ON r."id"=tr."routeId" AND r."schoolId"=tr."schoolId"
+       JOIN "P3Vehicle" v ON v."id"=tr."vehicleId" AND v."schoolId"=tr."schoolId"
+       LEFT JOIN LATERAL (
+         SELECT COALESCE(l."normalizedLatitude",l."latitude")::text AS "latitude",
+                COALESCE(l."normalizedLongitude",l."longitude")::text AS "longitude",
+                l."speedKph"::text AS "speedKph",l."reportedAt",l."routeDeviation",l."routeMatchConfidence"::text AS "routeMatchConfidence"
+         FROM "P3VehicleLocation" l
+         WHERE l."schoolId"=tr."schoolId" AND l."tripId"=tr."id" AND l."quality"='accepted'
+         ORDER BY l."reportedAt" DESC LIMIT 1
+       ) loc ON true
+       WHERE tr."schoolId"=$1 AND tr."status" IN ('scheduled','active')
+       ORDER BY tr."serviceDate" ASC,tr."plannedStartAt" ASC NULLS LAST`,
+      schoolId,
+    ),
+    tx.$queryRawUnsafe(
+      `SELECT "id","tripId","studentId","guardianId","type","channel","status","queuedAt","sentAt","details"
+       FROM "P3TransportAlert" WHERE "schoolId"=$1 ORDER BY "queuedAt" DESC LIMIT 100`,
+      schoolId,
+    ),
+    tx.$queryRawUnsafe(
+      `SELECT r."id",r."name",r."code",
+              COUNT(*) FILTER (WHERE p."direction"='morning')::int AS "morningShapePoints",
+              COUNT(*) FILTER (WHERE p."direction"='afternoon')::int AS "afternoonShapePoints"
+       FROM "P3BusRoute" r
+       LEFT JOIN "P3RouteShapePoint" p ON p."schoolId"=r."schoolId" AND p."routeId"=r."id"
+       WHERE r."schoolId"=$1
+       GROUP BY r."id",r."name",r."code"
+       ORDER BY r."name" ASC`,
+      schoolId,
+    ),
   ]);
-  return { pendingPickups, trackers, activeTrips, recentAlerts };
+  return { pendingPickups, trackers, activeTrips, recentAlerts, routeReadiness };
 }
