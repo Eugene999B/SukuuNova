@@ -21,7 +21,7 @@ export default async function StudentBiometricsPage({ params }: { params: Promis
           class: { select: { name: true } },
           school: { select: { name: true, uniqueCode: true } },
           guardians: {
-            orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+            orderBy: { isPrimary: "desc" },
             select: { isPrimary: true, relationship: true, guardian: { select: { id: true, name: true } } },
           },
         },
