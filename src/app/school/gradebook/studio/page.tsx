@@ -7,7 +7,7 @@ import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
 import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/academic-engine";
 import { gradeScale } from "@/lib/report-card-ranking";
-import { isTermActive } from "@/lib/term-date";
+import { selectAcademicTerm } from "@/lib/term-date";
 import "../../academic-workspace.css";
 import "./gradebook-entry.css";
 
@@ -32,9 +32,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
     const selectedClass = params.class || "";
     const selectedSubject = params.subject || "";
     const timezone = settings?.timezone || "Africa/Accra";
-    const selectedTerm = config.terms.find((item) => item.id === params.term)
-      ?? config.terms.find((item) => isTermActive(item, new Date(), timezone))
-      ?? null;
+    const selectedTerm = selectAcademicTerm(config.terms, params.term, new Date(), timezone);
     const assignment = assignments.find((item) => item.classId === selectedClass && item.subjectId === selectedSubject) ?? null;
     const performance = assignment && selectedTerm
       ? await getClassSubjectPerformance(tx, assignment.classId, assignment.subjectId, selectedTerm.id)
@@ -152,7 +150,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
         {!data.assignment || !data.performance ? (
           <section className="academic-empty">
             <strong>{data.selectedTerm ? "Start with a valid class + subject assignment." : "Choose an academic term before entering marks."}</strong>
-            <p>{data.selectedTerm ? "The selected class and subject must be connected through Classes & Houses before marks can be entered." : "There is no active academic term right now. Choose a term explicitly so marks cannot accidentally be entered against a completed or future period."}</p>
+            <p>{data.selectedTerm ? "The selected class and subject must be connected through Classes & Houses before marks can be entered." : "The calendar did not resolve a unique valid term for this request. Choose a term explicitly before entering marks."}</p>
             <div className="academic-empty-actions">
               <Link href="/school/classes">Manage class assignments</Link>
               <Link href="/school/exams">Open assessments</Link>

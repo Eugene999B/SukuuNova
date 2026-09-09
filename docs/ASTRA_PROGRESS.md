@@ -1,5 +1,13 @@
 # Astra progress
 
+## Gradebook term context batch
+- Replaced newest-term selection in the teacher gradebook with a shared school-local calendar selector.
+- Both gradebook experiences require a unique active term or explicit selection; invalid IDs never fall back and overlapping terms require a choice.
+- Added teacher term selectors, preserved term context across assignment links/back navigation, and readable missing-calendar/assessment states.
+- Teacher sheets use the school's grading scale and retain locked-term read-only controls. Assignment-list access now checks score-entry permission.
+- Removed redundant route-parameter decoding and reject malformed teaching contexts.
+- Seven calendar/context regressions. GitHub verification pending. No migration. Production browser verification remains outstanding.
+
 ## Owner-reviewed default-role upgrades
 - Added a selective Owner review in Roles & Permissions with readable permission labels, risk, assigned/active account counts and direct-denial impact.
 - Additive upgrades preserve extra permissions, account overrides, role identity and custom roles; preview never provisions or broadens roles.

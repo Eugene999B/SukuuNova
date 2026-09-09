@@ -14,3 +14,12 @@ export function isTermActive(term: { startDate: Date; endDate: Date }, now = new
   const end = dateParts(term.endDate, "UTC");
   return current >= start && current <= end;
 }
+
+/** Explicit term IDs never fall back to another term. Automatic selection requires one active term. */
+export function selectAcademicTerm<T extends { id: string; startDate: Date; endDate: Date }>(
+  terms: readonly T[], requestedId?: string, now = new Date(), timezone = "Africa/Accra",
+): T | null {
+  if (requestedId) return terms.find(term => term.id === requestedId) ?? null;
+  const active = terms.filter(term => isTermActive(term, now, timezone));
+  return active.length === 1 ? active[0] : null;
+}
