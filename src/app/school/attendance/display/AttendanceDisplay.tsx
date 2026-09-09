@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import encodeQR from "qr";
 
 type DisplayLocation = { latitude: number; longitude: number; accuracyM?: number };
+type ChallengeMeta = { refreshAfterSeconds: number; requireFace: boolean; presenceMode: "network_or_location" | "location" | "network" };
 
 export default function AttendanceDisplay({ schoolName }: { schoolName: string }) {
   const [token, setToken] = useState("");
@@ -12,6 +13,7 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
   const [loading, setLoading] = useState(true);
   const [clock, setClock] = useState(() => Date.now());
   const [location, setLocation] = useState<DisplayLocation>();
+  const [meta, setMeta] = useState<ChallengeMeta>({ refreshAfterSeconds: 60, requireFace: false, presenceMode: "network_or_location" });
 
   useEffect(() => {
     if (!navigator.geolocation) return;
@@ -29,13 +31,21 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
       const response = await fetch("/api/school/attendance/staff-qr", {
         method: "POST",
         headers: { "content-type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ action: "challenge", displayLocation: location ?? null })
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Unable to refresh the school check-in code.");
+      if (!response.ok) throw new Error(body.message ?? body.error ?? "Unable to refresh the school check-in code.");
       setToken(body.result.token);
       setExpiresAt(new Date(body.result.expiresAt));
+      setMeta({
+        refreshAfterSeconds: Number(body.result.refreshAfterSeconds ?? body.refreshAfterSeconds ?? 60),
+        requireFace: Boolean(body.result.requireFace),
+        presenceMode: body.result.presenceMode ?? "network_or_location",
+      });
     } catch (err) {
+      setToken("");
+      setExpiresAt(null);
       setError(err instanceof Error ? err.message : "Unable to refresh the school check-in code.");
     } finally {
       setLoading(false);
@@ -44,9 +54,10 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
 
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
-    const timer = window.setInterval(() => void refresh(), 30000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
+    if (!token) return;
+    const timer = window.setTimeout(() => void refresh(), Math.max(30, meta.refreshAfterSeconds) * 1000);
+    return () => window.clearTimeout(timer);
+  }, [meta.refreshAfterSeconds, refresh, token]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
@@ -55,40 +66,40 @@ export default function AttendanceDisplay({ schoolName }: { schoolName: string }
 
   const svg = useMemo(() => token ? encodeQR(token, "svg", { ecc: "high", border: 4, scale: 8 }) : "", [token]);
   const remaining = expiresAt ? Math.max(0, Math.ceil((expiresAt.getTime() - clock) / 1000)) : 0;
+  const presenceLabel = meta.presenceMode === "network" ? "school network" : meta.presenceMode === "location" ? "school location" : "school network or location";
 
-  return <main className="min-h-screen bg-slate-950 px-5 py-8 text-white sm:px-10">
-    <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl flex-col items-center justify-center">
-      <div className="mb-6 text-center">
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-emerald-300">SukuuNova · Staff Check-In</p>
-        <h1 className="mt-2 text-3xl font-semibold sm:text-5xl">{schoolName}</h1>
-        
-      </div>
-
-      <section className="grid w-full gap-6 rounded-3xl border border-white/10 bg-white p-6 text-slate-900 shadow-2xl sm:p-10 md:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="flex min-h-[320px] items-center justify-center rounded-2xl bg-white p-4 sm:min-h-[430px]">
-          {svg ? <div aria-label="Live school staff check-in QR code" className="w-full max-w-[430px] [&>svg]:h-auto [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="text-center text-slate-500">{loading ? "Generating secure check-in code…" : "QR code unavailable"}</div>}
+  return <main className="attendance-live-display">
+    <div className="attendance-live-frame">
+      <header className="attendance-live-header">
+        <div>
+          <span>SukuuNova Attendance · Live Staff Check-In</span>
+          <h1>{schoolName}</h1>
+          <p>Scan the live code with your signed-in staff account. The code rotates automatically and cannot be reused by the same account.</p>
         </div>
+        <div className="attendance-live-clock"><small>Code changes in</small><strong>{remaining}s</strong><span>{meta.refreshAfterSeconds}s rotation</span></div>
+      </header>
 
-        <div className="flex flex-col justify-between rounded-2xl bg-slate-50 p-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">How it works</p>
-            <ol className="mt-4 space-y-4 text-sm text-slate-700">
-              <li><strong>1.</strong> Teacher logs into SukuuNova.</li>
-              <li><strong>2.</strong> Teacher opens <strong>School Check-In</strong>.</li>
-              <li><strong>3.</strong> Teacher scans this live code.</li>
-              <li><strong>4.</strong> Server verifies the session, freshness and school presence.</li>
-            </ol>
-          </div>
-          <div className="mt-8 border-t border-slate-200 pt-5">
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Code status</p>
-            <p className="mt-2 text-2xl font-bold tabular-nums">{remaining}s</p>
-            <p className="mt-1 text-xs text-slate-500">Refreshes automatically every 30 seconds.</p>
-            {location ? <p className="mt-3 text-xs font-medium text-emerald-700">Display location verification ready.</p> : <p className="mt-3 text-xs font-medium text-amber-700">Location unavailable; network-bound verification will be used.</p>}
-            {error ? <p className="mt-3 rounded-xl bg-red-50 p-3 text-xs font-medium text-red-700">{error}</p> : null}
-          </div>
+      <section className="attendance-live-stage">
+        <div className="attendance-live-qr">
+          {svg ? <div aria-label="Live school staff check-in QR code" dangerouslySetInnerHTML={{ __html: svg }} /> : <div className="attendance-live-empty">{loading ? "Generating secure check-in code…" : "QR code unavailable"}</div>}
         </div>
+        <aside className="attendance-live-guide">
+          <span className="attendance-live-kicker">Verification path</span>
+          <ol>
+            <li><b>1</b><div><strong>Open School Check-In</strong><small>Use your own signed-in staff account.</small></div></li>
+            <li><b>2</b><div><strong>Scan this live code</strong><small>A screenshot quickly becomes useless because the code rotates.</small></div></li>
+            <li><b>3</b><div><strong>Prove school presence</strong><small>Verification uses {presenceLabel}.</small></div></li>
+            <li><b>4</b><div><strong>{meta.requireFace ? "Verify your face" : "Attendance is recorded"}</strong><small>{meta.requireFace ? "The face must match the same staff account that scanned the code." : "The server applies the school's late and closing-time rules."}</small></div></li>
+          </ol>
+          <div className="attendance-live-status">
+            <strong>{location ? "Display location ready" : "Display location unavailable"}</strong>
+            <small>{location ? "Location can be used as part of school-presence verification." : "The configured network rule may still allow verification."}</small>
+          </div>
+          {error ? <div className="attendance-live-error">{error}</div> : null}
+        </aside>
       </section>
-      <p className="mt-6 text-center text-xs text-slate-400">Keep this page on the school's designated attendance screen. Do not share screenshots of the code.</p>
+
+      <footer>Keep this page open only on the school's designated attendance screen. Do not publish or share live-code screenshots.</footer>
     </div>
   </main>;
 }

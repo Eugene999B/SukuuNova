@@ -3,14 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import { requirePermission } from "@/lib/rbac";
-import { AppError } from "@/lib/errors";
+import { hasPermission, requirePermission } from "@/lib/rbac";
+import { AppError, ForbiddenError } from "@/lib/errors";
 
-type AttendanceEntry = { studentId: string; type: "present" | "late" | "absent" | "excused"; isLate?: boolean };
+type AttendanceEntry = { studentId: string; type: "present" | "late" | "absent" | "excused" };
 
-// One request writes the whole register in a single transaction; cap it so a
-// malformed client cannot force a multi-thousand-row write.
 const MAX_REGISTER_ENTRIES = 500;
+
+function canonicalEntry(entry: AttendanceEntry) {
+  if (entry.type === "present") return { type: "in", isLate: false };
+  if (entry.type === "late") return { type: "in", isLate: true };
+  return { type: entry.type, isLate: false };
+}
 
 export async function saveClassAttendance(classId: string, attendanceDate: string, entries: AttendanceEntry[]) {
   const session = await requireSchoolSession();
@@ -22,17 +26,51 @@ export async function saveClassAttendance(classId: string, attendanceDate: strin
   const dateValue = new Date(`${attendanceDate}T00:00:00.000Z`);
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "attendance:record");
+    const canRecordAll = await hasPermission(tx, session.userId, "attendance:record_all") || await hasPermission(tx, session.userId, "attendance:review");
+    if (!canRecordAll) {
+      await requirePermission(tx, session.userId, "attendance:record_assigned");
+      const assigned = await tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId, classTeacherId: session.userId }, select: { id: true } });
+      if (!assigned) throw new ForbiddenError("You may save attendance only for your assigned class. School leadership can use all-class attendance permissions when needed.");
+    }
+
     const uniqueIds = [...new Set(entries.map((entry) => entry.studentId))];
     if (uniqueIds.length !== entries.length) throw new AppError("A learner appears more than once in this register.", 400, "DUPLICATE_REGISTER_ENTRY");
     const students = await tx.student.findMany({ where: { classId, status: "active", id: { in: uniqueIds } }, select: { id: true } });
     if (students.length !== uniqueIds.length) throw new AppError("One or more learners no longer belong to this class or school.", 400, "INVALID_REGISTER");
     const existing = await tx.attendanceEvent.findMany({ where: { attendanceDate: dateValue, studentId: { in: uniqueIds } }, select: { studentId: true } });
-    if (existing.length) throw new AppError("Some learners already have attendance recorded for this date. Refresh the register before saving again.", 409, "REGISTER_ALREADY_SAVED");
+    if (existing.length) throw new AppError("Attendance arrived for one or more learners while this register was open. Refresh before saving so device and manual records are not duplicated.", 409, "REGISTER_STALE");
+
     const now = new Date();
-    await tx.attendanceEvent.createMany({ data: entries.map((entry) => ({ schoolId: session.schoolId, studentId: entry.studentId, type: entry.type, method: "school_register", timestamp: now, attendanceDate: dateValue, isLate: Boolean(entry.isLate) || entry.type === "late", recordedBy: session.userId })) });
-    await tx.auditLogSchool.createMany({ data: entries.map((entry) => ({ schoolId: session.schoolId, actorId: session.userId, action: "attendance.recorded", entityType: "AttendanceEvent", entityId: `${classId}:${attendanceDate}:${entry.studentId}`, after: { classId, studentId: entry.studentId, attendanceDate, type: entry.type, isLate: Boolean(entry.isLate) || entry.type === "late" } })) });
+    await tx.attendanceEvent.createMany({
+      data: entries.map((entry) => {
+        const canonical = canonicalEntry(entry);
+        return {
+          schoolId: session.schoolId,
+          studentId: entry.studentId,
+          type: canonical.type,
+          method: "school_register",
+          timestamp: now,
+          attendanceDate: dateValue,
+          isLate: canonical.isLate,
+          recordedBy: session.userId,
+        };
+      })
+    });
+    await tx.auditLogSchool.createMany({
+      data: entries.map((entry) => {
+        const canonical = canonicalEntry(entry);
+        return {
+          schoolId: session.schoolId,
+          actorId: session.userId,
+          action: "attendance.recorded",
+          entityType: "AttendanceEvent",
+          entityId: `${classId}:${attendanceDate}:${entry.studentId}`,
+          after: { classId, studentId: entry.studentId, attendanceDate, registerDecision: entry.type, type: canonical.type, isLate: canonical.isLate, method: "school_register" },
+        };
+      })
+    });
   });
   revalidatePath("/school/attendance");
   revalidatePath("/school/attendance/register");
-  return { ok: true as const, message: `Attendance saved for ${entries.length} learners.` };
+  return { ok: true as const, message: `Attendance saved for ${entries.length} learner${entries.length === 1 ? "" : "s"}.` };
 }

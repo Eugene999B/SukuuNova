@@ -7,6 +7,8 @@ import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { clientIpFromHeaders, consumeStaffAttendanceQr, createStaffAttendanceQr, displayIpHashFromChallenge, displayLocationFromChallenge, freshChallengeId, freshNonce, hashClientIp, issueStaffAttendanceChallenge, verifyStaffAttendanceQr } from "@/lib/qr-attendance";
 import { recordStaffSelfAttendance } from "@/lib/attendance-service";
+import { assertAutomatedAttendanceWindow, readAttendancePolicy } from "@/lib/attendance-policy";
+import { verifyExpectedStaffFace } from "@/lib/face-service";
 
 const locationSchema = z.object({
   latitude: z.number().finite().min(-90).max(90),
@@ -16,7 +18,13 @@ const locationSchema = z.object({
 
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("challenge"), displayLocation: locationSchema }),
-  z.object({ action: z.literal("scan"), token: z.string().min(50).max(10000), location: locationSchema, idempotencyKey: z.string().uuid() })
+  z.object({
+    action: z.literal("scan"),
+    token: z.string().min(50).max(10000),
+    location: locationSchema,
+    idempotencyKey: z.string().uuid(),
+    faceImage: z.string().min(100).max(7_500_000).optional(),
+  })
 ]);
 
 function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
@@ -37,6 +45,26 @@ function noStoreJson(payload: unknown, init?: ResponseInit) {
   return NextResponse.json(payload, { ...init, headers });
 }
 
+export async function GET() {
+  try {
+    const session = await requireSchoolSession();
+    const policy = await withTenant(session.schoolId, async (tx) => {
+      await requirePermission(tx, session.userId, "attendance:staff_scan");
+      return readAttendancePolicy(tx, session.schoolId);
+    });
+    return noStoreJson({
+      qr: policy.qr,
+      staffWindow: policy.staff,
+      expectedResumptionTime: policy.expectedResumptionTime,
+      attendanceGraceMinutes: policy.attendanceGraceMinutes,
+      timezone: policy.timezone,
+      configured: policy.configured,
+    });
+  } catch (error) {
+    return routeError(error);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
@@ -46,8 +74,11 @@ export async function POST(request: Request) {
     if (input.action === "challenge") {
       const result = await withTenant(session.schoolId, async (tx) => {
         await requirePermission(tx, session.userId, "attendance:display");
+        const policy = await readAttendancePolicy(tx, session.schoolId);
+        if (!policy.qr.enabled) throw new AppError("Rotating QR attendance is disabled in Attendance Control.", 409, "STAFF_QR_DISABLED");
         const issuedAt = new Date();
-        const expiresAt = new Date(issuedAt.getTime() + 45_000);
+        assertAutomatedAttendanceWindow(policy, "staff", issuedAt);
+        const expiresAt = new Date(issuedAt.getTime() + (policy.qr.rotationSeconds + 5) * 1000);
         const challengeId = freshChallengeId();
         const nonce = freshNonce();
         await issueStaffAttendanceChallenge(tx, {
@@ -61,13 +92,23 @@ export async function POST(request: Request) {
           displayLocation: input.displayLocation ?? undefined
         });
         const token = await createStaffAttendanceQr(session.schoolId, challengeId, nonce, expiresAt);
-        return { token, challengeId, issuedAt: issuedAt.toISOString(), expiresAt: expiresAt.toISOString() };
+        return {
+          token,
+          challengeId,
+          issuedAt: issuedAt.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+          refreshAfterSeconds: policy.qr.rotationSeconds,
+          requireFace: policy.qr.requireFace,
+          presenceMode: policy.qr.presenceMode,
+        };
       });
-      return noStoreJson({ ok: true, result, refreshAfterSeconds: 30 });
+      return noStoreJson({ ok: true, result, refreshAfterSeconds: result.refreshAfterSeconds });
     }
 
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "attendance:staff_scan");
+      const policy = await readAttendancePolicy(tx, session.schoolId);
+      if (!policy.qr.enabled) throw new AppError("Rotating QR attendance is disabled in Attendance Control.", 409, "STAFF_QR_DISABLED");
 
       const idempotencyAuditId = hashClientIp(`staff-qr-idempotency:${session.schoolId}:${session.userId}:${input.idempotencyKey}`);
       const previous = await tx.auditLogSchool.findUnique({ where: { id: idempotencyAuditId }, select: { actorId: true, after: true } });
@@ -113,8 +154,49 @@ export async function POST(request: Request) {
         geoReason = "display_location_unavailable";
       }
 
-      if (!sameNetwork && !geoVerified) throw new AppError("Attendance check-in could not verify that you are at school. Please connect to the school's network or allow location access and scan the live code again.", 403, "SCHOOL_PRESENCE_NOT_VERIFIED");
-      const verification = sameNetwork && geoVerified ? "qr+network+location" : sameNetwork ? "qr+network" : "qr+location";
+      const presenceVerified = policy.qr.presenceMode === "network"
+        ? sameNetwork
+        : policy.qr.presenceMode === "location"
+          ? geoVerified
+          : sameNetwork || geoVerified;
+      if (!presenceVerified) {
+        const guidance = policy.qr.presenceMode === "network"
+          ? "Connect to the school's attendance network and scan the live code again."
+          : policy.qr.presenceMode === "location"
+            ? "Allow accurate location access at the school and scan the live code again."
+            : "Connect to the school's network or allow location access at the school, then scan the live code again.";
+        throw new AppError(`Attendance check-in could not verify that you are at school. ${guidance}`, 403, "SCHOOL_PRESENCE_NOT_VERIFIED");
+      }
+
+      let faceConfidence: number | undefined;
+      if (policy.qr.requireFace) {
+        if (!input.faceImage) throw new AppError("This school requires face verification after scanning the QR code.", 409, "STAFF_FACE_REQUIRED");
+        const face = await verifyExpectedStaffFace(tx, { schoolId: session.schoolId, staffId: session.userId, image: input.faceImage });
+        faceConfidence = face.confidence;
+      }
+
+      const presenceVerification = sameNetwork && geoVerified ? "network+location" : sameNetwork ? "network" : "location";
+      const verification = `qr+${presenceVerification}${policy.qr.requireFace ? "+face" : ""}`;
+      const verificationMeta = {
+        networkMatch: sameNetwork,
+        locationMatch: geoVerified,
+        ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}),
+        locationReason: geoReason,
+        ...(faceConfidence !== undefined ? { faceConfidence } : {}),
+        idempotencyKey: input.idempotencyKey,
+      };
+
+      // Claim this challenge for this staff account before writing attendance. If the
+      // same person races/replays the code, QR_REPLAY aborts before any attendance row
+      // can be created. Other staff may still claim the same live school challenge.
+      await consumeStaffAttendanceQr(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        challengeId: verified.challengeId,
+        nonce: verified.nonce,
+        verification,
+        meta: verificationMeta,
+      });
 
       try {
         const event = await recordStaffSelfAttendance(tx, {
@@ -123,16 +205,12 @@ export async function POST(request: Request) {
           type: "in",
           method: "qr",
           verification,
-          verificationMeta: { networkMatch: sameNetwork, locationMatch: geoVerified, ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}) }
-        });
-
-        await consumeStaffAttendanceQr(tx, {
-          schoolId: session.schoolId,
-          actorId: session.userId,
-          challengeId: verified.challengeId,
-          nonce: verified.nonce,
-          verification,
-          meta: { networkMatch: sameNetwork, locationMatch: geoVerified, ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}), locationReason: geoReason, idempotencyKey: input.idempotencyKey }
+          verificationMeta: {
+            networkMatch: sameNetwork,
+            locationMatch: geoVerified,
+            ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}),
+            ...(faceConfidence !== undefined ? { faceConfidence } : {}),
+          }
         });
 
         await tx.auditLogSchool.create({
@@ -149,14 +227,8 @@ export async function POST(request: Request) {
         return { event, verification };
       } catch (error) {
         if (!(error instanceof AppError)) throw error;
-        await consumeStaffAttendanceQr(tx, {
-          schoolId: session.schoolId,
-          actorId: session.userId,
-          challengeId: verified.challengeId,
-          nonce: verified.nonce,
-          verification,
-          meta: { networkMatch: sameNetwork, locationMatch: geoVerified, ...(distanceM !== undefined ? { distanceM: Math.round(distanceM) } : {}), locationReason: geoReason, outcome: "rejected", errorCode: error.code, idempotencyKey: input.idempotencyKey }
-        });
+        // The verified challenge remains consumed for this staff account so a failed
+        // attendance state (for example already checked in) cannot be retried/replayed.
         return { error };
       }
     });

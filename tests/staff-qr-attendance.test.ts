@@ -78,23 +78,24 @@ describe("staff attendance QR", () => {
     });
   });
 
-  it("consumes a challenge once and rejects replay", async () => {
+  it("allows different staff to consume the same live code once each and rejects same-staff replay", async () => {
     const challengeId = freshChallengeId();
     const nonce = freshNonce();
-    const findFirst = async () => ({
-      after: {
-        nonceHash: hashQrSecret(nonce),
-        expiresAt: new Date(Date.now() + 45_000).toISOString(),
-        displayIpHash: "display-ip-hash"
-      }
-    });
-    let createCount = 0;
+    const seenConsumptionIds = new Set<string>();
     const tx = {
       auditLogSchool: {
-        findFirst,
-        createMany: async () => {
-          createCount += 1;
-          return { count: createCount === 1 ? 1 : 0 };
+        findFirst: async () => ({
+          after: {
+            nonceHash: hashQrSecret(nonce),
+            expiresAt: new Date(Date.now() + 45_000).toISOString(),
+            displayIpHash: "display-ip-hash"
+          }
+        }),
+        createMany: async (input: { data: Array<{ id: string }> | { id: string } }) => {
+          const row = Array.isArray(input.data) ? input.data[0] : input.data;
+          if (seenConsumptionIds.has(row.id)) return { count: 0 };
+          seenConsumptionIds.add(row.id);
+          return { count: 1 };
         }
       }
     } as unknown as Parameters<typeof consumeStaffAttendanceQr>[0];
@@ -110,6 +111,14 @@ describe("staff attendance QR", () => {
     await expect(consumeStaffAttendanceQr(tx, {
       schoolId: "school-a",
       actorId: "teacher-b",
+      challengeId,
+      nonce,
+      verification: "qr+network"
+    })).resolves.toBeUndefined();
+
+    await expect(consumeStaffAttendanceQr(tx, {
+      schoolId: "school-a",
+      actorId: "teacher-a",
       challengeId,
       nonce,
       verification: "qr+network"

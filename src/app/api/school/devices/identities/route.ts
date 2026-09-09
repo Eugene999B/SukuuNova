@@ -33,15 +33,47 @@ export async function GET() {
         tx.student.findMany({
           where: { status: "active" },
           orderBy: { name: "asc" },
-          select: { id: true, name: true, admissionNo: true }
+          select: {
+            id: true,
+            name: true,
+            admissionNo: true,
+            photoUrl: true,
+            faceEnrollments: { select: { id: true, enrolledAt: true }, take: 1, orderBy: { enrolledAt: "desc" } },
+            guardians: {
+              where: { isPrimary: true },
+              take: 1,
+              select: { guardian: { select: { id: true, name: true } } },
+            },
+          }
         }),
         tx.user.findMany({
           where: { status: { in: ["active", "pending"] } },
           orderBy: { name: "asc" },
-          select: { id: true, name: true, email: true }
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            faceEnrollments: { select: { id: true, enrolledAt: true }, take: 1, orderBy: { enrolledAt: "desc" } },
+          }
         })
       ]);
-      return { identities, students, staff };
+      return {
+        identities,
+        students: students.map((student) => ({
+          id: student.id,
+          name: student.name,
+          admissionNo: student.admissionNo,
+          photoUrl: student.photoUrl,
+          faceEnrolledAt: student.faceEnrollments[0]?.enrolledAt ?? null,
+          primaryGuardian: student.guardians[0]?.guardian ?? null,
+        })),
+        staff: staff.map((user) => ({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          faceEnrolledAt: user.faceEnrollments[0]?.enrolledAt ?? null,
+        })),
+      };
     });
     return NextResponse.json(data);
   } catch (error) {

@@ -4,6 +4,12 @@ import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
 import { hasPermission, requirePermission } from "./rbac";
 import { enqueueSms } from "./sms-outbox";
+import {
+  assertAutomatedAttendanceWindow,
+  attendanceLateCutoffMinutes,
+  attendanceLocalMinutes,
+  readAttendancePolicy,
+} from "./attendance-policy";
 
 type AttendanceTarget =
   | { studentId: string; staffId?: never }
@@ -77,17 +83,19 @@ export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId:
   await requirePermission(tx, input.actorId, "attendance:staff_scan", input.schoolId);
   const staff = await tx.user.findFirst({ where: { id: input.actorId, schoolId: input.schoolId, status: "active" }, select: { id: true, schoolId: true, name: true } });
   if (!staff) throw new ForbiddenError("Only an active staff account in this school can use staff check-in.");
-  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
+  const [settings, policy] = await Promise.all([
+    tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } }),
+    readAttendancePolicy(tx, input.schoolId),
+  ]);
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
   const timestamp = new Date();
-  const day = attendanceDate(timestamp, settings.timezone);
+  if (input.type === "in" && input.method !== "manual") assertAutomatedAttendanceWindow(policy, "staff", timestamp);
+  const day = attendanceDate(timestamp, policy.timezone);
   if (await isAttendanceBlocked(tx, input.schoolId, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   const periodSetting = await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
   const periodId: string = periodSetting[0]?.value?.trim() || "DAILY";
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${periodId}, true)`;
-  const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
-  const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
+  const isLate = input.type === "in" ? attendanceLocalMinutes(timestamp, policy.timezone) > attendanceLateCutoffMinutes(policy) : null;
   await validateStaffState(tx, input.schoolId, input.actorId, day, input.type);
   const event = await tx.attendanceEvent.create({ data: { schoolId: input.schoolId, staffId: input.actorId, type: input.type, method: input.method, timestamp, attendanceDate: day, isLate, recordedBy: input.actorId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: input.type === "in" ? "attendance.staff.checked_in" : "attendance.staff.checked_out", entityType: "AttendanceEvent", entityId: event.id, after: { event, verification: input.verification, ...(input.verificationMeta ? { verificationMeta: input.verificationMeta } : {}) } });
@@ -123,19 +131,24 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
       if (!staff) throw new ForbiddenError("The selected staff account is not active in this school.");
     }
   }
-  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } });
+  const [settings, policy] = await Promise.all([
+    tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } }),
+    readAttendancePolicy(tx, input.schoolId),
+  ]);
   if (!settings?.expectedResumptionTime) throw new AppError("Configure the expected resumption time before recording attendance.", 409, "ATTENDANCE_NOT_CONFIGURED");
+  if (input.deviceAuthenticated && !policy.devices.enabled) throw new AppError("Attendance devices are disabled in school attendance settings.", 409, "ATTENDANCE_DEVICES_DISABLED");
   const timestamp = input.timestamp ?? new Date();
   if (Number.isNaN(timestamp.getTime())) throw new AppError("Invalid attendance timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
   if (timestamp.getTime() > Date.now() + 5 * 60 * 1000) throw new AppError("Attendance timestamp cannot be more than 5 minutes in the future.", 400, "ATTENDANCE_TIMESTAMP_IN_FUTURE");
-  const day = attendanceDate(timestamp, settings.timezone);
+  if (input.type === "in" && input.method !== "manual") {
+    assertAutomatedAttendanceWindow(policy, input.target.staffId ? "staff" : "student", timestamp);
+  }
+  const day = attendanceDate(timestamp, policy.timezone);
   if (await isAttendanceBlocked(tx, input.schoolId, day)) throw new AppError("Attendance is disabled for this calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
   const periodSetting = input.periodId?.trim() ? null : await tx.$queryRaw<Array<{ value: string | null }>>`SELECT current_setting('sukuunova.attendance_period', true) AS value`;
   const validatedPeriodId = validatePeriodId(input.periodId?.trim() || periodSetting?.[0]?.value?.trim() || "DAILY");
   await tx.$executeRaw`SELECT set_config('sukuunova.attendance_period', ${validatedPeriodId}, true)`;
-  const [hour, minute] = settings.expectedResumptionTime.split(":").map(Number);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) throw new AppError("Expected resumption time must use HH:MM.", 409, "INVALID_ATTENDANCE_CONFIGURATION");
-  const isLate = input.type === "in" ? localParts(timestamp, settings.timezone).minutes > hour * 60 + minute + settings.attendanceGraceMinutes : null;
+  const isLate = input.type === "in" ? attendanceLocalMinutes(timestamp, policy.timezone) > attendanceLateCutoffMinutes(policy) : null;
   if (input.target.staffId) {
     await validateStaffState(tx, input.schoolId, input.target.staffId, day, input.type);
   } else {
