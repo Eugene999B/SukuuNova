@@ -7,10 +7,23 @@ import { routeError } from "@/lib/errors";
 import { requireSchoolFeatureInTransaction } from "@/lib/feature-flags";
 import { guardianLibraryAction, guardianLibraryOverview } from "@/lib/library-resource-service";
 
+function initialStudentId(request: Request) {
+  const url = new URL(request.url);
+  const explicit = url.searchParams.get("studentId")?.trim();
+  if (explicit) return explicit;
+  const referer = request.headers.get("referer");
+  if (!referer) return undefined;
+  try {
+    const page = new URL(referer);
+    if (page.origin !== url.origin || page.pathname.replace(/\/$/, "") !== "/guardian/library") return undefined;
+    return page.searchParams.get("studentId")?.trim() || undefined;
+  } catch { return undefined; }
+}
+
 export async function GET(request: Request) {
   try {
     const session = await requireGuardianSession();
-    const studentId = new URL(request.url).searchParams.get("studentId")?.trim() || undefined;
+    const studentId = initialStudentId(request);
     const result = await withTenant(session.schoolId, async tx => {
       await requireSchoolFeatureInTransaction(tx, session.schoolId, "library");
       return guardianLibraryOverview(tx, { schoolId: session.schoolId, guardianId: session.guardianId, userId: session.userId }, studentId);
