@@ -3,8 +3,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import TimetableWorkspace from "./TimetableWorkspace";
-import "./timetable.css";
-import "./timetable-intelligence.css";
+import "./timetable-v4.css";
 
 export default async function TimetablePage() {
   const session = await requireSchoolSession();
@@ -20,7 +19,7 @@ export default async function TimetablePage() {
     <AppShell
       universe="school"
       title="Timetable"
-      subtitle="Plan, review, manage and print the current school timetable."
+      subtitle="View the published school timetable, print it, or deliberately open it for authorised changes."
       active="Timetable"
       schoolName={school?.name ?? "School Workspace"}
       schoolCode={school?.uniqueCode ?? ""}
