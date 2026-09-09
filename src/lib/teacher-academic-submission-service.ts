@@ -1,4 +1,5 @@
 import { ensureWorkAssessment } from "./academic-work-gradebook";
+import { gradeAcademicQuestions } from "./academic-question-grading";
 import { hasPermission } from "./rbac";
 import { enterScore } from "./gradebook-service";
 import { randomUUID } from "node:crypto";
@@ -19,34 +20,6 @@ type QuestionRow = {
 };
 type AnswerInput = { responseText?: string | null; responseData?: unknown };
 
-function normalize(value: string) {
-  return value.toLowerCase().normalize("NFKD").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-}
-function asStrings(value: unknown) {
-  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
-}
-function exactAnswerScore(response: string, accepted: string[], points: number) {
-  const canonical = (text: string) => text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
-  const value = canonical(response);
-  if (!value) return 0;
-  return accepted.some((answer) => canonical(answer) === value) ? points : 0;
-}
-function suggestedWrittenScore(response: string, guide: string[], points: number) {
-  if (!response.trim() || guide.length === 0) return { score: 0, confidence: 0, reason: "No answer guidance is available for semantic review." };
-  const responseTokens = new Set(normalize(response).split(" ").filter((word) => word.length > 2));
-  const guideTokens = new Set(normalize(guide.join(" ")).split(" ").filter((word) => word.length > 2));
-  if (!responseTokens.size || !guideTokens.size) return { score: 0, confidence: 0, reason: "The response or answer guide has no usable key terms." };
-  let overlap = 0;
-  for (const token of responseTokens) if (guideTokens.has(token)) overlap += 1;
-  const precision = overlap / responseTokens.size;
-  const recall = overlap / guideTokens.size;
-  const f1 = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
-  return {
-    score: Math.round(points * Math.min(1, f1 * 1.2) * 100) / 100,
-    confidence: Math.round(Math.min(1, f1 * 1.35) * 100),
-    reason: `${overlap} key terms matched across the submitted response and teacher guidance.`
-  };
-}
 async function getWork(tx: TenantDb, schoolId: string, workId: string) {
   const rows = await tx.$queryRawUnsafe<WorkRow[]>(`SELECT "id","schoolId","termId","classId","subjectId","title","kind","instructions","maxScore","markingMode","answerGuide","dueAt","status","weekNumber","workNumber","workDate" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, workId, schoolId);
   const work = rows[0];
@@ -113,25 +86,6 @@ export async function startGuardianSubmission(tx: TenantDb, input: { schoolId: s
     answers: released ? answers : answers.map(({ questionId, responseText, responseData }) => ({ questionId, responseText, responseData }))
   };
 }
-async function gradeAnswers(questions: QuestionRow[], answers: Map<string, AnswerInput>, guide: unknown, mode: string) {
-  const answerGuide = asStrings(guide);
-  return questions.map((question) => {
-    const response = answers.get(question.id) ?? {};
-    const responseText = String(response.responseText ?? "");
-    const points = Number(question.points);
-    if (question.type === "multiple_choice" || question.type === "true_false") {
-      const selected = typeof response.responseData === "string" ? response.responseData : responseText;
-      const score = exactAnswerScore(selected, asStrings(question.acceptedAnswers), points);
-      return { questionId: question.id, score, markingMode: "auto", reason: score > 0 ? "Matched teacher-supplied accepted answer." : "Did not match a teacher-supplied accepted answer." };
-    }
-    if (question.type === "short_answer") {
-      const score = exactAnswerScore(responseText, asStrings(question.acceptedAnswers), points);
-      if (score > 0 || mode === "auto") return { questionId: question.id, score, markingMode: "auto", reason: score > 0 ? "Normalized answer matched." : "No accepted normalized answer matched." };
-    }
-    const suggested = suggestedWrittenScore(responseText, answerGuide, points);
-    return { questionId: question.id, score: 0, suggestedScore: suggested.score, confidence: suggested.confidence, markingMode: mode === "review" ? "suggested" : "manual", reason: suggested.reason };
-  });
-}
 export async function saveGuardianSubmission(tx: TenantDb, input: { schoolId: string; guardianId: string; studentId: string; workId: string; answers: Array<{ questionId: string; responseText?: string | null; responseData?: unknown }> }) {
   await lockSubmission(tx, input.schoolId, input.workId, input.studentId);
   const { work } = { work: await getWork(tx, input.schoolId, input.workId) };
@@ -161,7 +115,12 @@ export async function submitGuardianSubmission(tx: TenantDb, input: { schoolId: 
   await requireOpenWorkTerm(tx, input.schoolId, work.termId);
   const questions = await tx.$queryRawUnsafe<QuestionRow[]>(`SELECT "id","position","type","prompt","points","options","acceptedAnswers" FROM "TeacherAcademicQuestion" WHERE "workId"=$1 AND "schoolId"=$2 ORDER BY "position" ASC`, work.id, input.schoolId);
   const answerRows = await tx.$queryRawUnsafe<Array<{ questionId: string; responseText: string | null; responseData: unknown }>>(`SELECT "questionId","responseText","responseData" FROM "TeacherAcademicAnswer" WHERE "submissionId"=$1`, submission.id);
-  const graded = await gradeAnswers(questions, new Map(answerRows.map((answer) => [answer.questionId, answer])), work.answerGuide, work.markingMode);
+  const graded = gradeAcademicQuestions(
+    questions.map(question => ({ id: question.id, type: question.type, points: Number(question.points), acceptedAnswers: question.acceptedAnswers })),
+    new Map<string, AnswerInput>(answerRows.map(answer => [answer.questionId, answer])),
+    work.answerGuide,
+    work.markingMode
+  );
   const total = graded.reduce((sum, item) => sum + Number(item.score), 0);
   const reviewRequired = graded.some((item) => item.markingMode === "manual" || item.markingMode === "suggested") || work.markingMode !== "auto" || questions.length === 0;
   for (const item of graded) await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicAnswer" SET "awardedScore"=$1,"markingMode"=$2,"markerComment"=$3,"updatedAt"=NOW() WHERE "submissionId"=$4 AND "questionId"=$5 AND "schoolId"=$6`, item.score, item.markingMode, item.suggestedScore === undefined ? item.reason : `Suggested score: ${item.suggestedScore}. Teacher review required. ${item.reason}`, submission.id, item.questionId, input.schoolId);
