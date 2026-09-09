@@ -79,18 +79,17 @@ DECLARE
   required_units INTEGER;
 BEGIN
   IF NEW.channel IS NULL OR NEW.channel NOT IN ('sms','whatsapp') THEN RETURN NEW; END IF;
-  IF NOT EXISTS (SELECT 1 FROM "PlatformMessagingWallet" WHERE "schoolId" = NEW."schoolId") THEN RETURN NEW; END IF;
   required_units := CASE WHEN NEW.channel = 'sms' THEN sukuunova_sms_segment_count(NEW.body) ELSE 1 END;
 
   IF NEW.channel = 'sms' THEN
     UPDATE "PlatformMessagingWallet"
       SET "smsBalance" = "smsBalance" - required_units, "updatedAt" = CURRENT_TIMESTAMP
-      WHERE "schoolId" = NEW."schoolId" AND "smsBalance" >= required_units
+      WHERE "schoolId" = NEW."schoolId" AND "status" = 'active' AND "smsBalance" >= required_units
       RETURNING "smsBalance", "smsSellRate", "smsCostRate" INTO current_balance, sell_rate, cost_rate;
   ELSE
     UPDATE "PlatformMessagingWallet"
       SET "whatsappBalance" = "whatsappBalance" - 1, "updatedAt" = CURRENT_TIMESTAMP
-      WHERE "schoolId" = NEW."schoolId" AND "whatsappBalance" >= 1
+      WHERE "schoolId" = NEW."schoolId" AND "status" = 'active' AND "whatsappBalance" >= 1
       RETURNING "whatsappBalance", "whatsappSellRate", "whatsappCostRate" INTO current_balance, sell_rate, cost_rate;
   END IF;
 
