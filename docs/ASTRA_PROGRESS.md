@@ -8,9 +8,14 @@
 - Studio preserves blank cells, reloads existing marks, links review queues and publishes saved notes; locked terms remain readable.
 - Manual marking requires teacher release; objective auto marking remains available.
 - Added question/date validation and a nullable same-school assessment-link migration.
-- GitHub Actions verification pending for this batch; previous verified checkpoint follows.
+- Verified code SHA: 9ded435b64c9aa2985eaf9cd94df7d8fef90c669.
+- Full Build SUCCESS: https://github.com/Eugene999B/SukuuNova/actions/runs/34300866837. Prisma, migrations under a restricted PostgreSQL role, typecheck, lint, tests and production build passed.
+- 179 tests in 41 files passed, including 7 new connected academic workflow regressions.
+- Follow-up correction saves only changed, nonblank marks, preserves attendance status and prevents context switching during saves.
+- 10 files changed in this batch. No local checkout; all code and verification ran in GitHub.
+- This documentation-only checkpoint skips redundant CI. Production deployment/browser verification remains outstanding.
 
-## Verified checkpoint
+## Previous verified checkpoint
 - Main/code SHA before this documentation-only checkpoint: f8952080022b8bdd8b8dda6af3299a54581f299c.
 - Full Build verification: https://github.com/Eugene999B/SukuuNova/actions/runs/34298587865 — SUCCESS.
 - 172 tests in 40 files passed. Prisma generation/validation, migrations under NOSUPERUSER/NOBYPASSRLS, design-token/pilot/navigation lint, ESLint, TypeScript and production build passed.
@@ -38,7 +43,7 @@
 - Never modify already deployed migrations.
 
 ## Architecture / current subsystem
-- Current subsystem: guardian assignments and academic data protection; connected teacher workflow batch awaiting CI.
+- Current subsystem: guardian assignments and academic data protection; connected teacher workflow batch complete and verified in GitHub Actions.
 - TeacherAcademicWork/Question/Submission/Answer/Note already implement guardian assignments, objective marking and teacher review. Extend these rather than creating a duplicate submission engine.
 - Homework/LessonPlan remain separate legacy planning workflows; their connection to the richer assignment engine needs review.
 - Earlier feat/school-onboarding-rbac-v3 supplied the permission catalogue; its unsafe synchronization was not imported.
