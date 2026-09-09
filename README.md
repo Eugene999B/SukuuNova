@@ -90,6 +90,8 @@ Teachers can reopen and edit their lesson drafts or plans returned for revision,
 
 Published academic activities now link to a stable gradebook assessment. Manual mark entry and teacher review use the same term and finalized-report protections. The Teacher Academic Studio loads existing marks, leaves blank cells unchanged, opens learner review and publishes saved notes. Review shows submitted answers and requires a mark for every question. Question points must match the activity maximum; manual activities require teacher release even when objective answers can be scored automatically.
 
+The academic mark sheet supports pasting a spreadsheet mark column with optional Present/Absent/Excused statuses, keyboard movement between learners, and visible completion/save states. Unsaved edits are protected when switching context or closing the browser. Each edited cell includes its last-seen score identity, value, status and timestamp; concurrent changes reject the whole save transaction with a reload message. Blank clipboard rows and unchanged marks are preserved.
+
 ### Attendance and safety
 
 Attendance supports ordinary class registers as well as physical/device and biometric directions. Existing concepts include class attendance, staff attendance, attendance history, exception handling, device registration, device identity, attendance receipts, idempotency/nonce protections, face enrollment and face-match review.

@@ -45,7 +45,9 @@ export async function createAssessment(tx: TenantDb, input: { schoolId: string; 
   return assessment;
 }
 
-export async function enterScore(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; value: number; status?: "present" | "absent" | "excused"; }) {
+export type ScoreExpectation = { id: string; value: number; status: string; enteredAt: string } | null;
+
+export async function enterScore(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; assessmentId: string; value: number; status?: "present" | "absent" | "excused"; expected?: ScoreExpectation; }) {
   const assessment = await tx.assessment.findFirst({ where: { id: input.assessmentId, schoolId: input.schoolId }, select: { id: true, classId: true, subjectId: true, termId: true, maxScore: true } });
   if (!assessment) throw new AppError("Assessment not found in this school.", 404, "NOT_FOUND");
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
@@ -63,6 +65,11 @@ export async function enterScore(tx: TenantDb, input: { schoolId: string; actorI
   if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
   const status = input.status ?? "present";
   const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
+  if (input.expected !== undefined) {
+    const expected = input.expected;
+    const matches = expected === null ? !previous : !!previous && previous.id === expected.id && Number(previous.value) === expected.value && previous.status === expected.status && previous.enteredAt.toISOString() === expected.enteredAt;
+    if (!matches) throw new AppError("A mark changed after you opened this sheet. Reload the latest marks and reapply your edits. Nothing in this batch was saved.", 409, "SCORE_CONFLICT");
+  }
   const score = await tx.score.upsert({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } }, update: { value: new Prisma.Decimal(input.value), status, enteredBy: input.actorId, enteredAt: new Date() }, create: { schoolId: input.schoolId, studentId: input.studentId, subjectId: assessment.subjectId, assessmentId: assessment.id, value: new Prisma.Decimal(input.value), status, enteredBy: input.actorId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: previous ? "score.updated" : "score.created", entityType: "Score", entityId: score.id, before: previous, after: score });
   return score;

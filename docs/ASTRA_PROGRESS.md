@@ -1,5 +1,13 @@
 # Astra progress
 
+## Efficient mark-entry batch
+- Spreadsheet paste supports mark/status columns, A/E shortcuts, blank-row preservation and all-or-nothing validation.
+- Enter/arrow keyboard navigation, explicit Present/Absent/Excused states, recorded/dirty counts and save confirmation.
+- Unsaved marks prompt before context changes and browser unload; duplicate actions are blocked while saving.
+- Canonical enterScore checks optional last-seen score snapshots under the term lock; teacher sheet requires snapshots. A conflict rolls back all rows.
+- Added eight paste, concurrent-write, status and batch-rollback regressions. No schema changes.
+- GitHub verification pending for this batch.
+
 ## Guardian learning batch
 - Final answers save and submit atomically; a failed save cannot finalize stale answers.
 - Activities bind to a specific child; stale overview responses are discarded and child switches clear old learning data.

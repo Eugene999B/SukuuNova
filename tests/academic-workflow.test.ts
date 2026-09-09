@@ -4,6 +4,7 @@ import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 import { createTeacherAcademicWork, publishTeacherAcademicWork, saveTeacherWorkMarks, createTeacherAcademicNote, publishTeacherAcademicNote, getTeacherAcademicRoster } from "../src/lib/teacher-academic-workspace-service";
 import { startGuardianSubmission, saveGuardianSubmission, submitGuardianSubmission, reviewTeacherSubmission } from "../src/lib/teacher-academic-submission-service";
+import { enterScore } from "../src/lib/gradebook-service";
 import { validateAcademicQuestions } from "../src/lib/academic-work-validation";
 
 async function setup() {
@@ -117,4 +118,51 @@ describe("connected teacher academic workflow", () => {
     expect(() => validateAcademicQuestions([{ ...valid, type: "long_answer" }], 10, "auto")).toThrow(/objective/);
     expect(() => validateAcademicQuestions([], 10, "auto")).toThrow(/questions/);
   });
+  it("rejects stale marks after another canonical gradebook writer changes the score", async () => {
+    const f = await setup();
+    const work = await withTenant(f.schoolId, tx => createTeacherAcademicWork(tx, workInput(f)));
+    const input = { schoolId: f.schoolId, teacherId: f.ownerId, workId: work.id };
+    const saved = await withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [{ studentId: f.studentId, value: 5, expected: null }] }));
+    const score = await withTenant(f.schoolId, tx => tx.score.findFirstOrThrow({ where: { assessmentId: saved.assessmentId, studentId: f.studentId } }));
+    const expected = { id: score.id, value: Number(score.value), status: score.status, enteredAt: score.enteredAt.toISOString() };
+    await withTenant(f.schoolId, tx => enterScore(tx, { schoolId: f.schoolId, actorId: f.ownerId, assessmentId: saved.assessmentId, studentId: f.studentId, value: 8 }));
+    await expect(withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [{ studentId: f.studentId, value: 6, expected }] }))).rejects.toMatchObject({ code: "SCORE_CONFLICT", status: 409 });
+    const current = await withTenant(f.schoolId, tx => tx.score.findFirstOrThrow({ where: { id: score.id } }));
+    expect(Number(current.value)).toBe(8);
+  });
+
+  it("serializes simultaneous writes to a previously blank cell", async () => {
+    const f = await setup();
+    const work = await withTenant(f.schoolId, tx => createTeacherAcademicWork(tx, workInput(f)));
+    const results = await Promise.allSettled([6, 9].map(value => withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, {
+      schoolId: f.schoolId, teacherId: f.ownerId, workId: work.id, marks: [{ studentId: f.studentId, value, expected: null }]
+    }))));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find(result => result.status === "rejected");
+    expect(rejected && rejected.status === "rejected" ? rejected.reason : null).toMatchObject({ code: "SCORE_CONFLICT" });
+  });
+
+  it("rolls back earlier rows when a later row has a snapshot conflict", async () => {
+    const f = await setup();
+    const work = await withTenant(f.schoolId, tx => createTeacherAcademicWork(tx, workInput(f)));
+    const input = { schoolId: f.schoolId, teacherId: f.ownerId, workId: work.id };
+    await withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [{ studentId: f.siblingId, value: 8 }] }));
+    await expect(withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [
+      { studentId: f.studentId, value: 5, expected: null }, { studentId: f.siblingId, value: 6, expected: null }
+    ] }))).rejects.toMatchObject({ code: "SCORE_CONFLICT" });
+    expect(await withTenant(f.schoolId, tx => tx.score.count({ where: { studentId: f.studentId } }))).toBe(0);
+  });
+
+  it("saves absent and excused states and detects status-only changes", async () => {
+    const f = await setup();
+    const work = await withTenant(f.schoolId, tx => createTeacherAcademicWork(tx, workInput(f)));
+    const input = { schoolId: f.schoolId, teacherId: f.ownerId, workId: work.id };
+    const saved = await withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [{ studentId: f.studentId, value: 0, status: "absent", expected: null }] }));
+    const before = await withTenant(f.schoolId, tx => tx.score.findFirstOrThrow({ where: { assessmentId: saved.assessmentId, studentId: f.studentId } }));
+    const expected = { id: before.id, value: 0, status: before.status, enteredAt: before.enteredAt.toISOString() };
+    await withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [{ studentId: f.studentId, value: 0, status: "excused", expected }] }));
+    await expect(withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [{ studentId: f.studentId, value: 1, status: "present", expected }] }))).rejects.toMatchObject({ code: "SCORE_CONFLICT" });
+    await expect(withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { ...input, marks: [{ studentId: f.siblingId, value: 4, status: "absent" }] }))).rejects.toMatchObject({ code: "INVALID_SCORE" });
+  });
+
 });

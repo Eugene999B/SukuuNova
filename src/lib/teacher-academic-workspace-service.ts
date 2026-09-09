@@ -1,4 +1,4 @@
-import { enterScore } from "./gradebook-service";
+import { enterScore, type ScoreExpectation } from "./gradebook-service";
 import { ensureWorkAssessment } from "./academic-work-gradebook";
 import { validateAcademicQuestions } from "./academic-work-validation";
 import { randomUUID } from "node:crypto";
@@ -52,7 +52,7 @@ export async function getTeacherAcademicRoster(tx: TenantDb, input: { schoolId: 
   const [students, works, assessments, notes] = await Promise.all([
     tx.student.findMany({ where: { schoolId: input.schoolId, classId: input.classId, status: "active" }, select: { id: true, name: true, admissionNo: true }, orderBy: { name: "asc" } }),
     tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"assessmentId","title","kind","workDate","weekNumber","workNumber","maxScore","markingMode","status","dueAt" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "workDate" DESC,"workNumber" ASC`, input.schoolId, input.classId, input.subjectId, input.termId),
-    tx.assessment.findMany({ where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, termId: input.termId }, select: { id: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true, status: true } } }, orderBy: { name: "asc" } }),
+    tx.assessment.findMany({ where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, termId: input.termId }, select: { id: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { id: true, studentId: true, value: true, status: true, enteredAt: true } } }, orderBy: { name: "asc" } }),
     tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"title","weekNumber","status","publishedAt","content" FROM "TeacherAcademicNote" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "updatedAt" DESC`, input.schoolId, input.classId, input.subjectId, input.termId),
   ]);
   return { students, works, assessments, notes };
@@ -101,7 +101,7 @@ export async function publishTeacherAcademicWork(tx: TenantDb, input: { schoolId
   return { ...work, status: "published" };
 }
 
-export async function saveTeacherWorkMarks(tx: TenantDb, input: { schoolId: string; teacherId: string; workId: string; marks: Array<{ studentId: string; value: number; status?: "present" | "absent" | "excused" }> }) {
+export async function saveTeacherWorkMarks(tx: TenantDb, input: { schoolId: string; teacherId: string; workId: string; marks: Array<{ studentId: string; value: number; status?: "present" | "absent" | "excused"; expected?: ScoreExpectation }> }) {
   const workRows = await tx.$queryRawUnsafe<Array<{ id: string; termId: string; classId: string; subjectId: string; title: string; kind: string; maxScore: Prisma.Decimal }>>(`SELECT id,"termId","classId","subjectId","title","kind","maxScore" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, input.workId, input.schoolId);
   const work = workRows[0];
   if (!work) throw new AppError("Work not found.", 404, "NOT_FOUND");
@@ -112,7 +112,8 @@ export async function saveTeacherWorkMarks(tx: TenantDb, input: { schoolId: stri
   let saved = 0;
   for (const mark of input.marks) {
     if (mark.status && !["present", "absent", "excused"].includes(mark.status)) throw new AppError("Unsupported attendance status.", 400, "INVALID_STATUS");
-    await enterScore(tx, { schoolId: input.schoolId, actorId: input.teacherId, studentId: mark.studentId, assessmentId: assessment.id, value: mark.value, status: mark.status });
+    if (mark.status && mark.status !== "present" && mark.value !== 0) throw new AppError("Absent or excused learners must have a stored mark of zero.", 400, "INVALID_SCORE");
+    await enterScore(tx, { schoolId: input.schoolId, actorId: input.teacherId, studentId: mark.studentId, assessmentId: assessment.id, value: mark.value, status: mark.status, expected: mark.expected });
     saved += 1;
   }
   return { saved, assessmentId: assessment.id };
