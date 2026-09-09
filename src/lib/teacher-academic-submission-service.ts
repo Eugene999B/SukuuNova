@@ -9,7 +9,7 @@ import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
 
 type WorkRow = {
-  id: string; schoolId: string; termId: string; classId: string; subjectId: string;
+  id: string; schoolId: string; termId: string; classId: string; subjectId: string; teacherId: string;
   title: string; kind: string; instructions: string | null; maxScore: Prisma.Decimal;
   answerGuide: unknown; markingMode: string; dueAt: Date | null; status: string;
   weekNumber: number; workNumber: number; workDate: Date;
@@ -21,7 +21,7 @@ type QuestionRow = {
 type AnswerInput = { responseText?: string | null; responseData?: unknown };
 
 async function getWork(tx: TenantDb, schoolId: string, workId: string) {
-  const rows = await tx.$queryRawUnsafe<WorkRow[]>(`SELECT "id","schoolId","termId","classId","subjectId","title","kind","instructions","maxScore","markingMode","answerGuide","dueAt","status","weekNumber","workNumber","workDate" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, workId, schoolId);
+  const rows = await tx.$queryRawUnsafe<WorkRow[]>(`SELECT "id","schoolId","termId","classId","subjectId","teacherId","title","kind","instructions","maxScore","markingMode","answerGuide","dueAt","status","weekNumber","workNumber","workDate" FROM "TeacherAcademicWork" WHERE "id"=$1 AND "schoolId"=$2 LIMIT 1`, workId, schoolId);
   const work = rows[0];
   if (!work) throw new AppError("Academic work was not found.", 404, "NOT_FOUND");
   if (work.status !== "published") throw new AppError("This activity is not currently published.", 409, "WORK_NOT_PUBLISHED");
@@ -34,7 +34,7 @@ async function assertLinkedStudent(tx: TenantDb, schoolId: string, guardianId: s
   return student;
 }
 export async function getGuardianAcademicOverview(tx: TenantDb, input: { schoolId: string; guardianId: string; studentId?: string; subjectId?: string }) {
-  const students = await tx.$queryRawUnsafe<Array<{ id: string; name: string; admissionNo: string; classId: string | null; className: string | null }>>(`SELECT s."id",s."name",s."admissionNo",s."classId",c."name" AS "className" FROM "Student" s INNER JOIN "StudentGuardian" sg ON sg."studentId"=s."id" AND sg."schoolId"=s."schoolId" LEFT JOIN "Class" c ON c."id"=s."classId" AND c."schoolId"=s."schoolId" WHERE sg."schoolId"=$1 AND sg."guardianId"=$2 AND s."status"='active' ORDER BY s."name" ASC`, input.schoolId, input.guardianId);
+  const students = await tx.$queryRawUnsafe<Array<{ id: string; name: string; admissionNo: string; classId: string | null; className: string | null }>>(`SELECT s."id",s."name",s."admissionNo",s."classId",c."name" AS "className" FROM "Student" s INNER JOIN "StudentGuardian" sg ON sg."studentId"=s."id" AND sg."schoolId"=s."schoolId" LEFT JOIN "Class" c ON c."id"=s."classId" AND c."schoolId"=s."schoolId" WHERE sg."schoolId"=$1 AND sg."guardianId"=$2 AND s."id"=$3 AND s."status"='active' ORDER BY s."name" ASC`, input.schoolId, input.guardianId);
   const selected = input.studentId ? students.find((student) => student.id === input.studentId) : students[0];
   if (input.studentId && !selected) throw new ForbiddenError("You can only access academic work belonging to a linked child.");
   if (!selected) return { students, selectedStudent: null, subjects: [], works: [], notes: [] };
@@ -124,6 +124,10 @@ export async function submitGuardianSubmission(tx: TenantDb, input: { schoolId: 
   const total = graded.reduce((sum, item) => sum + Number(item.score), 0);
   const reviewRequired = graded.some((item) => item.markingMode === "manual" || item.markingMode === "suggested") || work.markingMode !== "auto" || questions.length === 0;
   for (const item of graded) await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicAnswer" SET "awardedScore"=$1,"markingMode"=$2,"markerComment"=$3,"updatedAt"=NOW() WHERE "submissionId"=$4 AND "questionId"=$5 AND "schoolId"=$6`, item.score, item.markingMode, item.suggestedScore === undefined ? item.reason : `Suggested score: ${item.suggestedScore}. Teacher review required. ${item.reason}`, submission.id, item.questionId, input.schoolId);
+  if (!reviewRequired) {
+    const assessment = await ensureWorkAssessment(tx, input.schoolId, work.id, work.teacherId);
+    await enterScore(tx, { schoolId: input.schoolId, actorId: work.teacherId, studentId: student.id, assessmentId: assessment.id, value: total, status: "present", expected: null });
+  }
   const status = reviewRequired ? "review_required" : "graded";
   await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicSubmission" SET "submittedAt"=NOW(),"status"=$1,"totalAwarded"=$2,"updatedAt"=NOW() WHERE "id"=$3`, status, total, submission.id);
   return { submissionId: submission.id, status, totalAwarded: reviewRequired ? null : total, maxScore: Number(work.maxScore) };
