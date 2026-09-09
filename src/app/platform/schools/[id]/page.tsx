@@ -2,10 +2,13 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import PlatformSchool360Workspace from "@/components/PlatformSchool360Workspace";
 import PlatformSchoolLifecycle from "@/components/PlatformSchoolLifecycle";
+import PlatformSchoolControlCenter from "@/components/PlatformSchoolControlCenter";
 import { requirePlatformSession } from "@/lib/auth";
 import { hasPlatformPermission, requirePlatformPermission } from "@/lib/platform-permissions";
 import { requireSchoolScope } from "@/lib/platform-school-scope";
 import { db, withTenant } from "@/lib/db";
+import { getPlatformOwnerIntelligence } from "@/lib/platform-owner-intelligence";
+import { getPlatformSchoolControlSnapshot } from "@/lib/platform-school-control-service";
 import "@/components/platform-control-plane.css";
 import "@/components/platform-school360.css";
 
@@ -14,10 +17,13 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
   await requirePlatformPermission(session, "schools.view");
   const { id } = await params;
   await requireSchoolScope(session, id);
-  const [canSupport, canBilling, canAudit] = await Promise.all([
+  const [canSupport, canBilling, canAudit, canSecurity, canImpersonate, canNotify] = await Promise.all([
     hasPlatformPermission(session, "support.view"),
     hasPlatformPermission(session, "billing.view"),
     hasPlatformPermission(session, "audit.view"),
+    hasPlatformPermission(session, "security.manage"),
+    hasPlatformPermission(session, "schools.impersonate"),
+    hasPlatformPermission(session, "support.manage"),
   ]);
   const data = await withTenant(id, async (tx) => {
     const school = await tx.school.findUnique({
@@ -46,6 +52,12 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
     return { school, students, users, classes, subjects, invoices, payments, recentMessages, failedMessages };
   });
   if (!data) notFound();
+
+  const [control, intelligenceResult] = await Promise.all([
+    getPlatformSchoolControlSnapshot(id),
+    getPlatformOwnerIntelligence({ schoolIds: [id] }),
+  ]);
+  const intelligence = intelligenceResult.schools.find((school) => school.schoolId === id) ?? null;
   const audits = canAudit
     ? await db.$queryRawUnsafe<Array<{ id: string; actorId: string | null; actorName: string | null; actorEmail: string | null; action: string; targetEntity: string | null; createdAt: Date }>>(
         `SELECT l."id",l."actorId",a."name" AS "actorName",a."email" AS "actorEmail",l."action",l."targetEntity",l."createdAt" FROM "AuditLogPlatform" l LEFT JOIN "PlatformAdmin" a ON a."id"=l."actorId" WHERE l."targetSchoolId"=$1 ORDER BY l."createdAt" DESC LIMIT 40`,
@@ -55,7 +67,7 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
   const unpaid = data.invoices.filter((invoice) => invoice.status !== "paid").length;
   const collected = data.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
 
-  return <AppShell universe="platform" title={data.school.name} subtitle="School 360 · operator workspace" active="Schools">
+  return <AppShell universe="platform" title={data.school.name} subtitle="School 360 · intelligence, support and control" active="Schools">
     <PlatformSchool360Workspace
       school={data.school}
       students={data.students}
@@ -70,6 +82,14 @@ export default async function PlatformSchool360Page({ params }: { params: Promis
       canSupport={canSupport}
       canBilling={canBilling}
       canAudit={canAudit}
+    />
+    <PlatformSchoolControlCenter
+      schoolId={id}
+      intelligence={intelligence}
+      control={control}
+      canSecurity={canSecurity}
+      canImpersonate={canImpersonate}
+      canNotify={canNotify}
     />
     <PlatformSchoolLifecycle schoolId={id} status={data.school.status} />
   </AppShell>;
