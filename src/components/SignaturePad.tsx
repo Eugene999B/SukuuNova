@@ -2,15 +2,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createSignatureVectorEvidence,
+  restoreSignatureStrokes,
+  type RawSignaturePoint,
+  type RawSignatureStroke,
+  type SignaturePointerType,
+  type SignatureVectorEvidence,
+} from "@/lib/signature-vector";
 
-type PointerKind = "mouse" | "pen" | "touch" | "unknown";
-type Point = { x: number; y: number; pressure: number; time: number; pointerType: PointerKind };
-type Stroke = { points: Point[]; width: number };
+type PointerKind = SignaturePointerType;
+type Point = RawSignaturePoint;
+type Stroke = RawSignatureStroke;
 
 type SignaturePadProps = {
   initialDataUrl?: string | null;
+  initialVectorEvidence?: SignatureVectorEvidence | null;
   disabled?: boolean;
   onChange?: (dataUrl: string) => void;
+  onEvidenceChange?: (evidence: SignatureVectorEvidence | null) => void;
 };
 
 const CANVAS_WIDTH = 960;
@@ -37,15 +47,28 @@ function inkColor() {
   return value || "currentColor";
 }
 
+function smoothedVelocity(stroke: Stroke, index: number) {
+  if (index <= 0) return 0;
+  const from = Math.max(1, index - 3);
+  let distance = 0;
+  let elapsed = 0;
+  for (let cursor = from; cursor <= index; cursor += 1) {
+    const current = stroke.points[cursor];
+    const previous = stroke.points[cursor - 1];
+    distance += Math.hypot(current.x - previous.x, current.y - previous.y);
+    elapsed += Math.max(1, current.time - previous.time);
+  }
+  return distance / Math.max(1, elapsed);
+}
+
 function segmentWidth(stroke: Stroke, index: number) {
   const current = stroke.points[index];
-  const previous = stroke.points[Math.max(0, index - 1)];
-  const elapsed = Math.max(1, current.time - previous.time);
-  const velocity = Math.hypot(current.x - previous.x, current.y - previous.y) / elapsed;
+  const velocity = smoothedVelocity(stroke, index);
   const velocityFactor = clamp(1 - velocity / 2.25, 0.28, 1);
   const pressure = current.pointerType === "pen" ? clamp(current.pressure || 0.5, 0.08, 1) : 0.5;
-  const pressureFactor = current.pointerType === "pen" ? 0.55 + pressure * 0.8 : 0.72 + velocityFactor * 0.58;
-  return clamp(stroke.width * pressureFactor, MIN_WIDTH, MAX_WIDTH);
+  const pressureFactor = current.pointerType === "pen" ? 0.5 + pressure * 0.85 : 0.7 + velocityFactor * 0.6;
+  const motionFactor = current.pointerType === "pen" ? 0.82 + velocityFactor * 0.18 : 1;
+  return clamp(stroke.width * pressureFactor * motionFactor, MIN_WIDTH, MAX_WIDTH);
 }
 
 function drawStroke(ctx: CanvasRenderingContext2D, stroke: Stroke) {
@@ -120,7 +143,7 @@ function trimmedPng(canvas: HTMLCanvasElement) {
   return output.toDataURL("image/png");
 }
 
-export function SignaturePad({ initialDataUrl, disabled = false, onChange }: SignaturePadProps) {
+export function SignaturePad({ initialDataUrl, initialVectorEvidence, disabled = false, onChange, onEvidenceChange }: SignaturePadProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const activeStroke = useRef<Stroke | null>(null);
   const [strokes, setStrokes] = useState<Stroke[]>([]);
@@ -128,7 +151,17 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
   const [baseImage, setBaseImage] = useState(initialDataUrl ?? "");
   const [width, setWidth] = useState(2.7);
 
-  useEffect(() => setBaseImage(initialDataUrl ?? ""), [initialDataUrl]);
+  useEffect(() => {
+    activeStroke.current = null;
+    setRedoStack([]);
+    if (initialVectorEvidence) {
+      setStrokes(restoreSignatureStrokes(initialVectorEvidence, CANVAS_WIDTH, CANVAS_HEIGHT));
+      setBaseImage("");
+    } else {
+      setStrokes([]);
+      setBaseImage(initialDataUrl ?? "");
+    }
+  }, [initialDataUrl, initialVectorEvidence]);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -173,10 +206,12 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
     if (!canvas) return;
     drawStrokes(canvas, next);
     onChange?.(trimmedPng(canvas));
+    onEvidenceChange?.(createSignatureVectorEvidence(next, canvas.width, canvas.height));
   };
 
   const start = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled) return;
+    if (event.pointerType === "touch" && Math.max(event.width, event.height) > 60) return;
     event.preventDefault();
     canvasRef.current?.setPointerCapture(event.pointerId);
     if (baseImage && strokes.length === 0) setBaseImage("");
@@ -219,6 +254,7 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
     const canvas = canvasRef.current;
     if (canvas) drawStrokes(canvas, []);
     onChange?.("");
+    onEvidenceChange?.(null);
   };
 
   const undo = () => {
@@ -267,7 +303,7 @@ export function SignaturePad({ initialDataUrl, disabled = false, onChange }: Sig
         />
         <span className="signature-pad-guide" aria-hidden="true" />
       </div>
-      <p className="signature-pad-note">This is an electronic document signature, not biometric authentication. Stylus pressure is used only to render natural ink; SukuuNova stores the signature image you choose to save.</p>
+      <p className="signature-pad-note">This is an electronic handwritten signature, not biometric authentication or a PKI digital signature. Stylus pressure affects natural ink rendering; when supported, SukuuNova also preserves normalized stroke evidence with separate integrity hashes.</p>
     </div>
   );
 }
