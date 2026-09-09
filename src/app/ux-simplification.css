@@ -38,6 +38,13 @@
   outline-offset: 2px;
 }
 
+/* The old product used shadows to separate almost every block. Borders and
+   whitespace now do most of that work so a page does not look like a wall of cards. */
+.sn-page-body :where(.app-card, .app-panel) {
+  box-shadow: none !important;
+  border-radius: 14px !important;
+}
+
 /* Existing module heroes are kept for context, but no longer dominate the page. */
 .sn-page-body :where(.module-hero, .students-hero, .academic-page-hero, .settings-hero, .search-hero, .platform-hero) {
   padding: clamp(16px, 2vw, 22px) !important;
@@ -111,6 +118,38 @@
   color: var(--sn-ink-2);
 }
 
+/* One dialog grammar for the whole product. Desktop dialogs are intentionally
+   compact; on phones they become reachable bottom sheets instead of tiny cards. */
+.sn-dialog::backdrop {
+  background: rgb(8 15 28 / 46%) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+}
+
+.sn-dialog-card {
+  border-radius: 16px !important;
+  max-height: min(88dvh, 820px) !important;
+}
+
+.sn-dialog-head {
+  padding: 16px 18px !important;
+  gap: 12px !important;
+}
+
+.sn-dialog-head h2 {
+  font-size: 17px !important;
+}
+
+.sn-dialog-head p {
+  margin-top: 4px !important;
+  font-size: 11px !important;
+  line-height: 1.45 !important;
+}
+
+.sn-dialog-body {
+  padding: 16px 18px 18px !important;
+}
+
 /* Dense desktop data still needs to remain reachable on phones. */
 .sn-page-body :where(.table-wrap, .table-scroll, .data-table-wrap, .gradebook-table-wrap) {
   max-width: 100%;
@@ -165,5 +204,33 @@
 
   .sn-progressive-body {
     padding-inline: 14px;
+  }
+
+  .sn-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    margin: auto 0 0 !important;
+  }
+
+  .sn-dialog-card,
+  .sn-dialog-sm .sn-dialog-card,
+  .sn-dialog-lg .sn-dialog-card {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    max-height: 88dvh !important;
+    border-radius: 18px 18px 0 0 !important;
+    border-bottom: 0 !important;
+  }
+
+  .sn-dialog-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 14px !important;
+    background: var(--color-surface);
+  }
+
+  .sn-dialog-body {
+    padding: 14px 14px max(18px, env(safe-area-inset-bottom)) !important;
   }
 }
