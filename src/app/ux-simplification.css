@@ -254,6 +254,122 @@
   line-height: 1.5 !important;
 }
 
+/* Guardian academic work should foreground the learner's activities, not a
+   promotional hero. The activity dialog itself remains fully featured. */
+.gaw-page {
+  gap: 11px !important;
+  max-width: 1120px !important;
+}
+
+.gaw-hero {
+  padding: 14px 16px !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+
+.gaw-hero h1 {
+  margin: 3px 0 !important;
+  font-size: clamp(19px, 2.2vw, 24px) !important;
+  line-height: 1.15 !important;
+}
+
+.gaw-hero p {
+  margin: 0 !important;
+  font-size: 10px !important;
+  line-height: 1.45 !important;
+}
+
+.gaw-hero-icon {
+  display: none !important;
+}
+
+.gaw-context {
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+.gaw-grid {
+  gap: 10px !important;
+}
+
+.gaw-panel {
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+.gaw-work,
+.gaw-note {
+  padding: 11px !important;
+  border-radius: 10px !important;
+}
+
+/* Settings has many capabilities by nature. Reduce the chrome so each section
+   reads like a form section rather than a separate dashboard. */
+.school-settings-simple {
+  max-width: 1120px !important;
+  margin: 0 auto !important;
+  gap: 12px !important;
+}
+
+.school-settings-titlebar {
+  padding: 15px 17px !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+
+.school-settings-titlebar h1 {
+  font-size: clamp(20px, 2.2vw, 25px) !important;
+  line-height: 1.15 !important;
+}
+
+.school-settings-titlebar p {
+  font-size: 10px !important;
+  line-height: 1.45 !important;
+}
+
+.settings-jump {
+  gap: 5px !important;
+  overflow-x: auto !important;
+  flex-wrap: nowrap !important;
+  overscroll-behavior-inline: contain;
+}
+
+.settings-jump a {
+  white-space: nowrap;
+}
+
+.settings-panel {
+  padding: 16px !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+
+.settings-panel-heading h2 {
+  font-size: 17px !important;
+}
+
+.settings-panel-heading p {
+  font-size: 10px !important;
+  line-height: 1.45 !important;
+}
+
+.settings-action-row {
+  gap: 7px !important;
+}
+
+.settings-bottom-save {
+  padding: 12px 14px !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+.help-simple-groups {
+  display: grid;
+  gap: 8px;
+}
+
 /* Device control is a tool switcher, not another dashboard. Keep its overview
    compact and let the existing tabs expose advanced setup only when selected. */
 .devices-simple-shell .attendance-control {
@@ -375,6 +491,12 @@
   box-shadow: none !important;
 }
 
+.platform-schools-simple .platform-page-header p {
+  margin: 4px 0 0;
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
 /* Dense desktop data still needs to remain reachable on phones. */
 .sn-page-body :where(.table-wrap, .table-scroll, .data-table-wrap, .gradebook-table-wrap) {
   max-width: 100%;
@@ -403,6 +525,10 @@
   .sn-page-body :where(.lessons-kpis, .homework-kpis, .connected-grid, .result-summary) {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
+
+  .platform-schools-simple .platform-school-table {
+    overflow-x: auto;
+  }
 }
 
 @media (max-width: 640px) {
@@ -430,12 +556,28 @@
   .sn-page-body :where(.lessons-hero p, .homework-hero p, .terms-hero p, .reports-header p),
   .library-simple-shell > div > section:first-child p,
   .devices-simple-shell .attendance-control-hero p,
-  .downloads-simple-shell > div > section:first-child p {
+  .downloads-simple-shell > div > section:first-child p,
+  .gaw-hero p,
+  .school-settings-titlebar p,
+  .settings-panel-heading p {
     display: none !important;
   }
 
   .sn-page-body .reports-list {
     max-height: 260px;
+  }
+
+  .gaw-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .school-settings-titlebar {
+    align-items: stretch !important;
+  }
+
+  .school-settings-titlebar .settings-save,
+  .settings-bottom-save .settings-save {
+    width: 100%;
   }
 
   .devices-simple-shell .attendance-control-hero {
