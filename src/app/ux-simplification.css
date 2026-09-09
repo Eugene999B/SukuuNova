@@ -121,7 +121,7 @@
 /* One dialog grammar for the whole product. Desktop dialogs are intentionally
    compact; on phones they become reachable bottom sheets instead of tiny cards. */
 .sn-dialog::backdrop {
-  background: rgb(8 15 28 / 46%) !important;
+  background: color-mix(in srgb, var(--color-text-primary) 46%, transparent) !important;
   backdrop-filter: blur(4px) !important;
   -webkit-backdrop-filter: blur(4px) !important;
 }
