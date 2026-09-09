@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { evaluateTrackerCertification } from "../src/lib/novacore/tracker-certification";
+import { evaluateTrackerCertification, type TrackerCertificationPacket } from "../src/lib/novacore/tracker-certification";
 
-function packets(count: number, startMs: number, intervalMs = 10_000) {
+function packets(count: number, startMs: number, intervalMs = 10_000): TrackerCertificationPacket[] {
   return Array.from({ length: count }, (_, index) => ({
     receivedAt: startMs + index * intervalMs,
     accepted: true,
