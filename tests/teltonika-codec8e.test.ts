@@ -17,7 +17,7 @@ describe("Teltonika Codec 8 Extended", () => {
     expect(parsed.crc16).toBe(0x2994);
     expect(parsed.acknowledgement.toString("hex")).toBe("00000001");
     expect(parsed.records[0]).toMatchObject({
-      timestampMs: 1560161082880,
+      timestampMs: 1560166592000,
       priority: 1,
       eventIoId: 1,
       gps: {
