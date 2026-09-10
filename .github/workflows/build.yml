@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:16-alpine
@@ -69,6 +69,15 @@ jobs:
         run: npm run test
       - name: Pilot smoke journeys
         run: npm run test:pilot-smoke
+      - name: Eugene Academy full-system fixture
+        env:
+          DATABASE_URL: postgresql://production-sentinel.invalid/sukuunova
+          TEST_DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_test
+          ALLOW_EUGENE_ACADEMY_TRIAL_SEED: YES
+          TEST_STUDENT_COUNT: "225"
+        run: |
+          export EUGENE_ACADEMY_TEST_PASSWORD="$(openssl rand -base64 24 | tr -d '\n')"
+          npm run test:seed-eugene
       - name: Clean-state reset rehearsal
         env:
           RESET_DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_test
