@@ -4,7 +4,7 @@ import { z } from "zod";
 import { appendSchoolAudit } from "@/lib/audit";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
-import { withTenant } from "@/lib/db";
+import { withTenant, type TenantDb } from "@/lib/db";
 import { ForbiddenError, routeError } from "@/lib/errors";
 
 const sendSchema = z.object({
@@ -20,13 +20,12 @@ function object(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-async function teacherClassIds(tx: Parameters<Parameters<typeof withTenant>[1]>[0], schoolId: string, teacherId: string) {
-  const classes = await tx.class.findMany({
+async function teacherClasses(tx: TenantDb, schoolId: string, teacherId: string) {
+  return tx.class.findMany({
     where: { schoolId, OR: [{ classTeacherId: teacherId }, { subjectAssignments: { some: { teacherId } } }] },
     select: { id: true, name: true, level: true },
     orderBy: [{ level: "asc" }, { name: "asc" }],
   });
-  return classes;
 }
 
 export async function GET() {
@@ -35,7 +34,7 @@ export async function GET() {
     return await withTenant(session.schoolId, async (tx) => {
       const access = await getSchoolAuthorization(tx, session.userId);
       if (access.workspace !== "teacher" || !access.isTeacher) throw new ForbiddenError("Teacher announcements are not available for this account.");
-      const classes = await teacherClassIds(tx, session.schoolId, session.userId);
+      const classes = await teacherClasses(tx, session.schoolId, session.userId);
       const classIds = classes.map((item) => item.id);
       const [students, sent] = await Promise.all([
         tx.student.findMany({
@@ -50,11 +49,15 @@ export async function GET() {
           take: 250,
         }),
       ]);
+      const seenBatches = new Set<string>();
       const announcements = sent.flatMap((row) => {
         const metadata = object(row.templateVariables);
         if (metadata.senderId !== session.userId) return [];
+        const batchId = typeof metadata.batchId === "string" ? metadata.batchId : row.id;
+        if (seenBatches.has(batchId)) return [];
+        seenBatches.add(batchId);
         return [{
-          id: row.id,
+          id: batchId,
           title: typeof metadata.title === "string" ? metadata.title : row.body.split("\n")[0],
           body: typeof metadata.body === "string" ? metadata.body : row.body.replace(/^.*?\n\n/, ""),
           audienceLabel: typeof metadata.audienceLabel === "string" ? metadata.audienceLabel : "Class announcement",
@@ -75,7 +78,7 @@ export async function POST(request: Request) {
     return await withTenant(session.schoolId, async (tx) => {
       const access = await getSchoolAuthorization(tx, session.userId);
       if (access.workspace !== "teacher" || !access.isTeacher) throw new ForbiddenError("Teacher announcements are not available for this account.");
-      const classes = await teacherClassIds(tx, session.schoolId, session.userId);
+      const classes = await teacherClasses(tx, session.schoolId, session.userId);
       const targetClass = classes.find((item) => item.id === input.classId);
       if (!targetClass) throw new ForbiddenError("You can announce only to a class inside your teaching scope.");
 
