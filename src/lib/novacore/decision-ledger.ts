@@ -225,3 +225,78 @@ export async function listNovaCoreDecisionEvidence(tx: TenantDb, input: {
     limit,
   );
 }
+
+export async function summarizeNovaCoreDecisionEvidence(tx: TenantDb, input: {
+  schoolId: string;
+  days?: number;
+}) {
+  const days = Math.max(1, Math.min(90, Math.floor(input.days ?? 30)));
+  const rows = await tx.$queryRawUnsafe<Array<{
+    algorithmKey: string;
+    algorithmVersion: string;
+    domain: string;
+    rolloutMode: string;
+    samples: number;
+    averageConfidence: string | null;
+    averageLatencyMs: string | null;
+    firstObservedAt: Date;
+    lastObservedAt: Date;
+  }>>(
+    `SELECT "algorithmKey","algorithmVersion","domain","rolloutMode",
+            COUNT(*)::int AS "samples",
+            AVG("confidence")::text AS "averageConfidence",
+            AVG("latencyMs")::text AS "averageLatencyMs",
+            MIN("createdAt") AS "firstObservedAt",
+            MAX("createdAt") AS "lastObservedAt"
+     FROM "NovaCoreDecision"
+     WHERE "schoolId"=$1
+       AND "createdAt" >= CURRENT_TIMESTAMP - ($2 * INTERVAL '1 day')
+     GROUP BY "algorithmKey","algorithmVersion","domain","rolloutMode"
+     ORDER BY "algorithmKey","algorithmVersion"`,
+    input.schoolId,
+    days,
+  );
+
+  const reasonRows = await tx.$queryRawUnsafe<Array<{
+    algorithmKey: string;
+    algorithmVersion: string;
+    reasonCode: string;
+    count: number;
+  }>>(
+    `SELECT d."algorithmKey",d."algorithmVersion",reason.value AS "reasonCode",COUNT(*)::int AS "count"
+     FROM "NovaCoreDecision" d
+     CROSS JOIN LATERAL jsonb_array_elements_text(d."reasonCodes") AS reason(value)
+     WHERE d."schoolId"=$1
+       AND d."createdAt" >= CURRENT_TIMESTAMP - ($2 * INTERVAL '1 day')
+     GROUP BY d."algorithmKey",d."algorithmVersion",reason.value
+     ORDER BY d."algorithmKey",d."algorithmVersion","count" DESC,reason.value ASC`,
+    input.schoolId,
+    days,
+  );
+
+  const topReasons = new Map<string, Array<{ reasonCode: string; count: number }>>();
+  for (const row of reasonRows) {
+    const key = `${row.algorithmKey}@${row.algorithmVersion}`;
+    const current = topReasons.get(key) ?? [];
+    if (current.length < 5) current.push({ reasonCode: row.reasonCode, count: row.count });
+    topReasons.set(key, current);
+  }
+
+  return {
+    schoolId: input.schoolId,
+    days,
+    generatedAt: new Date().toISOString(),
+    algorithms: rows.map((row) => ({
+      algorithmKey: row.algorithmKey,
+      algorithmVersion: row.algorithmVersion,
+      domain: row.domain,
+      rolloutMode: row.rolloutMode,
+      samples: Number(row.samples),
+      averageConfidence: row.averageConfidence == null ? null : Math.round(Number(row.averageConfidence) * 1000) / 1000,
+      averageLatencyMs: row.averageLatencyMs == null ? null : Math.round(Number(row.averageLatencyMs) * 10) / 10,
+      firstObservedAt: row.firstObservedAt,
+      lastObservedAt: row.lastObservedAt,
+      topReasonCodes: topReasons.get(`${row.algorithmKey}@${row.algorithmVersion}`) ?? [],
+    })),
+  };
+}
