@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, CircleGauge, DatabaseZap, ShieldCheck, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleGauge, DatabaseZap, LifeBuoy, ShieldCheck, Wrench } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -122,6 +122,7 @@ export default async function SchoolGoLivePage() {
           <div className="sn-progressive-body go-live-explain">
             <p>The score is weighted toward operational dependencies: academic period, staff access, teaching connections, learner/class coverage and guardian coverage. Branding, fees and communication configuration still matter, but they do not outweigh missing core school structure.</p>
             <p>A score of 90% or more is not enough by itself. SukuuNova only marks the school review-ready when no hard blocker remains. Final pilot/device/provider certification is still a separate launch gate.</p>
+            <p><Link href="/school/support" className="app-pill"><LifeBuoy size={13}/> Open Pilot Support Center</Link></p>
           </div>
         </details>
       </div>
