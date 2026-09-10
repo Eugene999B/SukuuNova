@@ -32,7 +32,12 @@ const prisma = new PrismaClient();
 const TEST_CODE = (process.env.TEST_SCHOOL_CODE || "sn-test-2026").toLowerCase();
 const TEST_SCHOOL_NAME = process.env.TEST_SCHOOL_NAME || "SukuuNova Demonstration Academy";
 const PASSWORD = process.env.TEST_SEED_PASSWORD || "SukuuTest!2026";
+const requestedStudentCount = Number(process.env.TEST_STUDENT_COUNT || 90);
 if (PASSWORD.length < 12) throw new Error("TEST_SEED_PASSWORD must be at least 12 characters.");
+if (!Number.isInteger(requestedStudentCount) || requestedStudentCount < 1 || requestedStudentCount > 500) {
+  throw new Error("TEST_STUDENT_COUNT must be an integer between 1 and 500.");
+}
+const STUDENT_COUNT = requestedStudentCount;
 
 const roles = [
   ["Owner", "owner"], ["Principal", "principal"], ["Accountant", "accountant"],
@@ -194,7 +199,7 @@ async function main() {
     const lastNames = ["Mensah","Owusu","Boateng","Asare","Addo","Tetteh","Ofori","Sarpong","Badu","Marfo"];
     const students = [];
     const studentsByClass = new Map(classes.map((classroom) => [classroom.id, []]));
-    for (let index = 0; index < 90; index += 1) {
+    for (let index = 0; index < STUDENT_COUNT; index += 1) {
       const classroom = classes[index % classes.length];
       const admissionNo = `SNT-${String(index + 1).padStart(4, "0")}`;
       const name = `${firstNames[index % firstNames.length]} ${lastNames[Math.floor(index / firstNames.length) % lastNames.length]}`;
