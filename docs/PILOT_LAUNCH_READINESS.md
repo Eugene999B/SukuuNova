@@ -1,164 +1,167 @@
 # SukuuNova pilot launch readiness
 
-Current production branch checkpoint reviewed: `5536f33aca60c67880f925a286c84fcd7c746f7f`.
+Current engineering branch: `feat/novacore-transport-intelligence`.
 
-The purpose of this document is to separate features that are technically present from features that are safe to promise and demonstrate during a real-school pilot.
+This document separates **implemented**, **CI-certified**, and **live-environment certified** capabilities. A feature is not promised to a pilot school merely because code exists.
 
 ## Pilot positioning principle
 
-SukuuNova should launch the pilot around a dependable connected-school core, not around the largest possible feature list. Every feature shown to a pilot school must satisfy three conditions:
+SukuuNova should launch the pilot around a dependable connected-school core. Every feature demonstrated to a pilot school should satisfy:
 
-1. the workflow exists end to end for the intended user,
-2. permissions/tenant boundaries are enforced server-side,
-3. the production journey has been exercised on the deployment environment.
+1. the intended user workflow exists end to end;
+2. permissions and tenant boundaries are enforced server-side;
+3. automated regression/production build gates pass;
+4. external providers, devices, backup recovery, or other environment-dependent behavior has been exercised on the actual deployment where applicable.
 
-A feature may remain in the product but be hidden from the pilot if it has not passed those conditions.
+## Current launch-hardening status
 
-## Tier A — pilot-safe core to certify and actively demonstrate
+### Implemented and CI-certified on the NovaCore branch
 
-These areas have strong implementation foundations and regression coverage. They should form the pilot's primary value proposition after live-browser certification:
+- School leadership/admin workspace, teacher workspace and Family Portal / linked-learner experience.
+- Attendance, academic setup, timetable, lesson planning/review, homework, gradebook and report-card workflows.
+- Fees/finance foundations, invoices/payments/reversals and payroll foundations.
+- Digital/physical Library and protected Resource Hub.
+- Learning Arcade, including deterministic NovaCore physics for the Force & Motion Lab.
+- NovaCore algorithm registry, decision evidence, transport intelligence and timetable shadow optimization.
+- Electronic handwritten signatures with vector evidence, PNG/vector SHA-256 integrity and report-card HMAC binding.
+- **Pilot Data Import Center:** strict CSV parsing, deterministic column mapping, row validation, duplicate detection, tenant-RLS staging, downloadable validation report and transactional rollback-safe apply for classes, subjects, learners and guardians.
+- **Go-Live Readiness / onboarding:** weighted live-data readiness score plus six-phase guided setup path.
+- **Leadership Action Center:** deterministic cross-module exception queue with direct fix links.
+- **Pilot Feedback & Support Center:** structured problem/suggestion, module, severity, diagnostic context, attachment link, tenant isolation, threaded replies and Platform Support provenance.
+- **Encrypted backup/restore tooling:** PostgreSQL custom-format backup, AES-256-GCM encryption, SHA-256 manifest and isolated restore-verification command with production-target safeguards.
 
-- School leadership/admin workspace, role-based access and school isolation.
-- Teacher workspace and assignment-scoped academic workflows.
-- Guardian multi-child portal with child-specific attendance, released results, fees, messages, academic work and learning context.
-- Student/staff attendance, attendance exceptions and QR/device-ready attendance paths.
-- Timetable setup/generation and teacher timetable visibility.
-- Structured lesson planning, submission, review, revision, approval, completion and archive history.
-- Teacher academic work, homework bridge, learner submissions, objective auto-grading, written review and attempt policies.
-- Gradebook and report-card workflow, report themes, publication and protected guardian access.
-- Fees/finance records, invoices, payments, receipts, arrears, reversals and payroll foundations.
-- Digital/physical Library and Student Resource Hub with protected in-app reading, school-controlled download permission, favourites, bookmarks, progress, recommendations, reservations and copy/accession controls.
-- Learning Universe / Arcade: 64 runtime-ready educational games across age/standard bands, difficulty 1–5, school controls, XP/stars/streaks and scoped leaderboards.
-- In-app messaging plus prepaid SMS commercial control. Arkesel is the default adapter; Sailup, Hubtel and a generic gateway are switchable. Platform SMS inventory is allocated/sold to school wallets and usage is metered by billable segment.
-- Recruitment, approved pickup, visitors, assets/inventory and identity-card foundations where the school needs them.
-- Role-aware dashboards and audit history.
+### Implemented but intentionally limited / staging-only
 
-## Tier B — controlled beta during pilot
+- Staff import can stage and validate, but bulk account creation is not enabled until role-assignment authorization and one-time credential handoff are certified.
+- Opening fee balances can stage and validate, but posting is not enabled until a dedicated finance-ledger-safe writer is certified.
+- XLSX import is not yet enabled; CSV is the certified parser path.
+- Timetable NovaCore optimizer remains preview/shadow only; the existing safe timetable writer remains authoritative.
+- ETA remains shadow/certification-driven and cannot auto-promote itself to production.
 
-These modules have meaningful foundations but should be enabled only for a school that needs them and after a school-specific live journey is certified:
+### Requires live-environment certification before broad promise
 
-### Transport
+- Real SMS provider credentials/sender ID and delivery/failure cycle.
+- WhatsApp sender/business approval, approved templates, webhook verification and real delivery statuses where WhatsApp is offered.
+- Real FMC130 tracker/network installation and trip alert timing at the pilot school.
+- Any biometric hardware model/gateway on the actual school network.
+- Actual encrypted backup creation, off-host retention and successful restore drill using the deployment environment.
+- Production cron/secrets and operational monitoring.
 
-Existing foundations include vehicles, routes, stops, route assignments, latest vehicle locations, boarding events, parent location context and compliance reminders. Before broadly promising "bus approaching / arrival alerts", certify the real GPS/location source, route progression logic, guardian notification timing and stale-location handling in production.
+## Family Portal / learner experience
 
-### Feeding / canteen
+SukuuNova does **not** need a separate unrelated Student Portal for the pilot. The intended product model is the Family Portal with linked children plus the learner-facing experience/mode inside that family boundary. Pilot wording should therefore describe secure family/learner access rather than promise a second standalone student product that duplicates the same data.
 
-Existing foundations include feeding budgets, menus, service logs, invoice items and planned-versus-actual cost reporting. A full canteen operating product should still add meal entitlement/attendance, stock consumption, supplier purchasing, daily portions, exceptions/allergies where appropriate, and optionally POS/cashless meal accounting.
+The critical requirement is identity separation: learner-facing functions must not expose parent-only finance/private communication or another sibling's private data.
 
-### WhatsApp
+## Transport — controlled beta
 
-Webhook and provider foundations exist, including Meta/Twilio-related environment support, but production credentials, templates, sender/business approval, webhook verification and real delivery status must be configured and exercised before promising automated WhatsApp delivery as universally available.
+Transport now has a significantly deeper implementation foundation:
 
-### Biometrics / devices
+- Teltonika Codec 8 Extended gateway and tracker provisioning;
+- evidence-driven FMC130 certification state;
+- raw GPS preservation plus separately normalized positions;
+- GPS validation/smoothing;
+- direction-specific route geometry;
+- state-aware route matching and deviation detection;
+- child-specific geofence progression and ETA;
+- guardian pickup-point request/approval workflow;
+- transport alert outbox through SukuuNova messaging;
+- persistent incidents and trip replay evidence;
+- ETA shadow prediction-versus-arrival scoring and human-only promotion gate.
 
-QR, face/fingerprint/card pathways and device models exist, but every physical device model/gateway used in a pilot must be certified on the actual school network before being included in the pilot commitment.
+Before broadly promising bus-approaching/arrival alerts, certify one real FMC130, SIM/network, route, pickup points, stale-location behavior and guardian notification timing in the pilot environment.
 
-## Tier C — do not promise as finished yet
+## Communications
 
-### Dedicated Student Portal
+In-app messaging and prepaid SMS architecture are implemented. Arkesel is the default SMS adapter with other provider abstractions available in the messaging layer. Production claims still depend on real provider credentials and a live delivery/failure/retry exercise.
 
-SukuuNova currently defines a `student` role key, but the current school authorization resolver exposes only `school` and `teacher` workspaces. Learner experiences are presently strongest through guardian-linked learner flows. Before the pilot letter promises a true Student Portal, either build a dedicated student authentication/workspace or change the pilot wording to "student learning access through the configured learner/guardian experience".
+WhatsApp remains conditional on the school's approved sender/template/provider configuration and real webhook/delivery certification.
 
-### Online fee collection / Mobile Money
+## Backup and recovery
 
-The finance system records school payments and balances, but a production-grade online payment gateway / MoMo self-payment journey is not currently part of the verified core. This should be treated as a future commercial add-on unless completed and reconciled before pilot.
+Application-side backup/recovery tooling now exists and is CI-certified:
 
-### General-purpose PWA / installable offline app
+- `npm run db:backup`
+- `npm run db:restore:verify`
+- `docs/BACKUP_RESTORE_RUNBOOK.md`
 
-SukuuNova has selected offline synchronization workflows, but there is no verified general installable PWA/service-worker experience for the entire application. Do not market the whole system as fully offline-capable.
+This does **not** mean production recovery is proven yet. Before pilot launch, an authorized operator must create a real encrypted backup, move it to durable off-host storage, restore it into a separate drill database, record the verification evidence and confirm the infrastructure retention/incident procedure.
 
-### Bulk migration/import center
+## Data Import Center
 
-A pilot school needs a fast way to onboard existing student, guardian, staff, class, subject, opening-balance and possibly historical-result data. A dedicated CSV/Excel import, validation, preview, error-report and rollback workflow should be built before scaling beyond a very small manually configured pilot.
+The former bulk-migration blocker is substantially closed for the most important onboarding data:
 
-### Backup/restore and disaster-recovery operator workflow
+- classes;
+- subjects;
+- learners;
+- guardians.
 
-Production deployment documentation exists, but the pilot launch needs a tested backup schedule, restore drill, retention policy and recovery runbook. This is an operational requirement even if it is not a school-facing feature.
+Those four data families have staged validation plus atomic production apply with revalidation, idempotency and rollback tests. Staff, opening balances and XLSX remain deliberately limited as described above.
 
-### Pilot feedback/support center
+## Pilot Feedback & Support Center
 
-The pilot letter promises support and asks schools to report difficulties. Add an in-product feedback/support workflow that captures school, user, module, severity, screenshot/attachment, status, owner and resolution history. This should feed the platform-owner support desk.
+The in-product pilot support workflow is implemented and CI-certified. It feeds the same tenant-scoped support records used by Platform Support. It captures kind, module, severity, approved diagnostic context, optional safe attachment URL, status and complete message history. Platform replies are distinguishable from school-user replies.
 
-## Built features that are under-described in the current pilot letter
+Direct binary screenshot upload is not yet part of this workflow; screenshots can use a certified HTTPS/same-site file URL once the deployment's file-storage path is available.
 
-The pilot letter should be revised before distribution because several major differentiators are compressed into one or two lines:
+## Leadership Action Center
 
-- **Learning Arcade:** explicitly state 64 educational games, subject categories, age/standard bands, adaptive difficulty, progress/rewards and school-scoped rankings.
-- **Digital Library:** explain protected in-app Reading Mode and that each school decides whether a resource can be downloaded.
-- **SMS:** explain prepaid school SMS wallets and controlled school messaging rather than simply saying SMS exists.
-- **Lesson review:** describe teacher submission, leadership comments, return-for-correction and resubmission history.
-- **Guardian multi-child:** note that one guardian can securely switch between linked children without mixing records.
-- **Academic attempts:** retry limits/highest/latest grading policy can be a useful teacher/assessment differentiator.
-- **Audit/RBAC/data isolation:** this is important for school management confidence and should appear as a trust/safety line.
+The School Analytics leadership view now prioritizes explainable exceptions instead of only dashboard totals. Current evidence includes attendance gaps/absence, report-card gaps, outstanding fees, communication failures, submitted lesson plans, guardian-link quality, library overdue items, timetable collision signals and other available operational exceptions.
 
-The current Arcade sentence in the letter should not remain merely "Learning Arcade gives level-based practice games" because that materially understates the implemented product.
+## Remaining launch work
 
-## Pilot letter claims that require wording care
+### P0 — final pilot blockers
 
-- "Student Portal" — currently the most important claim to fix or build before launch.
-- "WhatsApp delivery" — phrase as available when the school's WhatsApp channel is configured and approved until production credentials/templates are certified.
-- "Bus approaching/arrival alerts" — keep as a controlled transport pilot capability until real GPS/notification timing is certified.
-- Digital Library "read or download" — revise to say learners read in SukuuNova and downloads are available only when the school has enabled download for that resource.
+1. **Production certification ledger + automated smoke journeys** for Platform Owner, School Leadership, Teacher and Family/learner flows.
+2. **Live provider certification:** real SMS send/delivery/failure handling; WhatsApp only where configured/approved.
+3. **Real backup/restore drill:** encrypted backup, off-host retention and isolated restore verification.
+4. **Production secrets/jobs review:** provider secrets, cron/worker jobs and monitoring.
+5. **Cross-tenant/IDOR/RLS production-schema smoke checks.**
+6. **Pilot scope sign-off:** explicitly mark Transport/biometrics/WhatsApp as controlled until their school-specific hardware/provider tests pass.
 
-## Recommended missing additions before first pilot school
+### P1 — useful expansion after the core launch gate
 
-### P0 — launch blockers / high leverage
-
-1. Dedicated Student Portal and student login/learner identity boundary.
-2. Pilot Data Import Center with CSV/XLSX templates, preview, validation, duplicate detection and rollback-safe import.
-3. Production certification checklist and automated smoke journeys for Owner, Teacher, Guardian and Student.
-4. Configure production providers/secrets: Arkesel credentials/sender ID, WhatsApp if offered, protected library storage hosts, and `RISK_SCAN_CRON_SECRET`.
-5. Backup/restore drill plus pilot data-retention and incident-response runbook.
-6. In-product Pilot Feedback / Support Center.
-
-### P1 — make the pilot feel premium
-
-7. Leadership Action Center: one cross-module exception queue for attendance, fees, academics, staff, library, communications and transport with evidence and direct fix links.
-8. School onboarding wizard: school profile -> academic year/term -> classes/subjects -> staff -> students/guardians -> fee structures -> communication settings -> go-live readiness score.
-9. Notification center with delivery receipts, failed-message retry visibility and low SMS-balance alerts for school leadership.
-10. Parent/guardian preference controls for communication channels and important-notification categories.
-11. School-branded public/guardian touchpoints: logo, colors, contact details and report/receipt consistency.
-12. Data-quality dashboard: missing guardian links, invalid phone numbers, duplicate admissions, incomplete class assignment, missing subject teachers and unresolved setup blockers.
+7. XLSX adapter using the existing import staging contract.
+8. Certified staff import with secure one-time credential handoff and role authorization.
+9. Finance-safe opening-balance writer with explicit ledger semantics and audit/reconciliation.
+10. Direct support screenshot upload through the deployment's certified file-storage service.
+11. Deeper notification preference/receipt controls for guardians and leadership.
 
 ### P2 — commercial expansion after pilot stability
 
-13. Online/MoMo fee payments with idempotent webhooks and reconciliation.
-14. Deeper canteen/feeding inventory and meal-entitlement workflows.
-15. Production GPS integration and route ETA/guardian alerts for Transport.
-16. Full import/export center for historical results, payroll and other legacy datasets.
-17. General PWA/offline experience only after deciding which workflows genuinely need offline support.
-18. Advanced leadership trends/benchmarking across terms and schools while preserving tenant privacy.
+12. Online/MoMo fee payments with idempotent webhooks and reconciliation.
+13. Deeper canteen/feeding inventory and meal entitlement.
+14. Broader certified device catalogue and installation tooling.
+15. Historical results/payroll/other legacy import families.
+16. General PWA/offline experience only where a workflow genuinely requires it.
+17. Advanced longitudinal/cross-school leadership trends while preserving tenant privacy.
 
-## Pilot scope recommendation
+## Recommended first-school rollout
 
-For the first school, do not enable every module on day one. Recommended rollout:
-
-- Week 0 setup: import people/classes/subjects/fees, roles, branding, communication provider, backup baseline.
-- Week 1: attendance, staff/teacher access, guardian linking, fees visibility, in-app messaging/SMS.
-- Week 2: timetable, lesson planning, homework/academic work, gradebook.
-- Week 3: report cards, Library/Resources and Learning Arcade.
-- Week 4+: enable transport/feeding/biometrics only if the school has the operational need and hardware/data sources.
-
-This reduces training load and gives the pilot team a clean way to measure adoption and defects by workflow.
+- **Week 0:** Go-Live readiness, import people/classes/subjects, roles, branding, communication provider, baseline encrypted backup and restore drill.
+- **Week 1:** attendance, staff/teacher access, guardian linking, fees visibility, in-app messaging/SMS and Support Center.
+- **Week 2:** timetable, lesson planning, homework/academic work and gradebook.
+- **Week 3:** report cards, Library/Resources and Learning Arcade.
+- **Week 4+:** Transport/feeding/biometrics only if the school needs them and the relevant hardware/data source has passed certification.
 
 ## Definition of pilot-ready
 
 SukuuNova should be called pilot-ready only when:
 
-- the four core user journeys (Platform Owner, School Leadership, Teacher, Guardian/Student) are certified in the live deployment;
-- one complete academic cycle has been rehearsed from class setup through assignment/grade/report release;
-- one complete finance cycle has been rehearsed from fee/invoice through payment/reversal/guardian balance;
-- one complete communication cycle has been rehearsed through in-app + real SMS provider delivery and failure handling;
+- Platform Owner, School Leadership, Teacher and Family/learner journeys are certified against the live deployment;
+- one academic cycle is rehearsed from setup through assignment/grade/report release;
+- one finance cycle is rehearsed through invoice/payment/reversal/guardian balance;
+- one communication cycle is rehearsed through in-app + real SMS delivery/failure handling;
 - cross-tenant/IDOR/RLS checks are repeated against the production schema;
-- backup and restore are proven;
-- provider secrets and cron jobs are configured;
-- the pilot team has an incident/support workflow and knows how to disable a problematic feature without affecting the rest of the school.
+- a real backup and isolated restore drill is proven;
+- provider secrets and required workers/cron jobs are configured;
+- the pilot team can raise/track incidents through the Support Center;
+- controlled-beta capabilities can be disabled without disrupting the school core.
 
 ## Immediate engineering order
 
-1. Build the dedicated Student Portal.
-2. Build the Pilot Data Import + Onboarding/Readiness Center.
-3. Build Pilot Feedback/Support and leadership data-quality/exception surfaces.
-4. Deepen operations where the first pilot school actually needs them: Finance -> Transport -> Feeding.
-5. Finish Leadership Intelligence.
-6. Run whole-system production certification and update the pilot letter to exactly match the certified scope.
+1. Build the production certification ledger and automated smoke-journey suite.
+2. Certify report-card communications/provider readiness against the current messaging layer.
+3. Add final provider/device/backup evidence into the certification gate.
+4. Run whole-system production certification and update the pilot letter to exactly match the certified scope.
+5. Only then expand staff/finance/XLSX import and post-pilot commercial modules.

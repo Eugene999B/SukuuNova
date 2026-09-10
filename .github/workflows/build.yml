@@ -67,6 +67,17 @@ jobs:
         run: npm run lint
       - name: Tests
         run: npm run test
+      - name: Pilot smoke journeys
+        run: npm run test:pilot-smoke
+      - name: Clean-state reset rehearsal
+        env:
+          RESET_DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_test
+          ALLOW_APPLICATION_DATA_RESET: YES_DELETE_APPLICATION_DATA
+          RESET_CONFIRM_DATABASE_NAME: sukuunova_test
+        run: |
+          RESET_MODE=preview npm run data:reset
+          RESET_MODE=execute npm run data:reset
+          npm run data:verify-empty
       - name: Production build
         env:
           NODE_ENV: production

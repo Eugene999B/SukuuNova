@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -104,12 +105,24 @@ export default async function SchoolSettingsPage() {
       universe="school"
       title="School Settings"
       subtitle="Configure the school-wide details and rules SukuuNova uses everywhere."
-      active="School Settings"
+      active="Settings Home"
       schoolName={data.school.name}
       schoolCode={data.school.uniqueCode}
       userName={session.name}
     >
-      <SchoolSettingsWorkspace initial={workspaceData} />
+      <div style={{ display: "grid", gap: 12 }}>
+        <section className="app-card app-panel">
+          <div className="app-card-head">
+            <div>
+              <span className="app-eyebrow">GO-LIVE CHECK</span>
+              <h2>Is this school ready for wider rollout?</h2>
+              <p>Use live school data to find setup blockers across academics, people, families, fees and communications.</p>
+            </div>
+            <Link href="/school/go-live" className="app-action"><strong>Check readiness</strong></Link>
+          </div>
+        </section>
+        <SchoolSettingsWorkspace initial={workspaceData} />
+      </div>
     </AppShell>
   );
 }

@@ -6,6 +6,7 @@ import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { generateSchoolTimetable, readTimetableExtensions } from "@/lib/timetable-generation-policy";
 import { getAcademicEngineConfig, saveAcademicEngineConfig } from "@/lib/academic-engine";
+import { previewNovaCoreTimetableWithShadow } from "@/lib/novacore/timetable-shadow-service";
 
 const period = z.object({ period: z.number().int().min(1).max(16), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) });
 const day = z.object({ dayOfWeek: z.number().int().min(1).max(7), name: z.string().min(2).max(20), enabled: z.boolean(), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/), periods: z.array(period).max(16).optional() });
@@ -27,15 +28,23 @@ const timetable = z.object({
 });
 const assessment = z.object({ categories: z.array(z.object({ name: z.string().min(1).max(80), weight: z.number().min(0).max(100) })).min(1).max(16), rounding: z.enum(["nearest", "down", "up"]), missingScorePolicy: z.enum(["blank", "zero"]), allowTeacherOverride: z.boolean() });
 const report = z.object({ includePosition: z.boolean(), includeSubjectPosition: z.boolean(), includeAttendance: z.boolean(), includeTeacherRemark: z.boolean(), includeHeadRemark: z.boolean(), includeSignatures: z.boolean(), includeSchoolContacts: z.boolean(), rankMethod: z.enum(["total_average", "weighted_total"]), showGrades: z.boolean(), showClassAverage: z.boolean() });
+const generationMode = z.enum(["fill_gaps", "rebuild", "rebuild_preserving_locked"]);
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save"), timetable: timetable.optional(), assessment: assessment.optional(), reportCard: report.optional() }),
   z.object({
     action: z.literal("generate"),
-    mode: z.enum(["fill_gaps", "rebuild", "rebuild_preserving_locked"]).optional(),
+    mode: generationMode.optional(),
     dryRun: z.boolean().default(false),
     lockedSlotIds: z.array(z.string().min(1)).max(1000).optional(),
     classIds: z.array(z.string().min(1)).max(100).optional(),
     replaceExisting: z.boolean().optional(),
+  }),
+  z.object({
+    action: z.literal("novacorePreview"),
+    mode: generationMode.optional(),
+    lockedSlotIds: z.array(z.string().min(1)).max(1000).optional(),
+    classIds: z.array(z.string().min(1)).max(100).optional(),
+    maxSearchNodes: z.number().int().min(100).max(2_000_000).optional(),
   }),
 ]);
 
@@ -152,6 +161,17 @@ export async function POST(request: Request) {
           reportCard = legacyReportView(merged);
         }
         return NextResponse.json({ ...result, timetable: extendedTimetable, reportCard });
+      }
+
+      if (input.action === "novacorePreview") {
+        return NextResponse.json(await previewNovaCoreTimetableWithShadow(tx, {
+          schoolId: session.schoolId,
+          actorId: session.userId,
+          mode: input.mode,
+          lockedSlotIds: input.lockedSlotIds,
+          classIds: input.classIds,
+          maxSearchNodes: input.maxSearchNodes,
+        }), { headers: { "Cache-Control": "private, no-store" } });
       }
 
       const result = await generateSchoolTimetable(tx, {

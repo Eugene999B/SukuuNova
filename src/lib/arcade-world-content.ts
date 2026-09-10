@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { createForceMotionQuestions } from "./novacore/arcade-force-motion";
 
 export type ArcadeWorldKind = "choice_plus" | "match_plus" | "sort_plus" | "grid" | "map" | "memory" | "simulation";
 export type ArcadeWorldScene = {
@@ -311,7 +312,10 @@ export function createArcadeWorldQuestions(game: WorldArcadeGame, difficulty: nu
     case "reading-detective": return choiceQuestions(reading, length);
     case "tense-trek": return choiceQuestions(tense, length);
     case "essay-planner": return sortQuestions(essayPlans, length);
-    case "force-motion-lab": return simulationQuestions(forceSimulation, length);
+    case "force-motion-lab": {
+      const generated = createForceMotionQuestions(safeDifficulty, length);
+      return generated.length ? generated : simulationQuestions(forceSimulation, length);
+    }
     case "energy-quest": return choiceQuestions(energy, length);
     case "space-explorer": return mapQuestions(spaceMap, length);
     case "ghana-map-master": return mapQuestions(ghanaMap, length);

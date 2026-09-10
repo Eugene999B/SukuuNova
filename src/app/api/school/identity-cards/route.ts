@@ -8,9 +8,14 @@ import { requirePermission } from "@/lib/rbac";
 import { buildIdentityCardPdf, getIdentityCardsByScope, listIdentityCards, reissueIdentityCard, revokeIdentityCard, type IdentityCardScope } from "@/lib/identity-card-service";
 
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("download"), scope: z.enum(["all", "students", "staff", "selected"]), ids: z.array(z.string().min(1).max(100)).max(2000).optional() }),
+  z.object({
+    action: z.literal("download"),
+    scope: z.enum(["all", "students", "staff", "class", "selected"]),
+    ids: z.array(z.string().min(1).max(100)).max(2000).optional(),
+    classId: z.string().min(1).max(100).optional(),
+  }),
   z.object({ action: z.literal("reissue"), cardId: z.string().min(1).max(100) }),
-  z.object({ action: z.literal("revoke"), cardId: z.string().min(1).max(100) })
+  z.object({ action: z.literal("revoke"), cardId: z.string().min(1).max(100) }),
 ]);
 
 export async function GET() {
@@ -18,33 +23,54 @@ export async function GET() {
     const session = await requireSchoolSession();
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "identity_cards:manage");
-      const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } });
+      const [school, classes] = await Promise.all([
+        tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
+        tx.class.findMany({ where: { schoolId: session.schoolId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+      ]);
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
-      return { school, cards: await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId) };
+      return { school, classes, cards: await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId) };
     });
     return NextResponse.json({ ok: true, ...result });
-  } catch (error) { return routeError(error); }
+  } catch (error) {
+    return routeError(error);
+  }
 }
 
 export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
-    if (input.action === "download" && input.scope === "selected" && !(input.ids?.length)) throw new AppError("Select at least one card to download.", 400, "NO_SELECTION");
+    if (input.action === "download" && input.scope === "selected" && !input.ids?.length) throw new AppError("Select at least one card to download.", 400, "NO_SELECTION");
+    if (input.action === "download" && input.scope === "class" && !input.classId) throw new AppError("Choose a class to download.", 400, "CLASS_REQUIRED");
+
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "identity_cards:manage");
       const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } });
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
       if (input.action === "reissue") return { kind: "json" as const, value: await reissueIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
       if (input.action === "revoke") return { kind: "json" as const, value: await revokeIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
-      const scope: IdentityCardScope = input.scope === "students" ? "student" : input.scope === "staff" ? "staff" : input.scope;
-      const cards = (await getIdentityCardsByScope(tx, session.schoolId, school.uniqueCode, scope, input.ids ?? [], session.userId))
+
+      const scope: IdentityCardScope = input.scope === "students" ? "student" : input.scope;
+      const cards = (await getIdentityCardsByScope(tx, session.schoolId, school.uniqueCode, scope, input.ids ?? [], session.userId, input.classId))
         .filter((card) => card.status === "active" && !card.isExpired);
       if (!cards.length) throw new AppError("No current identity cards matched this selection.", 404, "NO_CARDS");
-      return { kind: "pdf" as const, pdf: await buildIdentityCardPdf(cards, school, new URL(request.url).origin) };
+      return { kind: "pdf" as const, pdf: await buildIdentityCardPdf(cards, school, new URL(request.url).origin), scope: input.scope };
     });
+
     if (result.kind === "json") return NextResponse.json({ ok: true, result: result.value });
-    return new NextResponse(result.pdf, { status: 200, headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${schoolSafeFilename(session.schoolId)}-identity-cards.pdf"`, "cache-control": "private, no-store" } });
-  } catch (error) { return routeError(error); }
+    return new NextResponse(result.pdf, {
+      status: 200,
+      headers: {
+        "content-type": "application/pdf",
+        "content-disposition": `attachment; filename="${schoolSafeFilename(session.schoolId)}-${result.scope}-identity-cards.pdf"`,
+        "cache-control": "private, no-store",
+      },
+    });
+  } catch (error) {
+    return routeError(error);
+  }
 }
-function schoolSafeFilename(value: string) { return value.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 80) || "school"; }
+
+function schoolSafeFilename(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]+/g, "-").slice(0, 80) || "school";
+}

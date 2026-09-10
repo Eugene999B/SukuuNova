@@ -59,7 +59,7 @@ async function freezeIntelligentReportCard(tx: TenantDb, schoolId: string, repor
   }
   const [data, signatureSnapshot] = await Promise.all([
     calculateIntelligentReportCard(tx, { schoolId, reportId }),
-    resolveCurrentReportSignatures(tx, schoolId),
+    resolveCurrentReportSignatures(tx, schoolId, { documentType: "report_card", documentId: reportId }),
   ]);
   const previous = report.calculationSnapshot && typeof report.calculationSnapshot === "object" && !Array.isArray(report.calculationSnapshot)
     ? report.calculationSnapshot as Record<string, Prisma.JsonValue>
