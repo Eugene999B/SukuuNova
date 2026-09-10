@@ -20,9 +20,13 @@ if (!Number.isInteger(studentCount) || studentCount < 225 || studentCount > 500)
 const env = { ...process.env, TEST_STUDENT_COUNT: String(studentCount) };
 const baseFixturePath = path.join(__dirname, "seed-realistic-test-school.cjs");
 const coreFixturePath = path.join(__dirname, "seed-eugene-academy-trial.cjs");
+const operationsFixturePath = path.join(__dirname, "seed-eugene-academy-operations.cjs");
+const verifierFixturePath = path.join(__dirname, "verify-eugene-academy-trial.cjs");
 const originals = new Map([
   [baseFixturePath, fs.readFileSync(baseFixturePath, "utf8")],
   [coreFixturePath, fs.readFileSync(coreFixturePath, "utf8")],
+  [operationsFixturePath, fs.readFileSync(operationsFixturePath, "utf8")],
+  [verifierFixturePath, fs.readFileSync(verifierFixturePath, "utf8")],
 ]);
 const patchedPaths = new Set();
 
@@ -125,6 +129,54 @@ function patchFixtures() {
 
   fs.writeFileSync(coreFixturePath, core, "utf8");
   patchedPaths.add(coreFixturePath);
+
+  // Operations and verification must also discover the tenant without querying a
+  // FORCE-RLS School table outside a tenant transaction.
+  let operations = originals.get(operationsFixturePath);
+  operations = replaceRequired(
+    operations,
+    'const { PrismaClient } = require("@prisma/client");',
+    'const fs = require("fs");\nconst path = require("path");\nconst { PrismaClient } = require("@prisma/client");',
+    "operations fixture imports",
+  );
+  const operationsSchoolNeedle = `async function main() {
+  const school = await prisma.school.findUnique({ where: { uniqueCode: SCHOOL_CODE } });
+  if (!school) throw new Error("Eugene Academy must be seeded before operational depth is added.");
+  const schoolId = school.id;
+
+  const summary = await prisma.$transaction(async (tx) => {`;
+  const operationsSchoolReplacement = `async function main() {
+  const baseReport = JSON.parse(fs.readFileSync(path.join(__dirname, ".realistic-test-school-output.json"), "utf8"));
+  const schoolId = String(baseReport?.school?.id || "");
+  if (!schoolId || baseReport?.school?.code !== SCHOOL_CODE) throw new Error("Eugene Academy base fixture report is missing or mismatched before operations seeding.");
+
+  const summary = await prisma.$transaction(async (tx) => {`;
+  operations = replaceRequired(operations, operationsSchoolNeedle, operationsSchoolReplacement, "operations tenant-RLS school bootstrap");
+  fs.writeFileSync(operationsFixturePath, operations, "utf8");
+  patchedPaths.add(operationsFixturePath);
+
+  let verifier = originals.get(verifierFixturePath);
+  const verifierSchoolNeedle = `async function main() {
+  const school = await prisma.school.findUnique({ where: { uniqueCode: SCHOOL_CODE } });
+  expected(school, "Eugene Academy school code eug123 was not created.");
+  expected(school.name === "Eugene Academy", \`Expected school name Eugene Academy, received \${school.name}.\`);
+  const schoolId = school.id;
+
+  const report = await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id',$1,true)", schoolId);`;
+  const verifierSchoolReplacement = `async function main() {
+  const baseReport = JSON.parse(fs.readFileSync(path.join(__dirname, ".realistic-test-school-output.json"), "utf8"));
+  const schoolId = String(baseReport?.school?.id || "");
+  expected(schoolId && baseReport?.school?.code === SCHOOL_CODE, "Eugene Academy school code eug123 was not created.");
+
+  const report = await prisma.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id',$1,true)", schoolId);
+    const school = await tx.school.findUnique({ where: { id: schoolId } });
+    expected(school, "Eugene Academy is not visible inside its tenant context.");
+    expected(school.name === "Eugene Academy", \`Expected school name Eugene Academy, received \${school.name}.\`);`;
+  verifier = replaceRequired(verifier, verifierSchoolNeedle, verifierSchoolReplacement, "verification tenant-RLS school bootstrap");
+  fs.writeFileSync(verifierFixturePath, verifier, "utf8");
+  patchedPaths.add(verifierFixturePath);
 
   console.log("[eugene-academy] applied guarded compatibility normalization for current schema.");
 }
