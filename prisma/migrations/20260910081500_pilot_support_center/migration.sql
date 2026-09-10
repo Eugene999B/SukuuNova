@@ -25,6 +25,30 @@ ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessa
 ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessage_senderType_check";
 ALTER TABLE "SupportTicketMessage" ADD CONSTRAINT "SupportTicketMessage_senderType_check" CHECK ("senderType" IN ('school_user','platform_admin','system'));
 
+-- Existing platform support code writes a platform admin id into senderId without a sender type.
+-- Infer that provenance at the database boundary so older/newer callers share the same truth.
+CREATE OR REPLACE FUNCTION sukuunova_support_message_sender_type()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."senderType" = 'system' THEN RETURN NEW; END IF;
+  IF EXISTS (
+    SELECT 1 FROM "User" u
+    WHERE u."id" = NEW."senderId" AND u."schoolId" = NEW."schoolId"
+  ) THEN
+    NEW."senderType" := 'school_user';
+  ELSE
+    NEW."senderType" := 'platform_admin';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS sukuunova_support_message_sender_type_trg ON "SupportTicketMessage";
+CREATE TRIGGER sukuunova_support_message_sender_type_trg
+BEFORE INSERT ON "SupportTicketMessage"
+FOR EACH ROW EXECUTE FUNCTION sukuunova_support_message_sender_type();
+
 -- Keep one authoritative same-school ticket relationship.
 ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessage_ticket_fkey";
 DO $$ BEGIN
