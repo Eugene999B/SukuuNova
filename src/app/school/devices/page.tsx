@@ -12,6 +12,6 @@ export default async function DevicesPage() {
   });
   if (!school) throw new Error("School not found.");
   return <AppShell universe="school" title="Attendance Control" subtitle="Devices, live QR, biometrics and attendance rules." active="Devices" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}>
-    <DevicesDesk schoolName={school.name} schoolCode={school.uniqueCode} />
+    <div className="devices-simple-shell"><DevicesDesk schoolName={school.name} schoolCode={school.uniqueCode} /></div>
   </AppShell>;
 }

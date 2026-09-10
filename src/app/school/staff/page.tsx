@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Users, UserCheck, KeyRound, ArrowRight, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { StaffDirectory } from "@/components/staff/StaffDirectory";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { StaffCreateDialog } from "./StaffCreateDialog";
 import "./staff-workspace.css";
+import "./staff-simple.css";
 
 export default async function StaffPage() {
   const session = await requireSchoolSession();
@@ -26,19 +27,54 @@ export default async function StaffPage() {
     ]);
     return { school, users, classes, subjects };
   });
-  const teachers = data.users.filter((u) => u.userRoles.some((r) => /teacher/i.test(r.role.name)));
-  const pending = data.users.filter((u) => u.status === "pending");
-  const active = data.users.filter((u) => u.status === "active");
+
+  const teachers = data.users.filter((user) => user.userRoles.some((role) => /teacher/i.test(role.role.name)));
+  const pending = data.users.filter((user) => user.status === "pending");
+  const active = data.users.filter((user) => user.status === "active");
+  const people = data.users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    status: user.status,
+    roles: user.userRoles.map((role) => role.role.name),
+    classLead: user.classTeacherFor.map((schoolClass) => `${schoolClass.level ?? ""} ${schoolClass.name}`.trim()),
+    assignments: user.subjectAssignments.map((assignment) => `${assignment.class.level ?? ""} ${assignment.class.name} · ${assignment.subject.name}`.trim()),
+  }));
+
   return (
-    <AppShell universe="school" title="Staff & Teachers" subtitle="Manage staff profiles, teaching assignments and login activation from one workforce directory." active="Staff & Teachers" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
-      <div className="staff-workspace">
-        <section className="staff-header"><div><span className="staff-eyebrow">PEOPLE · WORKFORCE</span><h2>Staff directory</h2></div><StaffCreateDialog classes={data.classes} subjects={data.subjects} /></section>
-        {pending.length ? <section className="staff-form-note wide"><strong>{pending.length} staff profile{pending.length === 1 ? " is" : "s are"} waiting for login activation.</strong><span>Use the Activate login action on the person row, or open <Link href="/school/settings/access">Sub-accounts & Access</Link>.</span></section> : null}
-        <section className="staff-metrics" aria-label="Staff summary"><article><span className="staff-metric-icon"><Users size={16} aria-hidden="true" /></span><span>Total profiles</span><strong>{data.users.length}</strong><small>Active, pending and suspended staff</small></article><article><span className="staff-metric-icon"><UserCheck size={16} aria-hidden="true" /></span><span>Teachers</span><strong>{teachers.length}</strong><small>Teaching profiles</small></article><article><span className="staff-metric-icon"><ShieldCheck size={16} aria-hidden="true" /></span><span>Ready to sign in</span><strong>{active.length}</strong><small>Active staff accounts</small></article><article><span className="staff-metric-icon"><KeyRound size={16} aria-hidden="true" /></span><span>Needs login</span><strong>{pending.length}</strong><small>Pending staff profiles</small></article></section>
-        <section className="staff-directory"><div className="staff-directory-head"><div><span>Directory</span><h3>People at this school</h3><p>Role, teaching scope, contact and login status.</p></div><div className="staff-tools"><Link href="/school/settings/access">Sub-accounts & access</Link><Link href="/school/attendance/staff">Staff attendance</Link><Link href="/school/settings/roles">Roles & permissions</Link></div></div>
-          {data.users.length === 0 ? <div className="staff-empty"><strong>No staff profiles yet.</strong><p>Add the first staff profile to begin assigning roles and teaching scope.</p></div> : <div className="staff-table-wrap"><table><thead><tr><th>Person</th><th>Role</th><th>Teaching scope</th><th>Contact</th><th>Login</th></tr></thead><tbody>{data.users.map((u) => { const roles = u.userRoles.map((r) => r.role.name); const assignments = u.subjectAssignments.map((a) => `${a.class.level ?? ""} ${a.class.name} · ${a.subject.name}`.trim()); const classLead = u.classTeacherFor.map((c) => `${c.level ?? ""} ${c.name}`.trim()); return <tr key={u.id}><td><div className="staff-person"><span>{u.name.split(/\s+/).map((x) => x[0]).slice(0, 2).join("").toUpperCase()}</span><div><b>{u.name}</b><small>{u.email ?? u.phone ?? "No sign-in contact"}</small></div></div></td><td><div className="staff-role-pills">{roles.length ? roles.map((r) => <em key={r}>{r}</em>) : <em>Unassigned</em>}</div></td><td><small>{[...classLead, ...assignments].slice(0, 3).join(" · ") || "Not assigned"}</small>{assignments.length > 3 ? <small>+{assignments.length - 3} more</small> : null}</td><td><small>{u.email ?? "—"}</small><small>{u.phone ?? "—"}</small></td><td><div className="staff-login-cell"><span className={`staff-status ${u.status}`}>{u.status === "pending" ? "No login" : u.status}</span>{u.status === "pending" ? <Link className="staff-inline-action" href={`/school/settings/access?userId=${encodeURIComponent(u.id)}`}>Activate login <ArrowRight size={13} aria-hidden="true" /></Link> : null}</div></td></tr>; })}</tbody></table></div>}
+    <AppShell universe="school" title="Staff & Teachers" subtitle="Find staff, review teaching scope and manage access." active="Staff & Teachers" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+      <div className="staff-simple">
+        <section className="staff-simple-head">
+          <div><h2>Staff directory</h2><p>Search people first. Open details only when you need roles, contact, assignments or login actions.</p></div>
+          <StaffCreateDialog classes={data.classes} subjects={data.subjects} />
         </section>
-        <nav className="staff-shortcuts" aria-label="Staff management shortcuts"><span>Manage:</span><Link href="/school/classes">Classes</Link><Link href="/school/subjects">Subjects</Link><Link href="/school/timetable">Timetable</Link><Link href="/school/gradebook">Gradebook</Link></nav>
+
+        {pending.length ? <section className="staff-form-note wide"><strong>{pending.length} staff profile{pending.length === 1 ? " needs" : "s need"} login activation.</strong><span>Open the person and choose Activate login, or use <Link href="/school/settings/access">People & Access</Link>.</span></section> : null}
+
+        <section className="staff-simple-metrics" aria-label="Staff summary">
+          <div><span>Total staff</span><strong>{data.users.length}</strong></div>
+          <div><span>Teachers</span><strong>{teachers.length}</strong></div>
+          <div><span>Active login</span><strong>{active.length}</strong></div>
+          <div><span>Needs login</span><strong>{pending.length}</strong></div>
+        </section>
+
+        <section className="staff-simple-panel">
+          <div className="staff-simple-panel-head"><div><h3>People at this school</h3><p>Search by name, contact or role, then open a person for the complete staff record.</p></div></div>
+          <StaffDirectory people={people} />
+        </section>
+
+        <details className="sn-progressive">
+          <summary>More workforce administration</summary>
+          <div className="sn-progressive-body staff-simple-tools">
+            <Link href="/school/settings/access"><strong>People & access</strong><span>Accounts and activation →</span></Link>
+            <Link href="/school/settings/roles"><strong>Roles & permissions</strong><span>Access rules →</span></Link>
+            <Link href="/school/attendance/staff"><strong>Staff attendance</strong><span>Attendance records →</span></Link>
+            <Link href="/school/classes"><strong>Classes</strong><span>Class teachers →</span></Link>
+            <Link href="/school/subjects"><strong>Subjects</strong><span>Teaching assignments →</span></Link>
+            <Link href="/school/timetable"><strong>Timetable</strong><span>Teaching schedule →</span></Link>
+          </div>
+        </details>
       </div>
     </AppShell>
   );

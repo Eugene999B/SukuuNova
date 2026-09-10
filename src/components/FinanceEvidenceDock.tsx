@@ -1,18 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import "./finance-evidence-dock-simple.css";
 
 export function FinanceEvidenceDock() {
   return (
-    <div className="finance-evidence-dock" role="region" aria-label="Finance evidence and printing">
-      <div>
-        <span className="finance-evidence-kicker">EVIDENCE & PRINTING</span>
-        <strong>Receipts, statements, salary records and finance reports</strong>
-      </div>
+    <details className="finance-evidence-dock" aria-label="Finance evidence and printing">
+      <summary><span>Evidence & printing</span><small>Receipts, statements and exports</small></summary>
       <div className="finance-evidence-actions">
         <Link href="/school/fees/evidence">Open Evidence Centre →</Link>
         <button type="button" onClick={() => window.print()}>Print this view</button>
       </div>
-    </div>
+    </details>
   );
 }

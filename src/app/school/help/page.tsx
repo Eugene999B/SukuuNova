@@ -4,36 +4,12 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 
 const guideGroups = [
-  {
-    title: "Getting started",
-    detail: "Set up school identity, terms, people and permissions.",
-    links: [["School settings", "/school/settings"], ["People & users", "/school/people"], ["Access governance", "/school/settings/access"], ["Terms", "/school/terms"]],
-  },
-  {
-    title: "Academics",
-    detail: "Timetable, assessment, gradebook and report cards.",
-    links: [["Academic setup", "/school/academics/setup"], ["Timetable", "/school/timetable"], ["Gradebook", "/school/gradebook"], ["Report cards", "/school/report-cards"]],
-  },
-  {
-    title: "Finance",
-    detail: "Fees, invoices, payments, arrears and official evidence.",
-    links: [["Fee overview", "/school/fees/overview"], ["Invoices", "/school/fees/invoices"], ["Payments", "/school/fees/payments"], ["Arrears", "/school/fees/arrears"]],
-  },
-  {
-    title: "Attendance & people",
-    detail: "Daily attendance, learners, guardians and staff operations.",
-    links: [["Attendance", "/school/attendance"], ["Attendance exceptions", "/school/attendance/exceptions"], ["Students", "/school/students"], ["Staff", "/school/staff"]],
-  },
-  {
-    title: "Communication",
-    detail: "Messages, announcements, broadcasts and delivery history.",
-    links: [["Messages", "/school/communications/messages"], ["Announcements", "/school/communications/announcements"], ["Broadcasts", "/school/communications/broadcasts"], ["Communication settings", "/school/communications/settings"]],
-  },
-  {
-    title: "Operations",
-    detail: "Devices, visitors, pickup and other school operations.",
-    links: [["Devices", "/school/devices"], ["Visitors", "/school/visitors"], ["Pickup", "/school/pickup"], ["Downloads & exports", "/school/downloads"]],
-  },
+  { title: "Getting started", links: [["School settings", "/school/settings"], ["People & users", "/school/people"], ["People & access", "/school/settings/access"], ["Terms", "/school/terms"]] },
+  { title: "Academics", links: [["Academic setup", "/school/academics/setup"], ["Timetable", "/school/timetable"], ["Gradebook", "/school/gradebook"], ["Report cards", "/school/report-cards"]] },
+  { title: "Finance", links: [["School fees", "/school/fees"], ["Invoices", "/school/fees/invoices"], ["Payments", "/school/fees/payments"], ["Arrears", "/school/fees/arrears"]] },
+  { title: "Attendance & people", links: [["Attendance", "/school/attendance"], ["Attendance exceptions", "/school/attendance/exceptions"], ["Students", "/school/students"], ["Staff", "/school/staff"]] },
+  { title: "Communication", links: [["Messages", "/school/communications/messages"], ["Announcements", "/school/communications/announcements"], ["SMS / WhatsApp", "/school/communications/broadcasts"], ["Communication settings", "/school/communications/settings"]] },
+  { title: "Operations", links: [["Devices", "/school/devices"], ["Visitors", "/school/visitors"], ["Pickup", "/school/pickup"], ["Downloads & exports", "/school/downloads"]] },
 ] as const;
 
 const popularGuides = [
@@ -42,70 +18,27 @@ const popularGuides = [
   ["Approve and publish report cards", "/school/report-cards"],
   ["Record a class attendance register", "/school/attendance/register"],
   ["Generate an official export", "/school/downloads"],
-  ["Review a failed or incomplete payment", "/school/fees/payments"],
+  ["Review payments and balances", "/school/fees/payments"],
 ] as const;
 
 export default async function HelpPage() {
   const session = await requireSchoolSession();
-  const school = await withTenant(session.schoolId, (tx) =>
-    tx.school.findUnique({
-      where: { id: session.schoolId },
-      select: { name: true, uniqueCode: true },
-    }),
-  );
-
+  const school = await withTenant(session.schoolId, (tx) => tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }));
   if (!school) return null;
 
   return (
-    <AppShell
-      universe="school"
-      title="Help & Support"
-      subtitle="Help."
-      active="Help & Support"
-      schoolName={school.name}
-      schoolCode={school.uniqueCode}
-      userName={session.name}
-    >
-      <div className="space-y-6">
-        <section className="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-[0_18px_50px_rgba(15,23,42,.16)]">
-          <span className="text-[9px] font-black uppercase tracking-[.16em] text-emerald-300">Product support</span>
-          <h2 className="mt-2 text-2xl font-black tracking-tight">Find the right place to do the work</h2>
+    <AppShell universe="school" title="Help & Support" subtitle="Find the workflow you need." active="Help & Support" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}>
+      <div className="module-workspace help-simple">
+        <section className="module-card">
+          <div className="module-section-title"><div><span>Popular</span><h3>Common tasks</h3></div></div>
+          <div className="module-list">{popularGuides.map(([label, href], index) => <Link key={href} href={href} className="module-list-row"><span className="module-list-no">{index + 1}</span><div><b>{label}</b><span>Open the exact SukuuNova workspace for this task.</span></div></Link>)}</div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {guideGroups.map((group) => (
-            <article key={group.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-black text-slate-950">{group.title}</h3>
-              <p className="mt-2 text-[10px] leading-5 text-slate-500">{group.detail}</p>
-              <div className="mt-4 space-y-1 border-t border-slate-100 pt-3">
-                {group.links.map(([label, href]) => (
-                  <Link key={href} href={href} className="flex items-center justify-between rounded-xl px-3 py-2.5 text-[10px] font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-950">
-                    <span>{label}</span><span aria-hidden="true">→</span>
-                  </Link>
-                ))}
-              </div>
-            </article>
-          ))}
-        </section>
-
-        <div className="grid gap-5 lg:grid-cols-[1.1fr,.9fr]">
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-black text-slate-950">Popular guides</h3>
-            <div className="mt-3 divide-y divide-slate-100 border-t border-slate-100">
-              {popularGuides.map(([label, href]) => (
-                <Link key={href} href={href} className="flex items-center justify-between py-3 text-left text-[10px] font-bold text-slate-700 hover:text-slate-950">
-                  <span>{label}</span><span aria-hidden="true">→</span>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-            <span className="text-[9px] font-black uppercase tracking-[.12em] text-slate-500">Support boundary</span>
-            <h3 className="mt-2 text-sm font-black text-slate-950">Need help with a live workflow?</h3>
-            <Link href="/school/settings/access" className="mt-4 inline-flex rounded-xl bg-slate-950 px-4 py-3 text-[10px] font-black text-white hover:bg-slate-800">Review access first</Link>
-          </section>
+        <div className="help-simple-groups">
+          {guideGroups.map((group) => <details className="sn-progressive" key={group.title}><summary>{group.title}</summary><div className="sn-progressive-body"><div className="module-list">{group.links.map(([label, href]) => <Link key={href} href={href} className="module-list-row"><div><b>{label}</b></div></Link>)}</div></div></details>)}
         </div>
+
+        <div className="module-notice"><strong>Can’t use a page you expected to access?</strong> Start with <Link href="/school/settings/access">People & Access</Link> to verify the account’s role and effective permissions.</div>
       </div>
     </AppShell>
   );

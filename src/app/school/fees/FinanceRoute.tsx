@@ -4,6 +4,7 @@ import { withTenant } from "@/lib/db";
 import FinanceWorkspace from "@/components/FinanceWorkspace";
 import { FinanceEvidenceDock } from "@/components/FinanceEvidenceDock";
 import "@/components/finance-evidence.css";
+import "@/components/finance-workspace-simple.css";
 import "./finance-theme-parity.css";
 
 export default async function FinanceRoute({ mode }: { mode: "overview"|"fees"|"invoices"|"payments"|"arrears"|"reports"|"payroll" }) {

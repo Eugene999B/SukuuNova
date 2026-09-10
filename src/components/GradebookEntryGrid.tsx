@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Dialog } from "@/components/ui/Dialog";
 import { previewSubjectTotal, type PreviewRules } from "./gradebook-math";
 import { parseMarkSheetPaste, type MarkStatus } from "@/lib/mark-sheet-input";
 import type { GradebookChange } from "@/lib/gradebook-input";
@@ -10,6 +11,8 @@ type Snapshot = { id: string; value: number; status: string; enteredAt: string }
 type Row = { student: { id: string; name: string; admissionNo: string }; total: number | null; scores: { assessmentId: string; rawScore: number | null; maxScore: number; status?: string | null; expected: Snapshot }[] };
 type Cell = { value: string; status: MarkStatus };
 type Props = { assessments: Assessment[]; rows: Row[]; rules: PreviewRules; gradeScale?: { min: number; max: number; grade: string; label?: string }[]; locked?: boolean };
+type CellDialog = { key: string; studentName: string; assessmentName: string } | null;
+
 const cellKey = (studentId: string, assessmentId: string) => studentId + ":" + assessmentId;
 function fromSnapshot(snapshot: Snapshot): Cell {
   return snapshot ? { value: String(snapshot.value), status: snapshot.status as MarkStatus } : { value: "", status: "present" };
@@ -28,9 +31,11 @@ export default function GradebookEntryGrid({ assessments, rows, rules, gradeScal
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [cellDialog, setCellDialog] = useState<CellDialog>(null);
   const busy = useRef(false);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
   const dirty = useMemo(() => Object.keys(cells).filter(key => !sameCell(cells[key], fromSnapshot(snapshots[key] ?? null))), [cells, snapshots]);
+  const dirtySet = useMemo(() => new Set(dirty), [dirty]);
   const visibleRows = useMemo(() => rows.filter(row => (row.student.name + " " + row.student.admissionNo).toLowerCase().includes(query.trim().toLowerCase())), [rows, query]);
   const possible = rows.length * assessments.length;
   const recorded = Object.values(snapshots).filter(Boolean).length;
@@ -62,6 +67,15 @@ export default function GradebookEntryGrid({ assessments, rows, rules, gradeScal
     setError(""); setMessage("");
   }
 
+  function applyCellAction(action: "present" | "absent" | "excused" | "clear") {
+    if (!cellDialog || busy.current || locked) return;
+    const current = cells[cellDialog.key];
+    if (action === "clear") update(cellDialog.key, { value: "", status: "present" });
+    else if (action === "present") update(cellDialog.key, { value: current.status === "present" ? current.value : "", status: "present" });
+    else update(cellDialog.key, { value: "0", status: action });
+    setCellDialog(null);
+  }
+
   async function save() {
     if (busy.current || locked || !dirty.length) return;
     const changes: GradebookChange[] = [];
@@ -69,7 +83,7 @@ export default function GradebookEntryGrid({ assessments, rows, rules, gradeScal
       if (dirty.length > 500) throw new Error("Save at most 500 changed cells at once. Narrow the sheet or discard some edits.");
       for (const row of rows) for (const assessment of assessments) {
         const key = cellKey(row.student.id, assessment.id);
-        if (!dirty.includes(key)) continue;
+        if (!dirtySet.has(key)) continue;
         const cell = cells[key];
         const snapshot = snapshots[key] ?? null;
         const expected = snapshot ? { ...snapshot, status: snapshot.status as MarkStatus } : null;
@@ -101,21 +115,22 @@ export default function GradebookEntryGrid({ assessments, rows, rules, gradeScal
     finally { busy.current = false; setSaving(false); }
   }
 
-  return <div className="gradebook-entry">
+  return <div className="gradebook-entry gradebook-entry-simple">
     <div className="gradebook-entry-toolbar">
-      <div className="gradebook-entry-progress"><strong>{recorded} of {possible} marks recorded</strong><small>{dirty.length} unsaved changes{locked ? " · Term locked" : ""}</small></div>
+      <div className="gradebook-entry-progress"><strong>{recorded} of {possible} recorded</strong><small>{dirty.length ? `${dirty.length} unsaved` : "All changes saved"}{locked ? " · Term locked" : ""}</small></div>
       <label className="gradebook-search"><span>Find learner</span><input value={query} disabled={saving} onChange={event => setQuery(event.target.value)} placeholder="Name or admission number" /></label>
-      <button type="button" className="academic-btn-primary" disabled={locked || saving || !dirty.length} onClick={() => void save()}>{saving ? "Saving…" : "Save all changes"}</button>
-      <button type="button" className="academic-btn-secondary" disabled={saving || !dirty.length} onClick={() => {
+      <button type="button" className="academic-btn-primary" disabled={locked || saving || !dirty.length} onClick={() => void save()}>{saving ? "Saving…" : dirty.length ? `Save ${dirty.length} change${dirty.length === 1 ? "" : "s"}` : "Saved"}</button>
+      {dirty.length ? <button type="button" className="academic-btn-secondary" disabled={saving} onClick={() => {
         if (!window.confirm("Discard all unsaved marks on this sheet?")) return;
         setCells(Object.fromEntries(Object.keys(cells).map(key => [key, fromSnapshot(snapshots[key] ?? null)])));
         setError(""); setMessage("");
-      }}>Discard changes</button>
+      }}>Discard</button> : null}
     </div>
-    <p className="gradebook-tip">Paste a mark column, optionally followed by Present, Absent or Excused. A/E shortcuts are accepted when pasting. Paste follows the visible learner order. Enter and arrow keys move between marks. Changes are saved together.</p>
+
     {(error || message) && <div role={error ? "alert" : "status"} className={"gradebook-entry-status " + (error ? "is-error" : "is-success")}>{error || message}</div>}
+
     <div className="gradebook-table-wrap"><table className="gradebook-table" aria-label="Gradebook mark entry" aria-busy={saving}>
-      <thead><tr><th className="gradebook-sticky-student">Learner</th>{assessments.map(assessment => <th key={assessment.id}><div className="gradebook-assessment-head"><strong>{assessment.name}</strong><small>{assessment.type}</small><span>Raw mark / {assessment.maxScore}</span></div></th>)}<th>Result preview</th></tr></thead>
+      <thead><tr><th className="gradebook-sticky-student">Learner</th>{assessments.map(assessment => <th key={assessment.id}><div className="gradebook-assessment-head"><strong>{assessment.name}</strong><small>{assessment.type}</small><span>Out of {assessment.maxScore}</span></div></th>)}<th>Result</th></tr></thead>
       <tbody>{visibleRows.map((row, rowIndex) => {
         const total = previewSubjectTotal(assessments.map(assessment => {
           const cell = cells[cellKey(row.student.id, assessment.id)];
@@ -128,47 +143,58 @@ export default function GradebookEntryGrid({ assessments, rows, rules, gradeScal
           {assessments.map((assessment, columnIndex) => {
             const key = cellKey(row.student.id, assessment.id);
             const cell = cells[key];
-            const changed = dirty.includes(key);
-            return <td key={assessment.id}><div className="gradebook-cell">
-              <input ref={element => { inputs.current[key] = element; }} className="gradebook-input" aria-label={assessment.name + " mark for " + row.student.name} inputMode="decimal" value={cell.value} disabled={saving || locked} readOnly={cell.status !== "present"} placeholder="—"
-                onChange={event => update(key, { ...cell, value: event.target.value })}
-                onPaste={event => {
-                  event.preventDefault();
-                  if (busy.current || locked) return;
-                  try {
-                    const pasted = parseMarkSheetPaste(event.clipboardData.getData("text"), rowIndex, visibleRows.length, assessment.maxScore);
-                    setCells(current => {
-                      const next = { ...current };
-                      for (const item of pasted) next[cellKey(visibleRows[item.row].student.id, assessment.id)] = { value: item.value, status: item.status };
-                      return next;
-                    });
-                    setError(""); setMessage(pasted.length + " marks pasted. Review and save all changes.");
-                  } catch (err) { setError(err instanceof Error ? err.message : "Paste could not be read."); }
-                }}
-                onKeyDown={event => {
-                  let r = rowIndex, c = columnIndex;
-                  if (event.key === "Enter" || event.key === "ArrowDown") r += event.shiftKey && event.key === "Enter" ? -1 : 1;
-                  else if (event.key === "ArrowUp") r -= 1;
-                  else if (event.key === "ArrowLeft" && event.currentTarget.selectionStart === 0) c -= 1;
-                  else if (event.key === "ArrowRight" && event.currentTarget.selectionStart === cell.value.length) c += 1;
-                  else return;
-                  event.preventDefault();
-                  const student = visibleRows[r], target = assessments[c];
-                  if (student && target) inputs.current[cellKey(student.student.id, target.id)]?.focus();
-                }} />
-              <select className="gradebook-status-select" aria-label={"Assessment status for " + assessment.name + ", " + row.student.name} value={cell.status} disabled={saving || locked} onChange={event => {
-                const status = event.target.value as MarkStatus;
-                update(key, { status, value: status === "present" ? cell.value : "0" });
-              }}><option value="present">Present</option><option value="absent">Absent</option><option value="excused">Excused</option></select>
-              <div className="gradebook-save-state">{changed ? <span>Unsaved</span> : snapshots[key] ? <span className="ok">Recorded</span> : <span>Blank</span>}
-                {(cell.value !== "" || cell.status !== "present") && <button type="button" disabled={saving || locked} aria-label={"Clear " + assessment.name + " for " + row.student.name} onClick={() => update(key, { value: "", status: "present" })}>Clear</button>}
+            const changed = dirtySet.has(key);
+            const exceptional = cell.status !== "present";
+            return <td key={assessment.id} data-label={assessment.name}><div className={`gradebook-cell ${changed ? "is-dirty" : ""} ${exceptional ? "is-exception" : ""}`}>
+              <div className="gradebook-cell-entry">
+                <input ref={element => { inputs.current[key] = element; }} className="gradebook-input" aria-label={assessment.name + " mark for " + row.student.name} inputMode="decimal" value={cell.status === "present" ? cell.value : ""} disabled={saving || locked} readOnly={cell.status !== "present"} placeholder={exceptional ? (cell.status === "absent" ? "Absent" : "Excused") : "—"}
+                  onChange={event => update(key, { ...cell, value: event.target.value })}
+                  onPaste={event => {
+                    event.preventDefault();
+                    if (busy.current || locked) return;
+                    try {
+                      const pasted = parseMarkSheetPaste(event.clipboardData.getData("text"), rowIndex, visibleRows.length, assessment.maxScore);
+                      setCells(current => {
+                        const next = { ...current };
+                        for (const item of pasted) next[cellKey(visibleRows[item.row].student.id, assessment.id)] = { value: item.value, status: item.status };
+                        return next;
+                      });
+                      setError(""); setMessage(pasted.length + " marks pasted. Review and save when ready.");
+                    } catch (err) { setError(err instanceof Error ? err.message : "Paste could not be read."); }
+                  }}
+                  onKeyDown={event => {
+                    let r = rowIndex, c = columnIndex;
+                    if (event.key === "Enter" || event.key === "ArrowDown") r += event.shiftKey && event.key === "Enter" ? -1 : 1;
+                    else if (event.key === "ArrowUp") r -= 1;
+                    else if (event.key === "ArrowLeft" && event.currentTarget.selectionStart === 0) c -= 1;
+                    else if (event.key === "ArrowRight" && event.currentTarget.selectionStart === cell.value.length) c += 1;
+                    else return;
+                    event.preventDefault();
+                    const student = visibleRows[r], target = assessments[c];
+                    if (student && target) inputs.current[cellKey(student.student.id, target.id)]?.focus();
+                  }} />
+                <button type="button" className="gradebook-cell-more" disabled={saving || locked} aria-label={`More options for ${row.student.name}, ${assessment.name}`} onClick={() => setCellDialog({ key, studentName: row.student.name, assessmentName: assessment.name })}>•••</button>
               </div>
+              {(exceptional || changed) ? <div className="gradebook-cell-state">{exceptional ? <span>{cell.status === "absent" ? "Absent" : "Excused"}</span> : null}{changed ? <span className="is-unsaved">Unsaved</span> : null}</div> : null}
             </div></td>;
           })}
-          <td><div className="gradebook-total-card"><span>Weighted preview</span><strong>{total == null ? "—" : total.toFixed(2) + "%"}</strong><small>{total == null ? "Incomplete" : grade ? grade.grade + (grade.label ? " · " + grade.label : "") : "Ungraded"}</small></div></td>
+          <td><div className="gradebook-total-card"><span>Weighted</span><strong>{total == null ? "—" : total.toFixed(2) + "%"}</strong><small>{total == null ? "Incomplete" : grade ? grade.grade + (grade.label ? " · " + grade.label : "") : "Ungraded"}</small></div></td>
         </tr>;
       })}</tbody>
     </table>{!visibleRows.length && <div className="gradebook-no-results">No learners match this search.</div>}</div>
-    <p className="gradebook-tip">Preview uses the report-card weighting rules and includes unsaved edits. A conflict preserves your edits and saves nothing; reload the latest sheet before reapplying them.</p>
+
+    <details className="sn-progressive gradebook-entry-help">
+      <summary>Keyboard, paste and saving tips</summary>
+      <div className="sn-progressive-body"><p>Paste a mark column directly into a mark field. You can also paste Present, Absent or Excused (A/E shortcuts are accepted). Enter and arrow keys move through the sheet. Nothing is written until you choose Save.</p></div>
+    </details>
+
+    <Dialog open={Boolean(cellDialog)} onClose={() => setCellDialog(null)} title="Mark options" description={cellDialog ? `${cellDialog.studentName} · ${cellDialog.assessmentName}` : undefined} size="sm">
+      <div className="gradebook-cell-dialog-actions">
+        <button type="button" onClick={() => applyCellAction("present")}>Enter a mark</button>
+        <button type="button" onClick={() => applyCellAction("absent")}>Mark absent</button>
+        <button type="button" onClick={() => applyCellAction("excused")}>Mark excused</button>
+        <button type="button" className="is-danger" onClick={() => applyCellAction("clear")}>Clear this mark</button>
+      </div>
+    </Dialog>
   </div>;
 }

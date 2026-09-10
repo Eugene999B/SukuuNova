@@ -1,32 +1,149 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Paperclip, RefreshCw, Send, Check, Clock3, AlertTriangle, MessageSquare, Smartphone, Bell, X } from "lucide-react";
+import { AlertTriangle, Bell, Check, Clock3, MessageSquare, Paperclip, RefreshCw, Send, Smartphone, X } from "lucide-react";
+import "./communications-simple.css";
 
 type Person={id:string;name:string;email?:string|null;phone?:string|null;roles?:string[];isGuardian?:boolean};
 type Attachment={name:string;type:string;size:number;dataUrl:string};
 type Message={id:string;body:string;status:string;createdAt:string;sentAt?:string|null;lastError?:string|null;templateVariables?:unknown;mediaUrl?:string|null;channel?:string;recipientType?:string;recipientId?:string;title?:string;senderName?:string;senderId?:string|null;attachments?:Attachment[];readAt?:string|null};
 type Props={schoolName:string;mode?:"all"|"external"};
+type Tab="compose"|"inbox"|"sent";
+type Channel="in_app"|"sms"|"whatsapp";
 
-const channels={in_app:{label:"SukuuNova inbox",detail:"Instant portal delivery with files and a read/reply trail.",icon:Bell},sms:{label:"SMS",detail:"Direct to the phone number held by the school.",icon:Smartphone},whatsapp:{label:"WhatsApp",detail:"Uses the school’s configured WhatsApp business sender and template.",icon:MessageSquare}} as const;
-function meta(v:unknown){return v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:{};}
-function date(v:unknown){const d=new Date(String(v||""));return Number.isNaN(d.getTime())?"—":d.toLocaleString("en-GH",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});}
-function titleOf(m:Message){return m.title||String(meta(m.templateVariables).title||m.body.split("\n")[0]||"Message");}
-function senderOf(m:Message){return m.senderName||String(meta(m.templateVariables).senderName||"School communication");}
-function attachmentsOf(m:Message){return m.attachments||([] as Attachment[]);}
+const channels:Record<Channel,{label:string;detail:string;icon:typeof Bell}>={
+  in_app:{label:"SukuuNova inbox",detail:"Delivered inside the portal with read and reply history.",icon:Bell},
+  sms:{label:"SMS",detail:"Delivered to the phone number held by the school.",icon:Smartphone},
+  whatsapp:{label:"WhatsApp",detail:"Delivered through the school WhatsApp business sender.",icon:MessageSquare},
+};
+
+function meta(value:unknown){return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};}
+function formatDate(value:unknown){const d=new Date(String(value||""));return Number.isNaN(d.getTime())?"—":d.toLocaleString("en-GH",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"});}
+function titleOf(message:Message){return message.title||String(meta(message.templateVariables).title||message.body.split("\n")[0]||"Message");}
+function senderOf(message:Message){return message.senderName||String(meta(message.templateVariables).senderName||"School communication");}
+function attachmentsOf(message:Message){return message.attachments||([] as Attachment[]);}
 
 export default function UnifiedCommunicationsDesk({schoolName,mode="all"}:Props){
- const [tab,setTab]=useState<"compose"|"inbox"|"sent">("compose"); const [channel,setChannel]=useState<keyof typeof channels>(mode==="external"?"sms":"in_app"); const [audience,setAudience]=useState("individual"); const [title,setTitle]=useState(""); const [body,setBody]=useState(""); const [userId,setUserId]=useState(""); const [mediaUrl,setMediaUrl]=useState(""); const [attachments,setAttachments]=useState<Attachment[]>([]); const [data,setData]=useState<{inbox:Message[];sent:Message[];recipients:Person[];unreadCount:number}>({inbox:[],sent:[],recipients:[],unreadCount:0}); const [busy,setBusy]=useState(false); const [notice,setNotice]=useState(""); const [error,setError]=useState("");
- async function load(){const r=await fetch("/api/school/communications/unified",{cache:"no-store"});const b=await r.json().catch(()=>({}));if(r.ok)setData(b);}
- useEffect(()=>{void load();const id=window.setInterval(()=>void load(),15000);return()=>window.clearInterval(id)},[]);
- const counts=useMemo(()=>({guardians:data.recipients.filter(p=>p.isGuardian).length,teachers:data.recipients.filter(p=>p.roles?.some(r=>/teacher/i.test(r))).length,staff:data.recipients.filter(p=>!p.isGuardian).length}),[data.recipients]);
- async function files(e:React.ChangeEvent<HTMLInputElement>){const next:Attachment[]=[];for(const f of [...(e.target.files||[])]){if(f.size>1500000){setError(`${f.name} is larger than 1.5 MB.`);continue}const dataUrl=await new Promise<string>((resolve,reject)=>{const rd=new FileReader();rd.onload=()=>resolve(String(rd.result));rd.onerror=()=>reject(rd.error);rd.readAsDataURL(f)});next.push({name:f.name,type:f.type||"application/octet-stream",size:f.size,dataUrl})}const merged=[...attachments,...next].slice(0,3);if(merged.reduce((a,b)=>a+b.size,0)>3000000){setError("Keep attachments under 3 MB total.");return}setAttachments(merged);setError("");e.target.value="";}
- async function markRead(id:string){await fetch("/api/school/communications/unified",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"mark_read",messageId:id})});await load();}
- function reply(m:Message){const senderId=m.senderId||String(meta(m.templateVariables).senderId||"");if(!senderId)return;setAudience("individual");setUserId(senderId);setChannel("in_app");setTitle(`Re: ${titleOf(m)}`);setBody(`\n\n--- Previous message ---\n${m.body}`);setTab("compose");}
- async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setNotice("");setError("");const r=await fetch("/api/school/communications/unified",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"send",title,body,channel,audience,userId:userId||undefined,mediaUrl:mediaUrl||undefined,attachments})});const b=await r.json().catch(()=>({}));if(!r.ok)setError(b.message||"Message could not be sent.");else{setNotice(b.message||"Message sent.");setTitle("");setBody("");setUserId("");setMediaUrl("");setAttachments([]);setTab("sent");await load()}setBusy(false)}
- return <div className="mx-auto max-w-[1480px] space-y-5 pb-10"><section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><span className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-600">Communication centre</span><h1 className="mt-2 text-2xl font-black text-slate-950">Everything about messaging, in one place.</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">Choose who should receive the message, then choose exactly one channel. Your school inbox, SMS and WhatsApp deliveries stay visibly separate.</p></div><button onClick={()=>void load()} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-[10px] font-black"><RefreshCw size={14}/> Refresh</button></div><div className="mt-6 grid gap-2 sm:grid-cols-3"><button onClick={()=>setTab("compose")} className={`rounded-2xl border p-3 text-left ${tab==="compose"?"border-emerald-600 bg-emerald-50":"border-slate-200"}`}><b className="block text-xs">Compose</b><span className="text-[10px] text-slate-500">Write a new message.</span></button><button onClick={()=>setTab("inbox")} className={`rounded-2xl border p-3 text-left ${tab==="inbox"?"border-emerald-600 bg-emerald-50":"border-slate-200"}`}><b className="block text-xs">Inbox {data.unreadCount?`· ${data.unreadCount} new`:""}</b><span className="text-[10px] text-slate-500">Messages sent to you.</span></button><button onClick={()=>setTab("sent")} className={`rounded-2xl border p-3 text-left ${tab==="sent"?"border-emerald-600 bg-emerald-50":"border-slate-200"}`}><b className="block text-xs">Sent & delivery</b><span className="text-[10px] text-slate-500">See exactly what happened.</span></button></div></section>
- {tab==="compose"&&<form onSubmit={submit} className="grid gap-5 xl:grid-cols-[1.2fr,.8fr]"><section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="mb-5"><span className="text-[10px] font-black uppercase tracking-[.16em] text-slate-500">01 · Message</span><h2 className="mt-2 text-lg font-black">Who should receive it?</h2></div><div className="grid gap-4 sm:grid-cols-2"><label className="grid gap-1.5"><span className="text-[10px] font-black uppercase text-slate-600">Subject</span><input required value={title} onChange={e=>setTitle(e.target.value)} maxLength={160} className="rounded-xl border border-slate-300 px-3 py-3 text-sm" placeholder="PTA reminder, fee notice, update…"/></label><label className="grid gap-1.5"><span className="text-[10px] font-black uppercase text-slate-600">Channel</span><select value={channel} onChange={e=>setChannel(e.target.value as keyof typeof channels)} className="rounded-xl border border-slate-300 px-3 py-3 text-sm">{mode!=="external"&&<option value="in_app">SukuuNova inbox</option>}<option value="sms">SMS</option><option value="whatsapp">WhatsApp</option></select></label></div><label className="mt-4 grid gap-1.5"><span className="text-[10px] font-black uppercase text-slate-600">Message</span><textarea required value={body} onChange={e=>setBody(e.target.value)} rows={8} maxLength={5000} className="rounded-xl border border-slate-300 px-3 py-3 text-sm leading-6" placeholder="Write exactly what the recipient should receive…"/></label><div className="mt-4"><span className="text-[10px] font-black uppercase text-slate-600">02 · Audience</span><div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{([["individual","One person",data.recipients.length],["guardians","Parents / guardians",counts.guardians],["teachers","Teachers",counts.teachers],["staff","Staff",counts.staff]] as const).map(([v,l,c])=><button type="button" key={v} onClick={()=>setAudience(v)} className={`rounded-2xl border p-3 text-left ${audience===v?"border-emerald-600 bg-emerald-50":"border-slate-200 bg-slate-50"}`}><b className="block text-xs">{l}</b><span className="text-[10px] text-slate-500">{c} active account{c===1?"":"s"}</span></button>)}</div>{audience==="individual"&&<select value={userId} onChange={e=>setUserId(e.target.value)} required className="mt-3 w-full rounded-xl border border-slate-300 px-3 py-3 text-sm"><option value="">Select the person</option>{data.recipients.map(p=><option key={p.id} value={p.id}>{p.name} · {p.roles?.slice(0,2).join(" · ")||"School user"}{p.phone?` · ${p.phone}`:""}</option>)}</select>}</div><div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4"><div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-700"><Paperclip size={14}/> Attach files to portal messages</div><p className="mt-1 text-[10px] leading-5 text-slate-500">Up to 3 files, 3 MB total. Files are available inside the SukuuNova inbox; external channels use a public media URL.</p><input type="file" multiple disabled={channel!=="in_app"} onChange={files} className="mt-3 block w-full text-xs disabled:opacity-50"/>{attachments.map((a,i)=><div key={`${a.name}-${i}`} className="mt-2 flex items-center justify-between rounded-xl bg-white p-3"><span className="truncate text-xs font-semibold">{a.name}</span><button type="button" onClick={()=>setAttachments(attachments.filter((_,x)=>x!==i))}><X size={15}/></button></div>)}</div>{channel!=="in_app"&&<label className="mt-4 grid gap-1.5"><span className="text-[10px] font-black uppercase text-slate-600">Public media URL (optional)</span><input type="url" value={mediaUrl} onChange={e=>setMediaUrl(e.target.value)} className="rounded-xl border border-slate-300 px-3 py-3 text-sm" placeholder="https://…"/></label>}<div className="mt-6 flex flex-wrap items-center gap-3"><button disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-[11px] font-black text-white disabled:opacity-50"><Send size={14}/>{busy?"Sending…":`Send via ${channels[channel].label}`}</button>{notice&&<span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700"><Check size={14}/>{notice}</span>}{error&&<span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-700"><AlertTriangle size={14}/>{error}</span>}</div></section><aside className="space-y-5"><section className="rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white"><span className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-300">Channel guide</span><div className="mt-4 grid gap-3">{(Object.keys(channels) as Array<keyof typeof channels>).filter(k=>mode!=="external"||k!=="in_app").map(k=>{const I=channels[k].icon;return <div key={k} className={`rounded-2xl border p-4 ${channel===k?"border-emerald-300/50 bg-white/10":"border-white/10 bg-white/5"}`}><div className="flex items-center gap-2"><I size={16}/><b className="text-xs">{channels[k].label}</b></div><p className="mt-1 text-[10px] leading-5 text-slate-300">{channels[k].detail}</p></div>})}</div></section></aside></form>}
- {tab==="inbox"&&<section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="mb-5"><span className="text-[10px] font-black uppercase tracking-[.16em] text-emerald-600">Your inbox</span><h2 className="mt-2 text-lg font-black">Messages addressed to you</h2></div>{data.inbox.length?data.inbox.map(m=><article key={m.id} onClick={()=>m.readAt?undefined:void markRead(m.id)} className={`mb-3 rounded-2xl border p-4 cursor-pointer ${m.readAt?"border-slate-200":"border-emerald-200 bg-emerald-50/50"}`}><div className="flex items-start justify-between gap-4"><div><div className="flex items-center gap-2"><b className="text-xs">{titleOf(m)}</b>{!m.readAt&&<span className="rounded-full bg-emerald-600 px-2 py-1 text-[8px] font-black text-white">NEW</span>}</div><p className="mt-1 text-[10px] text-slate-500">From {senderOf(m)} · {date(m.createdAt)}</p></div><span className="text-[9px] font-black uppercase text-slate-500">{m.readAt?"Read":"Unread"}</span></div><p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-slate-700">{m.body.replace(/^.*?\n\n/,"")}</p>{attachmentsOf(m).length>0&&<div className="mt-4 grid gap-2">{attachmentsOf(m).map(a=><a key={a.name} href={a.dataUrl} download={a.name} onClick={e=>e.stopPropagation()} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-bold text-slate-700"><Paperclip size={13}/>{a.name}</a>)}</div>}<div className="mt-4 flex items-center gap-2"><button type="button" onClick={e=>{e.stopPropagation();reply(m)}} className="rounded-xl bg-slate-950 px-3 py-2 text-[10px] font-black text-white">Reply</button></div></article>):<div className="py-16 text-center"><MessageSquare className="mx-auto text-slate-300" size={28}/><p className="mt-3 text-sm font-black">Your inbox is clear.</p></div>}</section>}
- {tab==="sent"&&<section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-7"><div className="mb-5"><span className="text-[10px] font-black uppercase tracking-[.16em] text-slate-500">Sent & delivery</span><h2 className="mt-2 text-lg font-black">Your messages and external delivery jobs</h2></div>{data.sent.length?data.sent.map(m=><div key={m.id} className="flex flex-col gap-3 border-b border-slate-200 py-4 sm:flex-row sm:items-center sm:justify-between"><div><b className="text-xs">{titleOf(m)}</b><p className="mt-1 text-[10px] text-slate-500">{m.channel||"in_app"} · {m.recipientType||"recipient"} · {date(m.createdAt)}</p>{m.lastError&&<p className="mt-1 text-[10px] text-rose-600">{m.lastError}</p>}</div><span className={`inline-flex items-center gap-1 text-[9px] font-black uppercase ${m.status==="failed"?"text-rose-600":m.status==="queued"?"text-amber-700":"text-emerald-700"}`}>{m.status==="failed"?<AlertTriangle size={13}/>:m.status==="queued"?<Clock3 size={13}/>:<Check size={13}/>} {m.status}</span></div>):<div className="py-16 text-center text-xs text-slate-400">Nothing sent yet.</div>}</section>}
- </div>;
+  const [tab,setTab]=useState<Tab>("compose");
+  const [channel,setChannel]=useState<Channel>(mode==="external"?"sms":"in_app");
+  const [audience,setAudience]=useState("individual");
+  const [title,setTitle]=useState("");
+  const [body,setBody]=useState("");
+  const [userId,setUserId]=useState("");
+  const [mediaUrl,setMediaUrl]=useState("");
+  const [attachments,setAttachments]=useState<Attachment[]>([]);
+  const [data,setData]=useState<{inbox:Message[];sent:Message[];recipients:Person[];unreadCount:number}>({inbox:[],sent:[],recipients:[],unreadCount:0});
+  const [selectedInboxId,setSelectedInboxId]=useState("");
+  const [busy,setBusy]=useState(false);
+  const [notice,setNotice]=useState("");
+  const [error,setError]=useState("");
+
+  async function load(){
+    const response=await fetch("/api/school/communications/unified",{cache:"no-store"});
+    const payload=await response.json().catch(()=>({}));
+    if(response.ok)setData(payload);
+  }
+
+  useEffect(()=>{void load();const id=window.setInterval(()=>void load(),15000);return()=>window.clearInterval(id);},[]);
+  useEffect(()=>{if(!data.inbox.length){setSelectedInboxId("");return;}setSelectedInboxId(current=>data.inbox.some(message=>message.id===current)?current:data.inbox[0].id);},[data.inbox]);
+
+  const counts=useMemo(()=>({
+    guardians:data.recipients.filter(person=>person.isGuardian).length,
+    teachers:data.recipients.filter(person=>person.roles?.some(role=>/teacher/i.test(role))).length,
+    staff:data.recipients.filter(person=>!person.isGuardian).length,
+  }),[data.recipients]);
+  const selectedInbox=data.inbox.find(message=>message.id===selectedInboxId)??null;
+
+  async function files(event:React.ChangeEvent<HTMLInputElement>){
+    const next:Attachment[]=[];
+    for(const file of [...(event.target.files||[])]){
+      if(file.size>1500000){setError(`${file.name} is larger than 1.5 MB.`);continue;}
+      const dataUrl=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(reader.error);reader.readAsDataURL(file);});
+      next.push({name:file.name,type:file.type||"application/octet-stream",size:file.size,dataUrl});
+    }
+    const merged=[...attachments,...next].slice(0,3);
+    if(merged.reduce((sum,item)=>sum+item.size,0)>3000000){setError("Keep attachments under 3 MB total.");return;}
+    setAttachments(merged);setError("");event.target.value="";
+  }
+
+  async function markRead(id:string){
+    await fetch("/api/school/communications/unified",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"mark_read",messageId:id})});
+    await load();
+  }
+
+  function openInbox(message:Message){
+    setSelectedInboxId(message.id);
+    if(!message.readAt)void markRead(message.id);
+  }
+
+  function reply(message:Message){
+    const senderId=message.senderId||String(meta(message.templateVariables).senderId||"");
+    if(!senderId)return;
+    setAudience("individual");setUserId(senderId);setChannel("in_app");setTitle(`Re: ${titleOf(message)}`);setBody("");setTab("compose");
+  }
+
+  async function submit(event:React.FormEvent){
+    event.preventDefault();setBusy(true);setNotice("");setError("");
+    const response=await fetch("/api/school/communications/unified",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"send",title,body,channel,audience,userId:userId||undefined,mediaUrl:mediaUrl||undefined,attachments})});
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok)setError(payload.message||"Message could not be sent.");
+    else{setNotice(payload.message||"Message sent.");setTitle("");setBody("");setUserId("");setMediaUrl("");setAttachments([]);setTab("sent");await load();}
+    setBusy(false);
+  }
+
+  const availableChannels=(Object.keys(channels) as Channel[]).filter(item=>mode!=="external"||item!=="in_app");
+  const audienceOptions=[["individual","One person",data.recipients.length],["guardians","Parents / guardians",counts.guardians],["teachers","Teachers",counts.teachers],["staff","Staff",counts.staff]] as const;
+  const ChannelIcon=channels[channel].icon;
+
+  return <div className="comm-desk">
+    <div className="comm-top">
+      <div className="comm-top-copy"><strong>{schoolName} communications</strong><span>Write, read and check delivery without leaving this workspace.</span></div>
+      <button type="button" className="comm-refresh" onClick={()=>void load()}><RefreshCw size={14}/>Refresh</button>
+    </div>
+
+    <nav className="comm-tabs" aria-label="Communication workspace">
+      <button type="button" className={tab==="compose"?"is-active":""} onClick={()=>setTab("compose")}>Compose</button>
+      {mode!=="external"?<button type="button" className={tab==="inbox"?"is-active":""} onClick={()=>setTab("inbox")}>Inbox{data.unreadCount?<span className="comm-badge">{data.unreadCount}</span>:null}</button>:null}
+      <button type="button" className={tab==="sent"?"is-active":""} onClick={()=>setTab("sent")}>Sent & delivery</button>
+    </nav>
+
+    {tab==="compose"?<section className="comm-panel">
+      <div className="comm-panel-head"><div><h2>New message</h2><p>Choose the recipient and channel, write the message, then send.</p></div></div>
+      <form className="comm-form" onSubmit={submit}>
+        <div className="comm-form-grid">
+          <label className="comm-field"><span>Subject</span><input required value={title} onChange={event=>setTitle(event.target.value)} maxLength={160} placeholder="PTA reminder, fee notice, school update…"/></label>
+          <label className="comm-field"><span>Channel</span><select value={channel} onChange={event=>setChannel(event.target.value as Channel)}>{availableChannels.map(item=><option key={item} value={item}>{channels[item].label}</option>)}</select></label>
+        </div>
+        <div className="comm-channel-note"><ChannelIcon size={14}/> <strong>{channels[channel].label}:</strong> {channels[channel].detail}</div>
+
+        <div><span className="comm-label">Audience</span><div className="comm-audience">{audienceOptions.map(([value,label,count])=><button type="button" key={value} className={audience===value?"is-active":""} onClick={()=>setAudience(value)}><strong>{label}</strong><small>{count} account{count===1?"":"s"}</small></button>)}</div></div>
+        {audience==="individual"?<label className="comm-field"><span>Person</span><select value={userId} onChange={event=>setUserId(event.target.value)} required><option value="">Choose recipient</option>{data.recipients.map(person=><option key={person.id} value={person.id}>{person.name} · {person.roles?.slice(0,2).join(" · ")||"School user"}{person.phone?` · ${person.phone}`:""}</option>)}</select></label>:null}
+
+        <label className="comm-field"><span>Message</span><textarea required value={body} onChange={event=>setBody(event.target.value)} rows={7} maxLength={5000} placeholder="Write the message exactly as the recipient should receive it…"/></label>
+
+        <details className="comm-advanced">
+          <summary><Paperclip size={14}/>Attachments & media</summary>
+          <div className="comm-advanced-body">
+            {channel==="in_app"?<><span className="comm-channel-note">Portal messages can include up to 3 files, 3 MB total.</span><input type="file" multiple onChange={files}/>{attachments.map((attachment,index)=><div className="comm-file-row" key={`${attachment.name}-${index}`}><span>{attachment.name}</span><button type="button" onClick={()=>setAttachments(current=>current.filter((_,itemIndex)=>itemIndex!==index))} aria-label={`Remove ${attachment.name}`}><X size={14}/></button></div>)}</>:<label className="comm-field"><span>Public media URL (optional)</span><input type="url" value={mediaUrl} onChange={event=>setMediaUrl(event.target.value)} placeholder="https://…"/></label>}
+          </div>
+        </details>
+
+        <div className="comm-actions">
+          <button className="comm-send" disabled={busy}><Send size={14}/>{busy?"Sending…":`Send via ${channels[channel].label}`}</button>
+          {notice?<span className="comm-status ok"><Check size={14}/>{notice}</span>:null}
+          {error?<span className="comm-status error"><AlertTriangle size={14}/>{error}</span>:null}
+        </div>
+      </form>
+    </section>:null}
+
+    {tab==="inbox"&&mode!=="external"?<section className="comm-split">
+      <div className="comm-list"><div className="comm-list-head">Inbox · {data.inbox.length}</div>{data.inbox.length?data.inbox.map(message=><button type="button" key={message.id} className={`comm-message-row ${selectedInboxId===message.id?"is-active":""} ${message.readAt?"":"is-unread"}`} onClick={()=>openInbox(message)}><strong>{titleOf(message)}</strong><span>{senderOf(message)} · {formatDate(message.createdAt)}</span></button>):<div className="comm-empty">Your inbox is clear.</div>}</div>
+      <div className="comm-reader">{selectedInbox?<><div className="comm-reader-head"><div><strong>{titleOf(selectedInbox)}</strong><span>From {senderOf(selectedInbox)} · {formatDate(selectedInbox.createdAt)}</span></div><span>{selectedInbox.readAt?"Read":"Unread"}</span></div><div className="comm-reader-body">{selectedInbox.body}</div><div className="comm-reader-actions"><button type="button" onClick={()=>reply(selectedInbox)}>Reply</button>{attachmentsOf(selectedInbox).map(attachment=><a key={attachment.name} href={attachment.dataUrl} download={attachment.name}><Paperclip size={13}/>{attachment.name}</a>)}</div></>:<div className="comm-empty">Choose a message to read it.</div>}</div>
+    </section>:null}
+
+    {tab==="sent"?<section className="comm-panel">
+      <div className="comm-panel-head"><div><h2>Sent & delivery</h2><p>Recent messages with their current delivery state.</p></div></div>
+      {data.sent.length?<div className="comm-sent-list">{data.sent.map(message=>{const status=message.status||"sent";return <div className="comm-sent-row" key={message.id}><div><strong>{titleOf(message)}</strong><small>{message.channel||"in_app"} · {message.recipientType||"recipient"} · {formatDate(message.createdAt)}{message.lastError?` · ${message.lastError}`:""}</small></div><span className={`comm-delivery ${status}`}>{status==="failed"?<AlertTriangle size={12}/>:status==="queued"?<Clock3 size={12}/>:<Check size={12}/>} {status}</span></div>;})}</div>:<div className="comm-empty">Nothing has been sent yet.</div>}
+    </section>:null}
+  </div>;
 }

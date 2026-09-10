@@ -8,7 +8,6 @@ import {
   Clock3,
   Sparkles,
   Target,
-  Zap,
 } from "lucide-react";
 import "./role-intelligence-home.css";
 
@@ -88,7 +87,7 @@ export function RoleIntelligenceHome({
   const statusTone = critical > 0 ? "critical" : warning > 0 ? "warn" : "good";
 
   return (
-    <div className="role-intelligence-home">
+    <div className="role-intelligence-home role-intelligence-home-simple">
       <section className="role-intelligence-hero">
         <div className="role-intelligence-hero-copy">
           <span className="role-intelligence-eyebrow"><Sparkles size={13} aria-hidden="true" /> {eyebrow}</span>
@@ -98,17 +97,17 @@ export function RoleIntelligenceHome({
         </div>
         <div className="role-intelligence-hero-side">
           <div className={`role-intelligence-status tone-${statusTone}`}>
-            <BrainCircuit size={18} aria-hidden="true" />
-            <div><span>Intelligence status</span><strong>{statusLabel}</strong></div>
+            {critical || warning ? <AlertTriangle size={18} aria-hidden="true" /> : <CheckCircle2 size={18} aria-hidden="true" />}
+            <div><span>Current status</span><strong>{statusLabel}</strong></div>
           </div>
-          <div className="role-intelligence-hero-actions">
+          {(primaryAction || secondaryAction) ? <div className="role-intelligence-hero-actions">
             {primaryAction ? <Link href={primaryAction.href} className="role-intelligence-primary">{primaryAction.label} <ArrowRight size={14} aria-hidden="true" /></Link> : null}
             {secondaryAction ? <Link href={secondaryAction.href} className="role-intelligence-secondary">{secondaryAction.label}</Link> : null}
-          </div>
+          </div> : null}
         </div>
       </section>
 
-      <section className="role-intelligence-metrics" aria-label="Key dashboard statistics">
+      <section className="role-intelligence-metrics" aria-label="Key statistics">
         {metrics.map((metric) => {
           const card = <>
             <span>{metric.label}</span>
@@ -121,10 +120,10 @@ export function RoleIntelligenceHome({
         })}
       </section>
 
-      <section className="role-intelligence-main-grid">
+      {(insights.length > 0 || focus.length > 0) ? <section className="role-intelligence-main-grid">
         <article className="role-intelligence-panel role-intelligence-insights">
           <div className="role-intelligence-panel-head">
-            <div><span className="role-intelligence-eyebrow"><BrainCircuit size={13} aria-hidden="true" /> Intelligence brief</span><h2>What deserves attention</h2><p>Priorities are derived from live records already in this account.</p></div>
+            <div><span className="role-intelligence-eyebrow"><BrainCircuit size={13} aria-hidden="true" /> Needs attention</span><h2>{insights.length ? "What should I look at?" : "Nothing urgent"}</h2></div>
           </div>
           <div className="role-intelligence-insight-list">
             {insights.length ? insights.map((insight, index) => {
@@ -135,31 +134,36 @@ export function RoleIntelligenceHome({
                 {insight.href ? <b>{insight.actionLabel ?? "Open"} <ArrowRight size={12} aria-hidden="true" /></b> : null}
               </>;
               return insight.href ? <Link href={insight.href} className={`role-intelligence-insight tone-${severity}`} key={`${insight.title}-${index}`}>{content}</Link> : <div className={`role-intelligence-insight tone-${severity}`} key={`${insight.title}-${index}`}>{content}</div>;
-            }) : <div className="role-intelligence-clear"><CheckCircle2 size={18} aria-hidden="true" /><div><strong>No urgent issues detected.</strong><small>There is no account-specific exception waiting for action right now.</small></div></div>}
+            }) : <div className="role-intelligence-clear"><CheckCircle2 size={18} aria-hidden="true" /><div><strong>All clear.</strong><small>There is no exception waiting for action right now.</small></div></div>}
           </div>
         </article>
 
-        <article className="role-intelligence-panel role-intelligence-focus">
+        {focus.length ? <article className="role-intelligence-panel role-intelligence-focus">
           <div className="role-intelligence-panel-head">
-            <div><span className="role-intelligence-eyebrow"><Clock3 size={13} aria-hidden="true" /> {focusTitle}</span><h2>Stay ahead of the day</h2><p>{focusDescription}</p></div>
+            <div><span className="role-intelligence-eyebrow"><Clock3 size={13} aria-hidden="true" /> {focusTitle}</span><h2>Next up</h2><p>{focusDescription}</p></div>
           </div>
           <div className="role-intelligence-focus-list">
-            {focus.length ? focus.map((item, index) => {
+            {focus.map((item, index) => {
               const content = <><span className="role-intelligence-focus-mark"><Target size={15} aria-hidden="true" /></span><div><strong>{item.label}</strong><small>{item.detail}</small></div>{item.value ? <b>{item.value}</b> : null}{item.href ? <ArrowRight size={13} aria-hidden="true" /> : null}</>;
               return item.href ? <Link key={`${item.label}-${index}`} href={item.href} className="role-intelligence-focus-row">{content}</Link> : <div key={`${item.label}-${index}`} className="role-intelligence-focus-row">{content}</div>;
-            }) : <div className="role-intelligence-clear"><CheckCircle2 size={18} aria-hidden="true" /><div><strong>Nothing scheduled here yet.</strong><small>Your next account-specific tasks will appear automatically as data becomes available.</small></div></div>}
+            })}
           </div>
-        </article>
-      </section>
-
-      {actions.length ? <section className="role-intelligence-actions">
-        <div className="role-intelligence-panel-head"><div><span className="role-intelligence-eyebrow"><Zap size={13} aria-hidden="true" /> Quick actions</span><h2>Move directly into the work</h2></div></div>
-        <div className="role-intelligence-action-grid">
-          {actions.map((action) => <Link href={action.href} key={action.label}><div><strong>{action.label}</strong><span>{action.detail}</span></div><ArrowRight size={15} aria-hidden="true" /></Link>)}
-        </div>
+        </article> : null}
       </section> : null}
 
-      {children}
+      {actions.length ? <details className="sn-progressive role-intelligence-more">
+        <summary>More actions</summary>
+        <div className="sn-progressive-body">
+          <div className="role-intelligence-action-grid">
+            {actions.map((action) => <Link href={action.href} key={action.label}><div><strong>{action.label}</strong><span>{action.detail}</span></div><ArrowRight size={15} aria-hidden="true" /></Link>)}
+          </div>
+        </div>
+      </details> : null}
+
+      {children ? <details className="sn-progressive role-intelligence-more">
+        <summary>More details</summary>
+        <div className="sn-progressive-body role-intelligence-extra">{children}</div>
+      </details> : null}
     </div>
   );
 }
