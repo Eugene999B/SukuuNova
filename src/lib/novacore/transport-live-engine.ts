@@ -1,6 +1,7 @@
 import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "@/lib/db";
 import { fingerprintNovaCoreInput, recordNovaCoreDecisionBestEffort } from "./decision-ledger";
+import { evaluateEtaArrivalBestEffort, recordEtaShadowPredictionBestEffort } from "./eta-shadow-evaluation";
 import { matchPointToRoute, routeDistanceBetweenMatches, type RouteMatch } from "./route-matching";
 import {
   estimateEta,
@@ -203,7 +204,50 @@ export async function processLiveTransportLocation(
       routeHistoricalSpeedKph,
       uncertaintyRatio: progress.routeDistanceMeters == null ? 0.4 : 0.25,
     });
-    if (eta.minutes != null) etaPredictions += 1;
+    if (eta.minutes != null) {
+      etaPredictions += 1;
+      await recordEtaShadowPredictionBestEffort(tx, {
+        schoolId,
+        tripId: trip.id,
+        pickupPointId: pickup.id,
+        predictedAt: reportedAt,
+        predictedMinutes: eta.minutes,
+        confidenceMinutes: eta.confidenceMinutes,
+        distanceMode: progress.routeDistanceMeters == null ? "direct" : "route",
+        routeRemainingMeters: progress.routeDistanceMeters,
+      });
+    }
+
+    if (decision.transitioned && decision.state === "arrived") {
+      const evaluation = await evaluateEtaArrivalBestEffort(tx, {
+        schoolId,
+        tripId: trip.id,
+        pickupPointId: pickup.id,
+        actualArrivalAt: reportedAt,
+      });
+      if (evaluation?.evaluatedPredictions) {
+        await recordNovaCoreDecisionBestEffort(tx, {
+          schoolId,
+          algorithmKey: "transport.eta",
+          entityType: "P3TransportTrip",
+          entityId: trip.id,
+          inputFingerprint: fingerprintNovaCoreInput({
+            event: "actual_arrival",
+            tripDirection: trip.direction,
+            predictionVersion: PICKUP_PREDICTION_VERSION,
+            reportedAtMinute: Math.floor(reportedAt.getTime() / 60_000),
+            evaluatedPredictions: evaluation.evaluatedPredictions,
+          }),
+          reasonCodes: [
+            "actual_arrival_evaluated",
+            ...(evaluation.maeMinutes != null && evaluation.maeMinutes <= 5 ? ["mae_within_5_minutes"] : ["mae_above_5_minutes"]),
+          ],
+          outputSummary: evaluation,
+          shadowGroupKey: `transport-eta-evaluation:${trip.id}:${Math.floor(reportedAt.getTime() / 60_000)}`,
+          latencyMs: Date.now() - processingStartedAt,
+        });
+      }
+    }
 
     const transitionAt = decision.transitioned ? reportedAt : null;
     await tx.$executeRawUnsafe(
