@@ -4,7 +4,8 @@ import { requireGuardianSession } from "@/lib/guardian-auth";
 import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { ForbiddenError, routeError } from "@/lib/errors";
-import { arcadeOverview, guardianArcadeLeaderboard, startArcadeRound, readArcadeRound, saveArcadeRound } from "@/lib/arcade-service";
+import { arcadeOverview, guardianArcadeLeaderboard, readArcadeRound, saveArcadeRound } from "@/lib/arcade-service";
+import { startVariedArcadeRound } from "@/lib/arcade-varied-service";
 import { fingerprintNovaCoreInput, recordNovaCoreDecisionBestEffort } from "@/lib/novacore/decision-ledger";
 
 const ageBand = z.enum(["age_4_5","age_6_8","age_9_11","age_12_14","age_15_18"]);
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     return json(await withTenant(current.schoolId, async (tx) => {
       if (input.action === "start") {
         const startedAt = Date.now();
-        const round = await startArcadeRound(tx, current, input);
+        const round = await startVariedArcadeRound(tx, current, input);
         if (input.game === "force-motion-lab") {
           const physicsScenes = round.questions.filter((question) => question.kind === "simulation" && Boolean(question.scene)).length;
           await recordNovaCoreDecisionBestEffort(tx, {
