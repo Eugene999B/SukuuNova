@@ -17,8 +17,8 @@ export default async function DownloadsPage() {
   if (!data.school) return null;
 
   return (
-    <AppShell universe="school" title="Downloads & Exports" subtitle="Official documents, PDF printing and school data exports." active="Reports" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
-      <DownloadsExportCentre schoolName={data.school.name} schoolCode={data.school.uniqueCode} logoUrl={data.school.logoUrl} terms={data.terms} classes={data.classes} />
+    <AppShell universe="school" title="Downloads & Exports" subtitle="Official documents and school data exports." active="Reports" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+      <div className="downloads-simple-shell"><DownloadsExportCentre schoolName={data.school.name} schoolCode={data.school.uniqueCode} logoUrl={data.school.logoUrl} terms={data.terms} classes={data.classes} /></div>
     </AppShell>
   );
 }

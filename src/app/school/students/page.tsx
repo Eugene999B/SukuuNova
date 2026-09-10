@@ -1,20 +1,16 @@
 import Link from "next/link";
-import Image from "next/image";
 import { randomInt } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { CircleCheckBig, GraduationCap, IdCard, UserPlus, UsersRound } from "lucide-react";
+import { IdCard } from "lucide-react";
 import { AddStudentDialog } from "@/components/students/AddStudentDialog";
+import { StudentDirectory } from "@/components/students/StudentDirectory";
 import { AppShell } from "@/components/AppShell";
-import { DataCard } from "@/components/ui/DataCard";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { cachedSchoolRead } from "@/lib/school-cache";
 import { requirePermission } from "@/lib/rbac";
-import "./students-workspace.css";
-import "./students-light-theme.css";
-import "./students-light-overrides.css";
+import "./students-simple.css";
 import "@/components/students/add-student-dialog.css";
 
 type StudentActionState = { message: string | null };
@@ -83,19 +79,33 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
   redirect("/school/students");
 }
 
-export default async function StudentsPage() {
+export default async function StudentsPage({ searchParams }: { searchParams: Promise<{ classId?: string }> }) {
   const session = await requireSchoolSession();
-  const data = await withTenant(session.schoolId, async (tx) => { await requirePermission(tx, session.userId, "students:read"); return getStudentsPageData(session.schoolId); });
-  const unassigned = data.students.filter((student) => !student.class); const assignedCount = data.students.length - unassigned.length; const activeCount = data.students.filter((student) => student.status === "active").length;
-  const grouped = data.classes.reduce<Record<string, typeof data.classes>>((acc, item) => { const level = item.level?.trim() || "Other / ungraded"; (acc[level] ??= []).push(item); return acc; }, {});
+  const params = await searchParams;
+  const data = await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "students:read");
+    return getStudentsPageData(session.schoolId);
+  });
+  const unassigned = data.students.filter((student) => !student.class);
+  const assignedCount = data.students.length - unassigned.length;
+  const activeCount = data.students.filter((student) => student.status === "active").length;
+  const grouped = data.classes.reduce<Record<string, typeof data.classes>>((acc, item) => {
+    const level = item.level?.trim() || "Other / ungraded";
+    (acc[level] ??= []).push(item);
+    return acc;
+  }, {});
+
   return (
-    <AppShell universe="school" title="Students" subtitle="Student register" active="Students" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
-      <div className="students-workspace">
-        <section className="students-hero students-hero-rich"><div><div className="eyebrow">People · Student register</div><h2>Every learner, clearly organised.</h2><div className="hero-statline"><span><b>{data.students.length}</b> learners</span><span><b>{activeCount}</b> active</span><span><b>{data.classes.length}</b> class groups</span></div></div><div className="hero-actions"><Link href="/school/id-cards" className="button secondary"><IdCard size={15} aria-hidden="true" /> School ID cards</Link><Link href="/school/classes" className="button secondary"><GraduationCap size={15} aria-hidden="true" /> Manage classes</Link><AddStudentDialog classes={data.classes} action={createStudent} /></div></section>
-        <section className="student-metrics"><DataCard label="Total learners" value={data.students.length} meta="Live records in this school" icon={UsersRound} /><DataCard label="Placed in classes" value={assignedCount} meta={data.students.length ? `${Math.round((assignedCount / data.students.length) * 100)}% placed` : "Create classes first"} icon={GraduationCap} tone="info" /><DataCard label="Needs class placement" value={unassigned.length} meta={unassigned.length ? "Open the filtered register to resolve" : "Every learner is placed"} icon={unassigned.length ? UserPlus : CircleCheckBig} tone={unassigned.length ? "warning" : "success"} /></section>
-        <section className="class-structure-card"><div className="section-head"><div><div className="eyebrow">Academic structure</div><h3>Grades, classes & streams</h3></div><Link href="/school/classes?action=create" className="button primary"><GraduationCap size={15} aria-hidden="true" /> Create class</Link></div>{data.classes.length === 0 ? <EmptyState icon={GraduationCap} title="No classes created yet" action={<Link href="/school/classes?action=create" className="text-link">Create the first class →</Link>} /> : <div className="grade-grid">{Object.entries(grouped).map(([level, sections]) => <article className="grade-card" key={level}><div className="grade-title"><div><span className="grade-kicker">Academic level</span><h4>{level}</h4></div><span className="grade-total">{sections.reduce((sum, item) => sum + item._count.students, 0)} learners</span></div><div className="section-list">{sections.map((schoolClass) => <Link href={`/school/classes?class=${schoolClass.id}`} className="section-row" key={schoolClass.id}><span className="section-badge"><GraduationCap size={14} aria-hidden="true" /></span><span className="section-main"><b>{schoolClass.name}</b><small>{schoolClass._count.students} learners in this class</small></span><span className="section-count">{schoolClass._count.students}</span><span className="chevron">›</span></Link>)}</div></article>)}</div>}</section>
-        <section className="student-register-card"><div className="section-head"><div><div className="eyebrow">Learner directory</div><h3>Students at a glance</h3></div><div className="head-actions"><Link href="/school/students?view=unassigned">Needs placement ({unassigned.length})</Link><Link href="/school/students?view=active">Active students</Link><AddStudentDialog classes={data.classes} action={createStudent} triggerLabel="+ New student" /></div></div><div className="student-toolbar"><input aria-label="Search students" placeholder="Search name or index number"/><select aria-label="Filter by class" defaultValue="all"><option value="all">All classes</option>{data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</option>)}</select><select aria-label="Filter by status" defaultValue="active"><option value="active">Active</option><option value="all">All statuses</option><option value="inactive">Inactive</option></select><button type="button" className="button secondary">Filter</button></div>{data.students.length === 0 ? <EmptyState icon={UsersRound} title="Start the student register" description="Create a learner to begin." action={<AddStudentDialog classes={data.classes} action={createStudent} triggerLabel="Create first student →" />} /> : <div className="student-card-grid">{data.students.map((student) => <Link href={`/school/students/${student.id}`} className="student-card" key={student.id}><div className="student-card-photo">{student.photoUrl ? <Image src={student.photoUrl} alt="" width={56} height={56} unoptimized /> : <span>{student.name.slice(0, 2).toUpperCase()}</span>}</div><div className="student-card-main"><div className="student-card-top"><span className="student-index">{student.admissionNo}</span><span className={`pill ${student.status === "active" ? "success" : "muted"}`}>{student.status}</span></div><h4>{student.name}</h4><p>{student.class?.level ?? "No grade"} · {student.class?.name ?? "Needs placement"}</p><small>{student._count.reportCards} reports · {student._count.attendanceEvents} attendance events · {student._count.invoices} invoices</small></div><span className="student-card-arrow">→</span></Link>)}</div>}</section>
-        <section className="student-actions-strip"><div><div className="eyebrow">Next actions</div><h3>Keep the register moving.</h3></div><div className="student-actions-grid"><Link href="/school/id-cards"><strong>School ID cards</strong><span>Issue and print credentials →</span></Link><Link href="/school/students?view=unassigned"><strong>{unassigned.length} learners</strong><span>Need class placement →</span></Link><Link href="/school/classes"><strong>{data.classes.length} class groups</strong><span>Manage class structure →</span></Link><Link href="/school/guardians"><strong>Family records</strong><span>Review guardian links →</span></Link></div></section>
+    <AppShell universe="school" title="Students" subtitle="Find a learner, open their record or add a new student." active="Students" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+      <div className="students-simple">
+        <section className="students-simple-head">
+          <div><h2>Student register</h2><p>Search the register first. Open a learner only when you need the full record.</p></div>
+          <div className="students-simple-actions"><Link href="/school/id-cards" className="button secondary"><IdCard size={15} aria-hidden="true" /> ID cards</Link><AddStudentDialog classes={data.classes} action={createStudent} /></div>
+        </section>
+        <section className="students-simple-stats" aria-label="Student register summary"><div className="students-simple-stat"><span>Active learners</span><strong>{activeCount}</strong></div><div className="students-simple-stat"><span>In a class</span><strong>{assignedCount}</strong></div><div className="students-simple-stat"><span>Needs placement</span><strong>{unassigned.length}</strong></div></section>
+        <section className="students-simple-section"><div className="students-simple-section-head"><div><h3>Learners</h3><p>Search by name or index number, then narrow by class or status.</p></div></div><StudentDirectory students={data.students} classes={data.classes} initialClassId={params.classId} /></section>
+        <details className="sn-progressive"><summary>Classes and placement</summary><div className="sn-progressive-body">{data.classes.length ? <div className="students-class-grid">{Object.entries(grouped).map(([level, sections]) => <div className="students-class-card" key={level}><div className="students-class-card-head"><strong>{level}</strong><span>{sections.reduce((sum, item) => sum + item._count.students, 0)} learners</span></div><div className="students-class-links">{sections.map((schoolClass) => <Link href={`/school/students?classId=${schoolClass.id}`} key={schoolClass.id}><span>{schoolClass.name}</span><strong>{schoolClass._count.students} →</strong></Link>)}</div></div>)}</div> : <div className="student-directory-empty"><strong>No classes created yet.</strong><span>Create the academic class structure before placing learners.</span></div>}</div></details>
+        <details className="sn-progressive"><summary>More student administration</summary><div className="sn-progressive-body students-tools"><Link href="/school/classes"><strong>Classes & houses</strong><span>Manage class structure →</span></Link><Link href="/school/guardians"><strong>Guardians</strong><span>Review family links →</span></Link><Link href="/school/id-cards"><strong>School ID cards</strong><span>Issue and print credentials →</span></Link></div></details>
       </div>
     </AppShell>
   );

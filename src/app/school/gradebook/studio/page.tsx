@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { AcademicWorkspaceNav } from "@/components/AcademicWorkspaceNav";
 import GradebookEntryGrid from "@/components/GradebookEntryGrid";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -9,6 +8,7 @@ import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/aca
 import { gradeScale } from "@/lib/report-card-ranking";
 import { selectAcademicTerm } from "@/lib/term-date";
 import "../../academic-workspace.css";
+import "../gradebook-simple.css";
 import "./gradebook-entry.css";
 
 type SearchParams = Promise<{ class?: string; subject?: string; term?: string }>;
@@ -45,7 +45,6 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
       assignment,
       selectedTerm,
       performance,
-      canWriteAll,
       gradeScale: gradeScale(settings?.gradingScale),
     };
   });
@@ -68,7 +67,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
   );
   const totalCells = (data.performance?.assessments.length ?? 0) * rows.length;
   const completion = totalCells ? Math.round(marked / totalCells * 100) : 0;
-  const termLabel = data.selectedTerm?.name ?? "No active term selected";
+  const termLabel = data.selectedTerm?.name ?? "Choose a term";
   const classLabel = data.assignment
     ? `${data.assignment.class.level ? `${data.assignment.class.level} · ` : ""}${data.assignment.class.name}`
     : "Choose a class";
@@ -77,49 +76,21 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
   return (
     <AppShell
       universe="school"
-      title="Gradebook"
-      subtitle="Enter and moderate marks."
+      title="Enter marks"
+      subtitle="Choose the teaching context, then work directly in the mark sheet."
       active="Gradebook"
       schoolName={data.school?.name ?? "School Workspace"}
       schoolCode={data.school?.uniqueCode ?? ""}
       userName={session.name}
     >
-      <div className="academic-page">
-        <section className="academic-page-hero">
-          <div className="academic-page-hero-copy">
-            <span className="academic-page-overline">GRADEBOOK · MARK ENTRY</span>
-            <h1>Enter marks once. See the same result the report card will use.</h1>
-            <p>Choose one class, subject and term. Raw marks are normalized against their actual maximum, weighted through Academic Setup, then graded with the school&apos;s official report-card scale.</p>
-          </div>
-          <div className="academic-page-hero-side">
-            <div className="academic-page-context">
-              <span className="academic-context-chip"><strong>Class</strong> {classLabel}</span>
-              <span className="academic-context-chip"><strong>Subject</strong> {subjectLabel}</span>
-              <span className="academic-context-chip"><strong>Term</strong> {termLabel}</span>
-            </div>
-            <div className="academic-page-actions">
-              <Link className="academic-btn-secondary" href="/school/gradebook">Results hub</Link>
-              <Link className="academic-btn-secondary" href="/school/academics/setup">Academic setup</Link>
-            </div>
-          </div>
-        </section>
-
-        <AcademicWorkspaceNav current="gradebook" />
-
-        <section className="academic-step-row">
-          <div className="academic-step-card"><span className="academic-step-number">01</span><div><strong>Configure</strong><small>Assessment and term rules</small></div></div>
-          <div className="academic-step-card"><span className="academic-step-number">02</span><div><strong>Enter</strong><small>Record mark and status</small></div></div>
-          <div className="academic-step-card"><span className="academic-step-number">03</span><div><strong>Review</strong><small>See weighted class results</small></div></div>
-          <div className="academic-step-card"><span className="academic-step-number">04</span><div><strong>Report</strong><small>Feed approved results forward</small></div></div>
-        </section>
-
+      <div className="gb-simple">
         <section className="academic-context-card">
-          <div className="academic-section-head">
+          <div className="gb-section-head">
             <div>
-              <span className="academic-page-overline">WORKING CONTEXT</span>
-              <h2>Choose the teaching assignment</h2>
-              <p>The term comes from the school calendar, while class and subject come from the teacher assignment model.</p>
+              <h2>Choose class, subject and term</h2>
+              <p>Only valid teaching assignments are available.</p>
             </div>
+            <Link className="academic-btn-secondary" href="/school/gradebook">Back to gradebook</Link>
           </div>
           <form className="academic-context-form" action="/school/gradebook/studio" method="get">
             <div className="academic-field">
@@ -140,105 +111,90 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
               <label htmlFor="gradebook-term">Term</label>
               <select id="gradebook-term" name="term" defaultValue={data.selectedTerm?.id ?? ""}>
                 <option value="">Choose term</option>
-                {terms.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                {terms.map((item) => <option key={item.id} value={item.id}>{item.name}{item.isLocked ? " · Locked" : ""}</option>)}
               </select>
             </div>
-            <button className="academic-context-submit" type="submit">Open gradebook</button>
+            <button className="academic-context-submit" type="submit">Open mark sheet</button>
           </form>
         </section>
 
         {!data.assignment || !data.performance ? (
           <section className="academic-empty">
-            <strong>{data.selectedTerm ? "Start with a valid class + subject assignment." : "Choose an academic term before entering marks."}</strong>
-            <p>{data.selectedTerm ? "The selected class and subject must be connected through Classes & Houses before marks can be entered." : "The calendar did not resolve a unique valid term for this request. Choose a term explicitly before entering marks."}</p>
+            <strong>{data.selectedTerm ? "Choose a valid class and subject." : "Choose a term before entering marks."}</strong>
+            <p>{data.selectedTerm ? "The class and subject must be connected through the school teaching assignment." : "SukuuNova will not guess when the academic period is ambiguous."}</p>
             <div className="academic-empty-actions">
-              <Link href="/school/classes">Manage class assignments</Link>
-              <Link href="/school/exams">Open assessments</Link>
-              <Link href="/school/terms">Check term calendar</Link>
+              <Link href="/school/classes">Class assignments</Link>
+              <Link href="/school/exams">Assessments</Link>
+              <Link href="/school/terms">Terms</Link>
             </div>
           </section>
         ) : (
           <>
-            <section className="academic-stat-row">
-              <div className="academic-stat"><span>Learners</span><strong>{rows.length}</strong><small>Active learners in {classLabel}</small></div>
-              <div className="academic-stat"><span>Assessments</span><strong>{data.performance.assessments.length}</strong><small>Configured for {termLabel}</small></div>
-              <div className="academic-stat"><span>Entry completion</span><strong>{completion}%</strong><small>{marked} of {totalCells} mark cells recorded</small></div>
-              <div className="academic-stat"><span>Grade bands</span><strong>{data.gradeScale.length || "—"}</strong><small>{data.gradeScale.length ? "Official report-card scale connected" : "No custom scale configured"}</small></div>
+            <section className="gb-context" aria-label="Current mark sheet">
+              <div className="gb-context-copy">
+                <strong>{subjectLabel} · {classLabel}</strong>
+                <span>{termLabel}{data.selectedTerm?.isLocked ? " · Read-only" : ` · ${completion}% complete`}</span>
+              </div>
+              <span className="gb-role">{rows.length} learner{rows.length === 1 ? "" : "s"}</span>
             </section>
 
-            <section className="academic-main-grid gradebook-main-grid">
-              <div className="academic-work-card gradebook-work-card">
-                <div className="academic-section-head">
-                  <div>
-                    <span className="academic-page-overline">02 · ENTER & MODERATE</span>
-                    <h2 id="gradebook-entry-heading">{subjectLabel} · {classLabel}</h2>
-                    <p>Every saved cell feeds Performance Studio and the report-card calculation chain for this exact class, subject and term.</p>
-                  </div>
-                  <Link className="academic-btn-secondary" href={`/school/academics/performance${contextQuery}`}>View performance</Link>
+            <section className="academic-work-card gradebook-work-card">
+              <div className="gb-section-head">
+                <div>
+                  <h2 id="gradebook-entry-heading">Mark sheet</h2>
+                  <p>{data.performance.assessments.length} assessment{data.performance.assessments.length === 1 ? "" : "s"} · {marked} of {totalCells} cells recorded</p>
                 </div>
-
-                {data.performance.assessments.length === 0 ? (
-                  <div className="academic-empty">
-                    <strong>No assessments are configured for this term.</strong>
-                    <p>Set the assessment structure first; the same configuration will be used for grade calculations and report cards.</p>
-                    <div className="academic-empty-actions">
-                      <Link href="/school/exams">Configure assessments</Link>
-                      <Link href="/school/academics/setup">Review grading rules</Link>
-                    </div>
-                  </div>
-                ) : (
-                  <GradebookEntryGrid
-                    key={contextQuery}
-                    locked={data.selectedTerm?.isLocked ?? true}
-                    assessments={data.performance.assessments}
-                    rules={{
-                      categories: data.config.assessment.categories,
-                      rounding: data.config.assessment.rounding,
-                      missingScorePolicy: data.config.assessment.missingScorePolicy,
-                    }}
-                    gradeScale={data.gradeScale}
-                    rows={rows.map((row) => ({
-                      student: row.student,
-                      total: row.total,
-                      scores: row.scores.map((score) => ({
-                        assessmentId: score.assessmentId,
-                        expected: score.expected,
-                        rawScore: score.rawScore,
-                        maxScore: score.maxScore,
-                        status: (score as { status?: string }).status ?? null,
-                      })),
-                    }))}
-                  />
-                )}
+                <Link className="academic-btn-secondary" href={`/school/academics/performance${contextQuery}`}>Review performance</Link>
               </div>
 
-              <aside className="academic-side-stack">
-                <div className="academic-side-card">
-                  <span className="academic-page-overline">03 · RESULT RULE</span>
-                  <strong>Weighted subject result</strong>
-                  <small>These weights come directly from Academic Setup. There is no second grading definition inside the gradebook.</small>
-                  <div className="academic-link-list">
-                    {data.config.assessment.categories.map((category) => <div key={category.name}><span>{category.name}</span><strong>{category.weight}%</strong></div>)}
+              {data.performance.assessments.length === 0 ? (
+                <div className="academic-empty">
+                  <strong>No assessments are configured for this term.</strong>
+                  <p>Create the assessment structure first, then return to this mark sheet.</p>
+                  <div className="academic-empty-actions">
+                    <Link href="/school/exams">Configure assessments</Link>
+                    <Link href="/school/academics/setup">Grading setup</Link>
                   </div>
                 </div>
-                <div className="academic-side-card">
-                  <span className="academic-page-overline">REPORT GRADE SCALE</span>
-                  <strong>{data.gradeScale.length ? "The same grade bands are active here." : "No custom grade bands configured."}</strong>
-                  <small>{data.gradeScale.length ? "Teachers can see the report-grade meaning immediately after entering marks." : "Configure the school grading scale before relying on letter/remark previews."}</small>
-                  {data.gradeScale.length ? <div className="gradebook-scale-list">{data.gradeScale.map((band) => <div key={`${band.min}-${band.max}-${band.grade}`}><span>{band.min}–{band.max}</span><strong>{band.grade || band.label || "—"}</strong><small>{band.label && band.label !== band.grade ? band.label : ""}</small></div>)}</div> : null}
-                </div>
-                <div className="academic-side-card">
-                  <span className="academic-page-overline">NEXT</span>
-                  <strong>Move the same context forward</strong>
-                  <small>Performance reads the same class, subject and term. Report cards then use the approved result chain.</small>
-                  <div className="academic-link-list">
-                    <Link href={`/school/academics/performance${contextQuery}`}>Performance <span>→</span></Link>
-                    <Link href="/school/report-cards">Report cards <span>→</span></Link>
-                    <Link href="/school/academics/health">Academic readiness <span>→</span></Link>
-                  </div>
-                </div>
-              </aside>
+              ) : (
+                <GradebookEntryGrid
+                  key={contextQuery}
+                  locked={data.selectedTerm?.isLocked ?? true}
+                  assessments={data.performance.assessments}
+                  rules={{
+                    categories: data.config.assessment.categories,
+                    rounding: data.config.assessment.rounding,
+                    missingScorePolicy: data.config.assessment.missingScorePolicy,
+                  }}
+                  gradeScale={data.gradeScale}
+                  rows={rows.map((row) => ({
+                    student: row.student,
+                    total: row.total,
+                    scores: row.scores.map((score) => ({
+                      assessmentId: score.assessmentId,
+                      expected: score.expected,
+                      rawScore: score.rawScore,
+                      maxScore: score.maxScore,
+                      status: (score as { status?: string }).status ?? null,
+                    })),
+                  }))}
+                />
+              )}
             </section>
+
+            <details className="sn-progressive">
+              <summary>Rules, grade bands and next steps</summary>
+              <div className="sn-progressive-body">
+                <div className="gb-tool-list">
+                  <div className="gb-tool-link"><b>Weighting</b><span>{data.config.assessment.categories.map((category) => `${category.name} ${category.weight}%`).join(" · ") || "Not configured"}</span></div>
+                  <div className="gb-tool-link"><b>Grade bands</b><span>{data.gradeScale.length ? `${data.gradeScale.length} bands connected` : "No custom scale"}</span></div>
+                  <Link className="gb-tool-link" href={`/school/academics/performance${contextQuery}`}><b>Performance</b><span>Review class results →</span></Link>
+                  <Link className="gb-tool-link" href="/school/report-cards"><b>Report cards</b><span>Prepare reports →</span></Link>
+                  <Link className="gb-tool-link" href="/school/exams"><b>Assessments</b><span>Manage structure →</span></Link>
+                  <Link className="gb-tool-link" href="/school/academics/setup"><b>Academic setup</b><span>Grading rules →</span></Link>
+                </div>
+              </div>
+            </details>
           </>
         )}
       </div>
