@@ -5,6 +5,7 @@ import { getSchoolAuthorization } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import "./teacher-attendance.css";
+import "./teacher-attendance-v4.css";
 
 export default async function TeacherAttendancePage() {
   const session = await requireSchoolSession();
@@ -17,5 +18,5 @@ export default async function TeacherAttendancePage() {
     return { school, role: access.roles.map((role) => role.name).join(" · ") };
   });
 
-  return <AppShell universe="teacher" title="Class Attendance" subtitle="Fast daily register for your teaching scope." active="My Attendance" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}><TeacherAttendanceRegister/></AppShell>;
+  return <AppShell universe="teacher" title="Class Attendance" subtitle="Tick Present or Absent for the class, then submit once. Verified device arrivals appear automatically." active="My Attendance" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}><TeacherAttendanceRegister/></AppShell>;
 }

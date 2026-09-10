@@ -18,6 +18,41 @@ const blockSchema = z.object({
   caption: z.string().max(500).optional(),
   rows: z.array(z.array(z.string().max(1000)).max(10)).max(20).optional(),
 });
+
+const plannerDefaults = {
+  framework: "standards_based" as const,
+  strand: "",
+  subStrand: "",
+  contentStandard: "",
+  learningIndicators: "",
+  essentialQuestions: "",
+  coreCompetencies: "",
+  pedagogicalStrategies: "",
+  assessmentStrategies: "",
+  gesiSel: "",
+  ghanaianValues: "",
+  references: "",
+  durationMinutes: 60,
+  periodLabel: "",
+};
+
+const plannerSchema = z.object({
+  framework: z.enum(["standards_based", "secondary_learner_planner"]).default("standards_based"),
+  strand: z.string().trim().max(500).default(""),
+  subStrand: z.string().trim().max(500).default(""),
+  contentStandard: z.string().trim().max(2500).default(""),
+  learningIndicators: z.string().trim().max(3500).default(""),
+  essentialQuestions: z.string().trim().max(2500).default(""),
+  coreCompetencies: z.string().trim().max(2500).default(""),
+  pedagogicalStrategies: z.string().trim().max(3500).default(""),
+  assessmentStrategies: z.string().trim().max(3500).default(""),
+  gesiSel: z.string().trim().max(2500).default(""),
+  ghanaianValues: z.string().trim().max(2000).default(""),
+  references: z.string().trim().max(2500).default(""),
+  durationMinutes: z.number().int().min(1).max(360).default(60),
+  periodLabel: z.string().trim().max(100).default(""),
+});
+
 const fields = {
   title: z.string().trim().min(3).max(160),
   topic: z.string().trim().max(160).default(""),
@@ -35,7 +70,9 @@ const fields = {
   objective: z.string().trim().max(500).default(""),
   resources: z.array(z.object({ label: z.string().trim().min(1).max(160), url: z.string().url().max(2000) })).max(20).default([]),
   blocks: z.array(blockSchema).min(1).max(120),
+  planner: plannerSchema.optional().default(plannerDefaults),
 };
+
 const saveSchema = z.object({
   action: z.literal("save"),
   id: z.string().trim().min(1).optional(),
@@ -76,7 +113,7 @@ async function context(tx: TenantDb, schoolId: string, userId: string) {
   const [settings, terms, assignments] = await Promise.all([
     tx.schoolSettings.findUnique({ where: { schoolId }, select: { timezone: true } }),
     tx.term.findMany({ where: { schoolId }, orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true, academicYear: { select: { name: true } } } }),
-    tx.classSubjectTeacher.findMany({ where: { schoolId, OR: [{ teacherId: userId }, { class: { classTeacherId: userId } }] }, select: { classId: true, subjectId: true, class: { select: { name: true, level: true } }, subject: { select: { name: true } } }, orderBy: [{ class: { name: "asc" } }, { subject: { name: "asc" } }] }),
+    tx.classSubjectTeacher.findMany({ where: { schoolId, OR: [{ teacherId: userId }, { class: { classTeacherId: userId } }] }, select: { classId: true, subjectId: true, class: { select: { name: true, level: true, _count: { select: { students: true } } } }, subject: { select: { name: true } } }, orderBy: [{ class: { name: "asc" } }, { subject: { name: "asc" } }] }),
   ]);
   const timezone = settings?.timezone || "Africa/Accra";
   const activeTerm = selectAcademicTerm(terms, undefined, new Date(), timezone);
@@ -142,14 +179,15 @@ export async function POST(request: Request) {
 
       await assertContext(tx, session.schoolId, session.userId, input.classId, input.subjectId, input.termId, input.plannedDate);
       const summary = plainText(input.blocks);
-      const standard = { objective: input.objective || undefined, content: summary, topic: input.topic || undefined, subTopic: input.subTopic || undefined, curriculumObjective: input.curriculumObjective || undefined, learningOutcomes: input.learningOutcomes || undefined, priorKnowledge: input.priorKnowledge || undefined, materials: input.materials || undefined, introduction: input.introduction || undefined, development: input.development || undefined, differentiatedActivities: input.differentiatedActivities || undefined, assessment: input.assessment || undefined, conclusion: input.conclusion || undefined, homework: input.homework || undefined, resources: input.resources };
+      const curriculumObjective = input.curriculumObjective || input.planner.contentStandard;
+      const standard = { objective: input.objective || undefined, content: summary, topic: input.topic || undefined, subTopic: input.subTopic || undefined, curriculumObjective: curriculumObjective || undefined, learningOutcomes: input.learningOutcomes || undefined, priorKnowledge: input.priorKnowledge || undefined, materials: input.materials || undefined, introduction: input.introduction || undefined, development: input.development || undefined, differentiatedActivities: input.differentiatedActivities || undefined, assessment: input.assessment || undefined, conclusion: input.conclusion || undefined, homework: input.homework || undefined, resources: input.resources };
       if (input.status === "submitted") assertLessonSubmissionReady(standard);
-      const documentContent = JSON.stringify({ version: 2, weekNumber: input.weekNumber, blocks: input.blocks });
+      const documentContent = JSON.stringify({ version: 3, weekNumber: input.weekNumber, planner: input.planner, blocks: input.blocks });
 
       if (!input.id) {
         const id = createId();
-        await tx.$executeRawUnsafe(`INSERT INTO "LessonPlan"("id","schoolId","teacherId","classId","subjectId","termId","title","objective","content","topic","subTopic","curriculumObjective","learningOutcomes","priorKnowledge","materials","introduction","development","differentiatedActivities","assessment","conclusion","homework","resources","documentContent","plannedDate","status","submittedAt") VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23::jsonb,$24::date,$25,CASE WHEN $25='submitted' THEN NOW() ELSE NULL END)`, id, session.schoolId, session.userId, input.classId, input.subjectId, input.termId, input.title, input.objective || null, summary, input.topic || null, input.subTopic || null, input.curriculumObjective || null, input.learningOutcomes || null, input.priorKnowledge || null, input.materials || null, input.introduction || null, input.development || null, input.differentiatedActivities || null, input.assessment || null, input.conclusion || null, input.homework || null, JSON.stringify(input.resources), documentContent, input.plannedDate, input.status);
-        await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "lesson_plan.created_from_teacher_studio", entityType: "LessonPlan", entityId: id, after: { title: input.title, classId: input.classId, subjectId: input.subjectId, termId: input.termId, weekNumber: input.weekNumber, status: input.status } });
+        await tx.$executeRawUnsafe(`INSERT INTO "LessonPlan"("id","schoolId","teacherId","classId","subjectId","termId","title","objective","content","topic","subTopic","curriculumObjective","learningOutcomes","priorKnowledge","materials","introduction","development","differentiatedActivities","assessment","conclusion","homework","resources","documentContent","plannedDate","status","submittedAt") VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22::jsonb,$23::jsonb,$24::date,$25,CASE WHEN $25='submitted' THEN NOW() ELSE NULL END)`, id, session.schoolId, session.userId, input.classId, input.subjectId, input.termId, input.title, input.objective || null, summary, input.topic || null, input.subTopic || null, curriculumObjective || null, input.learningOutcomes || null, input.priorKnowledge || null, input.materials || null, input.introduction || null, input.development || null, input.differentiatedActivities || null, input.assessment || null, input.conclusion || null, input.homework || null, JSON.stringify(input.resources), documentContent, input.plannedDate, input.status);
+        await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "lesson_plan.created_from_teacher_studio", entityType: "LessonPlan", entityId: id, after: { title: input.title, classId: input.classId, subjectId: input.subjectId, termId: input.termId, weekNumber: input.weekNumber, framework: input.planner.framework, status: input.status } });
         return NextResponse.json({ ok: true, id }, { status: 201 });
       }
 
@@ -159,9 +197,9 @@ export async function POST(request: Request) {
       if (!current || current.teacherId !== session.userId) throw new ForbiddenError("You can only edit lesson plans you created.");
       if (!["draft", "changes_requested"].includes(current.status)) throw new AppError("Only drafts or plans returned for changes can be edited.", 409, "WORK_NOT_EDITABLE");
       if (current.updatedAt.getTime() !== new Date(input.expectedUpdatedAt).getTime()) throw new AppError("This lesson plan changed. Refresh before saving.", 409, "CONCURRENT_UPDATE");
-      const changed = await tx.$executeRawUnsafe(`UPDATE "LessonPlan" SET "classId"=$3,"subjectId"=$4,"termId"=$5,"title"=$6,"objective"=$7,"content"=$8,"topic"=$9,"subTopic"=$10,"curriculumObjective"=$11,"learningOutcomes"=$12,"priorKnowledge"=$13,"materials"=$14,"introduction"=$15,"development"=$16,"differentiatedActivities"=$17,"assessment"=$18,"conclusion"=$19,"homework"=$20,"resources"=$21::jsonb,"documentContent"=$22::jsonb,"plannedDate"=$23::date,"status"=$24,"submittedAt"=CASE WHEN $24='submitted' THEN NOW() ELSE "submittedAt" END,"reviewerId"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewerId" END,"reviewNote"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewNote" END,"reviewedAt"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewedAt" END,"updatedAt"=GREATEST(NOW(),"updatedAt"+INTERVAL '1 millisecond') WHERE "schoolId"=$1 AND "id"=$2 AND "updatedAt"=$25::timestamptz`, session.schoolId, input.id, input.classId, input.subjectId, input.termId, input.title, input.objective || null, summary, input.topic || null, input.subTopic || null, input.curriculumObjective || null, input.learningOutcomes || null, input.priorKnowledge || null, input.materials || null, input.introduction || null, input.development || null, input.differentiatedActivities || null, input.assessment || null, input.conclusion || null, input.homework || null, JSON.stringify(input.resources), documentContent, input.plannedDate, input.status, input.expectedUpdatedAt);
+      const changed = await tx.$executeRawUnsafe(`UPDATE "LessonPlan" SET "classId"=$3,"subjectId"=$4,"termId"=$5,"title"=$6,"objective"=$7,"content"=$8,"topic"=$9,"subTopic"=$10,"curriculumObjective"=$11,"learningOutcomes"=$12,"priorKnowledge"=$13,"materials"=$14,"introduction"=$15,"development"=$16,"differentiatedActivities"=$17,"assessment"=$18,"conclusion"=$19,"homework"=$20,"resources"=$21::jsonb,"documentContent"=$22::jsonb,"plannedDate"=$23::date,"status"=$24,"submittedAt"=CASE WHEN $24='submitted' THEN NOW() ELSE "submittedAt" END,"reviewerId"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewerId" END,"reviewNote"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewNote" END,"reviewedAt"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewedAt" END,"updatedAt"=GREATEST(NOW(),"updatedAt"+INTERVAL '1 millisecond') WHERE "schoolId"=$1 AND "id"=$2 AND "updatedAt"=$25::timestamptz`, session.schoolId, input.id, input.classId, input.subjectId, input.termId, input.title, input.objective || null, summary, input.topic || null, input.subTopic || null, curriculumObjective || null, input.learningOutcomes || null, input.priorKnowledge || null, input.materials || null, input.introduction || null, input.development || null, input.differentiatedActivities || null, input.assessment || null, input.conclusion || null, input.homework || null, JSON.stringify(input.resources), documentContent, input.plannedDate, input.status, input.expectedUpdatedAt);
       if (changed !== 1) throw new AppError("This lesson plan changed. Refresh before saving.", 409, "CONCURRENT_UPDATE");
-      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "lesson_plan.updated_from_teacher_studio", entityType: "LessonPlan", entityId: input.id, before: { status: current.status }, after: { title: input.title, status: input.status, weekNumber: input.weekNumber } });
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "lesson_plan.updated_from_teacher_studio", entityType: "LessonPlan", entityId: input.id, before: { status: current.status }, after: { title: input.title, status: input.status, weekNumber: input.weekNumber, framework: input.planner.framework } });
       return NextResponse.json({ ok: true, id: input.id });
     });
   } catch (error) {
