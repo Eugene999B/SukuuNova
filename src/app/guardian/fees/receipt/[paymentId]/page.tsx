@@ -15,6 +15,7 @@ type ReversalRow={id:string;amount:Prisma.Decimal;reason:string;createdAt:Date};
 type SumRow={total:Prisma.Decimal|null};
 
 const zero=()=>new Prisma.Decimal(0);
+const nonNegative=(value:Prisma.Decimal)=>value.lt(0)?zero():value;
 const money=(value:Prisma.Decimal)=>`GH₵${value.toFixed(2)}`;
 const dateTime=(value:Date)=>new Intl.DateTimeFormat("en-GH",{dateStyle:"medium",timeStyle:"short",timeZone:"Africa/Accra"}).format(value);
 const methodLabel=(value:string)=>value==="momo"?"Mobile money":value==="card"?"Card / bank":value==="cash"?"Cash":value.replaceAll("_"," ");
@@ -37,9 +38,9 @@ export default async function GuardianReceiptPage({params}:Props){
   });
   if(!data)notFound();
   const reversed=data.reversals.reduce((sum,row)=>sum.plus(row.amount),zero());
-  const netTransaction=Prisma.Decimal.max(zero(),data.receipt.amount.minus(reversed));
-  const invoiceNetPaid=Prisma.Decimal.max(zero(),data.paymentTotal.minus(data.reversalTotal));
-  const remaining=Prisma.Decimal.max(zero(),data.receipt.invoiceTotal.minus(invoiceNetPaid));
+  const netTransaction=nonNegative(data.receipt.amount.minus(reversed));
+  const invoiceNetPaid=nonNegative(data.paymentTotal.minus(data.reversalTotal));
+  const remaining=nonNegative(data.receipt.invoiceTotal.minus(invoiceNetPaid));
   const receiptNo=data.receipt.reference||`SN-${data.receipt.id.slice(-10).toUpperCase()}`;
 
   return <AppShell universe="guardian" title="Payment receipt" subtitle="A protected family payment record." active="Fees & Receipts" schoolName={session.schoolName} schoolCode="" userName={session.name} role="Guardian">
