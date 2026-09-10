@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import TeacherLessonStudio from "@/components/TeacherLessonStudio";
+import TeacherGhanaLessonPlanner from "@/components/TeacherGhanaLessonPlanner";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import "./teacher-lessons.css";
+import "./ghana-lesson-planner.css";
 
 export default async function TeacherLessonsPage(){
  const session=await requireSchoolSession();
@@ -14,5 +15,5 @@ export default async function TeacherLessonsPage(){
   const school=await tx.school.findUnique({where:{id:session.schoolId},select:{name:true,uniqueCode:true}});
   return{school,role:access.roles.map(role=>role.name).join(" · ")};
  });
- return <AppShell universe="teacher" title="Lessons & Planning" subtitle="Rich lesson authoring, verification and reflection." active="My Lessons & Planning" schoolName={data.school?.name??"School Workspace"} schoolCode={data.school?.uniqueCode??""} userName={session.name} role={data.role||"Teacher"}><TeacherLessonStudio/></AppShell>;
+ return <AppShell universe="teacher" title="Lessons & Planning" subtitle="Ghana-aligned weekly lesson planning, rich authoring, leadership vetting and reflection." active="My Lessons & Planning" schoolName={data.school?.name??"School Workspace"} schoolCode={data.school?.uniqueCode??""} userName={session.name} role={data.role||"Teacher"}><TeacherGhanaLessonPlanner/></AppShell>;
 }
