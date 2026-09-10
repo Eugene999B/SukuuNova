@@ -5,11 +5,12 @@ import { revalidatePath } from "next/cache";
 import { IdCard } from "lucide-react";
 import { AddStudentDialog } from "@/components/students/AddStudentDialog";
 import { StudentDirectory } from "@/components/students/StudentDirectory";
+import { IdentityCardBatchActions } from "@/components/IdentityCardBatchActions";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { cachedSchoolRead } from "@/lib/school-cache";
-import { requirePermission } from "@/lib/rbac";
+import { hasPermission, requirePermission } from "@/lib/rbac";
 import "./students-simple.css";
 import "@/components/students/add-student-dialog.css";
 
@@ -86,6 +87,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
     await requirePermission(tx, session.userId, "students:read");
     return getStudentsPageData(session.schoolId);
   });
+  const canManageCards = await withTenant(session.schoolId, (tx) => hasPermission(tx, session.userId, "identity_cards:manage").catch(() => false));
   const unassigned = data.students.filter((student) => !student.class);
   const assignedCount = data.students.length - unassigned.length;
   const activeCount = data.students.filter((student) => student.status === "active").length;
@@ -94,14 +96,16 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
     (acc[level] ??= []).push(item);
     return acc;
   }, {});
+  const cardClasses = data.classes.map((schoolClass) => ({ id: schoolClass.id, name: `${schoolClass.level ?? ""} ${schoolClass.name}`.trim() }));
 
   return (
     <AppShell universe="school" title="Students" subtitle="Find a learner, open their record or add a new student." active="Students" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
       <div className="students-simple">
         <section className="students-simple-head">
-          <div><h2>Student register</h2><p>Search the register first. Open a learner only when you need the full record.</p></div>
+          <div><h2>Student register</h2><p>Search the register first. Open a learner for their full record and printable school ID.</p></div>
           <div className="students-simple-actions"><Link href="/school/id-cards" className="button secondary"><IdCard size={15} aria-hidden="true" /> ID cards</Link><AddStudentDialog classes={data.classes} action={createStudent} /></div>
         </section>
+        {canManageCards ? <section className="students-simple-section"><div className="students-simple-section-head"><div><h3>Student identity cards</h3><p>Download the whole student body or choose one class for an A4 print pack. Every card includes the school brand and signed verification QR.</p></div></div><IdentityCardBatchActions mode="students" classes={cardClasses}/></section> : null}
         <section className="students-simple-stats" aria-label="Student register summary"><div className="students-simple-stat"><span>Active learners</span><strong>{activeCount}</strong></div><div className="students-simple-stat"><span>In a class</span><strong>{assignedCount}</strong></div><div className="students-simple-stat"><span>Needs placement</span><strong>{unassigned.length}</strong></div></section>
         <section className="students-simple-section"><div className="students-simple-section-head"><div><h3>Learners</h3><p>Search by name or index number, then narrow by class or status.</p></div></div><StudentDirectory students={data.students} classes={data.classes} initialClassId={params.classId} /></section>
         <details className="sn-progressive"><summary>Classes and placement</summary><div className="sn-progressive-body">{data.classes.length ? <div className="students-class-grid">{Object.entries(grouped).map(([level, sections]) => <div className="students-class-card" key={level}><div className="students-class-card-head"><strong>{level}</strong><span>{sections.reduce((sum, item) => sum + item._count.students, 0)} learners</span></div><div className="students-class-links">{sections.map((schoolClass) => <Link href={`/school/students?classId=${schoolClass.id}`} key={schoolClass.id}><span>{schoolClass.name}</span><strong>{schoolClass._count.students} →</strong></Link>)}</div></div>)}</div> : <div className="student-directory-empty"><strong>No classes created yet.</strong><span>Create the academic class structure before placing learners.</span></div>}</div></details>
