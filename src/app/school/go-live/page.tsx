@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, CircleGauge, ShieldCheck, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleGauge, DatabaseZap, ShieldCheck, Wrench } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -11,6 +11,14 @@ const STATUS_COPY = {
   attention: { label: "Needs attention", icon: Wrench },
   blocked: { label: "Blocker", icon: AlertTriangle },
 } as const;
+
+type StepStatus = keyof typeof STATUS_COPY;
+
+function worstStatus(statuses: StepStatus[]): StepStatus {
+  if (statuses.includes("blocked")) return "blocked";
+  if (statuses.includes("attention")) return "attention";
+  return "complete";
+}
 
 export default async function SchoolGoLivePage() {
   const session = await requireSchoolSession();
@@ -27,6 +35,16 @@ export default async function SchoolGoLivePage() {
     const rank = { blocked: 0, attention: 1, complete: 2 } as const;
     return rank[a.status] - rank[b.status] || b.weight - a.weight;
   });
+  const byKey = new Map(data.readiness.steps.map((step) => [step.key, step]));
+  const phase = (keys: string[]) => worstStatus(keys.map((key) => byKey.get(key)?.status ?? "blocked"));
+  const launchPath: Array<{ title: string; description: string; status: StepStatus; href: string; action: string }> = [
+    { title: "Foundation", description: "School identity, settings, academic year and current term.", status: phase(["profile", "calendar"]), href: "/school/settings", action: "Set foundation" },
+    { title: "Structure", description: "Create the classes and subjects every academic workflow depends on.", status: phase(["classes", "subjects"]), href: "/school/classes", action: "Build structure" },
+    { title: "People & data", description: "Prepare staff access, learners and guardian coverage. Existing schools can migrate records in bulk.", status: phase(["staff", "students", "guardians"]), href: "/school/import", action: "Import or review data" },
+    { title: "Teaching", description: "Connect teachers to the classes and subjects they actually teach.", status: phase(["teaching"]), href: "/school/academics/setup", action: "Connect teaching" },
+    { title: "Operations", description: "Prepare fee structure and at least one parent communication channel.", status: phase(["fees", "communications"]), href: "/school/fees", action: "Prepare operations" },
+    { title: "Launch review", description: "Clear every hard blocker, reach the launch threshold and move into pilot certification.", status: data.readiness.readyToLaunch ? "complete" : data.readiness.blockerCount ? "blocked" : "attention", href: "#setup-worklist", action: "Review remaining work" },
+  ];
 
   return (
     <AppShell
@@ -58,7 +76,26 @@ export default async function SchoolGoLivePage() {
           <div><span><ShieldCheck size={15}/></span><div><small>Launch gate</small><strong>{data.readiness.readyToLaunch ? "Review ready" : "Hold"}</strong></div></div>
         </section>
 
-        <section className="app-card app-panel go-live-worklist">
+        <section className="app-card app-panel go-live-path-panel">
+          <div className="app-card-head">
+            <div><span className="app-eyebrow">GUIDED SETUP</span><h2>Your launch path</h2><p>Move left to right. These phases summarize the same live readiness checks below, so there is no second checklist to maintain.</p></div>
+            <Link href="/school/import" className="app-pill go-live-import-link"><DatabaseZap size={13}/> Migrate existing school data</Link>
+          </div>
+          <div className="go-live-path">
+            {launchPath.map((item, index) => {
+              const Icon = STATUS_COPY[item.status].icon;
+              return <article className={`go-live-phase is-${item.status}`} key={item.title}>
+                <div className="go-live-phase-top"><span>{index + 1}</span><Icon size={15}/></div>
+                <strong>{item.title}</strong>
+                <p>{item.description}</p>
+                <small>{STATUS_COPY[item.status].label}</small>
+                <Link href={item.href}>{item.action}</Link>
+              </article>;
+            })}
+          </div>
+        </section>
+
+        <section className="app-card app-panel go-live-worklist" id="setup-worklist">
           <div className="app-card-head">
             <div>
               <span className="app-eyebrow">NEXT WORK</span>
