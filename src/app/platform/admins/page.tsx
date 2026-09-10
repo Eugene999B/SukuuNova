@@ -1,7 +1,8 @@
 import { AppShell } from "@/components/AppShell";
+import PlatformWorkersConsoleV3 from "@/components/PlatformWorkersConsoleV3";
+import "@/components/platform-workers-v3.css";
 import { requirePlatformSession } from "@/lib/auth";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
-import PlatformWorkersConsole from "@/components/PlatformWorkersConsole";
 
 export default async function PlatformAdminsPage() {
   const session = await requirePlatformSession();
@@ -10,12 +11,12 @@ export default async function PlatformAdminsPage() {
     <AppShell
       universe="platform"
       title="Workers & Permissions"
-      subtitle="Operators and permissions."
+      subtitle="Manage accountable Platform operators, capability permissions and tenant-scope handoff."
       active="Workers & Permissions"
       userName={session.name}
       role={session.role}
     >
-      <PlatformWorkersConsole />
+      <PlatformWorkersConsoleV3 />
     </AppShell>
   );
 }
