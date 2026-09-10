@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import TeacherAcademicStudioV3 from "@/components/TeacherAcademicStudioV3";
+import TeacherAcademicStudioV4 from "@/components/TeacherAcademicStudioV4";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import "./teacher-studio.css";
+import "./teacher-studio-v4.css";
 
 export default async function TeacherStudioPage() {
   const session = await requireSchoolSession();
@@ -18,8 +18,8 @@ export default async function TeacherStudioPage() {
   });
 
   return (
-    <AppShell universe="teacher" title="Teaching Studio" subtitle="Advanced assessment design, marks and learner submissions inside your assigned teaching scope." active="Teaching Studio" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}>
-      <TeacherAcademicStudioV3 />
+    <AppShell universe="teacher" title="Teaching Studio" subtitle="Create work, build questions, mark learners and review submissions inside your assigned teaching scope." active="Teaching Studio" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}>
+      <TeacherAcademicStudioV4 />
     </AppShell>
   );
 }
