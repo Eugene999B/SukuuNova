@@ -135,22 +135,40 @@ export async function reviewPickupPoint(tx: TenantDb, input: {
   const note = input.note?.trim().slice(0, 500) || null;
 
   if (input.decision === "approve") {
+    const replacementStart = pickup.effectiveFrom ?? now;
+    const assignment = await activeAssignment(tx, input.schoolId, pickup.studentId, replacementStart);
+    if (!assignment || !pickup.routeId || assignment.routeId !== pickup.routeId) {
+      throw new AppError("This pickup request belongs to an older transport assignment. Ask the family to submit a new pickup point.", 409, "PICKUP_REQUEST_STALE_ASSIGNMENT");
+    }
+    if (pickup.direction === "morning" && !assignment.morningEnabled) {
+      throw new AppError("Morning transport is no longer enabled for this learner.", 409, "MORNING_TRANSPORT_DISABLED");
+    }
+    if (pickup.direction === "afternoon" && !assignment.afternoonEnabled) {
+      throw new AppError("Afternoon transport is no longer enabled for this learner.", 409, "AFTERNOON_TRANSPORT_DISABLED");
+    }
+    if (pickup.effectiveTo && pickup.effectiveTo <= replacementStart) {
+      throw new AppError("This temporary pickup request has already expired. Ask the family to submit a new request.", 409, "PICKUP_REQUEST_WINDOW_EXPIRED");
+    }
+
     await tx.$executeRawUnsafe(
       `UPDATE "P3PickupPoint" SET "effectiveTo"=$5,"updatedAt"=CURRENT_TIMESTAMP
-       WHERE "schoolId"=$1 AND "studentId"=$2 AND "direction"=$3 AND "status"='approved' AND "effectiveTo" IS NULL AND "id"<>$4`,
+       WHERE "schoolId"=$1 AND "studentId"=$2 AND "direction"=$3 AND "status"='approved' AND "id"<>$4
+         AND ("effectiveFrom" IS NULL OR "effectiveFrom" <= $5)
+         AND ("effectiveTo" IS NULL OR "effectiveTo" > $5)`,
       input.schoolId,
       pickup.studentId,
       pickup.direction,
       pickup.id,
-      now,
+      replacementStart,
     );
     await tx.$executeRawUnsafe(
-      `UPDATE "P3PickupPoint" SET "status"='approved',"approvedBy"=$3,"approvedAt"=$4,"effectiveFrom"=COALESCE("effectiveFrom",$4),"decisionNote"=$5,"updatedAt"=CURRENT_TIMESTAMP
+      `UPDATE "P3PickupPoint" SET "status"='approved',"approvedBy"=$3,"approvedAt"=$4,"effectiveFrom"=COALESCE("effectiveFrom",$5),"decisionNote"=$6,"updatedAt"=CURRENT_TIMESTAMP
        WHERE "schoolId"=$1 AND "id"=$2`,
       input.schoolId,
       pickup.id,
       input.actorId,
       now,
+      replacementStart,
       note,
     );
   } else {
