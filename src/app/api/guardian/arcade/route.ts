@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { ForbiddenError, routeError } from "@/lib/errors";
 import { arcadeOverview, guardianArcadeLeaderboard, startArcadeRound, readArcadeRound, saveArcadeRound } from "@/lib/arcade-service";
+import { fingerprintNovaCoreInput, recordNovaCoreDecision } from "@/lib/novacore/decision-ledger";
 
 const ageBand = z.enum(["age_4_5","age_6_8","age_9_11","age_12_14","age_15_18"]);
 const schema = z.discriminatedUnion("action", [
@@ -38,6 +39,45 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const current = await session(), input = await parseJson(request, schema);
-    return json(await withTenant(current.schoolId, (tx) => input.action === "start" ? startArcadeRound(tx, current, input) : input.action === "view" ? readArcadeRound(tx, current, input.roundId) : saveArcadeRound(tx, current, input)));
+    return json(await withTenant(current.schoolId, async (tx) => {
+      if (input.action === "start") {
+        const startedAt = Date.now();
+        const round = await startArcadeRound(tx, current, input);
+        if (input.game === "force-motion-lab") {
+          const physicsScenes = round.questions.filter((question) => question.kind === "simulation" && Boolean(question.scene)).length;
+          try {
+            await recordNovaCoreDecision(tx, {
+              schoolId: current.schoolId,
+              algorithmKey: "arcade.physics",
+              entityType: "ArcadeRound",
+              entityId: round.id,
+              inputFingerprint: fingerprintNovaCoreInput({
+                game: round.game,
+                difficulty: round.difficulty,
+                ageBand: round.ageBand,
+                standardBand: round.standardBand,
+                roundLength: round.roundLength,
+                engine: round.engine,
+              }),
+              confidence: 1,
+              reasonCodes: ["deterministic_fixed_timestep", "measured_force_motion_round"],
+              outputSummary: {
+                game: round.game,
+                difficulty: round.difficulty,
+                roundLength: round.roundLength,
+                physicsScenes,
+                challengeMode: round.challengeMode,
+              },
+              latencyMs: Date.now() - startedAt,
+            });
+          } catch (error) {
+            console.error("NovaCore Arcade telemetry failed", error instanceof Error ? error.message : "unknown error");
+          }
+        }
+        return round;
+      }
+      if (input.action === "view") return readArcadeRound(tx, current, input.roundId);
+      return saveArcadeRound(tx, current, input);
+    }));
   } catch (error) { return routeError(error); }
 }
