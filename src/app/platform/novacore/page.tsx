@@ -1,75 +1,96 @@
+import { Activity, AlertTriangle, BrainCircuit, Eye, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import NovaCoreEvidencePanel from "@/components/NovaCoreEvidencePanel";
 import { requirePlatformSession } from "@/lib/auth";
 import { requirePlatformPermission } from "@/lib/platform-permissions";
 import { NOVACORE_ALGORITHMS } from "@/lib/novacore/registry";
-
-const STATUS_LABEL: Record<string, string> = {
-  production: "Production",
-  beta: "Beta",
-  shadow: "Shadow testing",
-  planned: "Planned",
-};
+import "@/components/platform-owner-control.css";
+import "@/components/platform-owner-simple.css";
+import "@/components/novacore-control.css";
 
 export default async function NovaCorePage() {
   const session = await requirePlatformSession();
   await requirePlatformPermission(session, "analytics.view");
-  const counts = NOVACORE_ALGORITHMS.reduce<Record<string, number>>((acc, algorithm) => {
-    acc[algorithm.status] = (acc[algorithm.status] ?? 0) + 1;
-    return acc;
-  }, {});
+
+  const enforced = NOVACORE_ALGORITHMS.filter((algorithm) => algorithm.rolloutMode === "enforced").length;
+  const shadow = NOVACORE_ALGORITHMS.filter((algorithm) => algorithm.rolloutMode === "shadow").length;
+  const highRisk = NOVACORE_ALGORITHMS.filter((algorithm) => algorithm.risk === "high").length;
+  const outcome = NOVACORE_ALGORITHMS.filter((algorithm) => algorithm.affectsUserOutcome).length;
 
   return (
     <AppShell
       universe="platform"
       title="NovaCore"
-      subtitle="Algorithm control, safety, versioning and shadow evaluation."
+      subtitle="Algorithm control, evidence, safety and rollout decisions."
       active="NovaCore"
       userName={session.name}
       role={session.role}
     >
-      <div className="space-y-6">
-        <section className="grid gap-4 md:grid-cols-4">
-          {[
-            ["Production", counts.production ?? 0],
-            ["Beta", counts.beta ?? 0],
-            ["Shadow", counts.shadow ?? 0],
-            ["Planned", counts.planned ?? 0],
-          ].map(([label, value]) => (
-            <article key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-              <p className="text-sm text-slate-500">{label}</p>
-              <strong className="mt-2 block text-3xl">{value}</strong>
-            </article>
-          ))}
+      <div className="space-y-4">
+        <section className="novacore-command">
+          <div>
+            <span className="platform-eyebrow">Algorithm control</span>
+            <h2>What is NovaCore doing across SukuuNova?</h2>
+            <p>Start with rollout posture and real school evidence. Open implementation safeguards only when a version needs inspection or promotion review.</p>
+          </div>
         </section>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-950">
-          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">SukuuNova Intelligence & Simulation Core</p>
-              <h2 className="mt-2 text-2xl font-semibold">Algorithm registry</h2>
+        <section className="novacore-status-strip" aria-label="NovaCore rollout posture">
+          <div className="novacore-status-item"><span><ShieldCheck size={16}/></span><div><small>Enforced</small><strong>{enforced}</strong></div></div>
+          <div className="novacore-status-item"><span><Eye size={16}/></span><div><small>Shadow</small><strong>{shadow}</strong></div></div>
+          <div className="novacore-status-item"><span><AlertTriangle size={16}/></span><div><small>High risk</small><strong>{highRisk}</strong></div></div>
+          <div className="novacore-status-item"><span><Activity size={16}/></span><div><small>Affect outcomes</small><strong>{outcome}</strong></div></div>
+        </section>
+
+        {session.role === "super_admin" ? <NovaCoreEvidencePanel/> : <section className="app-card app-panel">
+          <div className="app-card-head"><div><span className="app-eyebrow">LIVE EVIDENCE</span><h2>School algorithm evidence</h2></div></div>
+          <div className="platform-empty"><ShieldCheck size={20}/><strong>Super Admin access is required for school-level NovaCore evidence.</strong><span>The algorithm registry remains visible below.</span></div>
+        </section>}
+
+        <details className="sn-progressive owner-more">
+          <summary>More algorithm details</summary>
+          <div className="sn-progressive-body">
+            <div className="app-card-head">
+              <div><span className="app-eyebrow">REGISTRY</span><h2>Versions, rollout and safeguards</h2><p>Every algorithm has one authoritative key, version and rollout mode.</p></div>
             </div>
-            <p className="max-w-xl text-sm text-slate-500">New algorithms must prove themselves in tests or shadow mode before they are allowed to change a live school decision.</p>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            {NOVACORE_ALGORITHMS.map((algorithm) => (
-              <article key={algorithm.key} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{algorithm.domain}</p>
-                    <h3 className="mt-1 text-lg font-semibold">{algorithm.name}</h3>
-                    <p className="mt-1 text-xs text-slate-500">{algorithm.key} · v{algorithm.version}</p>
+            <div className="novacore-registry-grid">
+              {NOVACORE_ALGORITHMS.map((algorithm) => (
+                <article key={algorithm.key} className="novacore-registry-item">
+                  <div className="novacore-registry-head">
+                    <div>
+                      <span className="novacore-registry-meta">{algorithm.domain} · {algorithm.key} · v{algorithm.version}</span>
+                      <h3>{algorithm.name}</h3>
+                    </div>
+                    <span className={`novacore-risk novacore-risk-${algorithm.risk}`}>{algorithm.risk} risk</span>
                   </div>
-                  <span className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold dark:border-slate-700">{STATUS_LABEL[algorithm.status]}</span>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">{algorithm.description}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {algorithm.safeguards.map((item) => <span key={item} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-900 dark:text-slate-300">{item}</span>)}
-                </div>
-              </article>
-            ))}
+                  <p>{algorithm.description}</p>
+                  <div className="novacore-registry-tags">
+                    <span>{algorithm.status}</span>
+                    <span>{algorithm.rolloutMode}</span>
+                    <span>{algorithm.affectsUserOutcome ? "affects outcome" : "non-authoritative"}</span>
+                  </div>
+                  <details className="sn-progressive">
+                    <summary>Safeguards & evidence</summary>
+                    <div className="sn-progressive-body">
+                      <div className="novacore-registry-tags">{algorithm.safeguards.map((item) => <span key={item}>{item}</span>)}</div>
+                      <div className="novacore-registry-tags">{algorithm.evidence.map((item) => <span key={item}>{item}</span>)}</div>
+                    </div>
+                  </details>
+                </article>
+              ))}
+            </div>
           </div>
-        </section>
+        </details>
+
+        <details className="sn-progressive owner-more">
+          <summary>How NovaCore rollout works</summary>
+          <div className="sn-progressive-body owner-explain-grid">
+            <div><BrainCircuit size={17}/><b>Versioned decisions</b><p>Every instrumented decision records the authoritative algorithm key and version from the registry.</p></div>
+            <div><Eye size={17}/><b>Shadow before promotion</b><p>Candidate algorithms can run without controlling the live school outcome while evidence is collected.</p></div>
+            <div><ShieldCheck size={17}/><b>Tenant isolation</b><p>School evidence is queried through the same tenant context and forced row-level security as operational records.</p></div>
+            <div><AlertTriangle size={17}/><b>Explainable reasons</b><p>Reason codes show why a decision or fallback occurred instead of presenting a vague AI warning.</p></div>
+          </div>
+        </details>
       </div>
     </AppShell>
   );
