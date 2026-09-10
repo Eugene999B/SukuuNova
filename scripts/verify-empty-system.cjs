@@ -7,6 +7,7 @@ const {
   parseResetTarget,
   quotePgIdentifier,
   safeDatabaseSummary,
+  withExactTableVisibility,
 } = require("./data-reset-safety.cjs");
 
 const target = parseResetTarget(process.env.RESET_DATABASE_URL);
@@ -22,15 +23,18 @@ async function main() {
   );
   const tables = tableRows.map((row) => String(row.tablename));
 
-  const nonEmptyTables = [];
-  let applicationRows = 0;
-  for (const table of tables) {
-    const rows = await prisma.$queryRawUnsafe(`SELECT COUNT(*)::bigint AS count FROM ${quotePgIdentifier(table)}`);
-    const count = Number(rows[0]?.count ?? 0);
-    const safeCount = Number.isFinite(count) ? count : 0;
-    applicationRows += safeCount;
-    if (safeCount > 0) nonEmptyTables.push({ table, count: safeCount });
-  }
+  const counts = await prisma.$transaction(async (tx) => withExactTableVisibility(tx, tables, async () => {
+    const rows = [];
+    for (const table of tables) {
+      const countRows = await tx.$queryRawUnsafe(`SELECT COUNT(*)::bigint AS count FROM ${quotePgIdentifier(table)}`);
+      const count = Number(countRows[0]?.count ?? 0);
+      rows.push({ table, count: Number.isFinite(count) ? count : 0 });
+    }
+    return rows;
+  }), { maxWait: 60_000, timeout: 300_000 });
+
+  const nonEmptyTables = counts.filter((item) => item.count > 0);
+  const applicationRows = counts.reduce((sum, item) => sum + item.count, 0);
 
   const migrationTableRows = await prisma.$queryRawUnsafe(
     `SELECT to_regclass('public."_prisma_migrations"') IS NOT NULL AS present`,
