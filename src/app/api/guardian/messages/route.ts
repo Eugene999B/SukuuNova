@@ -14,6 +14,16 @@ const sendSchema = z.object({
 });
 const readSchema = z.object({ action: z.literal("mark_read"), messageId: z.string().min(1).max(120) });
 
+type RawMessage = {
+  id: string;
+  body: string;
+  status: string;
+  createdAt: Date;
+  templateVariables: unknown;
+  mediaUrl: string | null;
+  recipientId: string;
+};
+
 function meta(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -31,13 +41,18 @@ export async function GET() {
       });
       if (!linked) throw new ForbiddenError("Guardian messaging is not available for this account.");
 
-      const [rows, staff] = await Promise.all([
+      const [incoming, outgoing, staff] = await Promise.all([
         tx.message.findMany({
           where: { schoolId: session.schoolId, channel: "in_app", recipientId: session.userId },
           orderBy: { createdAt: "desc" },
           take: 100,
-          select: { id: true, body: true, status: true, createdAt: true, templateVariables: true, mediaUrl: true },
+          select: { id: true, body: true, status: true, createdAt: true, templateVariables: true, mediaUrl: true, recipientId: true },
         }),
+        tx.$queryRawUnsafe<RawMessage[]>(
+          `SELECT "id","body","status","createdAt","templateVariables","mediaUrl","recipientId" FROM "Message" WHERE "schoolId"=$1 AND "channel"='in_app' AND "templateVariables"->>'senderType'='guardian' AND "templateVariables"->>'senderId'=$2 ORDER BY "createdAt" DESC LIMIT 100`,
+          session.schoolId,
+          session.userId,
+        ),
         tx.user.findMany({
           where: {
             schoolId: session.schoolId,
@@ -56,22 +71,40 @@ export async function GET() {
           },
         }),
       ]);
-
-      const messages = rows.map((message) => {
-        const metadata = meta(message.templateVariables);
-        return {
-          ...message,
-          title: typeof metadata.title === "string" ? metadata.title : message.body.split("\n")[0],
-          senderName: typeof metadata.senderName === "string" ? metadata.senderName : "School communication",
-          senderId: typeof metadata.senderId === "string" ? metadata.senderId : null,
-          readAt: typeof metadata.readAt === "string" ? metadata.readAt : null,
-          attachments: Array.isArray(metadata.attachments) ? metadata.attachments : [],
-        };
-      });
+      const staffById = new Map(staff.map((person) => [person.id, person]));
+      const messages = [
+        ...incoming.map((message) => {
+          const metadata = meta(message.templateVariables);
+          return {
+            ...message,
+            direction: "incoming" as const,
+            title: typeof metadata.title === "string" ? metadata.title : message.body.split("\n")[0],
+            senderName: typeof metadata.senderName === "string" ? metadata.senderName : "School communication",
+            senderId: typeof metadata.senderId === "string" ? metadata.senderId : null,
+            recipientName: session.name,
+            readAt: typeof metadata.readAt === "string" ? metadata.readAt : null,
+            attachments: Array.isArray(metadata.attachments) ? metadata.attachments : [],
+          };
+        }),
+        ...outgoing.map((message) => {
+          const metadata = meta(message.templateVariables);
+          const recipient = staffById.get(message.recipientId);
+          return {
+            ...message,
+            direction: "outgoing" as const,
+            title: typeof metadata.title === "string" ? metadata.title : message.body.split("\n")[0],
+            senderName: session.name,
+            senderId: session.userId,
+            recipientName: recipient?.name || "School staff",
+            readAt: null,
+            attachments: Array.isArray(metadata.attachments) ? metadata.attachments : [],
+          };
+        }),
+      ].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()).slice(0, 150);
 
       return NextResponse.json({
         messages,
-        unreadCount: messages.filter((message) => !message.readAt).length,
+        unreadCount: messages.filter((message) => message.direction === "incoming" && !message.readAt).length,
         recipients: staff.map((person) => ({
           id: person.id,
           name: person.name,
@@ -156,7 +189,7 @@ export async function POST(request: Request) {
         entityId: message.id,
         after: { title: input.title, recipientId: target.id, channel: "in_app", guardianDirectMessage: true },
       });
-      return NextResponse.json({ ok: true, message: `Delivered to ${target.name}.` });
+      return NextResponse.json({ ok: true, message: `Delivered to ${target.name}.`, messageId: message.id });
     });
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: "INVALID_INPUT", message: "Choose a recipient and complete the message." }, { status: 400 });
