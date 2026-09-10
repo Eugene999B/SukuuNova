@@ -46,6 +46,7 @@ function patchFixtures() {
           : await tx.feeItem.create({ data: { schoolId, name, amount: new Prisma.Decimal(amount), termId: term.id, classId: null } });
         items.push(feeItem);`;
   base = replaceRequired(base, baseFeeNeedle, baseFeeReplacement, "base nullable fee-item write");
+  base = replaceRequired(base, 'method: "mobile_money"', 'method: "momo"', "base payment method");
   fs.writeFileSync(baseFixturePath, base, "utf8");
   patchedPaths.add(baseFixturePath);
 
@@ -63,6 +64,8 @@ function patchFixtures() {
         feeItems.push(feeItem);
       }`;
   core = replaceRequired(core, coreFeeNeedle, coreFeeReplacement, "current-term nullable fee-item write");
+  core = replaceRequired(core, '"mobile_money"', '"momo"', "current-term mobile payment method");
+  core = replaceRequired(core, '"bank_transfer"', '"card"', "current-term alternate payment method");
   fs.writeFileSync(coreFixturePath, core, "utf8");
   patchedPaths.add(coreFixturePath);
 
