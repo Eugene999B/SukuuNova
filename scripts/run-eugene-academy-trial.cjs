@@ -87,10 +87,11 @@ function patchFixtures() {
   core = replaceRequired(core, '["Mock Examination Week","exam"', '["Mock Examination Week","exam_week"', "mock-exam calendar category");
   core = replaceRequired(core, '["Christmas Vacation","break"', '["Christmas Vacation","vacation"', "Christmas calendar category");
 
-  // ArcadeUniverse requires question-count parity with roundLength. Seed a realistic
-  // five-question completed round instead of relying on the historical default.
+  // ArcadeUniverse's database contract requires five questions for the historical
+  // default round length. Prisma's legacy model does not expose roundLength yet,
+  // so preserve the database default and seed five questions explicitly.
   const arcadeQuestionNeedle = 'questions:[{q:"Synthetic practice item",options:["A","B","C","D"],correct:1}],answers:[1],status:"completed",correct:1';
-  const arcadeQuestionReplacement = 'questions:[{q:"Synthetic practice 1",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 2",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 3",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 4",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 5",options:["A","B","C","D"],correct:1}],answers:[1,1,1,1,1],status:"completed",roundLength:5,correct:4';
+  const arcadeQuestionReplacement = 'questions:[{q:"Synthetic practice 1",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 2",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 3",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 4",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 5",options:["A","B","C","D"],correct:1}],answers:[1,1,1,1,1],status:"completed",correct:4';
   core = replaceAllRequired(core, arcadeQuestionNeedle, arcadeQuestionReplacement, "arcade round question length");
 
   const schoolLookupNeedle = `async function main() {
