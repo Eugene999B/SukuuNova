@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
+import "./staff-profile-link.css";
 
 type StaffRow = {
   id: string;
