@@ -47,8 +47,12 @@ describe("import row validation", () => {
   });
 
   it("normalizes Ghana-style money text without accepting negative balances", () => {
-    const parsed = parseCsvImport("Admission Number,Opening Balance\nSN-001,GHS 1,250.50\n");
-    expect(() => parsed).not.toThrow();
+    const parsed = parseCsvImport('Admission Number,Opening Balance\nSN-001,"GHS 1,250.50"\nSN-002,-25.00\n');
+    const mapping = suggestColumnMapping("opening_balances", parsed.normalizedHeaders);
+    const result = validateMappedImportRows("opening_balances", parsed, mapping);
+    expect(result.rows[0].normalized.amount).toBe(1250.5);
+    expect(result.rows[0].status).toBe("valid");
+    expect(result.rows[1].issues.some((issue) => issue.code === "invalid_money")).toBe(true);
   });
 
   it("accepts boolean aliases and requires a contact for guardian rows", () => {
