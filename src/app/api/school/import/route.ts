@@ -6,6 +6,7 @@ import { AppError, routeError } from "@/lib/errors";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { CSV_IMPORT_LIMITS } from "@/lib/import/csv";
 import { IMPORT_CONTRACTS, importContract, type ColumnMapping, type ImportKind } from "@/lib/import/contracts";
+import { APPLY_ENABLED_IMPORT_KINDS, applySchoolImportBatch } from "@/lib/import/apply-service";
 import {
   createCsvImportBatch,
   getSchoolImportBatch,
@@ -14,11 +15,18 @@ import {
   validateSchoolImportBatch,
 } from "@/lib/import/staging-service";
 
-const validateSchema = z.object({
-  action: z.literal("validate"),
-  batchId: z.string().min(1).max(100),
-  columnMapping: z.record(z.string(), z.string().nullable()),
-});
+const actionSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("validate"),
+    batchId: z.string().min(1).max(100),
+    columnMapping: z.record(z.string(), z.string().nullable()),
+  }),
+  z.object({
+    action: z.literal("apply"),
+    batchId: z.string().min(1).max(100),
+    confirmation: z.literal("APPLY"),
+  }),
+]);
 
 const uniquePermissions = [...new Set(Object.keys(IMPORT_CONTRACTS).map((kind) => requiredPermissionForImport(kind as ImportKind)))];
 
@@ -45,13 +53,14 @@ export async function GET(request: Request) {
       if (batchId) {
         const result = await getSchoolImportBatch(tx, session.schoolId, batchId);
         await requirePermission(tx, session.userId, requiredPermissionForImport(result.batch.kind));
-        return { ...result, access };
+        return { ...result, access, applyEnabledKinds: APPLY_ENABLED_IMPORT_KINDS };
       }
       const batches = await listSchoolImportBatches(tx, session.schoolId, 50);
       return {
         batches: batches.filter((batch) => access[batch.kind]),
         access,
         contracts: Object.fromEntries((Object.entries(IMPORT_CONTRACTS) as Array<[ImportKind, (typeof IMPORT_CONTRACTS)[ImportKind]]>).filter(([kind]) => access[kind])),
+        applyEnabledKinds: APPLY_ENABLED_IMPORT_KINDS,
       };
     }), { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
@@ -87,10 +96,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ batch }, { status: 201, headers: { "Cache-Control": "private, no-store" } });
     }
 
-    const input = validateSchema.parse(await request.json());
+    const input = actionSchema.parse(await request.json());
     const result = await withTenant(session.schoolId, async (tx) => {
       const current = await getSchoolImportBatch(tx, session.schoolId, input.batchId);
       await requirePermission(tx, session.userId, requiredPermissionForImport(current.batch.kind));
+      if (input.action === "apply") {
+        return applySchoolImportBatch(tx, {
+          schoolId: session.schoolId,
+          actorId: session.userId,
+          batchId: input.batchId,
+        });
+      }
       return validateSchoolImportBatch(tx, {
         schoolId: session.schoolId,
         actorId: session.userId,
