@@ -51,7 +51,7 @@ export default async function DashboardPage() {
       const [students, guardians, staff, classes, subjects, feeItems, invoices, payments, todayAttendance, events, announcements, academicYears, terms, reportTemplates, pendingReportCards, pendingFeeAdjustments, pendingStaff, activatedNonOwnerStaff, schoolBranding, classesWithoutTeacher, teachingAssignments, timetableSlots] = await Promise.all([
         tx.student.count({ where: { status: "active" } }),
         tx.guardian.count(),
-        tx.user.count({ where: { status: "active" } }),
+        tx.user.count({ where: { status: "active", userRoles: { some: { role: { key: { notIn: ["guardian", "parent", "student"] } } } } } }),
         tx.class.count(),
         tx.subject.count(),
         tx.feeItem.count(),
