@@ -1,6 +1,6 @@
 import { createId } from "@paralleldrive/cuid2";
 import { appendPlatformAudit } from "./audit";
-import { db } from "./db";
+import { rawDb as db } from "./db";
 import { AppError } from "./errors";
 
 export const PILOT_CERTIFICATION_CHECKS = [
