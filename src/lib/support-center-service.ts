@@ -16,6 +16,14 @@ export const SUPPORT_MODULES = [
 ] as const;
 export type SupportModule = (typeof SUPPORT_MODULES)[number];
 
+export type SupportMessageView = {
+  id: string;
+  senderType: string;
+  senderName: string;
+  body: string;
+  sentAt: Date;
+};
+
 type SupportMessageRow = {
   id: string;
   ticketId: string;
@@ -100,7 +108,7 @@ export async function getSchoolSupportCenter(tx: TenantDb, input: { schoolId: st
     input.schoolId,
     ticketIds,
   ) : [];
-  const byTicket = new Map<string, Array<Record<string, unknown>>>();
+  const byTicket = new Map<string, SupportMessageView[]>();
   for (const message of messages) {
     const list = byTicket.get(message.ticketId) ?? [];
     list.push({
