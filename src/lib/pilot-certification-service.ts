@@ -1,6 +1,6 @@
 import { createId } from "@paralleldrive/cuid2";
 import { appendPlatformAudit } from "./audit";
-import { rawDb as db } from "./db";
+import { rawDb as db, withTenant } from "./db";
 import { AppError } from "./errors";
 
 export const PILOT_CERTIFICATION_CHECKS = [
@@ -63,8 +63,7 @@ function cleanSummary(value: string) {
 }
 
 async function readSchoolThroughRls(schoolId: string): Promise<CertificationSchoolRow | null> {
-  return db.$transaction(async (tx) => {
-    await tx.$queryRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", schoolId);
+  return withTenant(schoolId, async (tx) => {
     const rows = await tx.$queryRawUnsafe<CertificationSchoolRow[]>(
       `SELECT "id","name","uniqueCode","status" FROM "School" WHERE "id"=$1 LIMIT 1`,
       schoolId,
