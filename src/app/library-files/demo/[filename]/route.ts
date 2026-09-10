@@ -132,7 +132,7 @@ const DOCUMENTS: Record<string, DemoDocument> = {
       {
         heading: "Geometry and measurement",
         paragraphs: [
-          "9. A rectangle has length 12 cm and width 7 cm. Find its perimeter and area.\n10. Two angles of a triangle are 58° and 67°. Find the third angle.\n11. A circular garden has radius 7 m. Using π = 22/7, find its circumference.\n12. Convert 2.4 metres to centimetres.",
+          "9. A rectangle has length 12 cm and width 7 cm. Find its perimeter and area.\n10. Two angles of a triangle are 58° and 67°. Find the third angle.\n11. A circular garden has radius 7 m. Using pi = 22/7, find its circumference.\n12. Convert 2.4 metres to centimetres.",
         ],
       },
       {
@@ -233,13 +233,11 @@ async function renderDocument(document: DemoDocument) {
 
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  let pageNumber = 0;
   let page: PDFPage;
   let y = 0;
 
   const startPage = () => {
     page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    pageNumber += 1;
     y = PAGE_HEIGHT - 54;
     page.drawText("EUGENE ACADEMY", { x: MARGIN_X, y, size: 9, font: bold, color: rgb(0.04, 0.42, 0.39) });
     page.drawText("SYNTHETIC TRIAL RESOURCE", { x: PAGE_WIDTH - MARGIN_X - 151, y, size: 8, font: bold, color: rgb(0.38, 0.42, 0.48) });
@@ -299,7 +297,9 @@ export async function GET(_request: Request, context: { params: Promise<{ filena
   }
 
   const bytes = await renderDocument(document);
-  return new Response(bytes, {
+  const body = new Uint8Array(bytes.byteLength);
+  body.set(bytes);
+  return new Response(body.buffer, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
