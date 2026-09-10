@@ -12,6 +12,7 @@ ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_kind_check" CHECK ("ki
 ALTER TABLE "SupportTicket" DROP CONSTRAINT IF EXISTS "SupportTicket_severity_check";
 ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_severity_check" CHECK ("severity" IN ('low','medium','high','critical'));
 
+CREATE UNIQUE INDEX IF NOT EXISTS "SupportTicket_id_schoolId_key" ON "SupportTicket"("id","schoolId");
 CREATE INDEX IF NOT EXISTS "SupportTicket_school_severity_status_idx"
   ON "SupportTicket"("schoolId","severity","status","createdAt" DESC);
 
