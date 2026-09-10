@@ -151,6 +151,36 @@ export async function recordNovaCoreDecision(tx: TenantDb, input: NovaCoreDecisi
   };
 }
 
+/**
+ * Algorithm telemetry must never invalidate the authoritative school operation.
+ * PostgreSQL marks a transaction failed after a SQL error, even when JavaScript
+ * catches that error, so isolate evidence writes behind a savepoint and roll
+ * back only the telemetry statement when it fails.
+ */
+export async function recordNovaCoreDecisionBestEffort(tx: TenantDb, input: NovaCoreDecisionInput) {
+  try {
+    prepareNovaCoreDecision(input);
+  } catch {
+    return null;
+  }
+
+  const savepoint = `novacore_decision_${createId().replace(/[^a-zA-Z0-9_]/g, "")}`;
+  try {
+    await tx.$executeRawUnsafe(`SAVEPOINT ${savepoint}`);
+    try {
+      const result = await recordNovaCoreDecision(tx, input);
+      await tx.$executeRawUnsafe(`RELEASE SAVEPOINT ${savepoint}`);
+      return result;
+    } catch {
+      await tx.$executeRawUnsafe(`ROLLBACK TO SAVEPOINT ${savepoint}`);
+      await tx.$executeRawUnsafe(`RELEASE SAVEPOINT ${savepoint}`);
+      return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
 export async function listNovaCoreDecisionEvidence(tx: TenantDb, input: {
   schoolId: string;
   algorithmKey?: string;
