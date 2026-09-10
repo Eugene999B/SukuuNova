@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { ArrowRight, CircleCheckBig, LoaderCircle, LockKeyhole, Plus, ShieldCheck } from "lucide-react";
 
@@ -93,7 +94,7 @@ export function SchoolOnboardingForm() {
       </div>
       {created.leadership.length ? <div className="platform-onboarding-success-v3-leadership">{created.leadership.map((person) => <div key={person.id}><b>{person.role} · {person.name}</b><span>{person.email ?? "No email"}</span><span>Temporary password: {person.temporaryPassword}</span></div>)}</div> : null}
       <ol className="platform-onboarding-success-v3-checklist"><li>Send each person only their own login credentials.</li><li>Require the owner and leadership to replace temporary passwords on first login.</li><li>Open School 360 to confirm profile, access and commercial state.</li><li>Continue academic setup: year, term, classes, subjects, staff, learners and guardians.</li></ol>
-      <div className="platform-onboarding-success-v3-actions">{created.id ? <a className="is-primary" href={`/platform/schools/${created.id}`}>Open School 360 <ArrowRight size={13}/></a> : null}<button type="button" onClick={() => setCreated(null)}>Hide credentials</button><a href="/platform/schools">School network</a><a href="/login/school">School login</a></div>
+      <div className="platform-onboarding-success-v3-actions">{created.id ? <Link className="is-primary" href={`/platform/schools/${created.id}`}>Open School 360 <ArrowRight size={13}/></Link> : null}<button type="button" onClick={() => setCreated(null)}>Hide credentials</button><Link href="/platform/schools">School network</Link><Link href="/login/school">School login</Link></div>
     </section> : <div className="platform-onboarding-form-v3-status" role="status"><span>{busy ? <LoaderCircle size={15}/> : <ShieldCheck size={15}/>}</span><div><b>{busy ? "Provisioning in progress" : "Atomic provisioning"}</b><div>{notice}</div></div></div>}
 
     <form onSubmit={submit} className="platform-onboarding-form-v3">
