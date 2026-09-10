@@ -78,7 +78,6 @@ function patchFixtures() {
   core = replaceAllRequired(core, '"bank_transfer"', '"card"', "current-term alternate payment method");
   core = replaceAllRequired(core, '"part_paid"', '"partial"', "current-term invoice status");
 
-  // Normalize fixture prose categories to the canonical calendar vocabulary used by the service/UI.
   core = replaceRequired(core, '["New Family Orientation","orientation"', '["New Family Orientation","parent"', "orientation calendar category");
   core = replaceRequired(core, '["Founders Day Celebration","event"', '["Founders Day Celebration","other"', "Founders Day calendar category");
   core = replaceRequired(core, '["First Continuous Assessment","exam"', '["First Continuous Assessment","exam_week"', "continuous-assessment calendar category");
@@ -87,9 +86,6 @@ function patchFixtures() {
   core = replaceRequired(core, '["Mock Examination Week","exam"', '["Mock Examination Week","exam_week"', "mock-exam calendar category");
   core = replaceRequired(core, '["Christmas Vacation","break"', '["Christmas Vacation","vacation"', "Christmas calendar category");
 
-  // ArcadeUniverse's database contract requires five questions for the historical
-  // default round length. Prisma's legacy model does not expose roundLength yet,
-  // so preserve the database default and seed five questions explicitly.
   const arcadeQuestionNeedle = 'questions:[{q:"Synthetic practice item",options:["A","B","C","D"],correct:1}],answers:[1],status:"completed",correct:1';
   const arcadeQuestionReplacement = 'questions:[{q:"Synthetic practice 1",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 2",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 3",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 4",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 5",options:["A","B","C","D"],correct:1}],answers:[1,1,1,1,1],status:"completed",correct:4';
   core = replaceAllRequired(core, arcadeQuestionNeedle, arcadeQuestionReplacement, "arcade round question length");
@@ -137,8 +133,6 @@ function patchFixtures() {
   fs.writeFileSync(coreFixturePath, core, "utf8");
   patchedPaths.add(coreFixturePath);
 
-  // Operations and verification must also discover the tenant without querying a
-  // FORCE-RLS School table outside a tenant transaction.
   let operations = originals.get(operationsFixturePath);
   operations = replaceRequired(
     operations,
@@ -160,9 +154,6 @@ function patchFixtures() {
   const summary = await prisma.$transaction(async (tx) => {`;
   operations = replaceRequired(operations, operationsSchoolNeedle, operationsSchoolReplacement, "operations tenant-RLS school bootstrap");
 
-  // Pickup approvals enforce four-eyes control at the database layer: the user
-  // requesting a pickup cannot approve that same request. Front desk requests;
-  // the Owner reviews the synthetic approved cases.
   operations = replaceAllRequired(
     operations,
     'approvedByUserId: index < 8 ? frontDeskUser.id : null',
@@ -185,14 +176,21 @@ function patchFixtures() {
   const verifierSchoolReplacement = `async function main() {
   const baseReport = JSON.parse(fs.readFileSync(path.join(__dirname, ".realistic-test-school-output.json"), "utf8"));
   const schoolId = String(baseReport?.school?.id || "");
+  const school = { id: schoolId, name: String(baseReport?.school?.name || "Eugene Academy"), uniqueCode: SCHOOL_CODE };
   expected(schoolId && baseReport?.school?.code === SCHOOL_CODE, "Eugene Academy school code eug123 was not created.");
 
   const report = await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id',$1,true)", schoolId);
-    const school = await tx.school.findUnique({ where: { id: schoolId } });
-    expected(school, "Eugene Academy is not visible inside its tenant context.");
-    expected(school.name === "Eugene Academy", \`Expected school name Eugene Academy, received \${school.name}.\`);`;
+    const visibleSchool = await tx.school.findUnique({ where: { id: schoolId } });
+    expected(visibleSchool, "Eugene Academy is not visible inside its tenant context.");
+    expected(visibleSchool.name === "Eugene Academy", \`Expected school name Eugene Academy, received \${visibleSchool.name}.\`);`;
   verifier = replaceRequired(verifier, verifierSchoolNeedle, verifierSchoolReplacement, "verification tenant-RLS school bootstrap");
+  verifier = replaceRequired(
+    verifier,
+    'console.error("[verify-eugene-academy] failed:", error instanceof Error ? error.message : String(error));',
+    'console.error("[verify-eugene-academy] failed:", error instanceof Error ? (error.stack || error.message) : String(error));',
+    "verification stack diagnostics",
+  );
   fs.writeFileSync(verifierFixturePath, verifier, "utf8");
   patchedPaths.add(verifierFixturePath);
 
