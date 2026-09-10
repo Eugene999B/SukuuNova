@@ -126,7 +126,7 @@ describe("guardian family context", () => {
 });
 
 describe("guardian message boundary", () => {
-  it("uses the guardian relationship, preserves school sender metadata on read, and audits the real outgoing message", async () => {
+  it("uses the guardian relationship, exposes school staff, preserves sender metadata, and audits outgoing messages", async () => {
     const fixture = await setupFamily();
     const incomingId = createId();
     await withTenant(fixture.schoolId, async (tx) => {
@@ -182,8 +182,14 @@ describe("guardian message boundary", () => {
 
     const inbox = await getMessages();
     expect(inbox.status).toBe(200);
-    const body = await inbox.json() as { unreadCount: number; messages: Array<{ id: string; readAt: string | null }> };
+    const body = await inbox.json() as {
+      unreadCount: number;
+      messages: Array<{ id: string; readAt: string | null }>;
+      recipients: Array<{ id: string; name: string; roles: string[] }>;
+    };
     expect(body.messages.find((message) => message.id === incomingId)?.readAt).toBeTruthy();
+    expect(body.recipients.some((person) => person.id === fixture.ownerId)).toBe(true);
+    expect(body.recipients.some((person) => person.id === fixture.memberId)).toBe(false);
   });
 
   it("denies a guardian session whose Guardian row is no longer linked", async () => {
