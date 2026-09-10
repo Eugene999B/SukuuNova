@@ -55,6 +55,7 @@ jobs:
           echo "PLATFORM_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
           echo "FACE_EMBEDDING_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
           echo "WHATSAPP_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "EUGENE_ACADEMY_OWNER_PASSWORD=$(openssl rand -base64 24)" >> "$GITHUB_ENV"
       - name: Generate Prisma client
         run: npx prisma generate
       - name: Validate Prisma schema
@@ -69,6 +70,16 @@ jobs:
         run: npm run test
       - name: Pilot smoke journeys
         run: npm run test:pilot-smoke
+      - name: Eugene Academy RLS trial rehearsal
+        env:
+          ALLOW_EUGENE_ACADEMY_TRIAL_SEED: "YES"
+          TEST_SCHOOL_CODE: eug123
+          TEST_SCHOOL_NAME: Eugene Academy
+          EUGENE_ACADEMY_OWNER_EMAIL: eugene-academy-ci-owner@test.invalid
+          EUGENE_ACADEMY_OWNER_NAME: Eugene Academy CI Owner
+        run: |
+          npm run trial:seed:eugene-academy
+          npm run trial:verify:eugene-academy
       - name: Production build
         env:
           NODE_ENV: production
