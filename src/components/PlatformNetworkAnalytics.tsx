@@ -1,22 +1,69 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, RefreshCw, School, Users } from "lucide-react";
-import type { PlatformAnalyticsSchool } from "@/lib/platform-analytics-service";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  BarChart3,
+  CircleDollarSign,
+  RefreshCw,
+  School,
+  ShieldAlert,
+  Users,
+} from "lucide-react";
+import type { PlatformAnalyticsNetwork, PlatformAnalyticsSchool } from "@/lib/platform-analytics-service";
 
-type Payload = { generatedAt: string; windowDays: number; network: Record<string, number>; schools: PlatformAnalyticsSchool[] };
+type Payload = {
+  generatedAt: string;
+  windowDays: number;
+  network: PlatformAnalyticsNetwork;
+  schools: PlatformAnalyticsSchool[];
+};
+
 type MetricKey = "riskScore" | "attendanceCoverage" | "activityRate" | "collectionRate";
 
-function signed(value: number) { return `${value > 0 ? "+" : ""}${value.toFixed(1)}`; }
-function pct(value: number) { return `${Math.round(value)}%`; }
-function trendClass(value: number) { return value > 0.5 ? "is-positive" : value < -0.5 ? "is-negative" : "is-flat"; }
+function signed(value: number) {
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)}`;
+}
+
+function pct(value: number) {
+  return `${Math.round(value)}%`;
+}
+
+function money(value: number) {
+  return `₵${Number(value || 0).toLocaleString()}`;
+}
+
+function trendClass(value: number) {
+  return value > 0.5 ? "is-positive" : value < -0.5 ? "is-negative" : "is-flat";
+}
 
 function Sparkline({ values }: { values: number[] }) {
-  if (!values.length) return <span className="analytics-spark-empty">—</span>;
-  const min = Math.min(...values), max = Math.max(...values), range = Math.max(max - min, 1);
-  const points = values.map((value, index) => `${(index / Math.max(values.length - 1, 1)) * 100},${100 - ((value - min) / range) * 84 - 8}`).join(" ");
-  return <svg className="analytics-spark" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points={points} fill="none" stroke="currentColor" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" /></svg>;
+  if (!values.length) return <span aria-label="No trend data">—</span>;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(max - min, 1);
+  const points = values
+    .map((value, index) => `${(index / Math.max(values.length - 1, 1)) * 100},${100 - ((value - min) / range) * 84 - 8}`)
+    .join(" ");
+
+  return (
+    <svg className="platform-analytics-v3-spark" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        vectorEffect="non-scaling-stroke"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 export default function PlatformNetworkAnalytics() {
@@ -28,38 +75,138 @@ export default function PlatformNetworkAnalytics() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  async function load(nextDays = days) {
+  const load = useCallback(async (nextDays: number) => {
     setLoading(true);
     try {
       const response = await fetch(`/api/platform/analytics?days=${nextDays}`, { cache: "no-store" });
-      const payload = await response.json() as Payload & { error?: string; message?: string };
-      if (!response.ok) { setMessage(payload.message ?? payload.error ?? "Unable to load network analytics."); return; }
-      setData(payload); setMessage("");
-    } catch { setMessage("Network analytics could not be loaded."); }
-    finally { setLoading(false); }
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void load(28); }, []);
+      const payload = (await response.json()) as Payload & { error?: string; message?: string };
+      if (!response.ok) {
+        setMessage(payload.message ?? payload.error ?? "Unable to load network analytics.");
+        return;
+      }
+      setData(payload);
+      setMessage("");
+    } catch {
+      setMessage("Network analytics could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(28);
+  }, [load]);
 
   const schools = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return (data?.schools ?? []).filter((school) => !q || school.name.toLowerCase().includes(q) || school.uniqueCode.toLowerCase().includes(q)).filter((school) => !riskOnly || school.riskLevel !== "stable");
-  }, [data, query, riskOnly]);
-  const topRisk = data?.schools.slice(0, 5) ?? [];
+    const normalized = query.trim().toLowerCase();
+    return (data?.schools ?? [])
+      .filter((school) => !normalized || school.name.toLowerCase().includes(normalized) || school.uniqueCode.toLowerCase().includes(normalized))
+      .filter((school) => !riskOnly || school.riskLevel !== "stable")
+      .sort((a, b) => Number(b[metric]) - Number(a[metric]));
+  }, [data, metric, query, riskOnly]);
+
+  const topRisk = useMemo(() => [...(data?.schools ?? [])].sort((a, b) => b.riskScore - a.riskScore).slice(0, 5), [data]);
   const network = data?.network;
 
-  return <>
-    <div className="analytics-page-stack">
-      <section className="platform-page-header"><div><span className="platform-eyebrow">Network intelligence</span><h2>Analytics</h2></div><div className="platform-header-actions"><Link href="/platform/reports" className="app-pill"><BarChart3 size={14}/> Reports</Link><button type="button" className="app-pill" onClick={() => void load()} disabled={loading}><RefreshCw size={14}/> {loading ? "Refreshing" : "Refresh"}</button></div></section>
-      {message && <div className="app-banner" role="status"><div><h3>{message}</h3><p>The analytics endpoint remains permission-scoped and school-safe.</p></div></div>}
-      <section className="analytics-controlbar app-card app-panel"><div className="analytics-control-group"><span className="analytics-control-label">Window</span><div className="analytics-toggle-group">{[14,28,60,90].map((value) => <button type="button" key={value} className={days===value?"is-active":""} onClick={() => { setDays(value); void load(value); }}>{value}d</button>)}</div></div><label className="analytics-search"><span>Find school</span><input aria-label="Search analytics schools" value={query} onChange={(event)=>setQuery(event.target.value)} placeholder="Name or code"/></label><label className="analytics-check"><input type="checkbox" checked={riskOnly} onChange={(event)=>setRiskOnly(event.target.checked)}/> Needs attention only</label></section>
-      <div className="app-grid kpis platform-kpis"><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Network schools</span><span className="app-kpi-icon"><School size={17}/></span></div><div className="app-kpi-value">{network?.schools ?? 0}</div><div className="app-kpi-meta">{network?.critical ?? 0} critical · {network?.watch ?? 0} watch</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Attendance coverage</span><span className="app-kpi-icon"><Activity size={17}/></span></div><div className="app-kpi-value">{pct(network?.attendanceCoverage ?? 0)}</div><div className="app-kpi-meta">Distinct students reached during the window</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Collection rate</span><span className="app-kpi-icon">₵</span></div><div className="app-kpi-value">{pct(network?.collectionRate ?? 0)}</div><div className="app-kpi-meta">Platform invoicing collected</div></div><div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Outstanding</span><span className="app-kpi-icon">₵</span></div><div className="app-kpi-value">₵{Number(network?.outstanding ?? 0).toLocaleString()}</div><div className="app-kpi-meta">Commercial exposure across the network</div></div></div>
-      <div className="analytics-primary-grid">
-        <section className="app-card app-panel analytics-benchmark"><div className="app-card-head"><div><h2>School benchmark</h2><p>Every score is traceable to measurable operational conditions. Select a metric to reorder the table.</p></div><select aria-label="Benchmark metric" value={metric} onChange={(event)=>setMetric(event.target.value as MetricKey)}><option value="riskScore">Risk</option><option value="attendanceCoverage">Attendance</option><option value="activityRate">Activity</option><option value="collectionRate">Collections</option></select></div><div className="analytics-table-head"><span>School</span><span>Score</span><span>Coverage</span><span>Trend</span><span>Finance</span><span>Open</span></div><div className="analytics-table-body">{[...schools].sort((a,b)=>Number(b[metric])-Number(a[metric])).map((school)=><div className="analytics-table-row" key={school.id}><div className="analytics-school"><span className="analytics-school-avatar"><School size={15}/></span><div><b>{school.name}</b><small>{school.uniqueCode} · {school.students.toLocaleString()} students · {school.users.toLocaleString()} users</small></div></div><div><strong>{metric === "riskScore" ? `${school.riskScore}/100` : pct(school[metric])}</strong><span className={`analytics-risk analytics-risk-${school.riskLevel}`}>{school.riskLevel}</span></div><div><span className="analytics-meter"><i style={{ width: `${school.attendanceCoverage}%` }}/></span><small>{pct(school.attendanceCoverage)} attendance</small></div><div className="analytics-trend"><span className={trendClass(school.attendanceTrend)}>{school.attendanceTrend >= 0 ? <ArrowUpRight size={13}/> : <ArrowDownRight size={13}/>} {signed(school.attendanceTrend)}pp</span><Sparkline values={school.series.map((row)=>school.students ? (row.activeStudents/school.students)*100 : 0)}/></div><div><b>{pct(school.collectionRate)}</b><small>₵{school.outstanding.toLocaleString()} outstanding</small></div><div><Link href={`/platform/schools/${school.id}`} className="app-action"><strong>Inspect</strong><ArrowUpRight size={13}/></Link></div></div>)}{schools.length===0&&<div className="platform-empty"><AlertTriangle size={20}/><b>No schools match this view.</b><span>Change the search or attention filter.</span></div>}</div></section>
-        <aside className="analytics-side-stack"><section className="app-card app-panel"><div className="app-card-head"><div><h2>Risk leaders</h2><p>Highest composite scores right now.</p></div></div>{topRisk.map((school,index)=><Link href={`/platform/schools/${school.id}`} className="analytics-risk-row" key={school.id}><span className="analytics-rank">{index+1}</span><div><b>{school.name}</b><small>{school.riskReasons[0] ?? "No material issue detected"}</small></div><strong>{school.riskScore}</strong></Link>)}{topRisk.length===0&&<div className="platform-empty">No school risk signals yet.</div>}</section><section className="app-card app-panel"><div className="app-card-head"><div><h2>How the score works</h2></div></div><div className="analytics-method"><div><span>Attendance</span><strong>0–43</strong><small>Coverage and declining EWMA trend</small></div><div><span>Activity</span><strong>0–18</strong><small>Observed active-user footprint</small></div><div><span>Commercial</span><strong>0–18</strong><small>Collection performance</small></div><div><span>Access & setup</span><strong>0–55</strong><small>Status and configuration gaps</small></div></div></section></aside>
+  function changeWindow(value: number) {
+    setDays(value);
+    void load(value);
+  }
+
+  return (
+    <div className="platform-analytics-v3">
+      <section className="platform-analytics-v3-hero">
+        <div className="platform-analytics-v3-hero-copy">
+          <span className="platform-analytics-v3-eyebrow">Network intelligence</span>
+          <h2>See the network clearly, then act on the right school.</h2>
+          <p>Compare school health, attendance, operator activity and commercial exposure without opening every tenant. Every row links directly into School 360 for investigation.</p>
+        </div>
+        <div className="platform-analytics-v3-actions">
+          <Link href="/platform/reports" className="platform-analytics-v3-button"><BarChart3 size={16}/> Reports</Link>
+          <button type="button" className="platform-analytics-v3-button" onClick={() => void load(days)} disabled={loading}><RefreshCw size={16}/> {loading ? "Refreshing…" : "Refresh data"}</button>
+        </div>
+      </section>
+
+      {message ? <div className="platform-analytics-v3-notice" role="status">{message}</div> : null}
+
+      <section className="platform-analytics-v3-toolbar" aria-label="Analytics filters">
+        <div className="platform-analytics-v3-field">
+          <span className="platform-analytics-v3-label">Analysis window</span>
+          <div className="platform-analytics-v3-window">
+            {[14, 28, 60, 90].map((value) => <button type="button" key={value} className={days === value ? "is-active" : ""} onClick={() => changeWindow(value)}>{value}d</button>)}
+          </div>
+        </div>
+        <label className="platform-analytics-v3-field">
+          <span className="platform-analytics-v3-label">Find a school</span>
+          <input className="platform-analytics-v3-search" aria-label="Search analytics schools" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by school name or code" />
+        </label>
+        <label className="platform-analytics-v3-check"><input type="checkbox" checked={riskOnly} onChange={(event) => setRiskOnly(event.target.checked)} /> Show schools needing attention only</label>
+      </section>
+
+      <section className="platform-analytics-v3-kpis" aria-label="Network summary">
+        <div className="platform-analytics-v3-kpi"><div className="platform-analytics-v3-kpi-top"><span className="platform-analytics-v3-kpi-label">Network schools</span><span className="platform-analytics-v3-kpi-icon"><School size={17}/></span></div><strong>{network?.schools ?? 0}</strong><p>{network?.critical ?? 0} critical · {network?.watch ?? 0} watch</p></div>
+        <div className="platform-analytics-v3-kpi"><div className="platform-analytics-v3-kpi-top"><span className="platform-analytics-v3-kpi-label">Learners</span><span className="platform-analytics-v3-kpi-icon"><Users size={17}/></span></div><strong>{(network?.students ?? 0).toLocaleString()}</strong><p>{(network?.users ?? 0).toLocaleString()} active user accounts across the network</p></div>
+        <div className="platform-analytics-v3-kpi"><div className="platform-analytics-v3-kpi-top"><span className="platform-analytics-v3-kpi-label">Attendance coverage</span><span className="platform-analytics-v3-kpi-icon"><Activity size={17}/></span></div><strong>{pct(network?.attendanceCoverage ?? 0)}</strong><p>Weighted learner coverage during the selected window</p></div>
+        <div className="platform-analytics-v3-kpi"><div className="platform-analytics-v3-kpi-top"><span className="platform-analytics-v3-kpi-label">Collection rate</span><span className="platform-analytics-v3-kpi-icon"><CircleDollarSign size={17}/></span></div><strong>{pct(network?.collectionRate ?? 0)}</strong><p>Platform invoices collected across active schools</p></div>
+        <div className="platform-analytics-v3-kpi"><div className="platform-analytics-v3-kpi-top"><span className="platform-analytics-v3-kpi-label">Outstanding</span><span className="platform-analytics-v3-kpi-icon"><ShieldAlert size={17}/></span></div><strong>{money(network?.outstanding ?? 0)}</strong><p>Current commercial exposure requiring follow-up</p></div>
+      </section>
+
+      <div className="platform-analytics-v3-main">
+        <section className="platform-analytics-v3-card">
+          <div className="platform-analytics-v3-card-head">
+            <div><h3>School performance matrix</h3><p>Reorder the network by the signal you want to investigate. Risk remains evidence-based rather than a cosmetic status badge.</p></div>
+            <select className="platform-analytics-v3-select" aria-label="Benchmark metric" value={metric} onChange={(event) => setMetric(event.target.value as MetricKey)}>
+              <option value="riskScore">Highest risk</option>
+              <option value="attendanceCoverage">Attendance coverage</option>
+              <option value="activityRate">Operator activity</option>
+              <option value="collectionRate">Collection rate</option>
+            </select>
+          </div>
+          <div className="platform-analytics-v3-table-wrap">
+            <div className="platform-analytics-v3-table">
+              <div className="platform-analytics-v3-table-head"><span>School</span><span>Risk</span><span>Attendance</span><span>Trend</span><span>Finance</span><span>Action</span></div>
+              {schools.map((school) => (
+                <div className="platform-analytics-v3-row" key={school.id}>
+                  <div className="platform-analytics-v3-school"><span className="platform-analytics-v3-school-icon"><School size={18}/></span><div><b>{school.name}</b><span>{school.uniqueCode} · {school.students.toLocaleString()} learners · {school.users.toLocaleString()} users</span></div></div>
+                  <div className="platform-analytics-v3-score"><strong>{school.riskScore}/100</strong><span className={`platform-analytics-v3-risk is-${school.riskLevel}`}>{school.riskLevel}</span></div>
+                  <div className="platform-analytics-v3-coverage"><span className="platform-analytics-v3-meter"><i style={{ width: `${school.attendanceCoverage}%` }}/></span><span>{pct(school.attendanceCoverage)} coverage</span></div>
+                  <div className="platform-analytics-v3-trend"><span className={`platform-analytics-v3-trend-label ${trendClass(school.attendanceTrend)}`}>{school.attendanceTrend >= 0 ? <ArrowUpRight size={15}/> : <ArrowDownRight size={15}/>} {signed(school.attendanceTrend)}pp</span><Sparkline values={school.series.map((row) => school.students ? (row.activeStudents / school.students) * 100 : 0)} /></div>
+                  <div className="platform-analytics-v3-finance"><strong>{pct(school.collectionRate)}</strong><span>{money(school.outstanding)} outstanding</span></div>
+                  <div><Link href={`/platform/schools/${school.id}`} className="platform-analytics-v3-inspect">Open <ArrowRight size={14}/></Link></div>
+                </div>
+              ))}
+              {!schools.length ? <div className="platform-analytics-v3-empty"><AlertTriangle size={24}/><b>No schools match this view.</b><span>Clear the search or remove the attention-only filter.</span></div> : null}
+            </div>
+          </div>
+        </section>
+
+        <aside className="platform-analytics-v3-side">
+          <section className="platform-analytics-v3-card">
+            <div className="platform-analytics-v3-card-head"><div><h3>Risk leaders</h3><p>Schools with the highest composite operational risk.</p></div></div>
+            {topRisk.map((school, index) => <Link href={`/platform/schools/${school.id}`} className="platform-analytics-v3-risk-row" key={school.id}><span className="platform-analytics-v3-rank">{index + 1}</span><div><b>{school.name}</b><small>{school.riskReasons[0] ?? "No material issue detected"}</small></div><strong>{school.riskScore}</strong></Link>)}
+            {!topRisk.length ? <div className="platform-analytics-v3-empty"><b>No school risk signals yet.</b><span>Create or activate a school to begin network benchmarking.</span></div> : null}
+          </section>
+
+          <section className="platform-analytics-v3-card">
+            <div className="platform-analytics-v3-card-head"><div><h3>How risk is composed</h3><p>The score is a prioritisation aid, not an automatic enforcement decision.</p></div></div>
+            <div className="platform-analytics-v3-method">
+              <div><b>Attendance</b><strong>up to 43</strong><span>Coverage and declining attendance trend.</span></div>
+              <div><b>Operator activity</b><strong>up to 18</strong><span>Observed active-user footprint.</span></div>
+              <div><b>Commercial</b><strong>up to 18</strong><span>Invoice collection performance.</span></div>
+              <div><b>Access & setup</b><strong>up to 55</strong><span>School status and configuration gaps.</span></div>
+            </div>
+          </section>
+        </aside>
       </div>
-      <section className="app-card app-panel analytics-bottom"><div className="app-card-head"><div><h2>Operational interpretation</h2></div><Users size={18} color="var(--sn-muted)"/></div><div className="analytics-guidance-grid"><div><b>Critical</b></div><div><b>Watch</b></div><div><b>Stable</b></div></div></section>
+
+      <section className="platform-analytics-v3-card">
+        <div className="platform-analytics-v3-card-head"><div><h3>Operational interpretation</h3><p>Use risk to choose where to look first, then confirm the evidence inside School 360 before acting.</p></div></div>
+        <div className="platform-analytics-v3-guidance">
+          <div><b>Critical</b><p>Open School 360 immediately and confirm the specific failing conditions before intervention.</p></div>
+          <div><b>Watch</b><p>Review the leading signal, contact the school where needed, and monitor the next reporting window.</p></div>
+          <div><b>Stable</b><p>No material risk is currently detected. Normal platform monitoring can continue.</p></div>
+        </div>
+      </section>
     </div>
-    <style jsx global>{`\n      .analytics-page-stack{display:grid;gap:16px;margin-top:22px}.analytics-controlbar{display:grid;grid-template-columns:auto minmax(220px,1fr) auto;gap:14px;align-items:center;padding:12px}.analytics-control-group{display:flex;align-items:center;gap:9px}.analytics-control-label{font-size:8px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--sn-ink)}.analytics-toggle-group{display:flex;gap:4px}.analytics-toggle-group button{min-width:42px;height:32px;border:1px solid var(--sn-line);border-radius:9px;background:var(--sn-surface);color:var(--sn-ink);font-size:9px;font-weight:800;cursor:pointer}.analytics-toggle-group button:hover{border-color:var(--sn-line)}.analytics-toggle-group button.is-active{background:var(--sn-surface);border-color:var(--sn-line);color:var(--sn-ink)}.analytics-search{display:flex;align-items:center;gap:8px;min-height:38px;border:1px solid var(--sn-line);border-radius:10px;padding:0 11px;background:var(--sn-surface)}.analytics-search span{font-size:8.5px;font-weight:850;color:var(--sn-ink);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}.analytics-search input{border:0;outline:0;min-width:0;flex:1;background:transparent;font:inherit;font-size:10.5px;color:var(--sn-ink)}.analytics-check{display:flex;align-items:center;gap:7px;font-size:9.5px;font-weight:750;color:var(--sn-ink);white-space:nowrap}.analytics-primary-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.72fr);gap:16px;align-items:start}.analytics-benchmark{overflow:hidden}.analytics-benchmark .app-card-head{padding:19px 20px 13px}.analytics-benchmark .app-card-head h2{font-size:16px}.analytics-benchmark .app-card-head p{font-size:10.5px}.analytics-benchmark .app-card-head select{height:34px;border:1px solid var(--sn-line);border-radius:9px;background:var(--sn-surface);font:inherit;font-size:9.5px;color:var(--sn-ink);padding:0 9px}.analytics-table-head,.analytics-table-row{display:grid;grid-template-columns:minmax(180px,1.5fr) 80px minmax(115px,1fr) minmax(110px,1fr) 110px 80px;gap:12px;align-items:center}.analytics-table-head{padding:10px 18px;background:var(--sn-surface);border-top:1px solid var(--sn-line);border-bottom:1px solid var(--sn-line);color:var(--sn-ink);font-size:7.5px;font-weight:900;letter-spacing:.1em;text-transform:uppercase}.analytics-table-row{padding:13px 18px;border-bottom:1px solid var(--sn-line);min-height:72px}.analytics-table-row:last-child{border-bottom:0}.analytics-table-row:hover{background:var(--sn-surface)}.analytics-school{display:flex;align-items:center;gap:9px;min-width:0}.analytics-school>div{min-width:0}.analytics-school-avatar{display:grid;place-items:center;width:31px;height:31px;border-radius:9px;background:var(--sn-surface);color:var(--sn-ink);flex:none}.analytics-school b{display:block;font-size:10.5px;color:var(--sn-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.analytics-school small,.analytics-table-row>div>small{display:block;margin-top:3px;color:var(--sn-ink);font-size:8.5px;line-height:1.3}.analytics-table-row>div>strong{display:block;font-size:11px;color:var(--sn-ink)}.analytics-risk{display:inline-block;margin-top:3px;font-size:7.5px;font-weight:850;text-transform:uppercase;letter-spacing:.05em}.analytics-risk-critical{color:var(--color-warning)}.analytics-risk-watch{color:var(--color-warning)}.analytics-risk-stable{color:var(--color-success)}.analytics-meter{display:block;height:5px;border-radius:99px;background:var(--sn-surface);overflow:hidden}.analytics-meter i{display:block;height:100%;border-radius:inherit;background:var(--sn-surface)}.analytics-trend{display:grid;grid-template-columns:auto minmax(55px,70px);gap:7px;align-items:center}.analytics-trend>span{display:flex;align-items:center;gap:2px;font-size:8.5px;font-weight:850;white-space:nowrap}.analytics-trend .is-positive{color:var(--color-success)}.analytics-trend .is-negative{color:var(--color-warning)}.analytics-trend .is-flat{color:var(--sn-ink)}.analytics-spark{width:70px;height:24px;color:var(--sn-ink)}.analytics-spark-empty{font-size:12px;color:var(--sn-ink)}.analytics-side-stack{display:grid;gap:16px}.analytics-risk-row{display:grid;grid-template-columns:25px minmax(0,1fr) 35px;gap:9px;align-items:center;padding:11px 18px;border-top:1px solid var(--sn-line);text-decoration:none;color:inherit}.analytics-risk-row:hover{background:var(--sn-surface)}.analytics-rank{display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:var(--sn-surface);color:var(--sn-ink);font-size:8px;font-weight:900}.analytics-risk-row b{display:block;font-size:9.5px;color:var(--sn-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.analytics-risk-row small{display:block;margin-top:2px;color:var(--sn-ink);font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.analytics-risk-row>strong{font-size:14px;text-align:right;color:var(--sn-ink)}.analytics-method{display:grid;padding:0 18px 18px}.analytics-method>div{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px 0;border-top:1px solid var(--sn-line)}.analytics-method span{font-size:9px;font-weight:800;color:var(--sn-ink)}.analytics-method strong{font-size:9px;color:var(--sn-ink)}.analytics-method small{grid-column:1 / -1;font-size:8px;color:var(--sn-ink)}.analytics-bottom{padding:19px 20px}.analytics-guidance-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.analytics-guidance-grid>div{padding:11px 12px;border:1px solid var(--sn-line);border-radius:10px;background:var(--sn-surface)}.analytics-guidance-grid b{display:block;font-size:9px;color:var(--sn-ink)}.analytics-guidance-grid span{display:block;margin-top:4px;color:var(--sn-ink);font-size:8.5px;line-height:1.45}@media(max-width:1050px){.analytics-controlbar{grid-template-columns:1fr 1fr}.analytics-check{grid-column:1 / -1}.analytics-primary-grid{grid-template-columns:1fr}.analytics-table-head,.analytics-table-row{grid-template-columns:minmax(170px,1.5fr) 80px minmax(105px,1fr) minmax(110px,1fr) 100px 75px}}@media(max-width:760px){.analytics-controlbar{grid-template-columns:1fr}.analytics-check{grid-column:auto}.analytics-toggle-group{flex:1}.analytics-toggle-group button{flex:1}.analytics-table-head{display:none}.analytics-table-row{grid-template-columns:minmax(0,1fr) auto;padding:12px 14px;gap:8px}.analytics-table-row>div:nth-child(2){grid-column:2;grid-row:1}.analytics-table-row>div:nth-child(3),.analytics-table-row>div:nth-child(4),.analytics-table-row>div:nth-child(5){grid-column:1 / -1}.analytics-table-row>div:nth-child(6){grid-column:2;grid-row:1}.analytics-guidance-grid{grid-template-columns:1fr}.analytics-side-stack{gap:12px}}\n    `}</style>
-  </>;
+  );
 }
