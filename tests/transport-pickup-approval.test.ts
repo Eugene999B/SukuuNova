@@ -97,7 +97,7 @@ describe("transport pickup approval safety", () => {
         pendingId, fixture.schoolId, guardian.id, student.id, oldRouteId,
       );
       await tx.$executeRawUnsafe(
-        `UPDATE "P3StudentTransportAssignment" SET "status"='ended',"effectiveTo"=$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$1 AND "id"=$2`,
+        `UPDATE "P3StudentTransportAssignment" SET "status"='inactive',"effectiveTo"=$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$1 AND "id"=$2`,
         fixture.schoolId, oldAssignmentId, new Date(Date.now() - 1_000),
       );
       await tx.$executeRawUnsafe(
