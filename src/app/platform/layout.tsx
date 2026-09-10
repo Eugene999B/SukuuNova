@@ -3,6 +3,7 @@ import { PlatformNavigationProvider, type PlatformNavigationAccess } from "@/com
 import { requirePlatformSession } from "@/lib/auth";
 import { hasPlatformPermission } from "@/lib/platform-permissions";
 import "@/components/platform-owner-v3.css";
+import "@/components/platform-school360-v3-details.css";
 
 const PLATFORM_NAV_PERMISSIONS = [
   "analytics.view",
