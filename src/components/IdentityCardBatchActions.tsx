@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Download, IdCard } from "lucide-react";
+import "./identity-card-actions.css";
 
 type Props = {
   mode: "students" | "staff";
