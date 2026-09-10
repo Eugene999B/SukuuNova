@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Dialog } from "@/components/ui/Dialog";
+import { ArrowRight } from "lucide-react";
 
 type StaffRow = {
   id: string;
@@ -18,7 +18,6 @@ type StaffRow = {
 export function StaffDirectory({ people }: { people: StaffRow[] }) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
-  const [selected, setSelected] = useState<StaffRow | null>(null);
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     return people.filter((person) => {
@@ -39,21 +38,12 @@ export function StaffDirectory({ people }: { people: StaffRow[] }) {
         const teaching = [...person.classLead, ...person.assignments];
         return <div className="staff-simple-row" key={person.id}>
           <span className="staff-simple-avatar">{person.name.split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase()}</span>
-          <span className="staff-simple-person"><strong>{person.name}</strong><small>{person.roles[0] ?? "Role not assigned"} · {person.email ?? person.phone ?? "No sign-in contact"}</small></span>
+          <span className="staff-simple-person"><strong><Link href={`/school/staff/${encodeURIComponent(person.id)}`}>{person.name}</Link></strong><small>{person.roles[0] ?? "Role not assigned"} · {person.email ?? person.phone ?? "No sign-in contact"}</small></span>
           <span className="staff-simple-scope">{teaching[0] ?? "No teaching assignment"}{teaching.length > 1 ? ` +${teaching.length - 1}` : ""}</span>
           <span className={`staff-simple-status is-${person.status}`}>{person.status === "pending" ? "Needs login" : person.status}</span>
-          <button type="button" onClick={() => setSelected(person)}>View</button>
+          <Link className="staff-profile-link" href={`/school/staff/${encodeURIComponent(person.id)}`}>Profile <ArrowRight size={14}/></Link>
         </div>;
       })}
     </div> : <div className="staff-simple-empty"><strong>No staff match these filters.</strong><span>Change the search or status filter.</span></div>}
-
-    <Dialog open={Boolean(selected)} onClose={() => setSelected(null)} title={selected?.name ?? "Staff details"} description={selected ? (selected.email ?? selected.phone ?? "School staff profile") : undefined} size="md">
-      {selected ? <div className="staff-detail-dialog">
-        <section><span>Login status</span><strong>{selected.status === "pending" ? "Needs activation" : selected.status}</strong>{selected.status === "pending" ? <Link href={`/school/settings/access?userId=${encodeURIComponent(selected.id)}`}>Activate login →</Link> : null}</section>
-        <section><span>Roles</span><div className="staff-detail-pills">{selected.roles.length ? selected.roles.map((role) => <b key={role}>{role}</b>) : <b>Unassigned</b>}</div></section>
-        <section><span>Teaching scope</span><div className="staff-detail-lines">{[...selected.classLead, ...selected.assignments].length ? [...selected.classLead, ...selected.assignments].map((item) => <b key={item}>{item}</b>) : <b>No teaching assignment</b>}</div></section>
-        <section><span>Contact</span><strong>{selected.email ?? "No email"}</strong><small>{selected.phone ?? "No phone"}</small></section>
-      </div> : null}
-    </Dialog>
   </div>;
 }
