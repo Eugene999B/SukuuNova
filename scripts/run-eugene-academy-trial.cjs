@@ -66,6 +66,21 @@ function patchFixtures() {
   core = replaceRequired(core, coreFeeNeedle, coreFeeReplacement, "current-term nullable fee-item write");
   core = replaceRequired(core, '"mobile_money"', '"momo"', "current-term mobile payment method");
   core = replaceRequired(core, '"bank_transfer"', '"card"', "current-term alternate payment method");
+
+  const messageNeedle = `      // In-app communications must target User.id to appear in teacher/guardian inboxes.
+      const guardianUsers=await tx.guardian.findMany`;
+  const messageReplacement = `      // Synthetic staging credits let SMS lifecycle records exercise the real prepaid meter without any provider calls.
+      await tx.$executeRawUnsafe(
+        \`INSERT INTO "PlatformMessagingWallet" ("schoolId","smsBalance","whatsappBalance","smsSellRate","whatsappSellRate","smsCostRate","whatsappCostRate","lowBalanceThreshold","status","updatedAt")
+         VALUES ($1,250,50,0.08,0.12,0.04,0.06,25,'active',NOW())
+         ON CONFLICT ("schoolId") DO UPDATE SET "smsBalance"=GREATEST("PlatformMessagingWallet"."smsBalance",250),"whatsappBalance"=GREATEST("PlatformMessagingWallet"."whatsappBalance",50),"status"='active',"updatedAt"=NOW()\`,
+        schoolId,
+      );
+
+      // In-app communications must target User.id to appear in teacher/guardian inboxes.
+      const guardianUsers=await tx.guardian.findMany`;
+  core = replaceRequired(core, messageNeedle, messageReplacement, "synthetic messaging wallet insertion point");
+
   fs.writeFileSync(coreFixturePath, core, "utf8");
   patchedPaths.add(coreFixturePath);
 
