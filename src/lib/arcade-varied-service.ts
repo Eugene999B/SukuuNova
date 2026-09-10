@@ -4,7 +4,7 @@ import { canGenerateArcadeContent, createArcadeGameQuestions, type ArcadeQuestio
 import { canGenerateArcadeInteractionContent, createArcadeInteractionQuestions, type ArcadeInteractionQuestion } from "./arcade-interaction-content";
 import { canGenerateArcadeResponseContent, createArcadeResponseQuestions, type ArcadeResponseQuestion } from "./arcade-response-content";
 import { canGenerateArcadeWorldContent, createArcadeWorldQuestions, type ArcadeWorldQuestion } from "./arcade-world-content";
-import { arcadeQuestionHistorySignatures, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge, type ArcadeVariationAgeBand } from "./arcade-variation";
+import { arcadeDifficultyForAge, arcadeQuestionHistorySignatures, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge, type ArcadeVariationAgeBand } from "./arcade-variation";
 import type { ArcadeAgeBand } from "./arcade-catalog";
 
 type Context = { schoolId: string; guardianId: string; userId: string };
@@ -48,20 +48,21 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     LIMIT 4
   `;
   const recentSignatures = arcadeQuestionHistorySignatures(history);
+  const ageBand = (round.ageBand || "age_6_8") as ArcadeVariationAgeBand;
+  const ageAdjustedDifficulty = arcadeDifficultyForAge(round.difficulty, ageBand);
   let generationAttempt = 0;
   const generator = () => {
     generationAttempt += 1;
-    // Try the current mastery level repeatedly first. If a static bank is exhausted,
-    // interleave one-step-easier reinforcement rather than pushing a learner above
-    // their age/standard band simply to manufacture novelty.
-    const candidateDifficulty = generationAttempt <= 4 || round.difficulty <= 1
-      ? round.difficulty
-      : Math.max(1, round.difficulty - 1);
+    // First exhaust unseen material at the learner's age-capped mastery depth.
+    // Only then mix in one-step-easier reinforcement. Never increase difficulty
+    // simply to manufacture novelty.
+    const candidateDifficulty = generationAttempt <= 4 || ageAdjustedDifficulty <= 1
+      ? ageAdjustedDifficulty
+      : Math.max(1, ageAdjustedDifficulty - 1);
     return generate(round.game, candidateDifficulty, round.roundLength);
   };
 
   const varied = buildVariedArcadeQuestionSet(generator, round.roundLength, recentSignatures, 12);
-  const ageBand = (round.ageBand || "age_6_8") as ArcadeVariationAgeBand;
   const presented = varied.questions.map((question, index) => presentArcadeQuestionForAge(question, ageBand, round.id, index));
   const nextSnapshot = {
     ...snapshot,
@@ -70,6 +71,8 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     freshQuestionCount: varied.freshCount,
     reusedQuestionCount: varied.reusedCount,
     uniqueConceptCount: varied.uniqueConceptCount,
+    originalSuggestedDifficulty: round.difficulty,
+    ageAdjustedDifficulty,
     presentation: "age_aware_motion_v1",
   };
 
@@ -77,6 +80,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     UPDATE "ArcadeRound"
     SET "questions"=${JSON.stringify(presented)}::jsonb,
         "answers"=${JSON.stringify(presented.map(() => ""))}::jsonb,
+        "difficulty"=${ageAdjustedDifficulty},
         "roundLength"=${presented.length},
         "settingsSnapshot"=${JSON.stringify(nextSnapshot)}::jsonb
     WHERE "schoolId"=${context.schoolId} AND "id"=${round.id} AND "status"='in_progress'
