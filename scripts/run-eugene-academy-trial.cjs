@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
@@ -17,6 +18,36 @@ if (!Number.isInteger(studentCount) || studentCount < 225 || studentCount > 500)
 }
 
 const env = { ...process.env, TEST_STUDENT_COUNT: String(studentCount) };
+const baseFixturePath = path.join(__dirname, "seed-realistic-test-school.cjs");
+const originalBaseFixture = fs.readFileSync(baseFixturePath, "utf8");
+const legacyAttendanceFragment = "'in','device'";
+const supportedAttendanceFragment = "'in','fingerprint'";
+let baseFixturePatched = false;
+
+if (originalBaseFixture.includes(legacyAttendanceFragment)) {
+  fs.writeFileSync(
+    baseFixturePath,
+    originalBaseFixture.replaceAll(legacyAttendanceFragment, supportedAttendanceFragment),
+    "utf8",
+  );
+  baseFixturePatched = true;
+  console.log("[eugene-academy] normalized legacy attendance fixture method to fingerprint for this run.");
+}
+
+function restoreBaseFixture() {
+  if (!baseFixturePatched) return;
+  try {
+    fs.writeFileSync(baseFixturePath, originalBaseFixture, "utf8");
+    baseFixturePatched = false;
+  } catch (error) {
+    console.error("[eugene-academy] failed to restore the base fixture file:", error instanceof Error ? error.message : String(error));
+  }
+}
+
+process.on("exit", restoreBaseFixture);
+process.on("SIGINT", () => { restoreBaseFixture(); process.exit(130); });
+process.on("SIGTERM", () => { restoreBaseFixture(); process.exit(143); });
+
 const steps = [
   ["core school fixture", "seed-eugene-academy-trial.cjs"],
   ["operational depth", "seed-eugene-academy-operations.cjs"],
@@ -29,12 +60,17 @@ for (const [label, filename] of steps) {
     env,
     stdio: "inherit",
   });
-  if (child.error) throw child.error;
+  if (child.error) {
+    restoreBaseFixture();
+    throw child.error;
+  }
   if (child.status !== 0) {
     console.error(`[eugene-academy] ${label} failed.`);
+    restoreBaseFixture();
     process.exit(child.status || 1);
   }
   console.log(`[eugene-academy] ${label} complete.`);
 }
 
+restoreBaseFixture();
 console.log("[eugene-academy] full synthetic staging fixture verified successfully.");
