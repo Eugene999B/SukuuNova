@@ -28,8 +28,8 @@ function brand(value: unknown) {
   const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   const safe = (candidate: unknown, fallback: string) => typeof candidate === "string" && /^#?[0-9a-f]{6}$/i.test(candidate) ? (candidate.startsWith("#") ? candidate : `#${candidate}`) : fallback;
   return {
-    primary: safe(row.primary ?? row.primaryColor, "#102943"),
-    accent: safe(row.accent ?? row.secondary, "#d9a629"),
+    primary: safe(row.primary ?? row.primaryColor, "var(--sn-primary-deep)"),
+    accent: safe(row.accent ?? row.secondary, "var(--sn-warning)"),
   };
 }
 
