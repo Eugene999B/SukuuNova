@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
+import { IdentityCardBatchActions } from "@/components/IdentityCardBatchActions";
 import { StaffDirectory } from "@/components/staff/StaffDirectory";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
+import { hasPermission } from "@/lib/rbac";
 import { StaffCreateDialog } from "./StaffCreateDialog";
 import "./staff-workspace.css";
 import "./staff-simple.css";
@@ -10,7 +12,7 @@ import "./staff-simple.css";
 export default async function StaffPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
-    const [school, users, classes, subjects] = await Promise.all([
+    const [school, users, classes, subjects, canManageCards] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.user.findMany({
         where: { status: { in: ["active", "pending", "suspended"] } },
@@ -24,8 +26,9 @@ export default async function StaffPage() {
       }),
       tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true } }),
       tx.subject.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      hasPermission(tx, session.userId, "identity_cards:manage").catch(() => false),
     ]);
-    return { school, users, classes, subjects };
+    return { school, users, classes, subjects, canManageCards };
   });
 
   const teachers = data.users.filter((user) => user.userRoles.some((role) => /teacher/i.test(role.role.name)));
@@ -46,10 +49,11 @@ export default async function StaffPage() {
     <AppShell universe="school" title="Staff & Teachers" subtitle="Find staff, review teaching scope and manage access." active="Staff & Teachers" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
       <div className="staff-simple">
         <section className="staff-simple-head">
-          <div><h2>Staff directory</h2><p>Search people first. Open details only when you need roles, contact, assignments or login actions.</p></div>
+          <div><h2>Staff directory</h2><p>Search people first. Open a profile for portrait, school ID, roles, contact and teaching scope.</p></div>
           <StaffCreateDialog classes={data.classes} subjects={data.subjects} />
         </section>
 
+        {data.canManageCards ? <section className="staff-form-note wide"><strong>Staff identity cards</strong><span>Generate school-branded, QR-verifiable cards for the full staff team.</span><IdentityCardBatchActions mode="staff"/></section> : null}
         {pending.length ? <section className="staff-form-note wide"><strong>{pending.length} staff profile{pending.length === 1 ? " needs" : "s need"} login activation.</strong><span>Open the person and choose Activate login, or use <Link href="/school/settings/access">People & Access</Link>.</span></section> : null}
 
         <section className="staff-simple-metrics" aria-label="Staff summary">
@@ -60,13 +64,14 @@ export default async function StaffPage() {
         </section>
 
         <section className="staff-simple-panel">
-          <div className="staff-simple-panel-head"><div><h3>People at this school</h3><p>Search by name, contact or role, then open a person for the complete staff record.</p></div></div>
+          <div className="staff-simple-panel-head"><div><h3>People at this school</h3><p>Search by name, contact or role, then open the full staff profile.</p></div></div>
           <StaffDirectory people={people} />
         </section>
 
         <details className="sn-progressive">
           <summary>More workforce administration</summary>
           <div className="sn-progressive-body staff-simple-tools">
+            {data.canManageCards ? <Link href="/school/id-cards"><strong>Identity cards</strong><span>Issue, reissue & verify →</span></Link> : null}
             <Link href="/school/settings/access"><strong>People & access</strong><span>Accounts and activation →</span></Link>
             <Link href="/school/settings/roles"><strong>Roles & permissions</strong><span>Access rules →</span></Link>
             <Link href="/school/attendance/staff"><strong>Staff attendance</strong><span>Attendance records →</span></Link>
