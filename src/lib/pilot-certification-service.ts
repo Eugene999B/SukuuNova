@@ -42,6 +42,8 @@ export type PilotCertificationEvidenceRow = {
   reviewedAt: Date;
 };
 
+type CertificationSchoolRow = { id: string; name: string; uniqueCode: string; status: string };
+
 const CHECK_BY_KEY = new Map(PILOT_CERTIFICATION_CHECKS.map((check) => [check.key, check]));
 const SECRET_PATTERN = /(authorization\s*:\s*bearer|password\s*[=:]|api[_-]?key\s*[=:]|access[_-]?token\s*[=:]|secret\s*[=:])/i;
 
@@ -58,6 +60,17 @@ function cleanSummary(value: string) {
   if (!text || text.length > 2000) throw new AppError("Evidence summary must contain 1–2,000 characters.", 400, "CERTIFICATION_SUMMARY_INVALID");
   if (SECRET_PATTERN.test(text)) throw new AppError("Certification evidence must not contain credentials, tokens or secrets.", 400, "CERTIFICATION_SECRET_REJECTED");
   return text;
+}
+
+async function readSchoolThroughRls(schoolId: string): Promise<CertificationSchoolRow | null> {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", schoolId);
+    const rows = await tx.$queryRawUnsafe<CertificationSchoolRow[]>(
+      `SELECT "id","name","uniqueCode","status" FROM "School" WHERE "id"=$1 LIMIT 1`,
+      schoolId,
+    );
+    return rows[0] ?? null;
+  });
 }
 
 function rowState(evidence: PilotCertificationEvidenceRow | null, now: Date): PilotCertificationCheckState {
@@ -89,10 +102,8 @@ function evaluateCheckState(
 }
 
 export async function getPilotCertificationOverview(schoolId: string) {
-  const school = await db.$queryRawUnsafe<Array<{ id: string; name: string; uniqueCode: string; status: string }>>(
-    `SELECT "id","name","uniqueCode","status" FROM "School" WHERE "id"=$1 LIMIT 1`, schoolId,
-  );
-  if (!school[0]) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
+  const school = await readSchoolThroughRls(schoolId);
+  if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
   const latestPerEnvironment = await db.$queryRawUnsafe<PilotCertificationEvidenceRow[]>(
     `SELECT DISTINCT ON (e."checkKey",e."environment") e."id",e."schoolId",e."checkKey",e."status",e."environment",e."evidenceSummary",e."evidenceRef",e."commitSha",e."ciRun",e."expiresAt",e."reviewedByAdminId",a."name" AS "reviewedByName",e."reviewedAt"
      FROM "PilotCertificationEvidence" e
@@ -128,7 +139,7 @@ export async function getPilotCertificationOverview(schoolId: string) {
   const pendingRequired = required.length - passedRequired - failedRequired;
   const controlled = checks.filter((check) => !check.requiredForPilot);
   return {
-    school: school[0],
+    school,
     checks,
     summary: {
       required: required.length,
@@ -167,8 +178,8 @@ export async function recordPilotCertificationEvidence(input: {
   const evidenceRef = cleanOptional(input.evidenceRef, 1000);
   const commitSha = cleanOptional(input.commitSha, 80);
   const ciRun = cleanOptional(input.ciRun, 160);
-  const school = await db.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "School" WHERE "id"=$1 LIMIT 1`, input.schoolId);
-  if (!school[0]) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
+  const school = await readSchoolThroughRls(input.schoolId);
+  if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
   const id = createId();
   await db.$executeRawUnsafe(
     `INSERT INTO "PilotCertificationEvidence" ("id","schoolId","checkKey","status","environment","evidenceSummary","evidenceRef","commitSha","ciRun","expiresAt","reviewedByAdminId")
