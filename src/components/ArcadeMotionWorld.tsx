@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import { Atom, BookOpenText, BrainCircuit, Coins, Compass, Gamepad2, HeartPulse, Keyboard, MapPinned, Rocket, Sparkles } from "lucide-react";
 import { ARCADE_AGE_MOTION, arcadeExperienceForGame, type ArcadeExperienceIcon } from "@/lib/arcade-experience";
+import "./arcade-game-emblems.css";
 
 type AgeBand = "age_4_5" | "age_6_8" | "age_9_11" | "age_12_14" | "age_15_18";
 
