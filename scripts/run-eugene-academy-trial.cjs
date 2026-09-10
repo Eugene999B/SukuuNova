@@ -159,6 +159,17 @@ function patchFixtures() {
 
   const summary = await prisma.$transaction(async (tx) => {`;
   operations = replaceRequired(operations, operationsSchoolNeedle, operationsSchoolReplacement, "operations tenant-RLS school bootstrap");
+
+  // Pickup approvals enforce four-eyes control at the database layer: the user
+  // requesting a pickup cannot approve that same request. Front desk requests;
+  // the Owner reviews the synthetic approved cases.
+  operations = replaceAllRequired(
+    operations,
+    'approvedByUserId: index < 8 ? frontDeskUser.id : null',
+    'approvedByUserId: index < 8 ? owner.id : null',
+    "pickup four-eyes approval",
+  );
+
   fs.writeFileSync(operationsFixturePath, operations, "utf8");
   patchedPaths.add(operationsFixturePath);
 
