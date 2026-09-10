@@ -12,7 +12,7 @@ const date=z.coerce.date();
 const schema=z.discriminatedUnion("action",[
  z.object({action:z.literal("academicYear"),name:z.string().trim().min(1).max(80),startDate:date,endDate:date}),
  z.object({action:z.literal("term"),academicYearId:z.string().min(1).max(100),name:z.string().trim().min(1).max(80),startDate:date,endDate:date}),
- z.object({action:z.literal("event"),academicYearId:z.string().min(1).max(100),type:z.enum(["holiday","vacation","exam_week","closure"]),name:z.string().trim().min(1).max(180),startDate:date,endDate:date,affectsAttendance:z.boolean().optional(),affectsTransport:z.boolean().optional()}),
+ z.object({action:z.literal("event"),academicYearId:z.string().min(1).max(100),type:z.enum(["holiday","vacation","exam_week","closure","academic","parent","operational","sports","trip","meeting","other"]),name:z.string().trim().min(1).max(180),startDate:date,endDate:date,affectsAttendance:z.boolean().optional(),affectsTransport:z.boolean().optional()}),
  z.object({action:z.literal("class"),name:z.string().trim().min(1).max(120),level:z.string().trim().max(80).optional(),classTeacherId:z.string().min(1).max(100).optional()}),
  z.object({action:z.literal("subject"),name:z.string().trim().min(1).max(120)}),
  z.object({action:z.literal("assignment"),classId:z.string().min(1).max(100),subjectId:z.string().min(1).max(100),teacherId:z.string().min(1).max(100)}),
