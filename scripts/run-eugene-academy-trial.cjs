@@ -74,6 +74,32 @@ function patchFixtures() {
   core = replaceAllRequired(core, '"bank_transfer"', '"card"', "current-term alternate payment method");
   core = replaceAllRequired(core, '"part_paid"', '"partial"', "current-term invoice status");
 
+  const schoolLookupNeedle = `async function main() {
+  patchAndRunBaseFixture();
+
+  process.env.DATABASE_URL = testUrl;
+  const prisma = new PrismaClient({ transactionOptions: { maxWait: 15000, timeout: 300000 } });
+  try {
+    const school = await prisma.school.findUnique({ where: { uniqueCode: SCHOOL_CODE } });
+    if (!school) throw new Error("Eugene Academy was not created by the base fixture.");
+    const schoolId = school.id;
+    const passwordHash = await hash(password, 12);`;
+  const schoolLookupReplacement = `async function main() {
+  patchAndRunBaseFixture();
+
+  // School rows are tenant-RLS protected. Read the ID emitted by the base fixture,
+  // then enter the tenant context before any school-scoped Prisma read/write.
+  const baseReportPath = path.join(__dirname, ".realistic-test-school-output.json");
+  const baseReport = JSON.parse(fs.readFileSync(baseReportPath, "utf8"));
+  const schoolId = String(baseReport?.school?.id || "");
+  if (!schoolId || baseReport?.school?.code !== SCHOOL_CODE) throw new Error("Eugene Academy base fixture report is missing or mismatched.");
+
+  process.env.DATABASE_URL = testUrl;
+  const prisma = new PrismaClient({ transactionOptions: { maxWait: 15000, timeout: 300000 } });
+  try {
+    const passwordHash = await hash(password, 12);`;
+  core = replaceRequired(core, schoolLookupNeedle, schoolLookupReplacement, "tenant-RLS school bootstrap");
+
   const messageNeedle = `      // In-app communications must target User.id to appear in teacher/guardian inboxes.
       const guardianUsers=await tx.guardian.findMany`;
   const messageReplacement = `      // Synthetic staging credits let SMS lifecycle records exercise the real prepaid meter without any provider calls.
