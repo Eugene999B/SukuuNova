@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
-import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
+import { withTenant, type TenantDb } from "@/lib/db";
+import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
+import { termLifecycle, selectAcademicTerm } from "@/lib/term-date";
 import { createTeacherAcademicNote, createTeacherAcademicWork, getTeacherAcademicContexts, getTeacherAcademicRoster, publishTeacherAcademicNote, publishTeacherAcademicWork, saveTeacherWorkMarks } from "@/lib/teacher-academic-workspace-service";
 
 const questionSchema = z.object({ type: z.string().trim().min(1).max(40), prompt: z.string().trim().min(1).max(4000), points: z.number().finite().positive().max(1000), options: z.array(z.string().trim().max(500)).max(20).optional(), acceptedAnswers: z.array(z.string().trim().max(500)).max(20).optional() });
@@ -15,6 +16,34 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("publishNote"), noteId: z.string().min(1) }),
 ]);
 
+async function timezone(tx: TenantDb, schoolId: string) {
+  const settings = await tx.schoolSettings.findUnique({ where: { schoolId }, select: { timezone: true } });
+  return settings?.timezone || "Africa/Accra";
+}
+
+async function assertWritableTerm(tx: TenantDb, schoolId: string, termId: string) {
+  const [term, zone] = await Promise.all([
+    tx.term.findFirst({ where: { schoolId, id: termId }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true } }),
+    timezone(tx, schoolId),
+  ]);
+  if (!term) throw new AppError("The academic term is not available.", 404, "TERM_NOT_FOUND");
+  const lifecycle = termLifecycle(term, new Date(), zone);
+  if (lifecycle.state === "locked") throw new AppError(`Term "${term.name}" is locked.`, 409, "TERM_LOCKED");
+  if (lifecycle.state === "upcoming") throw new AppError(`Term "${term.name}" has not started yet.`, 409, "TERM_NOT_STARTED");
+  if (lifecycle.state === "ended") throw new AppError(`Term "${term.name}" has ended. School leadership must finalize and lock the term; teachers can no longer change academic records in it.`, 409, "TERM_ENDED");
+  return term;
+}
+
+async function workTermId(tx: TenantDb, schoolId: string, workId: string) {
+  const rows = await tx.$queryRawUnsafe<Array<{ termId: string }>>(`SELECT "termId" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, schoolId, workId);
+  return rows[0]?.termId ?? null;
+}
+
+async function noteTermId(tx: TenantDb, schoolId: string, noteId: string) {
+  const rows = await tx.$queryRawUnsafe<Array<{ termId: string }>>(`SELECT "termId" FROM "TeacherAcademicNote" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, schoolId, noteId);
+  return rows[0]?.termId ?? null;
+}
+
 export async function GET(request: Request) {
   try {
     const session = await requireSchoolSession();
@@ -23,7 +52,11 @@ export async function GET(request: Request) {
     const subjectId = url.searchParams.get("subjectId");
     const termId = url.searchParams.get("termId");
     return await withTenant(session.schoolId, async tx => {
-      if (!classId || !subjectId || !termId) return NextResponse.json(await getTeacherAcademicContexts(tx, session.schoolId, session.userId));
+      if (!classId || !subjectId || !termId) {
+        const [contexts, zone] = await Promise.all([getTeacherAcademicContexts(tx, session.schoolId, session.userId), timezone(tx, session.schoolId)]);
+        const activeTerm = selectAcademicTerm(contexts.terms, undefined, new Date(), zone);
+        return NextResponse.json({ ...contexts, activeTermId: activeTerm?.id ?? null, activeTerm: activeTerm ? { ...activeTerm, lifecycle: termLifecycle(activeTerm, new Date(), zone) } : null, timezone: zone });
+      }
       return NextResponse.json(await getTeacherAcademicRoster(tx, { schoolId: session.schoolId, teacherId: session.userId, classId, subjectId, termId }));
     });
   } catch (error) { return routeError(error); }
@@ -35,10 +68,29 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     return await withTenant(session.schoolId, async tx => {
       const common = { schoolId: session.schoolId, teacherId: session.userId };
-      if (input.action === "createWork") return NextResponse.json({ ok: true, result: await createTeacherAcademicWork(tx, { ...common, ...input }) });
-      if (input.action === "publishWork") return NextResponse.json({ ok: true, result: await publishTeacherAcademicWork(tx, { ...common, workId: input.workId }) });
-      if (input.action === "saveMarks") return NextResponse.json({ ok: true, result: await saveTeacherWorkMarks(tx, { ...common, workId: input.workId, marks: input.marks }) });
-      if (input.action === "createNote") return NextResponse.json({ ok: true, result: await createTeacherAcademicNote(tx, { ...common, ...input }) });
+      if (input.action === "createWork") {
+        await assertWritableTerm(tx, session.schoolId, input.termId);
+        return NextResponse.json({ ok: true, result: await createTeacherAcademicWork(tx, { ...common, ...input }) });
+      }
+      if (input.action === "publishWork") {
+        const termId = await workTermId(tx, session.schoolId, input.workId);
+        if (!termId) throw new AppError("Work not found.", 404, "NOT_FOUND");
+        await assertWritableTerm(tx, session.schoolId, termId);
+        return NextResponse.json({ ok: true, result: await publishTeacherAcademicWork(tx, { ...common, workId: input.workId }) });
+      }
+      if (input.action === "saveMarks") {
+        const termId = await workTermId(tx, session.schoolId, input.workId);
+        if (!termId) throw new AppError("Work not found.", 404, "NOT_FOUND");
+        await assertWritableTerm(tx, session.schoolId, termId);
+        return NextResponse.json({ ok: true, result: await saveTeacherWorkMarks(tx, { ...common, workId: input.workId, marks: input.marks }) });
+      }
+      if (input.action === "createNote") {
+        await assertWritableTerm(tx, session.schoolId, input.termId);
+        return NextResponse.json({ ok: true, result: await createTeacherAcademicNote(tx, { ...common, ...input }) });
+      }
+      const termId = await noteTermId(tx, session.schoolId, input.noteId);
+      if (!termId) throw new AppError("Note not found.", 404, "NOT_FOUND");
+      await assertWritableTerm(tx, session.schoolId, termId);
       return NextResponse.json({ ok: true, result: await publishTeacherAcademicNote(tx, { ...common, noteId: input.noteId }) });
     });
   } catch (error) { return routeError(error); }
