@@ -3,6 +3,8 @@ import { requirePlatformSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { AppError, routeError } from "@/lib/errors";
 import { listNovaCoreDecisionEvidence, summarizeNovaCoreDecisionEvidence } from "@/lib/novacore/decision-ledger";
+import { evaluateEtaPromotionReadiness } from "@/lib/novacore/eta-promotion-policy";
+import { summarizeEtaShadowAccuracy } from "@/lib/novacore/eta-shadow-evaluation";
 import { novaCoreRegistrySummary } from "@/lib/novacore/registry";
 
 function positiveLimit(value: string | null) {
@@ -37,10 +39,18 @@ export async function GET(request: Request) {
     if (!schoolId) throw new AppError("schoolId is required for NovaCore evidence.", 400, "NOVACORE_SCHOOL_REQUIRED");
 
     if (view === "summary") {
-      const summary = await withTenant(schoolId, (tx) => summarizeNovaCoreDecisionEvidence(tx, {
-        schoolId,
-        days: summaryDays(url.searchParams.get("days")),
-      }));
+      const days = summaryDays(url.searchParams.get("days"));
+      const summary = await withTenant(schoolId, async (tx) => {
+        const [decisionSummary, etaAccuracy] = await Promise.all([
+          summarizeNovaCoreDecisionEvidence(tx, { schoolId, days }),
+          summarizeEtaShadowAccuracy(tx, { schoolId, days }),
+        ]);
+        return {
+          ...decisionSummary,
+          etaAccuracy,
+          etaPromotion: evaluateEtaPromotionReadiness(etaAccuracy),
+        };
+      });
       return NextResponse.json(summary, {
         headers: { "Cache-Control": "private, no-store" },
       });
