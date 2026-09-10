@@ -9,7 +9,7 @@ import { createTeacherAcademicNote, createTeacherAcademicWork, getTeacherAcademi
 
 const questionSchema = z.object({ type: z.string().trim().min(1).max(40), prompt: z.string().trim().min(1).max(4000), points: z.number().finite().positive().max(1000), options: z.array(z.string().trim().max(500)).max(20).optional(), acceptedAnswers: z.array(z.string().trim().max(500)).max(20).optional() });
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("createWork"), termId: z.string().min(1), classId: z.string().min(1), subjectId: z.string().min(1), kind: z.enum(["Classwork","Homework","Exercise","Participation","Quiz","Exam"]), title: z.string().trim().min(1).max(160), instructions: z.string().max(8000).optional(), workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), weekNumber: z.number().int().min(1).max(60), workNumber: z.number().int().min(1).max(50), maxScore: z.number().finite().positive().max(100000), markingMode: z.enum(["manual","auto","review"]), attemptLimit: z.number().int().min(1).max(10).default(1), attemptScorePolicy: z.enum(["highest","latest"]).default("highest"), dueAt: z.string().datetime().nullable().optional(), answerGuide: z.unknown().optional(), questionList: z.array(questionSchema).max(100).optional() }),
+  z.object({ action: z.literal("createWork"), termId: z.string().min(1), classId: z.string().min(1), subjectId: z.string().min(1), kind: z.enum(["Classwork","Homework","Exercise","Participation","Quiz","Exam"]), title: z.string().trim().min(1).max(160), instructions: z.string().max(8000).optional(), workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), weekNumber: z.number().int().min(1).max(60), workNumber: z.number().int().min(1).max(50), maxScore: z.number().finite().positive().max(100000), markingMode: z.enum(["manual","auto","review"]), attemptLimit: z.number().int().min(1).max(10).default(1), attemptScorePolicy: z.enum(["highest","latest"]).default("highest"), opensAt: z.string().datetime().nullable().optional(), dueAt: z.string().datetime().nullable().optional(), answerGuide: z.unknown().optional(), questionList: z.array(questionSchema).max(100).optional() }),
   z.object({ action: z.literal("publishWork"), workId: z.string().min(1) }),
   z.object({ action: z.literal("saveMarks"), workId: z.string().min(1), marks: z.array(z.object({ studentId: z.string().min(1), value: z.number().finite().nonnegative().max(100000), status: z.enum(["present","absent","excused"]).optional(), expected: z.object({ id: z.string().min(1), value: z.number().finite(), status: z.enum(["present","absent","excused"]), enteredAt: z.string().datetime() }).nullable() })).max(5000) }),
   z.object({ action: z.literal("createNote"), termId: z.string().min(1), classId: z.string().min(1), subjectId: z.string().min(1), title: z.string().trim().min(1).max(160), content: z.unknown(), weekNumber: z.number().int().min(1).max(60).optional() }),
@@ -70,7 +70,10 @@ export async function POST(request: Request) {
       const common = { schoolId: session.schoolId, teacherId: session.userId };
       if (input.action === "createWork") {
         await assertWritableTerm(tx, session.schoolId, input.termId);
-        return NextResponse.json({ ok: true, result: await createTeacherAcademicWork(tx, { ...common, ...input }) });
+        if (input.opensAt && input.dueAt && Date.parse(input.opensAt) >= Date.parse(input.dueAt)) throw new AppError("The closing time must be later than the opening time.", 400, "INVALID_WORK_WINDOW");
+        const result = await createTeacherAcademicWork(tx, { ...common, ...input });
+        if (input.opensAt) await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicWork" SET "opensAt"=$3::timestamptz,"updatedAt"=NOW() WHERE "schoolId"=$1 AND "id"=$2`, session.schoolId, result.id, input.opensAt);
+        return NextResponse.json({ ok: true, result });
       }
       if (input.action === "publishWork") {
         const termId = await workTermId(tx, session.schoolId, input.workId);
