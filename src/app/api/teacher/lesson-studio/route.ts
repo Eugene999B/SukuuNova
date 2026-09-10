@@ -19,6 +19,23 @@ const blockSchema = z.object({
   rows: z.array(z.array(z.string().max(1000)).max(10)).max(20).optional(),
 });
 
+const plannerDefaults = {
+  framework: "standards_based" as const,
+  strand: "",
+  subStrand: "",
+  contentStandard: "",
+  learningIndicators: "",
+  essentialQuestions: "",
+  coreCompetencies: "",
+  pedagogicalStrategies: "",
+  assessmentStrategies: "",
+  gesiSel: "",
+  ghanaianValues: "",
+  references: "",
+  durationMinutes: 60,
+  periodLabel: "",
+};
+
 const plannerSchema = z.object({
   framework: z.enum(["standards_based", "secondary_learner_planner"]).default("standards_based"),
   strand: z.string().trim().max(500).default(""),
@@ -53,7 +70,7 @@ const fields = {
   objective: z.string().trim().max(500).default(""),
   resources: z.array(z.object({ label: z.string().trim().min(1).max(160), url: z.string().url().max(2000) })).max(20).default([]),
   blocks: z.array(blockSchema).min(1).max(120),
-  planner: plannerSchema.optional().default({}),
+  planner: plannerSchema.optional().default(plannerDefaults),
 };
 
 const saveSchema = z.object({
