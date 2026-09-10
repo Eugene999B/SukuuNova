@@ -4,6 +4,10 @@ import { selectAcademicTerm, termLifecycle } from "../src/lib/term-date";
 import { schoolWorkspaceRedirect, teacherWorkspaceRedirect } from "../src/lib/workspace-boundary";
 
 const date = (value: string) => new Date(`${value}T12:00:00.000Z`);
+function codeOf(action: () => void) {
+  try { action(); return null; }
+  catch (error) { return error && typeof error === "object" && "code" in error ? String(error.code) : "UNKNOWN"; }
+}
 
 describe("Teacher Workspace V3 policy", () => {
   it("hard-routes pure teacher identities away from the school administration universe", () => {
@@ -37,9 +41,9 @@ describe("Teacher Workspace V3 policy", () => {
     const opensAt = new Date("2026-09-10T08:00:00.000Z");
     const dueAt = new Date("2026-09-10T09:00:00.000Z");
     const work = { status: "published", opensAt, dueAt };
-    expect(() => assertAcademicWorkWindowOpen(work, new Date("2026-09-10T07:59:59.000Z"))).toThrowError(expect.objectContaining({ code: "WORK_NOT_OPEN" }));
+    expect(codeOf(() => assertAcademicWorkWindowOpen(work, new Date("2026-09-10T07:59:59.000Z")))).toBe("WORK_NOT_OPEN");
     expect(() => assertAcademicWorkWindowOpen(work, new Date("2026-09-10T08:30:00.000Z"))).not.toThrow();
-    expect(() => assertAcademicWorkWindowOpen(work, dueAt)).toThrowError(expect.objectContaining({ code: "WORK_EXPIRED" }));
-    expect(() => assertAcademicWorkWindowOpen({ ...work, status: "draft" }, new Date("2026-09-10T08:30:00.000Z"))).toThrowError(expect.objectContaining({ code: "WORK_NOT_PUBLISHED" }));
+    expect(codeOf(() => assertAcademicWorkWindowOpen(work, dueAt))).toBe("WORK_EXPIRED");
+    expect(codeOf(() => assertAcademicWorkWindowOpen({ ...work, status: "draft" }, new Date("2026-09-10T08:30:00.000Z")))).toBe("WORK_NOT_PUBLISHED");
   });
 });
