@@ -4,10 +4,11 @@ import { requireGuardianSession } from "@/lib/guardian-auth";
 import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { routeError } from "@/lib/errors";
-import { getGuardianTransportOverview, requestGuardianPickupPoint } from "@/lib/novacore/family-transport-service";
+import { getGuardianTransportOverview } from "@/lib/novacore/family-transport-service";
+import { setGuardianPickupLocation } from "@/lib/novacore/guardian-pickup-location-service";
 
-const requestPickupSchema = z.object({
-  action: z.literal("requestPickup"),
+const setPickupSchema = z.object({
+  action: z.enum(["setPickup", "requestPickup"]),
   studentId: z.string().min(1),
   direction: z.enum(["morning", "afternoon"]),
   latitude: z.number().min(-90).max(90),
@@ -31,8 +32,8 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await requireGuardianSession();
-    const input = await parseJson(request, requestPickupSchema);
-    return await withTenant(session.schoolId, async (tx) => NextResponse.json(await requestGuardianPickupPoint(tx, {
+    const input = await parseJson(request, setPickupSchema);
+    return await withTenant(session.schoolId, async (tx) => NextResponse.json(await setGuardianPickupLocation(tx, {
       schoolId: session.schoolId,
       guardianId: session.guardianId,
       guardianUserId: session.userId,
