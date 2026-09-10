@@ -199,7 +199,7 @@ export function evaluateGoLiveReadiness(metrics: GoLiveMetrics): GoLiveReadiness
   return {
     generatedAt: new Date().toISOString(),
     score,
-    readyToLaunch: score >= 90 && blockerCount === 0,
+    readyToLaunch: score >= 90 && blockerCount === 0 && metrics.communicationConfigured,
     blockerCount,
     attentionCount,
     steps,
