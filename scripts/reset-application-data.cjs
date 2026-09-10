@@ -9,6 +9,7 @@ const {
   normalizeResetMode,
   assertResetAuthorization,
   safeDatabaseSummary,
+  withExactTableVisibility,
 } = require("./data-reset-safety.cjs");
 
 const target = parseResetTarget(process.env.RESET_DATABASE_URL);
@@ -43,9 +44,16 @@ async function tableCounts(db, tables) {
   return result;
 }
 
+async function exactCounts(tables) {
+  return prisma.$transaction(
+    async (tx) => withExactTableVisibility(tx, tables, () => tableCounts(tx, tables)),
+    { maxWait: 60_000, timeout: 300_000 },
+  );
+}
+
 async function main() {
   const tables = await listApplicationTables(prisma);
-  const before = await tableCounts(prisma, tables);
+  const before = await exactCounts(tables);
   const beforeRows = before.reduce((sum, item) => sum + item.count, 0);
   const beforeNonEmpty = before.filter((item) => item.count > 0);
 
@@ -64,17 +72,19 @@ async function main() {
 
   if (tables.length > 0) {
     await prisma.$transaction(async (tx) => {
-      const quotedTables = tables.map(quotePgIdentifier).join(", ");
-      await tx.$executeRawUnsafe(`TRUNCATE TABLE ${quotedTables} RESTART IDENTITY CASCADE`);
-      const remaining = await tableCounts(tx, tables);
-      const nonEmpty = remaining.filter((item) => item.count > 0);
-      if (nonEmpty.length > 0) {
-        throw new Error(`Application-data reset verification failed; ${nonEmpty.length} table(s) still contain rows.`);
-      }
+      await withExactTableVisibility(tx, tables, async () => {
+        const quotedTables = tables.map(quotePgIdentifier).join(", ");
+        await tx.$executeRawUnsafe(`TRUNCATE TABLE ${quotedTables} RESTART IDENTITY CASCADE`);
+        const remaining = await tableCounts(tx, tables);
+        const nonEmpty = remaining.filter((item) => item.count > 0);
+        if (nonEmpty.length > 0) {
+          throw new Error(`Application-data reset verification failed; ${nonEmpty.length} table(s) still contain rows.`);
+        }
+      });
     }, { maxWait: 60_000, timeout: 300_000 });
   }
 
-  const after = await tableCounts(prisma, tables);
+  const after = await exactCounts(tables);
   const remainingRows = after.reduce((sum, item) => sum + item.count, 0);
   console.log(JSON.stringify({
     mode,
