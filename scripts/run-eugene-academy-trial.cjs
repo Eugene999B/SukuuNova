@@ -31,6 +31,11 @@ function replaceRequired(source, needle, replacement, label) {
   return source.replace(needle, replacement);
 }
 
+function replaceAllRequired(source, needle, replacement, label) {
+  if (!source.includes(needle)) throw new Error(`Fixture compatibility guard failed: ${label} changed.`);
+  return source.replaceAll(needle, replacement);
+}
+
 function patchFixtures() {
   let base = originals.get(baseFixturePath);
   base = replaceRequired(base, "'in','device'", "'in','fingerprint'", "legacy attendance method");
@@ -46,7 +51,7 @@ function patchFixtures() {
           : await tx.feeItem.create({ data: { schoolId, name, amount: new Prisma.Decimal(amount), termId: term.id, classId: null } });
         items.push(feeItem);`;
   base = replaceRequired(base, baseFeeNeedle, baseFeeReplacement, "base nullable fee-item write");
-  base = replaceRequired(base, 'method: "mobile_money"', 'method: "momo"', "base payment method");
+  base = replaceAllRequired(base, '"mobile_money"', '"momo"', "base payment method");
   fs.writeFileSync(baseFixturePath, base, "utf8");
   patchedPaths.add(baseFixturePath);
 
@@ -64,8 +69,8 @@ function patchFixtures() {
         feeItems.push(feeItem);
       }`;
   core = replaceRequired(core, coreFeeNeedle, coreFeeReplacement, "current-term nullable fee-item write");
-  core = replaceRequired(core, '"mobile_money"', '"momo"', "current-term mobile payment method");
-  core = replaceRequired(core, '"bank_transfer"', '"card"', "current-term alternate payment method");
+  core = replaceAllRequired(core, '"mobile_money"', '"momo"', "current-term mobile payment method");
+  core = replaceAllRequired(core, '"bank_transfer"', '"card"', "current-term alternate payment method");
 
   const messageNeedle = `      // In-app communications must target User.id to appear in teacher/guardian inboxes.
       const guardianUsers=await tx.guardian.findMany`;
