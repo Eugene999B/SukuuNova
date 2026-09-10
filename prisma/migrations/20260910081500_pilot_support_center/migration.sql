@@ -15,6 +15,25 @@ ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_severity_check" CHECK 
 CREATE INDEX IF NOT EXISTS "SupportTicket_school_severity_status_idx"
   ON "SupportTicket"("schoolId","severity","status","createdAt" DESC);
 
+-- Support messages may come from a school account or a platform support admin.
+-- The restored single-user FK is incompatible with platform replies, so provenance is explicit instead.
+ALTER TABLE "SupportTicketMessage"
+  ADD COLUMN IF NOT EXISTS "senderType" TEXT NOT NULL DEFAULT 'school_user';
+ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessage_sender_fkey";
+ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessage_sender_school_fkey";
+ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessage_senderType_check";
+ALTER TABLE "SupportTicketMessage" ADD CONSTRAINT "SupportTicketMessage_senderType_check" CHECK ("senderType" IN ('school_user','platform_admin','system'));
+
+-- Keep one authoritative same-school ticket relationship.
+ALTER TABLE "SupportTicketMessage" DROP CONSTRAINT IF EXISTS "SupportTicketMessage_ticket_fkey";
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'SupportTicketMessage_ticket_school_fkey') THEN
+    ALTER TABLE "SupportTicketMessage"
+      ADD CONSTRAINT "SupportTicketMessage_ticket_school_fkey"
+      FOREIGN KEY ("ticketId","schoolId") REFERENCES "SupportTicket"("id","schoolId") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
+
 -- Preserve/repair tenant isolation even when this migration is applied to a partially restored database.
 ALTER TABLE "SupportTicket" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "SupportTicket" FORCE ROW LEVEL SECURITY;
