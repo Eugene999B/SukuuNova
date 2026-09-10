@@ -4,7 +4,7 @@ import { canGenerateArcadeContent, createArcadeGameQuestions } from "../src/lib/
 import { canGenerateArcadeInteractionContent } from "../src/lib/arcade-interaction-content";
 import { canGenerateArcadeResponseContent } from "../src/lib/arcade-response-content";
 import { canGenerateArcadeWorldContent } from "../src/lib/arcade-world-content";
-import { arcadeQuestionHistorySignatures, arcadeQuestionSignature, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge } from "../src/lib/arcade-variation";
+import { arcadeDifficultyForAge, arcadeQuestionHistorySignatures, arcadeQuestionSignature, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge } from "../src/lib/arcade-variation";
 
 describe("Arcade launch universe", () => {
   it("keeps all 64 catalogue worlds backed by a real question generator", () => {
@@ -21,6 +21,15 @@ describe("Arcade launch universe", () => {
       expect(game.difficultyMax).toBeLessThanOrEqual(5);
       expect(game.difficultyMax).toBeGreaterThanOrEqual(game.difficultyMin);
     }
+  });
+
+  it("caps challenge depth when a learner intentionally chooses a younger practice band", () => {
+    expect(arcadeDifficultyForAge(5, "age_4_5")).toBe(1);
+    expect(arcadeDifficultyForAge(5, "age_6_8")).toBe(2);
+    expect(arcadeDifficultyForAge(5, "age_9_11")).toBe(3);
+    expect(arcadeDifficultyForAge(5, "age_12_14")).toBe(4);
+    expect(arcadeDifficultyForAge(5, "age_15_18")).toBe(5);
+    expect(arcadeDifficultyForAge(2, "age_15_18")).toBe(2);
   });
 });
 
@@ -54,6 +63,7 @@ describe("Arcade variation engine", () => {
     expect(presented.answer).toBe(base.answer);
     expect(presented.prompt).toContain(" · ");
     expect(presented.conceptKey).toBe(arcadeQuestionSignature(base));
+    expect(presented.presentationVariant.length).toBeGreaterThan(0);
   });
 
   it("only falls back to spaced repetition after fresh unique candidates are exhausted", () => {
