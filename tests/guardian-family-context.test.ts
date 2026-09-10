@@ -126,7 +126,7 @@ describe("guardian family context", () => {
 });
 
 describe("guardian message boundary", () => {
-  it("uses the guardian relationship, exposes school staff, preserves sender metadata, and audits outgoing messages", async () => {
+  it("uses the guardian relationship, exposes school staff, preserves sender metadata, and returns outgoing history", async () => {
     const fixture = await setupFamily();
     const incomingId = createId();
     await withTenant(fixture.schoolId, async (tx) => {
@@ -166,6 +166,8 @@ describe("guardian message boundary", () => {
       body: JSON.stringify({ action: "send", recipientId: fixture.ownerId, title: "Family question", body: "Please help with this learner record." }),
     }));
     expect(sendResponse.status).toBe(200);
+    const sentPayload = await sendResponse.json() as { messageId?: string };
+    expect(sentPayload.messageId).toBeTruthy();
     const outgoing = await withTenant(fixture.schoolId, (tx) => tx.message.findFirst({
       where: { schoolId: fixture.schoolId, recipientId: fixture.ownerId, templateKey: "direct_message", body: { startsWith: "Family question" } },
       orderBy: { createdAt: "desc" },
@@ -184,10 +186,13 @@ describe("guardian message boundary", () => {
     expect(inbox.status).toBe(200);
     const body = await inbox.json() as {
       unreadCount: number;
-      messages: Array<{ id: string; readAt: string | null }>;
+      messages: Array<{ id: string; readAt: string | null; direction: "incoming" | "outgoing"; recipientName?: string }>;
       recipients: Array<{ id: string; name: string; roles: string[] }>;
     };
     expect(body.messages.find((message) => message.id === incomingId)?.readAt).toBeTruthy();
+    expect(body.messages.find((message) => message.id === incomingId)?.direction).toBe("incoming");
+    expect(body.messages.find((message) => message.id === outgoing?.id)?.direction).toBe("outgoing");
+    expect(body.messages.find((message) => message.id === outgoing?.id)?.recipientName).toBeTruthy();
     expect(body.recipients.some((person) => person.id === fixture.ownerId)).toBe(true);
     expect(body.recipients.some((person) => person.id === fixture.memberId)).toBe(false);
   });
