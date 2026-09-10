@@ -25,11 +25,33 @@ type EvidenceRow = {
   topReasonCodes: Array<{ reasonCode: string; count: number }>;
 };
 
+type EtaAccuracy = {
+  algorithmVersion: string;
+  samples: number;
+  maeMinutes: number | null;
+  medianErrorMinutes: number | null;
+  p90ErrorMinutes: number | null;
+  within2MinutesRate: number | null;
+  within5MinutesRate: number | null;
+  withinConfidenceRate: number | null;
+};
+
+type EtaPromotion = {
+  policyVersion: string;
+  status: "insufficient_evidence" | "hold" | "review_ready";
+  automaticPromotionAllowed: false;
+  passedGates: string[];
+  failedGates: string[];
+  remainingSamples: number;
+};
+
 type EvidenceSummary = {
   schoolId: string;
   days: number;
   generatedAt: string;
   algorithms: EvidenceRow[];
+  etaAccuracy: EtaAccuracy;
+  etaPromotion: EtaPromotion;
 };
 
 function title(value: string) {
@@ -43,6 +65,16 @@ function title(value: string) {
 
 function confidence(value: number | null) {
   return value == null ? "—" : `${Math.round(value * 100)}%`;
+}
+
+function rate(value: number | null) {
+  return value == null ? "—" : `${Math.round(value * 100)}%`;
+}
+
+function etaVerdict(status: EtaPromotion["status"]) {
+  if (status === "review_ready") return "Review ready";
+  if (status === "hold") return "Hold in shadow";
+  return "Collecting evidence";
 }
 
 export default function NovaCoreEvidencePanel() {
@@ -125,6 +157,14 @@ export default function NovaCoreEvidencePanel() {
       <div><span><ShieldCheck size={15}/></span><div><small>Algorithms observed</small><strong>{observedAlgorithms}</strong></div></div>
       <div><span><Activity size={15}/></span><div><small>Shadow samples</small><strong>{shadowSamples.toLocaleString()}</strong></div></div>
     </div>
+
+    {summary ? <section className={`novacore-eta-cert novacore-eta-${summary.etaPromotion.status}`} aria-label="ETA shadow certification">
+      <div className="novacore-eta-verdict"><span><ShieldCheck size={16}/></span><div><small>ETA shadow certification</small><strong>{etaVerdict(summary.etaPromotion.status)}</strong><em>v{summary.etaAccuracy.algorithmVersion} · policy {summary.etaPromotion.policyVersion}</em></div></div>
+      <div><small>Evaluated predictions</small><strong>{summary.etaAccuracy.samples.toLocaleString()}</strong><em>{summary.etaPromotion.remainingSamples ? `${summary.etaPromotion.remainingSamples} more for review gate` : "Sample gate met"}</em></div>
+      <div><small>Mean error</small><strong>{summary.etaAccuracy.maeMinutes == null ? "—" : `${summary.etaAccuracy.maeMinutes} min`}</strong><em>Median {summary.etaAccuracy.medianErrorMinutes == null ? "—" : `${summary.etaAccuracy.medianErrorMinutes} min`}</em></div>
+      <div><small>P90 error</small><strong>{summary.etaAccuracy.p90ErrorMinutes == null ? "—" : `${summary.etaAccuracy.p90ErrorMinutes} min`}</strong><em>Within 5 min {rate(summary.etaAccuracy.within5MinutesRate)}</em></div>
+      <div><small>Confidence coverage</small><strong>{rate(summary.etaAccuracy.withinConfidenceRate)}</strong><em>Automatic promotion disabled</em></div>
+    </section> : null}
 
     <div className="novacore-evidence-list">
       <div className="novacore-evidence-row novacore-evidence-row-head"><span>Algorithm</span><span>Mode</span><span>Samples</span><span>Confidence</span><span>Latency</span><span>Top evidence</span></div>
