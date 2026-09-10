@@ -18,7 +18,12 @@ function parseResetTarget(rawUrl) {
     throw new Error("RESET_DATABASE_URL must use the postgresql:// or postgres:// scheme.");
   }
 
-  const databaseName = decodeURIComponent(parsed.pathname.replace(/^\/+/, "")).trim();
+  let databaseName;
+  try {
+    databaseName = decodeURIComponent(parsed.pathname.replace(/^\/+/, "")).trim();
+  } catch {
+    throw new Error("RESET_DATABASE_URL contains an invalid encoded database name.");
+  }
   if (!databaseName || databaseName.includes("/")) throw new Error("RESET_DATABASE_URL must identify exactly one database name.");
   if (SYSTEM_DATABASES.has(databaseName.toLowerCase())) {
     throw new Error(`Refusing application-data reset for PostgreSQL system database: ${databaseName}.`);
@@ -67,6 +72,39 @@ function safeDatabaseSummary(target) {
   };
 }
 
+async function withExactTableVisibility(db, applicationTables, work) {
+  const targetNames = new Set(applicationTables.map(String));
+  const rows = await db.$queryRawUnsafe(
+    `SELECT c.relname AS "tableName",
+            pg_get_userbyid(c.relowner) AS "ownerName",
+            current_user AS "currentUser"
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE n.nspname='public'
+        AND c.relkind IN ('r','p')
+        AND c.relforcerowsecurity = true
+      ORDER BY c.relname`,
+  );
+  const forcedTables = rows.filter((row) => targetNames.has(String(row.tableName)));
+  const notOwned = forcedTables.filter((row) => String(row.ownerName) !== String(row.currentUser));
+  if (notOwned.length > 0) {
+    throw new Error(
+      `Exact reset verification requires a table-owner maintenance connection; ${notOwned.length} forced-RLS table(s) are owned by another role.`,
+    );
+  }
+
+  for (const row of forcedTables) {
+    await db.$executeRawUnsafe(`ALTER TABLE ${quotePgIdentifier(String(row.tableName))} NO FORCE ROW LEVEL SECURITY`);
+  }
+
+  const result = await work();
+
+  for (const row of forcedTables) {
+    await db.$executeRawUnsafe(`ALTER TABLE ${quotePgIdentifier(String(row.tableName))} FORCE ROW LEVEL SECURITY`);
+  }
+  return result;
+}
+
 module.exports = {
   APPLICATION_TABLE_EXCLUSION,
   EXECUTE_CONFIRMATION,
@@ -76,4 +114,5 @@ module.exports = {
   normalizeResetMode,
   assertResetAuthorization,
   safeDatabaseSummary,
+  withExactTableVisibility,
 };
