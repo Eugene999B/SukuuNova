@@ -50,10 +50,10 @@ function numericScore(response: unknown, accepted: string[], points: number) {
   }) ? points : 0;
 }
 function suggestedWrittenScore(response: string, guide: string[], points: number) {
-  if (!response.trim() || guide.length === 0) return { score: 0, confidence: 0, reason: "No answer guidance is available for semantic review." };
+  if (!response.trim() || guide.length === 0) return { score: 0, confidence: 0, reason: "No answer guidance is available for assisted review." };
   const responseTokens = new Set(normalizedWords(response).split(" ").filter(word => word.length > 2));
   const guideTokens = new Set(normalizedWords(guide.join(" ")).split(" ").filter(word => word.length > 2));
-  if (!responseTokens.size || !guideTokens.size) return { score: 0, confidence: 0, reason: "The response or answer guide has no usable key terms." };
+  if (!responseTokens.size || !guideTokens.size) return { score: 0, confidence: 0, reason: "The response or teacher guidance has no usable key terms." };
   let overlap = 0;
   for (const token of responseTokens) if (guideTokens.has(token)) overlap += 1;
   const precision = overlap / responseTokens.size;
@@ -62,7 +62,7 @@ function suggestedWrittenScore(response: string, guide: string[], points: number
   return {
     score: Math.round(points * Math.min(1, f1 * 1.2) * 100) / 100,
     confidence: Math.round(Math.min(1, f1 * 1.35) * 100),
-    reason: `${overlap} key terms matched across the submitted response and teacher guidance.`
+    reason: `${overlap} teacher-supplied key terms matched the submitted response.`
   };
 }
 
@@ -72,7 +72,7 @@ export function gradeAcademicQuestions(
   guide: unknown,
   mode: string
 ): AcademicGradeResult[] {
-  const answerGuide = asStrings(guide);
+  const activityGuide = asStrings(guide);
   return questions.map(question => {
     const response = answers.get(question.id) ?? {};
     const responseText = String(response.responseText ?? "");
@@ -100,7 +100,11 @@ export function gradeAcademicQuestions(
       const score = exactScore(responseText, accepted, points);
       if (score > 0 || mode === "auto") return { questionId: question.id, score, markingMode: "auto", reason: score > 0 ? "Normalized answer matched." : "No accepted normalized answer matched." };
     }
-    const suggested = suggestedWrittenScore(responseText, answerGuide, points);
+    // Written/semantic review prefers guidance attached to the individual
+    // question. The activity-level guide remains a backwards-compatible fallback.
+    // The result is a suggestion only; review mode still requires teacher confirmation.
+    const writtenGuide = accepted.length ? accepted : activityGuide;
+    const suggested = suggestedWrittenScore(responseText, writtenGuide, points);
     return {
       questionId: question.id,
       score: 0,
