@@ -1,14 +1,12 @@
-import { selectAcademicTerm } from "@/lib/term-date";
-import "@/app/school/academic-workspace.css";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
+import { selectAcademicTerm, termLifecycle } from "@/lib/term-date";
 
-export default async function TeacherGradebookPage({ searchParams }: { searchParams: Promise<{ term?: string }> }) {
-  const query = await searchParams;
+export default async function TeacherGradebookPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
     const access = await getSchoolAuthorization(tx, session.userId);
@@ -17,7 +15,7 @@ export default async function TeacherGradebookPage({ searchParams }: { searchPar
     const [school, assignments, terms, settings] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.classSubjectTeacher.findMany({
-        where: { teacherId: session.userId },
+        where: { schoolId: session.schoolId, teacherId: session.userId },
         orderBy: [{ class: { name: "asc" } }, { subject: { name: "asc" } }],
         select: {
           classId: true,
@@ -26,36 +24,34 @@ export default async function TeacherGradebookPage({ searchParams }: { searchPar
           subject: { select: { name: true } },
         },
       }),
-      tx.term.findMany({ orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true } }),
+      tx.term.findMany({ orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true, academicYear: { select: { name: true } } } }),
       tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
     ]);
-    const selectedTerm = selectAcademicTerm(terms, query.term, new Date(), settings?.timezone || "Africa/Accra");
-    return { school, assignments, terms, selectedTerm };
+    const timezone = settings?.timezone || "Africa/Accra";
+    const activeTerm = selectAcademicTerm(terms, undefined, new Date(), timezone);
+    const endedOpenTerms = terms.filter((term) => termLifecycle(term, new Date(), timezone).state === "ended");
+    return { school, assignments, terms, activeTerm, endedOpenTerms, timezone, role: access.roles.map((role) => role.name).join(" · ") };
   });
 
-  const termQuery = data.selectedTerm ? "?term=" + encodeURIComponent(data.selectedTerm.id) : query.term ? "?term=" + encodeURIComponent(query.term) : "";
   return (
-    <AppShell universe="teacher" title="My gradebook" subtitle="Marks for your classes." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role="Teacher">
+    <AppShell universe="teacher" title="My Gradebook" subtitle="Fast marks for the classes and subjects assigned to you." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}>
       <div className="teacher-workspace">
         <section className="teacher-page-head">
-          <div><span className="teacher-eyebrow">TEACHER · GRADEBOOK</span><h2>My gradebook</h2></div>
-          <Link className="teacher-primary-action" href="/teacher">Teacher home →</Link>
+          <div><span className="teacher-eyebrow">TEACHER · GRADEBOOK</span><h2>Your active-term markbooks</h2><p>The school calendar chooses the term. You choose the class and subject you are teaching.</p></div>
+          <Link className="teacher-primary-action" href="/teacher/studio#activities">Create assessment →</Link>
         </section>
-        <section className="teacher-scope-strip"><div><span>Assigned class-subjects</span><strong>{data.assignments.length}</strong></div></section>
+        <section className="teacher-scope-strip">
+          <div><span>Teaching assignments</span><strong>{data.assignments.length}</strong></div>
+          <div><span>Current term</span><strong>{data.activeTerm?.name ?? "—"}</strong></div>
+          <div><span>Academic year</span><strong>{data.activeTerm?.academicYear.name ?? "—"}</strong></div>
+        </section>
+        {!data.activeTerm ? <section className="teacher-surface"><span className="teacher-eyebrow">TERM CONTROL</span><h3>No writable academic term is active today.</h3><p>Teachers cannot choose a future or expired term for new marks. School leadership must configure the calendar and finalize any ended term.</p></section> : null}
+        {data.endedOpenTerms.length ? <section className="teacher-surface"><span className="teacher-eyebrow">LEADERSHIP ACTION NEEDED</span><h3>{data.endedOpenTerms.length} ended term{data.endedOpenTerms.length===1?" is":"s are"} still unlocked.</h3><p>Those terms remain historical for teachers. Leadership should review reports and lock them from Academic Terms so records are formally closed.</p></section> : null}
         <section className="teacher-surface">
-          <span className="teacher-eyebrow">Mark entry</span><h3>Select your teaching context</h3>
-          
-          <form className="academic-context-form" action="/teacher/gradebook" method="get">
-            <div className="academic-field"><label htmlFor="gradebook-list-term">Academic term</label>
-              <select id="gradebook-list-term" name="term" defaultValue={data.selectedTerm?.id ?? ""} required>
-                <option value="">Choose a term</option>
-                {data.terms.map(term => <option key={term.id} value={term.id}>{term.name}{term.isLocked ? " · Locked" : ""}</option>)}
-              </select>
-            </div><button className="academic-context-submit" type="submit">Choose term</button>
-          </form>
-          <p>{data.selectedTerm ? "Selected term: " + data.selectedTerm.name + (data.selectedTerm.isLocked ? " · Read-only" : "") : "Select a term. A future or ambiguous term is never chosen automatically."}</p>
-          {data.assignments.length ? <div className="teacher-assignment-list">{data.assignments.map((assignment) => <Link key={`${assignment.classId}:${assignment.subjectId}`} href={`/teacher/gradebook/${encodeURIComponent(assignment.classId)}__${encodeURIComponent(assignment.subjectId)}${termQuery}`}><strong>{assignment.class.level ? `${assignment.class.level} · ` : ""}{assignment.class.name}</strong><span>{assignment.subject.name} · {assignment.class._count.students} learners →</span></Link>)}</div> : <div className="teacher-empty-state"><strong>No gradebook assignment yet.</strong><p>An authorised school administrator must assign a class and subject to your staff profile before you can enter marks.</p></div>}
+          <span className="teacher-eyebrow">ASSIGNED MARKBOOKS</span><h3>Choose a class and subject</h3>
+          {data.assignments.length && data.activeTerm ? <div className="teacher-assignment-list">{data.assignments.map((assignment) => <Link key={`${assignment.classId}:${assignment.subjectId}`} href={`/teacher/gradebook/${encodeURIComponent(assignment.classId)}__${encodeURIComponent(assignment.subjectId)}?term=${encodeURIComponent(data.activeTerm!.id)}`}><strong>{assignment.class.level ? `${assignment.class.level} · ` : ""}{assignment.class.name}</strong><span>{assignment.subject.name} · {assignment.class._count.students} learners →</span></Link>)}</div> : <div className="teacher-empty-state"><strong>{data.assignments.length ? "Waiting for an active term." : "No subject teaching assignment yet."}</strong><p>{data.assignments.length ? "Your markbooks will become writable automatically when the configured term starts." : "School leadership must assign one or more class-subject responsibilities to this teacher account."}</p></div>}
         </section>
+        <section className="teacher-surface"><span className="teacher-eyebrow">HISTORY</span><h3>Previous terms stay available without becoming the working term</h3><div className="teacher-assignment-list">{data.terms.filter((term)=>term.id!==data.activeTerm?.id).slice(0,6).map((term)=><div key={term.id}><strong>{term.academicYear.name} · {term.name}</strong><span>{term.isLocked?"Locked archive":"Ended / upcoming"} · leadership controls reopening</span></div>)}</div></section>
       </div>
     </AppShell>
   );
