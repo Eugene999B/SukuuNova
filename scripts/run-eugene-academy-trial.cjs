@@ -52,6 +52,7 @@ function patchFixtures() {
         items.push(feeItem);`;
   base = replaceRequired(base, baseFeeNeedle, baseFeeReplacement, "base nullable fee-item write");
   base = replaceAllRequired(base, '"mobile_money"', '"momo"', "base payment method");
+  base = replaceAllRequired(base, '"part_paid"', '"partial"', "base invoice status");
   fs.writeFileSync(baseFixturePath, base, "utf8");
   patchedPaths.add(baseFixturePath);
 
@@ -71,6 +72,7 @@ function patchFixtures() {
   core = replaceRequired(core, coreFeeNeedle, coreFeeReplacement, "current-term nullable fee-item write");
   core = replaceAllRequired(core, '"mobile_money"', '"momo"', "current-term mobile payment method");
   core = replaceAllRequired(core, '"bank_transfer"', '"card"', "current-term alternate payment method");
+  core = replaceAllRequired(core, '"part_paid"', '"partial"', "current-term invoice status");
 
   const messageNeedle = `      // In-app communications must target User.id to appear in teacher/guardian inboxes.
       const guardianUsers=await tx.guardian.findMany`;
