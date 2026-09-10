@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { ensureDatabaseRoleSafe, rawDb, withTenant } from "@/lib/db";
+import { fingerprintNovaCoreInput, recordNovaCoreDecisionBestEffort } from "./decision-ledger";
 import { getDirectionalRouteShape } from "./directional-route-service";
 import { deriveLiveLocationIntelligence } from "./location-intelligence";
 import { decodeTeltonikaCodec8E, type TeltonikaCodec8ERecord } from "./teltonika-codec8e";
@@ -123,6 +124,8 @@ function gpsSample(record: TeltonikaCodec8ERecord): GpsSample {
 }
 
 export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs = Date.now()): Promise<TrackerIngestResult> {
+  const ingestStartedAt = Date.now();
+  const packetFingerprint = createHash("sha256").update(packet).digest("hex");
   const decoded = decodeTeltonikaCodec8E(packet);
   const binding = await resolveTrackerGatewayBinding(imei);
   if (!binding) throw new Error("Tracker is not provisioned or is disabled.");
@@ -179,6 +182,11 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
     let storedLocations = 0;
     let rejectedLocations = 0;
     let guardianAlertsQueued = 0;
+    const rejectionReasons = new Map<string, number>();
+    let routeMatches = 0;
+    let routeFallbacks = 0;
+    let routeDeviations = 0;
+    let routeConfidenceTotal = 0;
 
     for (const record of decoded.records) {
       const sample = gpsSample(record);
@@ -203,6 +211,8 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
 
       if (!accepted) {
         rejectedLocations += 1;
+        const reasonKey = reason ?? "rejected";
+        rejectionReasons.set(reasonKey, (rejectionReasons.get(reasonKey) ?? 0) + 1);
         continue;
       }
 
@@ -213,6 +223,14 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
         route: routeShape,
       });
       const match = intelligence.routeMatch;
+      if (match) {
+        routeMatches += 1;
+        routeConfidenceTotal += match.confidence;
+      } else if (activeTrip) {
+        routeFallbacks += 1;
+      }
+      if (intelligence.routeDeviation) routeDeviations += 1;
+
       await tx.$executeRawUnsafe(
         `INSERT INTO "P3VehicleLocation"
           ("id","schoolId","vehicleId","routeId","trackerDeviceId","tripId","latitude","longitude","normalizedLatitude","normalizedLongitude","speedKph","heading","reportedAt","source","quality","routeDistanceMeters","routeProgressMeters","routeRemainingMeters","routeMatchConfidence","routeDeviation","algorithmVersion")
@@ -266,6 +284,59 @@ export async function ingestTeltonikaPacket(imei: string, packet: Buffer, nowMs 
         binding.schoolId,
         activeTrip.id,
       );
+    }
+
+    const rejectionSummary = Object.fromEntries([...rejectionReasons.entries()].sort(([a], [b]) => a.localeCompare(b)));
+    await recordNovaCoreDecisionBestEffort(tx, {
+      schoolId: binding.schoolId,
+      algorithmKey: "transport.gps-validation",
+      entityType: "P3TrackerDevice",
+      entityId: tracker.id,
+      inputFingerprint: packetFingerprint,
+      reasonCodes: [
+        ...(storedLocations ? ["accepted_samples"] : []),
+        ...(rejectedLocations ? ["rejected_samples"] : []),
+        ...[...rejectionReasons.keys()].map((reasonKey) => `rejection:${reasonKey}`),
+      ],
+      outputSummary: {
+        recordCount: decoded.recordCount,
+        storedLocations,
+        rejectedLocations,
+        rejectionReasons: rejectionSummary,
+        activeTrip: Boolean(activeTrip),
+      },
+      latencyMs: Date.now() - ingestStartedAt,
+    });
+
+    if (activeTrip && storedLocations > 0) {
+      const averageRouteMatchConfidence = routeMatches ? routeConfidenceTotal / routeMatches : null;
+      await recordNovaCoreDecisionBestEffort(tx, {
+        schoolId: binding.schoolId,
+        algorithmKey: "transport.route-matching",
+        entityType: "P3TransportTrip",
+        entityId: activeTrip.id,
+        inputFingerprint: fingerprintNovaCoreInput({
+          packetFingerprint,
+          routeShapePoints: routeShape.length,
+          acceptedSamples: storedLocations,
+        }),
+        confidence: averageRouteMatchConfidence,
+        reasonCodes: [
+          ...(routeMatches ? ["route_match_available"] : []),
+          ...(routeFallbacks ? ["route_match_unavailable"] : []),
+          ...(routeDeviations ? ["route_deviation_detected"] : []),
+        ],
+        outputSummary: {
+          routeShapePoints: routeShape.length,
+          acceptedSamples: storedLocations,
+          routeMatches,
+          routeFallbacks,
+          routeDeviations,
+          averageRouteMatchConfidence,
+        },
+        shadowGroupKey: `transport-route:${activeTrip.id}:${packetFingerprint}`,
+        latencyMs: Date.now() - ingestStartedAt,
+      });
     }
 
     return {
