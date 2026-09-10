@@ -87,6 +87,10 @@ const AGE_PRESENTATIONS = {
 } as const;
 
 export type ArcadeVariationAgeBand = keyof typeof AGE_PRESENTATIONS;
+export type AgePresentedArcadeQuestion<T extends ArcadeVariationQuestion> = T & {
+  conceptKey: string;
+  presentationVariant: string;
+};
 
 function hash(value: string) {
   let output = 2166136261;
@@ -97,7 +101,12 @@ function hash(value: string) {
   return output >>> 0;
 }
 
-export function presentArcadeQuestionForAge<T extends ArcadeVariationQuestion>(question: T, ageBand: ArcadeVariationAgeBand, missionId: string, index: number): T {
+export function presentArcadeQuestionForAge<T extends ArcadeVariationQuestion>(
+  question: T,
+  ageBand: ArcadeVariationAgeBand,
+  missionId: string,
+  index: number,
+): AgePresentedArcadeQuestion<T> {
   const conceptKey = arcadeQuestionSignature(question);
   const frames = AGE_PRESENTATIONS[ageBand];
   const frame = frames[hash(`${missionId}:${conceptKey}:${index}`) % frames.length];
