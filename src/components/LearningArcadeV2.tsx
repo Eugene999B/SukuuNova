@@ -145,7 +145,7 @@ export default function LearningArcadeV2() {
     if (question.kind === "path") return <ArcadePhysicsChoice options={question.options} value={answers[index] ?? ""} onChange={choose} disabled={busy} variant="path" hint="Choose the route that solves the challenge."/>;
     if (question.kind === "match" || question.kind === "match_plus") return <ArcadePhysicsChoice options={question.options} value={answers[index] ?? ""} onChange={choose} disabled={busy} variant="match" hint="Find the strongest match."/>;
     if (question.kind === "classify") return <ArcadePhysicsChoice options={question.options} value={answers[index] ?? ""} onChange={choose} disabled={busy} variant="classify" hint="Place the item in the correct group."/>;
-    if ((question.kind === "choice" || question.kind === "choice_plus") && roundGame) return <ArcadeMovingChoice options={question.options} value={answers[index] ?? ""} onChange={choose} disabled={busy} ageBand={round?.ageBand ?? null} gameKey={round.game} subject={roundGame.subject} rapid={round.engine === "rapid_fire"}/>;
+    if ((question.kind === "choice" || question.kind === "choice_plus") && roundGame) return <ArcadeMovingChoice options={question.options} value={answers[index] ?? ""} onChange={choose} disabled={busy} ageBand={round?.ageBand ?? null} gameKey={roundGame.gameKey} subject={roundGame.subject} rapid={roundGame.engine === "rapid_fire"}/>;
     return <ArcadePhysicsChoice options={question.options} value={answers[index] ?? ""} onChange={choose} disabled={busy} variant="choice" hint="Choose one answer."/>;
   };
 
