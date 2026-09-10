@@ -225,7 +225,7 @@ async function main() {
   fs.mkdirSync(path.resolve("test-artifacts"), { recursive: true });
   fs.writeFileSync(path.resolve("test-artifacts/eugene-academy-verification.json"), JSON.stringify({
     verifiedAt: new Date().toISOString(),
-    school: { name: school.name, code: school.uniqueCode },
+    school: { name: "Eugene Academy", code: SCHOOL_CODE },
     synthetic: true,
     passed: true,
     report,
