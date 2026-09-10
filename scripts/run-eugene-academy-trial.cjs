@@ -74,6 +74,15 @@ function patchFixtures() {
   core = replaceAllRequired(core, '"bank_transfer"', '"card"', "current-term alternate payment method");
   core = replaceAllRequired(core, '"part_paid"', '"partial"', "current-term invoice status");
 
+  // Normalize fixture prose categories to the canonical calendar vocabulary used by the service/UI.
+  core = replaceRequired(core, '["New Family Orientation","orientation"', '["New Family Orientation","parent"', "orientation calendar category");
+  core = replaceRequired(core, '["Founders Day Celebration","event"', '["Founders Day Celebration","other"', "Founders Day calendar category");
+  core = replaceRequired(core, '["First Continuous Assessment","exam"', '["First Continuous Assessment","exam_week"', "continuous-assessment calendar category");
+  core = replaceRequired(core, '["Mid-term Break","break"', '["Mid-term Break","vacation"', "mid-term calendar category");
+  core = replaceRequired(core, '["PTA Open Day","pta"', '["PTA Open Day","parent"', "PTA calendar category");
+  core = replaceRequired(core, '["Mock Examination Week","exam"', '["Mock Examination Week","exam_week"', "mock-exam calendar category");
+  core = replaceRequired(core, '["Christmas Vacation","break"', '["Christmas Vacation","vacation"', "Christmas calendar category");
+
   const schoolLookupNeedle = `async function main() {
   patchAndRunBaseFixture();
 
