@@ -92,6 +92,19 @@ export type AgePresentedArcadeQuestion<T extends ArcadeVariationQuestion> = T & 
   presentationVariant: string;
 };
 
+const AGE_DIFFICULTY_CEILING: Record<ArcadeVariationAgeBand, number> = {
+  age_4_5: 1,
+  age_6_8: 2,
+  age_9_11: 3,
+  age_12_14: 4,
+  age_15_18: 5,
+};
+
+export function arcadeDifficultyForAge(difficulty: number, ageBand: ArcadeVariationAgeBand) {
+  const safe = Math.max(1, Math.min(5, Math.trunc(difficulty)));
+  return Math.min(safe, AGE_DIFFICULTY_CEILING[ageBand]);
+}
+
 function hash(value: string) {
   let output = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
