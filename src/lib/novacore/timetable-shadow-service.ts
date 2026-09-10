@@ -1,5 +1,5 @@
 import type { TenantDb } from "@/lib/db";
-import { fingerprintNovaCoreInput, recordNovaCoreDecision } from "./decision-ledger";
+import { fingerprintNovaCoreInput, recordNovaCoreDecisionBestEffort } from "./decision-ledger";
 import { compareTimetableQuality, scoreTimetableQuality, type TimetableQualityPlacement } from "./timetable-quality";
 import { previewNovaCoreTimetable, type NovaCoreTimetablePreviewInput } from "./timetable-preview-service";
 
@@ -80,7 +80,7 @@ export async function previewNovaCoreTimetableWithShadow(tx: TenantDb, input: No
   const diagnosticReasons = Object.entries(preview.diagnostics.reasons)
     .filter(([, count]) => count > 0)
     .map(([reason]) => reason);
-  await recordNovaCoreDecision(tx, {
+  await recordNovaCoreDecisionBestEffort(tx, {
     schoolId: input.schoolId,
     algorithmKey: "timetable.constraint-solver",
     entityType: "TimetablePreview",
