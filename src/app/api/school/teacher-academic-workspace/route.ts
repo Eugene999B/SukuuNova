@@ -21,16 +21,24 @@ async function timezone(tx: TenantDb, schoolId: string) {
   return settings?.timezone || "Africa/Accra";
 }
 
-async function assertWritableTerm(tx: TenantDb, schoolId: string, termId: string) {
-  const [term, zone] = await Promise.all([
-    tx.term.findFirst({ where: { schoolId, id: termId }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true } }),
+async function authoritativeTerm(tx: TenantDb, schoolId: string) {
+  const [terms, zone] = await Promise.all([
+    tx.term.findMany({ where: { schoolId }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true }, orderBy: { startDate: "desc" } }),
     timezone(tx, schoolId),
   ]);
+  const active = selectAcademicTerm(terms, undefined, new Date(), zone);
+  return { active, terms, zone };
+}
+
+async function assertWritableTerm(tx: TenantDb, schoolId: string, termId: string) {
+  const { active, terms, zone } = await authoritativeTerm(tx, schoolId);
+  const term = terms.find(item => item.id === termId);
   if (!term) throw new AppError("The academic term is not available.", 404, "TERM_NOT_FOUND");
   const lifecycle = termLifecycle(term, new Date(), zone);
   if (lifecycle.state === "locked") throw new AppError(`Term "${term.name}" is locked.`, 409, "TERM_LOCKED");
   if (lifecycle.state === "upcoming") throw new AppError(`Term "${term.name}" has not started yet.`, 409, "TERM_NOT_STARTED");
   if (lifecycle.state === "ended") throw new AppError(`Term "${term.name}" has ended. School leadership must finalize and lock the term; teachers can no longer change academic records in it.`, 409, "TERM_ENDED");
+  if (!active || active.id !== term.id) throw new AppError("This is not the school's current working term.", 409, "TERM_NOT_ACTIVE");
   return term;
 }
 
@@ -53,11 +61,19 @@ export async function GET(request: Request) {
     const termId = url.searchParams.get("termId");
     return await withTenant(session.schoolId, async tx => {
       if (!classId || !subjectId || !termId) {
-        const [contexts, zone] = await Promise.all([getTeacherAcademicContexts(tx, session.schoolId, session.userId), timezone(tx, session.schoolId)]);
-        const activeTerm = selectAcademicTerm(contexts.terms, undefined, new Date(), zone);
-        return NextResponse.json({ ...contexts, activeTermId: activeTerm?.id ?? null, activeTerm: activeTerm ? { ...activeTerm, lifecycle: termLifecycle(activeTerm, new Date(), zone) } : null, timezone: zone });
+        const [contexts, authority] = await Promise.all([getTeacherAcademicContexts(tx, session.schoolId, session.userId), authoritativeTerm(tx, session.schoolId)]);
+        const activeTerm = authority.active;
+        return NextResponse.json({
+          ...contexts,
+          terms: activeTerm ? [activeTerm] : [],
+          activeTermId: activeTerm?.id ?? null,
+          activeTerm: activeTerm ? { ...activeTerm, lifecycle: termLifecycle(activeTerm, new Date(), authority.zone) } : null,
+          timezone: authority.zone,
+          archivedTermCount: contexts.terms.filter(term => term.id !== activeTerm?.id).length,
+        });
       }
-      return NextResponse.json(await getTeacherAcademicRoster(tx, { schoolId: session.schoolId, teacherId: session.userId, classId, subjectId, termId }));
+      const term = await assertWritableTerm(tx, session.schoolId, termId);
+      return NextResponse.json({ ...(await getTeacherAcademicRoster(tx, { schoolId: session.schoolId, teacherId: session.userId, classId, subjectId, termId })), term: { ...term, lifecycle: termLifecycle(term, new Date(), await timezone(tx, session.schoolId)) } });
     });
   } catch (error) { return routeError(error); }
 }
