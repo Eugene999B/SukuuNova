@@ -10,7 +10,7 @@ export type NavGroup = { label: string; items: NavItem[] };
 
 const teacherDestinations: Record<string, string> = {
   "My Lessons & Planning": "/teacher/lessons",
-  "My Assessments": "/teacher/studio#activities",
+  "My Assessments": "/teacher/studio",
   "My Messages": "/teacher/messages",
   "Class Announcements": "/teacher/announcements",
   "Help & Support": "/teacher/help",
