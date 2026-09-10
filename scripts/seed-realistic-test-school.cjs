@@ -6,8 +6,8 @@
  * different from DATABASE_URL. It changes DATABASE_URL in-process to the
  * isolated test database before constructing PrismaClient.
  *
- * The fixture is intentionally synthetic and may be reset/re-run with the
- * same TEST_SCHOOL_CODE. It does not create or touch production-school data.
+ * The fixture is intentionally synthetic and idempotent enough to be re-run
+ * with the same TEST_SCHOOL_CODE. It never writes credentials to its report.
  */
 const { PrismaClient, Prisma } = require("@prisma/client");
 const { createId } = require("@paralleldrive/cuid2");
@@ -32,7 +32,12 @@ const prisma = new PrismaClient();
 const TEST_CODE = (process.env.TEST_SCHOOL_CODE || "sn-test-2026").toLowerCase();
 const TEST_SCHOOL_NAME = process.env.TEST_SCHOOL_NAME || "SukuuNova Demonstration Academy";
 const PASSWORD = process.env.TEST_SEED_PASSWORD || "SukuuTest!2026";
+const requestedStudentCount = Number(process.env.TEST_STUDENT_COUNT || 90);
 if (PASSWORD.length < 12) throw new Error("TEST_SEED_PASSWORD must be at least 12 characters.");
+if (!Number.isInteger(requestedStudentCount) || requestedStudentCount < 1 || requestedStudentCount > 500) {
+  throw new Error("TEST_STUDENT_COUNT must be an integer between 1 and 500.");
+}
+const STUDENT_COUNT = requestedStudentCount;
 
 const roles = [
   ["Owner", "owner"], ["Principal", "principal"], ["Accountant", "accountant"],
@@ -61,144 +66,297 @@ const rolePermissions = {
 
 function uid() { return createId(); }
 function email(slug) { return `${slug}.${TEST_CODE}@test.sukuunova.local`; }
-function phone(n) { return `+233240${String(100000+n).slice(-6)}`; }
-function d(s) { return new Date(`${s}T00:00:00.000Z`); }
-function schoolScopedId() { return uid(); }
+function phone(n) { return `+233240${String(100000 + n).slice(-6)}`; }
+function d(value) { return new Date(`${value}T00:00:00.000Z`); }
 async function setTenant(tx, schoolId) { await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id',$1,true)", schoolId); }
 async function exec(tx, sql, ...params) { return tx.$executeRawUnsafe(sql, ...params); }
 
 async function main() {
   const now = new Date();
-  const passwordsHash = await hash(PASSWORD, 12);
-  const audit = [];
-  const credentials = [];
+  const passwordHash = await hash(PASSWORD, 12);
 
-  const schoolExisting = await prisma.schoolLoginDirectory.findUnique({ where: { uniqueCode: TEST_CODE } });
-  const schoolId = schoolExisting?.schoolId || uid();
+  const directory = await prisma.schoolLoginDirectory.findUnique({ where: { uniqueCode: TEST_CODE } });
+  const schoolId = directory?.schoolId || uid();
   const plan = await prisma.subscriptionPlan.upsert({
-    where: { name: "Foundation" }, update: { featureFlags: ["face_recognition","payroll","transport","feeding","cbt","library","assets","recruitment"] },
+    where: { name: "Foundation" },
+    update: { featureFlags: ["face_recognition","payroll","transport","feeding","cbt","library","assets","recruitment"] },
     create: { name: "Foundation", price: new Prisma.Decimal(0), featureFlags: ["face_recognition","payroll","transport","feeding","cbt","library","assets","recruitment"] }
   });
 
-  await prisma.$transaction(async (tx) => {
+  const report = await prisma.$transaction(async (tx) => {
     await setTenant(tx, schoolId);
 
-    await tx.school.upsert({ where: { id: schoolId }, update: { uniqueCode: TEST_CODE, name: TEST_SCHOOL_NAME, status: "active", subscriptionPlanId: plan.id, logoUrl: "https://raw.githubusercontent.com/Eugene999B/SukuuNova/main/icon.svg" }, create: { id: schoolId, uniqueCode: TEST_CODE, name: TEST_SCHOOL_NAME, status: "active", subscriptionPlanId: plan.id, logoUrl: "https://raw.githubusercontent.com/Eugene999B/SukuuNova/main/icon.svg" } });
-    await tx.schoolLoginDirectory.upsert({ where: { schoolId }, update: { uniqueCode: TEST_CODE, status: "active" }, create: { schoolId, uniqueCode: TEST_CODE, status: "active" } });
-    await tx.schoolSettings.upsert({ where: { schoolId }, update: { timezone: "Africa/Accra", attendanceGraceMinutes: 10, gradingScale: { A1: 80, B2: 70, B3: 65, C4: 60, C5: 55, C6: 50, D7: 45, E8: 40, F9: 0 }, notificationChannels: { in_app: true, email: true, sms: false, whatsapp: false } }, create: { schoolId, timezone: "Africa/Accra", attendanceGraceMinutes: 10, gradingScale: { A1: 80, B2: 70, B3: 65, C4: 60, C5: 55, C6: 50, D7: 45, E8: 40, F9: 0 }, notificationChannels: { in_app: true, email: true, sms: false, whatsapp: false } } });
+    await tx.school.upsert({
+      where: { id: schoolId },
+      update: { uniqueCode: TEST_CODE, name: TEST_SCHOOL_NAME, status: "active", subscriptionPlanId: plan.id },
+      create: { id: schoolId, uniqueCode: TEST_CODE, name: TEST_SCHOOL_NAME, status: "active", subscriptionPlanId: plan.id }
+    });
+    await tx.schoolLoginDirectory.upsert({
+      where: { schoolId },
+      update: { uniqueCode: TEST_CODE, status: "active" },
+      create: { schoolId, uniqueCode: TEST_CODE, status: "active" }
+    });
+    await tx.schoolSettings.upsert({
+      where: { schoolId },
+      update: { timezone: "Africa/Accra", attendanceGraceMinutes: 10, gradingScale: { A1: 80, B2: 70, B3: 65, C4: 60, C5: 55, C6: 50, D7: 45, E8: 40, F9: 0 }, notificationChannels: { in_app: true, email: true, sms: false, whatsapp: false } },
+      create: { schoolId, timezone: "Africa/Accra", attendanceGraceMinutes: 10, gradingScale: { A1: 80, B2: 70, B3: 65, C4: 60, C5: 55, C6: 50, D7: 45, E8: 40, F9: 0 }, notificationChannels: { in_app: true, email: true, sms: false, whatsapp: false } }
+    });
 
-    const permissions = new Map();
     const roleIds = new Map();
-    for (const [name, slug] of roles) {
-      const role = await tx.role.upsert({ where: { schoolId_name: { schoolId, name } }, update: {}, create: { schoolId, name, description: `${name} role` } });
+    for (const [name, key] of roles) {
+      const role = await tx.role.upsert({
+        where: { schoolId_name: { schoolId, name } },
+        update: { key, isSystem: true },
+        create: { schoolId, name, key, isSystem: true }
+      });
       roleIds.set(name, role.id);
-      permissions.set(name, rolePermissions[name] || []);
     }
-    const roleDefinitions = Object.entries(rolePermissions);
-    for (const [roleName, perms] of roleDefinitions) {
+    for (const [roleName, permissionKeys] of Object.entries(rolePermissions)) {
       const roleId = roleIds.get(roleName);
-      for (const perm of perms) {
-        const existing = await tx.permission.findUnique({ where: { key: perm } });
-        const permission = existing || await tx.permission.create({ data: { key: perm, description: perm } });
-        await tx.rolePermission.upsert({ where: { roleId_permissionId: { roleId, permissionId: permission.id } }, update: {}, create: { roleId, permissionId: permission.id } });
+      if (!roleId) throw new Error(`Role was not created: ${roleName}`);
+      for (const key of permissionKeys) {
+        const permission = await tx.permission.upsert({ where: { key }, update: {}, create: { key, description: key } });
+        await tx.rolePermission.upsert({
+          where: { roleId_permissionId: { roleId, permissionId: permission.id } },
+          update: { schoolId },
+          create: { schoolId, roleId, permissionId: permission.id }
+        });
       }
     }
 
-    const termRows = [
+    const academicYear = await tx.academicYear.upsert({
+      where: { schoolId_name: { schoolId, name: "2025/2026" } },
+      update: { startDate: d("2025-09-01"), endDate: d("2026-07-31"), isLocked: false },
+      create: { schoolId, name: "2025/2026", startDate: d("2025-09-01"), endDate: d("2026-07-31"), isLocked: false }
+    });
+    const termMap = {};
+    for (const [name, startDate, endDate] of [
       ["Term 1", "2025-09-01", "2025-12-19"],
       ["Term 2", "2026-01-05", "2026-04-10"],
       ["Term 3", "2026-04-20", "2026-07-31"]
-    ];
-    const termMap = new Map();
-    for (const [name, startDate, endDate] of termRows) {
-      const term = await tx.term.upsert({ where: { schoolId_name: { schoolId, name } }, update: { startDate: d(startDate), endDate: d(endDate), status: name === "Term 3" ? "ACTIVE" : "COMPLETED" }, create: { schoolId, name, startDate: d(startDate), endDate: d(endDate), status: name === "Term 3" ? "ACTIVE" : "COMPLETED" } });
-      termMap.set(name, term);
+    ]) {
+      termMap[name] = await tx.term.upsert({
+        where: { schoolId_academicYearId_name: { schoolId, academicYearId: academicYear.id, name } },
+        update: { startDate: d(startDate), endDate: d(endDate), isLocked: false },
+        create: { schoolId, academicYearId: academicYear.id, name, startDate: d(startDate), endDate: d(endDate), isLocked: false }
+      });
     }
-    const academicYear = await tx.academicYear.upsert({ where: { schoolId_name: { schoolId, name: "2025/2026" } }, update: {}, create: { schoolId, name: "2025/2026", startDate: d("2025-09-01"), endDate: d("2026-07-31"), status: "ACTIVE" } });
 
+    const houseDefs = [
+      ["Adom House", "ADOM", "#2563eb"],
+      ["Nkrumah House", "NKR", "#059669"],
+      ["Asante House", "ASA", "#f59e0b"],
+      ["Anloga House", "ANL", "#dc2626"]
+    ];
     const houses = [];
-    for (const name of ["Adom House","Nkrumah House","Asante House","Anloga House"]) houses.push(await tx.house.upsert({ where: { schoolId_name: { schoolId, name } }, update: {}, create: { schoolId, name, color: name.includes("Adom") ? "#2563eb" : name.includes("Nkrumah") ? "#059669" : name.includes("Asante") ? "#f59e0b" : "#dc2626" } }));
+    for (const [name, code, color] of houseDefs) {
+      houses.push(await tx.house.upsert({
+        where: { schoolId_name: { schoolId, name } },
+        update: { code, color, isActive: true },
+        create: { schoolId, name, code, color, isActive: true }
+      }));
+    }
 
     const classes = [];
-    for (const name of ["JHS 1 A","JHS 1 B","JHS 2 A","JHS 2 B","JHS 3 A","JHS 3 B","Primary 5","Primary 6","Creche"]) classes.push(await tx.class.upsert({ where: { schoolId_name: { schoolId, name } }, update: {}, create: { schoolId, name, level: name.startsWith("JHS") ? "JHS" : name.startsWith("Primary") ? "PRIMARY" : "EARLY_YEARS" } }));
+    for (const name of ["JHS 1 A","JHS 1 B","JHS 2 A","JHS 2 B","JHS 3 A","JHS 3 B","Primary 5","Primary 6","Creche"]) {
+      classes.push(await tx.class.upsert({
+        where: { schoolId_name: { schoolId, name } },
+        update: { level: name.startsWith("JHS") ? "JHS" : name.startsWith("Primary") ? "PRIMARY" : "EARLY_YEARS" },
+        create: { schoolId, name, level: name.startsWith("JHS") ? "JHS" : name.startsWith("Primary") ? "PRIMARY" : "EARLY_YEARS" }
+      }));
+    }
 
     const subjects = [];
-    for (const name of ["Mathematics","English Language","Integrated Science","Social Studies","ICT","French","Creative Arts","Religious and Moral Education"]) subjects.push(await tx.subject.upsert({ where: { schoolId_name: { schoolId, name } }, update: {}, create: { schoolId, name, code: name.slice(0,3).toUpperCase() } }));
+    for (const name of ["Mathematics","English Language","Integrated Science","Social Studies","ICT","French","Creative Arts","Religious and Moral Education"]) {
+      subjects.push(await tx.subject.upsert({ where: { schoolId_name: { schoolId, name } }, update: {}, create: { schoolId, name } }));
+    }
 
     const users = {};
-    for (const [name, slug, roleName] of [["Ama Mensah","owner","Owner"],["Kofi Boateng","principal","Principal"],["Linda Owusu","accountant","Accountant"],["Yaw Asare","class.teacher","Class Teacher"],["Esi Tetteh","subject.teacher","Subject Teacher"],["Mavis Marfo","hr","HR Officer"],["Daniel Badu","transport","Transport Officer"],["Naa Addo","frontdesk","Front Desk/Gate Security"],["Sena Ofori","academic","Academic Coordinator"]]) {
-      const u = await tx.user.upsert({ where: { schoolId_email: { schoolId, email: email(slug) } }, update: { name, passwordHash: passwordsHash, status: "active", needsPasswordChange: false }, create: { schoolId, name, email: email(slug), phone: phone(50 + Object.keys(users).length), passwordHash: passwordsHash, status: "active", needsPasswordChange: false } });
-      users[slug] = u;
-      await tx.userRole.upsert({ where: { userId_roleId: { userId: u.id, roleId: roleIds.get(roleName) } }, update: { schoolId }, create: { schoolId, userId: u.id, roleId: roleIds.get(roleName) } });
+    const accountDefs = [
+      ["Ama Mensah","owner","Owner"], ["Kofi Boateng","principal","Principal"], ["Linda Owusu","accountant","Accountant"],
+      ["Yaw Asare","class.teacher","Class Teacher"], ["Esi Tetteh","subject.teacher","Subject Teacher"], ["Mavis Marfo","hr","HR Officer"],
+      ["Daniel Badu","transport","Transport Officer"], ["Naa Addo","frontdesk","Front Desk/Gate Security"], ["Sena Ofori","academic","Academic Coordinator"]
+    ];
+    for (let index = 0; index < accountDefs.length; index += 1) {
+      const [name, slug, roleName] = accountDefs[index];
+      const userEmail = email(slug);
+      const userPhone = phone(50 + index);
+      const user = await tx.user.upsert({
+        where: { schoolId_email: { schoolId, email: userEmail } },
+        update: { name, phone: userPhone, passwordHash, status: "active", needsPasswordChange: false },
+        create: { schoolId, name, email: userEmail, phone: userPhone, passwordHash, status: "active", needsPasswordChange: false }
+      });
+      users[slug] = user;
+      const roleId = roleIds.get(roleName);
+      await tx.userRole.upsert({
+        where: { userId_roleId: { userId: user.id, roleId } },
+        update: { schoolId },
+        create: { schoolId, userId: user.id, roleId }
+      });
     }
 
+    const firstNames = ["Kwesi","Ama","Kojo","Abena","Yaw","Akua","Kofi","Esi","Mavis","Daniel","Naa","Fiifi","Adjoa","Sena","Elikem"];
+    const lastNames = ["Mensah","Owusu","Boateng","Asare","Addo","Tetteh","Ofori","Sarpong","Badu","Marfo"];
     const students = [];
-    const studentsByClass = new Map(classes.map((c) => [c.id, []]));
-    for (let i = 0; i < 90; i++) {
-      const cls = classes[i % classes.length];
-      const studentNo = `SNT-${String(i + 1).padStart(4, "0")}`;
-      const firstNames = ["Kwesi","Ama","Kojo","Abena","Yaw","Akua","Kofi","Esi","Mavis","Daniel","Naa","Fiifi","Adjoa","Sena","Elikem"];
-      const lastNames = ["Mensah","Owusu","Boateng","Asare","Addo","Tetteh","Ofori","Sarpong","Badu","Marfo"];
-      const name = `${firstNames[i % firstNames.length]} ${lastNames[Math.floor(i / firstNames.length) % lastNames.length]}`;
-      const student = await tx.student.upsert({ where: { schoolId_admissionNo: { schoolId, admissionNo: studentNo } }, update: { name, dob: d(`${2010 + (i % 5)}-${String((i % 12) + 1).padStart(2,"0")}-${String((i % 27) + 1).padStart(2,"0")}`), classId: cls.id, houseId: houses[i % houses.length].id, status: "active", photoUrl: "https://raw.githubusercontent.com/Eugene999B/SukuuNova/main/icon.svg" }, create: { schoolId, admissionNo: studentNo, name, dob: d(`${2010 + (i % 5)}-${String((i % 12) + 1).padStart(2,"0")}-${String((i % 27) + 1).padStart(2,"0")}`), classId: cls.id, houseId: houses[i % houses.length].id, status: "active", photoUrl: "https://raw.githubusercontent.com/Eugene999B/SukuuNova/main/icon.svg" } });
-      students.push(student); studentsByClass.get(cls.id).push(student);
+    const studentsByClass = new Map(classes.map((classroom) => [classroom.id, []]));
+    for (let index = 0; index < STUDENT_COUNT; index += 1) {
+      const classroom = classes[index % classes.length];
+      const admissionNo = `SNT-${String(index + 1).padStart(4, "0")}`;
+      const name = `${firstNames[index % firstNames.length]} ${lastNames[Math.floor(index / firstNames.length) % lastNames.length]}`;
+      const dob = d(`${2010 + (index % 5)}-${String((index % 12) + 1).padStart(2,"0")}-${String((index % 27) + 1).padStart(2,"0")}`);
+      const student = await tx.student.upsert({
+        where: { schoolId_admissionNo: { schoolId, admissionNo } },
+        update: { name, dob, classId: classroom.id, houseId: houses[index % houses.length].id, status: "active" },
+        create: { schoolId, admissionNo, name, dob, classId: classroom.id, houseId: houses[index % houses.length].id, status: "active" }
+      });
+      students.push(student);
+      studentsByClass.get(classroom.id).push(student);
     }
 
-    // 50 guardians; every 10th guardian has two siblings to exercise family navigation.
-    for (let i = 0; i < 50; i++) {
-      const g = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId, phone: phone(100 + i) } }, update: { name: `Guardian ${i + 1}`, email: email(`guardian${i + 1}`) }, create: { schoolId, name: `Guardian ${i + 1}`, phone: phone(100 + i), email: email(`guardian${i + 1}`) } });
-      const gu = await tx.user.upsert({ where: { schoolId_email: { schoolId, email: email(`guardian${i + 1}`) } }, update: { name: g.name, passwordHash: passwordsHash, phone: g.phone, status: "active", needsPasswordChange: false }, create: { schoolId, name: g.name, email: g.email, phone: g.phone, passwordHash: passwordsHash, status: "active", needsPasswordChange: false } });
-      await tx.userRole.upsert({ where: { userId_roleId: { userId: gu.id, roleId: roleIds.get("Parent") } }, update: { schoolId }, create: { schoolId, userId: gu.id, roleId: roleIds.get("Parent") } });
-      await tx.guardian.update({ where: { id: g.id }, data: { userId: gu.id } });
-      const childIndexes = i % 10 === 0 ? [i, (i + 50) % students.length] : [i];
-      for (const idx of childIndexes) await tx.studentGuardian.upsert({ where: { studentId_guardianId: { studentId: students[idx].id, guardianId: g.id } }, update: { relationship: "Parent", isPrimary: idx === childIndexes[0] }, create: { schoolId, studentId: students[idx].id, guardianId: g.id, relationship: "Parent", isPrimary: idx === childIndexes[0] } });
-      credentials.push({ type: "guardian", role: "Parent", name: g.name, email: gu.email, password: PASSWORD, schoolCode: TEST_CODE, linkedStudents: childIndexes.map(idx => students[idx].admissionNo) });
+    const parentRoleId = roleIds.get("Parent");
+    for (let index = 0; index < 50; index += 1) {
+      const guardianPhone = phone(100 + index);
+      const guardianEmail = email(`guardian${index + 1}`);
+      const guardian = await tx.guardian.upsert({
+        where: { schoolId_phone: { schoolId, phone: guardianPhone } },
+        update: { name: `Guardian ${index + 1}`, email: guardianEmail },
+        create: { schoolId, name: `Guardian ${index + 1}`, phone: guardianPhone, email: guardianEmail }
+      });
+      const guardianUser = await tx.user.upsert({
+        where: { schoolId_email: { schoolId, email: guardianEmail } },
+        update: { name: guardian.name, phone: guardianPhone, passwordHash, status: "active", needsPasswordChange: false },
+        create: { schoolId, name: guardian.name, email: guardianEmail, phone: guardianPhone, passwordHash, status: "active", needsPasswordChange: false }
+      });
+      await tx.userRole.upsert({
+        where: { userId_roleId: { userId: guardianUser.id, roleId: parentRoleId } },
+        update: { schoolId },
+        create: { schoolId, userId: guardianUser.id, roleId: parentRoleId }
+      });
+      await tx.guardian.update({ where: { id: guardian.id }, data: { userId: guardianUser.id } });
+      const childIndexes = index % 10 === 0 ? [index, (index + 50) % students.length] : [index];
+      for (let childPosition = 0; childPosition < childIndexes.length; childPosition += 1) {
+        const student = students[childIndexes[childPosition]];
+        await tx.studentGuardian.upsert({
+          where: { studentId_guardianId: { studentId: student.id, guardianId: guardian.id } },
+          update: { schoolId, relationship: "Parent", isPrimary: childPosition === 0 },
+          create: { schoolId, studentId: student.id, guardianId: guardian.id, relationship: "Parent", isPrimary: childPosition === 0 }
+        });
+      }
     }
 
-    // Attendance over a realistic rolling history plus an explicit review conflict.
-    for (let day = 0; day < 30; day++) {
-      const date = new Date(now); date.setUTCDate(date.getUTCDate() - day); if ([0,6].includes(date.getUTCDay())) continue;
-      const dateOnly = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-      for (const student of students) {
-        const mode = (student.id.charCodeAt(0) + day) % 10;
-        const type = mode === 9 ? "out" : "in";
-        await exec(tx, `INSERT INTO "AttendanceEvent" ("id","schoolId","studentId","type","method","timestamp","attendanceDate","isLate","recordedBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`, uid(), schoolId, student.id, type, mode === 0 ? "qr" : "manual", date, dateOnly, mode === 8, users["class.teacher"].id);
+    for (let day = 0; day < 30; day += 1) {
+      const eventDate = new Date(now);
+      eventDate.setUTCDate(eventDate.getUTCDate() - day);
+      if ([0, 6].includes(eventDate.getUTCDay())) continue;
+      const attendanceDate = new Date(Date.UTC(eventDate.getUTCFullYear(), eventDate.getUTCMonth(), eventDate.getUTCDate()));
+      for (let index = 0; index < students.length; index += 1) {
+        const student = students[index];
+        const mode = (index + day) % 10;
+        await exec(
+          tx,
+          `INSERT INTO "AttendanceEvent" ("id","schoolId","studentId","type","method","timestamp","attendanceDate","isLate","recordedBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
+          uid(), schoolId, student.id, mode === 9 ? "out" : "in", mode === 0 ? "qr" : "manual", eventDate, attendanceDate, mode === 8, users["class.teacher"].id
+        );
       }
     }
     const conflictStudent = students[0];
-    await exec(tx, `INSERT INTO "AttendanceEvent" ("id","schoolId","studentId","type","method","timestamp","attendanceDate","isLate","recordedBy") VALUES ($1,$2,$3,'in','device',$4,$5,false,$6) ON CONFLICT DO NOTHING`, uid(), schoolId, conflictStudent.id, d("2026-08-31"), d("2026-08-31"), users["transport"].id);
-    await exec(tx, `INSERT INTO "AttendanceEvent" ("id","schoolId","studentId","type","method","timestamp","attendanceDate","isLate","recordedBy") VALUES ($1,$2,$3,'out','manual',$4,$5,false,$6) ON CONFLICT DO NOTHING`, uid(), schoolId, conflictStudent.id, d("2026-08-31"), d("2026-08-31"), users["frontdesk"].id);
+    await exec(tx, `INSERT INTO "AttendanceEvent" ("id","schoolId","studentId","type","method","timestamp","attendanceDate","isLate","recordedBy") VALUES ($1,$2,$3,'in','device',$4,$5,false,$6) ON CONFLICT DO NOTHING`, uid(), schoolId, conflictStudent.id, d("2026-08-31"), d("2026-08-31"), users.transport.id);
+    await exec(tx, `INSERT INTO "AttendanceEvent" ("id","schoolId","studentId","type","method","timestamp","attendanceDate","isLate","recordedBy") VALUES ($1,$2,$3,'out','manual',$4,$5,false,$6) ON CONFLICT DO NOTHING`, uid(), schoolId, conflictStudent.id, d("2026-08-31"), d("2026-08-31"), users.frontdesk.id);
 
-    // Assessments and scores for each term; one deliberately high-subject-count student gets all eight subjects.
     const assessments = [];
-    for (const term of [termMap["Term 1"], termMap["Term 2"], termMap["Term 3"]]) for (const cls of classes) for (const subj of subjects) {
-      const a = await tx.assessment.upsert({ where: { schoolId_termId_classId_subjectId_name: { schoolId, termId: term.id, classId: cls.id, subjectId: subj.id, name: "Continuous Assessment" } }, update: {}, create: { schoolId, termId: term.id, classId: cls.id, subjectId: subj.id, name: "Continuous Assessment", type: "CA", weight: new Prisma.Decimal(40), maxScore: new Prisma.Decimal(100) } });
-      const e = await tx.assessment.upsert({ where: { schoolId_termId_classId_subjectId_name: { schoolId, termId: term.id, classId: cls.id, subjectId: subj.id, name: "End of Term Examination" } }, update: {}, create: { schoolId, termId: term.id, classId: cls.id, subjectId: subj.id, name: "End of Term Examination", type: "EXAM", weight: new Prisma.Decimal(60), maxScore: new Prisma.Decimal(100) } });
-      assessments.push([a, e, cls, subj, term]);
-    }
-    for (const [a, e, cls, subj, term] of assessments) {
-      const classStudents = studentsByClass.get(cls.id) || [];
-      for (let idx = 0; idx < classStudents.length; idx++) {
-        const base = 45 + ((idx + subj.name.length + term.name.length) % 45);
-        await tx.score.upsert({ where: { studentId_assessmentId: { studentId: classStudents[idx].id, assessmentId: a.id } }, update: { value: new Prisma.Decimal(base), enteredBy: users["subject.teacher"].id }, create: { schoolId, studentId: classStudents[idx].id, subjectId: subj.id, assessmentId: a.id, value: new Prisma.Decimal(base), enteredBy: users["subject.teacher"].id } });
-        await tx.score.upsert({ where: { studentId_assessmentId: { studentId: classStudents[idx].id, assessmentId: e.id } }, update: { value: new Prisma.Decimal(Math.max(0, base - 5)), enteredBy: users["subject.teacher"].id }, create: { schoolId, studentId: classStudents[idx].id, subjectId: subj.id, assessmentId: e.id, value: new Prisma.Decimal(Math.max(0, base - 5)), enteredBy: users["subject.teacher"].id } });
+    for (const term of Object.values(termMap)) {
+      for (const classroom of classes) {
+        for (const subject of subjects) {
+          for (const definition of [["Continuous Assessment", "ca", 40], ["End of Term Examination", "exam", 60]]) {
+            const [name, type, weight] = definition;
+            assessments.push({
+              assessment: await tx.assessment.upsert({
+                where: { schoolId_termId_classId_subjectId_name: { schoolId, termId: term.id, classId: classroom.id, subjectId: subject.id, name } },
+                update: { type, weight: new Prisma.Decimal(weight), maxScore: new Prisma.Decimal(100) },
+                create: { schoolId, termId: term.id, classId: classroom.id, subjectId: subject.id, name, type, weight: new Prisma.Decimal(weight), maxScore: new Prisma.Decimal(100) }
+              }),
+              classroom,
+              subject,
+              term
+            });
+          }
+        }
       }
     }
-    const highLoad = students[0];
-    await tx.reportCard.create({ data: { schoolId, studentId: highLoad.id, termId: termMap["Term 2"].id, status: "approved", approvedBy: users.principal.id, approvedAt: d("2026-04-01"), calculationSnapshot: { calculationVersion: 1, subjects: subjects.map(s => s.name) }, calculationVersion: 1, remarks: "Consistent effort across a broad subject load." } }).catch(() => {});
-
-    // Fees, invoices, partial payment and reversal scenario.
-    const feeItems = [];
-    for (const term of [termMap["Term 1"], termMap["Term 2"], termMap["Term 3"]]) for (const [name, amount] of [["Tuition", 1800],["ICT Levy", 180],["Activities", 120]]) feeItems.push(await tx.feeItem.upsert({ where: { schoolId_termId_classId_name: { schoolId, termId: term.id, classId: null, name } }, update: { amount: new Prisma.Decimal(amount) }, create: { schoolId, termId: term.id, classId: null, name, amount: new Prisma.Decimal(amount) } }));
-    for (const term of [termMap["Term 1"], termMap["Term 2"], termMap["Term 3"]]) for (const student of students) {
-      const invoice = await tx.invoice.upsert({ where: { schoolId_studentId_termId: { schoolId, studentId: student.id, termId: term.id } }, update: { total: new Prisma.Decimal(2100), balance: new Prisma.Decimal(2100) }, create: { schoolId, studentId: student.id, termId: term.id, invoiceNo: `${TEST_CODE.toUpperCase()}-${term.name.replace(" ","")}-${student.admissionNo}`, total: new Prisma.Decimal(2100), balance: new Prisma.Decimal(2100), status: "issued" } });
-      for (const item of feeItems.filter((f) => f.termId === term.id)) await tx.invoiceLine.upsert({ where: { invoiceId_feeItemId: { invoiceId: invoice.id, feeItemId: item.id } }, update: {}, create: { schoolId, invoiceId: invoice.id, feeItemId: item.id, description: item.name, quantity: new Prisma.Decimal(1), unitAmount: item.amount, amount: item.amount } });
+    for (const row of assessments) {
+      const classStudents = studentsByClass.get(row.classroom.id) || [];
+      for (let index = 0; index < classStudents.length; index += 1) {
+        const value = 45 + ((index + row.subject.name.length + row.term.name.length + (row.assessment.type === "exam" ? 7 : 0)) % 45);
+        await tx.score.upsert({
+          where: { studentId_assessmentId: { studentId: classStudents[index].id, assessmentId: row.assessment.id } },
+          update: { value: new Prisma.Decimal(value), status: "present", enteredBy: users["subject.teacher"].id },
+          create: { schoolId, studentId: classStudents[index].id, subjectId: row.subject.id, assessmentId: row.assessment.id, value: new Prisma.Decimal(value), status: "present", enteredBy: users["subject.teacher"].id }
+        });
+      }
     }
 
-    const report = { generatedAt: new Date().toISOString(), school: { id: schoolId, code: TEST_CODE, name: TEST_SCHOOL_NAME }, summary: { students: students.length, classes: classes.length, subjects: subjects.length, guardians: 50, terms: 3, invoices: students.length * 3 } };
-    fs.writeFileSync(path.join(__dirname, ".realistic-test-school-output.json"), JSON.stringify(report, null, 2));
-    console.log(JSON.stringify({ generatedAt: report.generatedAt, school: report.school, summary: report.summary }));
-  });
+    await tx.reportCard.upsert({
+      where: { studentId_termId: { studentId: students[0].id, termId: termMap["Term 2"].id } },
+      update: { status: "approved", approvedBy: users.principal.id, approvedAt: d("2026-04-01"), calculationSnapshot: { calculationVersion: 1, subjects: subjects.map((subject) => subject.name) }, calculationVersion: 1, remarks: "Consistent effort across a broad subject load." },
+      create: { schoolId, studentId: students[0].id, termId: termMap["Term 2"].id, status: "approved", approvedBy: users.principal.id, approvedAt: d("2026-04-01"), calculationSnapshot: { calculationVersion: 1, subjects: subjects.map((subject) => subject.name) }, calculationVersion: 1, remarks: "Consistent effort across a broad subject load." }
+    });
+
+    const feeItemsByTerm = new Map();
+    for (const term of Object.values(termMap)) {
+      const items = [];
+      for (const [name, amount] of [["Tuition", 1800], ["ICT Levy", 180], ["Activities", 120]]) {
+        items.push(await tx.feeItem.upsert({
+          where: { schoolId_termId_classId_name: { schoolId, termId: term.id, classId: null, name } },
+          update: { amount: new Prisma.Decimal(amount) },
+          create: { schoolId, name, amount: new Prisma.Decimal(amount), termId: term.id, classId: null }
+        }));
+      }
+      feeItemsByTerm.set(term.id, items);
+    }
+
+    for (const term of Object.values(termMap)) {
+      const feeItems = feeItemsByTerm.get(term.id) || [];
+      for (const student of students) {
+        const invoice = await tx.invoice.upsert({
+          where: { studentId_termId: { studentId: student.id, termId: term.id } },
+          update: { totalAmount: new Prisma.Decimal(2100), status: "unpaid" },
+          create: { schoolId, studentId: student.id, termId: term.id, totalAmount: new Prisma.Decimal(2100), status: "unpaid" }
+        });
+        for (const item of feeItems) {
+          await tx.invoiceLine.upsert({
+            where: { invoiceId_feeItemId: { invoiceId: invoice.id, feeItemId: item.id } },
+            update: { schoolId, amount: item.amount },
+            create: { schoolId, invoiceId: invoice.id, feeItemId: item.id, amount: item.amount }
+          });
+        }
+      }
+    }
+
+    const sampleInvoice = await tx.invoice.findFirst({ where: { schoolId, studentId: students[0].id, termId: termMap["Term 3"].id } });
+    if (sampleInvoice) {
+      const reference = `${TEST_CODE.toUpperCase()}-SAMPLE-PAYMENT`;
+      await tx.payment.upsert({
+        where: { schoolId_reference: { schoolId, reference } },
+        update: { invoiceId: sampleInvoice.id, amount: new Prisma.Decimal(900), method: "mobile_money" },
+        create: { schoolId, invoiceId: sampleInvoice.id, amount: new Prisma.Decimal(900), method: "mobile_money", reference }
+      });
+      await tx.invoice.update({ where: { id: sampleInvoice.id }, data: { status: "part_paid" } });
+    }
+
+    const accounts = Object.values(users).map((user) => ({ name: user.name, email: user.email }));
+    return {
+      generatedAt: new Date().toISOString(),
+      school: { id: schoolId, code: TEST_CODE, name: TEST_SCHOOL_NAME },
+      summary: { students: students.length, classes: classes.length, subjects: subjects.length, guardians: 50, terms: Object.keys(termMap).length, invoices: students.length * Object.keys(termMap).length },
+      accounts
+    };
+  }, { maxWait: 15000, timeout: 300000 });
+
+  fs.writeFileSync(path.join(__dirname, ".realistic-test-school-output.json"), JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report, null, 2));
 }
 
-main().catch((err) => { console.error(err); process.exitCode = 1; }).finally(async () => prisma.$disconnect());
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+}).finally(async () => prisma.$disconnect());
