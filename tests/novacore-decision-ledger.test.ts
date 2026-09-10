@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { fingerprintNovaCoreInput, prepareNovaCoreDecision } from "../src/lib/novacore/decision-ledger";
+import {
+  fingerprintNovaCoreInput,
+  prepareNovaCoreDecision,
+  recordNovaCoreDecisionBestEffort,
+} from "../src/lib/novacore/decision-ledger";
 
 describe("NovaCore decision ledger", () => {
   it("fingerprints equivalent object inputs deterministically regardless of key order", () => {
@@ -45,5 +49,28 @@ describe("NovaCore decision ledger", () => {
     });
     expect(JSON.stringify(row)).not.toContain("Sensitive Example");
     expect(JSON.stringify(row)).not.toContain("Do not store");
+  });
+
+  it("rolls back only the telemetry savepoint when an evidence insert fails", async () => {
+    const statements: string[] = [];
+    const tx = {
+      $executeRawUnsafe: async (sql: string, ..._params: unknown[]) => {
+        statements.push(sql);
+        if (sql.includes('INSERT INTO "NovaCoreDecision"')) throw new Error("simulated telemetry failure");
+        return 0;
+      },
+    } as never;
+
+    const result = await recordNovaCoreDecisionBestEffort(tx, {
+      schoolId: "school-1",
+      algorithmKey: "transport.gps-validation",
+      inputFingerprint: fingerprintNovaCoreInput({ packet: "test" }),
+      outputSummary: { accepted: 1 },
+    });
+
+    expect(result).toBeNull();
+    expect(statements[0]).toMatch(/^SAVEPOINT novacore_decision_/);
+    expect(statements.some((sql) => sql.startsWith("ROLLBACK TO SAVEPOINT novacore_decision_"))).toBe(true);
+    expect(statements.some((sql) => sql.startsWith("RELEASE SAVEPOINT novacore_decision_"))).toBe(true);
   });
 });
