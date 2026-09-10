@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { getSchoolAuthorization } from "@/lib/authorization";
+import { schoolWorkspaceRedirect } from "@/lib/workspace-boundary";
 
 /**
  * Hard boundary between the school administration universe and pure teacher accounts.
@@ -18,6 +19,7 @@ export default async function SchoolWorkspaceLayout({ children }: { children: Re
     return access.workspace;
   });
 
-  if (workspace === "teacher") redirect("/teacher");
+  const destination = schoolWorkspaceRedirect(workspace);
+  if (destination) redirect(destination);
   return children;
 }
