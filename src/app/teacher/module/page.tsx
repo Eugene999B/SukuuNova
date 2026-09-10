@@ -11,17 +11,13 @@ const destination: Record<string, string> = {
   "My Gradebook": "/teacher/gradebook",
   "My Timetable": "/teacher/timetable",
   "My Classes": "/teacher/students",
-  "My Lessons & Planning": "/teacher/studio#notes",
+  "My Lessons & Planning": "/teacher/lessons",
   "My Assessments": "/teacher/studio#activities",
   "My Messages": "/teacher/messages",
   "Class Announcements": "/teacher/announcements",
 };
 
-/**
- * Legacy compatibility route. The old generic teacher module rendered placeholder
- * content and could encourage links back into school administration. Keep old
- * bookmarks working, but immediately send the teacher to a real teacher-owned page.
- */
+/** Legacy bookmarks are redirected into real teacher-owned workspaces. */
 export default async function TeacherModulePage({ searchParams }: Props) {
   const session = await requireSchoolSession();
   await withTenant(session.schoolId, async (tx) => {
