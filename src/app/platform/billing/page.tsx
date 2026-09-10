@@ -5,6 +5,7 @@ import { getPlatformOverview } from "@/lib/platform-admin-service";
 import { getScopedPlatformOverview } from "@/lib/platform-scoped-overview";
 import PlatformBillingHub from "./PlatformBillingHub";
 import "@/components/platform-control-plane.css";
+import "./platform-billing-v3.css";
 
 export default async function BillingPage() {
   const session = await requirePlatformSession();
@@ -12,7 +13,7 @@ export default async function BillingPage() {
   const scope = await getPlatformSchoolScope(session);
   const overview = scope === null ? await getPlatformOverview() : await getScopedPlatformOverview(session);
   const schools = overview.schools.map((school) => ({ id: String(school.id), name: String(school.name), uniqueCode: String(school.uniqueCode) }));
-  return <AppShell universe="platform" title="Platform Billing" subtitle="Subscriptions and invoices." active="Platform Billing" userName={session.name} role={session.role}>
+  return <AppShell universe="platform" title="Platform Billing" subtitle="Configure school subscriptions, issue invoices, reconcile collections and manage messaging inventory." active="Platform Billing" userName={session.name} role={session.role}>
     <PlatformBillingHub schools={schools} />
   </AppShell>;
 }

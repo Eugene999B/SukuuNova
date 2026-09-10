@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Clock3, ExternalLink, Filter, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import "./platform-audit-v3.css";
 
 type AuditEvent = {
   id: string;
@@ -19,6 +20,10 @@ type Payload = { events: AuditEvent[]; nextCursor: string | null; message?: stri
 
 function sensitiveAction(action: string) {
   return /imperson|delete|suspend|permission|password|role|setting|billing/i.test(action);
+}
+
+function actionLabel(action: string) {
+  return action.replace(/[._-]+/g, " ").replace(/(^| )\S/g, (letter) => letter.toUpperCase());
 }
 
 export default function PlatformAuditConsole() {
@@ -69,65 +74,65 @@ export default function PlatformAuditConsole() {
   }, [load, query]);
 
   const sensitiveCount = events.filter((event) => sensitiveAction(event.action)).length;
-  return (
-    <div className="audit-page-stack">
-      <section className="platform-page-header">
-        <div>
-          <span className="platform-eyebrow">Governance & evidence</span>
-          <h2>Audit Investigation</h2>
-          
-        </div>
-        <button type="button" className="app-pill" onClick={() => void load(cursor)} disabled={loading}>
-          <RefreshCw size={14} /> Refresh
-        </button>
-      </section>
+  const schoolTargetCount = events.filter((event) => Boolean(event.targetSchoolId)).length;
 
-      {message && <div className="app-banner" role="alert"><div><h3>{message}</h3></div></div>}
-
-      <div className="app-grid kpis platform-kpis">
-        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Events</span><span className="app-kpi-icon"><ShieldCheck size={17} /></span></div><div className="app-kpi-value">{events.length.toLocaleString()}</div><div className="app-kpi-meta">Current result page</div></div>
-        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Sensitive</span><span className="app-kpi-icon"><Filter size={17} /></span></div><div className="app-kpi-value">{sensitiveCount}</div><div className="app-kpi-meta">High-impact events on this page</div></div>
-        <div className="app-card app-kpi"><div className="app-kpi-top"><span className="app-kpi-label">Page</span><span className="app-kpi-icon"><Clock3 size={17} /></span></div><div className="app-kpi-value">{cursor ? "Next" : "1"}</div><div className="app-kpi-meta">Cursor-based navigation</div></div>
+  return <div className="platform-audit-v3">
+    <section className="platform-audit-v3-hero">
+      <div>
+        <span className="platform-audit-v3-eyebrow">Governance · evidence trail</span>
+        <h2>Trace every important Platform action to an accountable operator.</h2>
+        <p>Investigate privileged changes by action, person, target or school. Expand an event only when you need the recorded context behind it.</p>
       </div>
+      <button type="button" className="platform-audit-v3-refresh" onClick={() => void load(cursor)} disabled={loading}><RefreshCw size={15}/>{loading ? "Refreshing…" : "Refresh evidence"}</button>
+    </section>
 
-      <section className="app-card app-panel audit-controls">
-        <div className="audit-search"><Search size={15} /><input aria-label="Search audit events" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search action, operator, email, school or target" /></div>
-        <div className="audit-filter"><span>Action</span><select aria-label="Filter by action" value={action} onChange={(event) => setAction(event.target.value)}><option value="all">All actions</option>{actionOptions.map((option) => <option key={option} value={option}>{option}</option>)}</select></div>
-        <label className="audit-check"><input type="checkbox" checked={sensitive} onChange={(event) => setSensitive(event.target.checked)} /> Sensitive only</label>
-        <Link className="app-pill" href="/platform/search">Cross-system search</Link>
-      </section>
+    {message ? <div className="platform-audit-v3-notice" role="alert">{message}</div> : null}
 
-      <section className="app-card app-panel audit-table">
-        <div className="audit-table-head"><span>Event</span><span>Operator</span><span>Target</span><span>Timestamp</span><span></span></div>
-        {loading && events.length === 0 && <div className="platform-empty" role="status">Loading audit history…</div>}
-        {!loading && events.map((event) => {
-          const isOpen = expanded === event.id;
-          return <div className="audit-event" key={event.id}>
-            <button type="button" className="audit-row" onClick={() => setExpanded(isOpen ? null : event.id)} aria-expanded={isOpen}>
-              <div><b>{event.action}</b><small>{event.id}</small></div>
-              <div><span>{event.actorName ?? event.actorId}</span><small>{event.actorEmail ?? event.actorId}</small></div>
-              <div><span>{event.targetEntity ?? "Platform"}</span><small>{event.targetSchoolId ? `School ${event.targetSchoolId}` : "Network-wide"}</small></div>
-              <div><span>{new Date(event.createdAt).toLocaleString()}</span></div>
-              <div><ChevronDown className={isOpen ? "audit-chevron open" : "audit-chevron"} size={15} /></div>
-            </button>
-            {isOpen && <div className="audit-detail">
-              <div><strong>Accountable operator</strong><span>{event.actorName ?? "Unknown"}</span><small>{event.actorEmail ?? event.actorId}</small></div>
-              <div><strong>Target</strong><span>{event.targetEntity ?? "Platform"}</span><small>{event.targetSchoolId ? event.targetSchoolId : "No school target"}</small></div>
-              <div className="audit-meta-block"><strong>Recorded context</strong><pre>{event.meta ? JSON.stringify(event.meta, null, 2) : "No metadata recorded for this event."}</pre></div>
-              {event.targetSchoolId && <Link className="app-pill" href={`/platform/schools/${event.targetSchoolId}`}><ExternalLink size={13} /> Open School 360</Link>}
-            </div>}
-          </div>;
-        })}
-        {!loading && events.length === 0 && <div className="platform-empty">No audit events match the current investigation.</div>}
-      </section>
+    <section className="platform-audit-v3-kpis" aria-label="Audit evidence summary">
+      <article className="platform-audit-v3-kpi"><div className="platform-audit-v3-kpi-top"><div><span className="platform-audit-v3-kpi-label">Events shown</span><strong>{events.length.toLocaleString()}</strong></div><span className="platform-audit-v3-kpi-icon"><ShieldCheck size={16}/></span></div><small>Current investigation result page</small></article>
+      <article className={`platform-audit-v3-kpi ${sensitiveCount ? "is-alert" : ""}`}><div className="platform-audit-v3-kpi-top"><div><span className="platform-audit-v3-kpi-label">Sensitive actions</span><strong>{sensitiveCount}</strong></div><span className="platform-audit-v3-kpi-icon"><Filter size={16}/></span></div><small>Security, access, billing or policy changes</small></article>
+      <article className="platform-audit-v3-kpi"><div className="platform-audit-v3-kpi-top"><div><span className="platform-audit-v3-kpi-label">School-targeted</span><strong>{schoolTargetCount}</strong></div><span className="platform-audit-v3-kpi-icon"><Search size={16}/></span></div><small>Events tied to a specific tenant on this page</small></article>
+      <article className="platform-audit-v3-kpi"><div className="platform-audit-v3-kpi-top"><div><span className="platform-audit-v3-kpi-label">History position</span><strong>{cursor ? "Older" : "Latest"}</strong></div><span className="platform-audit-v3-kpi-icon"><Clock3 size={16}/></span></div><small>{nextCursor ? "More matching evidence is available" : "End of matching history reached"}</small></article>
+    </section>
 
-      <div className="audit-pagination">
-        <button type="button" className="app-pill" disabled={!cursor || loading} onClick={() => void load(null)}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }} /> First page</button>
-        <span>{nextCursor ? "More events available" : "End of matching history"}</span>
-        <button type="button" className="app-pill" disabled={!nextCursor || loading} onClick={() => void load(nextCursor)}><ChevronRight size={14} /> Next page</button>
-      </div>
+    <section className="platform-audit-v3-controls" aria-label="Audit investigation filters">
+      <label className="platform-audit-v3-search"><Search size={15}/><span className="sr-only">Search audit events</span><input aria-label="Search audit events" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Action, operator, email, school or target"/></label>
+      <select className="platform-audit-v3-select" aria-label="Filter by action" value={action} onChange={(event) => setAction(event.target.value)}><option value="all">All actions</option>{actionOptions.map((option) => <option key={option} value={option}>{actionLabel(option)}</option>)}</select>
+      <label className="platform-audit-v3-check"><input type="checkbox" checked={sensitive} onChange={(event) => setSensitive(event.target.checked)}/> Sensitive only</label>
+      <Link className="platform-audit-v3-search-link" href="/platform/search"><Search size={14}/> Cross-system search</Link>
+    </section>
 
-      <style jsx global>{`\n        .audit-page-stack{display:grid;gap:16px;margin-top:22px}.audit-controls{display:grid;grid-template-columns:minmax(280px,1fr) auto auto auto;gap:10px;align-items:center;padding:12px}.audit-search{display:flex;align-items:center;gap:8px;height:40px;padding:0 11px;border:1px solid var(--sn-line);border-radius:10px;background:var(--sn-surface);color:var(--sn-ink)}.audit-search input{border:0;outline:0;background:transparent;min-width:0;flex:1;font:inherit;font-size:12px;color:var(--sn-ink)}.audit-filter{display:flex;align-items:center;gap:6px}.audit-filter span{font-size:9px;font-weight:850;color:var(--sn-ink);text-transform:uppercase;letter-spacing:.07em}.audit-filter select{height:40px;border:1px solid var(--sn-line);border-radius:9px;background:var(--sn-surface);color:var(--sn-ink);font:inherit;font-size:11px;padding:0 10px;max-width:280px}.audit-check{display:flex;gap:7px;align-items:center;height:40px;padding:0 4px;font-size:11px;font-weight:700;color:var(--sn-ink);white-space:nowrap}.audit-check input{width:18px;height:18px}.audit-table{overflow:hidden}.audit-table-head{display:grid;grid-template-columns:minmax(230px,1.3fr) minmax(180px,1fr) minmax(170px,.95fr) 175px 34px;gap:12px;padding:11px 18px;background:var(--sn-surface);border-bottom:1px solid var(--sn-line);color:var(--sn-ink);font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.1em}.audit-row{width:100%;display:grid;grid-template-columns:minmax(230px,1.3fr) minmax(180px,1fr) minmax(170px,.95fr) 175px 34px;gap:12px;align-items:center;padding:13px 18px;border:0;border-bottom:1px solid var(--sn-line);background:var(--sn-surface);text-align:left;cursor:pointer}.audit-row:hover{background:var(--sn-surface)}.audit-row b,.audit-row span{display:block;font-size:11px;color:var(--sn-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.audit-row small{display:block;margin-top:3px;font-size:9px;color:var(--sn-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.audit-chevron{transition:transform .16s ease}.audit-chevron.open{transform:rotate(180deg)}.audit-detail{display:grid;grid-template-columns:1fr 1fr 1.7fr auto;gap:14px;padding:15px 18px;background:var(--sn-surface);border-bottom:1px solid var(--sn-line)}.audit-detail strong{display:block;margin-bottom:5px;font-size:9px;color:var(--sn-ink);text-transform:uppercase;letter-spacing:.08em}.audit-detail span{display:block;font-size:11px;font-weight:700;color:var(--sn-ink)}.audit-detail small{display:block;margin-top:3px;font-size:9px;color:var(--sn-ink)}.audit-meta-block pre{max-height:170px;overflow:auto;margin:0;padding:10px;border:1px solid var(--sn-line);border-radius:8px;background:var(--sn-surface);color:var(--sn-ink);font:10px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}.audit-pagination{display:flex;align-items:center;justify-content:space-between;gap:10px}.audit-pagination>span{font-size:11px;color:var(--sn-ink)}@media(max-width:1050px){.audit-controls{grid-template-columns:1fr 1fr}.audit-detail{grid-template-columns:1fr 1fr}.audit-detail .app-pill{grid-column:1/-1;justify-self:start}}@media(max-width:760px){.audit-table-head{display:none}.audit-row{grid-template-columns:minmax(0,1fr) 30px;gap:7px;padding:12px 14px}.audit-row>div:nth-child(2),.audit-row>div:nth-child(3),.audit-row>div:nth-child(4){grid-column:1/-1}.audit-row>div:nth-child(5){grid-column:2;grid-row:1}.audit-controls{grid-template-columns:1fr}.audit-detail{grid-template-columns:1fr;padding:14px}.audit-pagination{align-items:stretch;flex-direction:column}}\n      `}</style>
+    <section className="platform-audit-v3-card">
+      <div className="platform-audit-v3-card-head"><div><span className="platform-audit-v3-eyebrow">Recorded activity</span><h3>Audit investigation</h3><p>Newest matching records appear first. Open a row to inspect actor, target and captured metadata.</p></div><span>{loading ? "Updating…" : `${events.length} shown`}</span></div>
+      <div className="platform-audit-v3-table-head" aria-hidden="true"><span>Event</span><span>Operator</span><span>Target</span><span>Timestamp</span><span></span></div>
+
+      {loading && events.length === 0 ? <div className="platform-audit-v3-empty" role="status"><RefreshCw size={20}/><b>Loading audit evidence…</b><span>Retrieving the newest matching Platform records.</span></div> : null}
+      {!loading && events.map((event) => {
+        const isOpen = expanded === event.id;
+        const isSensitive = sensitiveAction(event.action);
+        return <div className="platform-audit-v3-event" key={event.id}>
+          <button type="button" className="platform-audit-v3-row" onClick={() => setExpanded(isOpen ? null : event.id)} aria-expanded={isOpen}>
+            <div className="platform-audit-v3-primary"><span className={`platform-audit-v3-event-icon ${isSensitive ? "is-sensitive" : ""}`}>{isSensitive ? <Filter size={14}/> : <ShieldCheck size={14}/>}</span><span><b>{actionLabel(event.action)}</b><small>{event.id}</small></span></div>
+            <div><span>{event.actorName ?? event.actorId}</span><small>{event.actorEmail ?? event.actorId}</small></div>
+            <div><span>{event.targetEntity ?? "Platform"}</span><small>{event.targetSchoolId ? `School ${event.targetSchoolId}` : "Network-wide"}</small></div>
+            <div><time>{new Date(event.createdAt).toLocaleString()}</time></div>
+            <div><ChevronDown className={`platform-audit-v3-chevron ${isOpen ? "is-open" : ""}`} size={15}/></div>
+          </button>
+          {isOpen ? <div className="platform-audit-v3-detail">
+            <div><strong>Accountable operator</strong><span>{event.actorName ?? "Unknown"}</span><small>{event.actorEmail ?? event.actorId}</small></div>
+            <div><strong>Target</strong><span>{event.targetEntity ?? "Platform"}</span><small>{event.targetSchoolId ?? "No school target"}</small></div>
+            <div className="platform-audit-v3-meta"><strong>Recorded context</strong><pre>{event.meta ? JSON.stringify(event.meta, null, 2) : "No metadata recorded for this event."}</pre></div>
+            {event.targetSchoolId ? <Link className="platform-audit-v3-open" href={`/platform/schools/${event.targetSchoolId}`}><ExternalLink size={13}/> Open School 360</Link> : null}
+          </div> : null}
+        </div>;
+      })}
+      {!loading && events.length === 0 ? <div className="platform-audit-v3-empty"><Search size={20}/><b>No audit events match this investigation.</b><span>Clear the search or change the action and sensitivity filters.</span></div> : null}
+    </section>
+
+    <div className="platform-audit-v3-pagination">
+      <button type="button" className="platform-audit-v3-page-button" disabled={!cursor || loading} onClick={() => void load(null)}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }}/> Back to latest</button>
+      <span>{nextCursor ? "Older matching events are available." : "You are at the end of the matching history."}</span>
+      <button type="button" className="platform-audit-v3-page-button" disabled={!nextCursor || loading} onClick={() => void load(nextCursor)}><ChevronRight size={14}/> Older events</button>
     </div>
-  );
+  </div>;
 }
