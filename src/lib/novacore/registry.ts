@@ -82,9 +82,9 @@ export const NOVACORE_ALGORITHMS: readonly NovaCoreAlgorithm[] = [
     rolloutMode: "shadow",
     risk: "high",
     affectsUserOutcome: false,
-    description: "Blends route remaining distance and filtered live speed into an ETA with an explicit uncertainty window while candidate improvements can run in shadow mode.",
-    safeguards: ["speed clamps", "missing-data fallback", "uncertainty band", "shadow rollout"],
-    evidence: ["ETA minutes", "confidence minutes", "route remaining meters", "prediction version"],
+    description: "Runs route-aware ETA predictions in shadow, samples them by pickup and minute, and scores them against actual arrival before any rollout review.",
+    safeguards: ["speed clamps", "missing-data fallback", "uncertainty band", "minute-bucketed shadow samples", "actual-arrival scoring", "human review gate", "automatic promotion disabled"],
+    evidence: ["ETA minutes", "confidence minutes", "actual arrival", "MAE", "median error", "P90 error", "within-five-minute rate", "confidence coverage", "promotion policy version"],
   },
   {
     key: "transport.simulator",
