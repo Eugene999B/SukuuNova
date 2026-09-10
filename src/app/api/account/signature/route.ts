@@ -4,6 +4,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { appendSchoolAudit } from "@/lib/audit";
+import { fingerprintNovaCoreInput, recordNovaCoreDecisionBestEffort } from "@/lib/novacore/decision-ledger";
 import { isPngSignatureDataUrl, mergeReportWorkflowConfig, readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
 import { signatureImageSha256, signatureVectorSha256 } from "@/lib/signature-integrity";
 import { parseSignatureVectorEvidence } from "@/lib/signature-vector";
@@ -93,6 +94,53 @@ export async function PATCH(request: Request) {
           vectorPointCount: after?.vectorEvidence?.pointCount ?? null,
         },
       });
+
+      if (after?.sha256) {
+        const evidenceFingerprint = fingerprintNovaCoreInput({ imageSha256: after.sha256, vectorSha256: after.vectorSha256 ?? null });
+        const vector = after.vectorEvidence;
+        if (vector) {
+          const pointerTypes = [...new Set(vector.strokes.flatMap((stroke) => stroke.points.map((point) => point.pointerType)))].sort();
+          const penPointCount = vector.strokes.reduce((sum, stroke) => sum + stroke.points.filter((point) => point.pointerType === "pen").length, 0);
+          await recordNovaCoreDecisionBestEffort(tx, {
+            schoolId: session.schoolId,
+            algorithmKey: "signature.stroke-dynamics",
+            entityType: "UserSignatureProfile",
+            entityId: session.userId,
+            inputFingerprint: evidenceFingerprint,
+            confidence: 1,
+            reasonCodes: [
+              "vector_evidence_saved",
+              ...(penPointCount ? ["stylus_pressure_available"] : ["velocity_width_fallback"]),
+            ],
+            outputSummary: {
+              vectorVersion: vector.version,
+              strokeCount: vector.strokeCount,
+              pointCount: vector.pointCount,
+              durationMs: vector.durationMs,
+              pointerTypes,
+              penPointCount,
+            },
+          });
+        }
+        await recordNovaCoreDecisionBestEffort(tx, {
+          schoolId: session.schoolId,
+          algorithmKey: "signature.integrity",
+          entityType: "UserSignatureProfile",
+          entityId: session.userId,
+          inputFingerprint: evidenceFingerprint,
+          confidence: 1,
+          reasonCodes: [
+            "png_sha256_saved",
+            ...(after.vectorSha256 ? ["vector_sha256_saved"] : ["legacy_png_only"]),
+          ],
+          outputSummary: {
+            imageIntegrityHashPresent: true,
+            vectorIntegrityHashPresent: Boolean(after.vectorSha256),
+            vectorEvidencePresent: Boolean(after.vectorEvidence),
+          },
+        });
+      }
+
       return NextResponse.json({ ok: true, user, signature: after });
     });
   } catch (error) { return routeError(error); }
