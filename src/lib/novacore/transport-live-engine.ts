@@ -1,5 +1,6 @@
 import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "@/lib/db";
+import { fingerprintNovaCoreInput, recordNovaCoreDecisionBestEffort } from "./decision-ledger";
 import { matchPointToRoute, routeDistanceBetweenMatches, type RouteMatch } from "./route-matching";
 import {
   estimateEta,
@@ -131,6 +132,7 @@ export async function processLiveTransportLocation(
   reportedAt: Date,
   context: LiveTransportLocationContext = {},
 ): Promise<LiveTransportProcessingResult> {
+  const processingStartedAt = Date.now();
   const pickups = await tx.$queryRawUnsafe<PickupRow[]>(
     `SELECT p."id",p."studentId",p."latitude"::text,p."longitude"::text
      FROM "P3PickupPoint" p
@@ -157,6 +159,10 @@ export async function processLiveTransportLocation(
     : null;
   let transitions = 0;
   let guardianAlertsQueued = 0;
+  let routeBasedPickups = 0;
+  let directFallbackPickups = 0;
+  let etaPredictions = 0;
+  const stateCounts = new Map<string, number>();
 
   for (const pickup of pickups) {
     const pickupPoint = { latitude: Number(pickup.latitude), longitude: Number(pickup.longitude) };
@@ -166,6 +172,9 @@ export async function processLiveTransportLocation(
       routeShape: context.routeShape,
       vehicleRouteMatch: context.vehicleRouteMatch,
     });
+    if (progress.routeDistanceMeters == null) directFallbackPickups += 1;
+    else routeBasedPickups += 1;
+
     const existing = await tx.$queryRawUnsafe<StateRow[]>(
       `SELECT "state","previousDistanceMeters"::text,"consecutiveSamples"
        FROM "P3GeofenceState"
@@ -185,6 +194,7 @@ export async function processLiveTransportLocation(
       ? passedDecision(memory, progress.directDistanceMeters)
       : nextGeofenceState(memory, progress.decisionDistanceMeters);
     if (decision.transitioned) transitions += 1;
+    stateCounts.set(decision.state, (stateCounts.get(decision.state) ?? 0) + 1);
 
     const etaDistanceMeters = progress.routeDistanceMeters ?? progress.directDistanceMeters;
     const eta = progress.pickupPassed ? { minutes: null, confidenceMinutes: null, effectiveSpeedKph: null } : estimateEta({
@@ -193,6 +203,7 @@ export async function processLiveTransportLocation(
       routeHistoricalSpeedKph,
       uncertaintyRatio: progress.routeDistanceMeters == null ? 0.4 : 0.25,
     });
+    if (eta.minutes != null) etaPredictions += 1;
 
     const transitionAt = decision.transitioned ? reportedAt : null;
     await tx.$executeRawUnsafe(
@@ -264,6 +275,68 @@ export async function processLiveTransportLocation(
       );
       guardianAlertsQueued += Number(inserted ?? 0);
     }
+  }
+
+  const stateSummary = Object.fromEntries([...stateCounts.entries()].sort(([a], [b]) => a.localeCompare(b)));
+  const decisionFingerprint = fingerprintNovaCoreInput({
+    predictionVersion: PICKUP_PREDICTION_VERSION,
+    tripDirection: trip.direction,
+    routeShapePoints: context.routeShape?.length ?? 0,
+    routeMatchConfidence: context.vehicleRouteMatch?.confidence == null ? null : Math.round(context.vehicleRouteMatch.confidence * 1000) / 1000,
+    speedBucketKph: context.speedKph == null ? null : Math.round(context.speedKph / 5) * 5,
+    pickupCount: pickups.length,
+    reportedAtMinute: Math.floor(reportedAt.getTime() / 60_000),
+  });
+
+  await recordNovaCoreDecisionBestEffort(tx, {
+    schoolId,
+    algorithmKey: "transport.geofence",
+    entityType: "P3TransportTrip",
+    entityId: trip.id,
+    inputFingerprint: decisionFingerprint,
+    confidence: context.vehicleRouteMatch?.confidence ?? null,
+    reasonCodes: [
+      ...(routeBasedPickups ? ["route_aware_distance"] : []),
+      ...(directFallbackPickups ? ["direct_distance_fallback"] : []),
+      ...(transitions ? ["state_transition"] : ["state_stable"]),
+      ...(guardianAlertsQueued ? ["guardian_alert_queued"] : []),
+    ],
+    outputSummary: {
+      pickupsEvaluated: pickups.length,
+      transitions,
+      guardianAlertsQueued,
+      routeBasedPickups,
+      directFallbackPickups,
+      states: stateSummary,
+      predictionVersion: PICKUP_PREDICTION_VERSION,
+    },
+    latencyMs: Date.now() - processingStartedAt,
+  });
+
+  if (pickups.length) {
+    await recordNovaCoreDecisionBestEffort(tx, {
+      schoolId,
+      algorithmKey: "transport.eta",
+      entityType: "P3TransportTrip",
+      entityId: trip.id,
+      inputFingerprint: decisionFingerprint,
+      reasonCodes: [
+        ...(context.speedKph != null ? ["live_speed_available"] : ["live_speed_missing"]),
+        ...(routeHistoricalSpeedKph != null ? ["historical_speed_available"] : ["historical_speed_missing"]),
+        ...(directFallbackPickups ? ["direct_distance_fallback"] : ["route_distance_available"]),
+      ],
+      outputSummary: {
+        pickupsEvaluated: pickups.length,
+        etaPredictions,
+        routeBasedPickups,
+        directFallbackPickups,
+        liveSpeedAvailable: context.speedKph != null,
+        historicalSpeedAvailable: routeHistoricalSpeedKph != null,
+        predictionVersion: PICKUP_PREDICTION_VERSION,
+      },
+      shadowGroupKey: `transport-eta:${trip.id}:${decisionFingerprint}`,
+      latencyMs: Date.now() - processingStartedAt,
+    });
   }
 
   return { pickupsEvaluated: pickups.length, transitions, guardianAlertsQueued };
