@@ -4,6 +4,7 @@ import { requirePlatformSession } from "@/lib/auth";
 import { hasPlatformPermission } from "@/lib/platform-permissions";
 import "@/components/platform-owner-v3.css";
 import "@/components/platform-school360-v3-details.css";
+import "@/components/platform-onboarding-v3.css";
 
 const PLATFORM_NAV_PERMISSIONS = [
   "analytics.view",
