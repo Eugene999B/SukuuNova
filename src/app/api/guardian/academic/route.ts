@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { routeError } from "@/lib/errors";
 import { guardianAcademicContextStudentId } from "@/lib/guardian-family-context";
+import { requireAcademicWorkWindowOpen } from "@/lib/academic-work-window";
 import { finalizeGuardianSubmission, getGuardianAcademicOverview, retryGuardianSubmission, saveGuardianSubmission, startGuardianSubmission, submitGuardianSubmission } from "@/lib/teacher-academic-submission-service";
 
 const answerSchema = z.object({ questionId: z.string().min(1), responseText: z.string().max(20000).optional(), responseData: z.unknown().optional() });
@@ -32,6 +33,10 @@ export async function POST(request: Request) {
     const session = await requireGuardianSession();
     const input = await parseJson(request, schema);
     return await withTenant(session.schoolId, async (tx) => {
+      // The configured opening/closing window is authoritative for every learner mutation,
+      // not just the first Start click. This prevents early starts, late autosaves and
+      // submissions sneaking through after a page has been left open in the browser.
+      await requireAcademicWorkWindowOpen(tx, session.schoolId, input.workId);
       const common = { schoolId: session.schoolId, guardianId: session.guardianId, studentId: input.studentId, workId: input.workId };
       if (input.action === "start") {
         const result = await startGuardianSubmission(tx, { ...common, attemptNumber: input.attemptNumber });

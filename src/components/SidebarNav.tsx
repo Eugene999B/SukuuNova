@@ -8,25 +8,41 @@ import { ChevronDown, type LucideIcon } from "lucide-react";
 export type NavItem = { icon: LucideIcon; label: string; href: string; primary?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
 
+const teacherDestinations: Record<string, string> = {
+  "My Lessons & Planning": "/teacher/lessons",
+  "My Assessments": "/teacher/studio#activities",
+  "My Messages": "/teacher/messages",
+  "Class Announcements": "/teacher/announcements",
+  "Help & Support": "/teacher/help",
+};
+
 export function SidebarNav({ groups, active, storageScope = "default" }: { groups: NavGroup[]; active: string; storageScope?: string }) {
   const pathname = usePathname();
   const storageKey = `sukuunova-sidebar-groups:v2:${storageScope}`;
+  const isTeacherScope = storageScope.startsWith("teacher:");
+  const navigationGroups = useMemo(() => isTeacherScope ? groups.map(group => ({
+    ...group,
+    items: group.items.map(item => ({ ...item, href: teacherDestinations[item.label] ?? item.href })),
+  })) : groups, [groups, isTeacherScope]);
   const activeLabel = useMemo(() => {
-    const matches = groups
+    const matches = navigationGroups
       .flatMap((group) => group.items.map((item) => ({ ...item, group: group.label })))
-      .filter((item) => pathname === item.href || (pathname.startsWith(`${item.href}/`) && item.href !== "/dashboard"))
+      .filter((item) => {
+        const route = item.href.split("#")[0];
+        return pathname === route || (pathname.startsWith(`${route}/`) && route !== "/dashboard");
+      })
       .sort((a, b) => b.href.length - a.href.length);
     return matches[0]?.label ?? active;
-  }, [groups, pathname, active]);
+  }, [navigationGroups, pathname, active]);
 
   const activeGroupLabel = useMemo(
-    () => groups.find((group) => group.items.some((item) => item.label === activeLabel))?.label,
-    [activeLabel, groups],
+    () => navigationGroups.find((group) => group.items.some((item) => item.label === activeLabel))?.label,
+    [activeLabel, navigationGroups],
   );
 
   const defaultCollapsed = useMemo(
-    () => Object.fromEntries(groups.map((group) => [group.label, group.label !== activeGroupLabel])),
-    [activeGroupLabel, groups],
+    () => Object.fromEntries(navigationGroups.map((group) => [group.label, group.label !== activeGroupLabel])),
+    [activeGroupLabel, navigationGroups],
   );
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(defaultCollapsed);
@@ -65,7 +81,7 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
 
   return (
     <nav className="app-nav" aria-label="Primary navigation">
-      {groups.map((group) => {
+      {navigationGroups.map((group) => {
         const isCollapsed = Boolean(collapsed[group.label]);
         return (
           <div className={`app-nav-group ${isCollapsed ? "is-collapsed" : ""}`} key={group.label}>

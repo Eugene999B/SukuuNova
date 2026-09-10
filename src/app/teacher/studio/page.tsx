@@ -1,21 +1,25 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import TeacherAttendanceRegister from "@/components/TeacherAttendanceRegister";
+import TeacherAcademicStudioV3 from "@/components/TeacherAcademicStudioV3";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import "./teacher-attendance.css";
+import "./teacher-studio.css";
 
-export default async function TeacherAttendancePage() {
+export default async function TeacherStudioPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
     const access = await getSchoolAuthorization(tx, session.userId);
     if (access.workspace !== "teacher" || !access.isTeacher) redirect("/dashboard");
-    const permitted = (await access.can("attendance:record_assigned")) || (await access.can("attendance:record_all"));
-    if (!permitted) redirect("/teacher");
+    const allowed = (await access.can("scores:write:assigned")) || (await access.can("scores:write:all"));
+    if (!allowed) redirect("/teacher");
     const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } });
     return { school, role: access.roles.map((role) => role.name).join(" · ") };
   });
 
-  return <AppShell universe="teacher" title="Class Attendance" subtitle="Fast daily register for your teaching scope." active="My Attendance" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}><TeacherAttendanceRegister/></AppShell>;
+  return (
+    <AppShell universe="teacher" title="Teaching Studio" subtitle="Advanced assessment design, marks and learner submissions inside your assigned teaching scope." active="Teaching Studio" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}>
+      <TeacherAcademicStudioV3 />
+    </AppShell>
+  );
 }

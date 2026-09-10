@@ -16,13 +16,22 @@ const schema = z.object({
   endDate: z.coerce.date()
 });
 
-function status(start: Date, end: Date, now = new Date()) { return now < start ? "upcoming" : now > end ? "completed" : "current"; }
+function status(start: Date, end: Date, isLocked = false, now = new Date()) {
+  if (isLocked) return "locked" as const;
+  return now < start ? "upcoming" as const : now > end ? "ended" as const : "active" as const;
+}
 
 export async function GET() {
   try {
     const session = await requireSchoolSession();
     const terms = await withTenant(session.schoolId, (tx) => tx.term.findMany({ where: { schoolId: session.schoolId }, include: { academicYear: true }, orderBy: [{ startDate: "desc" }, { name: "asc" }] }));
-    return NextResponse.json({ terms: terms.map((term) => ({ ...term, status: status(term.startDate, term.endDate) })) });
+    return NextResponse.json({
+      terms: terms.map((term) => ({
+        ...term,
+        status: status(term.startDate, term.endDate, term.isLocked),
+        needsFinalization: !term.isLocked && new Date() > term.endDate,
+      }))
+    });
   } catch (error) { return routeError(error); }
 }
 
@@ -47,6 +56,6 @@ export async function POST(request: Request) {
       await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "academic.term_created", entityType: "Term", entityId: term.id, before: null, after: { term, academicYear: year } });
       return { year, term };
     });
-    return NextResponse.json({ ok: true, ...result, status: status(result.term.startDate, result.term.endDate) });
+    return NextResponse.json({ ok: true, ...result, status: status(result.term.startDate, result.term.endDate, result.term.isLocked) });
   } catch (error) { return routeError(error); }
 }
