@@ -8,6 +8,7 @@ import {
   BellRing,
   BookOpen,
   Building2,
+  BusFront,
   CalendarClock,
   CalendarDays,
   ChartNoAxesCombined,
@@ -124,6 +125,7 @@ const schoolGroups: Group[] = [
   ] },
   { label: "Operations", items: [
     { icon: Users, label: "People Hub", href: "/school/people" },
+    { icon: BusFront, label: "Transport", href: "/school/transport", primary: true },
     { icon: ClipboardList, label: "Pickup", href: "/school/pickup" },
     { icon: Building2, label: "Visitors", href: "/school/visitors" },
     { icon: Activity, label: "Devices", href: "/school/devices" },
@@ -172,6 +174,7 @@ const guardianGroups: Group[] = [
     { icon: CircleCheckBig, label: "Attendance", href: "/guardian/attendance" },
     { icon: GraduationCap, label: "Academics", href: "/guardian/academics" },
     { icon: BookOpen, label: "Library & Resources", href: "/guardian/library" },
+    { icon: BusFront, label: "Transport", href: "/guardian/transport", primary: true },
     { icon: WalletCards, label: "Fees & Receipts", href: "/guardian/fees" },
     { icon: Mail, label: "Messages", href: "/guardian/messages" },
     { icon: Gamepad2, label: "Learning Arcade", href: "/guardian/arcade" },
@@ -187,6 +190,8 @@ const platformGroups: Group[] = [
     { icon: LayoutDashboard, label: "Overview", href: "/platform", primary: true, permission: "analytics.view" },
     { icon: Search, label: "Global Search", href: "/platform/search", primary: true, permission: "schools.view" },
     { icon: Activity, label: "System Health", href: "/platform/health", permission: "security.manage" },
+    { icon: Workflow, label: "NovaCore", href: "/platform/novacore", permission: "analytics.view" },
+    { icon: ShieldCheck, label: "Pilot Certification", href: "/platform/certification", permission: "analytics.view" },
   ] },
   { label: "Network", items: [
     { icon: School, label: "Schools", href: "/platform/schools", primary: true, permission: "schools.view" },
@@ -272,7 +277,7 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
       return [
         { label: "Home", href: "/guardian", icon: LayoutDashboard },
         { label: "Children", href: "/guardian/children", icon: UsersRound },
-        { label: "Attendance", href: "/guardian/attendance", icon: CircleCheckBig },
+        { label: "Transport", href: "/guardian/transport", icon: BusFront },
         { label: "Fees", href: "/guardian/fees", icon: WalletCards },
       ];
     }
