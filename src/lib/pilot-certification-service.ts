@@ -17,15 +17,16 @@ export const PILOT_CERTIFICATION_CHECKS = [
   { key: "operations.runtime", title: "Production secrets, workers and scheduled jobs", domain: "Operations", requiredForPilot: true, allowWaiver: false, evidenceMode: "live", requiredEnvironments: ["production"], description: "Required provider secrets, workers/cron jobs and monitoring are configured and observed." },
   { key: "support.pilot", title: "Pilot support workflow", domain: "Operations", requiredForPilot: true, allowWaiver: false, evidenceMode: "mixed", requiredEnvironments: ["ci", "production"], description: "A school can create a support case and receive/reply to Platform Support in the live deployment." },
   { key: "controlled.whatsapp", title: "WhatsApp provider/template certification", domain: "Controlled beta", requiredForPilot: false, allowWaiver: true, evidenceMode: "live", requiredEnvironments: ["production"], description: "Required only when WhatsApp is enabled for the pilot school." },
-  { key: "controlled.transport", title: "Real transport tracker/alerts certification", domain: "Controlled beta", requiredForPilot: false, allowWaiver: true, evidenceMode: "live", requiredEnvironments: ["production", "hardware_lab"], description: "Required only when real GPS transport is enabled for the pilot school." },
-  { key: "controlled.biometrics", title: "Biometric device/network certification", domain: "Controlled beta", requiredForPilot: false, allowWaiver: true, evidenceMode: "live", requiredEnvironments: ["production", "hardware_lab"], description: "Required only when biometric attendance is enabled for the pilot school." },
+  { key: "controlled.transport", title: "Real transport tracker/alerts certification", domain: "Controlled beta", requiredForPilot: false, allowWaiver: true, evidenceMode: "live", requiredEnvironments: ["production"], description: "Required only when real GPS transport is enabled for the pilot school." },
+  { key: "controlled.biometrics", title: "Biometric device/network certification", domain: "Controlled beta", requiredForPilot: false, allowWaiver: true, evidenceMode: "live", requiredEnvironments: ["production"], description: "Required only when biometric attendance is enabled for the pilot school." },
 ] as const;
 
 export type PilotCertificationCheckKey = (typeof PILOT_CERTIFICATION_CHECKS)[number]["key"];
 export type PilotCertificationEvidenceStatus = "in_review" | "passed" | "failed" | "waived";
 export type PilotCertificationEnvironment = "ci" | "staging" | "production" | "hardware_lab";
+export type PilotCertificationCheckState = "not_tested" | "partial" | "in_review" | "passed" | "failed" | "waived" | "expired" | "wrong_environment";
 
-type EvidenceRow = {
+export type PilotCertificationEvidenceRow = {
   id: string;
   schoolId: string;
   checkKey: string;
@@ -59,11 +60,32 @@ function cleanSummary(value: string) {
   return text;
 }
 
-function evidenceState(check: (typeof PILOT_CERTIFICATION_CHECKS)[number], evidence: EvidenceRow | null, now = new Date()) {
-  if (!evidence) return "not_tested" as const;
-  if (evidence.expiresAt && evidence.expiresAt <= now) return "expired" as const;
-  if (evidence.status === "passed" && !check.requiredEnvironments.includes(evidence.environment as never)) return "wrong_environment" as const;
+function rowState(evidence: PilotCertificationEvidenceRow | null, now: Date): PilotCertificationCheckState {
+  if (!evidence) return "not_tested";
+  if (evidence.expiresAt && evidence.expiresAt <= now) return "expired";
   return evidence.status;
+}
+
+function evaluateCheckState(
+  check: (typeof PILOT_CERTIFICATION_CHECKS)[number],
+  evidenceRows: PilotCertificationEvidenceRow[],
+  now: Date,
+): PilotCertificationCheckState {
+  const sorted = [...evidenceRows].sort((a, b) => b.reviewedAt.getTime() - a.reviewedAt.getTime());
+  const latestOverall = sorted[0] ?? null;
+  if (latestOverall?.status === "waived" && check.allowWaiver && (!latestOverall.expiresAt || latestOverall.expiresAt > now)) return "waived";
+
+  const requiredStates = check.requiredEnvironments.map((environment) => {
+    const evidence = evidenceRows.find((row) => row.environment === environment) ?? null;
+    return { environment, evidence, state: rowState(evidence, now) };
+  });
+  if (requiredStates.every((item) => item.state === "passed")) return "passed";
+  if (requiredStates.some((item) => item.state === "failed")) return "failed";
+  if (requiredStates.some((item) => item.state === "expired")) return "expired";
+  if (requiredStates.some((item) => item.state === "in_review")) return "in_review";
+  if (requiredStates.some((item) => item.state === "passed")) return "partial";
+  if (evidenceRows.some((row) => row.status === "passed" && !check.requiredEnvironments.includes(row.environment as never))) return "wrong_environment";
+  return "not_tested";
 }
 
 export async function getPilotCertificationOverview(schoolId: string) {
@@ -71,18 +93,34 @@ export async function getPilotCertificationOverview(schoolId: string) {
     `SELECT "id","name","uniqueCode","status" FROM "School" WHERE "id"=$1 LIMIT 1`, schoolId,
   );
   if (!school[0]) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
-  const latest = await db.$queryRawUnsafe<EvidenceRow[]>(
-    `SELECT DISTINCT ON (e."checkKey") e."id",e."schoolId",e."checkKey",e."status",e."environment",e."evidenceSummary",e."evidenceRef",e."commitSha",e."ciRun",e."expiresAt",e."reviewedByAdminId",a."name" AS "reviewedByName",e."reviewedAt"
+  const latestPerEnvironment = await db.$queryRawUnsafe<PilotCertificationEvidenceRow[]>(
+    `SELECT DISTINCT ON (e."checkKey",e."environment") e."id",e."schoolId",e."checkKey",e."status",e."environment",e."evidenceSummary",e."evidenceRef",e."commitSha",e."ciRun",e."expiresAt",e."reviewedByAdminId",a."name" AS "reviewedByName",e."reviewedAt"
      FROM "PilotCertificationEvidence" e
      JOIN "PlatformAdmin" a ON a."id"=e."reviewedByAdminId"
      WHERE e."schoolId"=$1
-     ORDER BY e."checkKey",e."reviewedAt" DESC,e."createdAt" DESC`,
+     ORDER BY e."checkKey",e."environment",e."reviewedAt" DESC,e."createdAt" DESC`,
     schoolId,
   );
-  const latestByKey = new Map(latest.map((row) => [row.checkKey, row]));
+  const byKey = new Map<string, PilotCertificationEvidenceRow[]>();
+  for (const row of latestPerEnvironment) {
+    const rows = byKey.get(row.checkKey) ?? [];
+    rows.push(row);
+    byKey.set(row.checkKey, rows);
+  }
+  const now = new Date();
   const checks = PILOT_CERTIFICATION_CHECKS.map((check) => {
-    const evidence = latestByKey.get(check.key) ?? null;
-    return { ...check, state: evidenceState(check, evidence), evidence };
+    const environmentEvidence = byKey.get(check.key) ?? [];
+    const latestEvidence = [...environmentEvidence].sort((a, b) => b.reviewedAt.getTime() - a.reviewedAt.getTime())[0] ?? null;
+    return {
+      ...check,
+      state: evaluateCheckState(check, environmentEvidence, now),
+      evidence: latestEvidence,
+      environmentEvidence: check.requiredEnvironments.map((environment) => ({
+        environment,
+        state: rowState(environmentEvidence.find((row) => row.environment === environment) ?? null, now),
+        evidence: environmentEvidence.find((row) => row.environment === environment) ?? null,
+      })),
+    };
   });
   const required = checks.filter((check) => check.requiredForPilot);
   const passedRequired = required.filter((check) => check.state === "passed").length;
@@ -148,8 +186,9 @@ export async function recordPilotCertificationEvidence(input: {
 }
 
 export async function listPilotCertificationEvidenceHistory(schoolId: string, checkKey: PilotCertificationCheckKey, limit = 50) {
+  if (!CHECK_BY_KEY.has(checkKey)) throw new AppError("Unknown pilot certification check.", 400, "CERTIFICATION_CHECK_UNKNOWN");
   const safeLimit = Math.max(1, Math.min(200, Math.floor(limit)));
-  return db.$queryRawUnsafe<EvidenceRow[]>(
+  return db.$queryRawUnsafe<PilotCertificationEvidenceRow[]>(
     `SELECT e."id",e."schoolId",e."checkKey",e."status",e."environment",e."evidenceSummary",e."evidenceRef",e."commitSha",e."ciRun",e."expiresAt",e."reviewedByAdminId",a."name" AS "reviewedByName",e."reviewedAt"
      FROM "PilotCertificationEvidence" e JOIN "PlatformAdmin" a ON a."id"=e."reviewedByAdminId"
      WHERE e."schoolId"=$1 AND e."checkKey"=$2 ORDER BY e."reviewedAt" DESC,e."createdAt" DESC LIMIT $3`,
