@@ -2,7 +2,7 @@ import { createId } from "@paralleldrive/cuid2";
 import type { TenantDb } from "@/lib/db";
 import { NOVACORE_ALGORITHMS } from "./registry";
 
-const ETA_ALGORITHM_VERSION = NOVACORE_ALGORITHMS.find((algorithm) => algorithm.key === "transport.eta")?.version ?? "1.0.0";
+export const ETA_SHADOW_ALGORITHM_VERSION = NOVACORE_ALGORITHMS.find((algorithm) => algorithm.key === "transport.eta")?.version ?? "1.0.0";
 const MAX_EVALUATION_LOOKBACK_MINUTES = 120;
 
 type EtaPredictionInput = {
@@ -84,9 +84,9 @@ export async function recordEtaShadowPredictionBestEffort(tx: TenantDb, input: E
       input.confidenceMinutes,
       input.distanceMode,
       input.routeRemainingMeters,
-      ETA_ALGORITHM_VERSION,
+      ETA_SHADOW_ALGORITHM_VERSION,
     );
-    return { inserted: Number(inserted ?? 0), predictionBucket, algorithmVersion: ETA_ALGORITHM_VERSION };
+    return { inserted: Number(inserted ?? 0), predictionBucket, algorithmVersion: ETA_SHADOW_ALGORITHM_VERSION };
   });
 }
 
@@ -101,22 +101,22 @@ export async function evaluateEtaArrivalBestEffort(tx: TenantDb, input: {
   return bestEffort(tx, async () => {
     const rows = await tx.$queryRawUnsafe<EtaEvaluationRow[]>(
       `UPDATE "NovaCoreEtaPrediction"
-       SET "actualArrivalAt"=$4,
-           "absoluteErrorMinutes"=ABS(EXTRACT(EPOCH FROM ($4 - "predictedAt")) / 60.0 - "predictedMinutes"),
+       SET "actualArrivalAt"=$4::timestamp,
+           "absoluteErrorMinutes"=ABS(EXTRACT(EPOCH FROM ($4::timestamp - "predictedAt")) / 60.0 - "predictedMinutes"),
            "evaluatedAt"=CURRENT_TIMESTAMP
        WHERE "schoolId"=$1
          AND "tripId"=$2
          AND "pickupPointId"=$3
          AND "algorithmVersion"=$5
          AND "actualArrivalAt" IS NULL
-         AND "predictedAt" <= $4
-         AND "predictedAt" >= $4 - ($6 * INTERVAL '1 minute')
+         AND "predictedAt" <= $4::timestamp
+         AND "predictedAt" >= $4::timestamp - ($6::integer * INTERVAL '1 minute')
        RETURNING "absoluteErrorMinutes"::text,"confidenceMinutes"`,
       input.schoolId,
       input.tripId,
       input.pickupPointId,
       input.actualArrivalAt,
-      ETA_ALGORITHM_VERSION,
+      ETA_SHADOW_ALGORITHM_VERSION,
       MAX_EVALUATION_LOOKBACK_MINUTES,
     );
 
@@ -161,8 +161,8 @@ export async function summarizeEtaShadowAccuracy(tx: TenantDb, input: { schoolId
   }>>(
     `SELECT COUNT(*)::int AS "samples",
             AVG("absoluteErrorMinutes")::text AS "maeMinutes",
-            percentile_cont(0.5) WITHIN GROUP (ORDER BY "absoluteErrorMinutes")::text AS "medianErrorMinutes",
-            percentile_cont(0.9) WITHIN GROUP (ORDER BY "absoluteErrorMinutes")::text AS "p90ErrorMinutes",
+            (percentile_cont(0.5) WITHIN GROUP (ORDER BY "absoluteErrorMinutes"))::text AS "medianErrorMinutes",
+            (percentile_cont(0.9) WITHIN GROUP (ORDER BY "absoluteErrorMinutes"))::text AS "p90ErrorMinutes",
             AVG(CASE WHEN "absoluteErrorMinutes" <= 2 THEN 1.0 ELSE 0.0 END)::text AS "within2MinutesRate",
             AVG(CASE WHEN "absoluteErrorMinutes" <= 5 THEN 1.0 ELSE 0.0 END)::text AS "within5MinutesRate",
             AVG(CASE WHEN "confidenceMinutes" IS NULL THEN NULL WHEN "absoluteErrorMinutes" <= "confidenceMinutes" THEN 1.0 ELSE 0.0 END)::text AS "withinConfidenceRate"
@@ -170,16 +170,16 @@ export async function summarizeEtaShadowAccuracy(tx: TenantDb, input: { schoolId
      WHERE "schoolId"=$1
        AND "algorithmVersion"=$2
        AND "evaluatedAt" IS NOT NULL
-       AND "evaluatedAt" >= CURRENT_TIMESTAMP - ($3 * INTERVAL '1 day')`,
+       AND "evaluatedAt" >= CURRENT_TIMESTAMP - ($3::integer * INTERVAL '1 day')`,
     input.schoolId,
-    ETA_ALGORITHM_VERSION,
+    ETA_SHADOW_ALGORITHM_VERSION,
     days,
   );
   const row = rows[0];
   const numberOrNull = (value: string | null | undefined, places = 2) => value == null ? null : rounded(Number(value), places);
   return {
     schoolId: input.schoolId,
-    algorithmVersion: ETA_ALGORITHM_VERSION,
+    algorithmVersion: ETA_SHADOW_ALGORITHM_VERSION,
     days,
     samples: Number(row?.samples ?? 0),
     maeMinutes: numberOrNull(row?.maeMinutes),
