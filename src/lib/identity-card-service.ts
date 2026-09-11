@@ -24,6 +24,7 @@ const CARD_WIDTH = 85.6 * PT_PER_MM;
 const CARD_HEIGHT = 53.98 * PT_PER_MM;
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
+const VALIDITY_CONFIG_KEY = "idCardValidityMonths";
 
 type CardRow = {
   id: string;
@@ -110,24 +111,27 @@ function normalizeValidityMonths(value: unknown) {
 
 function expiry(from: Date, validityMonths: number) {
   const value = new Date(from);
+  const originalDay = value.getUTCDate();
+  value.setUTCDate(1);
   value.setUTCMonth(value.getUTCMonth() + normalizeValidityMonths(validityMonths));
+  const lastDay = new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0)).getUTCDate();
+  value.setUTCDate(Math.min(originalDay, lastDay));
   return value;
 }
 
 export async function getIdentityCardSettings(tx: TenantDb, schoolId: string): Promise<IdentityCardSettings> {
-  const rows = await tx.$queryRawUnsafe<Array<{ validityMonths: number }>>(
-    `SELECT "validityMonths" FROM "IdentityCardSetting" WHERE "schoolId"=$1 LIMIT 1`,
+  const rows = await tx.$queryRawUnsafe<Array<{ validityMonths: number | null }>>(
+    `SELECT CASE
+       WHEN jsonb_typeof(COALESCE("brandColors", '{}'::jsonb)->$2) = 'number'
+         THEN (COALESCE("brandColors", '{}'::jsonb)->>$2)::int
+       ELSE NULL
+     END AS "validityMonths"
+     FROM "School" WHERE "id"=$1 LIMIT 1`,
     schoolId,
+    VALIDITY_CONFIG_KEY,
   );
-  if (rows[0]) return { validityMonths: normalizeValidityMonths(rows[0].validityMonths) };
-  await tx.$executeRawUnsafe(
-    `INSERT INTO "IdentityCardSetting" ("schoolId","validityMonths","updatedAt")
-     VALUES ($1,$2,CURRENT_TIMESTAMP)
-     ON CONFLICT ("schoolId") DO NOTHING`,
-    schoolId,
-    DEFAULT_VALIDITY_MONTHS,
-  );
-  return { validityMonths: DEFAULT_VALIDITY_MONTHS };
+  if (!rows[0]) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
+  return { validityMonths: normalizeValidityMonths(rows[0].validityMonths) };
 }
 
 export async function updateIdentityCardSettings(tx: TenantDb, input: { schoolId: string; actorId: string; validityMonths: number }) {
@@ -137,20 +141,21 @@ export async function updateIdentityCardSettings(tx: TenantDb, input: { schoolId
     throw new AppError("Identity card validity must be between 1 and 120 months.", 400, "INVALID_CARD_VALIDITY");
   }
   const before = await getIdentityCardSettings(tx, input.schoolId);
-  await tx.$executeRawUnsafe(
-    `INSERT INTO "IdentityCardSetting" ("schoolId","validityMonths","updatedAt")
-     VALUES ($1,$2,CURRENT_TIMESTAMP)
-     ON CONFLICT ("schoolId") DO UPDATE
-       SET "validityMonths"=EXCLUDED."validityMonths","updatedAt"=CURRENT_TIMESTAMP`,
+  const changed = await tx.$executeRawUnsafe(
+    `UPDATE "School"
+     SET "brandColors" = COALESCE("brandColors", '{}'::jsonb) || jsonb_build_object($2::text,$3::int)
+     WHERE "id"=$1`,
     input.schoolId,
+    VALIDITY_CONFIG_KEY,
     validityMonths,
   );
+  if (!changed) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
   const updatedCards = await alignActiveIdentityCardValidity(tx, input.schoolId, validityMonths);
   await appendSchoolAudit(tx, {
     schoolId: input.schoolId,
     actorId: input.actorId,
     action: "identity_cards.validity_updated",
-    entityType: "IdentityCardSetting",
+    entityType: "School",
     entityId: input.schoolId,
     before,
     after: { validityMonths, updatedCards },
