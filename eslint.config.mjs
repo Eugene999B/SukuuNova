@@ -22,7 +22,7 @@ const eslintConfig = [
     }
   },
   {
-    files: ["src/components/FinanceWorkspace.tsx"],
+    files: ["src/components/FinanceWorkspace.tsx", "src/components/FinanceWorkspaceSafe.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@next/next/no-html-link-for-pages": "off"

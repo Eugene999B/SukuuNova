@@ -1,40 +1,41 @@
 import { AppShell } from "@/components/AppShell";
-import FinanceWorkspace from "@/components/FinanceWorkspace";
-import PayrollWorkspace from "@/components/PayrollWorkspace";
-import "@/components/payroll-finance-v4.css";
+import FinanceRuntimeBoundary from "@/components/FinanceRuntimeBoundary";
+import FinanceWorkspaceSafe from "@/components/FinanceWorkspaceSafe";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 
-export default async function FinanceRoute({ mode }: { mode: "overview" | "fees" | "invoices" | "payments" | "arrears" | "reports" | "payroll" }) {
+export default async function FinanceRoute({ mode }: { mode: "overview" | "fees" | "invoices" | "payments" | "arrears" | "reports" }) {
   const session = await requireSchoolSession();
-  const school = await withTenant(session.schoolId, (tx) => tx.school.findUnique({
-    where: { id: session.schoolId },
-    select: { name: true, uniqueCode: true },
-  }));
-  if (!school) throw new Error("School not found.");
+  let school: { name: string; uniqueCode: string } | null = null;
+  try {
+    school = await withTenant(session.schoolId, (tx) => tx.school.findUnique({
+      where: { id: session.schoolId },
+      select: { name: true, uniqueCode: true },
+    }));
+  } catch (error) {
+    console.error("Finance shell school identity lookup failed", error);
+  }
 
+  const schoolName = school?.name || "School";
+  const schoolCode = school?.uniqueCode || "";
   const active = mode === "invoices" ? "Invoices"
     : mode === "payments" ? "Payments"
       : mode === "arrears" ? "Arrears & Balances"
         : mode === "reports" ? "Finance Reports"
-          : mode === "payroll" ? "Payroll"
-            : "School Fees";
-  const title = mode === "payroll" ? "Payroll" : mode === "reports" ? "Finance Reports" : mode === "arrears" ? "Arrears & Balances" : mode === "payments" ? "Payments" : mode === "invoices" ? "Invoices" : "School Fees";
-  const subtitle = mode === "payroll"
-    ? "Salary structures, payroll runs and staff payslips."
-    : "Billing, collections, balances, receipts and controlled financial reporting.";
+          : "School Fees";
+  const title = mode === "reports" ? "Finance Reports" : mode === "arrears" ? "Arrears & Balances" : mode === "payments" ? "Payments" : mode === "invoices" ? "Invoices" : "School Fees";
 
   return <AppShell
     universe="school"
     title={title}
-    subtitle={subtitle}
+    subtitle="Billing, collections, balances, receipts and controlled financial reporting."
     active={active}
-    schoolName={school.name}
-    schoolCode={school.uniqueCode}
+    schoolName={schoolName}
+    schoolCode={schoolCode}
     userName={session.name}
   >
-    {mode === "payroll"
-      ? <PayrollWorkspace schoolName={school.name} />
-      : <FinanceWorkspace mode={mode} schoolName={school.name} />}
+    <FinanceRuntimeBoundary area="finance">
+      <FinanceWorkspaceSafe mode={mode} schoolName={schoolName} />
+    </FinanceRuntimeBoundary>
   </AppShell>;
 }
