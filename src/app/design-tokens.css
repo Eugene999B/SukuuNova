@@ -45,6 +45,24 @@
   --color-accent-indigo: #4338ca;
   --color-accent-indigo-soft: #eef2ff;
 
+  /* Learning Arcade: a stable high-contrast game palette across product themes. */
+  --arcade-canvas: #071225;
+  --arcade-surface: #08172e;
+  --arcade-surface-raised: #0b2451;
+  --arcade-surface-soft: #123d6a;
+  --arcade-line: #31528c;
+  --arcade-line-strong: #5f7fbb;
+  --arcade-text: #ffffff;
+  --arcade-text-soft: #d8f9ff;
+  --arcade-muted: #9fb1d6;
+  --arcade-accent: #67ffe7;
+  --arcade-accent-2: #6aa3ff;
+  --arcade-danger: #ff5470;
+  --arcade-warning: #ffd45f;
+  --arcade-glow: rgba(103, 255, 231, 0.22);
+  --arcade-overlay: rgba(3, 10, 24, 0.82);
+  --arcade-option-bg: rgba(5, 12, 35, 0.68);
+
   /* All portals share the same brand grammar. Status colors stay semantic only. */
   --sn-school-accent: var(--color-brand);
   --sn-school-tint: var(--color-brand-soft);
