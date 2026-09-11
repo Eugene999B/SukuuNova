@@ -3,9 +3,12 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
-import { alignActiveIdentityCardValidity } from "@/lib/identity-card-policy";
-import { buildIdentityCardSvg, type IdentityCardArtworkSide } from "@/lib/identity-card-output";
-import { buildSingleIdentityCardPdf, getIdentityCardSettings, identityCardVerificationUrl, listIdentityCards } from "@/lib/identity-card-service";
+import { listIdentityCards } from "@/lib/identity-card-service";
+import {
+  buildIdentityCardSinglePdfV2,
+  buildIdentityCardSvgV2,
+  type IdentityCardArtworkSide,
+} from "@/lib/identity-card-print-v2";
 
 export async function GET(
   request: Request,
@@ -21,11 +24,14 @@ export async function GET(
     if (requestedSide !== "front" && requestedSide !== "back") throw new AppError("Identity card side must be front or back.", 400, "INVALID_CARD_SIDE");
     const side = requestedSide as IdentityCardArtworkSide;
 
-    const result = await withTenant(session.schoolId, async (tx) => {
+    // Keep the database transaction short. PDF/SVG rendering is deliberately done
+    // after withTenant completes so a large/slow render cannot expire Prisma's
+    // interactive transaction and turn a valid print request into P2028/500.
+    const data = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "identity_cards:manage");
       const student = await tx.student.findFirst({
         where: { id: studentId, schoolId: session.schoolId },
-        select: { id: true, name: true, admissionNo: true },
+        select: { id: true, name: true },
       });
       if (!student) throw new AppError("Student not found.", 404, "STUDENT_NOT_FOUND");
       const school = await tx.school.findUnique({
@@ -33,40 +39,34 @@ export async function GET(
         select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true },
       });
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
-      const settings = await getIdentityCardSettings(tx, session.schoolId);
-      await alignActiveIdentityCardValidity(tx, session.schoolId, settings.validityMonths);
       const card = (await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId))
         .find((item) => item.personType === "student" && item.studentId === student.id && item.status === "active" && !item.isExpired);
       if (!card) throw new AppError("No current identity card exists for this student.", 404, "NO_CURRENT_CARD");
-
-      if (requestedFormat === "svg") {
-        const verifyUrl = identityCardVerificationUrl(requestUrl.origin, school.uniqueCode, card);
-        return { kind: "svg" as const, svg: buildIdentityCardSvg(card, school, verifyUrl, side), studentName: student.name, side };
-      }
-
-      const pdf = await buildSingleIdentityCardPdf(card, school, requestUrl.origin);
-      return { kind: "pdf" as const, pdf, studentName: student.name };
+      return { school, card, studentName: student.name };
     });
 
-    const safe = result.studentName.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "student";
-    if (result.kind === "svg") {
-      return new NextResponse(result.svg, {
+    const safe = data.studentName.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "student";
+    if (requestedFormat === "svg") {
+      const svg = buildIdentityCardSvgV2(data.card, data.school, requestUrl.origin, side);
+      return new NextResponse(svg, {
         status: 200,
         headers: {
           "content-type": "image/svg+xml; charset=utf-8",
-          "content-disposition": `attachment; filename="${safe}-identity-card-${result.side}.svg"`,
+          "content-disposition": `attachment; filename="${safe}-identity-card-${side}.svg"`,
           "cache-control": "private, no-store",
         },
       });
     }
 
-    return new NextResponse(result.pdf, {
+    const pdf = await buildIdentityCardSinglePdfV2(data.card, data.school, requestUrl.origin);
+    return new NextResponse(pdf, {
       status: 200,
       headers: {
         "content-type": "application/pdf",
         "content-disposition": `attachment; filename="${safe}-identity-card-front-back.pdf"`,
         "cache-control": "private, no-store",
         "x-sukuunova-id-card-sides": "front,back",
+        "x-sukuunova-print-size": "CR80-85.60x53.98mm",
       },
     });
   } catch (error) {
