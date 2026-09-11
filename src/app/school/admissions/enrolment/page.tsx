@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createId } from "@paralleldrive/cuid2";
-import { randomInt } from "node:crypto";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { requirePermission } from "@/lib/rbac";
 import { withTenant } from "@/lib/db";
 import { appendSchoolAudit } from "@/lib/audit";
 import { selectAcademicTerm } from "@/lib/term-date";
+import { onboardStudentInTransaction } from "@/lib/student-onboarding-service";
 import "./enrolment.css";
 
 const statuses = ["draft", "ready", "confirmed", "withdrawn"] as const;
@@ -16,7 +16,7 @@ type EnrollmentStatus = (typeof statuses)[number];
 type EntryType = (typeof entryTypes)[number];
 
 function dateInput(value: FormDataEntryValue | null) {
-  return typeof value === "string" && value ? new Date(value) : null;
+  return typeof value === "string" && value ? new Date(`${value}T00:00:00.000Z`) : null;
 }
 
 function checked(formData: FormData, key: string) {
@@ -51,13 +51,16 @@ async function createEnrollment(formData: FormData) {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`enrollment:${session.schoolId}:${studentId}:${termId}`}))`;
 
     const [term, schoolClass, student] = await Promise.all([
-      tx.term.findFirst({ where: { id: termId, schoolId: session.schoolId, academicYearId }, select: { id: true } }),
+      tx.term.findFirst({ where: { id: termId, schoolId: session.schoolId, academicYearId }, select: { id: true, startDate: true, endDate: true, isLocked: true } }),
       tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } }),
-      tx.student.findFirst({ where: { id: studentId, schoolId: session.schoolId }, select: { id: true } }),
+      tx.student.findFirst({ where: { id: studentId, schoolId: session.schoolId }, select: { id: true, status: true } }),
     ]);
     if (!term) throw new Error("The selected term does not belong to the selected academic year.");
+    if (term.isLocked) throw new Error("The selected term is locked and cannot accept a new enrolment.");
+    if (startDate && (startDate < term.startDate || startDate > term.endDate)) throw new Error("Enrolment start date must fall inside the selected term.");
     if (!schoolClass) throw new Error("The selected class does not belong to this school.");
     if (!student) throw new Error("Learner not found.");
+    if (student.status !== "active") throw new Error("Only an active learner can receive a new term enrolment.");
 
     const duplicate = await tx.$queryRaw<Array<{ id: string }>>`
       SELECT "id" FROM "Enrollment"
@@ -82,7 +85,7 @@ async function createEnrollment(formData: FormData) {
       action: "enrollment.created",
       entityType: "Enrollment",
       entityId: id,
-      after: { studentId, academicYearId, termId, classId, status, entryType, guardianVerified, documentsReady, feeReady },
+      after: { studentId, academicYearId, termId, classId, status, entryType, startDate: startDate?.toISOString().slice(0, 10) ?? null, guardianVerified, documentsReady, feeReady },
     });
   });
   redirect("/school/admissions/enrolment");
@@ -147,6 +150,18 @@ async function updateEnrollment(formData: FormData) {
       }
     }
 
+    if (status === "withdrawn" && row.status === "confirmed") {
+      const [settings, terms, student] = await Promise.all([
+        tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
+        tx.term.findMany({ where: { schoolId: session.schoolId }, select: { id: true, startDate: true, endDate: true, isLocked: true } }),
+        tx.student.findFirst({ where: { id: row.studentId, schoolId: session.schoolId }, select: { id: true, classId: true } }),
+      ]);
+      const active = selectAcademicTerm(terms, undefined, new Date(), settings?.timezone ?? "Africa/Accra");
+      if (active?.id === row.termId && student?.classId === row.classId) {
+        await tx.student.update({ where: { id: row.studentId }, data: { classId: null } });
+      }
+    }
+
     await appendSchoolAudit(tx, {
       schoolId: session.schoolId,
       actorId: session.userId,
@@ -188,53 +203,27 @@ async function convertEnquiryToEnrollment(formData: FormData) {
     const enquiry = enquiryRows[0];
     if (!enquiry || enquiry.convertedStudentId) throw new Error("This enquiry is already linked to a learner or no longer exists.");
 
-    const [term, schoolClass] = await Promise.all([
-      tx.term.findFirst({ where: { id: termId, schoolId: session.schoolId, academicYearId }, select: { id: true } }),
-      tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } }),
-    ]);
+    const term = await tx.term.findFirst({
+      where: { id: termId, schoolId: session.schoolId, academicYearId },
+      select: { id: true, isLocked: true },
+    });
     if (!term) throw new Error("The selected term does not belong to the selected academic year.");
-    if (!schoolClass) throw new Error("The selected class does not belong to this school.");
+    if (term.isLocked) throw new Error("The selected term is locked and cannot accept a new learner draft.");
 
-    let admissionNo = `ADM-${new Date().getFullYear()}-${randomInt(1000, 9999)}`;
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const hit = await tx.student.findFirst({ where: { schoolId: session.schoolId, admissionNo }, select: { id: true } });
-      if (!hit) break;
-      admissionNo = `ADM-${new Date().getFullYear()}-${randomInt(1000, 9999)}`;
-    }
-
-    let student;
-    try {
-      student = await tx.student.create({
-        data: { schoolId: session.schoolId, name: enquiry.studentName, admissionNo, classId: null, status: "active" },
-      });
-    } catch (error) {
-      if ((error as { code?: string }).code === "P2002") throw new Error("A learner with this index number was just created. Try again.");
-      throw error;
-    }
-
-    const guardianVerified = Boolean(enquiry.guardianName && enquiry.phone);
-    if (enquiry.guardianName && enquiry.phone) {
-      const guardian = await tx.guardian.upsert({
-        where: { schoolId_phone: { schoolId: session.schoolId, phone: enquiry.phone } },
-        update: { name: enquiry.guardianName },
-        create: { schoolId: session.schoolId, name: enquiry.guardianName, phone: enquiry.phone },
-      });
-      await tx.studentGuardian.create({
-        data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: "Parent/Guardian", isPrimary: true },
-      }).catch(() => undefined);
-    }
-
-    const enrollmentId = createId();
-    await tx.$executeRaw`
-      INSERT INTO "Enrollment"
-        ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","guardianVerified","documentsReady","feeReady","notes","createdBy")
-      VALUES
-        (${enrollmentId},${session.schoolId},${student.id},${academicYearId},${termId},${classId},'draft','new',${guardianVerified},false,false,${`Converted from ${enquiryId}`},${session.userId})
-    `;
+    const onboarding = await onboardStudentInTransaction(tx, {
+      schoolId: session.schoolId,
+      actorId: session.userId,
+      name: enquiry.studentName,
+      intakeAcademicYearId: academicYearId,
+      entryType: "New enrollment",
+      guardian: enquiry.guardianName && enquiry.phone ? { name: enquiry.guardianName, phone: enquiry.phone, relationship: "Parent/Guardian" } : null,
+      placement: { termId, classId, notes: `Converted from admission enquiry ${enquiryId}` },
+      auditSource: "admission_enquiry",
+    });
 
     const claimed = await tx.$executeRaw`
       UPDATE "AdmissionEnquiry"
-      SET "stage"='converted',"convertedStudentId"=${student.id},"updatedAt"=CURRENT_TIMESTAMP
+      SET "stage"='converted',"convertedStudentId"=${onboarding.student.id},"updatedAt"=CURRENT_TIMESTAMP
       WHERE "id"=${enquiryId} AND "schoolId"=${session.schoolId} AND "convertedStudentId" IS NULL
     `;
     if (claimed !== 1) throw new Error("This enquiry was just linked to another learner. Refresh to see it.");
@@ -244,8 +233,17 @@ async function convertEnquiryToEnrollment(formData: FormData) {
       actorId: session.userId,
       action: "admission_enquiry.enrolled",
       entityType: "Enrollment",
-      entityId: enrollmentId,
-      after: { enquiryId, studentId: student.id, admissionNo, academicYearId, termId, classId, status: "draft", guardianVerified },
+      entityId: onboarding.enrollmentId ?? onboarding.student.id,
+      after: {
+        enquiryId,
+        studentId: onboarding.student.id,
+        admissionNo: onboarding.student.admissionNo,
+        academicYearId,
+        termId,
+        classId,
+        status: "draft",
+        guardianVerified: Boolean(enquiry.guardianName && enquiry.phone),
+      },
     });
   });
   redirect("/school/admissions/enrolment");
@@ -362,7 +360,7 @@ export default async function EnrolmentPage() {
           <form action={createEnrollment} className="module-toolbar">
             <select name="studentId" required defaultValue=""><option value="" disabled>Select learner</option>{data.students.map((student) => <option key={student.id} value={student.id}>{student.name} · {student.admissionNo}{student.class?.name ? ` · current ${student.class.name}` : " · currently unplaced"}</option>)}</select>
             <select name="academicYearId" required defaultValue={defaultTerm?.academicYearId ?? ""}><option value="" disabled>Select academic year</option>{[...new Map(data.terms.map((term) => [term.academicYearId, term.academicYear])).values()].map((year) => <option key={year.id} value={year.id}>{year.name}</option>)}</select>
-            <select name="termId" required defaultValue={defaultTerm?.id ?? ""}><option value="" disabled>Select term</option>{data.terms.map((term) => <option key={term.id} value={term.id}>{term.academicYear.name} · {term.name}</option>)}</select>
+            <select name="termId" required defaultValue={defaultTerm?.id ?? ""}><option value="" disabled>Select term</option>{data.terms.map((term) => <option key={term.id} value={term.id} disabled={term.isLocked}>{term.academicYear.name} · {term.name}{term.isLocked ? " · locked" : ""}</option>)}</select>
             <select name="classId" required defaultValue=""><option value="" disabled>Select class</option>{data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</option>)}</select>
             <select name="entryType" defaultValue="new"><option value="new">New</option><option value="returning">Returning</option><option value="transfer">Transfer</option></select>
             <input type="date" name="startDate" />
@@ -379,7 +377,7 @@ export default async function EnrolmentPage() {
 
         <section className="module-card">
           <div className="section-heading"><div><span className="eyebrow">Accepted applications</span><h3>Convert an enquiry into a learner draft</h3></div></div>
-          {data.candidates.length ? <div className="module-list">{data.candidates.map((candidate) => <form action={convertEnquiryToEnrollment} className="module-list-item" key={candidate.id}><input type="hidden" name="enquiryId" value={candidate.id} /><span><strong>{candidate.studentName}</strong><small>{candidate.reference} · {candidate.guardianName ?? "Guardian not recorded"}{candidate.intendedClass ? ` · requested ${candidate.intendedClass}` : ""}</small></span><select name="academicYearId" required defaultValue={defaultTerm?.academicYearId ?? ""}><option value="" disabled>Year</option>{[...new Map(data.terms.map((term) => [term.academicYearId, term.academicYear])).values()].map((year) => <option key={year.id} value={year.id}>{year.name}</option>)}</select><select name="termId" required defaultValue={defaultTerm?.id ?? ""}><option value="" disabled>Term</option>{data.terms.map((term) => <option key={term.id} value={term.id}>{term.academicYear.name} · {term.name}</option>)}</select><select name="classId" required defaultValue=""><option value="" disabled>Class</option>{data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>)}</select><button className="button primary" type="submit">Create draft</button></form>)}</div> : <div className="module-empty"><strong>No accepted applications are waiting for conversion.</strong></div>}
+          {data.candidates.length ? <div className="module-list">{data.candidates.map((candidate) => <form action={convertEnquiryToEnrollment} className="module-list-item" key={candidate.id}><input type="hidden" name="enquiryId" value={candidate.id} /><span><strong>{candidate.studentName}</strong><small>{candidate.reference} · {candidate.guardianName ?? "Guardian not recorded"}{candidate.intendedClass ? ` · requested ${candidate.intendedClass}` : ""}</small></span><select name="academicYearId" required defaultValue={defaultTerm?.academicYearId ?? ""}><option value="" disabled>Year</option>{[...new Map(data.terms.map((term) => [term.academicYearId, term.academicYear])).values()].map((year) => <option key={year.id} value={year.id}>{year.name}</option>)}</select><select name="termId" required defaultValue={defaultTerm?.id ?? ""}><option value="" disabled>Term</option>{data.terms.map((term) => <option key={term.id} value={term.id} disabled={term.isLocked}>{term.academicYear.name} · {term.name}{term.isLocked ? " · locked" : ""}</option>)}</select><select name="classId" required defaultValue=""><option value="" disabled>Class</option>{data.classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.name}</option>)}</select><button className="button primary" type="submit">Create draft</button></form>)}</div> : <div className="module-empty"><strong>No accepted applications are waiting for conversion.</strong></div>}
         </section>
       </div>
     </AppShell>

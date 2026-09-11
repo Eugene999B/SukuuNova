@@ -8,12 +8,14 @@ import { Tooltip } from "@/components/ui/Tooltip";
 
 type SchoolClass = { id: string; name: string; level: string | null; _count: { students: number } };
 type AcademicYearOption = { id: string; name: string; isCurrent: boolean };
+type TermOption = { id: string; name: string; academicYearName: string; isCurrent: boolean; isLocked: boolean };
 type StudentActionState = { message: string | null };
 type CreateStudentAction = (previousState: StudentActionState, formData: FormData) => Promise<StudentActionState>;
 
 type Props = {
   classes: SchoolClass[];
   academicYears: AcademicYearOption[];
+  terms: TermOption[];
   action: CreateStudentAction;
   triggerLabel?: string;
   initialOpen?: boolean;
@@ -21,7 +23,7 @@ type Props = {
 
 const steps = [
   { key: "identity", title: "Identity", hint: "Name and essential personal details" },
-  { key: "placement", title: "Placement", hint: "Intake year, admission date and class" },
+  { key: "placement", title: "Placement", hint: "Intake history and proposed term placement" },
   { key: "family", title: "Family", hint: "Parent or guardian contact" },
   { key: "photo", title: "Face & review", hint: "Live portrait capture and final review" },
 ] as const;
@@ -36,12 +38,13 @@ function Field({ label, required, children, hint }: { label: string; required?: 
   );
 }
 
-export function AddStudentDialog({ classes, academicYears, action, triggerLabel = "+ Add student", initialOpen = false }: Props) {
+export function AddStudentDialog({ classes, academicYears, terms, action, triggerLabel = "+ Add student", initialOpen = false }: Props) {
   const [open, setOpen] = useState(initialOpen);
   const [step, setStep] = useState(0);
   const [actionError, setActionError] = useState("");
   const [actionState, formAction] = useActionState(action, { message: null });
   const defaultAcademicYearId = academicYears.find((year) => year.isCurrent)?.id ?? academicYears[0]?.id ?? "";
+  const defaultPlacementTermId = terms.find((term) => term.isCurrent && !term.isLocked)?.id ?? "";
 
   useEffect(() => {
     setOpen(initialOpen);
@@ -83,9 +86,17 @@ export function AddStudentDialog({ classes, academicYears, action, triggerLabel 
     const form = event.currentTarget;
     const formData = new FormData(form);
     const photoData = String(formData.get("photoData") ?? "");
+    const placementTermId = String(formData.get("placementTermId") ?? "");
+    const classId = String(formData.get("classId") ?? "");
     if (!String(formData.get("intakeAcademicYearId") ?? "")) {
       event.preventDefault();
       setActionError("Choose the academic year in which the learner joined the school.");
+      setStep(1);
+      return;
+    }
+    if ((placementTermId && !classId) || (classId && !placementTermId)) {
+      event.preventDefault();
+      setActionError("Choose both a placement term and intended class, or leave both unassigned.");
       setStep(1);
       return;
     }
@@ -111,7 +122,7 @@ export function AddStudentDialog({ classes, academicYears, action, triggerLabel 
               <div>
                 <div className="eyebrow">Student admission</div>
                 <h2 id="add-student-title">Create a learner record</h2>
-                <p>Record when the learner actually joined the school, place them in the current register and capture a live portrait.</p>
+                <p>Record when the learner joined, propose a term placement and capture a live portrait. The class becomes live only after enrolment confirmation.</p>
               </div>
               <Tooltip label="Close student admission dialog">
                 <button type="button" className="dialog-close" onClick={closeDialog} aria-label="Close">×</button>
@@ -138,14 +149,15 @@ export function AddStudentDialog({ classes, academicYears, action, triggerLabel 
                 </div>
 
                 <div className="dialog-panel" hidden={step !== 1} aria-hidden={step !== 1}>
-                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 2</span><h3>Record intake and placement</h3><p>The intake year tells SukuuNova when the learner joined the school. It does not create fake historical marks or attendance.</p></div><span className="panel-badge">Academic</span></div>
+                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 2</span><h3>Record intake and proposed placement</h3><p>Intake records when the learner joined the school. Placement is a draft enrolment until admission checks are confirmed.</p></div><span className="panel-badge">Academic</span></div>
                   <div className="dialog-grid two">
                     <Field label="Academic year joined" required hint="Previous configured years are available for learners who joined before SukuuNova."><select name="intakeAcademicYearId" defaultValue={defaultAcademicYearId} required><option value="" disabled>Choose academic year</option>{academicYears.map((year) => <option key={year.id} value={year.id}>{year.name}{year.isCurrent ? " · current" : ""}</option>)}</select></Field>
                     <Field label="Admission date" hint="The actual date the learner entered this school."><input name="admissionDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
-                    <Field label="Current class group"><select name="classId" defaultValue=""><option value="">Leave unassigned</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name} · {schoolClass._count.students} learners</option>)}</select></Field>
+                    <Field label="Placement term" hint="Choose the term this intended class belongs to. Locked terms cannot accept new placements."><select name="placementTermId" defaultValue={defaultPlacementTermId}><option value="">Leave placement pending</option>{terms.map((term) => <option key={term.id} value={term.id} disabled={term.isLocked}>{term.academicYearName} · {term.name}{term.isCurrent ? " · current" : ""}{term.isLocked ? " · locked" : ""}</option>)}</select></Field>
+                    <Field label="Intended class group" hint="This creates a draft enrolment; it does not change the live class yet."><select name="classId" defaultValue=""><option value="">Leave unassigned</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name} · {schoolClass._count.students} live learners</option>)}</select></Field>
                     <Field label="Entry type"><select name="entryType" defaultValue="New enrollment"><option>New enrollment</option><option>Transfer in</option><option>Re-enrollment</option><option>Returning learner</option></select></Field>
                   </div>
-                  <div className="dialog-info-card subtle"><strong>History stays truthful</strong><span>Intake records when the learner joined the school. Academic records in SukuuNova begin only from the terms the school actually records in the system.</span></div>
+                  <div className="dialog-info-card subtle"><strong>History stays truthful</strong><span>Draft placement is reviewed in Admissions. Only a confirmed enrolment for the active term changes the learner&apos;s operational class.</span></div>
                 </div>
 
                 <div className="dialog-panel" hidden={step !== 2} aria-hidden={step !== 2}>
@@ -163,7 +175,7 @@ export function AddStudentDialog({ classes, academicYears, action, triggerLabel 
                       <div className="review-row"><span>Learner</span><b>Identity information</b></div>
                       <div className="review-row"><span>Index</span><b>Generated automatically</b></div>
                       <div className="review-row"><span>Intake</span><b>Academic year + admission date</b></div>
-                      <div className="review-row"><span>Class</span><b>Current placement</b></div>
+                      <div className="review-row"><span>Class</span><b>Draft term enrolment until confirmed</b></div>
                       <div className="review-row"><span>Family</span><b>Primary guardian</b></div>
                       <div className="review-row"><span>Portrait</span><b>Live camera capture</b></div>
                       <div className="review-security"><strong>Biometric safety</strong><span>The registration portrait can support later device enrollment, but biometric face templates still require the existing consent and device-enrollment controls.</span></div>

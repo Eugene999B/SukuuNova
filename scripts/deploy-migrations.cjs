@@ -68,14 +68,15 @@ async function ensureInvoiceProtection(client) {
 async function failedReleaseCMigration(client) {
   if (!(await tableExists(client, '"_prisma_migrations"'))) return false;
   const rows = await client.$queryRawUnsafe(`
-    SELECT "migration_name", "finished_at", "rolled_back_at"
+    SELECT "migration_name"
     FROM "_prisma_migrations"
     WHERE "migration_name" = '${FAILED_MIGRATION}'
+      AND "finished_at" IS NULL
+      AND "rolled_back_at" IS NULL
     ORDER BY "started_at" DESC
     LIMIT 1
   `);
-  const row = rows[0];
-  return Boolean(row && row.finished_at == null && row.rolled_back_at == null);
+  return rows.length > 0;
 }
 
 async function restoreSafetyBoundaries(client) {

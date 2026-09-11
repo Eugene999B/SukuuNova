@@ -9,7 +9,7 @@ const source = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
 describe("school store and property operational contracts", () => {
   it("keeps store and property permissions in canonical RBAC with Owner authority", () => {
     const required = [
-      "store:view","store:manage_catalog","store:stock","store:sell","store:void_sale","store:export",
+      "store:view","store:manage_catalog","store:stock","store:sell","store:discount","store:void_sale","store:export",
       "properties:view","properties:manage","properties:move","properties:dispose","properties:export",
     ] as const;
     for (const key of required) {
@@ -19,6 +19,7 @@ describe("school store and property operational contracts", () => {
       expect(DEFAULT_ROLE_PERMISSIONS.Administrator).toContain(key);
     }
     expect(DEFAULT_ROLE_PERMISSIONS.Accountant).toContain("store:sell");
+    expect(DEFAULT_ROLE_PERMISSIONS.Accountant).toContain("store:discount");
     expect(DEFAULT_ROLE_PERMISSIONS.Accountant).not.toContain("store:void_sale");
     expect(DEFAULT_ROLE_PERMISSIONS["Vice Principal"]).toContain("properties:view");
     expect(DEFAULT_ROLE_PERMISSIONS["Vice Principal"]).not.toContain("properties:dispose");
@@ -59,6 +60,16 @@ describe("school store and property operational contracts", () => {
     expect(service).toContain("store.sale_voided");
     expect(service).toContain("stockQuantity\"=\"stockQuantity\"+");
     expect(service).toContain('requireStore(tx, input.actorId, "store:void_sale")');
+  });
+
+  it("governs store discounts and non-cash payment references separately from cashier access", () => {
+    const service = source("src/lib/school-store-service.ts");
+    const migration = source("prisma/migrations/20260911165000_store_discount_governance/migration.sql");
+    expect(service).toContain('requireStore(tx, input.actorId, "store:discount")');
+    expect(service).toContain("STORE_PAYMENT_METHODS");
+    expect(service).toContain("PAYMENT_REFERENCE_REQUIRED");
+    expect(migration).toContain("store:discount");
+    expect(migration).toContain("Accountant");
   });
 
   it("keeps destructive property outcomes behind a separate high-impact permission", () => {

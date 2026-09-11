@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { Mail, Phone } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import { requirePermission } from "@/lib/rbac";
+import { hasPermission, requirePermission } from "@/lib/rbac";
+import { makePrimaryGuardianForStudent } from "@/lib/guardian-service";
 import { DetailGrid, ProductPageHeader, ProductSection, StatusBadge } from "@/components/product/ProductWorkspace";
 import "@/components/product/product-workspace.css";
 
@@ -13,7 +15,7 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
   const { id } = await params;
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:read");
-    const [school, guardian] = await Promise.all([
+    const [school, guardian, canManageLinks] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.guardian.findFirst({
         where: { id, schoolId: session.schoolId },
@@ -27,8 +29,9 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
           students: { select: { relationship: true, isPrimary: true, student: { select: { id: true, name: true, admissionNo: true, status: true, class: { select: { name: true, level: true } } } } } },
         },
       }),
+      hasPermission(tx, session.userId, "students:write"),
     ]);
-    return { school, guardian };
+    return { school, guardian, canManageLinks };
   });
 
   if (!data.school) notFound();
@@ -45,6 +48,21 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
         </div>
       </AppShell>
     );
+  }
+
+  async function makePrimary(formData: FormData) {
+    "use server";
+    const actionSession = await requireSchoolSession();
+    const studentId = String(formData.get("studentId") ?? "").trim();
+    if (!studentId) return;
+    await withTenant(actionSession.schoolId, async (tx) => {
+      await requirePermission(tx, actionSession.userId, "students:write");
+      const guardian = await tx.guardian.findFirst({ where: { id, schoolId: actionSession.schoolId }, select: { id: true } });
+      if (!guardian) return;
+      await makePrimaryGuardianForStudent(tx, { schoolId: actionSession.schoolId, studentId, guardianId: guardian.id });
+    });
+    revalidatePath(`/school/guardians/${id}`);
+    revalidatePath(`/school/students/${studentId}`);
   }
 
   const g = data.guardian;
@@ -97,6 +115,7 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
                     <th scope="col">Class</th>
                     <th scope="col">Relationship</th>
                     <th scope="col">Status</th>
+                    {data.canManageLinks ? <th scope="col">Primary contact</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -116,6 +135,18 @@ export default async function GuardianDetailPage({ params }: { params: Promise<{
                       <td>
                         <StatusBadge tone={link.student.status === "active" ? "success" : "neutral"}>{link.student.status}</StatusBadge>
                       </td>
+                      {data.canManageLinks ? (
+                        <td>
+                          {link.isPrimary ? (
+                            <StatusBadge tone="success">Primary</StatusBadge>
+                          ) : (
+                            <form action={makePrimary}>
+                              <input type="hidden" name="studentId" value={link.student.id} />
+                              <button className="button secondary" type="submit">Make primary</button>
+                            </form>
+                          )}
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                 </tbody>
