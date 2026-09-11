@@ -5,6 +5,7 @@ import { AppError } from "./errors";
 import { requirePermission } from "./rbac";
 import { enqueueSms } from "./sms-outbox";
 import { netPaid, toMoney } from "./money";
+import { resolveStudentTermClass } from "./student-term-context";
 
 const termLockKey=(schoolId:string,termId:string)=>`term-mutation:${schoolId}:${termId}`;
 
@@ -35,7 +36,8 @@ export async function generateInvoice(tx: TenantDb, input: { schoolId: string; a
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`invoice-generation:${input.schoolId}:${input.studentId}:${input.termId}`}))`;
   const existing = await tx.invoice.findFirst({ where: { studentId: input.studentId, termId: input.termId, schoolId: input.schoolId } });
   if (existing) throw new AppError("This student already has an invoice for the selected term.", 409, "INVOICE_EXISTS");
-  const items = await tx.feeItem.findMany({ where: { schoolId: input.schoolId, termId: input.termId, OR: [{ classId: null }, { classId: student.classId ?? "__none__" }] } });
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId });
+  const items = await tx.feeItem.findMany({ where: { schoolId: input.schoolId, termId: input.termId, OR: [{ classId: null }, { classId: termClass.classId }] } });
   if (items.length === 0) throw new AppError("No fee items apply to this student.", 409, "NO_FEE_ITEMS");
   const total = items.reduce((sum, item) => sum.plus(item.amount), new Prisma.Decimal(0));
   const invoice = await tx.invoice.create({ data: { schoolId: input.schoolId, studentId: student.id, termId: input.termId, totalAmount: total } });
@@ -44,7 +46,7 @@ export async function generateInvoice(tx: TenantDb, input: { schoolId: string; a
     if (!link.guardian.phone) continue;
     await enqueueSms(tx, { schoolId: input.schoolId, recipientType: "guardian", recipientId: link.guardianId, recipientPhone: link.guardian.phone, body: "SukuuNova invoice: " + student.name + " has fees of GHS " + total.toFixed(2) + ".", templateKey: "invoice_created", templateVariables: { "1": student.name, "2": total.toFixed(2), "3": invoice.id } });
   }
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "invoice.created", entityType: "Invoice", entityId: invoice.id, after: { ...invoice, lines: items.map((item) => item.id) } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "invoice.created", entityType: "Invoice", entityId: invoice.id, after: { ...invoice, classId: termClass.classId, classSource: termClass.source, lines: items.map((item) => item.id) } });
   return invoice;
 }
 
