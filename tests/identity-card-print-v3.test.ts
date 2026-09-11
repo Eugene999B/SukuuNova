@@ -67,7 +67,7 @@ describe("premium identity-card print engine v3", () => {
     process.env.SCHOOL_AUTH_SECRET = "identity-card-v3-test-secret-012345678901234567890123";
   });
 
-  it("uses a compact signed URL that materially reduces QR payload", () => {
+  it("uses a compact stable signed URL that materially reduces QR payload", () => {
     const token = identityCardCompactToken(baseCard);
     const compact = identityCardCompactVerificationUrl(origin, school.uniqueCode, baseCard);
     const legacy = identityCardVerificationUrl(origin, school.uniqueCode, baseCard);
@@ -75,7 +75,10 @@ describe("premium identity-card print engine v3", () => {
     expect(verifyIdentityCardCompactToken(baseCard, token)).toBe(true);
     expect(compact).toContain("/v/EUG123/");
     expect(compact.length).toBeLessThan(legacy.length);
-    expect(verifyIdentityCardCompactToken({ ...baseCard, version: 2 }, token)).toBe(false);
+    // Live status/version updates must not invalidate the physical card's QR.
+    expect(verifyIdentityCardCompactToken({ ...baseCard, version: 2, status: "revoked" }, token)).toBe(true);
+    // A different issued credential must never inherit the old token.
+    expect(verifyIdentityCardCompactToken({ ...baseCard, serial: `${baseCard.serial}-NEW` }, token)).toBe(false);
   });
 
   it("creates an exact two-page CR80 front/back PDF", async () => {
