@@ -5,6 +5,7 @@ import { StaffDirectory } from "@/components/staff/StaffDirectory";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
+import { isSchoolStaffAccount, isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
 import { StaffCreateDialog } from "./StaffCreateDialog";
 import "./staff-workspace.css";
 import "./staff-simple.css";
@@ -12,7 +13,7 @@ import "./staff-simple.css";
 export default async function StaffPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
-    const [school, users, classes, subjects, canManageCards] = await Promise.all([
+    const [school, allUsers, classes, subjects, canManageCards] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.user.findMany({
         where: { status: { in: ["active", "pending", "suspended"] } },
@@ -28,10 +29,11 @@ export default async function StaffPage() {
       tx.subject.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
       hasPermission(tx, session.userId, "identity_cards:manage").catch(() => false),
     ]);
+    const users = allUsers.filter((user) => isSchoolStaffAccount(user.userRoles.map(({ role }) => role)));
     return { school, users, classes, subjects, canManageCards };
   });
 
-  const teachers = data.users.filter((user) => user.userRoles.some((role) => /teacher/i.test(role.role.name)));
+  const teachers = data.users.filter((user) => user.userRoles.some(({ role }) => isTeachingRoleKey(role.key?.trim() || roleKeyForName(role.name))));
   const pending = data.users.filter((user) => user.status === "pending");
   const active = data.users.filter((user) => user.status === "active");
   const people = data.users.map((user) => ({
@@ -64,7 +66,7 @@ export default async function StaffPage() {
         </section>
 
         <section className="staff-simple-panel">
-          <div className="staff-simple-panel-head"><div><h3>People at this school</h3><p>Search by name, contact or role, then open the full staff profile.</p></div></div>
+          <div className="staff-simple-panel-head"><div><h3>People at this school</h3><p>Staff accounts only. Student and guardian portal identities are managed in their own workspaces.</p></div></div>
           <StaffDirectory people={people} />
         </section>
 
@@ -72,7 +74,7 @@ export default async function StaffPage() {
           <summary>More workforce administration</summary>
           <div className="sn-progressive-body staff-simple-tools">
             {data.canManageCards ? <Link href="/school/id-cards"><strong>Identity cards</strong><span>Issue, reissue & verify →</span></Link> : null}
-            <Link href="/school/settings/access"><strong>People & access</strong><span>Accounts and activation →</span></Link>
+            <Link href="/school/settings/access"><strong>People & access</strong><span>Staff accounts and activation →</span></Link>
             <Link href="/school/settings/roles"><strong>Roles & permissions</strong><span>Access rules →</span></Link>
             <Link href="/school/attendance/staff"><strong>Staff attendance</strong><span>Attendance records →</span></Link>
             <Link href="/school/classes"><strong>Classes</strong><span>Class teachers →</span></Link>

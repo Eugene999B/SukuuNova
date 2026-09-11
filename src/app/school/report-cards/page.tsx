@@ -21,16 +21,20 @@ async function runReportCardAction(formData: FormData) {
   "use server";
   const session = await requireSchoolSession();
   const action = String(formData.get("action") || "");
+  const academicYearId = String(formData.get("academicYearId") || "");
   const termId = String(formData.get("termId") || "");
   const classId = String(formData.get("classId") || "");
   const studentId = String(formData.get("studentId") || "");
   const reportCardId = String(formData.get("reportCardId") || "");
   const headRemark = String(formData.get("headRemark") || "").trim();
-  if (!termId || !classId) throw new Error("Choose a term and class first.");
+  if (!termId || !classId) throw new Error("Choose an academic year, term and class first.");
   if (!reportCardId) throw new Error("A report card is required.");
 
   let notice = "";
   await withTenant(session.schoolId, async (tx) => {
+    const contextTerm = await tx.term.findFirst({ where: { id: termId, schoolId: session.schoolId }, select: { academicYearId: true } });
+    if (!contextTerm || (academicYearId && contextTerm.academicYearId !== academicYearId)) throw new Error("The selected term does not belong to the selected academic year.");
+
     if (action === "promotion") {
       const decision = String(formData.get("decision") || "");
       if (decision !== "promoted" && decision !== "not_promoted") throw new Error("Choose a valid promotion decision.");
@@ -85,7 +89,7 @@ async function runReportCardAction(formData: FormData) {
   });
 
   revalidatePath("/school/report-cards");
-  redirect(`/school/report-cards?term=${encodeURIComponent(termId)}&classId=${encodeURIComponent(classId)}${studentId ? `&studentId=${encodeURIComponent(studentId)}` : ""}${notice ? `&notice=${encodeURIComponent(notice)}` : ""}`);
+  redirect(`/school/report-cards?${academicYearId ? `year=${encodeURIComponent(academicYearId)}&` : ""}term=${encodeURIComponent(termId)}&classId=${encodeURIComponent(classId)}${studentId ? `&studentId=${encodeURIComponent(studentId)}` : ""}${notice ? `&notice=${encodeURIComponent(notice)}` : ""}`);
 }
 
 const statusLabel: Record<string, string> = {
@@ -98,18 +102,23 @@ const statusLabel: Record<string, string> = {
 export default async function ReportCardsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ term?: string; classId?: string; studentId?: string; notice?: string }>;
+  searchParams: Promise<{ year?: string; term?: string; classId?: string; studentId?: string; notice?: string }>;
 }) {
   const session = await requireSchoolSession();
   const params = await searchParams;
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "report_cards:view");
-    const [school, terms, classes, canGenerate, canSubmit, canApprove, settings] = await Promise.all([
+    const [school, academicYears, allTerms, classes, canGenerate, canSubmit, canApprove, settings] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.term.findMany({
+      tx.academicYear.findMany({
+        where: { schoolId: session.schoolId },
         orderBy: { startDate: "desc" },
-        take: 18,
-        select: { id: true, name: true, startDate: true, endDate: true, academicYearId: true },
+        select: { id: true, name: true, startDate: true, endDate: true, isLocked: true },
+      }),
+      tx.term.findMany({
+        where: { schoolId: session.schoolId },
+        orderBy: { startDate: "desc" },
+        select: { id: true, name: true, startDate: true, endDate: true, academicYearId: true, isLocked: true },
       }),
       tx.class.findMany({
         where: { schoolId: session.schoolId },
@@ -125,12 +134,22 @@ export default async function ReportCardsPage({
       }),
     ]);
 
-    const term = terms.find((item) => item.id === params.term) ?? terms[0] ?? null;
+    const now = new Date();
+    const requestedTerm = params.term ? allTerms.find((item) => item.id === params.term) ?? null : null;
+    const selectedYear = (params.year ? academicYears.find((item) => item.id === params.year) : null)
+      ?? (requestedTerm ? academicYears.find((item) => item.id === requestedTerm.academicYearId) : null)
+      ?? academicYears.find((item) => item.startDate <= now && item.endDate >= now)
+      ?? academicYears[0]
+      ?? null;
+    const terms = selectedYear ? allTerms.filter((item) => item.academicYearId === selectedYear.id) : [];
+    const term = (requestedTerm && requestedTerm.academicYearId === selectedYear?.id ? requestedTerm : null) ?? terms[0] ?? null;
     const selectedClass = params.classId ? classes.find((item) => item.id === params.classId) ?? null : classes[0] ?? null;
     const permissions = { canGenerate, canSubmit, canApprove };
-    if (!term || !selectedClass) {
+    if (!selectedYear || !term || !selectedClass) {
       return {
         school,
+        academicYears,
+        selectedYear,
         terms,
         classes,
         term,
@@ -165,7 +184,7 @@ export default async function ReportCardsPage({
         orderBy: { createdAt: "desc" },
       }),
       tx.term.findMany({
-        where: { schoolId: session.schoolId, academicYearId: term.academicYearId },
+        where: { schoolId: session.schoolId, academicYearId: selectedYear.id },
         orderBy: [{ startDate: "asc" }, { endDate: "asc" }],
         select: { id: true },
       }),
@@ -196,6 +215,8 @@ export default async function ReportCardsPage({
     const isFinalTerm = yearTerms[workflow.finalTermNumber - 1]?.id === term.id;
     return {
       school,
+      academicYears,
+      selectedYear,
       terms,
       classes,
       term,
@@ -212,19 +233,21 @@ export default async function ReportCardsPage({
   });
 
   if (!data.school) return null;
-  if (!data.term || !data.selectedClass) {
+  if (!data.selectedYear || !data.term || !data.selectedClass) {
     return (
       <AppShell universe="school" title="Report Cards" subtitle="Create and print student reports." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
         <main className="simple-reports">
           <section className="reports-empty">
-            <h1>Set up a reporting term first</h1>
-            <p>Once a term and class exist, this workspace connects grades, remarks, approval, signatures and printing.</p>
+            <h1>Set up an academic year and reporting term first</h1>
+            <p>Report cards are always attached to a specific academic year and term. Create those periods in Academic Setup, then return here.</p>
+            <Link className="report-action primary" href="/school/academics/setup">Open Academic Setup</Link>
           </section>
         </main>
       </AppShell>
     );
   }
 
+  const selectedYear = data.selectedYear;
   const term = data.term;
   const selectedClass = data.selectedClass;
   const detail = data.detail;
@@ -233,14 +256,16 @@ export default async function ReportCardsPage({
   const missing = data.currentStudents.filter((student) => !currentReportIds.has(student.id)).length;
   const hiddenContext = (studentId = detail?.student.id ?? "") => (
     <>
+      <input type="hidden" name="academicYearId" value={selectedYear.id} />
       <input type="hidden" name="termId" value={term.id} />
       <input type="hidden" name="classId" value={selectedClass.id} />
       <input type="hidden" name="studentId" value={studentId} />
     </>
   );
+  const contextHref = `year=${encodeURIComponent(selectedYear.id)}&term=${encodeURIComponent(term.id)}&classId=${encodeURIComponent(selectedClass.id)}`;
 
   return (
-    <AppShell universe="school" title="Report Cards" subtitle="Grades → class teacher → approval → official report." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+    <AppShell universe="school" title="Report Cards" subtitle="Academic year → term → class → official learner report." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
       <main className="simple-reports">
         {params.notice ? <div className="report-notice" role="status">{params.notice}</div> : null}
 
@@ -248,7 +273,7 @@ export default async function ReportCardsPage({
           <div>
             <span className="reports-kicker">REPORT CARDS</span>
             <h1>{data.school.name}</h1>
-            <p>{term.name} · {selectedClass.level ? `${selectedClass.level} · ` : ""}{selectedClass.name}{data.isFinalTerm ? " · Final term" : ""}</p>
+            <p>{selectedYear.name} · {term.name} · {selectedClass.level ? `${selectedClass.level} · ` : ""}{selectedClass.name}{data.isFinalTerm ? " · Final term" : ""}</p>
           </div>
           <div className="result-print-actions">
             <Link className="report-action" href="/school/settings/reporting/intelligence">Report settings</Link>
@@ -262,18 +287,20 @@ export default async function ReportCardsPage({
         <section className="reports-picker">
           <form method="get">
             <div>
-              <label>Term<select name="term" defaultValue={term.id}>{data.terms.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label>Academic year<select name="year" defaultValue={selectedYear.id}>{data.academicYears.map((item) => <option key={item.id} value={item.id}>{item.name}{item.isLocked ? " · Locked" : ""}</option>)}</select></label>
+              <label>Term<select name="term" defaultValue={term.id}>{data.terms.map((item) => <option key={item.id} value={item.id}>{item.name}{item.isLocked ? " · Locked" : ""}</option>)}</select></label>
               <label>Class<select name="classId" defaultValue={selectedClass.id}>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></label>
               <label>Student<select name="studentId" defaultValue={detail?.student.id ?? ""}><option value="">Choose student</option>{data.students.map((student) => <option key={student.id} value={student.id}>{student.name} · {student.admissionNo}</option>)}</select></label>
             </div>
-            <button className="report-action primary" type="submit">Open report</button>
+            <button className="report-action primary" type="submit">Open reporting context</button>
           </form>
+          <p className="reports-context-note">Changing the academic year narrows the term list on the next load. Historical years remain available without mixing their results into the current year.</p>
         </section>
 
         {!data.students.length ? (
           <section className="reports-empty">
             <h2>No learners or historical reports in this class</h2>
-            <p>Add learners to the selected class or choose a different term.</p>
+            <p>Add learners to the selected class or choose a different academic year, term or class.</p>
           </section>
         ) : null}
 
@@ -291,7 +318,7 @@ export default async function ReportCardsPage({
                   <div><strong>{student.name}</strong><span>{student.admissionNo}</span></div>
                   <div className="report-row-status">
                     {item ? <span className={`status ${item.status}`}>{statusLabel[item.status] ?? item.status}</span> : <span className="status missing">Not generated</span>}
-                    {item ? <Link className="report-action small" href={`/school/report-cards?term=${encodeURIComponent(term.id)}&classId=${encodeURIComponent(selectedClass.id)}&studentId=${encodeURIComponent(student.id)}`}>Open</Link> : null}
+                    {item ? <Link className="report-action small" href={`/school/report-cards?${contextHref}&studentId=${encodeURIComponent(student.id)}`}>Open</Link> : null}
                   </div>
                 </div>
               );
@@ -326,7 +353,7 @@ export default async function ReportCardsPage({
 
             {data.isFinalTerm && data.isClassTeacher && report.status === "draft" ? (
               <div className="promotion-panel">
-                <div><strong>Final-term promotion decision</strong><span>Only the assigned class teacher can decide this learner's progression.</span></div>
+                <div><strong>Final-term promotion decision</strong><span>Only the assigned class teacher can decide this learner&apos;s progression.</span></div>
                 <div className="result-flow">
                   <form action={runReportCardAction}>
                     <input type="hidden" name="action" value="promotion" />

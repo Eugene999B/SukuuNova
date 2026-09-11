@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./student-photo-capture.css";
 
 type QualityCheck = {
@@ -17,6 +17,10 @@ type PortraitResult = {
   width: number;
   height: number;
 };
+
+type FaceBox = { x: number; y: number; width: number; height: number };
+type FaceDetectorInstance = { detect: (source: CanvasImageSource) => Promise<Array<{ boundingBox: FaceBox }>> };
+type FaceDetectorConstructor = new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorInstance;
 
 function cropPortrait(source: CanvasImageSource, sourceWidth: number, sourceHeight: number) {
   const targetRatio = 4 / 5;
@@ -70,10 +74,10 @@ function analysePortrait(canvas: HTMLCanvasElement, sourceWidth: number, sourceH
   const sharpness = edge / Math.max(1, edgeSamples);
   const enoughResolution = sourceWidth >= 480 && sourceHeight >= 480;
   return [
-    { key: "resolution", label: "Resolution", passed: enoughResolution, detail: enoughResolution ? `${sourceWidth}×${sourceHeight} source` : "Use at least a 480×480 source image." },
+    { key: "resolution", label: "Resolution", passed: enoughResolution, detail: enoughResolution ? `${sourceWidth}×${sourceHeight} source` : "Move to a device with a clearer camera." },
     { key: "lighting", label: "Lighting", passed: mean >= 45 && mean <= 220, detail: mean < 45 ? "Face area is too dark." : mean > 220 ? "Image is overexposed." : "Exposure is usable." },
     { key: "contrast", label: "Contrast", passed: contrast >= 18, detail: contrast >= 18 ? "Facial detail has usable contrast." : "Move to clearer, more even lighting." },
-    { key: "sharpness", label: "Sharpness", passed: sharpness >= 3.2, detail: sharpness >= 3.2 ? "Image detail is sufficiently sharp." : "Hold the camera steady and focus before capture." },
+    { key: "sharpness", label: "Sharpness", passed: sharpness >= 3.2, detail: sharpness >= 3.2 ? "Image detail is sufficiently sharp." : "Hold still and let the camera focus." },
   ];
 }
 
@@ -91,22 +95,107 @@ function preparePortrait(source: CanvasImageSource, width: number, height: numbe
   return { dataUrl: compressImage(canvas), checks, width: canvas.width, height: canvas.height };
 }
 
+function faceIsWellPlaced(box: FaceBox, width: number, height: number) {
+  const centerX = box.x + box.width / 2;
+  const centerY = box.y + box.height / 2;
+  const horizontalOffset = Math.abs(centerX - width / 2) / width;
+  const verticalOffset = Math.abs(centerY - height * 0.43) / height;
+  const faceRatio = (box.width * box.height) / Math.max(1, width * height);
+  return horizontalOffset <= 0.14 && verticalOffset <= 0.18 && faceRatio >= 0.06 && faceRatio <= 0.55;
+}
+
 export function StudentPhotoCapture() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const stableFramesRef = useRef(0);
+  const evaluatingRef = useRef(false);
   const [photo, setPhoto] = useState("");
   const [checks, setChecks] = useState<QualityCheck[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const [faceState, setFaceState] = useState("Camera not started");
 
   useEffect(() => () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
 
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    stableFramesRef.current = 0;
+    setCameraOpen(false);
+  }
+
+  function acceptPortrait(result: PortraitResult) {
+    setChecks(result.checks);
+    if (result.checks.every((check) => check.passed)) {
+      setPhoto(result.dataUrl);
+      setFaceState("Face captured and quality verified");
+      setMessage("Live portrait captured automatically. This becomes the learner's canonical school photo; biometric device enrollment remains subject to the school's consent controls.");
+      stopCamera();
+      return true;
+    }
+    setMessage("Hold still while SukuuNova checks lighting, clarity and face position.");
+    return false;
+  }
+
+  async function evaluateLiveFrame() {
+    if (evaluatingRef.current || photo) return;
+    const video = videoRef.current;
+    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+    evaluatingRef.current = true;
+    try {
+      const result = preparePortrait(video, video.videoWidth, video.videoHeight);
+      setChecks(result.checks);
+      const qualityPassed = result.checks.every((check) => check.passed);
+      if (!qualityPassed) {
+        stableFramesRef.current = 0;
+        setFaceState("Improving image quality…");
+        return;
+      }
+
+      const FaceDetectorApi = (window as typeof window & { FaceDetector?: FaceDetectorConstructor }).FaceDetector;
+      if (FaceDetectorApi) {
+        const detector = new FaceDetectorApi({ fastMode: true, maxDetectedFaces: 2 });
+        const faces = await detector.detect(video);
+        if (faces.length !== 1) {
+          stableFramesRef.current = 0;
+          setFaceState(faces.length ? "Only one learner should be in view" : "Move face into the guide");
+          return;
+        }
+        if (!faceIsWellPlaced(faces[0].boundingBox, video.videoWidth, video.videoHeight)) {
+          stableFramesRef.current = 0;
+          setFaceState("Centre the face and move slightly closer");
+          return;
+        }
+      }
+
+      stableFramesRef.current += 1;
+      setFaceState(stableFramesRef.current >= 2 ? "Face verified — capturing…" : "Face detected — hold still");
+      if (stableFramesRef.current >= 3) acceptPortrait(result);
+    } catch (error) {
+      stableFramesRef.current = 0;
+      setMessage(error instanceof Error ? error.message : "Live face quality verification is unavailable.");
+    } finally {
+      evaluatingRef.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (!cameraOpen || photo) return;
+    const timer = window.setInterval(() => { void evaluateLiveFrame(); }, 650);
+    return () => window.clearInterval(timer);
+  // evaluateLiveFrame intentionally reads current refs/state on each interval tick.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraOpen, photo]);
+
   async function startCamera() {
     setMessage("");
+    setChecks([]);
+    stableFramesRef.current = 0;
     if (!navigator.mediaDevices?.getUserMedia) {
-      setMessage("This browser does not expose a camera. Use Upload portrait instead.");
+      setFaceState("Live camera unavailable");
+      setMessage("Student registration requires live camera capture. Open this page on a camera-enabled browser or device.");
       return;
     }
     try {
@@ -116,6 +205,7 @@ export function StudentPhotoCapture() {
       });
       streamRef.current = stream;
       setCameraOpen(true);
+      setFaceState("Starting face verification…");
       requestAnimationFrame(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -123,100 +213,38 @@ export function StudentPhotoCapture() {
         }
       });
     } catch {
-      setMessage("Camera access was blocked. Allow camera permission or use Upload portrait.");
+      setFaceState("Camera permission required");
+      setMessage("Allow camera permission to capture the learner's live portrait. File uploads are intentionally disabled for student face registration.");
     }
-  }
-
-  function stopCamera() {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    setCameraOpen(false);
-  }
-
-  function acceptPortrait(result: PortraitResult) {
-    setChecks(result.checks);
-    if (result.checks.every((check) => check.passed)) {
-      setPhoto(result.dataUrl);
-      setMessage("Portrait quality passed. This image will be used consistently on the learner profile, supported documents and face enrollment.");
-      return true;
-    }
-    setPhoto("");
-    setMessage("Portrait not accepted yet. Correct the failed quality checks and capture again.");
-    return false;
-  }
-
-  function capture() {
-    const video = videoRef.current;
-    if (!video || !video.videoWidth || !video.videoHeight) {
-      setMessage("The camera is still starting. Wait for a clear preview, then try again.");
-      return;
-    }
-    try {
-      const passed = acceptPortrait(preparePortrait(video, video.videoWidth, video.videoHeight));
-      if (passed) stopCamera();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The portrait could not be processed.");
-    }
-  }
-
-  function upload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setMessage("Please choose a JPEG, PNG or WebP portrait image.");
-      return;
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      setMessage("Please choose an image smaller than 8 MB.");
-      return;
-    }
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-    image.onload = () => {
-      try {
-        acceptPortrait(preparePortrait(image, image.naturalWidth, image.naturalHeight));
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "This portrait could not be processed.");
-      } finally {
-        URL.revokeObjectURL(objectUrl);
-      }
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      setMessage("This portrait could not be loaded. Please choose another image.");
-    };
-    image.src = objectUrl;
   }
 
   return (
     <div className="photo-capture professional-portrait-capture">
       <div className="portrait-capture-layout">
         <div className="photo-preview-wrap portrait-preview-wrap">
-          {photo ? <img src={photo} alt="Accepted student portrait preview" className="photo-preview" /> : <div className="photo-placeholder"><span>Student portrait</span><small>Face centred · head &amp; shoulders</small></div>}
+          {photo ? <img src={photo} alt="Accepted student portrait preview" className="photo-preview" /> : <div className="photo-placeholder"><span>Live face capture</span><small>Face centred · head &amp; shoulders</small></div>}
         </div>
         <div className="portrait-guidance">
-          <strong>Official learner portrait</strong>
-          <p>Use one learner only, looking directly at the camera, with the full face visible and a simple background.</p>
+          <strong>Automatic face capture</strong>
+          <p>SukuuNova checks the live camera continuously and captures automatically once one clear, centred face stays stable.</p>
           <ul>
-            <li>No sunglasses, mask or face-covering hat.</li>
-            <li>Use even front lighting; avoid a bright window behind the learner.</li>
-            <li>Hold the camera steady and keep head and shoulders inside the guide.</li>
+            <li>Only the learner should be in the camera view.</li>
+            <li>Remove sunglasses, masks and face-covering hats.</li>
+            <li>Use even front lighting and keep the learner still.</li>
           </ul>
         </div>
       </div>
 
       <div className="photo-controls">
-        <button type="button" className="button secondary" onClick={() => (cameraOpen ? stopCamera() : void startCamera())}>{cameraOpen ? "Close camera" : "Use camera"}</button>
-        <label className="button secondary photo-upload">Upload portrait<input type="file" accept="image/jpeg,image/png,image/webp" capture="user" onChange={upload} /></label>
-        {photo ? <button type="button" className="photo-remove" onClick={() => { setPhoto(""); setChecks([]); setMessage(""); }}>Retake</button> : null}
+        {!photo ? <button type="button" className="button primary" onClick={() => (cameraOpen ? stopCamera() : void startCamera())}>{cameraOpen ? "Stop camera" : "Start live face capture"}</button> : <button type="button" className="photo-remove" onClick={() => { setPhoto(""); setChecks([]); setMessage(""); setFaceState("Ready to retake"); }}>Retake live photo</button>}
       </div>
 
-      {cameraOpen ? <div className="camera-panel portrait-camera-panel"><div className="portrait-camera-stage"><video ref={videoRef} muted playsInline className="camera-video" /><div className="portrait-camera-guide" aria-hidden="true"><span /></div></div><button type="button" className="button primary" onClick={capture}>Capture &amp; check portrait</button></div> : null}
+      {cameraOpen ? <div className="camera-panel portrait-camera-panel"><div className="portrait-camera-stage"><video ref={videoRef} muted playsInline className="camera-video" /><div className="portrait-camera-guide" aria-hidden="true"><span /></div></div><div className="photo-message" role="status"><strong>{faceState}</strong><br /><span>No shutter button is needed. Hold still until capture completes.</span></div></div> : null}
 
       {checks.length ? <div className="portrait-quality-grid" aria-label="Portrait quality checks">{checks.map((check) => <div key={check.key} className={check.passed ? "passed" : "failed"}><span>{check.passed ? "✓" : "!"}</span><div><strong>{check.label}</strong><small>{check.detail}</small></div></div>)}</div> : null}
-      {message ? <p className="photo-message" role="status">{message}</p> : null}
+      {!cameraOpen ? <p className="photo-message" role="status"><strong>{faceState}</strong>{message ? <><br /><span>{message}</span></> : null}</p> : null}
       <input type="hidden" name="photoData" value={photo} />
-      <p className="field-help">Only a portrait that passes the quality checks is submitted. The same accepted portrait becomes the learner&apos;s canonical school photo.</p>
+      <p className="field-help">Photo upload is disabled. Student portraits are captured from the live camera so the school has a trustworthy face image for the learner record and later controlled device enrollment.</p>
     </div>
   );
 }

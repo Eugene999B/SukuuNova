@@ -7,11 +7,13 @@ import { OptimisticSubmitButton } from "@/components/ui/OptimisticSubmitButton";
 import { Tooltip } from "@/components/ui/Tooltip";
 
 type SchoolClass = { id: string; name: string; level: string | null; _count: { students: number } };
+type AcademicYearOption = { id: string; name: string; isCurrent: boolean };
 type StudentActionState = { message: string | null };
 type CreateStudentAction = (previousState: StudentActionState, formData: FormData) => Promise<StudentActionState>;
 
 type Props = {
   classes: SchoolClass[];
+  academicYears: AcademicYearOption[];
   action: CreateStudentAction;
   triggerLabel?: string;
   initialOpen?: boolean;
@@ -19,9 +21,9 @@ type Props = {
 
 const steps = [
   { key: "identity", title: "Identity", hint: "Name and essential personal details" },
-  { key: "placement", title: "Placement", hint: "Academic year, grade and class" },
+  { key: "placement", title: "Placement", hint: "Intake year, admission date and class" },
   { key: "family", title: "Family", hint: "Parent or guardian contact" },
-  { key: "photo", title: "Photo & review", hint: "Capture portrait and confirm" },
+  { key: "photo", title: "Face & review", hint: "Live portrait capture and final review" },
 ] as const;
 
 function Field({ label, required, children, hint }: { label: string; required?: boolean; children: ReactNode; hint?: string }) {
@@ -34,11 +36,12 @@ function Field({ label, required, children, hint }: { label: string; required?: 
   );
 }
 
-export function AddStudentDialog({ classes, action, triggerLabel = "+ Add student", initialOpen = false }: Props) {
+export function AddStudentDialog({ classes, academicYears, action, triggerLabel = "+ Add student", initialOpen = false }: Props) {
   const [open, setOpen] = useState(initialOpen);
   const [step, setStep] = useState(0);
   const [actionError, setActionError] = useState("");
   const [actionState, formAction] = useActionState(action, { message: null });
+  const defaultAcademicYearId = academicYears.find((year) => year.isCurrent)?.id ?? academicYears[0]?.id ?? "";
 
   useEffect(() => {
     setOpen(initialOpen);
@@ -78,10 +81,17 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
 
   function prepareSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
     const form = event.currentTarget;
-    const photoData = String(new FormData(form).get("photoData") ?? "");
+    const formData = new FormData(form);
+    const photoData = String(formData.get("photoData") ?? "");
+    if (!String(formData.get("intakeAcademicYearId") ?? "")) {
+      event.preventDefault();
+      setActionError("Choose the academic year in which the learner joined the school.");
+      setStep(1);
+      return;
+    }
     if (photoData.length > 800_000) {
       event.preventDefault();
-      setActionError("The student photo is too large to submit. Please capture the photo again or upload a smaller image.");
+      setActionError("The captured student portrait is too large. Please capture it again.");
       setStep(3);
       return;
     }
@@ -100,8 +110,8 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
             <header className="student-dialog-header">
               <div>
                 <div className="eyebrow">Student admission</div>
-                <h2 id="add-student-title">Create a new learner</h2>
-                <p>Complete the learner record in a calm guided flow. SukuuNova generates the Index Number automatically.</p>
+                <h2 id="add-student-title">Create a learner record</h2>
+                <p>Record when the learner actually joined the school, place them in the current register and capture a live portrait.</p>
               </div>
               <Tooltip label="Close student admission dialog">
                 <button type="button" className="dialog-close" onClick={closeDialog} aria-label="Close">×</button>
@@ -128,9 +138,14 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
                 </div>
 
                 <div className="dialog-panel" hidden={step !== 1} aria-hidden={step !== 1}>
-                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 2</span><h3>Place the learner</h3><p>Choose the class group that will drive the learner&apos;s day-to-day school workflows.</p></div><span className="panel-badge">Academic</span></div>
-                  <div className="dialog-grid two"><Field label="Academic year"><input name="academicYear" placeholder="e.g. 2026/2027" /></Field><Field label="Admission date"><input name="admissionDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></Field><Field label="Grade / class group"><select name="classId" defaultValue=""><option value="">Leave unassigned</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name} · {schoolClass._count.students} learners</option>)}</select></Field><Field label="Entry type"><select name="entryType" defaultValue="New enrollment"><option>New enrollment</option><option>Transfer in</option><option>Re-enrollment</option><option>Returning learner</option></select></Field></div>
-                  <div className="dialog-info-card subtle"><strong>Why placement matters</strong><span>Class membership becomes the common context for attendance, timetable, teaching, assessments, report cards and class communication.</span></div>
+                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 2</span><h3>Record intake and placement</h3><p>The intake year tells SukuuNova when the learner joined the school. It does not create fake historical marks or attendance.</p></div><span className="panel-badge">Academic</span></div>
+                  <div className="dialog-grid two">
+                    <Field label="Academic year joined" required hint="Previous configured years are available for learners who joined before SukuuNova."><select name="intakeAcademicYearId" defaultValue={defaultAcademicYearId} required><option value="" disabled>Choose academic year</option>{academicYears.map((year) => <option key={year.id} value={year.id}>{year.name}{year.isCurrent ? " · current" : ""}</option>)}</select></Field>
+                    <Field label="Admission date" hint="The actual date the learner entered this school."><input name="admissionDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
+                    <Field label="Current class group"><select name="classId" defaultValue=""><option value="">Leave unassigned</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name} · {schoolClass._count.students} learners</option>)}</select></Field>
+                    <Field label="Entry type"><select name="entryType" defaultValue="New enrollment"><option>New enrollment</option><option>Transfer in</option><option>Re-enrollment</option><option>Returning learner</option></select></Field>
+                  </div>
+                  <div className="dialog-info-card subtle"><strong>History stays truthful</strong><span>Intake records when the learner joined the school. Academic records in SukuuNova begin only from the terms the school actually records in the system.</span></div>
                 </div>
 
                 <div className="dialog-panel" hidden={step !== 2} aria-hidden={step !== 2}>
@@ -140,17 +155,18 @@ export function AddStudentDialog({ classes, action, triggerLabel = "+ Add studen
                 </div>
 
                 <div className="dialog-panel" hidden={step !== 3} aria-hidden={step !== 3}>
-                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 4</span><h3>Take the portrait and review</h3><p>Use the laptop/phone camera or upload a clear portrait before the final save.</p></div><span className="panel-badge">Final</span></div>
+                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 4</span><h3>Capture the learner&apos;s face</h3><p>Use the live camera. SukuuNova will guide the face into position and capture a clear portrait for the learner record.</p></div><span className="panel-badge">Live camera</span></div>
                   <div className="photo-review-layout">
                     <StudentPhotoCapture />
                     <div className="review-summary">
                       <div className="review-title">Creation summary</div>
                       <div className="review-row"><span>Learner</span><b>Identity information</b></div>
                       <div className="review-row"><span>Index</span><b>Generated automatically</b></div>
-                      <div className="review-row"><span>Class</span><b>Selected placement</b></div>
+                      <div className="review-row"><span>Intake</span><b>Academic year + admission date</b></div>
+                      <div className="review-row"><span>Class</span><b>Current placement</b></div>
                       <div className="review-row"><span>Family</span><b>Primary guardian</b></div>
-                      <div className="review-row"><span>Portrait</span><b>List + profile</b></div>
-                      <div className="review-security"><strong>Real school data only</strong><span>No sample learner is created. The new record belongs only to this school.</span></div>
+                      <div className="review-row"><span>Portrait</span><b>Live camera capture</b></div>
+                      <div className="review-security"><strong>Biometric safety</strong><span>The registration portrait can support later device enrollment, but biometric face templates still require the existing consent and device-enrollment controls.</span></div>
                     </div>
                   </div>
                 </div>

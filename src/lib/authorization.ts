@@ -17,7 +17,7 @@ export const SYSTEM_ROLE_KEYS = {
   Teacher: "teacher",
   "Front Desk/Gate Security": "front_desk_security",
   "Transport Officer": "transport_officer",
-  "Parent": "parent",
+  Parent: "parent",
   Guardian: "guardian",
   Student: "student",
 } as const;
@@ -50,7 +50,15 @@ export const TEACHING_ROLE_KEYS = new Set<string>([
   "department_head",
 ]);
 
+export const FAMILY_PORTAL_ROLE_KEYS = new Set<string>([
+  "parent",
+  "guardian",
+  "student",
+]);
+
 export type SchoolWorkspace = "school" | "teacher";
+
+type AccountRole = { key?: string | null; name: string };
 
 function normalizeRoleKey(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -58,6 +66,26 @@ function normalizeRoleKey(name: string): string {
 
 export function roleKeyForName(name: string): string {
   return SYSTEM_ROLE_KEYS[name as keyof typeof SYSTEM_ROLE_KEYS] ?? normalizeRoleKey(name);
+}
+
+export function isFamilyPortalRoleKey(roleKey: string): boolean {
+  return FAMILY_PORTAL_ROLE_KEYS.has(roleKey.trim());
+}
+
+export function isSchoolStaffRoleKey(roleKey: string): boolean {
+  const normalized = roleKey.trim();
+  return Boolean(normalized) && !isFamilyPortalRoleKey(normalized);
+}
+
+/**
+ * Staff account boundary shared by Staff & Teachers, staff profiles and People & Access.
+ * Custom school roles count as staff roles. A role-less school account is also retained so
+ * pending/legacy staff can be repaired instead of becoming unreachable. Accounts whose
+ * roles are exclusively Parent/Guardian/Student stay in their dedicated family workspaces.
+ */
+export function isSchoolStaffAccount(roles: readonly AccountRole[]): boolean {
+  if (roles.length === 0) return true;
+  return roles.some((role) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name)));
 }
 
 export function resolveSchoolWorkspace(roleKeys: string[]): SchoolWorkspace {

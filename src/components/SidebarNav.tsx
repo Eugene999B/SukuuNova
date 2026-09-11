@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 
 export type NavItem = { icon: LucideIcon; label: string; href: string; primary?: boolean };
@@ -18,7 +18,9 @@ const teacherDestinations: Record<string, string> = {
 
 export function SidebarNav({ groups, active, storageScope = "default" }: { groups: NavGroup[]; active: string; storageScope?: string }) {
   const pathname = usePathname();
+  const navRef = useRef<HTMLElement | null>(null);
   const storageKey = `sukuunova-sidebar-groups:v2:${storageScope}`;
+  const scrollStorageKey = `sukuunova-sidebar-scroll:v1:${storageScope}`;
   const isTeacherScope = storageScope.startsWith("teacher:");
   const navigationGroups = useMemo(() => isTeacherScope ? groups.map(group => ({
     ...group,
@@ -71,6 +73,28 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
     });
   }, [activeGroupLabel, collapsed, storageKey]);
 
+  useEffect(() => {
+    const nav = navRef.current;
+    const sidebar = nav?.closest<HTMLElement>(".app-sidebar");
+    if (!sidebar) return;
+    let savedPosition = 0;
+    try {
+      savedPosition = Number(sessionStorage.getItem(scrollStorageKey) ?? "0");
+    } catch {}
+    const frame = window.requestAnimationFrame(() => {
+      if (Number.isFinite(savedPosition) && savedPosition > 0) sidebar.scrollTop = savedPosition;
+    });
+    const save = () => {
+      try { sessionStorage.setItem(scrollStorageKey, String(sidebar.scrollTop)); } catch {}
+    };
+    sidebar.addEventListener("scroll", save, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      save();
+      sidebar.removeEventListener("scroll", save);
+    };
+  }, [scrollStorageKey, pathname]);
+
   const toggleGroup = (label: string) => {
     setCollapsed((current) => {
       const next = { ...current, [label]: !current[label] };
@@ -80,7 +104,7 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
   };
 
   return (
-    <nav className="app-nav" aria-label="Primary navigation">
+    <nav ref={navRef} className="app-nav" aria-label="Primary navigation">
       {navigationGroups.map((group) => {
         const isCollapsed = Boolean(collapsed[group.label]);
         return (
