@@ -9,8 +9,8 @@ function money(value: number) {
   return new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 0 }).format(value);
 }
 
-function ghToday() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Accra" }).format(new Date());
+function localDateKey(timezone: string) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
 type Severity = "critical" | "high" | "watch";
@@ -32,14 +32,23 @@ function prioritized(actions: LeadershipAction[]) {
 
 export default async function AnalyticsPage() {
   const session = await requireSchoolSession();
-  const today = new Date(`${ghToday()}T00:00:00.000Z`);
 
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "analytics:view");
-    const term = await tx.term.findFirst({ orderBy: { startDate: "desc" }, select: { id: true, name: true } });
+    const settings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } });
+    const timezone = settings?.timezone ?? "Africa/Accra";
+    const todayKey = localDateKey(timezone);
+    const today = new Date(`${todayKey}T00:00:00.000Z`);
+    const currentTerms = await tx.term.findMany({
+      where: { startDate: { lte: today }, endDate: { gte: today } },
+      orderBy: [{ startDate: "desc" }, { id: "asc" }],
+      take: 3,
+      select: { id: true, name: true }
+    });
+    const term = currentTerms.length === 1 ? currentTerms[0] : null;
+    const calendarAmbiguous = currentTerms.length > 1;
     const [
       school,
-      settings,
       activeStudents,
       classes,
       attendanceToday,
@@ -55,11 +64,10 @@ export default async function AnalyticsPage() {
       staffAttendance,
     ] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
       tx.student.count({ where: { status: "active" } }),
       tx.class.count(),
       tx.attendanceEvent.findMany({ where: { attendanceDate: today, studentId: { not: null } }, select: { studentId: true, type: true }, orderBy: { timestamp: "desc" } }),
-      tx.invoice.findMany({ select: { totalAmount: true, payments: { select: { amount: true } } } }),
+      tx.invoice.findMany({ select: { totalAmount: true, payments: { select: { amount: true, reversals: { select: { amount: true } } } } } }),
       tx.message.count({ where: { status: "failed" } }),
       tx.student.count({ where: { status: "active", guardians: { none: {} } } }),
       tx.$queryRawUnsafe<Array<{ count: number }>>(`SELECT COUNT(*)::int AS "count" FROM "LessonPlan" WHERE "schoolId"=$1 AND "status"='submitted'`, session.schoolId),
@@ -67,7 +75,7 @@ export default async function AnalyticsPage() {
       tx.$queryRawUnsafe<Array<{ smsBalance: number; status: string }>>(`SELECT "smsBalance","status" FROM "PlatformMessagingWallet" WHERE "schoolId"=$1 LIMIT 1`, session.schoolId),
       tx.$queryRawUnsafe<Array<{ count: number }>>(`SELECT COALESCE(SUM(x.c),0)::int AS "count" FROM (SELECT COUNT(*)::int AS c FROM "TimetableSlot" WHERE "schoolId"=$1 GROUP BY "teacherId","dayOfWeek","period" HAVING COUNT(*)>1) x`, session.schoolId),
       tx.$queryRawUnsafe<Array<{ count: number }>>(`SELECT COALESCE(SUM(x.c),0)::int AS "count" FROM (SELECT COUNT(*)::int AS c FROM "TimetableSlot" WHERE "schoolId"=$1 AND "venue" IS NOT NULL AND BTRIM("venue")<>'' GROUP BY LOWER(BTRIM("venue")),"dayOfWeek","period" HAVING COUNT(*)>1) x`, session.schoolId),
-      tx.$queryRawUnsafe<Array<{ count: number }>>(`SELECT COUNT(DISTINCT u."id")::int AS "count" FROM "User" u JOIN "UserRole" ur ON ur."userId"=u."id" AND ur."schoolId"=u."schoolId" JOIN "Role" r ON r."id"=ur."roleId" AND r."schoolId"=ur."schoolId" WHERE u."schoolId"=$1 AND u."status"='active' AND LOWER(COALESCE(NULLIF(BTRIM(r."key"),''),BTRIM(r."name"))) NOT IN ('parent','student')`, session.schoolId),
+      tx.$queryRawUnsafe<Array<{ count: number }>>(`SELECT COUNT(DISTINCT u."id")::int AS "count" FROM "User" u JOIN "UserRole" ur ON ur."userId"=u."id" AND ur."schoolId"=u."schoolId" JOIN "Role" r ON r."id"=ur."roleId" AND r."schoolId"=ur."schoolId" WHERE u."schoolId"=$1 AND u."status"='active' AND LOWER(COALESCE(NULLIF(BTRIM(r."key"),''),REGEXP_REPLACE(BTRIM(r."name"),'[^a-zA-Z0-9]+','_','g'))) NOT IN ('parent','guardian','student')`, session.schoolId),
       tx.$queryRawUnsafe<Array<{ count: number }>>(`SELECT COUNT(DISTINCT "staffId")::int AS "count" FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "attendanceDate"=$2 AND "staffId" IS NOT NULL`, session.schoolId, today),
     ]);
     const termReports = term ? await tx.reportCard.findMany({ where: { termId: term.id }, select: { studentId: true, status: true } }) : [];
@@ -85,21 +93,27 @@ export default async function AnalyticsPage() {
 
     let outstanding = 0;
     for (const invoice of invoiceTotals) {
-      const paid = invoice.payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
-      outstanding += Math.max(0, Number(invoice.totalAmount) - paid);
+      const netPaid = invoice.payments.reduce((sum, payment) => {
+        const reversed = payment.reversals.reduce((reversalSum, reversal) => reversalSum + Number(reversal.amount), 0);
+        return sum + Math.max(0, Number(payment.amount) - reversed);
+      }, 0);
+      outstanding += Math.max(0, Number(invoice.totalAmount) - netPaid);
     }
 
     const reportStudents = new Set(termReports.map((report) => report.studentId));
     return {
       school,
-      timezone: settings?.timezone ?? "Africa/Accra",
+      timezone,
+      todayKey,
       term,
+      calendarAmbiguous,
+      currentTermMatches: currentTerms.length,
       activeStudents,
       classes,
       attendance,
       attendanceRecorded: seenStudents.size,
       attendanceMissing: Math.max(0, activeStudents - seenStudents.size),
-      reportMissing: Math.max(0, activeStudents - reportStudents.size),
+      reportMissing: term ? Math.max(0, activeStudents - reportStudents.size) : 0,
       released: termReports.filter((report) => report.status === "sent").length,
       approved: termReports.filter((report) => report.status === "approved").length,
       submitted: termReports.filter((report) => report.status === "submitted").length,
@@ -125,8 +139,9 @@ export default async function AnalyticsPage() {
   const timetableConflicts = data.teacherConflictSlots + data.venueConflictSlots;
   const actions: LeadershipAction[] = [];
 
+  if (data.calendarAmbiguous) actions.push({ key: "academic-calendar", severity: "critical", title: "Academic calendar is ambiguous", detail: `${data.currentTermMatches} terms include ${data.todayKey}. SukuuNova will not guess which term is current. Correct the term dates before relying on term-bound analytics.`, value: String(data.currentTermMatches), href: "/school/academics/setup", impact: 100000 });
   if (timetableConflicts > 0) actions.push({ key: "timetable", severity: "critical", title: "Timetable collisions need resolution", detail: `${data.teacherConflictSlots} teacher-conflict slots and ${data.venueConflictSlots} venue-conflict slots are scheduled at the same day and period.`, value: String(timetableConflicts), href: "/school/timetable", impact: timetableConflicts });
-  if (data.attendanceMissing > 0) actions.push({ key: "attendance-missing", severity: "high", title: "Learner attendance is incomplete today", detail: `${data.attendanceMissing} active learners have no attendance event for ${ghToday()}.`, value: String(data.attendanceMissing), href: "/school/attendance", impact: data.attendanceMissing });
+  if (data.attendanceMissing > 0) actions.push({ key: "attendance-missing", severity: "high", title: "Learner attendance is incomplete today", detail: `${data.attendanceMissing} active learners have no attendance event for ${data.todayKey}.`, value: String(data.attendanceMissing), href: "/school/attendance", impact: data.attendanceMissing });
   if (data.attendance.absent > 0) actions.push({ key: "attendance-absent", severity: "high", title: "Learners are marked absent", detail: `${data.attendance.absent} learners are currently recorded absent. Review genuine exceptions and follow-up rules.`, value: String(data.attendance.absent), href: "/school/attendance/exceptions", impact: data.attendance.absent });
   if (data.reportMissing > 0 && data.term) actions.push({ key: "reports", severity: "high", title: "Current-term report cards are incomplete", detail: `${data.reportMissing} active learners do not yet have a report-card record for ${data.term.name}.`, value: String(data.reportMissing), href: "/school/report-cards", impact: data.reportMissing });
   if (data.lessonQueue > 0) actions.push({ key: "lessons", severity: data.lessonQueue >= 10 ? "high" : "watch", title: "Lesson plans are waiting for review", detail: `${data.lessonQueue} submitted lesson plan${data.lessonQueue === 1 ? " is" : "s are"} awaiting an approval decision.`, value: String(data.lessonQueue), href: "/school/lessons", impact: data.lessonQueue });
@@ -136,20 +151,20 @@ export default async function AnalyticsPage() {
   if (data.messageFailures > 0) actions.push({ key: "messages", severity: "high", title: "Communication deliveries failed", detail: `${data.messageFailures} message${data.messageFailures === 1 ? " remains" : "s remain"} in failed state and may need retry or provider investigation.`, value: String(data.messageFailures), href: "/school/communications/messages", impact: data.messageFailures });
   if (data.smsBalance == null || data.smsWalletStatus !== "active") actions.push({ key: "sms", severity: "high", title: "SMS wallet is not ready", detail: "No active prepaid SMS wallet is available for this school. Parent alerts may fail when SMS is required.", value: "—", href: "/school/communications/settings", impact: 1000 });
   else if (data.smsBalance < 200) actions.push({ key: "sms", severity: data.smsBalance < 50 ? "high" : "watch", title: "SMS credit balance is low", detail: `${data.smsBalance} prepaid SMS segment${data.smsBalance === 1 ? " remains" : "s remain"}. Replenish before high-volume alerts or report delivery.`, value: String(data.smsBalance), href: "/school/communications/settings", impact: Math.max(1, 200 - data.smsBalance) });
-  if (data.outstanding > 0) actions.push({ key: "fees", severity: "watch", title: "Fee balances need follow-up", detail: `${money(data.outstanding)} remains outstanding across current invoice balances.`, value: money(data.outstanding), href: "/school/fees/arrears", impact: Math.min(10000, Math.round(data.outstanding / 100)) });
+  if (data.outstanding > 0) actions.push({ key: "fees", severity: "watch", title: "Fee balances need follow-up", detail: `${money(data.outstanding)} remains outstanding after payments and reversals are reconciled.`, value: money(data.outstanding), href: "/school/fees/arrears", impact: Math.min(10000, Math.round(data.outstanding / 100)) });
 
   const queue = prioritized(actions);
   const urgentCount = queue.filter((action) => action.severity === "critical" || action.severity === "high").length;
 
   return <AppShell universe="school" title="Leadership Action Center" subtitle="What needs leadership attention now." active="School Analytics" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
     <div className="module-workspace analytics-simple">
-      <section className="module-setup-card module-card"><div><span className="module-overline">Leadership action center</span><h3>{data.term?.name ?? "Current school data"}</h3><p>Exceptions are ranked by operational severity and impact. Every item states the evidence that triggered it and opens the workflow where it can be resolved.</p></div><span className="app-pill">{data.timezone}</span></section>
+      <section className="module-setup-card module-card"><div><span className="module-overline">Leadership action center</span><h3>{data.term?.name ?? (data.calendarAmbiguous ? "Academic calendar needs correction" : "Current school data")}</h3><p>Exceptions are ranked by operational severity and impact. Every item states the evidence that triggered it and opens the workflow where it can be resolved.</p></div><span className="app-pill">{data.timezone}</span></section>
 
       <section className="module-metrics" aria-label="School health summary">
         <article><span>Open actions</span><strong>{queue.length}</strong><small>{urgentCount} high/critical</small></article>
         <article><span>Attendance today</span><strong>{recordedPct}%</strong><small>{data.attendanceMissing} still missing</small></article>
-        <article><span>Reports released</span><strong>{data.released}/{data.activeStudents}</strong><small>{data.reportMissing} without report</small></article>
-        <article><span>Outstanding fees</span><strong>{money(data.outstanding)}</strong><small>Current invoice balances</small></article>
+        <article><span>Reports released</span><strong>{data.released}/{data.activeStudents}</strong><small>{data.term ? `${data.reportMissing} without report` : "No unambiguous current term"}</small></article>
+        <article><span>Outstanding fees</span><strong>{money(data.outstanding)}</strong><small>Payments minus reversals</small></article>
       </section>
 
       <section className="module-card">
