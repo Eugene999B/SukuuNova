@@ -11,36 +11,24 @@ import { db, withTenant } from "@/lib/db";
 import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 import "@/components/settings-hub.css";
 
+type SecurityUniverse = "platform" | "school" | "teacher" | "guardian";
+
 async function throttlePasswordChange(identity: string) {
   await recordLoginAttempt("password-change", identity, requestIp(await headers()));
 }
 
 async function changePassword(formData: FormData) {
   "use server";
+  const universe = String(formData.get("universe") ?? "") as SecurityUniverse;
   const current = String(formData.get("currentPassword") ?? "");
   const next = String(formData.get("newPassword") ?? "");
   const confirm = String(formData.get("confirmPassword") ?? "");
   if (next.length < 12 || next.length > 256) throw new Error("New password must contain 12–256 characters.");
   if (next !== confirm) throw new Error("New passwords do not match.");
 
-  const guardian = await getGuardianSession();
-  if (guardian) {
-    const currentGuardian = await requireGuardianSession();
-    await throttlePasswordChange(`guardian:${currentGuardian.schoolId}:${currentGuardian.userId}`);
-    await withTenant(currentGuardian.schoolId, async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: currentGuardian.userId }, select: { passwordHash: true } });
-      if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
-      const now = new Date();
-      await tx.user.update({ where: { id: currentGuardian.userId }, data: { passwordHash: await hash(next, 12) } });
-      await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: currentGuardian.schoolId, userId: currentGuardian.userId, usedAt: null }, data: { usedAt: now } });
-    });
-    const responseCookies = await cookies();
-    responseCookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ ...currentGuardian, needsPasswordChange: false }), sessionCookieOptions());
-    redirect("/guardian/settings");
-  }
-
-  const school = await getSchoolSession();
-  if (school) {
+  if (universe === "school" || universe === "teacher") {
+    // Require the same universe that rendered the form. A stale guardian or
+    // platform cookie must never redirect this action to another identity.
     const currentSchool = await requireSchoolSession();
     await throttlePasswordChange(`school:${currentSchool.schoolId}:${currentSchool.userId}`);
     const workspace = await withTenant(currentSchool.schoolId, async (tx) => {
@@ -54,11 +42,28 @@ async function changePassword(formData: FormData) {
     const responseCookies = await cookies();
     const token = await createSchoolSessionToken({ kind: "school", userId: currentSchool.userId, schoolId: currentSchool.schoolId, name: currentSchool.name, authorizationVersion: currentSchool.authorizationVersion, impersonationId: currentSchool.impersonationId, impersonatedByAdminId: currentSchool.impersonatedByAdminId });
     responseCookies.set(SCHOOL_COOKIE, token, sessionCookieOptions());
+    responseCookies.delete(GUARDIAN_COOKIE);
     redirect(workspace === "teacher" ? "/teacher/settings" : "/dashboard");
   }
 
-  const platform = await getPlatformSession();
-  if (platform) {
+  if (universe === "guardian") {
+    const currentGuardian = await requireGuardianSession();
+    await throttlePasswordChange(`guardian:${currentGuardian.schoolId}:${currentGuardian.userId}`);
+    await withTenant(currentGuardian.schoolId, async (tx) => {
+      const user = await tx.user.findUnique({ where: { id: currentGuardian.userId }, select: { passwordHash: true } });
+      if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
+      const now = new Date();
+      await tx.user.update({ where: { id: currentGuardian.userId }, data: { passwordHash: await hash(next, 12) } });
+      await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: currentGuardian.schoolId, userId: currentGuardian.userId, usedAt: null }, data: { usedAt: now } });
+    });
+    const responseCookies = await cookies();
+    responseCookies.set(GUARDIAN_COOKIE, await createGuardianSessionToken({ ...currentGuardian, needsPasswordChange: false }), sessionCookieOptions());
+    responseCookies.delete(SCHOOL_COOKIE);
+    responseCookies.delete(PLATFORM_COOKIE);
+    redirect("/guardian/settings");
+  }
+
+  if (universe === "platform") {
     const currentPlatform = await requirePlatformSession();
     await throttlePasswordChange(`platform:${currentPlatform.adminId}`);
     const admin = await db.platformAdmin.findUnique({ where: { id: currentPlatform.adminId }, select: { passwordHash: true } });
@@ -71,12 +76,12 @@ async function changePassword(formData: FormData) {
     const responseCookies = await cookies();
     responseCookies.set(PLATFORM_COOKIE, await createPlatformSessionToken(currentPlatform), sessionCookieOptions(PLATFORM_SESSION_SECONDS));
     responseCookies.delete(SCHOOL_COOKIE);
+    responseCookies.delete(GUARDIAN_COOKIE);
     redirect("/account/settings");
   }
+
   redirect("/");
 }
-
-type SecurityUniverse = "platform" | "school" | "teacher" | "guardian";
 
 function SecurityBody({ universe, required, accountName }: { universe: SecurityUniverse; required: boolean; accountName: string }) {
   const related = universe === "platform" ? [
@@ -114,6 +119,7 @@ function SecurityBody({ universe, required, accountName }: { universe: SecurityU
         </header>
         <div className="settings-focus-body">
           <form action={changePassword} className="security-settings-form">
+            <input type="hidden" name="universe" value={universe} />
             <label className="settings-field"><span>Current password</span><input name="currentPassword" type="password" autoComplete="current-password" required /></label>
             <label className="settings-field"><span>New password</span><input name="newPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
             <label className="settings-field"><span>Confirm new password</span><input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
@@ -139,9 +145,9 @@ function SecurityBody({ universe, required, accountName }: { universe: SecurityU
 }
 
 export default async function SecurityPage({ searchParams }: { searchParams: Promise<{ required?: string }> }) {
-  const guardian = await getGuardianSession();
   const school = await getSchoolSession();
   const platform = await getPlatformSession();
+  const guardian = await getGuardianSession();
   if (!guardian && !school && !platform) redirect("/");
   const required = (await searchParams).required === "1" || Boolean(guardian?.needsPasswordChange);
 
@@ -163,5 +169,5 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
   }
 
   const currentGuardian = await requireGuardianSession();
-  return <AppShell universe="guardian" title="Account Security" subtitle="Password and family-login protection." active="Account Security" schoolName={currentGuardian.schoolName} userName="Guardian" role="Guardian"><SecurityBody universe="guardian" accountName="Guardian account" required={required} /></AppShell>;
+  return <AppShell universe="guardian" title="Account Security" subtitle="Password and family-login protection." active="Account Security" schoolName={currentGuardian.schoolName} userName={currentGuardian.name || "Guardian"} role="Guardian"><SecurityBody universe="guardian" accountName={currentGuardian.name || "Guardian account"} required={required} /></AppShell>;
 }
