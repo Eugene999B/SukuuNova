@@ -6,19 +6,21 @@ import { canGenerateArcadeResponseContent, createArcadeResponseQuestions, type A
 import { canGenerateArcadeWorldContent, createArcadeWorldQuestions, type ArcadeWorldQuestion } from "./arcade-world-content";
 import { arcadeQuestionHistorySignatures, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge, type ArcadeVariationAgeBand } from "./arcade-variation";
 import { buildAdaptiveLearningPlan, publicAdaptiveLearningPlan, type AdaptiveHistoryRound } from "./adaptive-learning-director";
+import { createTurboTypeQuestions, turboTypeWeakKeysFromSnapshots } from "./turbo-type-content";
 import type { ArcadeAgeBand } from "./arcade-catalog";
 
 type Context = { schoolId: string; guardianId: string; userId: string };
 type StartInput = { studentId: string; game: string; ageBand?: ArcadeAgeBand; easier?: boolean; roundLength?: number; challengeMode?: boolean };
 type StoredQuestion = ArcadeQuestion | ArcadeInteractionQuestion | ArcadeResponseQuestion | ArcadeWorldQuestion;
 type SnapshotRow = { settingsSnapshot: unknown };
-type HistoryRow = AdaptiveHistoryRound & { questions: unknown; completedRoundCount: number };
+type HistoryRow = AdaptiveHistoryRound & { questions: unknown; settingsSnapshot: unknown; completedRoundCount: number };
 
 function object(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function generate(game: string, difficulty: number, length: number): StoredQuestion[] {
+function generate(game: string, difficulty: number, length: number, weakKeys: readonly string[] = []): StoredQuestion[] {
+  if (game === "keyboard-ninja") return createTurboTypeQuestions(difficulty, length, weakKeys);
   if (canGenerateArcadeContent(game)) return createArcadeGameQuestions(game, difficulty, length);
   if (canGenerateArcadeInteractionContent(game)) return createArcadeInteractionQuestions(game, difficulty, length);
   if (canGenerateArcadeResponseContent(game)) return createArcadeResponseQuestions(game, difficulty, length);
@@ -38,7 +40,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
   if (snapshot.variationVersion === 3 && snapshot.directorVersion === 1) return { ...round, learningPlan: savedPlan };
 
   const history = await tx.$queryRaw<HistoryRow[]>`
-    SELECT "questions","difficulty","correct","roundLength",COUNT(*) OVER()::int AS "completedRoundCount" FROM "ArcadeRound"
+    SELECT "questions","difficulty","correct","roundLength","settingsSnapshot",COUNT(*) OVER()::int AS "completedRoundCount" FROM "ArcadeRound"
     WHERE "schoolId"=${context.schoolId}
       AND "studentId"=${round.studentId}
       AND "game"=${round.game}
@@ -49,6 +51,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     LIMIT 6
   `;
   const recentSignatures = arcadeQuestionHistorySignatures(history);
+  const weakKeys = round.game === "keyboard-ninja" ? turboTypeWeakKeysFromSnapshots(history.map((item) => item.settingsSnapshot)) : [];
   const ageBand = (round.ageBand || "age_6_8") as ArcadeVariationAgeBand;
   const learningPlan = buildAdaptiveLearningPlan({
     game: round.game,
@@ -64,7 +67,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     const sequence = learningPlan.generationDifficulties;
     const candidateDifficulty = sequence[generationAttempt % sequence.length] ?? learningPlan.targetDifficulty;
     generationAttempt += 1;
-    return generate(round.game, candidateDifficulty, round.roundLength);
+    return generate(round.game, candidateDifficulty, round.roundLength, weakKeys);
   };
 
   const varied = buildVariedArcadeQuestionSet(generator, round.roundLength, recentSignatures, 12);
@@ -74,13 +77,14 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     variationVersion: 3,
     directorVersion: 1,
     learningPlan,
+    ...(round.game === "keyboard-ninja" ? { typingFocusKeys: weakKeys } : {}),
     recentRoundWindow: history.length,
     freshQuestionCount: varied.freshCount,
     reusedQuestionCount: varied.reusedCount,
     uniqueConceptCount: varied.uniqueConceptCount,
     originalSuggestedDifficulty: round.difficulty,
     ageAdjustedDifficulty: learningPlan.targetDifficulty,
-    presentation: "adaptive_director_v1",
+    presentation: round.game === "keyboard-ninja" ? "turbotype_v1" : "adaptive_director_v1",
   };
 
   await tx.$executeRaw`
