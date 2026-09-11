@@ -5,7 +5,7 @@ import { StaffDirectory } from "@/components/staff/StaffDirectory";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
-import { isSchoolStaffRoleKey, isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
+import { isSchoolStaffAccount, isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
 import { StaffCreateDialog } from "./StaffCreateDialog";
 import "./staff-workspace.css";
 import "./staff-simple.css";
@@ -29,7 +29,7 @@ export default async function StaffPage() {
       tx.subject.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
       hasPermission(tx, session.userId, "identity_cards:manage").catch(() => false),
     ]);
-    const users = allUsers.filter((user) => user.userRoles.some(({ role }) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name))));
+    const users = allUsers.filter((user) => isSchoolStaffAccount(user.userRoles.map(({ role }) => role)));
     return { school, users, classes, subjects, canManageCards };
   });
 
