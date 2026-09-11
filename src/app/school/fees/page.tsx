@@ -1,2 +1,5 @@
-import { redirect } from "next/navigation";
-export default function FeesPage(){ redirect("/school/fees/overview"); }
+import FinanceRoute from "./FinanceRoute";
+
+export default function FeesPage() {
+  return <FinanceRoute mode="overview" />;
+}
