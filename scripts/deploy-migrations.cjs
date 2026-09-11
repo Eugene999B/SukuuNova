@@ -42,6 +42,11 @@ async function restoreRls(client) {
 
 async function ensureInvoiceProtection(client) {
   if (!(await tableExists(client, '"Invoice"'))) return;
+  const functionRows = await client.$queryRawUnsafe(`
+    SELECT to_regprocedure('sukuunova_protect_invoice()')::text AS "name"
+  `);
+  if (!functionRows[0]?.name) return;
+
   const rows = await client.$queryRawUnsafe(`
     SELECT EXISTS (
       SELECT 1
@@ -73,6 +78,11 @@ async function failedReleaseCMigration(client) {
   return Boolean(row && row.finished_at == null && row.rolled_back_at == null);
 }
 
+async function restoreSafetyBoundaries(client) {
+  await restoreRls(client);
+  await ensureInvoiceProtection(client);
+}
+
 async function main() {
   const client = new PrismaClient();
 
@@ -99,9 +109,8 @@ async function main() {
     const verifier = new PrismaClient();
     try {
       // Recovery temporarily removes the old trigger. The later Release C migration
-      // upgrades sukuunova_protect_invoice(); ensure the trigger is attached again.
-      await ensureInvoiceProtection(verifier);
-      await restoreRls(verifier);
+      // upgrades sukuunova_protect_invoice(); attach protection again and FORCE RLS.
+      await restoreSafetyBoundaries(verifier);
 
       if (await failedReleaseCMigration(verifier)) {
         throw new Error(`${FAILED_MIGRATION} is still recorded as failed after deployment.`);
@@ -110,13 +119,13 @@ async function main() {
       await verifier.$disconnect();
     }
   } catch (error) {
-    // Fail closed: if deployment aborts after a Release C attempt, make a best effort to
-    // restore FORCE RLS before Railway stops the pre-deploy container.
+    // Fail closed: if any recovery/deploy step aborts, make a best effort to restore both
+    // FORCE RLS and invoice mutation protection before the pre-deploy container stops.
     const emergency = new PrismaClient();
     try {
-      await restoreRls(emergency);
-    } catch (rlsError) {
-      console.error("[db:migrate] CRITICAL: failed to restore finance RLS after migration error", rlsError);
+      await restoreSafetyBoundaries(emergency);
+    } catch (safetyError) {
+      console.error("[db:migrate] CRITICAL: failed to restore database safety boundaries", safetyError);
     } finally {
       await emergency.$disconnect().catch(() => undefined);
     }
