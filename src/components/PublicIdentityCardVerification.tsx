@@ -39,8 +39,8 @@ function brand(value: unknown) {
     ? (candidate.startsWith("#") ? candidate : `#${candidate}`)
     : fallback;
   return {
-    primary: safe(row.primary ?? row.primaryColor, "#08263d"),
-    accent: safe(row.accent ?? row.secondary, "#13b8a6"),
+    primary: safe(row.primary ?? row.primaryColor, "var(--identity-ink)"),
+    accent: safe(row.accent ?? row.secondary, "var(--color-brand)"),
   };
 }
 
