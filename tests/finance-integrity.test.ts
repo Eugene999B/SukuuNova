@@ -4,6 +4,36 @@ import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 import { createFeeItem, generateInvoice, recordPayment } from "../src/lib/finance-service";
 
+async function createConfirmedFinanceStudent(
+  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  fixture: Awaited<ReturnType<typeof createTenantFixture>>,
+  input: { yearId: string; termId: string; suffix: string },
+) {
+  const classroom = await tx.class.create({
+    data: { schoolId: fixture.schoolId, name: `Finance Class ${input.suffix}` },
+  });
+  const student = await tx.student.create({
+    data: {
+      schoolId: fixture.schoolId,
+      admissionNo: `FIN-${input.suffix}-${fixture.schoolId}`,
+      name: `Finance Test Student ${input.suffix}`,
+      classId: classroom.id,
+    },
+  });
+  await tx.$executeRawUnsafe(
+    `INSERT INTO "Enrollment" ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","guardianVerified","documentsReady","feeReady","createdBy")
+     VALUES ($1,$2,$3,$4,$5,$6,'confirmed','returning',true,true,true,$7)`,
+    `fin-enrol-${student.id}`,
+    fixture.schoolId,
+    student.id,
+    input.yearId,
+    input.termId,
+    classroom.id,
+    fixture.ownerId,
+  );
+  return student;
+}
+
 describe("finance payment integrity", () => {
   it("treats the same payment reference as an idempotent retry even after full settlement and rejects reuse for a different transaction", async () => {
     const fixture = await createTenantFixture();
@@ -26,13 +56,7 @@ describe("finance payment integrity", () => {
           endDate: new Date("2026-12-18T00:00:00.000Z")
         }
       });
-      const student = await tx.student.create({
-        data: {
-          schoolId: fixture.schoolId,
-          admissionNo: "FIN-" + fixture.schoolId,
-          name: "Finance Test Student"
-        }
-      });
+      const student = await createConfirmedFinanceStudent(tx, fixture, { yearId: year.id, termId: term.id, suffix: "ONE" });
 
       await createFeeItem(tx, {
         schoolId: fixture.schoolId,
@@ -105,13 +129,7 @@ describe("finance payment integrity", () => {
           endDate: new Date("2026-12-18T00:00:00.000Z")
         }
       });
-      const student = await tx.student.create({
-        data: {
-          schoolId: fixture.schoolId,
-          admissionNo: "FIN-CONCURRENT-" + fixture.schoolId,
-          name: "Concurrent Finance Test Student"
-        }
-      });
+      const student = await createConfirmedFinanceStudent(tx, fixture, { yearId: year.id, termId: term.id, suffix: "CONCURRENT" });
 
       await createFeeItem(tx, {
         schoolId: fixture.schoolId,
