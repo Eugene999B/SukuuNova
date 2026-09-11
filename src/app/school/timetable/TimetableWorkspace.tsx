@@ -71,6 +71,11 @@ function formatTime(value: string) {
   const [hour, minute] = value.split(":").map(Number);
   return `${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
 }
+function breakFitsDay(day: Day, column: Extract<GridColumn, { kind: "break" }>) {
+  const dayStart = toMinutes(day.start);
+  const dayEnd = toMinutes(day.end);
+  return toMinutes(column.start) >= dayStart && toMinutes(column.end) <= dayEnd;
+}
 function displayVenue(value: string | null | undefined, config: TimetableConfig) {
   if (!value) return "";
   if (value.startsWith("room:")) {
@@ -117,9 +122,10 @@ export default function TimetableWorkspace() {
   const days = useMemo(() => data?.timetableConfig.days.filter((day) => day.enabled).sort((a, b) => a.dayOfWeek - b.dayOfWeek) ?? [], [data]);
   const columns = useMemo<GridColumn[]>(() => {
     if (!data || !days.length) return [];
-    const firstPeriods = days[0].periods ?? [];
+    const periodMap = new Map<number, Period>();
+    for (const day of days) for (const period of day.periods ?? []) if (!periodMap.has(period.period)) periodMap.set(period.period, period);
     const entries: GridColumn[] = [
-      ...firstPeriods.map((period) => ({ kind: "period" as const, ...period })),
+      ...[...periodMap.values()].map((period) => ({ kind: "period" as const, ...period })),
       ...(data.timetableConfig.breaks ?? []).map((item) => ({ kind: "break" as const, ...item })),
     ];
     return entries.sort((a, b) => toMinutes(a.start) - toMinutes(b.start) || (a.kind === "break" ? 1 : -1));
@@ -194,7 +200,7 @@ export default function TimetableWorkspace() {
 
       <section className="tt-v4-summary">
         <div><span>{published ? <LockKeyhole size={16} /> : <Unlock size={16} />}</span><strong>{published ? "Published" : "Editing"}</strong><small>{published ? "Locked against accidental changes" : "Remember to finish changes"}</small></div>
-        <div><span><CalendarDays size={16} /></span><strong>{days.length} days</strong><small>{columns.filter((item) => item.kind === "period").length} teaching periods in the standard day</small></div>
+        <div><span><CalendarDays size={16} /></span><strong>{days.length} days</strong><small>{columns.filter((item) => item.kind === "period").length} teaching periods in the longest day</small></div>
         <div><span><GraduationBadge /></span><strong>{data.slots.length} lessons</strong><small>Across the whole school timetable</small></div>
       </section>
 
@@ -212,7 +218,7 @@ export default function TimetableWorkspace() {
           <table className="tt-v4-table">
             <thead><tr><th className="day-heading">DAY</th>{columns.map((column, index) => column.kind === "break" ? <th className="break-heading" key={`break-${column.name}-${index}`}><strong>{column.name}</strong><span>{formatTime(column.start)}–{formatTime(column.end)}</span></th> : <th key={`period-${column.period}-${index}`}><strong>Period {column.period}</strong><span>{formatTime(column.start)}–{formatTime(column.end)}</span></th>)}</tr></thead>
             <tbody>{days.map((day) => <tr key={day.dayOfWeek}><th className="day-cell"><strong>{day.name}</strong><span>{formatTime(day.start)}–{formatTime(day.end)}</span></th>{columns.map((column, index) => {
-              if (column.kind === "break") return <td className="break-cell" key={`break-${day.dayOfWeek}-${index}`}><strong>{column.name}</strong></td>;
+              if (column.kind === "break") return breakFitsDay(day, column) ? <td className="break-cell" key={`break-${day.dayOfWeek}-${index}`}><strong>{column.name}</strong></td> : <td className="unavailable-cell" key={`break-${day.dayOfWeek}-${index}`}><span>Not used</span></td>;
               const actualPeriod = day.periods?.find((item) => item.period === column.period);
               if (!actualPeriod) return <td className="unavailable-cell" key={`${day.dayOfWeek}:${column.period}`}><span>Not used</span></td>;
               const slot = slotMap.get(`${day.dayOfWeek}:${column.period}`);
