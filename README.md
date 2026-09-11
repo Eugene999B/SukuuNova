@@ -19,7 +19,7 @@ SukuuNova is a secure, multi-tenant school operations platform built for real da
 | Authentication | Separate platform, school and guardian security domains |
 | AI | Server-side OpenAI Responses API integration where enabled |
 
-**Railway is the production deployment platform for SukuuNova.** GitHub may show checks or previews from other providers, but those are not production deployment evidence and are not the release gate. Production verification means Railway deployment, database migration status, `/api/health`, runtime logs and the real browser workflow.
+**Railway is the production deployment platform for SukuuNova.** GitHub may show checks or previews from other providers, but SukuuNova does not use them as production infrastructure or as the production release gate. Production verification means Railway deployment, database migration status, `/api/health`, Railway runtime logs and the real browser workflow.
 
 SukuuNova has three connected user experiences:
 
@@ -698,10 +698,10 @@ A production change is complete only after:
 4. Railway runs the pre-deploy migration step successfully.
 5. Railway deploys the new application revision successfully.
 6. `/api/health` returns HTTP 200.
-7. Runtime logs contain no unexpected startup/database errors.
+7. Railway runtime logs contain no unexpected startup/database errors.
 8. The affected real browser workflow is tested against Railway production.
 
-A GitHub commit, PR merge or third-party preview by itself is **not** production verification.
+A GitHub commit, PR merge or non-Railway preview by itself is **not** production verification.
 
 ---
 
