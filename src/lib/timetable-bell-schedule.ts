@@ -14,6 +14,12 @@ function timeMinutes(value: string) {
   return hour * 60 + minute;
 }
 
+function minutesTime(value: number) {
+  const hour = Math.floor(value / 60);
+  const minute = value % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 function overlaps(a: { start: number; end: number }, b: { start: number; end: number }) {
   return a.start < b.end && a.end > b.start;
 }
@@ -25,17 +31,23 @@ export function breaksForTimetableDay(day: DayConfig, config: TimetableConfig): 
 
   const visible: Array<BreakConfig & { startMinutes: number; endMinutes: number }> = [];
   for (const item of config.breaks ?? []) {
-    const start = timeMinutes(item.start);
-    const end = timeMinutes(item.end);
-    if (end <= start) throw new AppError(`${item.name || "Break"} must end after it starts.`, 400, "INVALID_BREAK_TIME");
+    const configuredStart = timeMinutes(item.start);
+    const configuredEnd = timeMinutes(item.end);
+    if (configuredEnd <= configuredStart) throw new AppError(`${item.name || "Break"} must end after it starts.`, 400, "INVALID_BREAK_TIME");
 
-    // A school-wide break can legitimately sit outside a shortened day (for example Friday).
-    // Ignore it for that day. If it crosses the day's boundary, require the school to fix it.
-    if (end <= dayStart || start >= dayEnd) continue;
-    if (start < dayStart || end > dayEnd) {
-      throw new AppError(`${item.name || "Break"} partly falls outside ${day.name}'s school hours. Adjust the break or that day's hours.`, 400, "BREAK_CROSSES_DAY_BOUNDARY");
-    }
-    visible.push({ ...item, startMinutes: start, endMinutes: end });
+    // School-wide breaks can sit outside, or cross the edge of, a shortened day.
+    // Treat the day boundary as authoritative instead of making the whole timetable unreadable.
+    if (configuredEnd <= dayStart || configuredStart >= dayEnd) continue;
+    const startMinutes = Math.max(configuredStart, dayStart);
+    const endMinutes = Math.min(configuredEnd, dayEnd);
+    if (endMinutes <= startMinutes) continue;
+    visible.push({
+      ...item,
+      start: minutesTime(startMinutes),
+      end: minutesTime(endMinutes),
+      startMinutes,
+      endMinutes,
+    });
   }
 
   visible.sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes);
