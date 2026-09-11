@@ -122,7 +122,7 @@ export default async function SchoolFinanceReceiptPage({ params }: Props) {
   const remaining = nonNegative(data.receipt.invoiceTotal.minus(invoiceNetPaid));
   const receiptNo = data.receipt.reference || `SN-${shortId(data.receipt.id)}`;
   const invoiceNo = `INV-${shortId(data.receipt.invoiceId)}`;
-  const schoolName = data.school?.name || session.schoolName || "School";
+  const schoolName = data.school?.name || "School";
   const fullyPaid = remaining.lte(0);
 
   return (
@@ -149,7 +149,7 @@ export default async function SchoolFinanceReceiptPage({ params }: Props) {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={data.school.logoUrl} alt={`${schoolName} logo`} />
                 ) : (
-                  <span>{schoolName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
+                  <span>{schoolName.split(/\s+/).map((part: string) => part[0]).join("").slice(0, 2).toUpperCase()}</span>
                 )}
               </div>
               <div>
