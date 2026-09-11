@@ -61,9 +61,9 @@ jobs:
           fi
           echo "missing=" >> "$GITHUB_OUTPUT"
 
-      - name: Apply database migrations
+      - name: Apply database migrations through guarded deployer
         id: migrate
-        run: npx prisma migrate deploy
+        run: npm run db:migrate
 
       - name: Seed initial school and platform administrator
         id: seed

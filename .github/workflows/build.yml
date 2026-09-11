@@ -37,7 +37,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - name: Create non-superuser test database
+      - name: Create non-superuser test databases
         env:
           PGHOST: localhost
           PGUSER: postgres
@@ -45,6 +45,7 @@ jobs:
         run: |
           psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sukuunova_test LOGIN NOSUPERUSER NOBYPASSRLS;"
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_test OWNER sukuunova_test;"
+          psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_upgrade OWNER sukuunova_test;"
       - name: Install dependencies from lockfile
         run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
       - name: Generate ephemeral secrets
@@ -59,8 +60,16 @@ jobs:
         run: npx prisma generate
       - name: Validate Prisma schema
         run: npx prisma validate
-      - name: Apply migrations
-        run: npm run db:migrate
+      - name: Validate guarded migration deployer syntax
+        run: node --check scripts/deploy-migrations.cjs
+      - name: Rehearse Railway Release C migration recovery
+        env:
+          UPGRADE_DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_upgrade
+        run: bash scripts/rehearse-release-c-migration-recovery.sh
+      - name: Apply migrations through production deployer
+        run: |
+          npm run db:migrate
+          npm run db:migrate
       - name: Typecheck
         run: npx tsc --noEmit --pretty false
       - name: Lint
