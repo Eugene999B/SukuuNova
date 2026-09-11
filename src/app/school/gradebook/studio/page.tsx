@@ -4,7 +4,8 @@ import GradebookEntryGrid from "@/components/GradebookEntryGrid";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
-import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/academic-engine";
+import { getGradebookConfiguration } from "@/lib/academic-engine";
+import { getClassSubjectPerformanceForRuntime, normalizeAssessmentRulesForRuntime } from "@/lib/gradebook-read-service";
 import { gradeScale } from "@/lib/report-card-ranking";
 import { selectAcademicTerm } from "@/lib/term-date";
 import "../../academic-workspace.css";
@@ -22,21 +23,37 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
     const canWriteAll = await hasPermission(tx, session.userId, "scores:write:all");
     if (!canWriteAssigned && !canWriteAll) throw new Error("You do not have gradebook access.");
 
-    const [school, config, settings] = await Promise.all([
+    const [school, rawConfig, settings] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       getGradebookConfiguration(tx),
       tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true, gradingScale: true } }),
     ]);
 
+    const normalized = normalizeAssessmentRulesForRuntime(rawConfig.assessment);
+    const config = { ...rawConfig, assessment: normalized.rules };
     const assignments = config.assignments.filter((item) => canWriteAll || item.teacherId === session.userId);
     const selectedClass = params.class || "";
     const selectedSubject = params.subject || "";
     const timezone = settings?.timezone || "Africa/Accra";
     const selectedTerm = selectAcademicTerm(config.terms, params.term, new Date(), timezone);
     const assignment = assignments.find((item) => item.classId === selectedClass && item.subjectId === selectedSubject) ?? null;
-    const performance = assignment && selectedTerm
-      ? await getClassSubjectPerformance(tx, assignment.classId, assignment.subjectId, selectedTerm.id)
-      : null;
+
+    let performance: Awaited<ReturnType<typeof getClassSubjectPerformanceForRuntime>> | null = null;
+    let performanceIssue: string | null = null;
+    if (assignment && selectedTerm) {
+      try {
+        performance = await getClassSubjectPerformanceForRuntime(tx, assignment.classId, assignment.subjectId, selectedTerm.id, normalized.rules);
+      } catch (error) {
+        console.error("SukuuNova mark sheet read failed", {
+          schoolId: session.schoolId,
+          classId: assignment.classId,
+          subjectId: assignment.subjectId,
+          termId: selectedTerm.id,
+          error,
+        });
+        performanceIssue = "This mark sheet contains academic data that could not be calculated safely. No marks were changed. Review the assessment setup, then retry the sheet.";
+      }
+    }
 
     return {
       school,
@@ -45,6 +62,8 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
       assignment,
       selectedTerm,
       performance,
+      performanceIssue,
+      recoveredAssessmentConfig: normalized.repaired,
       gradeScale: gradeScale(settings?.gradingScale),
     };
   });
@@ -118,7 +137,25 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
           </form>
         </section>
 
-        {!data.assignment || !data.performance ? (
+        {data.recoveredAssessmentConfig ? (
+          <section className="academic-empty">
+            <strong>SukuuNova recovered an older assessment setup.</strong>
+            <p>The mark sheet is using the safe default assessment weighting for this view because the stored configuration was incomplete or invalid. Review Academic Setup and save the intended weighting before finalising results.</p>
+            <div className="academic-empty-actions"><Link href="/school/academics/setup">Review academic setup</Link></div>
+          </section>
+        ) : null}
+
+        {data.performanceIssue ? (
+          <section className="academic-empty">
+            <strong>Mark sheet needs an academic-data correction</strong>
+            <p>{data.performanceIssue}</p>
+            <div className="academic-empty-actions">
+              <Link href="/school/exams">Review assessments</Link>
+              <Link href="/school/academics/setup">Review grading setup</Link>
+              <Link href={`/school/gradebook/studio${contextQuery}`}>Retry mark sheet</Link>
+            </div>
+          </section>
+        ) : !data.assignment || !data.performance ? (
           <section className="academic-empty">
             <strong>{data.selectedTerm ? "Choose a valid class and subject." : "Choose a term before entering marks."}</strong>
             <p>{data.selectedTerm ? "The class and subject must be connected through the school teaching assignment." : "SukuuNova will not guess when the academic period is ambiguous."}</p>
@@ -175,7 +212,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
                       expected: score.expected,
                       rawScore: score.rawScore,
                       maxScore: score.maxScore,
-                      status: (score as { status?: string }).status ?? null,
+                      status: score.status ?? null,
                     })),
                   }))}
                 />
