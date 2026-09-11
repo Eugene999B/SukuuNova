@@ -81,7 +81,7 @@ describe("public identity-card verification rendering", () => {
     expect(html.length).toBeGreaterThan(1_000);
     expect(html).toContain("INVALID / UNVERIFIED CREDENTIAL");
     expect(html).toContain(student.serial);
-    expect(html).toContain("must not be accepted").or.toContain("Do not rely");
+    expect(html).toContain("Do not rely on this printed card");
   });
 
   it("cannot crash into a blank page when a stale holder name is missing", () => {
