@@ -41,22 +41,25 @@ function timeLabel(value: Date) {
 
 export default async function PickupPage() {
   const session = await requireSchoolSession();
+  const todayStart = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
   const data = await withTenant(session.schoolId, async (tx) => {
-    const [school, students, guardians, approved, requests, events, canApprove, canRecord] = await Promise.all([
+    const [school, students, guardians, approved, requests, events, activeLearnerCount, approvedCount, pendingCount, pickupsTodayCount, canApprove, canRecord] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.student.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, take: 500, select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } }),
       tx.guardian.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, take: 500, select: { id: true, name: true, phone: true } }),
       tx.approvedPickup.findMany({ where: { schoolId: session.schoolId }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, studentId: true, guardianId: true, student: { select: { name: true, admissionNo: true } }, guardian: { select: { name: true, phone: true } } } }),
       tx.pickupApprovalRequest.findMany({ where: { schoolId: session.schoolId, status: "pending" }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, studentId: true, collectedByGuardianId: true, requestedByUserId: true, createdAt: true, student: { select: { name: true, admissionNo: true, class: { select: { name: true } } } }, collectingGuardian: { select: { name: true, phone: true } }, requester: { select: { name: true } } } }),
       tx.pickupEvent.findMany({ where: { schoolId: session.schoolId }, orderBy: { timestamp: "desc" }, take: 80, select: { id: true, timestamp: true, wasPreApproved: true, student: { select: { name: true, admissionNo: true, class: { select: { name: true } } } }, collectingGuardian: { select: { name: true } } } }),
+      tx.student.count({ where: { schoolId: session.schoolId, status: "active" } }),
+      tx.approvedPickup.count({ where: { schoolId: session.schoolId } }),
+      tx.pickupApprovalRequest.count({ where: { schoolId: session.schoolId, status: "pending" } }),
+      tx.pickupEvent.count({ where: { schoolId: session.schoolId, timestamp: { gte: todayStart, lt: tomorrowStart } } }),
       hasPermission(tx, session.userId, "attendance:pickup_approve"),
       hasPermission(tx, session.userId, "attendance:record"),
     ]);
-    return { school, students, guardians, approved, requests, events, canApprove, canRecord };
+    return { school, students, guardians, approved, requests, events, activeLearnerCount, approvedCount, pendingCount, pickupsTodayCount, canApprove, canRecord };
   });
-
-  const today = new Date().toISOString().slice(0, 10);
-  const pickupsToday = data.events.filter((event) => event.timestamp.toISOString().slice(0, 10) === today).length;
 
   return <AppShell universe="school" title="Pickup & Gate" subtitle="Verify every learner collection against the same school record." active="Pickup" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
     <main className="pickup-shell">
@@ -70,10 +73,10 @@ export default async function PickupPage() {
       </section>
 
       <section className="pickup-metrics" aria-label="Pickup summary">
-        <article><Clock3 size={18} /><span><small>Waiting now</small><strong>{data.requests.length}</strong><p>Unscheduled collections</p></span></article>
-        <article><UserCheck size={18} /><span><small>Picked up today</small><strong>{pickupsToday}</strong><p>Recorded collections</p></span></article>
-        <article><CheckCircle2 size={18} /><span><small>Recurring approvals</small><strong>{data.approved.length}</strong><p>Trusted learner–collector links</p></span></article>
-        <article><UsersRound size={18} /><span><small>Active learners</small><strong>{data.students.length}</strong><p>Available at the gate</p></span></article>
+        <article><Clock3 size={18} /><span><small>Waiting now</small><strong>{data.pendingCount}</strong><p>Unscheduled collections</p></span></article>
+        <article><UserCheck size={18} /><span><small>Picked up today</small><strong>{data.pickupsTodayCount}</strong><p>Recorded collections</p></span></article>
+        <article><CheckCircle2 size={18} /><span><small>Recurring approvals</small><strong>{data.approvedCount}</strong><p>Trusted learner–collector links</p></span></article>
+        <article><UsersRound size={18} /><span><small>Active learners</small><strong>{data.activeLearnerCount}</strong><p>Available at the gate</p></span></article>
       </section>
 
       <section className="pickup-primary-grid">
@@ -88,7 +91,7 @@ export default async function PickupPage() {
         </article>
 
         <aside className="pickup-card pickup-approval-card">
-          <header><span>REQUIRES A SECOND CHECK</span><h2>Pending approvals</h2><p>{data.requests.length ? `${data.requests.length} collection${data.requests.length === 1 ? " is" : "s are"} waiting for a decision.` : "No unexpected collection is waiting."}</p></header>
+          <header><span>REQUIRES A SECOND CHECK</span><h2>Pending approvals</h2><p>{data.pendingCount ? `${data.pendingCount} collection${data.pendingCount === 1 ? " is" : "s are"} waiting for a decision.` : "No unexpected collection is waiting."}</p></header>
           {data.requests.length ? <div className="pickup-request-list">{data.requests.map((request) => {
             const ownRequest = request.requestedByUserId === session.userId;
             return <article className="pickup-request" key={request.id}>
@@ -106,7 +109,7 @@ export default async function PickupPage() {
       </section>
 
       {data.canApprove ? <details className="pickup-details">
-        <summary><span><strong>Recurring approved collectors</strong><small>{data.approved.length} learner–guardian approvals</small></span><b>Manage</b></summary>
+        <summary><span><strong>Recurring approved collectors</strong><small>{data.approvedCount} learner–guardian approvals</small></span><b>Manage</b></summary>
         <div className="pickup-details-body">
           <p>Add a recurring approval only when the school has verified that this guardian may collect the learner without a new approval each time.</p>
           <form action={approveGuardian} className="pickup-form compact">
