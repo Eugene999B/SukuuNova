@@ -6,8 +6,8 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
 import { getSchoolAuthorization } from "@/lib/authorization";
-import { reportBelongsToClass } from "@/lib/report-card-print-data";
 import { loadReportCardPrintPack } from "@/lib/report-card-print-pack";
+import { resolveStudentTermClass } from "@/lib/student-term-context";
 
 function PrintMessage({ title, body, classId, termId }: { title: string; body: string; classId?: string; termId?: string }) {
   const reportsHref = classId && termId
@@ -58,12 +58,14 @@ export default async function ClassReportPrintPage({ searchParams }: { searchPar
 
     const candidates = await tx.reportCard.findMany({
       where: { schoolId: session.schoolId, termId },
-      select: { id: true, calculationSnapshot: true, student: { select: { classId: true, name: true } } },
+      select: { id: true, studentId: true, student: { select: { name: true } } },
       orderBy: { student: { name: "asc" } },
     });
-    const reportIds = candidates
-      .filter((row) => reportBelongsToClass(row.calculationSnapshot, row.student.classId, classId))
-      .map((row) => row.id);
+    const reportIds: string[] = [];
+    for (const row of candidates) {
+      const termClass = await resolveStudentTermClass(tx, { schoolId: session.schoolId, studentId: row.studentId, termId });
+      if (termClass.classId === classId) reportIds.push(row.id);
+    }
 
     return { kind: "ready" as const, selectedClass, term, reportIds };
   });
