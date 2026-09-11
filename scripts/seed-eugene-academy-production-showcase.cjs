@@ -15,6 +15,7 @@ function run(label, filename, extraEnv = {}) {
 
 try {
   run("guarded permanent production demo seed", "seed-eugene-academy-production-demo.cjs");
+  run("current role and workspace access refresh", "refresh-eugene-academy-access.cjs", { EUGENE_ACADEMY_ACCESS_TARGET: "production" });
   run("rich learner and guardian showcase", "seed-eugene-academy-learning-showcase.cjs", { EUGENE_ACADEMY_SHOWCASE_TARGET: "production" });
   console.log("[eugene-academy] permanent production demonstration school and rich learning showcase are verified.");
 } catch (error) {

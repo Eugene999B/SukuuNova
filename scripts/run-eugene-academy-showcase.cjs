@@ -15,6 +15,7 @@ function run(label, filename, extraEnv = {}) {
 
 try {
   run("verified full-system fixture", "run-eugene-academy-trial.cjs");
+  run("current role and workspace access refresh", "refresh-eugene-academy-access.cjs", { EUGENE_ACADEMY_ACCESS_TARGET: "trial" });
   run("rich learner and guardian showcase", "seed-eugene-academy-learning-showcase.cjs", { EUGENE_ACADEMY_SHOWCASE_TARGET: "trial" });
   console.log("[eugene-academy] full showcase fixture completed successfully.");
 } catch (error) {

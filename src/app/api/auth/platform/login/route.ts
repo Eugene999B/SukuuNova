@@ -7,6 +7,7 @@ import {
   createPlatformSessionToken,
   sessionCookieOptions
 } from "@/lib/auth";
+import { GUARDIAN_COOKIE } from "@/lib/guardian-auth";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { authenticatePlatformAdmin } from "@/lib/login-service";
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
       sessionCookieOptions(PLATFORM_SESSION_SECONDS)
     );
     response.cookies.delete(SCHOOL_COOKIE);
+    response.cookies.delete(GUARDIAN_COOKIE);
     return response;
   } catch (error) {
     return routeError(error);

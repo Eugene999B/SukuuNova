@@ -36,6 +36,7 @@ type User = {
 
 type Permission = { id: string; key: string; description: string | null };
 type Data = {
+  school: { name: string; uniqueCode: string } | null;
   users: User[];
   roles: Role[];
   permissions: Permission[];
@@ -108,6 +109,8 @@ function AccessPageInner() {
   }, [data, searchParams, selectedId]);
 
   const selected = data?.users.find((user) => user.id === selectedId);
+  const currentUser = data?.users.find((user) => user.id === data.me);
+  const currentRoleLabel = currentUser?.userRoles.map(({ role }) => role.name).join(" · ") || "School account";
   const inheritedKeys = useMemo(() => new Set(
     (data?.roles ?? []).filter((role) => draftRoles.includes(role.name)).flatMap((role) => (role.rolePermissions ?? []).map(({ permission }) => permission.key)),
   ), [data, draftRoles]);
@@ -239,7 +242,7 @@ function AccessPageInner() {
   }
 
   return (
-    <AppShell universe="school" title="People & Access" subtitle="Create accounts, assign normal roles and review effective access." active="People & Access">
+    <AppShell universe="school" title="People & Access" subtitle="Create accounts, assign normal roles and review effective access." active="People & Access" schoolName={data?.school?.name ?? "School Workspace"} schoolCode={data?.school?.uniqueCode ?? ""} userName={currentUser?.name ?? "School account"} role={currentRoleLabel}>
       <div className="settings-hub">
         <SettingsHero
           eyebrow="School access"
