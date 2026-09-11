@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import FinanceWorkspace from "@/components/FinanceWorkspace";
 import PayrollWorkspace from "@/components/PayrollWorkspace";
+import "@/components/payroll-finance-v4.css";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 
