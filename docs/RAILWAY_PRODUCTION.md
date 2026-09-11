@@ -6,7 +6,7 @@ The official SukuuNova production application URL is:
 
 `https://sukuunova-production.up.railway.app`
 
-Use this Railway URL for production links, QR verification URLs, browser testing, operational documentation and the public application origin. Do not treat Vercel preview URLs as SukuuNova production URLs.
+Use this Railway URL for production links, QR verification URLs, browser testing, operational documentation and the public application origin. Do not treat preview-provider URLs as SukuuNova production URLs.
 
 ## Services
 
