@@ -1,6 +1,6 @@
-import { Atom, BookOpen, Compass, Crown, Keyboard, Orbit, Rocket, Search, Shield, Sparkles, Zap } from "lucide-react";
+import { Atom, BookOpen, Bot, Compass, Cpu, Crown, Keyboard, Orbit, Rocket, Search, Shield, Sparkles, Zap } from "lucide-react";
 
-export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest";
+export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence";
 
 type Props = {
   game: ArcadeLogoGame;
@@ -34,6 +34,13 @@ export default function ArcadeGameLogo({ game, size = "card" }: Props) {
       <Compass className="arcade-mark-main" aria-hidden="true"/>
       <Search className="arcade-mark-core" aria-hidden="true"/>
       <span className="arcade-mark-star" aria-hidden="true"><BookOpen size={13}/></span>
+    </div>;
+  }
+  if (game === "coding-sequence") {
+    return <div className={`arcade-mark arcade-mark-${size} arcade-mark-codebots`} aria-label="CodeBots Logic Factory logo">
+      <Bot className="arcade-mark-main" aria-hidden="true"/>
+      <Cpu className="arcade-mark-core" aria-hidden="true"/>
+      <span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span>
     </div>;
   }
   return <div className={`arcade-mark arcade-mark-${size} arcade-mark-runner`} aria-label="Nova Runner logo">
