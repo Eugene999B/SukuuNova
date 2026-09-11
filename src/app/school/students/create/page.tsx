@@ -11,6 +11,7 @@ import "@/components/students/add-student-dialog.css";
 import "@/app/school/students/students-light-overrides.css";
 
 type StudentActionState = { message: string | null };
+const ENTRY_TYPES = new Set(["New enrollment", "Transfer in", "Re-enrollment", "Returning learner"]);
 
 function createIndexNumber() {
   const year = new Date().getFullYear();
@@ -23,21 +24,28 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
   const name = String(formData.get("name") ?? "").trim();
   const dobRaw = String(formData.get("dob") ?? "").trim();
   const classId = String(formData.get("classId") ?? "").trim();
+  const intakeAcademicYearId = String(formData.get("intakeAcademicYearId") ?? "").trim();
+  const admissionDateRaw = String(formData.get("admissionDate") ?? "").trim();
+  const entryType = String(formData.get("entryType") ?? "New enrollment").trim() || "New enrollment";
   const guardianName = String(formData.get("guardianName") ?? "").trim();
   const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
   const guardianRelationship = String(formData.get("guardianRelationship") ?? "Parent").trim() || "Parent";
   const photoData = String(formData.get("photoData") ?? "").trim();
   try {
     if (!name) throw new Error("Student name is required.");
-    if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large.");
+    if (!intakeAcademicYearId) throw new Error("Choose the academic year in which the learner joined the school.");
+    if (!ENTRY_TYPES.has(entryType)) throw new Error("Choose a valid student entry type.");
+    if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large. Capture the live photo again.");
     if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
 
     await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "students:write");
-      if (classId) {
-        const schoolClass = await tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } });
-        if (!schoolClass) throw new Error("The selected class does not belong to this school.");
-      }
+      const [schoolClass, intakeYear] = await Promise.all([
+        classId ? tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } }) : Promise.resolve(null),
+        tx.academicYear.findFirst({ where: { id: intakeAcademicYearId, schoolId: session.schoolId }, select: { id: true, name: true } }),
+      ]);
+      if (classId && !schoolClass) throw new Error("The selected class does not belong to this school.");
+      if (!intakeYear) throw new Error("The selected intake academic year does not belong to this school.");
 
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${session.schoolId}`}))`;
 
@@ -56,6 +64,9 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
         throw error;
       }
 
+      const admissionDate = admissionDateRaw ? new Date(`${admissionDateRaw}T00:00:00.000Z`) : null;
+      await tx.$executeRaw`INSERT INTO "StudentAcademicIntake" ("schoolId","studentId","academicYearId","admissionDate","entryType","createdBy") VALUES (${session.schoolId},${student.id},${intakeAcademicYearId},${admissionDate},${entryType},${session.userId})`;
+
       if (guardianName && guardianPhone) {
         const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
         await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });
@@ -70,7 +81,7 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
         if (house) await tx.student.update({ where: { id: student.id }, data: { houseId: house.id } });
       }
 
-      await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, houseId: house?.id ?? null, houseName: house?.name ?? null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
+      await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, houseId: house?.id ?? null, houseName: house?.name ?? null, intakeAcademicYearId, intakeAcademicYear: intakeYear.name, admissionDate: admissionDateRaw || null, entryType, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
     });
     revalidatePath("/school/students");
   } catch (error) {
@@ -84,12 +95,14 @@ export default async function CreateStudentPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:read");
-    const [school, classes] = await Promise.all([
+    const [school, classes, academicYears] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
+      tx.academicYear.findMany({ where: { schoolId: session.schoolId }, orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true } }),
     ]);
-    return { school, classes };
+    const now = new Date();
+    return { school, classes, academicYears: academicYears.map((year) => ({ id: year.id, name: year.name, isCurrent: year.startDate <= now && year.endDate >= now })) };
   });
 
-  return <AppShell universe="school" title="Add student" subtitle="Guided learner admission" active="Students" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}><div style={{ minHeight: "calc(100vh - 120px)", display: "grid", placeItems: "center", padding: "24px" }}><AddStudentDialog classes={data.classes} action={createStudent} initialOpen /></div></AppShell>;
+  return <AppShell universe="school" title="Add student" subtitle="Guided learner admission" active="Students" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}><div style={{ minHeight: "calc(100vh - 120px)", display: "grid", placeItems: "center", padding: "24px" }}><AddStudentDialog classes={data.classes} academicYears={data.academicYears} action={createStudent} initialOpen /></div></AppShell>;
 }
