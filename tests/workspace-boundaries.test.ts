@@ -30,6 +30,9 @@ describe("workspace and account boundary contracts", () => {
       expect(refresh).toContain(permission);
     }
     expect(refresh).toContain('if (principalSet.has("students:delete"))');
+    expect(refresh).toContain("granted: false");
+    expect(refresh).toContain("effectiveDelete");
+    expect(refresh).toContain("effectively has students:delete");
   });
 
   it("clears incompatible cookies whenever a user changes login universe", () => {
@@ -53,12 +56,24 @@ describe("workspace and account boundary contracts", () => {
     expect(settings).not.toContain('universe="platform"');
   });
 
-  it("binds password changes to the universe rendered by Account Security", () => {
+  it("binds password changes and required-state to the active Account Security universe", () => {
     const security = source("src/app/account/security/page.tsx");
     expect(security).toContain('name="universe" value={universe}');
     expect(security).toContain('if (universe === "school" || universe === "teacher")');
     expect(security).toContain('if (universe === "guardian")');
     expect(security).toContain('if (universe === "platform")');
+    expect(security).toContain("const requiredByRoute");
+    expect(security).toContain("const guardianRequired = requiredByRoute || Boolean(currentGuardian.needsPasswordChange)");
+    expect(security).toContain("required={requiredByRoute}");
+  });
+
+  it("does not expose writable platform preference defaults before the saved state loads", () => {
+    const settings = source("src/app/account/settings/PlatformAccountSettingsClient.tsx");
+    expect(settings).toContain('type LoadState = "loading" | "ready" | "error"');
+    expect(settings).toContain('const editable = loadState === "ready"');
+    expect(settings).toContain("disabled={busy || !editable}");
+    expect(settings).toContain("async function readResponse");
+    expect(settings).toContain('setMessage("Unable to save preferences.")');
   });
 
   it("keeps People & Access bound to the current school and logged-in account", () => {
@@ -71,7 +86,7 @@ describe("workspace and account boundary contracts", () => {
     expect(accessPage).toContain("role={currentRoleLabel}");
   });
 
-  it("keeps school transport readers out of the family/guardian branch", () => {
+  it("keeps school transport readers out of the family branch and bounds mutation bodies before JSON decode", () => {
     const transport = source("src/app/api/phase3/transport/route.ts");
     expect(transport).toContain('scope: "school" as const');
     expect(transport).toContain('scope: "family" as const');
@@ -79,13 +94,23 @@ describe("workspace and account boundary contracts", () => {
     expect(transport).toContain('requirePermission(tx, session.userId, "transport:view")');
     expect(transport).toContain("return NextResponse.json(data");
     expect(transport).not.toContain("Parent transport access requires");
+    expect(transport).toContain("MAX_TRANSPORT_BODY_BYTES");
+    expect(transport).toContain("readBoundedJson(request)");
+    expect(transport).toContain("transportMutationSchema");
+    expect(transport).not.toContain("request.json()");
   });
 
-  it("renders pickup approval as an explicit two-person decision", () => {
+  it("renders pickup approval as an explicit two-person decision with uncapped summary counts", () => {
     const pickup = source("src/app/school/pickup/page.tsx");
     expect(pickup).toContain("Two-person control");
     expect(pickup).toContain('value="rejected"');
     expect(pickup).toContain('value="approved"');
     expect(pickup).toContain("A different authorised staff member must review this request.");
+    expect(pickup).toContain("tx.student.count");
+    expect(pickup).toContain("tx.approvedPickup.count");
+    expect(pickup).toContain("tx.pickupApprovalRequest.count");
+    expect(pickup).toContain("tx.pickupEvent.count");
+    expect(pickup).toContain("data.pendingCount");
+    expect(pickup).toContain("data.pickupsTodayCount");
   });
 });
