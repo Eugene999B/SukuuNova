@@ -16,7 +16,17 @@ describe("historical enrolment context", () => {
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.schoolSettings.update({
         where: { schoolId: fixture.schoolId },
-        data: { allowPartialReportCards: true },
+        data: {
+          allowPartialReportCards: true,
+          gradingScale: [
+            { min: 80, max: 100, grade: "A", label: "Excellent" },
+            { min: 70, max: 79.99, grade: "B", label: "Very Good" },
+            { min: 60, max: 69.99, grade: "C", label: "Good" },
+            { min: 50, max: 59.99, grade: "D", label: "Pass" },
+            { min: 40, max: 49.99, grade: "E", label: "Needs Improvement" },
+            { min: 0, max: 39.99, grade: "F", label: "Below Standard" },
+          ],
+        },
       });
 
       const year = await tx.academicYear.create({
