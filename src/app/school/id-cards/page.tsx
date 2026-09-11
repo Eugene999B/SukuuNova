@@ -3,13 +3,15 @@ import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
+import { identityCardThemeKeyFromBrandColors } from "@/lib/identity-card-themes";
 import IdentityCardManager from "./IdentityCardManager";
+import IdentityCardThemeStudio from "./IdentityCardThemeStudio";
 
 export default async function SchoolIdentityCardsPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
     const [school, canManageCards] = await Promise.all([
-      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
+      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, brandColors: true } }),
       hasPermission(tx, session.userId, "identity_cards:manage").catch(() => false),
     ]);
     if (!school) throw new Error("School not found.");
@@ -20,7 +22,7 @@ export default async function SchoolIdentityCardsPage() {
     <AppShell
       universe="school"
       title="School ID Cards"
-      subtitle="Issue, print and verify student and staff identity cards."
+      subtitle="Issue, theme, print and verify student and staff identity cards."
       active="Students"
       userName={session.name ?? ""}
       schoolName={data.school.name}
@@ -28,7 +30,10 @@ export default async function SchoolIdentityCardsPage() {
       role="ID Card Management"
     >
       {data.canManageCards ? (
-        <IdentityCardManager schoolName={data.school.name} />
+        <>
+          <IdentityCardThemeStudio initialTheme={identityCardThemeKeyFromBrandColors(data.school.brandColors)} />
+          <IdentityCardManager schoolName={data.school.name} />
+        </>
       ) : (
         <section className="app-card app-panel">
           <div className="app-card-head">
