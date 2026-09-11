@@ -19,6 +19,8 @@ type SaleLineInput = { variantId: string; quantity: number };
 
 type StoreRow = Record<string, unknown>;
 
+const STORE_PAYMENT_METHODS = new Set(["Cash", "Mobile Money", "Bank Transfer", "POS / Card", "Cheque", "Other"]);
+
 function money(value: number) { return Math.round(value * 100) / 100; }
 function text(value: unknown, max: number, field: string) {
   const next = String(value ?? "").trim();
@@ -36,7 +38,7 @@ async function requireStore(tx: TenantDb, actorId: string, permission: string) {
 }
 
 export async function schoolStoreAccess(tx: TenantDb, actorId: string) {
-  const keys = ["store:view","store:manage_catalog","store:stock","store:sell","store:void_sale","store:export"] as const;
+  const keys = ["store:view","store:manage_catalog","store:stock","store:sell","store:discount","store:void_sale","store:export"] as const;
   const values = await Promise.all(keys.map((key) => hasPermission(tx, actorId, key)));
   return Object.fromEntries(keys.map((key, index) => [key, values[index]])) as Record<(typeof keys)[number], boolean>;
 }
@@ -199,6 +201,9 @@ export async function recordStoreSale(tx: TenantDb, input: {
   }
 
   const paymentMethod = text(input.paymentMethod, 40, "Payment method");
+  if (!STORE_PAYMENT_METHODS.has(paymentMethod)) throw new AppError("Payment method is not supported.", 400, "INVALID_PAYMENT_METHOD");
+  const paymentReference = optionalText(input.paymentReference, 120);
+  if (paymentMethod !== "Cash" && !paymentReference) throw new AppError("A payment reference is required for non-cash sales.", 400, "PAYMENT_REFERENCE_REQUIRED");
   const lineRecords = [...quantityByVariant].map(([variantId, quantity]) => {
     const variant = variantMap.get(variantId)!;
     const unitPrice = Number(variant.price);
@@ -207,18 +212,19 @@ export async function recordStoreSale(tx: TenantDb, input: {
   const subtotal = money(lineRecords.reduce((sum, line) => sum + line.lineTotal, 0));
   const discount = money(Number(input.discount ?? 0));
   if (!Number.isFinite(discount) || discount < 0 || discount > subtotal) throw new AppError("Discount is invalid.", 400, "INVALID_INPUT");
+  if (discount > 0) await requireStore(tx, input.actorId, "store:discount");
   const total = money(subtotal - discount);
   const now = new Date();
   const receiptNo = `ST-${now.toISOString().slice(0,10).replaceAll("-","")}-${createId().slice(0,6).toUpperCase()}`;
   const saleId = createId();
-  await tx.$executeRawUnsafe(`INSERT INTO "SchoolStoreSale" ("id","schoolId","receiptNo","customerType","studentId","guardianId","customerName","customerPhone","paymentMethod","paymentReference","subtotal","discount","total","notes","createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, saleId, input.schoolId, receiptNo, input.customerType, studentId, guardianId, customerName, customerPhone, paymentMethod, optionalText(input.paymentReference, 120), subtotal, discount, total, optionalText(input.notes, 500), input.actorId);
+  await tx.$executeRawUnsafe(`INSERT INTO "SchoolStoreSale" ("id","schoolId","receiptNo","customerType","studentId","guardianId","customerName","customerPhone","paymentMethod","paymentReference","subtotal","discount","total","notes","createdBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`, saleId, input.schoolId, receiptNo, input.customerType, studentId, guardianId, customerName, customerPhone, paymentMethod, paymentReference, subtotal, discount, total, optionalText(input.notes, 500), input.actorId);
   for (const line of lineRecords) {
     const changed = await tx.$executeRawUnsafe(`UPDATE "SchoolStoreVariant" SET "stockQuantity"="stockQuantity"-$3,"updatedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$1 AND "id"=$2 AND "stockQuantity">=$3`, input.schoolId, line.variant.id, line.quantity);
     if (changed !== 1) throw new AppError("Stock changed while this sale was being recorded. Please review the cart and try again.", 409, "STOCK_CHANGED");
     await tx.$executeRawUnsafe(`INSERT INTO "SchoolStoreSaleLine" ("id","schoolId","saleId","productId","variantId","productName","variantLabel","sku","quantity","unitPrice","lineTotal") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, createId(), input.schoolId, saleId, line.variant.productId, line.variant.id, line.variant.productName, line.label, line.variant.sku, line.quantity, line.unitPrice, line.lineTotal);
     await tx.$executeRawUnsafe(`INSERT INTO "SchoolStoreStockMovement" ("id","schoolId","variantId","movementType","quantityDelta","referenceType","referenceId","notes","createdBy") VALUES ($1,$2,$3,'sale',$4,'sale',$5,$6,$7)`, createId(), input.schoolId, line.variant.id, -line.quantity, saleId, receiptNo, input.actorId);
   }
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "store.sale_completed", entityType: "SchoolStoreSale", entityId: saleId, after: { receiptNo, customerType: input.customerType, customerName, subtotal, discount, total, paymentMethod, lineCount: lineRecords.length } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "store.sale_completed", entityType: "SchoolStoreSale", entityId: saleId, after: { receiptNo, customerType: input.customerType, customerName, subtotal, discount, total, paymentMethod, paymentReference, lineCount: lineRecords.length } });
   return { saleId, receiptNo, total };
 }
 
