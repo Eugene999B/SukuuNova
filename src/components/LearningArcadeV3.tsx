@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Gamepad2, Medal, Play, RefreshCw, Rocket, Sparkles, Trophy, X, Zap } from "lucide-react";
 import NovaRunner from "./NovaRunner";
 import TurboType, { type TurboTypeTelemetry } from "./TurboType";
+import AstroLabDefender from "./AstroLabDefender";
 import "./nova-learning-arcade.css";
 
 type AgeBand = "age_4_5" | "age_6_8" | "age_9_11" | "age_12_14" | "age_15_18";
+type LiveGame = "math" | "keyboard-ninja" | "force-motion-lab";
 type Child = { id: string; name: string; classId: string | null; class: { name: string; level: string | null } | null };
 type Progress = { game: string; rounds: number; xp: number; level: number; accuracy: number | null; badges: string[] };
 type Overview = {
@@ -18,7 +20,7 @@ type Overview = {
   recommendedAgeBand: AgeBand | null;
   allowedAgeBands: AgeBand[];
 };
-type Question = { id: string; kind?: string; prompt: string; options: string[]; answer?: string; explanation?: string; correct?: boolean };
+type Question = { id: string; kind?: string; prompt: string; options: string[]; answer?: string; explanation?: string; correct?: boolean; scene?: { cue?: string; meterLabels?: string[] } };
 type LearningPlan = {
   version: 1;
   targetDifficulty: number;
@@ -52,6 +54,7 @@ type Leaderboard = { rows: Array<{ rank: number; studentId: string; displayName:
 const ageLabels: Record<AgeBand, string> = {
   age_4_5: "Age 4–5", age_6_8: "Age 6–8", age_9_11: "Age 9–11", age_12_14: "Age 12–14", age_15_18: "Age 15–18",
 };
+const gameLabels: Record<LiveGame, string> = { math: "Nova Runner", "keyboard-ninja": "TurboType", "force-motion-lab": "AstroLab Defender" };
 
 async function api(path: string, body?: unknown) {
   const response = await fetch(path, body ? { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) } : { cache: "no-store" });
@@ -66,7 +69,7 @@ export default function LearningArcadeV3() {
   const [result, setResult] = useState<Round | null>(null);
   const [ageBand, setAgeBand] = useState<AgeBand | "">("");
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
-  const [leaderboardGame, setLeaderboardGame] = useState<"math" | "keyboard-ninja">("math");
+  const [leaderboardGame, setLeaderboardGame] = useState<LiveGame>("math");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -97,10 +100,10 @@ export default function LearningArcadeV3() {
     finally { operation.current = false; setBusy(false); }
   };
 
-  const startGame = (game: "math" | "keyboard-ninja") => run(async () => {
+  const startGame = (game: LiveGame) => run(async () => {
     if (!data?.selected || !ageBand) return;
-    // New flagship experiences keep their proven historical game keys while the
-    // replacement gameplay rolls out, preserving learner mastery and progress.
+    // Replacement experiences keep proven historical game keys during rollout,
+    // preserving learner mastery while the game presentation evolves.
     const next = await api("/api/guardian/arcade", { action: "start", studentId: data.selected.id, game, ageBand, roundLength: 5 }) as Round;
     setRound(next); setResult(null); setLeaderboard(null);
   });
@@ -108,9 +111,9 @@ export default function LearningArcadeV3() {
   const finishRound = (answers: string[], typingTelemetry?: TurboTypeTelemetry) => run(async () => {
     if (!round) return;
     const completed = await api("/api/guardian/arcade", { action: "save", roundId: round.id, answers, finish: true, ...(typingTelemetry ? { typingTelemetry } : {}) }) as Round;
-    const completedGame = round.game;
+    const completedGame = round.game as LiveGame;
     setRound(null); setResult(completed);
-    setMessage(`${completedGame === "keyboard-ninja" ? "Race" : "Mission"} complete — ${completed.xp} XP earned.`);
+    setMessage(`${completedGame === "keyboard-ninja" ? "Race" : completedGame === "force-motion-lab" ? "Defence mission" : "Mission"} complete — ${completed.xp} XP earned.`);
     await refresh(completed.studentId);
   });
 
@@ -120,11 +123,15 @@ export default function LearningArcadeV3() {
     await api("/api/guardian/arcade", { action: "save", roundId: round.id, answers, finish: false, ...(typingTelemetry ? { typingTelemetry } : {}) });
     const studentId = round.studentId;
     setRound(null);
-    setMessage(currentGame === "keyboard-ninja" ? "Race saved. TurboType will resume at your next checkpoint." : "Mission saved. Nova Runner will resume from your next Knowledge Gate.");
+    setMessage(currentGame === "keyboard-ninja"
+      ? "Race saved. TurboType will resume at your next checkpoint."
+      : currentGame === "force-motion-lab"
+        ? "Lab secured. AstroLab Defender will resume at the next anomaly."
+        : "Mission saved. Nova Runner will resume from your next Knowledge Gate.");
     await refresh(studentId);
   });
 
-  const loadLeaderboard = (game: "math" | "keyboard-ninja") => run(async () => {
+  const loadLeaderboard = (game: LiveGame) => run(async () => {
     if (!data?.selected || !ageBand) return;
     const params = new URLSearchParams({ view: "leaderboard", studentId: data.selected.id, game, scope: "standard", period: "weekly", ageBand });
     setLeaderboardGame(game);
@@ -133,24 +140,33 @@ export default function LearningArcadeV3() {
 
   const runnerProgress = useMemo(() => data?.progress.find((item) => item.game === "math"), [data?.progress]);
   const typingProgress = useMemo(() => data?.progress.find((item) => item.game === "keyboard-ninja"), [data?.progress]);
+  const astroProgress = useMemo(() => data?.progress.find((item) => item.game === "force-motion-lab"), [data?.progress]);
   const totalXp = useMemo(() => data?.progress.reduce((sum, item) => sum + item.xp, 0) ?? 0, [data?.progress]);
   const novaCoins = Math.floor(totalXp / 10) + (data?.recent.reduce((sum, item) => sum + item.stars * 2, 0) ?? 0);
+  const astroEligible = ageBand === "age_9_11" || ageBand === "age_12_14" || ageBand === "age_15_18";
 
   if (round && data?.selected) return <div className="nova-arcade">
     {round.game === "keyboard-ninja"
       ? <TurboType learnerName={data.selected.name} round={round} onComplete={(answers, telemetry) => void finishRound(answers, telemetry)} onExit={(answers, telemetry) => void exitRound(answers, telemetry)}/>
-      : <NovaRunner learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>} 
+      : round.game === "force-motion-lab"
+        ? <AstroLabDefender learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>
+        : <NovaRunner learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>} 
     {busy ? <div className="nova-arcade-message">Saving game progress…</div> : null}
     {error ? <div className="nova-arcade-alert" role="alert">{error}</div> : null}
   </div>;
 
   if (result) {
-    const typingResult = result.game === "keyboard-ninja";
+    const resultGame = result.game as LiveGame;
+    const typingResult = resultGame === "keyboard-ninja";
+    const astroResult = resultGame === "force-motion-lab";
+    const unit = typingResult ? "typing checkpoints" : astroResult ? "science anomalies" : "Knowledge Gates";
+    const kicker = typingResult ? "TURBOTYPE · RACE COMPLETE" : astroResult ? "ASTROLAB DEFENDER · LAB SECURED" : "NOVA RUNNER · MISSION COMPLETE";
+    const replayLabel = typingResult ? "race" : astroResult ? "defence mission" : "mission";
     return <div className="nova-finish">
       <section className="nova-finish-card">
-        <div className="nova-finish-top"><div className="nova-finish-mark"><Trophy size={34}/></div><span className="nova-arcade-kicker">{typingResult ? "TURBOTYPE · RACE COMPLETE" : "NOVA RUNNER · MISSION COMPLETE"}</span><h1>{result.stars === 3 ? (typingResult ? "Perfect precision!" : "Legendary run!") : result.stars === 2 ? "Strong mission!" : "World cleared!"}</h1><p>{result.correct}/{result.roundLength} {typingResult ? "typing checkpoints" : "Knowledge Gates"} cleared correctly. The Adaptive Director will use this performance for the next game.</p><div className="nova-rewards"><div><strong>{result.stars}/3</strong><span>Stars</span></div><div><strong>+{result.xp}</strong><span>XP</span></div><div><strong>{result.score ?? 0}</strong><span>Score</span></div></div></div>
+        <div className="nova-finish-top"><div className="nova-finish-mark"><Trophy size={34}/></div><span className="nova-arcade-kicker">{kicker}</span><h1>{result.stars === 3 ? (typingResult ? "Perfect precision!" : astroResult ? "Lab fully stabilised!" : "Legendary run!") : result.stars === 2 ? "Strong mission!" : "World cleared!"}</h1><p>{result.correct}/{result.roundLength} {unit} cleared correctly. The Adaptive Director will use this performance for the next game.</p><div className="nova-rewards"><div><strong>{result.stars}/3</strong><span>Stars</span></div><div><strong>+{result.xp}</strong><span>XP</span></div><div><strong>{result.score ?? 0}</strong><span>Score</span></div></div></div>
         <div className="nova-result-list">{result.questions.map((question, index) => <div className={`nova-result ${question.correct ? "good" : "bad"}`} key={question.id}><div className="nova-result-icon">{question.correct ? <Check size={18}/> : <X size={18}/>}</div><div><p>{question.prompt}</p><small>{question.correct ? `Correct — ${result.answers[index]}` : `You entered ${result.answers[index] || "—"}. Target: ${question.answer ?? "—"}. ${question.explanation ?? ""}`}</small></div></div>)}</div>
-        <div className="nova-finish-actions"><button type="button" onClick={() => { const game = typingResult ? "keyboard-ninja" : "math"; setResult(null); void startGame(game); }} disabled={busy}><RefreshCw size={16}/> Play another {typingResult ? "race" : "mission"}</button><button type="button" onClick={() => setResult(null)}>Back to Arcade</button></div>
+        <div className="nova-finish-actions"><button type="button" onClick={() => { setResult(null); void startGame(resultGame); }} disabled={busy}><RefreshCw size={16}/> Play another {replayLabel}</button><button type="button" onClick={() => setResult(null)}>Back to Arcade</button></div>
       </section>
     </div>;
   }
@@ -158,7 +174,7 @@ export default function LearningArcadeV3() {
   return <div className="nova-arcade">
     <section className="nova-arcade-hero">
       <div className="nova-arcade-hero-copy"><span className="nova-arcade-kicker"><Sparkles size={13}/> SUKUUNOVA LEARNING ARCADE</span><h1>Learn inside the adventure.</h1><p>Real gameplay, adaptive school learning and measurable skill progression now share one Arcade foundation.</p></div>
-      <div className="nova-arcade-hero-card"><div className="nova-arcade-avatar">{data?.selected?.name?.trim()?.[0]?.toUpperCase() ?? "N"}</div><div><small>PLAYER</small><strong>{data?.selected?.name ?? (loading ? "Loading learner…" : "Choose a learner")}</strong><div className="nova-arcade-stat-grid"><div><b>{Math.max(runnerProgress?.level ?? 1, typingProgress?.level ?? 1)}</b><span>Arcade level</span></div><div><b>{data?.streak ?? 0}</b><span>Day streak</span></div><div><b>{novaCoins}</b><span>Nova coins</span></div></div></div></div>
+      <div className="nova-arcade-hero-card"><div className="nova-arcade-avatar">{data?.selected?.name?.trim()?.[0]?.toUpperCase() ?? "N"}</div><div><small>PLAYER</small><strong>{data?.selected?.name ?? (loading ? "Loading learner…" : "Choose a learner")}</strong><div className="nova-arcade-stat-grid"><div><b>{Math.max(runnerProgress?.level ?? 1, typingProgress?.level ?? 1, astroProgress?.level ?? 1)}</b><span>Arcade level</span></div><div><b>{data?.streak ?? 0}</b><span>Day streak</span></div><div><b>{novaCoins}</b><span>Nova coins</span></div></div></div></div>
     </section>
 
     {error ? <div className="nova-arcade-alert" role="alert">{error}</div> : null}
@@ -169,11 +185,11 @@ export default function LearningArcadeV3() {
     <div className="nova-game-grid">
       <article className="nova-game-card primary"><div className="nova-game-logo">NR</div><h3>Nova Runner</h3><p>Race through an original sci-fi world. Jump hazards, collect Nova energy and enter Knowledge Gates where mathematics changes with the learner’s level and recent play.</p><div className="nova-game-tags"><span>Mathematics</span><span>Adaptive Director</span><span>Runner</span><span>Keyboard + touch</span><span>5–10 min</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("math")} disabled={busy || loading || !data?.selected || !ageBand}><Play size={17} fill="currentColor"/>{busy ? "Preparing world…" : runnerProgress?.rounds ? "Continue Nova Runner" : "Play Nova Runner"}</button><button className="nova-rank-button" type="button" onClick={() => void loadLeaderboard("math")} disabled={busy || !data?.selected || !ageBand}><Medal size={16}/>Weekly ranking</button></div>{data?.allowedAgeBands?.length ? <div className="nova-game-actions"><label htmlFor="nova-age" className="nova-age-label">Learning band</label><select id="nova-age" className="nova-arcade-select" value={ageBand} onChange={(event) => setAgeBand(event.target.value as AgeBand)}>{data.allowedAgeBands.map((age) => <option key={age} value={age}>{ageLabels[age]}</option>)}</select></div> : null}</article>
       <article className="nova-game-card turbo-card"><span className="nova-coming live">LIVE</span><div className="nova-game-logo" style={{ width: 58, height: 58, fontSize: 21 }}>TT</div><h3>TurboType</h3><p>Race by typing exact targets. Every correct character moves your vehicle; accuracy, WPM and troublesome keys shape future practice.</p><div className="nova-game-tags"><span>ICT</span><span>Typing</span><span>Weak-key training</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("keyboard-ninja")} disabled={busy || loading || !data?.selected || !ageBand}><Play size={17} fill="currentColor"/>{typingProgress?.rounds ? "Continue TurboType" : "Play TurboType"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("keyboard-ninja")} disabled={busy || !data?.selected || !ageBand}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card"><span className="nova-coming">IN PRODUCTION</span><div className="nova-game-logo" style={{ width: 58, height: 58, fontSize: 21 }}>AD</div><h3>AstroLab Defender</h3><p>Science decisions power shields, repair systems and defend a living space laboratory.</p><div className="nova-game-ghost" aria-hidden="true"/></article>
+      <article className="nova-game-card astro-card"><span className={`nova-coming ${astroEligible ? "live" : ""}`}>{astroEligible ? "LIVE" : "AGE 9+"}</span><div className="nova-game-logo" style={{ width: 58, height: 58, fontSize: 21 }}>AD</div><h3>AstroLab Defender</h3><p>Defend a living research station by reading real force-and-motion telemetry, choosing science responses and managing shields, reactor power and navigation.</p><div className="nova-game-tags"><span>Science</span><span>NovaCore physics</span><span>Systems strategy</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("force-motion-lab")} disabled={busy || loading || !data?.selected || !ageBand || !astroEligible}><Play size={17} fill="currentColor"/>{astroEligible ? (astroProgress?.rounds ? "Continue AstroLab" : "Play AstroLab") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("force-motion-lab")} disabled={busy || !data?.selected || !ageBand || !astroEligible}><Medal size={16}/>Ranking</button></div></article>
     </div>
 
-    {leaderboard ? <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>{leaderboardGame === "keyboard-ninja" ? "TurboType" : "Nova Runner"} · Weekly school-standard ranking</h3><p>Ranking stays inside the learner’s permitted school context.</p></div><Trophy size={22}/></div><div className="nova-leaderboard">{leaderboard.rows.length ? leaderboard.rows.map((row) => <div className="nova-leader-row" key={row.studentId}><b>#{row.rank}</b><strong>{row.displayName}</strong><span>{row.bestScore} best</span><span>{row.totalXp} XP · {row.rounds} runs</span></div>) : <div className="nova-empty">No ranked games yet. Be the first this week.</div>}</div></section> : null}
+    {leaderboard ? <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>{gameLabels[leaderboardGame]} · Weekly school-standard ranking</h3><p>Ranking stays inside the learner’s permitted school context.</p></div><Trophy size={22}/></div><div className="nova-leaderboard">{leaderboard.rows.length ? leaderboard.rows.map((row) => <div className="nova-leader-row" key={row.studentId}><b>#{row.rank}</b><strong>{row.displayName}</strong><span>{row.bestScore} best</span><span>{row.totalXp} XP · {row.rounds} runs</span></div>) : <div className="nova-empty">No ranked games yet. Be the first this week.</div>}</div></section> : null}
 
-    <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>Arcade foundation</h3><p>Nova Runner and TurboType are now separate real game loops sharing the same safe adaptive learning director.</p></div><Gamepad2 size={22}/></div><div className="nova-game-tags"><span><Rocket size={12}/> real-time gameplay</span><span><Zap size={12}/> adaptive learning director</span><span>question variation</span><span>typing telemetry</span><span>save/resume</span><span>school-scoped ranking</span><span>privacy-bounded metrics</span></div></section>
+    <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>Arcade foundation</h3><p>Nova Runner, TurboType and AstroLab Defender are separate real game loops sharing one safe adaptive learning director.</p></div><Gamepad2 size={22}/></div><div className="nova-game-tags"><span><Rocket size={12}/> real-time gameplay</span><span><Zap size={12}/> adaptive learning director</span><span>NovaCore physics</span><span>typing telemetry</span><span>save/resume</span><span>school-scoped ranking</span><span>server-side grading</span></div></section>
   </div>;
 }
