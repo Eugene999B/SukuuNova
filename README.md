@@ -15,11 +15,12 @@ SukuuNova is a secure, multi-tenant school operations platform built for real da
 | Database | PostgreSQL 16 |
 | ORM | Prisma |
 | Production hosting | **Railway** |
+| Production URL | **https://sukuunova-production.up.railway.app** |
 | Production database | Railway PostgreSQL |
 | Authentication | Separate platform, school and guardian security domains |
 | AI | Server-side OpenAI Responses API integration where enabled |
 
-**Railway is the production deployment platform for SukuuNova.** GitHub may show checks or previews from other providers, but SukuuNova does not use them as production infrastructure or as the production release gate. Production verification means Railway deployment, database migration status, `/api/health`, Railway runtime logs and the real browser workflow.
+**Railway is the production deployment platform for SukuuNova.** The canonical production origin is `https://sukuunova-production.up.railway.app`. GitHub may show checks or previews from other providers, but SukuuNova does not use them as production infrastructure or as the production release gate. Production verification means Railway deployment, database migration status, `https://sukuunova-production.up.railway.app/api/health`, Railway runtime logs and the real browser workflow.
 
 SukuuNova has three connected user experiences:
 
@@ -64,6 +65,7 @@ Implemented in PR #111 on `feat/premium-duplex-school-id-cards`.
 - Added working actions for Print filtered, All students, All staff, Selected class, Selected cards and Whole school.
 - Current, revoked and expired records are separated correctly; only current credentials are printable/selectable.
 - Student and staff ID surfaces use the shared two-sided preview design.
+- Production links and QR verification are expected to resolve against `https://sukuunova-production.up.railway.app`.
 
 ### ID-card printing modes
 
@@ -516,7 +518,67 @@ Only the minimum necessary school context should be sent to an AI service. AI dr
 
 ## Downloads, documents and exports
 
-The application contains school download/export surfaces for authorized data. Export actions remain permission-controlled and tenant-scoped. Generated school documents must use real persisted data and should preserve the same access rules as their source records.
+- School-generated documents and exports where authorized.
+- Download surfaces must use real persisted data.
+- Export permissions must be checked server-side.
+- Generated documents should carry the correct school identity and avoid exposing data outside the intended scope.
+
+---
+
+# Security and architecture
+
+## Multi-tenancy
+
+Every school is a tenant. School-owned data is scoped through `schoolId` and same-school relationships.
+
+For school operations:
+
+1. authenticate the user;
+2. establish the correct school context;
+3. authorize the action;
+4. query inside the tenant boundary;
+5. verify related records belong to that same school;
+6. execute the business operation;
+7. audit consequential actions where appropriate.
+
+Never trust a client-provided school identity when the authenticated session already establishes the tenant.
+
+## Database isolation
+
+SukuuNova uses tenant-aware database helpers and PostgreSQL Row-Level Security. Production runtime uses the restricted `sukuunova_app` database role so `FORCE ROW LEVEL SECURITY` remains effective. The application is expected to fail closed when it cannot verify a safe production database role.
+
+## Authentication domains
+
+- Platform: `PlatformAdmin` + `PLATFORM_AUTH_SECRET`.
+- School: `User` + `SCHOOL_AUTH_SECRET`.
+- Guardian/family: guardian-specific school-facing security context.
+
+These security domains must not be merged casually.
+
+## Password and reset security
+
+- Passwords use `bcryptjs`.
+- Reset tokens are hashed.
+- Expiry/use controls apply.
+- Login throttling is persisted.
+- Temporary staff/leadership passwords require replacement at first login where configured.
+
+## Audit
+
+School and platform audit trails are security records. Examples of consequential operations include:
+
+- permission changes;
+- impersonation;
+- payment reversals;
+- approvals/rejections;
+- biometric operations;
+- ID-card reissue/revoke/validity change;
+- emergency communications;
+- destructive administrative changes.
+
+## Platform impersonation
+
+Support impersonation is explicit, permission-gated, reason-bound, time-limited and auditable. Never create a silent god-mode backdoor.
 
 ---
 
@@ -524,188 +586,52 @@ The application contains school download/export surfaces for authorized data. Ex
 
 ## School workspace
 
+- `/school`
 - `/school/students`
 - `/school/guardians`
 - `/school/staff`
-- `/school/id-cards`
 - `/school/classes`
 - `/school/subjects`
 - `/school/timetable`
-- `/school/academics`
-- `/school/gradebook`
-- `/school/report-cards`
 - `/school/attendance`
 - `/school/attendance/register`
 - `/school/attendance/exceptions`
 - `/school/attendance/check-in`
 - `/school/attendance/display`
+- `/school/gradebook`
+- `/school/report-cards`
+- `/school/id-cards`
 - `/school/fees`
 - `/school/fees/invoices`
 - `/school/fees/payments`
 - `/school/fees/arrears`
+- `/school/settings`
 - `/school/communications/messages`
 - `/school/communications/announcements`
 - `/school/events`
-- `/school/calendar`
-- `/school/admissions`
-- `/school/exams`
-- `/school/feeding`
-- `/school/devices`
-- `/school/settings`
 
-## Identity-card routes
+## Teacher workspace
 
-- `/school/id-cards`
-- `/school/students/[id]/id-card`
+Root: `/teacher`
+
+Includes teacher-scoped attendance, gradebook, homework/academic work, timetable, messages and school check-in surfaces where authorized.
+
+## Family / guardian
+
+Guardian routes expose only linked children and school-released information.
+
+## Identity-card APIs and verification
+
 - `/api/school/identity-cards`
 - `/api/school/identity-cards/student/[id]`
 - `/api/school/identity-cards/staff/[id]`
-- `/verify/id-card/[schoolCode]/[serial]`
+- `/verify/id-card/[schoolCode]/[serial]?sig=...`
 
-## Teacher experience
-
-The Teacher Portal is rooted at `/teacher` and includes the teacher's assigned academic/attendance/timetable/homework/messaging work plus the staff check-in entry point where enabled.
-
-Some API paths retain historical internal names. Those are compatibility details and do not define the current product structure.
+Production verification URLs should use the canonical Railway origin: `https://sukuunova-production.up.railway.app`.
 
 ---
 
-# Security and multi-tenancy
-
-Every school is a tenant. School-owned records are scoped through `schoolId`, tenant-aware database access and PostgreSQL row-level security.
-
-The required sequence for consequential operations is:
-
-1. Authenticate the user.
-2. Establish school/platform context.
-3. Authorize the action.
-4. Query through the tenant boundary.
-5. Validate related records belong to the same school.
-6. Apply business rules.
-7. Perform the operation.
-8. Audit consequential changes.
-
-Never trust a client-provided `schoolId` or target identity when the authenticated session already determines the actor/context.
-
-The application uses tenant-aware helpers such as `withTenant()` and production PostgreSQL row-level security. Production startup verifies the runtime database role does not have `SUPERUSER` or `BYPASSRLS` capabilities that would defeat tenant isolation.
-
-Authentication domains are deliberately separated:
-
-- Platform administrators: platform auth domain / `PLATFORM_AUTH_SECRET`.
-- School users: school auth domain / `SCHOOL_AUTH_SECRET`.
-- Guardians: guardian/family auth domain / `GUARDIAN_AUTH_SECRET`.
-
-Passwords use `bcryptjs`; reset tokens are hashed and time/use constrained. Login throttling and security-sensitive state should be persisted rather than relying only on process memory.
-
-School and platform audit trails are first-class records. Examples include permission changes, impersonation, payment reversals, approval/rejection, biometric operations, emergency communication, identity-card changes and destructive administration.
-
-## Platform impersonation
-
-Support impersonation is explicit, permission-gated, time-limited, reason-bound and audited. Never add hidden “god mode” access.
-
----
-
-# Data model
-
-The authoritative schema is `prisma/schema.prisma`.
-
-Major model families include:
-
-### Platform and tenancy
-
-`PlatformAdmin`, `School`, `SchoolSettings`, `SchoolLoginDirectory`, `SubscriptionPlan`, `LoginRateLimit`, `PlatformPasswordResetToken`, `AuditLogPlatform`
-
-### Users and authorization
-
-`User`, `Role`, `Permission`, `RolePermission`, `UserRole`, `UserPermissionOverride`, `SchoolPasswordResetToken`, `AuditLogSchool`
-
-### Academic structure
-
-`AcademicYear`, `Term`, `CalendarEvent`, `House`, `Class`, `Subject`, `ClassSubjectTeacher`
-
-### Learners and families
-
-`Student`, `Guardian`, `StudentGuardian`
-
-### Attendance and identity
-
-`AttendanceEvent`, `FaceEnrollment`, `FaceMatchReview`, `Device`, `DeviceIdentity`, `DeviceAttendanceReceipt`, `IdentityCard`
-
-### Academics
-
-`Assessment`, `Score`, `ReportCard`, `ReportCardTemplate`, `AiDraft`
-
-### Finance and payroll
-
-`FeeItem`, `Invoice`, `InvoiceLine`, `Payment`, `PaymentReversal`, `SalaryStructure`, `PayrollRun`, `Payslip`
-
-### Communication
-
-`Message`
-
-### Operations and safety
-
-`TimetableSlot`, `SubstituteAssignment`, `VisitorLog`, `ApprovedPickup`, `PickupApprovalRequest`, `PickupEvent`
-
-Additional specialized models exist. Always inspect the current schema before assuming a field or relationship exists.
-
----
-
-# Railway production
-
-Production is deployed on **Railway**, not Vercel.
-
-The detailed runbook is in [`docs/RAILWAY_PRODUCTION.md`](docs/RAILWAY_PRODUCTION.md).
-
-## Railway services
-
-- `SukuuNova` application service from GitHub `Eugene999B/SukuuNova`, branch `main`.
-- Railway PostgreSQL service.
-
-## Deployment configuration
-
-`railway.json` defines the production deployment behavior:
-
-- Railpack builder.
-- `node scripts/start-production.cjs` start command.
-- `npm run db:migrate` pre-deploy command.
-- `/api/health` health check.
-- `ON_FAILURE` restart policy with retries.
-
-The hardened production launcher creates/updates a restricted `sukuunova_app` PostgreSQL login for the web runtime so `FORCE ROW LEVEL SECURITY` remains effective. Railway migrations use the administrative `DATABASE_URL` before the runtime starts.
-
-**Do not change production back to plain `next start`/`npm start` unless the hardened runtime behavior is intentionally preserved.**
-
-## Core production environment variables
-
-- `DATABASE_URL`
-- `SCHOOL_AUTH_SECRET`
-- `GUARDIAN_AUTH_SECRET`
-- `QR_AUTH_SECRET`
-- `PLATFORM_AUTH_SECRET`
-- `NEXT_PUBLIC_APP_URL`
-- `NODE_ENV=production`
-
-Optional providers such as OpenAI, WhatsApp, SMS, email, AWS Rekognition and backup encryption are configured only when their corresponding integrations are enabled. See the Railway runbook for the complete environment-variable list.
-
-## Railway release checklist
-
-A production change is complete only after:
-
-1. Code is reviewed and merged to `main`.
-2. Dependencies/lockfile are coherent.
-3. Required tests/build checks pass.
-4. Railway runs the pre-deploy migration step successfully.
-5. Railway deploys the new application revision successfully.
-6. `/api/health` returns HTTP 200.
-7. Railway runtime logs contain no unexpected startup/database errors.
-8. The affected real browser workflow is tested against Railway production.
-
-A GitHub commit, PR merge or non-Railway preview by itself is **not** production verification.
-
----
-
-# Development workflow
+# Development rules
 
 Before changing a workflow:
 
@@ -713,102 +639,156 @@ Before changing a workflow:
 2. Inspect the page/component.
 3. Inspect the API/server action.
 4. Inspect reusable services/helpers.
-5. Inspect Prisma models/migrations.
+5. Inspect Prisma models and migrations.
 6. Inspect authorization.
 7. Inspect audit behavior.
 8. Inspect tests.
 9. Check whether another route already performs the same business operation.
 10. Consider Railway production impact.
 
-Prefer shared primitives such as `withTenant()`, RBAC helpers, audit utilities, service layers, workspace shells and semantic design tokens.
+Prefer shared primitives such as `withTenant()`, RBAC/authorization helpers, audit utilities, service layers, workspace shells and semantic design tokens.
 
-Do not create a second business implementation merely because the existing service is inconvenient.
+Do not create a second business implementation merely because the existing one is inconvenient.
 
 ## Database and migration rules
 
-The current Prisma schema is authoritative; migration directories are historical implementation records.
+The current Prisma schema is authoritative. Migration directories are historical implementation records, not product-stage labels.
 
 When changing the schema:
 
-1. Understand existing relationships.
-2. Preserve tenant isolation.
-3. Consider existing production data.
-4. Create a safe migration.
-5. Validate migration application against a production-style database.
-6. Update server logic.
-7. Update UI and validation.
-8. Consider rollback/recovery.
+1. understand current relationships;
+2. preserve tenant isolation;
+3. consider production data;
+4. create a safe migration;
+5. test migration application against a production-like database;
+6. update server logic;
+7. update validation/UI;
+8. consider recovery/rollback.
 
-Never casually delete or rename production fields simply to simplify a screen.
-
-## Testing standard
-
-Tests should cover both happy paths and failure paths, especially authorization, tenant isolation, locked/official data, retries, concurrency and destructive operations.
-
-Important end-to-end journeys include:
-
-- Owner: school setup → academic structure → staffing → learners/guardians → finance → timetable → marks → reports → communication.
-- Teacher: login → assigned work → attendance → check-in where enabled → marks → homework → timetable → messaging.
-- Guardian: login → linked children only → released attendance/results → report card → allowed fees → messages/learning practice.
-- Bursar: fees → invoice → full/partial payment → receipt → balance → reconciliation → reversal → audit.
-- Gate/safety: learner identification → approved pickup → approval if needed → final pickup event.
-- ID-card manager: filter → verify data/photo → select scope → print exact CR80/A4 duplex → scan QR → confirm live credential status.
-
-ID-card regression coverage should include:
-
-- one current card per eligible active person;
-- tenant-safe selection;
-- student/class filtering;
-- staff portrait data;
-- exact CR80 single-card size;
-- front/back page count;
-- A4 bulk front/back sheets;
-- signed QR tamper rejection;
-- revoked/ineligible staff behavior;
-- validity changes and expiry alignment.
+Never casually delete or rename production fields merely to simplify a screen.
 
 ---
 
-# UI/UX rules
+# Testing standard
 
-SukuuNova should use semantic tokens for backgrounds, surfaces, text, muted text, borders, accents, success/warning/danger and focus states.
+Tests should cover happy paths and failure paths.
 
-Mobile should preserve the same information architecture while adapting density and interaction for touch. Avoid unnecessary horizontal overflow, keep readable tap targets and preserve a clear primary action.
+High-value journeys include:
 
-Every important page should deliberately handle:
+- Owner: provision/configure school → staff → learners → fees → academics → reports → communications.
+- Teacher: login → assigned work → attendance → marks → homework → timetable → check-in.
+- Guardian: linked children only → released attendance/results → report card → fees/messages.
+- Bursar: fees → invoice → payment → receipt → balance → reversal → audit.
+- Gate/safety: learner → approved pickup → request/approval → final event.
+- ID cards: permission → reconcile → filter → exact CR80 single download → A4 bulk front/back pack → QR verification → reissue/revoke.
 
-- loading;
-- empty state;
-- success;
-- validation error;
-- permission denied;
-- not found;
-- server/network error;
-- saving/saved;
-- destructive confirmation.
+ID-card tests should include:
 
-The visual quality of a screen must match the quality of its underlying workflow. A polished UI with fake/non-working actions is not accepted.
+- student card creation;
+- staff/teacher card creation;
+- correct Student ID / Staff ID;
+- class filter isolation;
+- selected-card tenant isolation;
+- exact CR80 single-card page dimensions;
+- front and back page count;
+- A4 bulk front/back page pairing;
+- signed QR verification;
+- tampered signature rejection;
+- expired/revoked behavior;
+- portrait handling;
+- staff eligibility removal;
+- configured validity alignment.
 
 ---
 
-# AI coding-agent operating rule
+# Railway production and release process
 
-For any task:
+**Production platform: Railway**
 
-**Inspect deeply → understand the real workflow → trace UI → server → authorization → database → downstream effects → fix underlying logic → enforce security → make the UI coherent → test the journey → verify Railway production → move to the next problem.**
+**Canonical production URL: `https://sukuunova-production.up.railway.app`**
 
-Agents working on SukuuNova must:
+SukuuNova production is not Vercel. A provider preview/check that happens to appear on a GitHub pull request is not the production release gate.
 
-- work only on SukuuNova unless explicitly asked to inspect another repository for reference;
-- deliberately adapt any external/reference implementation rather than copy it blindly;
-- preserve tenant isolation and authorization;
-- reuse existing services and primitives;
-- avoid fake functionality;
-- avoid unnecessary rewrites;
-- avoid major dependency upgrades without a deliberate plan;
-- treat migration names as historical technical identifiers;
-- report uncertainty rather than invent behavior;
-- never claim production success without actual Railway deployment and health evidence.
+The repository Railway configuration uses:
+
+- Railpack builder;
+- `npm run db:migrate` as pre-deploy command;
+- `node scripts/start-production.cjs` as production start command;
+- `/api/health` as the health check;
+- restart-on-failure policy.
+
+`NEXT_PUBLIC_APP_URL` in Railway production should be `https://sukuunova-production.up.railway.app`.
+
+A release is not complete because a branch or PR exists. For production work verify:
+
+1. code is reviewed/merged to `main`;
+2. dependency and lockfile state is coherent;
+3. relevant tests/build checks pass;
+4. migrations are safe and Railway pre-deploy succeeds;
+5. Railway deployment succeeds;
+6. `https://sukuunova-production.up.railway.app/api/health` is healthy;
+7. Railway runtime logs show no unexpected failure;
+8. affected browser workflows are tested at `https://sukuunova-production.up.railway.app`;
+9. QR/public links resolve to the Railway production origin rather than a preview domain.
+
+Do not claim a change is production-complete without this evidence.
+
+See `docs/RAILWAY_PRODUCTION.md` for deployment/environment details.
+
+---
+
+# Environment and secrets
+
+Secrets belong in deployment configuration, never source control or browser-visible code.
+
+Important categories include:
+
+- database access;
+- school/platform/guardian authentication secrets;
+- QR/signature secrets;
+- AI configuration;
+- messaging/WhatsApp provider credentials;
+- biometric encryption material;
+- backup encryption keys;
+- destructive maintenance authorization.
+
+Production `NEXT_PUBLIC_APP_URL` is not a secret and should point to the canonical Railway production origin.
+
+---
+
+# Current engineering reality
+
+SukuuNova has substantial foundations across multi-tenancy, authentication, permissions, auditing, academics, finance, attendance, messaging, safety, platform management, subscriptions, support, identity cards and AI-assisted workflows.
+
+However, route existence is not proof of complete end-to-end behavior. A route may be fully operational, partially implemented, read-only, intentionally safe-fallback, visually polished but incomplete, or awaiting an external integration.
+
+Therefore:
+
+> **Never infer completion from a route, model, button, card, HTTP 200 or screenshot alone.**
+
+The goal is system-wide correctness: complete real workflows, eliminate misleading prototype behavior, strengthen tenant and role enforcement, improve responsive UX, test real journeys and verify Railway production behavior.
+
+---
+
+# Future directions
+
+SukuuNova is intended to grow further into a full school operating platform, including:
+
+- deeper device attendance infrastructure;
+- secure biometric terminal integrations;
+- offline-first attendance and gate operations;
+- Ghana-focused payments/reconciliation;
+- richer management analytics;
+- controlled AI school-operations assistance;
+- stronger intervention/academic-support tools;
+- comprehensive family/mobile experiences;
+- communications campaigns and delivery analytics;
+- deeper admissions/enrolment automation;
+- accounting/payment/document/calendar integrations;
+- authorized group benchmarking without breaking tenant boundaries;
+- partner APIs and webhooks.
+
+Future integrations must preserve tenant isolation, authorization and audit boundaries.
 
 ---
 
@@ -816,30 +796,53 @@ Agents working on SukuuNova must:
 
 Never:
 
-- cross tenant boundaries;
+- cross school/tenant boundaries;
 - trust frontend-only authorization;
 - expose secrets;
-- silently mutate official academic/financial records with AI;
+- silently mutate official academic or financial history with AI;
 - fake successful persistence;
 - destroy financial history casually;
 - introduce a competing design system without reason;
-- make destructive operations accidental/one-click;
-- assume route existence means feature completion;
-- replace an existing secure workflow without understanding downstream dependencies;
-- call a non-Railway preview a production deployment.
+- make destructive operations accidentally one-click;
+- assume a route means a function works;
+- replace an existing secure workflow without tracing its dependencies;
+- use a preview provider URL as the SukuuNova production origin.
 
 ---
 
 # Definition of done
 
-A SukuuNova feature is done when the intended user can complete the real workflow safely and confidently.
+A SukuuNova function is done when its intended user can complete the real workflow safely.
 
-That means:
+That requires:
 
 **Correct data + correct authorization + correct tenant scope + correct business rules + usable UI + complete states + auditability where needed + tests + successful Railway production verification.**
 
-The final product question is:
+The practical question is:
 
-> **Could a real school use this operation confidently on a busy day without needing to understand how the database works?**
+> **Could a real school use this operation confidently on a busy day without needing to understand the database?**
 
 If not, keep working.
+
+---
+
+# AI coding-agent operating rule
+
+For every task:
+
+**Inspect deeply → understand the workflow → trace UI → server → authorization → database → downstream effects → repair the underlying logic → enforce security → make the UI coherent → test the journey → verify Railway production → move to the next problem.**
+
+AI agents must:
+
+- work only on SukuuNova;
+- read this README before modifying the system;
+- preserve tenant isolation and authorization;
+- reuse existing services and primitives;
+- avoid fake functionality;
+- avoid unnecessary rewrites;
+- avoid major dependency upgrades without a deliberate plan;
+- treat migration names as historical technical identifiers;
+- report uncertainty instead of inventing behavior;
+- never claim production success without Railway deployment/health/browser evidence.
+
+SukuuNova is one evolving system. The goal is continuous improvement in reliability, usefulness, security and product coherence.
