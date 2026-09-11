@@ -15,7 +15,7 @@ import {
   updateIdentityCardSettings,
   type IdentityCardScope,
 } from "@/lib/identity-card-service";
-import { buildIdentityCardBulkPdfV2, ID_CARD_PACK_LIMIT } from "@/lib/identity-card-print-v2";
+import { buildIdentityCardBulkPdfV3, ID_CARD_PACK_LIMIT } from "@/lib/identity-card-print-v3";
 
 const schema = z.discriminatedUnion("action", [
   z.object({
@@ -58,9 +58,8 @@ export async function POST(request: Request) {
     if (input.action === "download" && input.scope === "selected" && !input.ids?.length) throw new AppError("Select at least one card to download.", 400, "NO_SELECTION");
     if (input.action === "download" && input.scope === "class" && !input.classId) throw new AppError("Choose a class to download.", 400, "CLASS_REQUIRED");
 
-    // The tenant transaction now contains only database work. The expensive PDF
-    // renderer executes after the transaction commits, which avoids Railway's
-    // observed Prisma P2028 failures when a print pack takes >5 seconds.
+    // Keep tenant database work short. PDF generation is deliberately outside
+    // this transaction so large Railway print jobs cannot hit Prisma P2028.
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "identity_cards:manage");
       if (input.action === "configure") {
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
 
     if (result.kind === "json") return NextResponse.json({ ok: true, result: result.value });
 
-    const pdf = await buildIdentityCardBulkPdfV2(result.cards, result.school, new URL(request.url).origin);
+    const pdf = await buildIdentityCardBulkPdfV3(result.cards, result.school, new URL(request.url).origin);
     const suffix = result.totalParts > 1 ? `-part-${result.part}-of-${result.totalParts}` : "";
     return new NextResponse(pdf, {
       status: 200,
