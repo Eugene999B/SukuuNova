@@ -15,6 +15,7 @@ import "./students-simple.css";
 import "@/components/students/add-student-dialog.css";
 
 type StudentActionState = { message: string | null };
+const ENTRY_TYPES = new Set(["New enrollment", "Transfer in", "Re-enrollment", "Returning learner"]);
 
 function createIndexNumber() {
   const year = new Date().getFullYear();
@@ -22,13 +23,15 @@ function createIndexNumber() {
 }
 
 async function getStudentsPageData(schoolId: string) {
-  return cachedSchoolRead(schoolId, "students-page", () => withTenant(schoolId, async (tx) => {
-    const [school, classes, students] = await Promise.all([
+  return cachedSchoolRead(schoolId, "students-page-v2", () => withTenant(schoolId, async (tx) => {
+    const [school, classes, students, academicYears] = await Promise.all([
       tx.school.findUnique({ where: { id: schoolId }, select: { name: true, uniqueCode: true } }),
       tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
       tx.student.findMany({ orderBy: [{ name: "asc" }], take: 250, select: { id: true, name: true, admissionNo: true, dob: true, status: true, photoUrl: true, class: { select: { id: true, name: true, level: true } }, _count: { select: { attendanceEvents: true, reportCards: true, invoices: true } } } }),
+      tx.academicYear.findMany({ orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true } }),
     ]);
-    return { school, classes, students };
+    const now = new Date();
+    return { school, classes, students, academicYears: academicYears.map((year) => ({ id: year.id, name: year.name, isCurrent: year.startDate <= now && year.endDate >= now })) };
   }), 30);
 }
 
@@ -38,20 +41,27 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
   const name = String(formData.get("name") ?? "").trim();
   const dobRaw = String(formData.get("dob") ?? "").trim();
   const classId = String(formData.get("classId") ?? "").trim();
+  const intakeAcademicYearId = String(formData.get("intakeAcademicYearId") ?? "").trim();
+  const admissionDateRaw = String(formData.get("admissionDate") ?? "").trim();
+  const entryType = String(formData.get("entryType") ?? "New enrollment").trim() || "New enrollment";
   const guardianName = String(formData.get("guardianName") ?? "").trim();
   const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
   const guardianRelationship = String(formData.get("guardianRelationship") ?? "Parent/Guardian").trim() || "Parent/Guardian";
   const photoData = String(formData.get("photoData") ?? "").trim();
   try {
     if (!name) throw new Error("Student name is required.");
-    if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large. Capture a smaller photo and try again.");
+    if (!intakeAcademicYearId) throw new Error("Choose the academic year in which the learner joined the school.");
+    if (!ENTRY_TYPES.has(entryType)) throw new Error("Choose a valid student entry type.");
+    if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large. Capture the live photo again.");
     if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
     await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "students:write");
-      if (classId) {
-        const schoolClass = await tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } });
-        if (!schoolClass) throw new Error("The selected class does not belong to this school.");
-      }
+      const [schoolClass, intakeYear] = await Promise.all([
+        classId ? tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } }) : Promise.resolve(null),
+        tx.academicYear.findFirst({ where: { id: intakeAcademicYearId, schoolId: session.schoolId }, select: { id: true, name: true } }),
+      ]);
+      if (classId && !schoolClass) throw new Error("The selected class does not belong to this school.");
+      if (!intakeYear) throw new Error("The selected intake academic year does not belong to this school.");
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${session.schoolId}`}))`;
       let indexNumber = createIndexNumber();
       for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -66,11 +76,13 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
         if ((error as { code?: string }).code === "P2002") throw new Error("A learner with this index number was just created. Try again.");
         throw error;
       }
+      const admissionDate = admissionDateRaw ? new Date(`${admissionDateRaw}T00:00:00.000Z`) : null;
+      await tx.$executeRaw`INSERT INTO "StudentAcademicIntake" ("schoolId","studentId","academicYearId","admissionDate","entryType","createdBy") VALUES (${session.schoolId},${student.id},${intakeAcademicYearId},${admissionDate},${entryType},${session.userId})`;
       if (guardianName && guardianPhone) {
         const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
         await tx.studentGuardian.create({ data: { schoolId: session.schoolId, studentId: student.id, guardianId: guardian.id, relationship: guardianRelationship, isPrimary: true } });
       }
-      await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
+      await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "student.created", entityType: "Student", entityId: student.id, after: { name, indexNumber, classId: classId || null, intakeAcademicYearId, intakeAcademicYear: intakeYear.name, admissionDate: admissionDateRaw || null, entryType, guardianLinked: Boolean(guardianName && guardianPhone), photoCaptured: Boolean(photoData) } } });
     });
     revalidatePath("/school/students");
   } catch (error) {
@@ -103,9 +115,10 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
       <div className="students-simple">
         <section className="students-simple-head">
           <div><h2>Student register</h2><p>Search the register first. Open a learner for their full record and printable school ID.</p></div>
-          <div className="students-simple-actions"><Link href="/school/id-cards" className="button secondary"><IdCard size={15} aria-hidden="true" /> ID cards</Link><AddStudentDialog classes={data.classes} action={createStudent} /></div>
+          <div className="students-simple-actions"><Link href="/school/id-cards" className="button secondary"><IdCard size={15} aria-hidden="true" /> ID cards</Link><AddStudentDialog classes={data.classes} academicYears={data.academicYears} action={createStudent} /></div>
         </section>
-        {canManageCards ? <section className="students-simple-section"><div className="students-simple-section-head"><div><h3>Student identity cards</h3><p>Download the whole student body or choose one class for an A4 print pack. Every card includes the school brand and signed verification QR.</p></div></div><IdentityCardBatchActions mode="students" classes={cardClasses}/></section> : null}
+        {data.canManageCards ? <section className="staff-form-note wide"><strong>Student identity cards</strong><span>Generate school-branded, QR-verifiable cards for the full student body.</span><IdentityCardBatchActions mode="students" classes={cardClasses}/></section> : null}
+        {canManageCards ? null : null}
         <section className="students-simple-stats" aria-label="Student register summary"><div className="students-simple-stat"><span>Active learners</span><strong>{activeCount}</strong></div><div className="students-simple-stat"><span>In a class</span><strong>{assignedCount}</strong></div><div className="students-simple-stat"><span>Needs placement</span><strong>{unassigned.length}</strong></div></section>
         <section className="students-simple-section"><div className="students-simple-section-head"><div><h3>Learners</h3><p>Search by name or index number, then narrow by class or status.</p></div></div><StudentDirectory students={data.students} classes={data.classes} initialClassId={params.classId} /></section>
         <details className="sn-progressive"><summary>Classes and placement</summary><div className="sn-progressive-body">{data.classes.length ? <div className="students-class-grid">{Object.entries(grouped).map(([level, sections]) => <div className="students-class-card" key={level}><div className="students-class-card-head"><strong>{level}</strong><span>{sections.reduce((sum, item) => sum + item._count.students, 0)} learners</span></div><div className="students-class-links">{sections.map((schoolClass) => <Link href={`/school/students?classId=${schoolClass.id}`} key={schoolClass.id}><span>{schoolClass.name}</span><strong>{schoolClass._count.students} →</strong></Link>)}</div></div>)}</div> : <div className="student-directory-empty"><strong>No classes created yet.</strong><span>Create the academic class structure before placing learners.</span></div>}</div></details>
