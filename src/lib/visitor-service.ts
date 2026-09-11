@@ -2,6 +2,7 @@ import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
 import { AppError } from "./errors";
 import { requirePermission } from "./rbac";
+import { requireActiveStaffTarget } from "./authorization";
 
 export async function signInVisitor(tx: TenantDb, input: { schoolId: string; actorId: string; name: string; phone?: string; purpose: string; hostStaffId?: string }) {
   await requirePermission(tx, input.actorId, "visitors:log");
@@ -9,8 +10,7 @@ export async function signInVisitor(tx: TenantDb, input: { schoolId: string; act
   const purpose = input.purpose.trim();
   if (!name || !purpose) throw new AppError("Visitor name and purpose are required.", 400, "INVALID_INPUT");
   if (input.hostStaffId) {
-    const host = await tx.user.findFirst({ where: { id: input.hostStaffId, schoolId: input.schoolId, status: "active" }, select: { id: true } });
-    if (!host) throw new AppError("Host staff member was not found in this school.", 404, "HOST_NOT_FOUND");
+    await requireActiveStaffTarget(tx, input.schoolId, input.hostStaffId);
   }
   const visitor = await tx.visitorLog.create({ data: { schoolId: input.schoolId, name, phone: input.phone?.trim(), purpose, hostStaffId: input.hostStaffId } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "visitor.signed_in", entityType: "VisitorLog", entityId: visitor.id, after: visitor });
