@@ -139,7 +139,7 @@ export async function resolveTermRoster(
 ) {
   const students = await tx.student.findMany({
     where: { schoolId: input.schoolId, status: "active", ...(input.studentIds?.length ? { id: { in: input.studentIds } } : {}) },
-    select: { id: true, name: true, classId: true },
+    select: { id: true, name: true, admissionNo: true, classId: true },
     orderBy: { id: "asc" },
   });
   const rows = [];
