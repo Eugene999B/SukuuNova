@@ -5,14 +5,14 @@ import { canGenerateArcadeInteractionContent, createArcadeInteractionQuestions, 
 import { canGenerateArcadeResponseContent, createArcadeResponseQuestions, type ArcadeResponseQuestion } from "./arcade-response-content";
 import { canGenerateArcadeWorldContent, createArcadeWorldQuestions, type ArcadeWorldQuestion } from "./arcade-world-content";
 import { arcadeQuestionHistorySignatures, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge, type ArcadeVariationAgeBand } from "./arcade-variation";
-import { buildAdaptiveLearningPlan, type AdaptiveHistoryRound } from "./adaptive-learning-director";
+import { buildAdaptiveLearningPlan, publicAdaptiveLearningPlan, type AdaptiveHistoryRound } from "./adaptive-learning-director";
 import type { ArcadeAgeBand } from "./arcade-catalog";
 
 type Context = { schoolId: string; guardianId: string; userId: string };
 type StartInput = { studentId: string; game: string; ageBand?: ArcadeAgeBand; easier?: boolean; roundLength?: number; challengeMode?: boolean };
 type StoredQuestion = ArcadeQuestion | ArcadeInteractionQuestion | ArcadeResponseQuestion | ArcadeWorldQuestion;
 type SnapshotRow = { settingsSnapshot: unknown };
-type HistoryRow = AdaptiveHistoryRound & { questions: unknown };
+type HistoryRow = AdaptiveHistoryRound & { questions: unknown; completedRoundCount: number };
 
 function object(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -28,17 +28,17 @@ function generate(game: string, difficulty: number, length: number): StoredQuest
 
 export async function startVariedArcadeRound(tx: TenantDb, context: Context, input: StartInput) {
   const round = await startArcadeRound(tx, context, input);
-  if (round.status !== "in_progress" || round.answers.some((answer) => answer.trim().length > 0)) return round;
-
   const snapshotRows = await tx.$queryRaw<SnapshotRow[]>`
     SELECT "settingsSnapshot" FROM "ArcadeRound"
     WHERE "schoolId"=${context.schoolId} AND "id"=${round.id} LIMIT 1
   `;
   const snapshot = object(snapshotRows[0]?.settingsSnapshot);
-  if (snapshot.variationVersion === 3 && snapshot.directorVersion === 1) return round;
+  const savedPlan = publicAdaptiveLearningPlan(snapshot.learningPlan);
+  if (round.status !== "in_progress" || round.answers.some((answer) => answer.trim().length > 0)) return { ...round, learningPlan: savedPlan };
+  if (snapshot.variationVersion === 3 && snapshot.directorVersion === 1) return { ...round, learningPlan: savedPlan };
 
   const history = await tx.$queryRaw<HistoryRow[]>`
-    SELECT "questions","difficulty","correct","roundLength" FROM "ArcadeRound"
+    SELECT "questions","difficulty","correct","roundLength",COUNT(*) OVER()::int AS "completedRoundCount" FROM "ArcadeRound"
     WHERE "schoolId"=${context.schoolId}
       AND "studentId"=${round.studentId}
       AND "game"=${round.game}
@@ -55,6 +55,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     ageBand,
     suggestedDifficulty: round.difficulty,
     completedRounds: history,
+    completedRoundCount: history[0]?.completedRoundCount ?? 0,
     missionId: round.id,
     challengeMode: round.challengeMode,
   });
@@ -92,5 +93,6 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     WHERE "schoolId"=${context.schoolId} AND "id"=${round.id} AND "status"='in_progress'
   `;
 
-  return readArcadeRound(tx, context, round.id);
+  const publicRound = await readArcadeRound(tx, context, round.id);
+  return { ...publicRound, learningPlan: publicAdaptiveLearningPlan(learningPlan) };
 }
