@@ -47,6 +47,7 @@ export default async function ReportRemarksCentre({ searchParams }: { searchPara
   });
 
   if (!data.school) return null;
+  const selectedTerm = data.term;
   const byClass = new Map(data.classes.map((schoolClass) => [schoolClass.id, [] as typeof data.reports]));
   for (const report of data.reports) byClass.get(report.termClassId)?.push(report);
 
@@ -62,7 +63,7 @@ export default async function ReportRemarksCentre({ searchParams }: { searchPara
         <form method="get" style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", padding: 14, border: "1px solid var(--color-border,var(--color-border))", borderRadius: 16, background: "var(--color-surface,var(--color-surface))", marginBottom: 14 }}>
           <label style={{ display: "grid", gap: 6, minWidth: 240 }}>
             <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--color-text-muted,var(--color-text-muted))" }}>Reporting term</span>
-            <select name="term" defaultValue={data.term?.id ?? ""} style={{ height: 40, border: "1px solid var(--color-border,var(--color-border))", borderRadius: 10, padding: "0 10px", background: "var(--color-surface-2,var(--color-bg))" }}>
+            <select name="term" defaultValue={selectedTerm?.id ?? ""} style={{ height: 40, border: "1px solid var(--color-border,var(--color-border))", borderRadius: 10, padding: "0 10px", background: "var(--color-surface-2,var(--color-bg))" }}>
               <option value="">Choose a term</option>
               {data.terms.map((term) => <option key={term.id} value={term.id}>{term.name}</option>)}
             </select>
@@ -70,7 +71,7 @@ export default async function ReportRemarksCentre({ searchParams }: { searchPara
           <button type="submit" style={{ height: 40, border: 0, borderRadius: 10, padding: "0 14px", background: "var(--color-brand,var(--color-brand-hover))", color: "white", fontWeight: 900 }}>Open term</button>
         </form>
 
-        {!data.term || !data.classes.length ? (
+        {!selectedTerm || !data.classes.length ? (
           <section style={{ padding: 30, border: "1px dashed var(--color-border,var(--color-border))", borderRadius: 16, textAlign: "center", background: "var(--color-surface,var(--color-surface))" }}>
             <strong>{!data.classes.length ? "No class-teacher classes are assigned to you." : "Choose a reporting term. SukuuNova will not guess across a gap or overlapping terms."}</strong>
           </section>
@@ -82,7 +83,7 @@ export default async function ReportRemarksCentre({ searchParams }: { searchPara
                 <section key={schoolClass.id} style={{ border: "1px solid var(--color-border,var(--sn-line))", borderRadius: 18, background: "var(--color-surface,var(--sn-line))", overflow: "hidden", boxShadow: "0 12px 30px var(--sn-line)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "15px 16px", borderBottom: "1px solid var(--color-border,var(--color-border))" }}>
                     <div><strong style={{ fontSize: 14 }}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name}</strong><small style={{ display: "block", marginTop: 4, color: "var(--color-text-muted,var(--color-text-muted))", fontSize: 9 }}>{reports.length} report{reports.length === 1 ? "" : "s"} for this term</small></div>
-                    <Link href={`/school/report-cards?term=${encodeURIComponent(data.term.id)}&classId=${encodeURIComponent(schoolClass.id)}`} style={{ fontSize: 9, fontWeight: 900, textDecoration: "none" }}>Open reports →</Link>
+                    <Link href={`/school/report-cards?term=${encodeURIComponent(selectedTerm.id)}&classId=${encodeURIComponent(schoolClass.id)}`} style={{ fontSize: 9, fontWeight: 900, textDecoration: "none" }}>Open reports →</Link>
                   </div>
                   {reports.length ? <div>{reports.map((report) => <div key={report.id} style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 12, alignItems: "center", padding: "12px 16px", borderBottom: "1px solid var(--color-bg-subtle)" }}><div><strong style={{ display: "block", fontSize: 11 }}>{report.student.name}</strong><small style={{ display: "block", marginTop: 3, color: "var(--color-text-muted,var(--color-text-muted))", fontSize: 8 }}>{report.student.admissionNo}</small></div><span style={{ fontSize: 8, fontWeight: 900, color: report.status === "draft" ? "var(--color-warning)" : "var(--color-text-muted)" }}>{report.status === "draft" ? "EDITABLE" : "LOCKED"}</span><Link href={`/school/report-cards/${report.id}/remarks`} style={{ border: "1px solid var(--color-border,var(--sn-line))", borderRadius: 10, padding: "8px 10px", fontSize: 8, fontWeight: 900, textDecoration: "none", color: "var(--color-text-primary,var(--sn-line))" }}>{report.status === "draft" ? "Write remark" : "View report"}</Link></div>)}</div> : <div style={{ padding: 18, color: "var(--color-text-muted,var(--color-text-muted))", fontSize: 10 }}>No report card has been generated for this class and term yet.</div>}
                 </section>
