@@ -34,8 +34,8 @@ function oneClass(rows: ClassEvidenceRow[], code: string): string | null {
  *  4. Existing class-specific invoice lines for legacy finance history.
  *  5. Student.classId only as a compatibility projection when no historical evidence exists.
  *
- * New term-bound writers should preserve the resolved class in their own immutable snapshot
- * and schools should create/confirm Enrollment rows so the final fallback disappears naturally.
+ * Draft enrolments are intentionally not historical truth. Strict writers reject them;
+ * read-only compatibility resolution may continue to stronger legacy evidence instead.
  */
 export async function resolveStudentTermClass(
   tx: TenantDb,
@@ -59,10 +59,7 @@ export async function resolveStudentTermClass(
     input.termId,
   );
   const enrollment = enrollments[0] ?? null;
-  if (enrollment && enrollment.status !== "withdrawn") {
-    if (input.requireOfficialEnrollment && !["ready", "confirmed"].includes(enrollment.status)) {
-      throw new AppError("This learner's enrolment is still a draft for the selected term.", 409, "TERM_ENROLLMENT_NOT_READY");
-    }
+  if (enrollment && ["ready", "confirmed"].includes(enrollment.status)) {
     return {
       schoolId: input.schoolId,
       studentId: input.studentId,
@@ -76,6 +73,9 @@ export async function resolveStudentTermClass(
   if (enrollment?.status === "withdrawn" && input.requireOfficialEnrollment) {
     throw new AppError("This learner is withdrawn from the selected term.", 409, "TERM_ENROLLMENT_WITHDRAWN");
   }
+  if (enrollment?.status === "draft" && input.requireOfficialEnrollment) {
+    throw new AppError("This learner's enrolment is still a draft for the selected term.", 409, "TERM_ENROLLMENT_NOT_READY");
+  }
 
   const scoreClassId = oneClass(await tx.$queryRawUnsafe<ClassEvidenceRow[]>(
     `SELECT DISTINCT a."classId"
@@ -87,7 +87,7 @@ export async function resolveStudentTermClass(
     input.termId,
   ), "AMBIGUOUS_SCORE_CLASS_HISTORY");
   if (scoreClassId) {
-    return { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, academicYearId: term.academicYearId, classId: scoreClassId, source: "score_history", enrollmentStatus: null };
+    return { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, academicYearId: term.academicYearId, classId: scoreClassId, source: "score_history", enrollmentStatus: enrollment?.status ?? null };
   }
 
   const snapshotClassId = oneClass(await tx.$queryRawUnsafe<ClassEvidenceRow[]>(
@@ -101,7 +101,7 @@ export async function resolveStudentTermClass(
     input.termId,
   ), "AMBIGUOUS_REPORT_CLASS_HISTORY");
   if (snapshotClassId) {
-    return { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, academicYearId: term.academicYearId, classId: snapshotClassId, source: "report_snapshot", enrollmentStatus: null };
+    return { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, academicYearId: term.academicYearId, classId: snapshotClassId, source: "report_snapshot", enrollmentStatus: enrollment?.status ?? null };
   }
 
   const invoiceClassId = oneClass(await tx.$queryRawUnsafe<ClassEvidenceRow[]>(
@@ -115,7 +115,7 @@ export async function resolveStudentTermClass(
     input.termId,
   ), "AMBIGUOUS_INVOICE_CLASS_HISTORY");
   if (invoiceClassId) {
-    return { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, academicYearId: term.academicYearId, classId: invoiceClassId, source: "invoice_history", enrollmentStatus: null };
+    return { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, academicYearId: term.academicYearId, classId: invoiceClassId, source: "invoice_history", enrollmentStatus: enrollment?.status ?? null };
   }
 
   if (!student.classId) throw new AppError("This learner has no class context for the selected term.", 409, "TERM_CLASS_NOT_FOUND");
@@ -129,13 +129,13 @@ export async function resolveStudentTermClass(
     academicYearId: term.academicYearId,
     classId: student.classId,
     source: "current_projection",
-    enrollmentStatus: null,
+    enrollmentStatus: enrollment?.status ?? null,
   };
 }
 
 export async function resolveTermRoster(
   tx: TenantDb,
-  input: { schoolId: string; termId: string; studentIds?: string[] },
+  input: { schoolId: string; termId: string; studentIds?: string[]; requireOfficialEnrollment?: boolean },
 ) {
   const students = await tx.student.findMany({
     where: { schoolId: input.schoolId, status: "active", ...(input.studentIds?.length ? { id: { in: input.studentIds } } : {}) },
@@ -145,11 +145,19 @@ export async function resolveTermRoster(
   const rows = [];
   for (const student of students) {
     try {
-      const context = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: student.id, termId: input.termId });
+      const context = await resolveStudentTermClass(tx, {
+        schoolId: input.schoolId,
+        studentId: student.id,
+        termId: input.termId,
+        requireOfficialEnrollment: input.requireOfficialEnrollment,
+      });
       rows.push({ ...student, termClassId: context.classId, classSource: context.source, enrollmentStatus: context.enrollmentStatus });
     } catch (error) {
-      if (error instanceof AppError && error.code === "TERM_CLASS_NOT_FOUND") rows.push({ ...student, termClassId: null, classSource: null, enrollmentStatus: null });
-      else throw error;
+      if (error instanceof AppError && ["TERM_CLASS_NOT_FOUND", "TERM_ENROLLMENT_REQUIRED", "TERM_ENROLLMENT_NOT_READY", "TERM_ENROLLMENT_WITHDRAWN"].includes(error.code)) {
+        rows.push({ ...student, termClassId: null, classSource: null, enrollmentStatus: null });
+      } else {
+        throw error;
+      }
     }
   }
   return rows;
