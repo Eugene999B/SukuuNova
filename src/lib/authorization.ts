@@ -50,6 +50,12 @@ export const TEACHING_ROLE_KEYS = new Set<string>([
   "department_head",
 ]);
 
+export const FAMILY_PORTAL_ROLE_KEYS = new Set<string>([
+  "parent",
+  "guardian",
+  "student",
+]);
+
 export type SchoolWorkspace = "school" | "teacher";
 
 function normalizeRoleKey(name: string): string {
@@ -58,6 +64,15 @@ function normalizeRoleKey(name: string): string {
 
 export function roleKeyForName(name: string): string {
   return SYSTEM_ROLE_KEYS[name as keyof typeof SYSTEM_ROLE_KEYS] ?? normalizeRoleKey(name);
+}
+
+export function isFamilyPortalRoleKey(roleKey: string): boolean {
+  return FAMILY_PORTAL_ROLE_KEYS.has(roleKey.trim());
+}
+
+export function isSchoolStaffRoleKey(roleKey: string): boolean {
+  const normalized = roleKey.trim();
+  return Boolean(normalized) && !isFamilyPortalRoleKey(normalized);
 }
 
 export function resolveSchoolWorkspace(roleKeys: string[]): SchoolWorkspace {
