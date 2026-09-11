@@ -6,6 +6,7 @@ import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { alignActiveIdentityCardValidity } from "@/lib/identity-card-policy";
+import { addBulkIdentityCardCropMarks } from "@/lib/identity-card-output";
 import {
   buildIdentityCardPdf,
   getIdentityCardSettings,
@@ -72,7 +73,9 @@ export async function POST(request: Request) {
       const cards = (await getIdentityCardsByScope(tx, session.schoolId, school.uniqueCode, scope, input.ids ?? [], session.userId, input.classId))
         .filter((card) => card.status === "active" && !card.isExpired);
       if (!cards.length) throw new AppError("No current identity cards matched this selection.", 404, "NO_CARDS");
-      return { kind: "pdf" as const, pdf: await buildIdentityCardPdf(cards, school, new URL(request.url).origin), scope: input.scope };
+      const rawPdf = await buildIdentityCardPdf(cards, school, new URL(request.url).origin);
+      const pdf = await addBulkIdentityCardCropMarks(rawPdf, cards.length);
+      return { kind: "pdf" as const, pdf, scope: input.scope, cardCount: cards.length };
     });
 
     if (result.kind === "json") return NextResponse.json({ ok: true, result: result.value });
@@ -80,8 +83,10 @@ export async function POST(request: Request) {
       status: 200,
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": `attachment; filename="${schoolSafeFilename(session.schoolId)}-${result.scope}-identity-cards-front-back.pdf"`,
+        "content-disposition": `attachment; filename="${schoolSafeFilename(session.schoolId)}-${result.scope}-identity-cards-a4-duplex.pdf"`,
         "cache-control": "private, no-store",
+        "x-sukuunova-print-layout": "A4-duplex-long-edge-CR80-85.60x53.98mm",
+        "x-sukuunova-card-count": String(result.cardCount),
       },
     });
   } catch (error) {
