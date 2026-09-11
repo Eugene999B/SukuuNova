@@ -114,9 +114,11 @@ export async function authenticateGuardianUser(input: { schoolCode: string; iden
       WHERE g."schoolId" = ${directory.schoolId}
         AND u."status" = 'active'
         AND (u."email" = ${identifier} OR u."phone" = ${identifier})
-      LIMIT 1`;
+      ORDER BY g."id"
+      LIMIT 2`;
+    if (guardianRows.length !== 1) throw new UnauthorizedError(LOGIN_FAILURE);
     const guardian = guardianRows[0];
-    if (!guardian || !(await compare(input.password, guardian.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
+    if (!(await compare(input.password, guardian.passwordHash))) throw new UnauthorizedError(LOGIN_FAILURE);
     return { userId: guardian.userId, guardianId: guardian.guardianId, schoolId: directory.schoolId, name: guardian.guardianName, schoolName: school.name, needsPasswordChange: Boolean(guardian.needsPasswordChange) };
   });
 }
