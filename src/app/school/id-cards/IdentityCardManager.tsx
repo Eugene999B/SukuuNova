@@ -39,7 +39,7 @@ type Card = {
 
 type SchoolClass = { id: string; name: string };
 type StatusFilter = "current" | "all" | "revoked" | "expired";
-type PrintStage = "preparing" | "rendering" | "combining" | "saving";
+type PrintStage = "preparing" | "rendering" | "combining" | "saving" | "retrying";
 type PrintProgress = {
   label: string;
   stage: PrintStage;
@@ -47,9 +47,11 @@ type PrintProgress = {
   totalParts: number;
   completedCards: number;
   totalCards: number;
+  retryAttempt?: number;
 };
 
 const CLIENT_PRINT_PACK = 32;
+const PRINT_RETRIES = 2;
 
 function isCurrent(card: Card) {
   return card.status === "active" && !card.isExpired;
@@ -69,6 +71,16 @@ function chunk<T>(items: T[], size: number) {
   return parts;
 }
 
+function sleep(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(resolve, ms);
+    signal.addEventListener("abort", () => {
+      window.clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    }, { once: true });
+  });
+}
+
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -77,13 +89,18 @@ function saveBlob(blob: Blob, filename: string) {
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function pdfBytesBlob(bytes: Uint8Array) {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return new Blob([copy.buffer], { type: "application/pdf" });
 }
 
 function responseFilename(response: Response, fallback: string) {
   const disposition = response.headers.get("content-disposition") ?? "";
-  const match = disposition.match(/filename="([^"]+)"/i);
-  return match?.[1] || fallback;
+  return disposition.match(/filename="([^"]+)"/i)?.[1] || fallback;
 }
 
 export default function IdentityCardManager({ schoolName }: { schoolName: string }) {
@@ -134,14 +151,14 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
   }), [cards, classId, kind, query, statusFilter]);
 
   const currentFiltered = filtered.filter(isCurrent);
-  const selectableIds = currentFiltered.map((card) => card.id);
-  const allFilteredSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
   const currentStudents = cards.filter((card) => card.personType === "student" && isCurrent(card));
   const currentStaff = cards.filter((card) => card.personType === "staff" && isCurrent(card));
   const currentCards = cards.filter(isCurrent);
-  const portraitMissing = currentCards.filter((card) => !card.photoReady).length;
   const selectedCurrent = cards.filter((card) => selected.has(card.id) && isCurrent(card));
   const selectedClassCards = classId === "all" ? [] : currentStudents.filter((card) => card.classId === classId);
+  const selectableIds = currentFiltered.map((card) => card.id);
+  const allFilteredSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
+  const portraitMissing = currentCards.filter((card) => !card.photoReady).length;
 
   function toggle(id: string) {
     const card = cards.find((item) => item.id === id);
@@ -166,18 +183,33 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
     printAbortRef.current?.abort();
   }
 
-  async function requestPrintPart(ids: string[], part: number, totalParts: number, signal: AbortSignal) {
-    const response = await fetch("/api/school/identity-cards", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      signal,
-      body: JSON.stringify({ action: "download", scope: "selected", ids, part, totalParts }),
-    });
-    if (!response.ok) {
+  async function requestPrintPart(
+    ids: string[],
+    part: number,
+    totalParts: number,
+    signal: AbortSignal,
+    label: string,
+    completedCards: number,
+    totalCards: number,
+  ) {
+    let lastMessage = `Unable to prepare print pack ${part} of ${totalParts}.`;
+    for (let attempt = 0; attempt <= PRINT_RETRIES; attempt += 1) {
+      if (attempt > 0) {
+        setPrintProgress({ label, stage: "retrying", currentPart: part, totalParts, completedCards, totalCards, retryAttempt: attempt });
+        await sleep(650 * attempt, signal);
+      }
+      const response = await fetch("/api/school/identity-cards", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        signal,
+        body: JSON.stringify({ action: "download", scope: "selected", ids, part, totalParts }),
+      });
+      if (response.ok) return response;
       const body = await response.json().catch(() => ({}));
-      throw new Error(body.message || body.error || `Unable to prepare print pack ${part} of ${totalParts}.`);
+      lastMessage = body.message || body.error || lastMessage;
+      if (response.status < 500 || attempt === PRINT_RETRIES) throw new Error(lastMessage);
     }
-    return response;
+    throw new Error(lastMessage);
   }
 
   async function downloadBulk(label: string, targetCards: Card[]) {
@@ -187,10 +219,9 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
       return;
     }
 
-    const busyKey = `bulk-${label}`;
     const controller = new AbortController();
     printAbortRef.current = controller;
-    setBusy(busyKey);
+    setBusy(`bulk-${label}`);
     setMessage("");
     setError("");
 
@@ -199,37 +230,49 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
     setPrintProgress({ label, stage: "preparing", currentPart: 0, totalParts: parts.length, completedCards: 0, totalCards: printable.length });
 
     try {
-      const buffers: ArrayBuffer[] = [];
+      const pdfLib = parts.length > 1 ? await import("pdf-lib") : null;
+      const combined = pdfLib ? await pdfLib.PDFDocument.create() : null;
+      let singleBlob: Blob | null = null;
       let completedCards = 0;
 
       for (let index = 0; index < parts.length; index += 1) {
         const part = parts[index];
         setPrintProgress({ label, stage: "rendering", currentPart: index + 1, totalParts: parts.length, completedCards, totalCards: printable.length });
-        const response = await requestPrintPart(part.map((card) => card.id), index + 1, parts.length, controller.signal);
-        buffers.push(await response.arrayBuffer());
+        const response = await requestPrintPart(
+          part.map((card) => card.id),
+          index + 1,
+          parts.length,
+          controller.signal,
+          label,
+          completedCards,
+          printable.length,
+        );
+
+        if (combined && pdfLib) {
+          const source = await pdfLib.PDFDocument.load(await response.arrayBuffer());
+          const pages = await combined.copyPages(source, source.getPageIndices());
+          pages.forEach((page) => combined.addPage(page));
+        } else {
+          singleBlob = await response.blob();
+        }
+
         completedCards += part.length;
         setPrintProgress({ label, stage: "rendering", currentPart: index + 1, totalParts: parts.length, completedCards, totalCards: printable.length });
       }
 
       let finalBlob: Blob;
-      if (buffers.length === 1) {
-        finalBlob = new Blob([buffers[0]], { type: "application/pdf" });
-      } else {
+      if (combined) {
         setPrintProgress({ label, stage: "combining", currentPart: parts.length, totalParts: parts.length, completedCards: printable.length, totalCards: printable.length });
-        const { PDFDocument } = await import("pdf-lib");
-        const combined = await PDFDocument.create();
-        for (const buffer of buffers) {
-          const source = await PDFDocument.load(buffer);
-          const pages = await combined.copyPages(source, source.getPageIndices());
-          pages.forEach((page) => combined.addPage(page));
-        }
-        const bytes = await combined.save({ useObjectStreams: true, addDefaultPage: false });
-        finalBlob = new Blob([bytes], { type: "application/pdf" });
+        finalBlob = pdfBytesBlob(await combined.save({ useObjectStreams: true, addDefaultPage: false }));
+      } else if (singleBlob) {
+        finalBlob = singleBlob;
+      } else {
+        throw new Error("The print engine completed without producing a PDF.");
       }
 
       setPrintProgress({ label, stage: "saving", currentPart: parts.length, totalParts: parts.length, completedCards: printable.length, totalCards: printable.length });
       saveBlob(finalBlob, downloadName(schoolName, label));
-      setMessage(`${printable.length} front-and-back ID card${printable.length === 1 ? "" : "s"} prepared successfully. The final PDF is arranged on A4 duplex sheets at exact CR80 size. Print at 100% / Actual Size and flip on the long edge.`);
+      setMessage(`${printable.length} front-and-back ID card${printable.length === 1 ? "" : "s"} prepared successfully. Print the A4 duplex PDF at 100% / Actual Size and flip on the long edge.`);
     } catch (reason) {
       if (reason instanceof DOMException && reason.name === "AbortError") setError("ID-card printing was cancelled before the file was created.");
       else setError(reason instanceof Error ? reason.message : "Unable to create the print pack.");
@@ -242,7 +285,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
 
   async function downloadSingle(card: Card) {
     if (!isCurrent(card)) return;
-    const printHref = card.personType === "student"
+    const href = card.personType === "student"
       ? `/api/school/identity-cards/student/${encodeURIComponent(card.studentId ?? "")}`
       : `/api/school/identity-cards/staff/${encodeURIComponent(card.staffId ?? "")}`;
     const controller = new AbortController();
@@ -252,7 +295,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
     setError("");
     setPrintProgress({ label: card.personName, stage: "rendering", currentPart: 1, totalParts: 1, completedCards: 0, totalCards: 1 });
     try {
-      const response = await fetch(printHref, { signal: controller.signal, cache: "no-store" });
+      const response = await fetch(href, { signal: controller.signal, cache: "no-store" });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.message || body.error || "Unable to prepare this identity card.");
@@ -283,7 +326,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || body.error || "Unable to save ID card validity.");
-      setMessage(`ID card validity updated to ${validityMonths / 12} year${validityMonths === 12 ? "" : "s"}. Current cards were refreshed; reprint active cards so the QR and expiry match.`);
+      setMessage(`ID card validity updated to ${validityMonths / 12} year${validityMonths === 12 ? "" : "s"}. Reprint active cards so expiry and QR credentials match.`);
       setSelected(new Set());
       await load();
     } catch (reason) {
@@ -294,10 +337,10 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
   }
 
   async function mutate(action: "reissue" | "revoke", cardId: string) {
-    const confirmation = action === "reissue"
+    const prompt = action === "reissue"
       ? "Reissue this card? The current credential will stop verifying as current."
       : "Revoke this card? It will immediately stop verifying as current.";
-    if (!window.confirm(confirmation)) return;
+    if (!window.confirm(prompt)) return;
     setBusy(cardId);
     setMessage("");
     setError("");
@@ -322,30 +365,32 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
   const progressPercent = printProgress
     ? Math.max(4, Math.min(100, Math.round((printProgress.completedCards / Math.max(1, printProgress.totalCards)) * 100)))
     : 0;
-  const progressText = printProgress?.stage === "combining"
-    ? "Combining all prepared sheets into one PDF…"
-    : printProgress?.stage === "saving"
-      ? "Final file is ready — starting your download…"
-      : printProgress?.stage === "rendering"
-        ? `Preparing print pack ${printProgress.currentPart} of ${printProgress.totalParts}…`
-        : "Starting secure print preparation…";
+  const progressText = printProgress?.stage === "retrying"
+    ? `Print pack ${printProgress.currentPart} had a temporary error — retrying (${printProgress.retryAttempt}/${PRINT_RETRIES})…`
+    : printProgress?.stage === "combining"
+      ? "Combining prepared sheets into one PDF…"
+      : printProgress?.stage === "saving"
+        ? "Final file is ready — starting your download…"
+        : printProgress?.stage === "rendering"
+          ? `Preparing print pack ${printProgress.currentPart} of ${printProgress.totalParts}…`
+          : "Starting secure print preparation…";
 
   return <div className="identity-manager">
     <section className="identity-manager-command">
-      <div><span className="app-eyebrow">SCHOOL IDENTITY</span><h2>Professional student & staff ID cards</h2><p>Government-style visual hierarchy, school branding and a secure two-sided CR80 layout. Bulk jobs are automatically split into safe server-sized packs, then recombined into one downloadable PDF so large schools do not hit database transaction timeouts.</p></div>
+      <div><span className="app-eyebrow">SCHOOL IDENTITY</span><h2>Professional student & staff ID cards</h2><p>Two-sided CR80 school credentials with a resilient large-school print engine. Long jobs are divided into safe server packs, streamed into one browser-side PDF, retried on temporary server errors, and kept outside database transactions.</p></div>
       <button type="button" className="app-pill" onClick={() => void load()} disabled={loading || Boolean(busy)}><RefreshCw size={14}/> Refresh</button>
     </section>
 
     <section className="identity-manager-settings">
-      <div><SlidersHorizontal size={18}/><span><strong>Card validity</strong><small>One school-wide period for all student and staff ID downloads. Default: 5 years.</small></span></div>
+      <div><SlidersHorizontal size={18}/><span><strong>Card validity</strong><small>One school-wide period for student and staff credentials. Default: 5 years.</small></span></div>
       <label><span>Validity period</span><select value={validityMonths} onChange={(event) => setValidityMonths(Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => (index + 1) * 12).map((months) => <option value={months} key={months}>{months / 12} year{months === 12 ? "" : "s"}</option>)}</select></label>
       <button type="button" className="button primary" disabled={Boolean(busy)} onClick={() => void saveValidity()}>{busy === "validity" ? <><LoaderCircle className="identity-spin" size={14}/> Saving…</> : "Save validity"}</button>
     </section>
 
     <section className="identity-manager-settings identity-print-guide">
-      <div><Printer size={18}/><span><strong>Printer setup · CR80 85.60 × 53.98 mm</strong><small>ISO ID-1 dimensions used by bank cards and professional PVC school ID printers.</small></span></div>
+      <div><Printer size={18}/><span><strong>CR80 · 85.60 × 53.98 mm</strong><small>Standard ID-1 physical dimensions used by professional PVC card printers.</small></span></div>
       <div><span><strong>PVC / card printer</strong><small>Use Print ID on one person. The PDF contains exact-size Front and Back pages.</small></span></div>
-      <div><span><strong>A4 office / print shop</strong><small>Bulk jobs create cut-ready, mirrored duplex sheets. Print 100% / Actual Size, long-edge flip.</small></span></div>
+      <div><span><strong>A4 office / print shop</strong><small>Bulk jobs are cut-ready and mirrored for duplex alignment. Print 100% / Actual Size, long-edge flip.</small></span></div>
     </section>
 
     <section className="identity-manager-kpis">
@@ -357,15 +402,13 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
 
     <section className="app-card app-panel identity-manager-panel">
       <div className="identity-manager-toolbar">
-        <div className="identity-kind-tabs">
-          {(["all", "student", "staff"] as const).map((value) => <button key={value} type="button" className={kind === value ? "is-active" : ""} onClick={() => { setKind(value); if (value === "staff") setClassId("all"); }}>{value === "all" ? "All people" : value === "student" ? "Students" : "Staff"}</button>)}
-        </div>
+        <div className="identity-kind-tabs">{(["all", "student", "staff"] as const).map((value) => <button key={value} type="button" className={kind === value ? "is-active" : ""} onClick={() => { setKind(value); if (value === "staff") setClassId("all"); }}>{value === "all" ? "All people" : value === "student" ? "Students" : "Staff"}</button>)}</div>
         <label className="identity-search"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, student/staff ID, class, role or card number"/></label>
         <label className="identity-class-filter"><span>Class</span><select value={classId} onChange={(event) => { const value = event.target.value; setClassId(value); if (value !== "all") setKind("student"); }} disabled={!classes.length || kind === "staff"}><option value="all">All classes</option>{classes.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
         <label className="identity-class-filter"><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="current">Current only</option><option value="all">All records</option><option value="revoked">Revoked</option><option value="expired">Expired</option></select></label>
       </div>
 
-      <div className="identity-filter-summary"><strong>{filtered.length}</strong> record{filtered.length === 1 ? "" : "s"} shown · <strong>{currentFiltered.length}</strong> printable with the current filters.</div>
+      <div className="identity-filter-summary"><strong>{filtered.length}</strong> record{filtered.length === 1 ? "" : "s"} shown · <strong>{currentFiltered.length}</strong> printable.</div>
 
       <div className="identity-manager-actions">
         <button type="button" className="button primary" disabled={Boolean(busy) || currentFiltered.length === 0} onClick={() => void downloadBulk("filtered", currentFiltered)}><Download size={14}/> Print filtered ({currentFiltered.length})</button>
@@ -380,15 +423,11 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
 
       {printProgress ? <div className="identity-print-progress" role="status" aria-live="polite">
         <div className="identity-print-progress-icon"><LoaderCircle className="identity-spin" size={22}/></div>
-        <div className="identity-print-progress-copy">
-          <strong>{progressText}</strong>
-          <span>{printProgress.label} · {printProgress.completedCards} of {printProgress.totalCards} card{printProgress.totalCards === 1 ? "" : "s"} prepared</span>
-          <div className="identity-print-progress-track"><i style={{ width: `${progressPercent}%` }}/></div>
-        </div>
+        <div className="identity-print-progress-copy"><strong>{progressText}</strong><span>{printProgress.label} · {printProgress.completedCards} of {printProgress.totalCards} card{printProgress.totalCards === 1 ? "" : "s"} prepared</span><div className="identity-print-progress-track"><i style={{ width: `${progressPercent}%` }}/></div></div>
         <button type="button" className="identity-print-cancel" onClick={cancelPrint}><X size={14}/> Cancel</button>
       </div> : null}
 
-      {portraitMissing ? <div className="identity-manager-note"><ImageOff size={17}/><div><strong>{portraitMissing} current card{portraitMissing === 1 ? "" : "s"} will print with initials.</strong><span>Open the student or staff profile and add the official portrait for the finished credential.</span></div></div> : null}
+      {portraitMissing ? <div className="identity-manager-note"><ImageOff size={17}/><div><strong>{portraitMissing} current card{portraitMissing === 1 ? "" : "s"} will print with initials.</strong><span>Add an official portrait from the student or staff profile for the finished credential.</span></div></div> : null}
       {error ? <div className="identity-manager-alert is-error" role="alert">{error}</div> : null}
       {message ? <div className="identity-manager-alert is-success" role="status"><CheckCircle2 size={15}/>{message}</div> : null}
 
@@ -410,7 +449,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
         })}</tbody></table>
       </div>}
 
-      <div className="identity-print-engine-note"><FileDown size={15}/><span><strong>Large-school print engine:</strong> the browser prepares safe print packs of up to {Math.min(CLIENT_PRINT_PACK, serverPackLimit)} cards, merges them locally, and downloads one final PDF. This keeps database transactions short while preserving one easy-to-print file.</span></div>
+      <div className="identity-print-engine-note"><FileDown size={15}/><span><strong>Large-school print engine:</strong> jobs are rendered in safe packs of up to {Math.min(CLIENT_PRINT_PACK, serverPackLimit)} cards, each pack is released after its pages are copied, and one final PDF is downloaded. Temporary 5xx errors are retried automatically.</span></div>
     </section>
   </div>;
 }
