@@ -1,6 +1,6 @@
 /* Theme-specific preview overrides. The base preview remains the shared CR80 structure;
    these rules deliberately change composition as well as palette. */
-.identity-profile-card-wrap{--id-back-paper:var(--id-paper);--id-theme-ink:var(--identity-ink);--id-theme-muted:var(--identity-muted);--id-theme-surface:var(--identity-paper);--id-theme-surface-alt:var(--identity-soft);--id-theme-line:var(--identity-border);--id-theme-footer:var(--id-primary);--id-theme-footer-ink:#fff;--id-theme-portrait:var(--id-gold)}
+.identity-profile-card-wrap{--id-back-paper:var(--id-paper);--id-theme-ink:var(--identity-ink);--id-theme-muted:var(--identity-muted);--id-theme-surface:var(--identity-paper);--id-theme-surface-alt:var(--identity-soft);--id-theme-line:var(--identity-border);--id-theme-footer:var(--id-primary);--id-theme-footer-ink:var(--identity-paper);--id-theme-portrait:var(--id-gold)}
 .identity-profile-card-wrap .identity-profile-card{background:var(--id-paper);color:var(--id-theme-ink);border-color:var(--id-theme-line)}
 .identity-profile-card-wrap .identity-card-person h3,.identity-profile-card-wrap .identity-card-person p{color:var(--id-theme-ink)}
 .identity-profile-card-wrap .identity-card-person>span,.identity-profile-card-wrap .identity-card-person>small,.identity-profile-card-wrap .identity-card-person code,.identity-profile-card-wrap .identity-back-details>span,.identity-profile-card-wrap .identity-back-details>small{color:var(--id-theme-muted)}
@@ -40,9 +40,9 @@
 .identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-front-card:after{display:none}
 .identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-profile-card-head{padding-left:4%;grid-template-columns:auto minmax(0,1fr) auto}
 .identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-profile-card-head strong{color:var(--id-primary)}
-.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-school-mark{background:#fff}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-school-mark{background:var(--identity-paper)}
 .identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-card-front-main{grid-template-columns:30% 1fr;padding-left:4%;gap:26px}
-.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-portrait{border-color:var(--id-gold);box-shadow:0 12px 26px rgba(54,16,31,.24)}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-portrait{border-color:var(--id-gold);box-shadow:var(--identity-card-shadow-soft)}
 .identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-card-person{padding-left:12px}
 .identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-accent-bar{margin-left:39.5%;background:var(--id-gold)}
 .identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-security-orbits{display:none}
@@ -53,7 +53,7 @@
 .identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-front-card:after{display:none}
 .identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-profile-card-head{padding-left:5.5%}
 .identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-school-mark{border-radius:12px;border-color:var(--id-accent)}
-.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-kind-chip{background:color-mix(in srgb,var(--id-accent) 10%,#fff);border-color:color-mix(in srgb,var(--id-accent) 34%,transparent)}
+.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-kind-chip{background:color-mix(in srgb,var(--id-accent) 10%,var(--identity-paper));border-color:color-mix(in srgb,var(--id-accent) 34%,transparent)}
 .identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-accent-bar{margin-left:0;background:linear-gradient(90deg,var(--id-primary),var(--id-accent),var(--id-gold))}
 .identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-security-orbits{display:none}
 
@@ -67,12 +67,12 @@
 .identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-card-person>strong,.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-back-details>strong{color:var(--id-accent)}
 .identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-security-orbits{display:none}
 
-/* Back-side theme consistency. QR itself stays pure white/high-contrast for scanners. */
+/* Back-side theme consistency. QR itself stays fixed white/high-contrast for scanners. */
 .identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-back-card,
 .identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-back-card{background:var(--id-back-paper)}
 .identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-back-details>strong,
 .identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-back-details>small,
 .identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-back-details>strong,
 .identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-back-details>small{color:var(--id-theme-ink)}
-.identity-profile-card-wrap .identity-card-qr{background:#fff!important;color:var(--id-primary)!important}
-.identity-profile-card-wrap .identity-card-qr img{background:#fff!important}
+.identity-profile-card-wrap .identity-card-qr{background:var(--identity-paper)!important;color:var(--id-primary)!important}
+.identity-profile-card-wrap .identity-card-qr img{background:var(--identity-paper)!important}
