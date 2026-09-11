@@ -7,6 +7,7 @@ import type { TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
 import { hasPermission } from "./rbac";
+import { resolveTermRoster } from "./student-term-context";
 
 const WORK_KINDS = ["Classwork", "Homework", "Exercise", "Participation", "Quiz", "Exam"] as const;
 type WorkKind = typeof WORK_KINDS[number];
@@ -50,12 +51,16 @@ export async function getTeacherAcademicRoster(tx: TenantDb, input: { schoolId: 
   await assertTeacherCanUseContext(tx, input.schoolId, input.teacherId, input.classId, input.subjectId);
   const term = await tx.term.findFirst({ where: { schoolId: input.schoolId, id: input.termId }, select: { id: true } });
   if (!term) throw new AppError("Term not found.", 404, "NOT_FOUND");
-  const [students, works, assessments, notes] = await Promise.all([
-    tx.student.findMany({ where: { schoolId: input.schoolId, classId: input.classId, status: "active" }, select: { id: true, name: true, admissionNo: true }, orderBy: { name: "asc" } }),
+  const [roster, works, assessments, notes] = await Promise.all([
+    resolveTermRoster(tx, { schoolId: input.schoolId, termId: input.termId }),
     tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"assessmentId","title","kind","workDate","weekNumber","workNumber","maxScore","markingMode","status","dueAt","attemptLimit","attemptScorePolicy" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "workDate" DESC,"workNumber" ASC`, input.schoolId, input.classId, input.subjectId, input.termId),
     tx.assessment.findMany({ where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, termId: input.termId }, select: { id: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { id: true, studentId: true, value: true, status: true, enteredAt: true } } }, orderBy: { name: "asc" } }),
     tx.$queryRawUnsafe<Array<Record<string, unknown>>>(`SELECT id,"title","weekNumber","status","publishedAt","content" FROM "TeacherAcademicNote" WHERE "schoolId"=$1 AND "classId"=$2 AND "subjectId"=$3 AND "termId"=$4 ORDER BY "updatedAt" DESC`, input.schoolId, input.classId, input.subjectId, input.termId),
   ]);
+  const students = roster
+    .filter((student) => student.termClassId === input.classId)
+    .map((student) => ({ id: student.id, name: student.name, admissionNo: student.admissionNo }))
+    .sort((a, b) => a.name.localeCompare(b.name));
   return { students, works, assessments, notes };
 }
 
