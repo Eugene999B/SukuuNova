@@ -89,6 +89,19 @@ describe("Phase 1 MVP security and workflow gates", () => {
       scienceId = (await tx.subject.create({ data: { schoolId: fixture.schoolId, name: `Science ${fixture.schoolId}` } })).id;
       studentId = (await tx.student.create({ data: { schoolId: fixture.schoolId, admissionNo: `P1-${fixture.schoolId}`, name: "Linked Child", classId } })).id;
       otherStudentId = (await tx.student.create({ data: { schoolId: fixture.schoolId, admissionNo: `P2-${fixture.schoolId}`, name: "Other Child", classId: otherClassId } })).id;
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "Enrollment" ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","guardianVerified","documentsReady","feeReady","createdBy") VALUES ($1,$2,$3,$4,$5,$6,'confirmed','returning',true,true,true,$7),($8,$2,$9,$4,$5,$10,'confirmed','returning',true,true,true,$7)`,
+        `phase1-enrol-${studentId}`,
+        fixture.schoolId,
+        studentId,
+        academicYearId,
+        termId,
+        classId,
+        fixture.ownerId,
+        `phase1-enrol-${otherStudentId}`,
+        otherStudentId,
+        otherClassId,
+      );
       const guardian = await tx.guardian.create({ data: { schoolId: fixture.schoolId, userId: parentId, name: "Linked Parent", phone: "+233200000001" } });
       await tx.studentGuardian.create({ data: { schoolId: fixture.schoolId, studentId, guardianId: guardian.id, relationship: "Parent", isPrimary: true } });
       await tx.classSubjectTeacher.create({ data: { schoolId: fixture.schoolId, classId, subjectId: mathId, teacherId: subjectTeacherId } });
