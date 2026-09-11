@@ -4,15 +4,26 @@ import { requireGuardianSession } from "@/lib/guardian-auth";
 import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { ForbiddenError, routeError } from "@/lib/errors";
-import { arcadeOverview, guardianArcadeLeaderboard, readArcadeRound, saveArcadeRound } from "@/lib/arcade-service";
+import { arcadeOverview, guardianArcadeLeaderboard, readArcadeRound } from "@/lib/arcade-service";
+import { saveArcadeRoundWithTelemetry } from "@/lib/arcade-telemetry-service";
 import { startVariedArcadeRound } from "@/lib/arcade-varied-service";
 import { fingerprintNovaCoreInput, recordNovaCoreDecisionBestEffort } from "@/lib/novacore/decision-ledger";
 
 const ageBand = z.enum(["age_4_5","age_6_8","age_9_11","age_12_14","age_15_18"]);
+const typingTelemetry = z.object({
+  version: z.literal(1),
+  final: z.boolean(),
+  elapsedMs: z.number().finite().min(0).max(3600000),
+  totalKeystrokes: z.number().int().min(0).max(100000),
+  correctKeystrokes: z.number().int().min(0).max(100000),
+  accuracy: z.number().finite().min(0).max(100),
+  wpm: z.number().finite().min(0).max(300),
+  troublesomeKeys: z.array(z.object({ key: z.string().length(1), count: z.number().int().min(1).max(999) })).max(24),
+});
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("start"), studentId: z.string().min(1).max(100), game: z.string().min(1).max(100), ageBand: ageBand.optional(), easier: z.boolean().optional(), roundLength: z.number().int().min(1).max(50).optional(), challengeMode: z.boolean().optional() }),
   z.object({ action: z.literal("view"), roundId: z.string().min(1).max(100) }),
-  z.object({ action: z.literal("save"), roundId: z.string().min(1).max(100), answers: z.array(z.string().max(300)).min(1).max(50), finish: z.boolean() })
+  z.object({ action: z.literal("save"), roundId: z.string().min(1).max(100), answers: z.array(z.string().max(300)).min(1).max(50), finish: z.boolean(), typingTelemetry: typingTelemetry.optional() })
 ]);
 const leaderboardQuery = z.object({
   studentId: z.string().min(1).max(100),
@@ -74,7 +85,7 @@ export async function POST(request: Request) {
         return round;
       }
       if (input.action === "view") return readArcadeRound(tx, current, input.roundId);
-      return saveArcadeRound(tx, current, input);
+      return saveArcadeRoundWithTelemetry(tx, current, input);
     }));
   } catch (error) { return routeError(error); }
 }
