@@ -27,16 +27,24 @@ export type AdaptiveLearningPlan = {
   reasonCodes: string[];
 };
 
+export type PublicAdaptiveLearningPlan = Pick<AdaptiveLearningPlan,
+  "version" | "targetDifficulty" | "masteryPercent" | "supportMode" | "missionMode" | "speedScale" | "hazardDensity" | "hintStrength" | "bossGate" | "worldKey"
+>;
+
 export type AdaptiveLearningInput = {
   game: string;
   ageBand: ArcadeVariationAgeBand;
   suggestedDifficulty: number;
   completedRounds: AdaptiveHistoryRound[];
+  completedRoundCount?: number;
   missionId: string;
   challengeMode?: boolean;
 };
 
 const WORLDS: AdaptiveWorldKey[] = ["aurora-causeway", "meteor-foundry", "prism-canyon", "nova-citadel"];
+const SUPPORT_MODES = new Set<AdaptiveSupportMode>(["guided", "supported", "independent", "challenge"]);
+const MISSION_MODES = new Set<AdaptiveMissionMode>(["onboarding", "recovery", "reinforcement", "balanced", "stretch"]);
+const WORLD_KEYS = new Set<AdaptiveWorldKey>(WORLDS);
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.max(minimum, Math.min(maximum, value));
@@ -78,6 +86,7 @@ function generationSequence(target: number, mode: AdaptiveMissionMode) {
 
 export function buildAdaptiveLearningPlan(input: AdaptiveLearningInput): AdaptiveLearningPlan {
   const history = input.completedRounds.slice(0, 6);
+  const completedRoundCount = Math.max(history.length, Math.max(0, Math.trunc(input.completedRoundCount ?? history.length)));
   const recentAccuracy = weightedAccuracy(history);
   const targetDifficulty = arcadeDifficultyForAge(input.suggestedDifficulty, input.ageBand);
   const lastTwo = history.slice(0, 2).map(accuracy);
@@ -106,8 +115,8 @@ export function buildAdaptiveLearningPlan(input: AdaptiveLearningInput): Adaptiv
     input.challengeMode ? "challenge_requested" : "standard_mission",
   ];
 
-  const upcomingRunNumber = history.length + 1;
-  const bossGate = history.length >= 2 && (upcomingRunNumber % 3 === 0 || (Boolean(input.challengeMode) && supportMode === "challenge"));
+  const upcomingRunNumber = completedRoundCount + 1;
+  const bossGate = completedRoundCount >= 2 && (upcomingRunNumber % 3 === 0 || (Boolean(input.challengeMode) && supportMode === "challenge"));
   const worldSeed = stableHash(`${input.game}:${input.missionId}:${missionMode}:${supportMode}`);
   const worldKey = WORLDS[worldSeed % WORLDS.length];
   const paceBySupport: Record<AdaptiveSupportMode, number> = { guided: 0.84, supported: 0.92, independent: 1, challenge: 1.08 };
@@ -129,5 +138,32 @@ export function buildAdaptiveLearningPlan(input: AdaptiveLearningInput): Adaptiv
     bossGate,
     worldKey,
     reasonCodes,
+  };
+}
+
+export function publicAdaptiveLearningPlan(value: unknown): PublicAdaptiveLearningPlan | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.version !== 1) return null;
+  if (typeof candidate.targetDifficulty !== "number" || candidate.targetDifficulty < 1 || candidate.targetDifficulty > 5) return null;
+  if (candidate.masteryPercent !== null && (typeof candidate.masteryPercent !== "number" || candidate.masteryPercent < 0 || candidate.masteryPercent > 100)) return null;
+  if (!SUPPORT_MODES.has(candidate.supportMode as AdaptiveSupportMode)) return null;
+  if (!MISSION_MODES.has(candidate.missionMode as AdaptiveMissionMode)) return null;
+  if (typeof candidate.speedScale !== "number" || candidate.speedScale < 0.5 || candidate.speedScale > 1.5) return null;
+  if (typeof candidate.hazardDensity !== "number" || candidate.hazardDensity < 0 || candidate.hazardDensity > 1.5) return null;
+  if (![0, 1, 2].includes(candidate.hintStrength as number)) return null;
+  if (typeof candidate.bossGate !== "boolean") return null;
+  if (!WORLD_KEYS.has(candidate.worldKey as AdaptiveWorldKey)) return null;
+  return {
+    version: 1,
+    targetDifficulty: candidate.targetDifficulty,
+    masteryPercent: candidate.masteryPercent as number | null,
+    supportMode: candidate.supportMode as AdaptiveSupportMode,
+    missionMode: candidate.missionMode as AdaptiveMissionMode,
+    speedScale: candidate.speedScale,
+    hazardDensity: candidate.hazardDensity,
+    hintStrength: candidate.hintStrength as 0 | 1 | 2,
+    bossGate: candidate.bossGate,
+    worldKey: candidate.worldKey as AdaptiveWorldKey,
   };
 }
