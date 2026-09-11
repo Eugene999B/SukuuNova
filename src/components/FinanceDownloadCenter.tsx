@@ -53,22 +53,8 @@ const money = (value: number) =>
   `GHS ${value.toLocaleString("en-GH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const date = (value: string) =>
   new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeZone: "Africa/Accra" }).format(new Date(value));
-const csvCell = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
 
-function downloadCsv(filename: string, headers: string[], rows: unknown[][]) {
-  const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
-  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-export default function FinanceDownloadCenter({ mode }: { mode: string }) {
+export default function FinanceDownloadCenter({ mode, canExport }: { mode: string; canExport: boolean }) {
   const [data, setData] = useState<FinanceData | null>(null);
   const [error, setError] = useState("");
 
@@ -77,11 +63,11 @@ export default function FinanceDownloadCenter({ mode }: { mode: string }) {
     void fetch("/api/mvp/finance", { cache: "no-store" })
       .then(async (response) => {
         const body = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(body.message || body.error || "Finance exports could not be loaded.");
+        if (!response.ok) throw new Error(body.message || body.error || "Finance receipts could not be loaded.");
         if (active) setData(body as FinanceData);
       })
       .catch((cause) => {
-        if (active) setError(cause instanceof Error ? cause.message : "Finance exports could not be loaded.");
+        if (active) setError(cause instanceof Error ? cause.message : "Finance receipts could not be loaded.");
       });
     return () => {
       active = false;
@@ -111,73 +97,27 @@ export default function FinanceDownloadCenter({ mode }: { mode: string }) {
   }, [data, reversalByPayment]);
 
   const invoiceById = useMemo(() => new Map((data?.invoices || []).map((invoice) => [invoice.id, invoice])), [data]);
-  const dateStamp = new Date().toISOString().slice(0, 10);
-
-  function exportLedger() {
-    downloadCsv(
-      `sukuunova-finance-ledger-${dateStamp}.csv`,
-      ["Invoice ID", "Student", "Admission No", "Term", "Billed (GHS)", "Net Paid (GHS)", "Outstanding (GHS)", "Status"],
-      ledger.map((row) => [
-        row.id,
-        row.student?.name || "",
-        row.student?.admissionNo || "",
-        row.term?.name || "",
-        row.billed.toFixed(2),
-        row.paid.toFixed(2),
-        row.due.toFixed(2),
-        row.due <= 0 ? "Paid" : row.paid > 0 ? "Part paid" : row.status,
-      ]),
-    );
-  }
-
-  function exportPayments() {
-    downloadCsv(
-      `sukuunova-payments-${dateStamp}.csv`,
-      ["Payment ID", "Invoice ID", "Student", "Admission No", "Date", "Method", "Reference", "Gross (GHS)", "Reversed (GHS)", "Net (GHS)"],
-      (data?.payments || []).map((payment) => {
-        const invoice = invoiceById.get(payment.invoiceId);
-        const reversed = reversalByPayment.get(payment.id) || 0;
-        return [
-          payment.id,
-          payment.invoiceId,
-          invoice?.student?.name || "",
-          invoice?.student?.admissionNo || "",
-          date(payment.createdAt),
-          payment.method,
-          payment.reference || "",
-          amount(payment.amount).toFixed(2),
-          reversed.toFixed(2),
-          netPayment(payment).toFixed(2),
-        ];
-      }),
-    );
-  }
-
-  function exportArrears() {
-    downloadCsv(
-      `sukuunova-arrears-${dateStamp}.csv`,
-      ["Invoice ID", "Student", "Admission No", "Term", "Billed (GHS)", "Net Paid (GHS)", "Outstanding (GHS)"],
-      ledger
-        .filter((row) => row.due > 0)
-        .sort((a, b) => b.due - a.due)
-        .map((row) => [
-          row.id,
-          row.student?.name || "",
-          row.student?.admissionNo || "",
-          row.term?.name || "",
-          row.billed.toFixed(2),
-          row.paid.toFixed(2),
-          row.due.toFixed(2),
-        ]),
-    );
-  }
-
-  if (error) {
-    return <section className="fdc-error">{error}</section>;
-  }
-
   const recent = (data?.payments || []).slice(0, mode === "payments" ? 12 : 6);
   const outstanding = ledger.reduce((sum, row) => sum + row.due, 0);
+
+  const exportCard = (
+    href: string,
+    icon: React.ReactNode,
+    title: string,
+    detail: string,
+  ) => canExport ? (
+    <a href={href}>
+      <span>{icon}</span>
+      <div><strong>{title}</strong><small>{detail}</small></div>
+      <Download size={16} />
+    </a>
+  ) : (
+    <button type="button" disabled title="Your role does not have finance export permission.">
+      <span>{icon}</span>
+      <div><strong>{title}</strong><small>Export permission required</small></div>
+      <Download size={16} />
+    </button>
+  );
 
   return (
     <section className="fdc-shell" aria-label="Finance downloads and receipts">
@@ -193,29 +133,34 @@ export default function FinanceDownloadCenter({ mode }: { mode: string }) {
         <div className="fdc-trust">
           <ShieldCheck size={18} />
           <span>
-            <b>Permission-scoped</b>
-            <small>Exports use the same finance:read tenant boundary as the live ledger.</small>
+            <b>{canExport ? "Export access verified" : "Viewing access only"}</b>
+            <small>{canExport ? "Bulk downloads are checked server-side against exports:finance." : "Receipts remain available, but bulk financial exports require exports:finance."}</small>
           </span>
         </div>
       </header>
 
       <div className="fdc-downloads">
-        <button type="button" onClick={exportLedger} disabled={!data}>
-          <span><FileSpreadsheet size={18} /></span>
-          <div><strong>Finance ledger CSV</strong><small>{ledger.length} invoice records</small></div>
-          <Download size={16} />
-        </button>
-        <button type="button" onClick={exportPayments} disabled={!data}>
-          <span><ReceiptText size={18} /></span>
-          <div><strong>Payments CSV</strong><small>{data?.payments.length || 0} payment records</small></div>
-          <Download size={16} />
-        </button>
-        <button type="button" onClick={exportArrears} disabled={!data}>
-          <span><WalletCards size={18} /></span>
-          <div><strong>Arrears CSV</strong><small>{money(outstanding)} outstanding</small></div>
-          <Download size={16} />
-        </button>
+        {exportCard(
+          "/api/school/exports/fees",
+          <FileSpreadsheet size={18} />,
+          "Finance ledger CSV",
+          `${ledger.length} invoice records`,
+        )}
+        {exportCard(
+          "/api/school/exports/payments",
+          <ReceiptText size={18} />,
+          "Payments CSV",
+          `${data?.payments.length || 0} payment records`,
+        )}
+        {exportCard(
+          "/api/school/exports/arrears",
+          <WalletCards size={18} />,
+          "Arrears CSV",
+          `${money(outstanding)} outstanding`,
+        )}
       </div>
+
+      {error ? <div className="fdc-error">{error}</div> : null}
 
       <div className="fdc-receipts">
         <div className="fdc-receipts-head">
@@ -243,7 +188,7 @@ export default function FinanceDownloadCenter({ mode }: { mode: string }) {
             })}
           </div>
         ) : (
-          <div className="fdc-empty">Receipts will appear here as soon as payments are recorded.</div>
+          <div className="fdc-empty">{data ? "Receipts will appear here as soon as payments are recorded." : "Loading recent receipts…"}</div>
         )}
       </div>
     </section>
