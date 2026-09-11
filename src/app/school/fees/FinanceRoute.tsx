@@ -1,25 +1,40 @@
 import { AppShell } from "@/components/AppShell";
+import FinanceWorkspace from "@/components/FinanceWorkspace";
+import PayrollWorkspace from "@/components/PayrollWorkspace";
+import "@/components/payroll-finance-v4.css";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import { hasPermission } from "@/lib/rbac";
-import FinanceWorkspace from "@/components/FinanceWorkspace";
-import FinanceDownloadCenter from "@/components/FinanceDownloadCenter";
-import { FinanceEvidenceDock } from "@/components/FinanceEvidenceDock";
-import "@/components/finance-evidence.css";
-import "@/components/finance-workspace-simple.css";
-import "./finance-theme-parity.css";
 
-export default async function FinanceRoute({ mode }: { mode: "overview"|"fees"|"invoices"|"payments"|"arrears"|"reports"|"payroll" }) {
+export default async function FinanceRoute({ mode }: { mode: "overview" | "fees" | "invoices" | "payments" | "arrears" | "reports" | "payroll" }) {
   const session = await requireSchoolSession();
-  const data = await withTenant(session.schoolId, async (tx) => {
-    const [school, canExportFinance] = await Promise.all([
-      tx.school.findUnique({ where: { id: session.schoolId }, select: { name:true, uniqueCode:true } }),
-      hasPermission(tx, session.userId, "exports:finance"),
-    ]);
-    return { school, canExportFinance };
-  });
-  if (!data.school) throw new Error("School not found.");
-  const title = mode === "fees" ? "School Fees" : mode === "invoices" ? "Invoices" : mode === "payments" ? "Payments" : mode === "arrears" ? "Arrears & Balances" : mode === "reports" ? "Finance Reports" : mode === "payroll" ? "Payroll" : "Finance";
-  const showDownloads = mode === "overview" || mode === "payments" || mode === "arrears" || mode === "reports";
-  return <AppShell universe="school" title={title} subtitle="Fees, collections, receipts, exports and payroll." active={title} schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}><FinanceEvidenceDock /><FinanceWorkspace mode={mode} schoolName={data.school.name} />{showDownloads ? <FinanceDownloadCenter mode={mode} canExport={data.canExportFinance} /> : null}</AppShell>;
+  const school = await withTenant(session.schoolId, (tx) => tx.school.findUnique({
+    where: { id: session.schoolId },
+    select: { name: true, uniqueCode: true },
+  }));
+  if (!school) throw new Error("School not found.");
+
+  const active = mode === "invoices" ? "Invoices"
+    : mode === "payments" ? "Payments"
+      : mode === "arrears" ? "Arrears & Balances"
+        : mode === "reports" ? "Finance Reports"
+          : mode === "payroll" ? "Payroll"
+            : "School Fees";
+  const title = mode === "payroll" ? "Payroll" : mode === "reports" ? "Finance Reports" : mode === "arrears" ? "Arrears & Balances" : mode === "payments" ? "Payments" : mode === "invoices" ? "Invoices" : "School Fees";
+  const subtitle = mode === "payroll"
+    ? "Salary structures, payroll runs and staff payslips."
+    : "Billing, collections, balances, receipts and controlled financial reporting.";
+
+  return <AppShell
+    universe="school"
+    title={title}
+    subtitle={subtitle}
+    active={active}
+    schoolName={school.name}
+    schoolCode={school.uniqueCode}
+    userName={session.name}
+  >
+    {mode === "payroll"
+      ? <PayrollWorkspace schoolName={school.name} />
+      : <FinanceWorkspace mode={mode} schoolName={school.name} />}
+  </AppShell>;
 }
