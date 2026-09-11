@@ -37,6 +37,9 @@ DECLARE
   linked_student TEXT;
   linked_term TEXT;
   linked_invoice TEXT;
+  gross_amount NUMERIC(14,2);
+  existing_reduction NUMERIC(14,2);
+  proposed_reduction NUMERIC(14,2);
 BEGIN
   IF NEW."mode"='fixed' THEN NEW."mode":='amount'; END IF;
   IF NEW."kind"='discount' THEN NEW."kind":='waiver'; END IF;
@@ -53,7 +56,8 @@ BEGIN
   END IF;
 
   IF NEW."invoiceId" IS NOT NULL THEN
-    SELECT i."studentId",i."termId" INTO linked_student,linked_term
+    SELECT i."studentId",i."termId",i."grossAmount"
+      INTO linked_student,linked_term,gross_amount
       FROM "Invoice" i
      WHERE i."id"=NEW."invoiceId" AND i."schoolId"=NEW."schoolId";
     IF linked_student IS NULL THEN
@@ -75,6 +79,22 @@ BEGIN
   END IF;
   IF NEW."status"='approved' AND NEW."kind"='scholarship' AND NULLIF(BTRIM(NEW."fundingSource"),'') IS NULL THEN
     NEW."fundingSource":='School scholarship programme';
+  END IF;
+
+  -- All writers, including the legacy Phase 3 console, must obey the same
+  -- ceiling. Never silently clamp an over-discounted invoice to zero.
+  IF NEW."status"='approved' AND NEW."invoiceId" IS NOT NULL THEN
+    SELECT COALESCE(SUM(CASE WHEN a."mode"='percent' THEN gross_amount*LEAST(a."value",100)/100 ELSE a."value" END),0)
+      INTO existing_reduction
+      FROM "P3FinanceAdjustment" a
+     WHERE a."schoolId"=NEW."schoolId"
+       AND a."invoiceId"=NEW."invoiceId"
+       AND a."status"='approved'
+       AND a."id"<>NEW."id";
+    proposed_reduction:=CASE WHEN NEW."mode"='percent' THEN gross_amount*LEAST(NEW."value",100)/100 ELSE NEW."value" END;
+    IF COALESCE(existing_reduction,0)+COALESCE(proposed_reduction,0)>gross_amount+0.005 THEN
+      RAISE EXCEPTION 'Approved finance adjustments cannot exceed invoice gross fees' USING ERRCODE='23514';
+    END IF;
   END IF;
 
   IF TG_OP='UPDATE' AND OLD."status" IN ('approved','rejected') THEN
