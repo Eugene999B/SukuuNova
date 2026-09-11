@@ -6,7 +6,8 @@ import { IdentityCardPreview } from "@/components/IdentityCardPreview";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/rbac";
-import { identityCardSignature, identityCardVerificationPath, listIdentityCards } from "@/lib/identity-card-service";
+import { listIdentityCards } from "@/lib/identity-card-service";
+import { identityCardCompactVerificationPath } from "@/lib/identity-card-compact-verification";
 
 export default async function StudentIdCardPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSchoolSession();
@@ -32,7 +33,7 @@ export default async function StudentIdCardPage({ params }: { params: Promise<{ 
   if (!data) notFound();
 
   const verifyHref = data.currentCard
-    ? `${identityCardVerificationPath(data.school.uniqueCode, data.currentCard.serial)}?sig=${identityCardSignature(data.currentCard)}`
+    ? identityCardCompactVerificationPath(data.school.uniqueCode, data.currentCard)
     : null;
 
   return (

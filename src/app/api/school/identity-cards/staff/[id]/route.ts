@@ -4,11 +4,12 @@ import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { listIdentityCards } from "@/lib/identity-card-service";
+import { identityCardThemeKeyFromBrandColors } from "@/lib/identity-card-themes";
 import {
-  buildIdentityCardSinglePdfV3,
-  buildIdentityCardSvgV3,
+  buildIdentityCardSinglePdfV4,
+  buildIdentityCardSvgV4,
   type IdentityCardArtworkSide,
-} from "@/lib/identity-card-print-v3";
+} from "@/lib/identity-card-print-v4";
 
 export async function GET(
   request: Request,
@@ -24,9 +25,6 @@ export async function GET(
     if (requestedSide !== "front" && requestedSide !== "back") throw new AppError("Identity card side must be front or back.", 400, "INVALID_CARD_SIDE");
     const side = requestedSide as IdentityCardArtworkSide;
 
-    // Database work remains inside the tenant transaction, while rendering runs
-    // afterward. This prevents slow PDF generation from exhausting Prisma's
-    // interactive transaction timeout on Railway.
     const data = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "identity_cards:manage");
       const staff = await tx.user.findFirst({
@@ -46,19 +44,21 @@ export async function GET(
     });
 
     const safe = data.staffName.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "staff";
+    const themeKey = identityCardThemeKeyFromBrandColors(data.school.brandColors);
     if (requestedFormat === "svg") {
-      const svg = buildIdentityCardSvgV3(data.card, data.school, requestUrl.origin, side);
+      const svg = buildIdentityCardSvgV4(data.card, data.school, requestUrl.origin, side);
       return new NextResponse(svg, {
         status: 200,
         headers: {
           "content-type": "image/svg+xml; charset=utf-8",
           "content-disposition": `attachment; filename="${safe}-identity-card-${side}.svg"`,
           "cache-control": "private, no-store",
+          "x-sukuunova-card-theme": themeKey,
         },
       });
     }
 
-    const pdf = await buildIdentityCardSinglePdfV3(data.card, data.school, requestUrl.origin);
+    const pdf = await buildIdentityCardSinglePdfV4(data.card, data.school, requestUrl.origin);
     return new NextResponse(pdf, {
       status: 200,
       headers: {
@@ -67,6 +67,7 @@ export async function GET(
         "cache-control": "private, no-store",
         "x-sukuunova-id-card-sides": "front,back",
         "x-sukuunova-print-size": "CR80-85.60x53.98mm",
+        "x-sukuunova-card-theme": themeKey,
       },
     });
   } catch (error) {

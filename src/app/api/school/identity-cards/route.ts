@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
+import { appendSchoolAudit } from "@/lib/audit";
 import { alignActiveIdentityCardValidity } from "@/lib/identity-card-policy";
 import {
   getIdentityCardSettings,
@@ -15,7 +16,11 @@ import {
   updateIdentityCardSettings,
   type IdentityCardScope,
 } from "@/lib/identity-card-service";
-import { buildIdentityCardBulkPdfV3, ID_CARD_PACK_LIMIT } from "@/lib/identity-card-print-v3";
+import {
+  IDENTITY_CARD_THEME_KEYS,
+  identityCardThemeKeyFromBrandColors,
+} from "@/lib/identity-card-themes";
+import { buildIdentityCardBulkPdfV4, ID_CARD_PACK_LIMIT } from "@/lib/identity-card-print-v4";
 
 const schema = z.discriminatedUnion("action", [
   z.object({
@@ -27,6 +32,7 @@ const schema = z.discriminatedUnion("action", [
     totalParts: z.number().int().min(1).max(999).optional(),
   }),
   z.object({ action: z.literal("configure"), validityMonths: z.number().int().min(1).max(120) }),
+  z.object({ action: z.literal("set-theme"), themeKey: z.enum(IDENTITY_CARD_THEME_KEYS) }),
   z.object({ action: z.literal("reissue"), cardId: z.string().min(1).max(100) }),
   z.object({ action: z.literal("revoke"), cardId: z.string().min(1).max(100) }),
 ]);
@@ -36,14 +42,22 @@ export async function GET() {
     const session = await requireSchoolSession();
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "identity_cards:manage");
-      const [school, classes, settings] = await Promise.all([
+      const [school, classes, validitySettings] = await Promise.all([
         tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
         tx.class.findMany({ where: { schoolId: session.schoolId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
         getIdentityCardSettings(tx, session.schoolId),
       ]);
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
-      await alignActiveIdentityCardValidity(tx, session.schoolId, settings.validityMonths);
-      return { school, classes, settings, cards: await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId) };
+      await alignActiveIdentityCardValidity(tx, session.schoolId, validitySettings.validityMonths);
+      return {
+        school,
+        classes,
+        settings: {
+          ...validitySettings,
+          themeKey: identityCardThemeKeyFromBrandColors(school.brandColors),
+        },
+        cards: await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId),
+      };
     });
     return NextResponse.json({ ok: true, printPackLimit: ID_CARD_PACK_LIMIT, ...result });
   } catch (error) {
@@ -65,6 +79,29 @@ export async function POST(request: Request) {
       if (input.action === "configure") {
         return { kind: "json" as const, value: await updateIdentityCardSettings(tx, { schoolId: session.schoolId, actorId: session.userId, validityMonths: input.validityMonths }) };
       }
+      if (input.action === "set-theme") {
+        const before = await tx.school.findUnique({ where: { id: session.schoolId }, select: { brandColors: true } });
+        if (!before) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
+        const previousTheme = identityCardThemeKeyFromBrandColors(before.brandColors);
+        await tx.$executeRawUnsafe(
+          `UPDATE "School"
+           SET "brandColors" = COALESCE("brandColors", '{}'::jsonb) || jsonb_build_object('idCardTheme',$2::text)
+           WHERE "id"=$1`,
+          session.schoolId,
+          input.themeKey,
+        );
+        await appendSchoolAudit(tx, {
+          schoolId: session.schoolId,
+          actorId: session.userId,
+          action: "identity_cards.theme_updated",
+          entityType: "School",
+          entityId: session.schoolId,
+          before: { themeKey: previousTheme },
+          after: { themeKey: input.themeKey },
+        });
+        return { kind: "json" as const, value: { themeKey: input.themeKey } };
+      }
+
       const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } });
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
       if (input.action === "reissue") return { kind: "json" as const, value: await reissueIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
@@ -82,7 +119,7 @@ export async function POST(request: Request) {
 
     if (result.kind === "json") return NextResponse.json({ ok: true, result: result.value });
 
-    const pdf = await buildIdentityCardBulkPdfV3(result.cards, result.school, new URL(request.url).origin);
+    const pdf = await buildIdentityCardBulkPdfV4(result.cards, result.school, new URL(request.url).origin);
     const suffix = result.totalParts > 1 ? `-part-${result.part}-of-${result.totalParts}` : "";
     return new NextResponse(pdf, {
       status: 200,
@@ -93,6 +130,7 @@ export async function POST(request: Request) {
         "x-sukuunova-print-layout": "A4-duplex-long-edge-CR80-85.60x53.98mm",
         "x-sukuunova-card-count": String(result.cards.length),
         "x-sukuunova-print-part": `${result.part}/${result.totalParts}`,
+        "x-sukuunova-card-theme": identityCardThemeKeyFromBrandColors(result.school.brandColors),
       },
     });
   } catch (error) {

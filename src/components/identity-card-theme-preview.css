@@ -1,0 +1,78 @@
+/* Theme-specific preview overrides. The base preview remains the shared CR80 structure;
+   these rules deliberately change composition as well as palette. */
+.identity-profile-card-wrap{--id-back-paper:var(--id-paper);--id-theme-ink:var(--identity-ink);--id-theme-muted:var(--identity-muted);--id-theme-surface:var(--identity-paper);--id-theme-surface-alt:var(--identity-soft);--id-theme-line:var(--identity-border);--id-theme-footer:var(--id-primary);--id-theme-footer-ink:var(--identity-paper);--id-theme-portrait:var(--id-gold)}
+.identity-profile-card-wrap .identity-profile-card{background:var(--id-paper);color:var(--id-theme-ink);border-color:var(--id-theme-line)}
+.identity-profile-card-wrap .identity-card-person h3,.identity-profile-card-wrap .identity-card-person p{color:var(--id-theme-ink)}
+.identity-profile-card-wrap .identity-card-person>span,.identity-profile-card-wrap .identity-card-person>small,.identity-profile-card-wrap .identity-card-person code,.identity-profile-card-wrap .identity-back-details>span,.identity-profile-card-wrap .identity-back-details>small{color:var(--id-theme-muted)}
+.identity-profile-card-wrap .identity-portrait{border-color:var(--id-theme-portrait);background:var(--id-theme-surface-alt)}
+.identity-profile-card-wrap .identity-school-mark{border-color:var(--id-gold);background:var(--id-theme-surface)}
+.identity-profile-card-wrap .identity-school-mark img{background:var(--id-theme-surface)}
+.identity-profile-card-wrap .identity-card-foot,.identity-profile-card-wrap .identity-back-foot{background:var(--id-theme-footer);color:var(--id-theme-footer-ink)}
+.identity-profile-card-wrap .identity-card-foot small,.identity-profile-card-wrap .identity-card-foot strong,.identity-profile-card-wrap .identity-verified-mark b,.identity-profile-card-wrap .identity-back-foot{color:var(--id-theme-footer-ink)}
+.identity-profile-card-wrap .identity-back-card{background:var(--id-back-paper)}
+
+/* Heritage Gold — formal warm institutional credential with a vertical crest rail. */
+.identity-profile-card-wrap[data-id-theme="heritage-gold"] .identity-front-card:after{display:block;width:4.8%;background:var(--id-primary);box-shadow:5px 0 0 var(--id-gold)}
+.identity-profile-card-wrap[data-id-theme="heritage-gold"] .identity-security-orbits{display:block}
+
+/* Midnight Aurora — full dark credential, luminous slashes and cyan edge light. */
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-profile-card{background:linear-gradient(145deg,var(--id-paper),var(--id-primary));color:var(--id-theme-ink);border-color:color-mix(in srgb,var(--id-accent) 44%,var(--id-theme-line))}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-profile-card:before{background:repeating-linear-gradient(112deg,transparent 0 36px,color-mix(in srgb,var(--id-accent) 13%,transparent) 37px 39px,transparent 40px 72px)}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-front-card:after{left:0;right:0;top:auto;bottom:0;width:auto;height:5px;background:linear-gradient(90deg,var(--id-accent),var(--id-gold));box-shadow:none}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-profile-card-head{color:var(--id-theme-ink)}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-profile-card-head small{color:var(--id-accent)}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-kind-chip{color:var(--id-theme-ink);background:color-mix(in srgb,var(--id-accent) 14%,transparent);border-color:color-mix(in srgb,var(--id-accent) 42%,transparent)}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-card-person>strong,.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-back-details>strong{color:var(--id-accent)}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-card-qr{border-color:color-mix(in srgb,var(--id-accent) 35%,var(--id-theme-line))}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-security-orbits{right:-70px;top:40px;border-color:color-mix(in srgb,var(--id-accent) 20%,transparent);box-shadow:0 0 0 20px color-mix(in srgb,var(--id-accent) 6%,transparent),0 0 0 48px color-mix(in srgb,var(--id-gold) 4%,transparent),0 0 0 80px color-mix(in srgb,var(--id-accent) 4%,transparent)}
+
+/* Emerald Crest — circular crest field and generous academic whitespace. */
+.identity-profile-card-wrap[data-id-theme="emerald-crest"] .identity-front-card:before{background:radial-gradient(circle at -3% -8%,var(--id-primary) 0 24%,transparent 24.5%),radial-gradient(circle at 105% 94%,color-mix(in srgb,var(--id-gold) 18%,transparent) 0 20%,transparent 20.5%)}
+.identity-profile-card-wrap[data-id-theme="emerald-crest"] .identity-front-card:after{display:none}
+.identity-profile-card-wrap[data-id-theme="emerald-crest"] .identity-profile-card-head{padding-left:7.5%}
+.identity-profile-card-wrap[data-id-theme="emerald-crest"] .identity-school-mark{border-radius:50%;border-width:3px}
+.identity-profile-card-wrap[data-id-theme="emerald-crest"] .identity-portrait{border-radius:18px 5px 18px 5px}
+.identity-profile-card-wrap[data-id-theme="emerald-crest"] .identity-accent-bar{margin-left:0;background:linear-gradient(90deg,var(--id-primary),var(--id-gold),transparent)}
+
+/* Royal Burgundy — executive split field; portrait lives inside the burgundy side. */
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-profile-card{background:linear-gradient(105deg,var(--id-primary) 0 38%,var(--id-gold) 38% 39.5%,var(--id-paper) 39.5%)}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-front-card:before{display:none}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-front-card:after{display:none}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-profile-card-head{padding-left:4%;grid-template-columns:auto minmax(0,1fr) auto}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-profile-card-head strong{color:var(--id-primary)}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-school-mark{background:var(--identity-paper)}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-card-front-main{grid-template-columns:30% 1fr;padding-left:4%;gap:26px}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-portrait{border-color:var(--id-gold);box-shadow:var(--identity-card-shadow-soft)}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-card-person{padding-left:12px}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-accent-bar{margin-left:39.5%;background:var(--id-gold)}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-security-orbits{display:none}
+.identity-profile-card-wrap[data-id-theme="royal-burgundy"] .identity-back-card{background:linear-gradient(180deg,var(--id-back-paper),color-mix(in srgb,var(--id-primary) 6%,var(--id-back-paper)))}
+
+/* Azure Wave — airy blue card with layered waves under the data field. */
+.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-profile-card:before{background:radial-gradient(ellipse at 100% 116%,var(--id-primary) 0 39%,transparent 39.5%),radial-gradient(ellipse at 86% 112%,color-mix(in srgb,var(--id-accent) 82%,transparent) 0 34%,transparent 34.5%),radial-gradient(ellipse at 70% 112%,color-mix(in srgb,var(--id-gold) 27%,transparent) 0 28%,transparent 28.5%)}
+.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-front-card:after{display:none}
+.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-profile-card-head{padding-left:5.5%}
+.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-school-mark{border-radius:12px;border-color:var(--id-accent)}
+.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-kind-chip{background:color-mix(in srgb,var(--id-accent) 10%,var(--identity-paper));border-color:color-mix(in srgb,var(--id-accent) 34%,transparent)}
+.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-accent-bar{margin-left:0;background:linear-gradient(90deg,var(--id-primary),var(--id-accent),var(--id-gold))}
+.identity-profile-card-wrap[data-id-theme="azure-wave"] .identity-security-orbits{display:none}
+
+/* Graphite Pulse — high-tech charcoal card with grid and waveform accents. */
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-profile-card{background:var(--id-paper);color:var(--id-theme-ink);border-color:var(--id-theme-line)}
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-profile-card:before{background-image:linear-gradient(color-mix(in srgb,var(--id-accent) 8%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--id-gold) 7%,transparent) 1px,transparent 1px);background-size:30px 30px}
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-front-card:after{left:0;right:0;top:52%;bottom:auto;width:auto;height:3px;background:linear-gradient(90deg,var(--id-accent),var(--id-gold),var(--id-accent));box-shadow:0 22px 0 color-mix(in srgb,var(--id-gold) 28%,transparent)}
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-profile-card-head{color:var(--id-theme-ink)}
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-profile-card-head small{color:var(--id-accent)}
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-kind-chip{color:var(--id-theme-ink);border-color:color-mix(in srgb,var(--id-accent) 42%,transparent);background:color-mix(in srgb,var(--id-accent) 10%,transparent)}
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-card-person>strong,.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-back-details>strong{color:var(--id-accent)}
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-security-orbits{display:none}
+
+/* Back-side theme consistency. QR itself stays fixed white/high-contrast for scanners. */
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-back-card,
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-back-card{background:var(--id-back-paper)}
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-back-details>strong,
+.identity-profile-card-wrap[data-id-theme="midnight-aurora"] .identity-back-details>small,
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-back-details>strong,
+.identity-profile-card-wrap[data-id-theme="graphite-pulse"] .identity-back-details>small{color:var(--id-theme-ink)}
+.identity-profile-card-wrap .identity-card-qr{background:var(--identity-paper)!important;color:var(--id-primary)!important}
+.identity-profile-card-wrap .identity-card-qr img{background:var(--identity-paper)!important}
