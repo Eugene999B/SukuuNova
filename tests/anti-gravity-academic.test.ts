@@ -70,8 +70,9 @@ describe("anti-gravity academic invariants", () => {
     const { enterScore } = await import("../src/lib/gradebook-service");
     const tx = {
       $executeRaw: vi.fn().mockResolvedValue(0),
+      $queryRawUnsafe: vi.fn().mockResolvedValue([{ classId: "c", status: "confirmed" }]),
       assessment: { findFirst: vi.fn().mockResolvedValue({ id: "a", classId: "c", subjectId: "s", termId: "t", maxScore: 20 }) },
-      term: { findFirst: vi.fn().mockResolvedValue({ id: "t", isLocked: false, name: "T1" }) },
+      term: { findFirst: vi.fn().mockResolvedValue({ id: "t", academicYearId: "y", isLocked: false, name: "T1" }) },
       reportCard: { findFirst: vi.fn().mockResolvedValue(null) },
       student: { findFirst: vi.fn().mockResolvedValue({ id: "stu", classId: "c" }) },
       score: { findUnique: vi.fn().mockResolvedValue(null), upsert: vi.fn().mockResolvedValue({ id: "sc" }) },
