@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Flag, Gauge, Keyboard, LogOut, Target, Zap } from "lucide-react";
+import "./turbotype.css";
 
 type TypingTroubleKey = { key: string; count: number };
 export type TurboTypeTelemetry = {
