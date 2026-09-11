@@ -1,13 +1,7 @@
-import { AppShell } from "@/components/AppShell";
-import SchoolLifeStudio from "@/components/SchoolLifeStudio";
+import { redirect } from "next/navigation";
 import { requireSchoolSession } from "@/lib/auth";
-import { withTenant } from "@/lib/db";
-import { notFound } from "next/navigation";
-import "../school-life-light.css";
 
 export default async function InventoryPage() {
-  const session = await requireSchoolSession();
-  const school = await withTenant(session.schoolId, tx => tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }));
-  if (!school) notFound();
-  return <AppShell universe="school" title="Assets & Inventory" subtitle="Inventory." active="Assets & Inventory" schoolName={school.name} schoolCode={school.uniqueCode} userName={session.name}><div className="school-life-surface"><SchoolLifeStudio module="inventory" schoolName={school.name} userName={session.name} schoolId={session.schoolId} /></div></AppShell>;
+  await requireSchoolSession();
+  redirect("/school/properties");
 }
