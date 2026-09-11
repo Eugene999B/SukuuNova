@@ -3,7 +3,8 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
-import { buildSingleIdentityCardPdf, listIdentityCards } from "@/lib/identity-card-service";
+import { alignActiveIdentityCardValidity } from "@/lib/identity-card-policy";
+import { buildSingleIdentityCardPdf, getIdentityCardSettings, listIdentityCards } from "@/lib/identity-card-service";
 
 export async function GET(
   request: Request,
@@ -24,6 +25,8 @@ export async function GET(
         select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true },
       });
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
+      const settings = await getIdentityCardSettings(tx, session.schoolId);
+      await alignActiveIdentityCardValidity(tx, session.schoolId, settings.validityMonths);
       const card = (await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId))
         .find((item) => item.personType === "staff" && item.staffId === staff.id && item.status === "active" && !item.isExpired);
       if (!card) throw new AppError("No current identity card exists for this staff member.", 404, "NO_CURRENT_CARD");
@@ -35,7 +38,7 @@ export async function GET(
       status: 200,
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": `attachment; filename="${safe}-identity-card.pdf"`,
+        "content-disposition": `attachment; filename="${safe}-identity-card-front-back.pdf"`,
         "cache-control": "private, no-store",
       },
     });
