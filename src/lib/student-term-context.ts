@@ -32,15 +32,18 @@ function oneClass(rows: ClassEvidenceRow[], code: string): string | null {
  *  2. Existing score -> assessment class evidence for legacy terms.
  *  3. Frozen report-card snapshot classId for already-generated reports.
  *  4. Existing class-specific invoice lines for legacy finance history.
- *  5. Student.classId only as a compatibility projection when no historical evidence exists.
+ *  5. Student.classId only when a caller explicitly opts out of official context.
  *
- * Draft enrolments are intentionally not historical truth. Strict writers reject them;
- * read-only compatibility resolution may continue to stronger legacy evidence instead.
+ * Safe-by-default: term-bound callers require official enrolment or strong legacy
+ * evidence. Draft/withdrawn enrolments block operational use. Compatibility code
+ * must explicitly pass requireOfficialEnrollment:false before current projection
+ * is allowed.
  */
 export async function resolveStudentTermClass(
   tx: TenantDb,
   input: { schoolId: string; studentId: string; termId: string; requireOfficialEnrollment?: boolean },
 ): Promise<StudentTermClassContext> {
+  const requireOfficialEnrollment = input.requireOfficialEnrollment ?? true;
   const [term, student] = await Promise.all([
     tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, academicYearId: true } }),
     tx.student.findFirst({ where: { id: input.studentId, schoolId: input.schoolId }, select: { id: true, classId: true } }),
@@ -70,10 +73,10 @@ export async function resolveStudentTermClass(
       enrollmentStatus: enrollment.status,
     };
   }
-  if (enrollment?.status === "withdrawn" && input.requireOfficialEnrollment) {
+  if (enrollment?.status === "withdrawn" && requireOfficialEnrollment) {
     throw new AppError("This learner is withdrawn from the selected term.", 409, "TERM_ENROLLMENT_WITHDRAWN");
   }
-  if (enrollment?.status === "draft" && input.requireOfficialEnrollment) {
+  if (enrollment?.status === "draft" && requireOfficialEnrollment) {
     throw new AppError("This learner's enrolment is still a draft for the selected term.", 409, "TERM_ENROLLMENT_NOT_READY");
   }
 
@@ -119,8 +122,8 @@ export async function resolveStudentTermClass(
   }
 
   if (!student.classId) throw new AppError("This learner has no class context for the selected term.", 409, "TERM_CLASS_NOT_FOUND");
-  if (input.requireOfficialEnrollment) {
-    throw new AppError("Confirm this learner's enrolment for the selected term before creating new term-bound records.", 409, "TERM_ENROLLMENT_REQUIRED");
+  if (requireOfficialEnrollment) {
+    throw new AppError("Confirm this learner's enrolment for the selected term before creating or reading term-bound records.", 409, "TERM_ENROLLMENT_REQUIRED");
   }
   return {
     schoolId: input.schoolId,
