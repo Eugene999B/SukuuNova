@@ -5,7 +5,7 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Download, FileImage, LoaderCircle, ShieldCheck } from "lucide-react";
-import { identityCardQrSvgDataUri } from "@/lib/identity-card-output";
+import { identityCardQrSvgDataUri } from "@/lib/identity-card-qr";
 import "./identity-card-preview.css";
 
 type Props = {
@@ -123,18 +123,18 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
 
   return <section className="identity-profile-card-wrap" style={style}>
     <div className="identity-profile-print-note">
-      <div><strong>Secure CR80 school credential</strong><span>Front + Back · 85.60 × 53.98 mm · print at 100% / Actual Size</span></div>
-      <small>The layout uses a clean official-ID hierarchy: strong issuer identity, prominent portrait and school ID on the front; signed QR verification, emergency/contact information and return instructions on the back.</small>
+      <div><strong>Premium CR80 school credential</strong><span>Front + Back · 85.60 × 53.98 mm · print at 100% / Actual Size</span></div>
+      <small>Designed as an institution credential: strong school identity and portrait on the front; a cleaner high-contrast QR on the back opens a signed live SukuuNova authenticity and status check.</small>
     </div>
 
     <div className="identity-profile-sides">
       <div className="identity-profile-side">
-        <div className="identity-profile-side-label"><strong>Front</strong><span>Identity · portrait · school number</span></div>
+        <div className="identity-profile-side-label"><strong>Front</strong><span>Holder identity · school number · validity</span></div>
         <article className="identity-profile-card identity-front-card">
           <div className="identity-security-orbits" aria-hidden="true" />
           <header className="identity-profile-card-head">
             <div className="identity-school-mark">{school.logoUrl ? <img src={school.logoUrl} alt="" /> : <span>{initials(school.name)}</span>}</div>
-            <div className="identity-issuer-copy"><strong>{school.name}</strong><small>OFFICIAL SCHOOL CREDENTIAL</small></div>
+            <div className="identity-issuer-copy"><strong>{school.name}</strong><small>{card.personType === "student" ? "STUDENT IDENTITY CARD" : "STAFF IDENTITY CARD"}</small></div>
             <span className="identity-kind-chip">{card.personType === "student" ? "STUDENT" : "STAFF"}</span>
           </header>
           <div className="identity-accent-bar" />
@@ -148,7 +148,7 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
               <strong>{schoolId}</strong>
               <small>{card.personType === "student" ? "CLASS / HOUSE" : "ROLE / POSITION"}</small>
               <p>{roleLine}</p>
-              <small>CREDENTIAL NO.</small>
+              <small>CARD NO.</small>
               <code>{card.serial}</code>
             </div>
           </div>
@@ -156,18 +156,18 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
             <div><small>ISSUED</small><strong>{date(card.issuedAt)}</strong></div>
             <div><small>VALID UNTIL</small><strong>{date(card.expiresAt)}</strong></div>
             <span className={current ? "is-current" : "is-invalid"}>{current ? "ACTIVE" : card.status === "revoked" ? "REVOKED" : "EXPIRED"}</span>
-            <div className="identity-verified-mark"><small>SUKUUNOVA</small><b>VERIFIED SCHOOL ID</b></div>
+            <div className="identity-verified-mark"><small>SUKUUNOVA</small><b>SECURE SCHOOL ID</b></div>
           </footer>
         </article>
       </div>
 
       <div className="identity-profile-side">
-        <div className="identity-profile-side-label"><strong>Back</strong><span>Signed verification · contact · return</span></div>
+        <div className="identity-profile-side-label"><strong>Back</strong><span>Live QR verification · contact · return</span></div>
         <article className="identity-profile-card identity-back-card">
           <div className="identity-security-orbits" aria-hidden="true" />
           <header className="identity-profile-card-head identity-back-head">
             <div className="identity-school-mark">{school.logoUrl ? <img src={school.logoUrl} alt="" /> : <span>{initials(school.name)}</span>}</div>
-            <div className="identity-issuer-copy"><strong>{school.name}</strong><small>VERIFY · STATUS · AUTHENTICITY</small></div>
+            <div className="identity-issuer-copy"><strong>{school.name}</strong><small>LIVE CREDENTIAL VERIFICATION</small></div>
           </header>
           <div className="identity-accent-bar" />
           <div className="identity-back-main">
@@ -177,9 +177,9 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
               <span>{contactLabel}</span><strong>{contactName}</strong><small>{contactValue}</small>
               <div className="identity-signature-row"><div className="identity-signature-line"><i/><b>AUTHORISED SIGNATURE</b></div><em>School code · {school.uniqueCode}</em></div>
             </div>
-            <Link className="identity-card-qr" href={verifyHref} target="_blank"><img src={qrDataUri} alt="QR code for live ID verification"/><b>SCAN TO VERIFY</b><small>Signed live credential</small></Link>
+            <Link className="identity-card-qr" href={verifyHref} target="_blank"><img src={qrDataUri} alt="QR code for live ID verification"/><b>SCAN · VERIFY LIVE</b><small>Authenticity + current status</small></Link>
           </div>
-          <footer className="identity-back-foot">If found, return to {school.name}. This is an official school credential, not a national identity document.</footer>
+          <footer className="identity-back-foot">If found, return to {school.name}. School credential only · not a national identity document.</footer>
         </article>
       </div>
     </div>
@@ -188,7 +188,7 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
       <button type="button" className="button primary" disabled={Boolean(downloading)} onClick={() => void downloadAsset("pdf")}>{downloading === "pdf" ? <LoaderCircle className="identity-preview-spin" size={15}/> : <Download size={15}/>} {downloading === "pdf" ? "Preparing PDF…" : "PDF · front + back"}</button>
       <button type="button" className="button secondary" disabled={Boolean(downloading)} onClick={() => void downloadAsset("front")}>{downloading === "front" ? <LoaderCircle className="identity-preview-spin" size={15}/> : <FileImage size={15}/>} {downloading === "front" ? "Preparing…" : "Front SVG"}</button>
       <button type="button" className="button secondary" disabled={Boolean(downloading)} onClick={() => void downloadAsset("back")}>{downloading === "back" ? <LoaderCircle className="identity-preview-spin" size={15}/> : <FileImage size={15}/>} {downloading === "back" ? "Preparing…" : "Back SVG"}</button>
-      <Link className="button secondary" href={verifyHref} target="_blank"><ShieldCheck size={15}/> Open verification</Link>
+      <Link className="button secondary" href={verifyHref} target="_blank"><ShieldCheck size={15}/> Verify live</Link>
       {!card.photoReady ? <span className="identity-photo-warning">Add a captured portrait for the best printed ID.</span> : null}
     </div>
     {downloadStatus ? <div className="identity-preview-download-status is-success"><CheckCircle2 size={14}/>{downloadStatus}</div> : null}
