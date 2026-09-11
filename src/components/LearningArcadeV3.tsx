@@ -18,6 +18,18 @@ type Overview = {
   allowedAgeBands: AgeBand[];
 };
 type Question = { id: string; kind?: string; prompt: string; options: string[]; answer?: string; explanation?: string; correct?: boolean };
+type LearningPlan = {
+  version: 1;
+  targetDifficulty: number;
+  masteryPercent: number | null;
+  supportMode: "guided" | "supported" | "independent" | "challenge";
+  missionMode: "onboarding" | "recovery" | "reinforcement" | "balanced" | "stretch";
+  speedScale: number;
+  hazardDensity: number;
+  hintStrength: 0 | 1 | 2;
+  bossGate: boolean;
+  worldKey: "aurora-causeway" | "meteor-foundry" | "prism-canyon" | "nova-citadel";
+};
 type Round = {
   id: string;
   studentId: string;
@@ -32,6 +44,7 @@ type Round = {
   roundLength: number;
   score: number | null;
   questions: Question[];
+  learningPlan?: LearningPlan | null;
 };
 type Leaderboard = { rows: Array<{ rank: number; studentId: string; displayName: string; bestScore: number; totalXp: number; rounds: number }> };
 
@@ -84,9 +97,8 @@ export default function LearningArcadeV3() {
 
   const startRunner = () => run(async () => {
     if (!data?.selected || !ageBand) return;
-    // Phase-one compatibility: Nova Runner consumes the proven adaptive mathematics
-    // content pack while the old game UI remains retired. A later migration gives the
-    // new game its own historical key after production gameplay has been validated.
+    // Nova Runner deliberately keeps the proven mathematics history key while the
+    // replacement gameplay is validated, so existing mastery is never discarded.
     const next = await api("/api/guardian/arcade", { action: "start", studentId: data.selected.id, game: "math", ageBand, roundLength: 5 }) as Round;
     setRound(next); setResult(null); setLeaderboard(null);
   });
@@ -138,13 +150,13 @@ export default function LearningArcadeV3() {
     <div className="nova-arcade-toolbar"><div><h2>Choose your mission</h2><p>Only experiences that meet the new game standard appear as playable.</p></div>{data?.children?.length ? <select className="nova-arcade-select" aria-label="Learner" value={data.selected?.id ?? ""} onChange={(event) => void refresh(event.target.value)} disabled={loading || busy}>{data.children.map((child) => <option key={child.id} value={child.id}>{child.name} · {child.class?.name ?? "No class"}</option>)}</select> : null}</div>
 
     <div className="nova-game-grid">
-      <article className="nova-game-card primary"><div className="nova-game-logo">NR</div><h3>Nova Runner</h3><p>Race through an original sci-fi world. Jump hazards, collect Nova energy and enter Knowledge Gates where the mathematics changes with the learner’s level and recent play.</p><div className="nova-game-tags"><span>Mathematics</span><span>Adaptive</span><span>Runner</span><span>Keyboard + touch</span><span>5–10 min</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startRunner()} disabled={busy || loading || !data?.selected || !ageBand}><Play size={17} fill="currentColor"/>{busy ? "Preparing world…" : selectedProgress?.rounds ? "Continue Nova Runner" : "Play Nova Runner"}</button><button className="nova-rank-button" type="button" onClick={() => void loadLeaderboard()} disabled={busy || !data?.selected || !ageBand}><Medal size={16}/>Weekly ranking</button></div>{data?.allowedAgeBands?.length ? <div className="nova-game-actions"><label htmlFor="nova-age" className="nova-age-label">Learning band</label><select id="nova-age" className="nova-arcade-select" value={ageBand} onChange={(event) => setAgeBand(event.target.value as AgeBand)}>{data.allowedAgeBands.map((age) => <option key={age} value={age}>{ageLabels[age]}</option>)}</select></div> : null}</article>
+      <article className="nova-game-card primary"><div className="nova-game-logo">NR</div><h3>Nova Runner</h3><p>Race through an original sci-fi world. Jump hazards, collect Nova energy and enter Knowledge Gates where the mathematics changes with the learner’s level and recent play.</p><div className="nova-game-tags"><span>Mathematics</span><span>Adaptive Director</span><span>Runner</span><span>Keyboard + touch</span><span>5–10 min</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startRunner()} disabled={busy || loading || !data?.selected || !ageBand}><Play size={17} fill="currentColor"/>{busy ? "Preparing world…" : selectedProgress?.rounds ? "Continue Nova Runner" : "Play Nova Runner"}</button><button className="nova-rank-button" type="button" onClick={() => void loadLeaderboard()} disabled={busy || !data?.selected || !ageBand}><Medal size={16}/>Weekly ranking</button></div>{data?.allowedAgeBands?.length ? <div className="nova-game-actions"><label htmlFor="nova-age" className="nova-age-label">Learning band</label><select id="nova-age" className="nova-arcade-select" value={ageBand} onChange={(event) => setAgeBand(event.target.value as AgeBand)}>{data.allowedAgeBands.map((age) => <option key={age} value={age}>{ageLabels[age]}</option>)}</select></div> : null}</article>
       <article className="nova-game-card"><span className="nova-coming">IN PRODUCTION</span><div className="nova-game-logo" style={{ width: 58, height: 58, fontSize: 21 }}>TT</div><h3>TurboType</h3><p>Typing becomes a speed adventure with accuracy-based routes, troublesome-key training and racing missions.</p><div className="nova-game-ghost" aria-hidden="true"/></article>
       <article className="nova-game-card"><span className="nova-coming">IN PRODUCTION</span><div className="nova-game-logo" style={{ width: 58, height: 58, fontSize: 21 }}>AD</div><h3>AstroLab Defender</h3><p>Science decisions power shields, repair systems and defend a living space laboratory.</p><div className="nova-game-ghost" aria-hidden="true"/></article>
     </div>
 
     {leaderboard ? <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>Nova Runner · Weekly school-standard ranking</h3><p>Ranking stays inside the learner’s permitted school context.</p></div><Trophy size={22}/></div><div className="nova-leaderboard">{leaderboard.rows.length ? leaderboard.rows.map((row) => <div className="nova-leader-row" key={row.studentId}><b>#{row.rank}</b><strong>{row.displayName}</strong><span>{row.bestScore} best</span><span>{row.totalXp} XP · {row.rounds} runs</span></div>) : <div className="nova-empty">No ranked missions yet. Be the first to run this week.</div>}</div></section> : null}
 
-    <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>What changed</h3><p>The legacy game cards are no longer the player experience. Nova Runner is the first game on the replacement runtime.</p></div><Gamepad2 size={22}/></div><div className="nova-game-tags"><span><Rocket size={12}/> real-time game loop</span><span><Zap size={12}/> adaptive difficulty</span><span>recent-question variation</span><span>touch + keyboard</span><span>save/resume</span><span>school-scoped ranking</span><span>reduced motion</span></div></section>
+    <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>What changed</h3><p>The legacy game cards are no longer the player experience. Nova Runner is the first game on the replacement runtime.</p></div><Gamepad2 size={22}/></div><div className="nova-game-tags"><span><Rocket size={12}/> real-time game loop</span><span><Zap size={12}/> adaptive learning director</span><span>recent-question variation</span><span>touch + keyboard</span><span>save/resume</span><span>school-scoped ranking</span><span>reduced motion</span></div></section>
   </div>;
 }
