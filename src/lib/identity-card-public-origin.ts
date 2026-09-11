@@ -1,9 +1,11 @@
 import { AppError } from "./errors";
 
-type OriginEnvironment = Pick<
-  NodeJS.ProcessEnv,
-  "NODE_ENV" | "APP_URL" | "NEXT_PUBLIC_APP_URL" | "RAILWAY_PUBLIC_DOMAIN"
->;
+type OriginEnvironment = {
+  NODE_ENV?: string;
+  APP_URL?: string;
+  NEXT_PUBLIC_APP_URL?: string;
+  RAILWAY_PUBLIC_DOMAIN?: string;
+};
 
 function parsedOrigin(value: string | undefined) {
   if (!value?.trim()) return null;
@@ -27,6 +29,7 @@ function unsafePublicHost(url: URL) {
   return host === "localhost"
     || host === "0.0.0.0"
     || host === "::1"
+    || host === "[::1]"
     || host.startsWith("127.")
     || host.endsWith(".internal")
     || host.endsWith(".local");
@@ -58,7 +61,7 @@ export function identityCardPublicOrigin(
     return configured.origin;
   }
 
-  const fallback = requestUrl instanceof URL ? requestUrl : parsedOrigin(requestUrl);
+  const fallback = parsedOrigin(requestUrl instanceof URL ? requestUrl.toString() : requestUrl);
   if (!fallback) {
     throw new AppError(
       "The public ID-card verification URL could not be determined.",
