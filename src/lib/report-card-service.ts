@@ -8,6 +8,7 @@ import { calculateSubjectResult, gradeForPercentage } from "@/lib/assessment-eng
 import { overallTotalsForScope, passMarkForScale, promotionForRule, rankTotals, remarkForLine, rulesFor } from "@/lib/report-card-ranking";
 import { getClassSubjectIntelligence } from "@/lib/performance-intelligence";
 import { approveAndQueuePublicReportCard, readHeadRemark, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
+import { resolveStudentTermClass, resolveTermRoster } from "@/lib/student-term-context";
 
 type SubjectResult = { subject: string; ca: number | null; exam: number | null; total: number | null };
 type TemplateConfig = { style: string; primary: string; accent: string; watermark: string };
@@ -20,15 +21,18 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
   const school = await tx.school.findFirst({ select: { id: true, name: true, logoUrl: true, brandColors: true } });
   if (!school) throw new AppError("Report-card context is incomplete.", 404, "NOT_FOUND");
   const [student, term, settings] = await Promise.all([
-    tx.student.findUnique({ where: { id: studentId }, include: { class: true } }),
+    tx.student.findUnique({ where: { id: studentId } }),
     tx.term.findUnique({ where: { id: termId } }),
     tx.schoolSettings.findUnique({ where: { schoolId: school.id } })
   ]);
   if (!student || !term || !settings) throw new AppError("Report-card context is incomplete.", 404, "NOT_FOUND");
-  if (!student.classId) throw new AppError("Student has no class assignment.", 409, "NO_CLASS");
+  const termClass = await resolveStudentTermClass(tx, { schoolId: school.id, studentId, termId });
+  const historicalClass = await tx.class.findFirst({ where: { id: termClass.classId, schoolId: school.id } });
+  if (!historicalClass) throw new AppError("The learner's class for this term no longer exists.", 409, "TERM_CLASS_NOT_FOUND");
+  const reportStudent = { ...student, classId: historicalClass.id, class: historicalClass };
   const template = await tx.reportCardTemplate.findUnique({ where: { id: settings.reportCardTemplateId ?? "preset-classic-blue" } });
   if (!template) throw new AppError("Select a valid report-card template.", 409, "TEMPLATE_REQUIRED");
-  const assessments = await tx.assessment.findMany({ where: { termId, classId: student.classId }, include: { subject: true, scores: { where: { studentId } } }, orderBy: [{ subject: { name: "asc" } }, { type: "asc" }] });
+  const assessments = await tx.assessment.findMany({ where: { termId, classId: historicalClass.id }, include: { subject: true, scores: { where: { studentId } } }, orderBy: [{ subject: { name: "asc" } }, { type: "asc" }] });
   if (!assessments.length) throw new AppError("No assessments exist for this report card.", 409, "NO_ASSESSMENTS");
   const missing = assessments.filter((assessment) => assessment.scores.length === 0);
   if (missing.length > 0 && !settings.allowPartialReportCards) throw new AppError("Missing scores block report-card generation. Enable partial reports to override.", 409, "MISSING_SCORES");
@@ -37,8 +41,6 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
   const caWeight = Number(settings.gradeCaWeight); const examWeight = Number(settings.gradeExamWeight);
   if (!Number.isFinite(caWeight) || caWeight < 0 || !Number.isFinite(examWeight) || examWeight < 0 || caWeight + examWeight <= 0) throw new AppError("The school's grading weights are invalid.", 409, "INVALID_GRADING_CONFIGURATION");
   const results: SubjectResult[] = [];
-  // Same engine + rules as the print path: custom assessment categories win,
-  // otherwise the school's CA/exam split applies.
   const rules = rulesFor(settings);
   for (const [subject, rows] of grouped) {
     const result = calculateSubjectResult(
@@ -53,7 +55,7 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
     results.push({ subject, ca: bucketAvg("classwork"), exam: bucketAvg("exam"), total: result.total });
   }
   const attendance = await tx.attendanceEvent.findMany({ where: { studentId, type: "in", attendanceDate: { gte: term.startDate, lte: term.endDate } }, select: { attendanceDate: true, isLate: true } });
-  return { student, term, settings, school, template, results, attendance, caWeight, examWeight };
+  return { student: reportStudent, term, termClass, settings, school, template, results, attendance, caWeight, examWeight };
 }
 
 async function makePdf(data: Awaited<ReturnType<typeof reportData>>, remarks?: string) {
@@ -65,7 +67,7 @@ async function makePdf(data: Awaited<ReturnType<typeof reportData>>, remarks?: s
   if (data.school.logoUrl?.startsWith("data:image/")) { try { const separator = data.school.logoUrl.indexOf(","); if (separator < 1) throw new Error("Malformed school logo data URL."); const header = data.school.logoUrl.slice(0, separator); const bytes = Buffer.from(data.school.logoUrl.slice(separator + 1), "base64"); const logo = header.includes("png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes); const scale = Math.min(60 / logo.width, 48 / logo.height); page.drawImage(logo, { x: 475, y: 772, width: logo.width * scale, height: logo.height * scale }); } catch {} }
   if (config.watermark) page.drawText(config.watermark.slice(0, 36), { x: 145, y: 390, size: 42, font: bold, color: accent, opacity: 0.18, rotate: degrees(35) });
   const headerColor = config.style === "modern" ? rgb(1, 1, 1) : primary;
-  page.drawText(data.school.name, { x: 50, y: 798, size: 20, font: bold, color: headerColor }); page.drawText("SukuuNova Report Card · " + data.template.name, { x: 50, y: 774, size: 10, font: regular, color: headerColor }); page.drawText("Student: " + data.student.name, { x: 50, y: 730, size: 11, font: bold }); page.drawText("Class: " + (data.student.class?.name ?? "Unassigned"), { x: 320, y: 730, size: 11, font: regular }); page.drawText("Term: " + data.term.name, { x: 50, y: 710, size: 11, font: regular }); page.drawRectangle({ x: 45, y: 664, width: 500, height: 24, color: accent }); page.drawText("Subject", { x: 50, y: 675, size: 10, font: bold, color: primary }); page.drawText("CA", { x: 310, y: 675, size: 10, font: bold, color: primary }); page.drawText("Exam", { x: 380, y: 675, size: 10, font: bold, color: primary }); page.drawText("Total", { x: 465, y: 675, size: 10, font: bold, color: primary });
+  page.drawText(data.school.name, { x: 50, y: 798, size: 20, font: bold, color: headerColor }); page.drawText("SukuuNova Report Card · " + data.template.name, { x: 50, y: 774, size: 10, font: regular, color: headerColor }); page.drawText("Student: " + data.student.name, { x: 50, y: 730, size: 11, font: bold }); page.drawText("Class: " + data.student.class.name, { x: 320, y: 730, size: 11, font: regular }); page.drawText("Term: " + data.term.name, { x: 50, y: 710, size: 11, font: regular }); page.drawRectangle({ x: 45, y: 664, width: 500, height: 24, color: accent }); page.drawText("Subject", { x: 50, y: 675, size: 10, font: bold, color: primary }); page.drawText("CA", { x: 310, y: 675, size: 10, font: bold, color: primary }); page.drawText("Exam", { x: 380, y: 675, size: 10, font: bold, color: primary }); page.drawText("Total", { x: 465, y: 675, size: 10, font: bold, color: primary });
   let y = 653; for (const row of data.results) { page.drawText(row.subject.slice(0, 36), { x: 50, y, size: 9, font: regular }); page.drawText(row.ca === null ? "-" : row.ca.toFixed(1), { x: 310, y, size: 9, font: regular }); page.drawText(row.exam === null ? "-" : row.exam.toFixed(1), { x: 380, y, size: 9, font: regular }); page.drawText(row.total === null ? "-" : row.total.toFixed(1), { x: 465, y, size: 9, font: bold }); y -= 21; }
   const presentDays = new Set(data.attendance.map((row) => row.attendanceDate.toISOString().slice(0, 10))).size; const lateDays = data.attendance.filter((row) => row.isLate).length; page.drawText("Attendance: " + presentDays + " days present; " + lateDays + " late.", { x: 50, y: 190, size: 10, font: regular }); page.drawText("Remarks: " + (remarks?.trim() || "—"), { x: 50, y: 165, size: 10, font: regular }); page.drawText("Generated securely by SukuuNova", { x: 50, y: 60, size: 8, font: regular, color: rgb(0.4, 0.4, 0.4) }); return Buffer.from(await pdf.save());
 }
@@ -81,11 +83,11 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
   const average = completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
   const rules = rulesFor(data.settings);
   const scale = rules.gradingScale?.length ? rules.gradingScale : undefined;
-  // Single snapshot version (v4): everything the print path renders is frozen
-  // here; positions + promotion are filled in by freezeReportCardRanking at
-  // approval and never recomputed afterwards.
   const calculationSnapshot = {
     calculationVersion: 4, calculatedAt: new Date().toISOString(),
+    classId: data.student.class.id,
+    className: data.student.class.name,
+    classSource: data.termClass.source,
     gradingWeights: { ca: data.caWeight, exam: data.examWeight },
     assessmentCategories: rules.categories, rounding: rules.rounding, missingScorePolicy: rules.missingScorePolicy,
     partialReportsAllowed: data.settings.allowPartialReportCards,
@@ -97,15 +99,21 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
   };
   const report = await tx.reportCard.upsert({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } }, update: { pdfData, remarks: input.remarks, templateId: data.template.id, calculationSnapshot, calculationVersion: 4 }, create: { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, templateId: data.template.id, pdfData, remarks: input.remarks, calculationSnapshot, calculationVersion: 4, generatedPdfUrl: "/api/mvp/report-cards/pending/pdf" } });
   const generatedPdfUrl = "/api/mvp/report-cards/" + report.id + "/pdf"; await tx.reportCard.update({ where: { id: report.id }, data: { generatedPdfUrl } });
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.generated", entityType: "ReportCard", entityId: report.id, after: { studentId: input.studentId, termId: input.termId, templateId: data.template.id, calculationVersion: 4 } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.generated", entityType: "ReportCard", entityId: report.id, after: { studentId: input.studentId, termId: input.termId, classId: data.student.class.id, classSource: data.termClass.source, templateId: data.template.id, calculationVersion: 4 } });
   return { ...report, generatedPdfUrl };
 }
 
 export async function submitReportCard(tx: TenantDb, input: { schoolId: string; actorId: string; reportCardId: string }) {
   await requirePermission(tx, input.actorId, "report_cards:submit");
-  const report = await tx.reportCard.findUnique({ where: { id: input.reportCardId }, include: { student: { include: { class: true } } } });
-  if (!report) throw new AppError("Report card not found.", 404, "NOT_FOUND"); if (report.status !== "draft") throw new AppError("Only draft reports can be submitted.", 409, "INVALID_STATE"); if (report.student.class?.classTeacherId !== input.actorId) throw new ForbiddenError("Only the student's class teacher may submit this report.");
-  const updated = await tx.reportCard.update({ where: { id: report.id }, data: { status: "submitted", submittedBy: input.actorId, submittedAt: new Date() } }); await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.submitted", entityType: "ReportCard", entityId: report.id, before: { status: report.status }, after: { status: updated.status } }); return updated;
+  const report = await tx.reportCard.findFirst({ where: { id: input.reportCardId, schoolId: input.schoolId }, select: { id: true, status: true, studentId: true, termId: true } });
+  if (!report) throw new AppError("Report card not found.", 404, "NOT_FOUND");
+  if (report.status !== "draft") throw new AppError("Only draft reports can be submitted.", 409, "INVALID_STATE");
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.studentId, termId: report.termId });
+  const historicalClass = await tx.class.findFirst({ where: { id: termClass.classId, schoolId: input.schoolId }, select: { classTeacherId: true } });
+  if (!historicalClass || historicalClass.classTeacherId !== input.actorId) throw new ForbiddenError("Only the learner's class teacher for this term may submit this report.");
+  const updated = await tx.reportCard.update({ where: { id: report.id }, data: { status: "submitted", submittedBy: input.actorId, submittedAt: new Date() } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.submitted", entityType: "ReportCard", entityId: report.id, before: { status: report.status }, after: { status: updated.status, classId: termClass.classId } });
+  return updated;
 }
 
 export async function approveReportCard(tx: TenantDb, input: { schoolId: string; actorId: string; reportCardId: string; headRemark?: string }) {
@@ -134,30 +142,25 @@ export type ReportPolicy = { showOverallPosition: boolean; showSubjectPosition: 
 
 function asRecord(value: unknown): Record<string, unknown> { return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
 
-// Single home for remark/promotion rules (re-exported for existing callers).
 export { remarkForPosition, promotionForRule, type PromotionDecision } from "@/lib/report-card-ranking";
 
-/**
- * Single consolidated report-card calculation.
- * Replaces the three former variants (reportData bucket math, print-page manual
- * ca/exam weighting + sum-based overall ranking, PrintStudioV2 client totals).
- * Live values are merged with the frozen calculationSnapshot exactly as before:
- * once a card is issued, frozen totals/positions/remarks/promotion win.
- */
 export async function calculateReportCard(tx: TenantDb, input: { schoolId: string; reportId: string }) {
   const report = await tx.reportCard.findFirst({
     where: { id: input.reportId, schoolId: input.schoolId },
     include: {
-      student: { include: { class: { include: { classTeacher: { select: { id: true, name: true } } } } } },
+      student: true,
       term: { include: { academicYear: true } },
     },
   });
-  if (!report || !report.student.class) throw new AppError("Report card not found.", 404, "NOT_FOUND");
+  if (!report) throw new AppError("Report card not found.", 404, "NOT_FOUND");
   const [settings, school] = await Promise.all([
     tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId } }),
     tx.school.findUnique({ where: { id: input.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
   ]);
   if (!settings || !school) throw new AppError("Report-card context is incomplete.", 404, "NOT_FOUND");
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.studentId, termId: report.termId });
+  const historicalClass = await tx.class.findFirst({ where: { id: termClass.classId, schoolId: input.schoolId }, include: { classTeacher: { select: { id: true, name: true } } } });
+  if (!historicalClass) throw new AppError("The learner's class for this report term no longer exists.", 409, "TERM_CLASS_NOT_FOUND");
   const policyRow = await tx.$queryRawUnsafe<Array<{ showOverallPosition: boolean; showSubjectPosition: boolean | null; positionScope: string; remarkSource: string; positionBandLabels: unknown; behaviorRatingFields: unknown; promotionRule: string; positionPromotionCutoffPercent: number | null }>>(
     `SELECT "showOverallPosition", "positionScope", "remarkSource", "positionBandLabels", "behaviorRatingFields", "promotionRule",
       CASE WHEN EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='SchoolSettings' AND column_name='showSubjectPosition') THEN "showSubjectPosition" ELSE true END AS "showSubjectPosition",
@@ -176,7 +179,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   };
   const rules = rulesFor(settings);
   const scale = (rules.gradingScale?.length ? rules.gradingScale : []) as Array<{ min: number; max: number; grade: string; remark?: string; label?: string }>;
-  const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: report.termId, classId: report.student.class.id }, include: { subject: true, scores: { where: { studentId: report.studentId } } }, orderBy: [{ subject: { name: "asc" } }, { type: "asc" }] });
+  const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: report.termId, classId: historicalClass.id }, include: { subject: true, scores: { where: { studentId: report.studentId } } }, orderBy: [{ subject: { name: "asc" } }, { type: "asc" }] });
   const grouped = new Map<string, typeof assessments>();
   for (const a of assessments) grouped.set(a.subject.name, [...(grouped.get(a.subject.name) ?? []), a]);
   const liveLines: ReportSubjectLine[] = [];
@@ -189,17 +192,17 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     };
     liveLines.push({ subject, subjectId: rows[0].subjectId, ca: bucketAvg("classwork"), exam: bucketAvg("exam"), total: result.total, grade: gradeForPercentage(result.total, scale.length ? scale : undefined), position: null, remark: null });
   }
-  const scopeClassIds = policy.positionScope === "year_group" && report.student.class.level
-    ? (await tx.class.findMany({ where: { schoolId: input.schoolId, level: report.student.class.level }, select: { id: true } })).map((r) => r.id)
-    : [report.student.class.id];
-  const scopeStudents = await tx.student.findMany({ where: { schoolId: input.schoolId, classId: { in: scopeClassIds }, status: "active" }, select: { id: true, name: true } });
+  const scopeClassIds = policy.positionScope === "year_group" && historicalClass.level
+    ? (await tx.class.findMany({ where: { schoolId: input.schoolId, level: historicalClass.level }, select: { id: true } })).map((r) => r.id)
+    : [historicalClass.id];
+  const scopeStudents = (await resolveTermRoster(tx, { schoolId: input.schoolId, termId: report.termId })).filter((student) => student.termClassId && scopeClassIds.includes(student.termClassId));
   const { totals, names } = await overallTotalsForScope(tx, { schoolId: input.schoolId, termId: report.termId, classIds: scopeClassIds, rules });
   const ranked = rankTotals([...totals.entries()].map(([id, total]) => ({ id, name: names.get(id) ?? "", total })));
   const overallPosition = ranked.get(report.studentId) ?? null;
   const rankedCount = totals.size;
   for (const line of liveLines) {
     if (!line.subjectId) continue;
-    const intelligence = await getClassSubjectIntelligence(tx, { classId: report.student.class.id, subjectId: line.subjectId, termId: report.termId, rules, scope: policy.positionScope });
+    const intelligence = await getClassSubjectIntelligence(tx, { classId: historicalClass.id, subjectId: line.subjectId, termId: report.termId, rules, scope: policy.positionScope });
     line.position = intelligence.rows.find((r) => r.studentId === report.studentId)?.position ?? null;
     line.remark = remarkForLine(line.total, scale, line.position, rankedCount, policy);
   }
@@ -207,10 +210,6 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   const average = completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
   const passMark = passMarkForScale(scale);
   const promotionDecision = promotionForRule(policy.promotionRule, { overallPosition, rankedCount, cutoffPercent: policy.positionPromotionCutoffPercent, lines: liveLines, passMark });
-  // Frozen merge: issued cards keep their snapshot (v2/v4 tolerant). Every
-  // rendered number — ca/exam/total/grade/position/remark, average, attendance,
-  // weights — comes from the snapshot once one exists; live values only fill
-  // gaps for cards generated before a field existed.
   const frozen = asRecord(report.calculationSnapshot);
   const frozenAssessments = Array.isArray(frozen.assessments) ? frozen.assessments as Array<Record<string, unknown>> : [];
   const frozenSubjects = Array.isArray(frozen.subjectPositions) ? frozen.subjectPositions as Array<Record<string, unknown>> : [];
@@ -260,6 +259,9 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
       data: {
         calculationSnapshot: {
           calculationVersion: 4, calculatedAt: new Date().toISOString(),
+          classId: historicalClass.id,
+          className: historicalClass.name,
+          classSource: termClass.source,
           gradingWeights: weights,
           partialReportsAllowed: settings.allowPartialReportCards,
           assessments: results.map((r) => ({ subject: r.subject, ca: r.ca, exam: r.exam, total: r.total, grade: r.grade })),
@@ -278,7 +280,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   const age = dob && !Number.isNaN(dob.getTime()) ? Math.max(0, new Date(report.term.endDate).getFullYear() - dob.getFullYear()) : null;
   return {
     school: { name: school.name, uniqueCode: school.uniqueCode, logoUrl: school.logoUrl, brandColors: school.brandColors, motto: str(brand.motto), address: str(brand.address) ?? str(brand.schoolAddress), phone: str(brand.phone) ?? str(brand.schoolPhone), watermark: settings.reportCardWatermark ?? str(brand.watermark) ?? "SUKUUNOVA" },
-    student: { name: report.student.name, admissionNo: report.student.admissionNo, className: report.student.class.name, level: report.student.class.level, photoUrl: report.student.photoUrl, dob: dob?.toISOString() ?? null, age, classTeacherName: report.student.class.classTeacher?.name ?? "Class Teacher" },
+    student: { name: report.student.name, admissionNo: report.student.admissionNo, className: historicalClass.name, level: historicalClass.level, photoUrl: report.student.photoUrl, dob: dob?.toISOString() ?? null, age, classTeacherName: historicalClass.classTeacher?.name ?? "Class Teacher" },
     term: { name: report.term.name, academicYear: report.term.academicYear.name, startDate: report.term.startDate.toISOString(), endDate: report.term.endDate.toISOString(), nextTermStartDate: nextTerm?.startDate.toISOString() ?? null, nextTermName: nextTerm?.name ?? null },
     results,
     gradingScale: scale,
