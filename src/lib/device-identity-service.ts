@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { AppError } from "./errors";
 import { recordAttendance } from "./attendance-service";
+import { requireActiveStaffTarget } from "./authorization";
 
 type Transaction = Prisma.TransactionClient;
 
@@ -38,6 +39,22 @@ export async function matchDeviceIdentityAttendance(input: MatchInput) {
       404,
       "DEVICE_IDENTITY_NOT_FOUND"
     );
+  }
+
+  if (identity.studentId) {
+    const student = await input.tx.student.findFirst({
+      where: { id: identity.studentId, schoolId: input.schoolId, status: "active" },
+      select: { id: true }
+    });
+    if (!student) {
+      throw new AppError("This device mapping belongs to a student who is no longer active.", 409, "STALE_DEVICE_IDENTITY");
+    }
+  } else if (identity.staffId) {
+    try {
+      await requireActiveStaffTarget(input.tx, input.schoolId, identity.staffId);
+    } catch {
+      throw new AppError("This device mapping belongs to a staff account that is no longer eligible.", 409, "STALE_DEVICE_IDENTITY");
+    }
   }
 
   const target = identity.studentId

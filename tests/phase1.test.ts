@@ -64,6 +64,21 @@ describe("Phase 1 MVP security and workflow gates", () => {
       subjectTeacherId = (await tx.user.create({ data: { schoolId: fixture.schoolId, name: "Assigned Subject Teacher", email: `subject-teacher-${fixture.schoolId}@test.invalid`, passwordHash: "test-only" } })).id;
       parentId = (await tx.user.create({ data: { schoolId: fixture.schoolId, name: "Linked Parent", email: `parent-${fixture.schoolId}@test.invalid`, phone: "+233200000001", passwordHash: "test-only" } })).id;
 
+      const teacherRole = await tx.role.create({
+        data: {
+          schoolId: fixture.schoolId,
+          name: `Teacher ${fixture.schoolId}`,
+          key: "teacher",
+          isSystem: true,
+        },
+      });
+      await tx.userRole.createMany({
+        data: [
+          { schoolId: fixture.schoolId, userId: teacherId, roleId: teacherRole.id },
+          { schoolId: fixture.schoolId, userId: subjectTeacherId, roleId: teacherRole.id },
+        ],
+      });
+
       for (const [userId, permission] of [[subjectTeacherId, "scores:write:assigned"], [teacherId, "report_cards:submit"], [parentId, "parents:read_linked"]] as const) {
         await tx.userPermissionOverride.create({ data: { schoolId: fixture.schoolId, userId, permissionId: fixture.permissionIds.get(permission)!, granted: true } });
       }

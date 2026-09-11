@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/db";
 import { AppError, routeError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
+import { isOperationalStaffAccount, requireActiveStaffTarget } from "@/lib/authorization";
 
 const createSchema = z.object({
   deviceKind: z.enum(["fingerprint", "card"]),
@@ -18,7 +19,7 @@ export async function GET() {
     const session = await requireSchoolSession();
     const data = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
-      const [identities, students, staff] = await Promise.all([
+      const [identities, students, staffCandidates] = await Promise.all([
         tx.deviceIdentity.findMany({
           orderBy: { createdAt: "desc" },
           select: {
@@ -47,16 +48,18 @@ export async function GET() {
           }
         }),
         tx.user.findMany({
-          where: { status: { in: ["active", "pending"] } },
+          where: { status: "active" },
           orderBy: { name: "asc" },
           select: {
             id: true,
             name: true,
             email: true,
+            userRoles: { select: { role: { select: { key: true, name: true } } } },
             faceEnrollments: { select: { id: true, enrolledAt: true }, take: 1, orderBy: { enrolledAt: "desc" } },
           }
         })
       ]);
+      const staff = staffCandidates.filter((user) => isOperationalStaffAccount(user.userRoles.map(({ role }) => role)));
       return {
         identities,
         students: students.map((student) => ({
@@ -88,10 +91,12 @@ export async function POST(request: Request) {
     const identity = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
 
-      const person = input.targetType === "student"
-        ? await tx.student.findUnique({ where: { id: input.targetId }, select: { id: true } })
-        : await tx.user.findUnique({ where: { id: input.targetId }, select: { id: true } });
-      if (!person) throw new AppError("Target person was not found in this school.", 404, "NOT_FOUND");
+      if (input.targetType === "student") {
+        const student = await tx.student.findFirst({ where: { id: input.targetId, schoolId: session.schoolId, status: "active" }, select: { id: true } });
+        if (!student) throw new AppError("Only an active student in this school can be mapped to a device identity.", 404, "STUDENT_NOT_FOUND");
+      } else {
+        await requireActiveStaffTarget(tx, session.schoolId, input.targetId);
+      }
 
       const created = await tx.deviceIdentity.create({
         data: {
@@ -134,7 +139,7 @@ export async function DELETE(request: Request) {
     const input = z.object({ id: z.string().min(1).max(100) }).parse(await request.json());
     const identity = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
-      const before = await tx.deviceIdentity.findUnique({ where: { id: input.id } });
+      const before = await tx.deviceIdentity.findFirst({ where: { id: input.id, schoolId: session.schoolId } });
       if (!before) throw new AppError("Device identity was not found in this school.", 404, "NOT_FOUND");
       const deleted = await tx.deviceIdentity.delete({ where: { id: before.id } });
       await appendSchoolAudit(tx, {

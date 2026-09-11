@@ -86,6 +86,22 @@ function patchFixtures() {
   core = replaceRequired(core, '["Mock Examination Week","exam"', '["Mock Examination Week","exam_week"', "mock-exam calendar category");
   core = replaceRequired(core, '["Christmas Vacation","break"', '["Christmas Vacation","vacation"', "Christmas calendar category");
 
+  // The showcase must model a schedulable school. Provision enough subject teachers so one
+  // teacher never has to occupy two classes in the same day/period, then use a Latin-square
+  // subject rotation that preserves each class-subject assignment without collisions.
+  core = replaceRequired(
+    core,
+    '      for (let i=1;i<subjects.length;i++) subjectTeacherUsers.push(await ensureRoleUser(`subject.teacher.${i+1}`, staffNames[(i+8) % staffNames.length], "Subject Teacher", 20+i));',
+    '      const requiredSubjectTeachers = Math.max(subjects.length, classes.length);\n      for (let i=1;i<requiredSubjectTeachers;i++) subjectTeacherUsers.push(await ensureRoleUser(`subject.teacher.${i+1}`, staffNames[(i+8) % staffNames.length], "Subject Teacher", 20+i));',
+    "collision-free subject teacher pool",
+  );
+  core = replaceRequired(
+    core,
+    '            const subject = subjects[(ci + dayOfWeek + period - 2) % subjects.length];\n            const teacherId = assignmentMap.get(`${classes[ci].id}:${subject.id}`) || subjectTeacherUsers[0].id;\n            await tx.timetableSlot.upsert({\n              where: { schoolId_classId_dayOfWeek_period: { schoolId, classId: classes[ci].id, dayOfWeek, period } },\n              update: { subjectId: subject.id, teacherId, venue: period === 4 && subject.name.toLowerCase().includes("comput") ? "ICT Lab 1" : `Room ${ci+1}` },\n              create: { schoolId, classId: classes[ci].id, subjectId: subject.id, teacherId, dayOfWeek, period, venue: period === 4 && subject.name.toLowerCase().includes("comput") ? "ICT Lab 1" : `Room ${ci+1}` },\n            });',
+    '            const subject = subjects[(dayOfWeek + period - 2) % subjects.length];\n            const teacherId = assignmentMap.get(`${classes[ci].id}:${subject.id}`) || subjectTeacherUsers[ci % subjectTeacherUsers.length].id;\n            const venue = `Room ${ci+1}`;\n            await tx.timetableSlot.upsert({\n              where: { schoolId_classId_dayOfWeek_period: { schoolId, classId: classes[ci].id, dayOfWeek, period } },\n              update: { subjectId: subject.id, teacherId, venue },\n              create: { schoolId, classId: classes[ci].id, subjectId: subject.id, teacherId, dayOfWeek, period, venue },\n            });',
+    "collision-free showcase timetable",
+  );
+
   const arcadeQuestionNeedle = 'questions:[{q:"Synthetic practice item",options:["A","B","C","D"],correct:1}],answers:[1],status:"completed",correct:1';
   const arcadeQuestionReplacement = 'questions:[{q:"Synthetic practice 1",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 2",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 3",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 4",options:["A","B","C","D"],correct:1},{q:"Synthetic practice 5",options:["A","B","C","D"],correct:1}],answers:[1,1,1,1,1],status:"completed",correct:4';
   core = replaceAllRequired(core, arcadeQuestionNeedle, arcadeQuestionReplacement, "arcade round question length");
@@ -185,6 +201,19 @@ function patchFixtures() {
     expected(visibleSchool, "Eugene Academy is not visible inside its tenant context.");
     expected(visibleSchool.name === "Eugene Academy", \`Expected school name Eugene Academy, received \${visibleSchool.name}.\`);`;
   verifier = replaceRequired(verifier, verifierSchoolNeedle, verifierSchoolReplacement, "verification tenant-RLS school bootstrap");
+  const timetableVerifierNeedle = `    const timetableSlots = await tx.timetableSlot.count({ where: { schoolId } });
+    expected(classTeacherCoverage === classes, \`Every class needs a class teacher (\${classTeacherCoverage}/\${classes}).\`);
+    expected(teachingAssignments >= classes * subjects, \`Expected full class-subject teaching assignment coverage, found \${teachingAssignments}.\`);
+    expected(timetableSlots >= classes * 5 * 8, \`Expected a five-day, eight-period timetable, found \${timetableSlots} slots.\`);`;
+  const timetableVerifierReplacement = `    const timetableSlots = await tx.timetableSlot.count({ where: { schoolId } });
+    const teacherCollisions = Number((await tx.$queryRawUnsafe(\`SELECT COUNT(*)::int AS "count" FROM (SELECT "teacherId","dayOfWeek","period" FROM "TimetableSlot" WHERE "schoolId"=$1 GROUP BY "teacherId","dayOfWeek","period" HAVING COUNT(*)>1) conflicts\`, schoolId))[0].count);
+    const venueCollisions = Number((await tx.$queryRawUnsafe(\`SELECT COUNT(*)::int AS "count" FROM (SELECT LOWER(BTRIM("venue")) AS venue,"dayOfWeek","period" FROM "TimetableSlot" WHERE "schoolId"=$1 AND "venue" IS NOT NULL AND BTRIM("venue")<>'' GROUP BY LOWER(BTRIM("venue")),"dayOfWeek","period" HAVING COUNT(*)>1) conflicts\`, schoolId))[0].count);
+    expected(classTeacherCoverage === classes, \`Every class needs a class teacher (\${classTeacherCoverage}/\${classes}).\`);
+    expected(teachingAssignments >= classes * subjects, \`Expected full class-subject teaching assignment coverage, found \${teachingAssignments}.\`);
+    expected(timetableSlots >= classes * 5 * 8, \`Expected a five-day, eight-period timetable, found \${timetableSlots} slots.\`);
+    expected(teacherCollisions === 0, \`Eugene Academy timetable has \${teacherCollisions} teacher collision group(s).\`);
+    expected(venueCollisions === 0, \`Eugene Academy timetable has \${venueCollisions} venue collision group(s).\`);`;
+  verifier = replaceRequired(verifier, timetableVerifierNeedle, timetableVerifierReplacement, "timetable collision verification");
   verifier = replaceRequired(
     verifier,
     'console.error("[verify-eugene-academy] failed:", error instanceof Error ? error.message : String(error));',

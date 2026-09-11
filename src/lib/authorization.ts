@@ -59,6 +59,13 @@ export const FAMILY_PORTAL_ROLE_KEYS = new Set<string>([
 export type SchoolWorkspace = "school" | "teacher";
 
 type AccountRole = { key?: string | null; name: string };
+type TargetAccount = {
+  id: string;
+  name: string;
+  email: string | null;
+  status: string;
+  userRoles: Array<{ role: AccountRole }>;
+};
 
 function normalizeRoleKey(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -86,6 +93,48 @@ export function isSchoolStaffRoleKey(roleKey: string): boolean {
 export function isSchoolStaffAccount(roles: readonly AccountRole[]): boolean {
   if (roles.length === 0) return true;
   return roles.some((role) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name)));
+}
+
+/**
+ * Stronger boundary for operational staff-only foreign keys such as payroll, devices,
+ * visitor hosts, custodians and attendance. Role-less repair accounts are intentionally
+ * excluded here until a real staff role is assigned.
+ */
+export function isOperationalStaffAccount(roles: readonly AccountRole[]): boolean {
+  return roles.some((role) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name)));
+}
+
+export function isTeachingAccount(roles: readonly AccountRole[]): boolean {
+  return roles.some((role) => isTeachingRoleKey(role.key?.trim() || roleKeyForName(role.name)));
+}
+
+async function readTargetAccount(tx: TenantDb, schoolId: string, userId: string): Promise<TargetAccount | null> {
+  return tx.user.findFirst({
+    where: { id: userId, schoolId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      status: true,
+      userRoles: { select: { role: { select: { key: true, name: true } } } }
+    }
+  });
+}
+
+export async function requireActiveStaffTarget(tx: TenantDb, schoolId: string, userId: string) {
+  const user = await readTargetAccount(tx, schoolId, userId);
+  if (!user || user.status !== "active" || !isOperationalStaffAccount(user.userRoles.map(({ role }) => role))) {
+    throw new ForbiddenError("Only an active staff account in this school can be selected.");
+  }
+  return user;
+}
+
+export async function requireActiveTeachingTarget(tx: TenantDb, schoolId: string, userId: string) {
+  const user = await readTargetAccount(tx, schoolId, userId);
+  if (!user || user.status !== "active" || !isTeachingAccount(user.userRoles.map(({ role }) => role))) {
+    throw new ForbiddenError("Only an active teaching or academic leadership account can be selected.");
+  }
+  return user;
 }
 
 export function resolveSchoolWorkspace(roleKeys: string[]): SchoolWorkspace {

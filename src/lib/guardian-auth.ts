@@ -45,18 +45,24 @@ export type GuardianSession = {
   authorizationVersion: string;
 };
 
-export async function createGuardianSessionToken(session: Omit<GuardianSession, "authorizationVersion"> | GuardianSession): Promise<string> {
-  const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
-  if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This guardian account is no longer active.");
-  await assertSchoolActive(session.schoolId);
+async function guardianOwnershipExists(session: Pick<GuardianSession, "guardianId" | "schoolId" | "userId">) {
   const linked = await rawDb.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", session.schoolId);
     return tx.$queryRawUnsafe<Array<{ id: string }>>(
       `SELECT "id" FROM "Guardian" WHERE "id"=$1 AND "schoolId"=$2 AND "userId"=$3 LIMIT 1`,
-      session.guardianId, session.schoolId, session.userId
+      session.guardianId,
+      session.schoolId,
+      session.userId
     );
   });
-  if (!linked.length) throw new UnauthorizedError("This guardian account is no longer linked.");
+  return linked.length > 0;
+}
+
+export async function createGuardianSessionToken(session: Omit<GuardianSession, "authorizationVersion"> | GuardianSession): Promise<string> {
+  const state = await getSchoolAuthorizationState(session.userId, session.schoolId);
+  if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This guardian account is no longer active.");
+  await assertSchoolActive(session.schoolId);
+  if (!(await guardianOwnershipExists(session))) throw new UnauthorizedError("This guardian account is no longer linked.");
   const currentAuthorizationVersion = authorizationVersion(state);
 
   return new SignJWT({
@@ -113,5 +119,6 @@ export async function requireGuardianSession() {
   if (!state || state.status !== "active" || state.schoolId !== session.schoolId) throw new UnauthorizedError("This guardian account is no longer active.");
   if (authorizationVersion(state) !== session.authorizationVersion) throw new UnauthorizedError("Your guardian access has changed. Please sign in again.");
   await assertSchoolActive(session.schoolId);
+  if (!(await guardianOwnershipExists(session))) throw new UnauthorizedError("Your guardian profile link has changed. Please sign in again.");
   return { ...session, name: state.name };
 }
