@@ -52,7 +52,10 @@ export default async function StaffPage() {
       <div className="staff-simple">
         <section className="staff-simple-head">
           <div><h2>Staff directory</h2><p>Search people first. Open a profile for portrait, school ID, roles, contact and teaching scope.</p></div>
-          <StaffCreateDialog classes={data.classes} subjects={data.subjects} />
+          <div className="staff-simple-head-actions">
+            {data.canManageCards ? <Link href="/school/id-cards" className="button secondary">ID cards</Link> : null}
+            <StaffCreateDialog classes={data.classes} subjects={data.subjects} />
+          </div>
         </section>
 
         {data.canManageCards ? <section className="staff-form-note wide"><strong>Staff identity cards</strong><span>Generate school-branded, QR-verifiable cards for the full staff team.</span><IdentityCardBatchActions mode="staff"/></section> : null}

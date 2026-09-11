@@ -35,6 +35,21 @@ describe("workspace and account boundary contracts", () => {
     expect(refresh).toContain("effectively has students:delete");
   });
 
+  it("keeps identity-card access available to canonical system roles without crashing the workspace", () => {
+    const migration = source("prisma/migrations/20260911153000_identity_card_permission_backfill/migration.sql");
+    const page = source("src/app/school/id-cards/page.tsx");
+    const staff = source("src/app/school/staff/page.tsx");
+    expect(migration).toContain("identity_cards:manage");
+    expect(migration).toContain('r."isSystem" = TRUE');
+    for (const roleKey of ["owner", "administrator", "principal", "hr_officer", "admissions_officer", "front_desk_security"]) {
+      expect(migration).toContain(`'${roleKey}'`);
+    }
+    expect(page).toContain('hasPermission(tx, session.userId, "identity_cards:manage")');
+    expect(page).toContain("ID card access needs permission");
+    expect(page).not.toContain('requirePermission(tx, session.userId, "identity_cards:manage")');
+    expect(staff).toContain('href="/school/id-cards" className="button secondary">ID cards</Link>');
+  });
+
   it("clears incompatible cookies whenever a user changes login universe", () => {
     const school = source("src/app/api/auth/school/login/route.ts");
     const guardian = source("src/app/api/auth/guardian/login/route.ts");
