@@ -5,10 +5,10 @@ import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { listIdentityCards } from "@/lib/identity-card-service";
 import {
-  buildIdentityCardSinglePdfV2,
-  buildIdentityCardSvgV2,
+  buildIdentityCardSinglePdfV3,
+  buildIdentityCardSvgV3,
   type IdentityCardArtworkSide,
-} from "@/lib/identity-card-print-v2";
+} from "@/lib/identity-card-print-v3";
 
 export async function GET(
   request: Request,
@@ -47,7 +47,7 @@ export async function GET(
 
     const safe = data.staffName.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "staff";
     if (requestedFormat === "svg") {
-      const svg = buildIdentityCardSvgV2(data.card, data.school, requestUrl.origin, side);
+      const svg = buildIdentityCardSvgV3(data.card, data.school, requestUrl.origin, side);
       return new NextResponse(svg, {
         status: 200,
         headers: {
@@ -58,7 +58,7 @@ export async function GET(
       });
     }
 
-    const pdf = await buildIdentityCardSinglePdfV2(data.card, data.school, requestUrl.origin);
+    const pdf = await buildIdentityCardSinglePdfV3(data.card, data.school, requestUrl.origin);
     return new NextResponse(pdf, {
       status: 200,
       headers: {
