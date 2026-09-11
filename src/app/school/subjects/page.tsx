@@ -5,6 +5,7 @@ import { SubjectAssignDialog, SubjectCreateDialog } from "@/components/subjects/
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
+import { isTeachingAccount, requireActiveTeachingTarget } from "@/lib/authorization";
 import "./subjects.css";
 import "./subjects-simple.css";
 
@@ -67,16 +68,16 @@ async function assignSubject(formData: FormData) {
   if (!subjectId || !teacherId || classIds.length === 0) throw new Error("Choose a subject, teacher and at least one class.");
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "classes:manage");
-    const [subject, teacher, schoolClasses] = await Promise.all([
+    const teacher = await requireActiveTeachingTarget(tx, session.schoolId, teacherId);
+    const [subject, schoolClasses] = await Promise.all([
       tx.subject.findFirst({ where: { id: subjectId, schoolId: session.schoolId }, select: { id: true, name: true } }),
-      tx.user.findFirst({ where: { id: teacherId, schoolId: session.schoolId, status: "active" }, select: { id: true, name: true } }),
       tx.class.findMany({ where: { schoolId: session.schoolId, id: { in: classIds } }, select: { id: true, name: true } }),
     ]);
-    if (!subject || !teacher || schoolClasses.length !== classIds.length) throw new Error("One or more selected records do not belong to this school.");
+    if (!subject || schoolClasses.length !== classIds.length) throw new Error("One or more selected records do not belong to this school.");
     for (const schoolClass of schoolClasses) {
       await tx.classSubjectTeacher.upsert({ where: { classId_subjectId_teacherId: { classId: schoolClass.id, subjectId, teacherId } }, update: {}, create: { schoolId: session.schoolId, classId: schoolClass.id, subjectId, teacherId } });
     }
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "subject.assigned_bulk", entityType: "ClassSubjectTeacher", entityId: `${subjectId}:${teacherId}`, after: { subjectId, teacherId, classIds } } });
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "subject.assigned_bulk", entityType: "ClassSubjectTeacher", entityId: `${subjectId}:${teacherId}`, after: { subjectId, teacherId, teacherName: teacher.name, classIds } } });
   });
   redirect(`/school/subjects?subject=${encodeURIComponent(subjectId)}`);
 }
@@ -104,7 +105,7 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
   const query = String(params.q ?? "").trim();
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:read");
-    const [school, subjects, classes, teachers] = await Promise.all([
+    const [school, subjects, classes, teacherCandidates] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.subject.findMany({
         where: query ? { name: { contains: query, mode: "insensitive" } } : undefined,
@@ -117,8 +118,9 @@ export default async function SubjectsPage({ searchParams }: { searchParams: Pro
         },
       }),
       tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true } }),
-      tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      tx.user.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, select: { id: true, name: true, userRoles: { select: { role: { select: { key: true, name: true } } } } } }),
     ]);
+    const teachers = teacherCandidates.filter((user) => isTeachingAccount(user.userRoles.map(({ role }) => role))).map(({ userRoles: _roles, ...user }) => user);
     return { school, subjects, classes, teachers };
   });
 
