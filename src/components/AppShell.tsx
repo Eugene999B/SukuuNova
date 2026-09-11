@@ -125,6 +125,8 @@ const schoolGroups: Group[] = [
   ] },
   { label: "Operations", items: [
     { icon: Users, label: "People Hub", href: "/school/people" },
+    { icon: ReceiptText, label: "School Store", href: "/school/store", primary: true },
+    { icon: Building2, label: "School Properties", href: "/school/properties", primary: true },
     { icon: BusFront, label: "Transport", href: "/school/transport", primary: true },
     { icon: ClipboardList, label: "Pickup", href: "/school/pickup" },
     { icon: Building2, label: "Visitors", href: "/school/visitors" },
