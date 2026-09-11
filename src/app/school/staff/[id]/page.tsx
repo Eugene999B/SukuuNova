@@ -54,14 +54,14 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
       </section>
 
       <div className="staff-profile-grid">
-        <section className="app-card app-panel">
-          <div className="app-card-head"><div><span className="app-eyebrow">SCHOOL ID</span><h2>Identity card</h2><p>School-branded, portrait-backed and QR-verifiable.</p></div></div>
+        <section className="app-card app-panel staff-profile-id-panel">
+          <div className="app-card-head"><div><span className="app-eyebrow">SCHOOL ID</span><h2>Identity card</h2><p>Front and back of the same CR80 credential, ready for direct or print-shop output.</p></div></div>
           {data.canManageCards && data.currentCard && verifyHref ? <IdentityCardPreview school={data.school} card={{ ...data.currentCard, photoUrl: data.photoUrl }} downloadHref={`/api/school/identity-cards/staff/${encodeURIComponent(data.staff.id)}`} verifyHref={verifyHref}/>
             : data.canManageCards ? <div className="staff-profile-empty"><IdCard size={20}/><strong>No current ID card.</strong><span>Open Identity Cards to reconcile or reissue this staff card.</span><Link href="/school/id-cards">Open Identity Cards →</Link></div>
             : <div className="staff-profile-empty"><ShieldCheck size={20}/><strong>ID-card management access required.</strong><span>You can view this staff record, but cannot issue or download identity cards.</span></div>}
         </section>
 
-        <section className="app-card app-panel">
+        <section className="app-card app-panel staff-profile-photo-panel">
           <div className="app-card-head"><div><span className="app-eyebrow">PORTRAIT</span><h2>Official photo</h2><p>A clear portrait is used on new staff ID downloads.</p></div></div>
           {data.canEditStaff ? <StaffPortraitEditor staffId={data.staff.id} staffName={data.staff.name} initialPhoto={data.photoUrl}/> : <div className="staff-profile-empty"><ShieldCheck size={20}/><strong>Staff editing access required.</strong><span>Your current permissions allow profile viewing only.</span></div>}
         </section>

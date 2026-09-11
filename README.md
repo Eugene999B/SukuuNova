@@ -1,415 +1,592 @@
 # SukuuNova
 
-SukuuNova is a multi-tenant school operations platform designed for real day-to-day school work, with a strong focus on Ghanaian schools and the realities of running a modern school.
+SukuuNova is a secure, multi-tenant school operations platform built for real day-to-day school work, with particular attention to the needs of Ghanaian schools. The long-term product goal is to operate as the connected digital operating system of a school: people, academics, attendance, finance, communication, safety, transport, staffing, family relationships, identity, reporting and management decisions in one environment.
 
-The product goal is to become the operating system of a school: one connected environment for people, academics, attendance, finance, communication, safety, transport, staffing, family relationships, reporting and operational decisions.
-
-> **Important:** This repository is for **SukuuNova only**. Do not import assumptions, code, styling or workflows from another product or repository unless deliberately adapted to SukuuNova.
-
-School Owners can review missing default permissions from Roles & Permissions and selectively apply them across system roles. The review shows assigned-account counts, permission risk and direct denials; stale reviews are rejected. Upgrades preserve existing permissions, custom roles and direct overrides, and record each selected change in audit history.
+> **Repository rule:** this repository is for **SukuuNova only**. Do not copy assumptions, code, styles or workflows from another product unless they are deliberately adapted to SukuuNova's data model, security rules and school workflows.
 
 ## Product identity
 
-- **Repository:** `Eugene999B/SukuuNova`
-- **Primary branch:** `main`
-- **Application:** Next.js App Router + TypeScript + React
-- **UI:** Tailwind CSS plus shared SukuuNova CSS/design tokens
-- **Database:** PostgreSQL 16
-- **ORM:** Prisma
-- **Production:** Railway
-- **Authentication:** separate platform and school JWT security domains
-- **AI:** server-side OpenAI Responses API integration
+| Area | Current choice |
+| --- | --- |
+| Repository | `Eugene999B/SukuuNova` |
+| Primary branch | `main` |
+| Application | Next.js App Router + TypeScript + React |
+| UI | Tailwind CSS + shared SukuuNova CSS/design tokens |
+| Database | PostgreSQL 16 |
+| ORM | Prisma |
+| Production hosting | **Railway** |
+| Production URL | **https://sukuunova-production.up.railway.app** |
+| Production database | Railway PostgreSQL |
+| Authentication | Separate platform, school and guardian security domains |
+| AI | Server-side OpenAI Responses API integration where enabled |
 
-SukuuNova has three connected experiences:
+**Railway is the production deployment platform for SukuuNova.** The canonical production origin is `https://sukuunova-production.up.railway.app`. GitHub may show checks or previews from other providers, but SukuuNova does not use them as production infrastructure or as the production release gate. Production verification means Railway deployment, database migration status, `https://sukuunova-production.up.railway.app/api/health`, Railway runtime logs and the real browser workflow.
+
+SukuuNova has three connected user experiences:
 
 1. **Platform** — the control plane above schools.
-2. **School Workspace** — administration, teachers and operational staff.
-3. **Family/Guardian Experience** — controlled access to linked children and released school information.
+2. **School Workspace** — school owners, administrators, teachers and operational staff.
+3. **Family / Guardian Experience** — controlled access to linked children and school-released information.
 
-## Product principles
+---
 
-### One connected system
+# Releases and recent updates
 
-Students, guardians, staff, classes, subjects, attendance, academics, finance and communication should reinforce each other instead of behaving like unrelated databases.
+This section records product-level releases and important recent changes. Git history and pull requests remain the implementation record.
 
-### Human workflow first
+## 2026-09-11 — ID-card access and authorization repair
 
-Build around what people actually do.
+Merged to `main` through PR #109.
 
-A teacher should think:
+- Added the missing `identity_cards:manage` production permission backfill for canonical system roles whose SukuuNova baseline includes ID-card management.
+- Prevented `/school/id-cards` from falling into the generic global error screen when the signed-in account lacks the ID-card permission.
+- Added a proper permission message and links to Roles & Permissions, Staff & Teachers and Students.
+- Restored visible ID-card access from Staff & Teachers for authorized users.
+- Preserved explicit custom-role and user-level permission decisions instead of granting ID-card management indiscriminately.
 
-> Select class → select today → mark the register.
+## 2026-09-11 — Premium duplex school ID cards release candidate
 
-A bursar should think:
+Implemented in PR #111 on `feat/premium-duplex-school-id-cards`.
 
-> Find account → understand balance → record payment → issue receipt → reconcile.
+- Rebuilt student and staff ID cards as professional **front-and-back CR80 credentials**.
+- Standard physical card size: **85.60 mm × 53.98 mm**.
+- Added school logo, school branding, portrait, full name, Student ID / Staff ID, class or role, credential number, issue date, expiry and status.
+- Moved the signed QR verification code to the back of the card.
+- Added useful back-side information, school code, verification wording, return-if-found text and signature space.
+- Student cards use the learner's admission/student number as the visible Student ID.
+- Staff cards expose a stable SukuuNova Staff ID instead of only showing an internal credential serial.
+- Individual downloads produce a two-page exact-CR80 PDF: front then back.
+- Bulk downloads produce paired A4 front/back sheets with mirrored backs for duplex alignment.
+- Added clear printing guidance: **100% / Actual Size — never Fit to Page**.
+- Added direct **Print ID** action for a single current card.
+- Added school-wide validity selection from 1 to 10 years, defaulting to **5 years**.
+- Validity changes update active-card expiry and signed verification credentials.
+- Reworked filtering so person type, class, status and search operate together.
+- Added working actions for Print filtered, All students, All staff, Selected class, Selected cards and Whole school.
+- Current, revoked and expired records are separated correctly; only current credentials are printable/selectable.
+- Student and staff ID surfaces use the shared two-sided preview design.
+- Production links and QR verification are expected to resolve against `https://sukuunova-production.up.railway.app`.
 
-A school administrator should think:
+### ID-card printing modes
 
-> Set up school → establish academic structure → operate school → review results → communicate with families.
+**PVC / dedicated card printer**
 
-### Safety over convenience
+- Use the single-person **Print ID** action.
+- PDF page size is CR80: `85.60 × 53.98 mm`.
+- Print at `100% / Actual Size`.
+- Disable Fit, Shrink, Scale to page or automatic page resizing.
 
-School data is sensitive. Prefer explicit permissions, tenant isolation, auditability, confirmation for destructive actions and human review for consequential automation.
+**A4 office printer / print shop**
 
-### Real functionality over decorative completeness
+- Use the bulk print actions.
+- Fronts are arranged on A4 sheets.
+- Corresponding backs are mirrored for duplex long-edge printing.
+- Print at `100% / Actual Size`, duplex, long-edge flip.
+- Cut on the printed card borders after printing/lamination as appropriate.
 
-A rendered page or button is not evidence that a workflow is complete. Never simulate persistence, success or integrations that do not actually work.
+## September 2026 cumulative system improvements
 
-### Consistency is a product feature
+The current codebase also documents and contains substantial work across access governance, academics, library circulation, recruitment, family academic work, learning tools, support operations and production hardening. Important themes include:
 
-Shared navigation, typography, spacing, forms, tables, cards, status indicators, responsive behaviour and semantic theme tokens should be reused across modules.
+- safer role/permission synchronization without overwriting intentional restrictions;
+- owner-account protection and readable effective-permission review;
+- atomic gradebook saves and concurrency protection;
+- stronger academic term selection, locked-record protection and report lifecycle controls;
+- shared circulation logic for school library operations;
+- recruitment workflow from vacancy/application review through staff conversion;
+- guardian-linked academic work with server-side answer protection;
+- Learning Arcade practice separated from official academic grades;
+- stronger tenant isolation, RLS verification and production database-role safety;
+- support-center and operational workflow improvements;
+- Railway production hardening and explicit health verification.
 
-## System areas
+---
 
-### Platform management
+# Product principles
 
-School onboarding and lifecycle, plans/subscriptions, platform billing, support, platform audit, school investigation, controlled impersonation and operational controls.
+## One connected system
 
-School provisioning can also create separate Principal and Administrator accounts. Their generated temporary passwords appear only in the no-store provisioning response and the handoff panel; every new leadership account must replace its password at first login. Provisioning validates distinct leadership emails and the school timezone, creates accounts, role assignments, school settings, billing configuration, messaging wallet and audits in one tenant transaction, then links to School 360 with a first-setup checklist. Reusing a school login code never deletes the existing login directory.
+Students, guardians, staff, classes, subjects, attendance, academics, finance, identity, safety and communication should reinforce each other instead of behaving like unrelated databases.
 
-### School administration
+## Human workflow first
 
-School profile, school code/login identity, academic years, terms, calendar, roles, permissions, staff, students, guardians, houses, classes, subjects, teacher assignments, settings and appearance.
+Build around what the user is actually trying to do.
 
-### Admissions
+- Teacher: class → date → roster → mark attendance.
+- Bursar: account → balance → payment → receipt → reconciliation.
+- Administrator: school setup → academic structure → staffing → learners → operations → review → communication.
+- ID-card manager: filter people → verify portrait/data → print the right cards → distribute → verify by QR when needed.
 
-Enquiries, applicants, application review, decisions, acceptance/rejection, enrolment and conversion into normal student/family records. Conversion must preserve guardian relationships and school data integrity.
+## Safety over convenience
 
-### Student and family management
+School data is sensitive. Prefer explicit permissions, tenant isolation, auditability, server-side authorization, confirmation for destructive actions and human review for consequential automation.
 
-Student records connect class, house, guardians, attendance, scores, report cards, invoices, identity records, pickup/safety events and other operational information. Guardians may be linked to multiple children subject to school relationships and authorization.
+## Real functionality over decorative completeness
 
-### Academics
+A page, button or beautiful component is not proof that a workflow works. SukuuNova must never simulate persistence, fake success or imply an integration is complete when the server-side operation is missing.
 
-Academic years, terms, subjects, class/subject teacher assignments, assessments, grade entry, gradebook, score calculation, moderation, report cards, templates, approval/publication, lesson planning, homework, timetable and substitution.
+## Consistency is a product feature
+
+Reuse navigation, typography, spacing, forms, tables, cards, status indicators, responsive behavior and semantic design tokens across the platform.
+
+---
+
+# Complete functional map
+
+The following is the current product-level function inventory. Individual implementation details live in the route tree, services, schema and tests.
+
+## Platform management
+
+- School provisioning and lifecycle management.
+- School status and operational investigation.
+- Subscription plans and platform billing configuration.
+- Platform support center.
+- Platform audit trail.
+- Controlled school impersonation for support.
+- Platform administrator authentication and password recovery.
+- School 360 / onboarding visibility.
+- First-setup handoff and leadership-account provisioning.
+
+School provisioning may create separate Owner/Principal/Administrator accounts where the workflow permits it. Temporary passwords are no-store handoff values and leadership accounts must replace temporary credentials at first login.
+
+## School administration
+
+- School profile and branding.
+- School login code / identity.
+- Academic years and terms.
+- School calendar and events.
+- Classes and levels.
+- Houses.
+- Subjects.
+- Class teachers and subject-teacher assignments.
+- School settings and appearance.
+- User accounts and status management.
+- Role and permission administration.
+- Default-role review and selective permission upgrades.
+- Audit history for consequential changes.
+
+## Roles and permissions
+
+- System roles.
+- Custom roles.
+- Role-permission assignment.
+- User-specific permission grants and denials.
+- Effective-permission preview.
+- High-impact permission warnings.
+- Owner protection.
+- At-least-one-active-owner governance.
+- Default-role synchronization without silently overwriting intentional restrictions.
+
+Important default roles include Owner, Principal, Administrator, Vice Principal, Academic Coordinator, Department Head, Accountant, HR Officer, Admissions Officer, Class Teacher, Subject Teacher, Front Desk/Gate Security, Transport Officer, Parent and Student.
+
+**Frontend visibility is never authorization.** Sensitive operations must be checked on the server.
+
+## Admissions and enrolment
+
+- Enquiries.
+- Applicants.
+- Application review.
+- Screening information.
+- Admission decisions.
+- Acceptance / rejection workflow.
+- Enrolment.
+- Conversion into normal Student and Guardian records.
+- Guardian relationship preservation.
+- Conflict-safe applicant stage changes.
+
+## Students
+
+- Student creation and profile management.
+- Admission/student number.
+- Status.
+- Class assignment.
+- House assignment.
+- Portrait/photo.
+- Guardian relationships.
+- Attendance history.
+- Scores and report cards.
+- Fees/invoices/payment relationship.
+- Documents.
+- Identity-card access.
+- Pickup/safety relationship.
+
+## Guardians and family relationships
+
+- Guardian creation and management.
+- Multiple-child relationships.
+- Primary guardian relationship.
+- Guardian contact details.
+- Controlled access to linked children.
+- Released attendance/results/report cards.
+- Fee information where authorized.
+- School messages and calendar information.
+- Guardian academic work.
+- Learning Arcade.
+
+## Staff and teachers
+
+- Staff account creation.
+- Staff status.
+- Roles.
+- Contact information.
+- Official portrait.
+- Class leadership.
+- Subject/class teaching assignments.
+- Staff profile.
+- Staff ID card.
+- Staff attendance/check-in.
+- Salary/payroll relationship.
+- Temporary password/change-on-first-login controls.
+
+Teachers are staff accounts with teaching assignments; the ID-card subsystem therefore prints teacher IDs through the staff credential path rather than maintaining a separate incompatible teacher-card model.
+
+## School identity cards
+
+Main workspace: `/school/id-cards`
+
+Functions:
+
+- Automatic reconciliation of current student/staff credentials.
+- Student IDs and staff IDs.
+- School logo and brand colors.
+- Official portrait support with initials fallback.
+- Front-and-back CR80 design.
+- Exact CR80 single-card PDF.
+- A4 bulk duplex print packs.
+- QR verification.
+- Signed verification URL.
+- Card serial/credential number.
+- Issue date.
+- Configurable expiry/validity period.
+- Current / revoked / expired status.
+- Reissue.
+- Revoke.
+- All-student printing.
+- All-staff printing.
+- Class printing.
+- Selected-card printing.
+- Whole-school printing.
+- Filtered-result printing.
+- Name/ID/card/class/role search.
+- Person-type filter.
+- Class filter.
+- Status filter.
+- Profile links.
+- Direct single-person **Print ID** action.
+- Public verification page that reports live credential state without exposing unnecessary private contact information.
+
+Printing standard:
+
+- CR80: `85.60 × 53.98 mm`.
+- Single card: exact CR80 PDF, front + back.
+- Bulk: A4 paired front/back sheets.
+- Print at `100% / Actual Size`.
+- Duplex bulk printing: long-edge flip.
+
+## Academics
+
+- Academic-year and term configuration.
+- Subjects.
+- Class/subject teacher assignment.
+- Assessments.
+- Score entry.
+- Gradebook.
+- Spreadsheet mark/status paste.
+- Keyboard mark-entry workflow.
+- Atomic multi-cell saves.
+- Concurrency snapshots/conflict rejection.
+- Score status such as Present/Absent/Excused where supported.
+- Moderation.
+- Report cards.
+- Report-card templates.
+- Review/approval/publication lifecycle.
+- Lesson planning.
+- Lesson draft/revision/resubmission.
+- Homework drafting/editing/assignment.
+- Teacher Academic Studio.
+- Submitted-answer review.
+- Manual/objective assessment handling.
+- Timetable.
+- Substitute assignments.
 
 Conceptual academic flow:
 
-**Academic year → term → class → subject → teacher → assessment → score → moderation → report card → approval → publication**
+`Academic year → term → class → subject → teacher → assessment → score → moderation → report card → approval → publication`
 
-Teachers can reopen and edit their lesson drafts or plans returned for revision, then resubmit the same record. Approved lesson content stays protected; its author can mark the lesson completed. Homework drafts can be edited and assigned from the existing editor. Content edits verify the current teaching assignment, term lock, author and last-seen update timestamp. Published homework content cannot be silently rewritten through this editor.
+Official academic history must not be silently rewritten after lock/publication.
 
-School and teacher gradebooks select a term automatically only when exactly one term is active on the school's local calendar day. Explicit historical/future selection remains available, invalid IDs do not fall back, and overlapping terms require a choice. Teacher assignment links preserve the selected term; locked sheets remain read-only and teacher previews use the school grade scale.
+## Report cards
 
-The general Gradebook Studio supports explicit atomic saves of up to 500 changed cells, spreadsheet mark/status paste in visible learner order, keyboard navigation, recorded/unsaved indicators and discard controls. Score snapshots protect updates and clears against concurrent writers; one conflict rejects the whole batch. Locked terms are read-only, status-only changes are saved, and clearing recorded marks requires confirmation. Previews include unsaved edits; production browser verification remains outstanding.
+- Draft report creation.
+- Template-based presentation.
+- Grade-scale integration.
+- Review.
+- Approval.
+- Publication.
+- Family visibility only after release.
+- Archived/historical protection.
 
-Published academic activities now link to a stable gradebook assessment. Manual mark entry and teacher review use the same term and finalized-report protections. The Teacher Academic Studio loads existing marks, leaves blank cells unchanged, opens learner review and publishes saved notes. Review shows submitted answers and requires a mark for every question. Question points must match the activity maximum; manual activities require teacher release even when objective answers can be scored automatically.
+Lifecycle:
 
-The academic mark sheet supports pasting a spreadsheet mark column with optional Present/Absent/Excused statuses, keyboard movement between learners, and visible completion/save states. Unsaved edits are protected when switching context or closing the browser. Each edited cell includes its last-seen score identity, value, status and timestamp; concurrent changes reject the whole save transaction with a reload message. Blank clipboard rows and unchanged marks are preserved.
+`Draft → Review → Approve → Publish → Family access → Archive`
 
-### Attendance and safety
+## Attendance
 
-Attendance supports ordinary class registers as well as physical/device and biometric directions. Existing concepts include class attendance, staff attendance, attendance history, exception handling, device registration, device identity, attendance receipts, idempotency/nonce protections, face enrollment and face-match review.
-
-Safety includes approved pickup relationships, pickup requests, pickup events and visitor logging.
-
-### Finance and payroll
-
-Fees, fee structures, invoices, invoice lines, balances, payments, receipts, arrears, reversals, salary structures, payroll runs and payslips.
-
-Financial history must remain auditable. A reversal is a separate event, not a silent mutation of historical payment data.
-
-### Communication
-
-School messages, announcements, SMS/WhatsApp broadcasts, templates, queues/outbox, delivery status, retry behaviour and emergency broadcast workflows.
-
-### Transport
-
-Routes, stops, vehicles, drivers, student assignments and operational route information, with room for future live tracking/integration.
-
-### Feeding
-
-School meal operations, planning and daily service information.
-
-### Library
-
-Physical and digital catalogue, borrowing, returns, due dates and overdue tracking. Digital resources may include textbooks, eBooks, PDFs, worksheets, past papers, audio, video and other documents.
-
-The library catalogue and legacy operations API share one circulation service. Library managers see school circulation; borrower-only accounts are limited to linked children or assigned classes. Named learner/material selectors, configurable loan duration, server-calculated overdue states and return controls complete the circulation desk. Issue/return retries preserve copy counts, and catalogue/circulation changes are audited. Unsafe legacy resource links are suppressed. Loan history currently returns the latest 300 records; full historical pagination and copy-level accession tracking remain future work.
-
-### Assets and inventory
-
-Assets, stock/inventory, assignments, maintenance and retirement/disposal records.
-
-### HR and recruitment
-
-Staff records, salary structures, payroll runs, payslips, vacancies, applicants, interviews, offers and recruitment status.
-
-Recruitment uses one service for the school and legacy operations routes. Public intake checks vacancy status, deadlines, screening answers and resource links; a submission key makes retries idempotent. Reviewers can inspect applications and move candidates through stages with conflict checks. Hired candidates can become staff in one transaction using the normal account-creation and role-authority rules, including Owner protection and forced password changes. Date-only closing dates mean end of day UTC. The public form supports narrow screens and preserves retry identifiers.
-
-### Examinations / CBT
-
-Assessments, examination schedules, mark entry, moderation, results and computer-based testing.
-
-### Reporting and analytics
-
-Attendance, academics, finance/arrears, staff, operations, management dashboards and authorized school/group comparisons. Analytics must use real data rather than fake KPIs or local-only UI state.
-
-## Roles and authorization
-
-School users operate through roles, permissions, role-permission assignments and user-specific overrides. The current permission catalogue includes areas such as attendance, finance, payroll, reports, visitors, transport, feeding, exams, library, assets, recruitment, analytics, exports and custom roles.
-
-Important default roles include:
-
-- Owner
-- Principal
-- Administrator
-- Vice Principal
-- Academic Coordinator
-- Department Head
-- Accountant
-- HR Officer
-- Admissions Officer
-- Class Teacher
-- Subject Teacher
-- Front Desk/Gate Security
-- Transport Officer
-- Parent
-- Student
-
-The school owner can assign custom roles and individual grants/denies. New Principal and Administrator roles receive broad operational permissions, while Owner assignment and Owner account changes remain protected. Existing school role permissions are preserved. Account governance serializes changes and requires at least one active Owner to remain when ownership or account status changes. Access settings show readable permission labels, high-impact warnings, and a preview of inherited, directly granted, directly denied and effective rights. Creating staff preserves the selected role's existing permissions. Temporary passwords created or reset through account management require replacement at first login. Default-role synchronization creates missing roles with baseline permissions and preserves existing role identities and permission sets, including intentional restrictions. A custom role that shares a system role's name is never automatically converted into that system role.
-
-**Frontend visibility is not authorization.** Sensitive actions must be checked on the server.
-
-## Multi-tenancy and security
-
-Every school is a tenant. School-owned records are scoped through `schoolId` and same-school relationships.
-
-Rules:
-
-1. Authenticate the user.
-2. Establish the correct school/platform context.
-3. Authorize the action.
-4. Query through the tenant boundary.
-5. Validate related records belong to the same school.
-6. Perform the business operation.
-7. Audit consequential actions where appropriate.
-
-Never trust a client-provided `schoolId` or a client-provided target identity when the authenticated session already determines the actor.
-
-The project uses tenant-aware database helpers such as `withTenant()` and PostgreSQL row-level protection. Application filtering and database protections should reinforce each other.
-
-Platform and school authentication are separate security universes. Platform accounts use `PlatformAdmin`/`PLATFORM_AUTH_SECRET`; school users use `User`/`SCHOOL_AUTH_SECRET`; guardian access follows the school-facing family path.
-
-Passwords use `bcryptjs`; password reset tokens are stored as hashes with expiry/use controls; login throttling is persisted rather than relying only on process memory.
-
-School and platform audit trails are first-class security records. Important actions include permission changes, impersonation, payment reversals, approval/rejection, biometric operations, emergency communication and destructive administrative operations.
-
-## Platform impersonation
-
-Support impersonation is explicit rather than a hidden backdoor. It is permission-gated, time-limited, tied to a reason and audited in both platform and school contexts. The intended maximum session duration is 30 minutes.
-
-Never add silent “god mode” access.
+- Student class register.
+- Date/class roster workflow.
+- Quick marking such as All Present with individual override.
+- Attendance history.
+- Attendance exceptions.
+- Staff attendance.
+- Staff self-check-in.
+- QR attendance foundations.
+- Device attendance.
+- Face enrollment and face-match review.
+- Device identity and attendance receipts.
+- Replay/idempotency protections.
+- School-timezone rules.
+- Expected resumption time and grace period.
+- Calendar-based attendance disabling.
 
 ## Staff QR School Check-In
 
-SukuuNova is being extended with a dedicated **Staff School Check-In** workflow for schools that do not want to rely on face/fingerprint hardware.
+Designed as a separate staff self-attendance workflow:
 
-This feature builds on the existing QR attendance foundation but changes the security model from a teacher-specific QR token to a **short-lived, school-wide challenge**.
+- Authorized attendance-display access.
+- Short-lived school-wide QR challenge.
+- Signed challenge/JWT design.
+- Authenticated staff identity derived from the signed-in session.
+- Same-school enforcement.
+- Expiry/replay protection.
+- Duplicate same-day protection.
+- Optional/required school-presence signal depending on school policy.
+- Audit trail.
 
-### Human workflow
+The QR challenge must never be the source of the staff identity; the authenticated staff session is the source of truth.
 
-**School display:**
+## Finance
 
-1. An authorized school user opens the dedicated Attendance Display.
-2. SukuuNova verifies the user has the dedicated `attendance:display` permission.
-3. The display creates a fresh school check-in challenge.
-4. A QR code is shown on the school's gate/office/reception display.
-5. The QR automatically rotates frequently.
+- Fee items/fee structures.
+- Student invoices.
+- Invoice lines.
+- Outstanding balances.
+- Full payments.
+- Partial payments.
+- Receipts.
+- Arrears.
+- Payment references.
+- Reconciliation-oriented records.
+- Payment reversals.
+- Audit trail.
+- Locked-period protections where configured.
 
-**Teacher:**
+Finance behaves like a ledger. Historical payments are not silently edited to manufacture a desired balance; a reversal is a new auditable event.
 
-1. Teacher signs into the normal Teacher Portal.
-2. Teacher opens **School Check-In**.
-3. The phone camera scans the live school QR.
-4. The server derives the teacher identity from the authenticated session.
-5. SukuuNova verifies the challenge, school, user and attendance rules.
-6. When the school's presence policy is satisfied, staff attendance is recorded using server time.
+## Payroll
 
-The QR **must never identify the teacher**. The authenticated teacher session is the source of truth for staff identity.
+- Salary structures.
+- Payroll runs.
+- Payslips.
+- Staff/payroll relationship.
+- Permission-controlled payroll operations.
 
-### Display access
+## Communication
 
-The live QR display is not a public URL and must not be available to every teacher automatically.
+- School messages.
+- Announcements.
+- SMS workflows.
+- WhatsApp workflows where configured.
+- Templates.
+- Queues/outbox.
+- Delivery status.
+- Retry behavior.
+- Emergency broadcast workflows.
+- Family-facing school communication.
 
-The school can explicitly grant `attendance:display` to selected users such as:
+Provider integrations are optional and environment-driven.
 
-- Principal / Head
-- Attendance Officer
-- Front Desk / Gate Security
-- another explicitly authorized staff member
+## Safety, pickup and visitors
 
-A person with display access should receive a focused display workflow, not additional administrative authority merely because they can operate the screen.
+- Approved pickup relationships.
+- Pickup approval requests.
+- Pickup events.
+- Gate/safety workflow.
+- Visitor log.
+- Consequential-event auditability.
 
-### Security properties
+## Transport
 
-The intended implementation uses:
+- Routes.
+- Stops.
+- Vehicles.
+- Drivers.
+- Student transport assignment.
+- Operational route information.
+- Infrastructure for deeper tracking/integration work.
 
-- school-scoped challenges;
-- cryptographically random challenge IDs/nonces;
-- signed JWTs;
-- `jti` challenge identifiers;
-- short expiration, currently targeted at roughly 45 seconds;
-- persisted challenge issuance metadata;
-- one-time/atomic consumption protection;
-- same-school session verification;
-- active staff verification;
-- server-derived actor identity;
-- replay detection;
-- duplicate same-day attendance protection;
-- failed-attempt/rate-limit protections where appropriate;
-- server time for the attendance event;
-- privacy-conscious verification metadata;
-- auditable successful and consequential events.
+## Feeding
 
-Browser geolocation may be used as a school-presence signal. A school's policy can decide whether location is off, optional or required. Location is a verification signal, not an absolute proof of physical identity.
+- School meal operations.
+- Meal planning.
+- Daily service information.
 
-The implementation should avoid continuous location tracking and should not store unnecessary location history.
+## Library
 
-### Anti-cheating model
+- Physical catalogue.
+- Digital resources.
+- Borrowing/issue.
+- Returns.
+- Due dates.
+- Server-calculated overdue state.
+- Loan-duration configuration.
+- Learner/material selection.
+- Circulation history.
+- Copy-count integrity on issue/return retries.
+- Audited catalogue/circulation changes.
+- Suppression of unsafe legacy links.
 
-No single browser signal is treated as infallible. The strongest practical workflow combines:
+Digital resources may include textbooks, eBooks, PDFs, worksheets, past papers, audio, video and other school documents.
 
-**short-lived QR + one-time server challenge + authenticated teacher identity + same-school enforcement + optional/required location verification + optional network/device anomaly signals + audit trail.**
+## Assets and inventory
 
-This means a teacher cannot simply take yesterday's screenshot and use it later. It also means a forwarded live code is much less useful because it expires quickly and the server still authenticates the person making the scan.
+- School assets.
+- Stock/inventory concepts.
+- Assignment.
+- Maintenance.
+- Retirement/disposal records.
 
-Schools that want stronger gate control can add approved network/Wi-Fi requirements or dedicated gate devices. Such mechanisms should be policy options, not hard-coded assumptions about every school's infrastructure.
+## HR and recruitment
 
-### Existing QR compatibility
+- Staff records.
+- Vacancies.
+- Public applicant intake.
+- Screening questions.
+- Application review.
+- Candidate stages.
+- Interviews/offers/status flow.
+- Idempotent submission key.
+- Deadline checks.
+- Conversion of a hired candidate into a staff account using normal role-authority and temporary-password rules.
 
-The repository already has an older `createAttendanceQr()` / `verifyAttendanceQr()` foundation and attendance methods including QR, face, fingerprint and card/device paths. The new staff self-check-in workflow must preserve those existing paths rather than replace them.
+## Examinations / CBT
 
-## Attendance rules
+- Assessments.
+- Examination schedules.
+- Mark entry.
+- Moderation.
+- Results.
+- Computer-based testing surfaces where implemented.
 
-Normal student attendance is organized around:
+## Reporting and analytics
 
-**Class → date → roster → mark → resolve exceptions → save/submit**
+- Attendance reporting.
+- Academic reporting.
+- Finance/arrears reporting.
+- Staff reporting.
+- Operational dashboards.
+- Management analytics.
+- Authorized school/group comparison concepts.
 
-Quick actions such as “All Present” are useful, with individual overrides.
-
-Staff self-attendance is a separate workflow from recording another person's attendance.
-
-Attendance must respect the school's configured timezone, expected resumption time and grace period. Calendar entries that disable attendance must be honored.
-
-Where a staff self-check-in already exists for the day and direction, the system should reject a duplicate rather than silently create another record.
-
-## Finance integrity
-
-Finance must behave like a ledger.
-
-A payment workflow should validate:
-
-- school and account ownership;
-- locked term rules;
-- positive amount;
-- supported payment method;
-- required reference/transaction identifier when applicable;
-- amount not exceeding the outstanding balance;
-- duplicate reference/idempotent retry conditions;
-- actor authorization.
-
-Payment reversal is a new financial event with an audit trail. Never rewrite historical payment data merely to make a balance look correct.
-
-Fee waivers, scholarships and consequential financial adjustments should use explicit approval rules.
-
-## Guardian / family experience
-
-Guardians should see only their authorized linked children and only information released to the family.
-
-The guardian academic-work engine separates attempts for linked children, keeps answer keys and teacher guidance on the server, and freezes submitted responses. Provisional marks remain hidden until grading completes. Teacher-reviewed results pass through the canonical gradebook service, including term and report-history protections. The raw academic-work, question, submission, answer and note tables enforce tenant RLS and same-school relationships.
-
-Important family information includes identity, released attendance/results, report cards, school messages, fee balances and relevant calendar information.
-
-WhatsApp is an access channel, not a free-form AI-to-database backdoor. The assistant must verify guardian context, resolve authorized children, classify supported intents, query only needed data and refuse unsupported requests rather than guessing.
+Analytics must use real persisted data. Decorative/fake KPIs are not acceptable.
 
 ## Learning Arcade
 
-Guardians can open Learning Arcade from the family dashboard. Math Sprint, Word Builder and Logic Lab share five-question rounds with keyboard/touch controls, saved answers and post-round teaching feedback. Each active linked child has separate practice history, XP, stars, levels, achievements and a school-timezone learning streak. Starting difficulty follows class level; sustained performance adjusts it, and families can request easier new rounds. Progress displays practice accuracy rather than claiming curriculum mastery.
+Family-linked learning practice includes:
 
-The server generates questions and checks answers. Active answer keys stay private; completion retries return the same award. Tenant RLS, same-school foreign keys and current guardian relationships protect ArcadeRound records. Arcade practice does not write official grades. There are no purchases, timers or chance-based rewards. Current content covers arithmetic/equations, vocabulary/grammar and number patterns; further game types and school-authored packs remain future work.
+- Math Sprint.
+- Word Builder.
+- Logic Lab.
+- Five-question rounds.
+- Saved answers.
+- Post-round teaching feedback.
+- Child-specific history.
+- XP/stars/levels/achievements.
+- School-timezone streak.
+- Difficulty adjustment.
 
-## Academic integrity
+Learning Arcade is practice only and does **not** write official school grades.
 
-Scores must be checked against the correct school, class, subject and assessment. Locked/published academic records must not be casually modified. Report cards follow a deliberate lifecycle:
+## AI assistance
 
-**Draft → Review → Approve → Publish → Family access → Archive**
-
-The family should not see unapproved/unpublished academic results merely because the database contains them.
-
-## AI inside SukuuNova
-
-AI is an assistant, not the authority over school records.
-
-AI-generated material is a draft. Official academic or operational records require the normal human approval workflow.
+AI is an assistant, never the authority over official records.
 
 Safe rule:
 
-> **AI suggests. A human decides. The normal application workflow records the decision.**
+> **AI suggests. A human decides. The normal SukuuNova workflow records the decision.**
 
-Only the minimum necessary school context should be sent to AI services.
+Only the minimum necessary school context should be sent to an AI service. AI drafts must not bypass authorization, academic approvals, financial controls or audit requirements.
 
-## UI/UX and responsive design
+## Downloads, documents and exports
 
-SukuuNova is undergoing continuous visual and workflow consolidation.
+- School-generated documents and exports where authorized.
+- Download surfaces must use real persisted data.
+- Export permissions must be checked server-side.
+- Generated documents should carry the correct school identity and avoid exposing data outside the intended scope.
 
-Use semantic tokens for page backgrounds, surfaces, text, muted text, borders, accents, success/warning/danger and focus states. Do not scatter hard-coded cross-theme classes throughout specialised workspaces.
+---
 
-Mobile should preserve the same information architecture while adapting density and interactions for touch. Avoid horizontal overflow where possible, preserve readable touch targets and keep the primary action obvious.
+# Security and architecture
 
-A page must deliberately handle loading, empty, success, validation error, permission denied, not found, network/server error, saving/saved and destructive confirmation states.
+## Multi-tenancy
 
-The finance/installment area is a known UI-sensitive surface: mobile coloring must stay visually consistent with the correct desktop palette while retaining the mobile layout.
+Every school is a tenant. School-owned data is scoped through `schoolId` and same-school relationships.
 
-## Data model
+For school operations:
 
-The authoritative schema is `prisma/schema.prisma`.
+1. authenticate the user;
+2. establish the correct school context;
+3. authorize the action;
+4. query inside the tenant boundary;
+5. verify related records belong to that same school;
+6. execute the business operation;
+7. audit consequential actions where appropriate.
 
-Major model families include:
+Never trust a client-provided school identity when the authenticated session already establishes the tenant.
 
-### Platform and tenancy
+## Database isolation
 
-`PlatformAdmin`, `School`, `SchoolSettings`, `SchoolLoginDirectory`, `SubscriptionPlan`, `LoginRateLimit`, `PlatformPasswordResetToken`, `AuditLogPlatform`
+SukuuNova uses tenant-aware database helpers and PostgreSQL Row-Level Security. Production runtime uses the restricted `sukuunova_app` database role so `FORCE ROW LEVEL SECURITY` remains effective. The application is expected to fail closed when it cannot verify a safe production database role.
 
-### Users and authorization
+## Authentication domains
 
-`User`, `Role`, `Permission`, `RolePermission`, `UserRole`, `UserPermissionOverride`, `SchoolPasswordResetToken`, `AuditLogSchool`
+- Platform: `PlatformAdmin` + `PLATFORM_AUTH_SECRET`.
+- School: `User` + `SCHOOL_AUTH_SECRET`.
+- Guardian/family: guardian-specific school-facing security context.
 
-### Academic structure
+These security domains must not be merged casually.
 
-`AcademicYear`, `Term`, `CalendarEvent`, `House`, `Class`, `Subject`, `ClassSubjectTeacher`
+## Password and reset security
 
-### Learners and families
+- Passwords use `bcryptjs`.
+- Reset tokens are hashed.
+- Expiry/use controls apply.
+- Login throttling is persisted.
+- Temporary staff/leadership passwords require replacement at first login where configured.
 
-`Student`, `Guardian`, `StudentGuardian`
+## Audit
 
-### Attendance and identity
+School and platform audit trails are security records. Examples of consequential operations include:
 
-`AttendanceEvent`, `FaceEnrollment`, `FaceMatchReview`, `Device`, `DeviceIdentity`, `DeviceAttendanceReceipt`
+- permission changes;
+- impersonation;
+- payment reversals;
+- approvals/rejections;
+- biometric operations;
+- ID-card reissue/revoke/validity change;
+- emergency communications;
+- destructive administrative changes.
 
-### Academics
+## Platform impersonation
 
-`Assessment`, `Score`, `ReportCard`, `ReportCardTemplate`, `AiDraft`
+Support impersonation is explicit, permission-gated, reason-bound, time-limited and auditable. Never create a silent god-mode backdoor.
 
-### Finance and payroll
+---
 
-`FeeItem`, `Invoice`, `InvoiceLine`, `Payment`, `PaymentReversal`, `SalaryStructure`, `PayrollRun`, `Payslip`
+# Important routes
 
-### Communication
+## School workspace
 
-`Message`
-
-### Operations and safety
-
-`TimetableSlot`, `SubstituteAssignment`, `VisitorLog`, `ApprovedPickup`, `PickupApprovalRequest`, `PickupEvent`
-
-Specialized models may also exist. Always inspect the current schema before assuming a model or field exists.
-
-## Major routes
-
-Important school routes include:
-
+- `/school`
 - `/school/students`
 - `/school/guardians`
 - `/school/staff`
@@ -423,6 +600,7 @@ Important school routes include:
 - `/school/attendance/display`
 - `/school/gradebook`
 - `/school/report-cards`
+- `/school/id-cards`
 - `/school/fees`
 - `/school/fees/invoices`
 - `/school/fees/payments`
@@ -432,11 +610,28 @@ Important school routes include:
 - `/school/communications/announcements`
 - `/school/events`
 
-The Teacher Portal is rooted at `/teacher` and includes attendance, gradebook, homework, timetable, messages and the staff school check-in entry point.
+## Teacher workspace
 
-Some API paths retain historical internal names. Those are compatibility details only and do not represent product stages or roadmap terminology.
+Root: `/teacher`
 
-## Development rules
+Includes teacher-scoped attendance, gradebook, homework/academic work, timetable, messages and school check-in surfaces where authorized.
+
+## Family / guardian
+
+Guardian routes expose only linked children and school-released information.
+
+## Identity-card APIs and verification
+
+- `/api/school/identity-cards`
+- `/api/school/identity-cards/student/[id]`
+- `/api/school/identity-cards/staff/[id]`
+- `/verify/id-card/[schoolCode]/[serial]?sig=...`
+
+Production verification URLs should use the canonical Railway origin: `https://sukuunova-production.up.railway.app`.
+
+---
+
+# Development rules
 
 Before changing a workflow:
 
@@ -444,181 +639,198 @@ Before changing a workflow:
 2. Inspect the page/component.
 3. Inspect the API/server action.
 4. Inspect reusable services/helpers.
-5. Inspect the Prisma models and migrations.
+5. Inspect Prisma models and migrations.
 6. Inspect authorization.
-7. Inspect audit behaviour.
+7. Inspect audit behavior.
 8. Inspect tests.
 9. Check whether another route already performs the same business operation.
-10. Consider production deployment impact.
+10. Consider Railway production impact.
 
-Prefer existing shared primitives such as `withTenant()`, authorization/RBAC helpers, audit utilities, service layers, workspace shells and semantic design tokens.
+Prefer shared primitives such as `withTenant()`, RBAC/authorization helpers, audit utilities, service layers, workspace shells and semantic design tokens.
 
 Do not create a second business implementation merely because the existing one is inconvenient.
 
 ## Database and migration rules
 
-Prisma migration directories are historical implementation records. Their old internal names must not be used to define product work.
-
-The current schema is authoritative.
+The current Prisma schema is authoritative. Migration directories are historical implementation records, not product-stage labels.
 
 When changing the schema:
 
-1. understand existing relationships;
+1. understand current relationships;
 2. preserve tenant isolation;
-3. consider existing production data;
+3. consider production data;
 4. create a safe migration;
-5. validate migration application against a production-style database;
+5. test migration application against a production-like database;
 6. update server logic;
-7. update UI and validation;
-8. consider rollback/recovery.
+7. update validation/UI;
+8. consider recovery/rollback.
 
 Never casually delete or rename production fields merely to simplify a screen.
 
-## Testing standard
+---
 
-Tests must cover both the happy path and failure paths.
+# Testing standard
 
-Important journeys include:
+Tests should cover happy paths and failure paths.
 
-### Owner
+High-value journeys include:
 
-Create school → establish academic year/term → create classes → add staff → assign teachers → enrol students → connect guardians → configure fees → record payments → configure timetable → enter marks → approve results → publish report cards → communicate with families.
+- Owner: provision/configure school → staff → learners → fees → academics → reports → communications.
+- Teacher: login → assigned work → attendance → marks → homework → timetable → check-in.
+- Guardian: linked children only → released attendance/results → report card → fees/messages.
+- Bursar: fees → invoice → payment → receipt → balance → reversal → audit.
+- Gate/safety: learner → approved pickup → request/approval → final event.
+- ID cards: permission → reconcile → filter → exact CR80 single download → A4 bulk front/back pack → QR verification → reissue/revoke.
 
-### Teacher
+ID-card tests should include:
 
-Login → see only assigned work → take class attendance → check in to school where enabled → enter marks → manage homework → inspect timetable → communicate where permitted.
+- student card creation;
+- staff/teacher card creation;
+- correct Student ID / Staff ID;
+- class filter isolation;
+- selected-card tenant isolation;
+- exact CR80 single-card page dimensions;
+- front and back page count;
+- A4 bulk front/back page pairing;
+- signed QR verification;
+- tampered signature rejection;
+- expired/revoked behavior;
+- portrait handling;
+- staff eligibility removal;
+- configured validity alignment.
 
-### Guardian
+---
 
-Login → see only linked children → see released attendance/results → inspect report card → view allowed fee information → receive communications.
+# Railway production and release process
 
-### Bursar
+**Production platform: Railway**
 
-Configure fees → invoice → full/partial payment → receipt → balance → reconciliation → reversal → audit.
+**Canonical production URL: `https://sukuunova-production.up.railway.app`**
 
-### Gate/safety
+SukuuNova production is not Vercel. A provider preview/check that happens to appear on a GitHub pull request is not the production release gate.
 
-Identify learner → verify approved pickup → process pickup or request approval → record final pickup event.
+The repository Railway configuration uses:
 
-### Staff QR check-in
+- Railpack builder;
+- `npm run db:migrate` as pre-deploy command;
+- `node scripts/start-production.cjs` as production start command;
+- `/api/health` as the health check;
+- restart-on-failure policy.
 
-Authorized display user → live rotating QR → authenticated teacher scan → challenge verification → presence policy → single-use consumption → staff attendance → audit.
+`NEXT_PUBLIC_APP_URL` in Railway production should be `https://sukuunova-production.up.railway.app`.
 
-QR-specific failure cases must include:
+A release is not complete because a branch or PR exists. For production work verify:
 
-- unauthorized display access;
-- invalid signature;
-- wrong school;
-- wrong purpose;
-- expired challenge;
-- replayed challenge;
-- concurrent submissions;
-- inactive staff;
-- teacher identity substitution attempt;
-- duplicate same-day check-in;
-- failed presence verification;
-- rate limiting;
-- manual/device/biometric attendance regressions.
-
-## Deployment
-
-Production is centred on Railway.
-
-A change is not considered complete merely because a GitHub commit exists.
-
-For production work, verify:
-
-1. code is committed;
-2. dependency/lockfile state is coherent;
-3. CI/build checks pass;
-4. migrations are safe and applied;
+1. code is reviewed/merged to `main`;
+2. dependency and lockfile state is coherent;
+3. relevant tests/build checks pass;
+4. migrations are safe and Railway pre-deploy succeeds;
 5. Railway deployment succeeds;
-6. `/api/health` is healthy;
-7. the affected browser workflow works;
-8. relevant logs contain no unexpected runtime errors.
+6. `https://sukuunova-production.up.railway.app/api/health` is healthy;
+7. Railway runtime logs show no unexpected failure;
+8. affected browser workflows are tested at `https://sukuunova-production.up.railway.app`;
+9. QR/public links resolve to the Railway production origin rather than a preview domain.
 
-Do not perform production database changes casually.
+Do not claim a change is production-complete without this evidence.
 
-## Environment configuration
+See `docs/RAILWAY_PRODUCTION.md` for deployment/environment details.
 
-Secrets belong in deployment/environment configuration and must never be committed or exposed to the browser.
+---
 
-Important categories include database access, school/platform auth secrets, AI configuration, messaging providers, WhatsApp configuration, deployment/runtime controls and development-only switches.
+# Environment and secrets
 
-## Current engineering reality
+Secrets belong in deployment configuration, never source control or browser-visible code.
 
-SukuuNova has substantial foundations around multi-tenancy, authentication, permissions, audit logging, academics, finance, attendance, messaging, safety, platform management, subscriptions, support and AI drafts.
+Important categories include:
 
-However, the route tree is larger than the amount of fully polished end-to-end workflow coverage. A route may be operational, partial, read-only, a safe fallback, visually complete but functionally incomplete, or awaiting integration.
+- database access;
+- school/platform/guardian authentication secrets;
+- QR/signature secrets;
+- AI configuration;
+- messaging/WhatsApp provider credentials;
+- biometric encryption material;
+- backup encryption keys;
+- destructive maintenance authorization.
+
+Production `NEXT_PUBLIC_APP_URL` is not a secret and should point to the canonical Railway production origin.
+
+---
+
+# Current engineering reality
+
+SukuuNova has substantial foundations across multi-tenancy, authentication, permissions, auditing, academics, finance, attendance, messaging, safety, platform management, subscriptions, support, identity cards and AI-assisted workflows.
+
+However, route existence is not proof of complete end-to-end behavior. A route may be fully operational, partially implemented, read-only, intentionally safe-fallback, visually polished but incomplete, or awaiting an external integration.
 
 Therefore:
 
-> **Never infer feature completion from route existence, a polished card, a database model or a successful HTTP status alone.**
+> **Never infer completion from a route, model, button, card, HTTP 200 or screenshot alone.**
 
-The working objective is system-wide coherence and correctness: finish real workflows, eliminate misleading prototype behaviour, strengthen tenant and role enforcement, improve responsive UX, improve loading/error/empty states, test real journeys and verify production.
+The goal is system-wide correctness: complete real workflows, eliminate misleading prototype behavior, strengthen tenant and role enforcement, improve responsive UX, test real journeys and verify Railway production behavior.
 
-## Current staff QR implementation status
+---
 
-The secure rotating staff QR work is being developed on the `feat/staff-qr-checkin` branch in draft PR #9. It is intentionally separate from `main` until dependency, build, security and browser validation pass.
+# Future directions
 
-The implementation includes a dedicated staff scanner, school display workflow, signed short-lived school challenges, authenticated teacher identity, presence verification and audit-based replay protection. It must not be described as production-complete until the complete validation chain passes.
+SukuuNova is intended to grow further into a full school operating platform, including:
 
-The existing attendance code already supports QR plus other attendance methods, so the new staff self-check-in is an extension of the attendance system, not a replacement for existing attendance mechanisms.
-
-## Future directions
-
-SukuuNova is intended to grow into a deeper school operating platform, including:
-
-- stronger hardware/device attendance infrastructure;
+- deeper device attendance infrastructure;
 - secure biometric terminal integrations;
-- offline-first attendance and gate workflows;
-- Ghana-focused payment integrations and reconciliation;
-- richer analytics and management intelligence;
-- controlled AI school operations assistance;
-- stronger academic support and intervention tooling;
+- offline-first attendance and gate operations;
+- Ghana-focused payments/reconciliation;
+- richer management analytics;
+- controlled AI school-operations assistance;
+- stronger intervention/academic-support tools;
 - comprehensive family/mobile experiences;
-- full communications campaigns and delivery analytics;
-- digital admissions and enrolment;
+- communications campaigns and delivery analytics;
+- deeper admissions/enrolment automation;
 - accounting/payment/document/calendar integrations;
-- authorized group-level benchmarking without breaking tenant boundaries;
+- authorized group benchmarking without breaking tenant boundaries;
 - partner APIs and webhooks.
 
-Future integrations should live behind clear service boundaries and preserve the core tenant/security/audit model.
+Future integrations must preserve tenant isolation, authorization and audit boundaries.
 
-## Architectural red lines
+---
+
+# Architectural red lines
 
 Never:
 
-- cross tenant boundaries;
+- cross school/tenant boundaries;
 - trust frontend-only authorization;
 - expose secrets;
-- silently mutate official academic/financial records with AI;
+- silently mutate official academic or financial history with AI;
 - fake successful persistence;
 - destroy financial history casually;
-- introduce competing design systems without reason;
-- make destructive operations one-click by accident;
-- assume a route means a feature is complete;
-- replace an existing secure workflow without understanding its downstream dependencies.
+- introduce a competing design system without reason;
+- make destructive operations accidentally one-click;
+- assume a route means a function works;
+- replace an existing secure workflow without tracing its dependencies;
+- use a preview provider URL as the SukuuNova production origin.
 
-## Definition of done
+---
 
-A SukuuNova feature is done when the intended user can complete the real workflow safely.
+# Definition of done
 
-That means:
+A SukuuNova function is done when its intended user can complete the real workflow safely.
 
-**Correct data + correct authorization + correct tenant scope + correct business rules + usable UI + complete states + auditability where needed + tests + successful production verification.**
+That requires:
 
-The ultimate test is:
+**Correct data + correct authorization + correct tenant scope + correct business rules + usable UI + complete states + auditability where needed + tests + successful Railway production verification.**
 
-> **Could a real school use this operation confidently on a busy day without needing to understand how the database works?**
+The practical question is:
+
+> **Could a real school use this operation confidently on a busy day without needing to understand the database?**
 
 If not, keep working.
 
-## AI coding-agent operating rule
+---
 
-For any task:
+# AI coding-agent operating rule
 
-**Inspect deeply → understand the real workflow → trace UI → server → authorization → database → downstream effects → fix the underlying logic → enforce security → make the UI coherent → test the journey → verify production → move to the next problem.**
+For every task:
+
+**Inspect deeply → understand the workflow → trace UI → server → authorization → database → downstream effects → repair the underlying logic → enforce security → make the UI coherent → test the journey → verify Railway production → move to the next problem.**
 
 AI agents must:
 
@@ -630,7 +842,7 @@ AI agents must:
 - avoid unnecessary rewrites;
 - avoid major dependency upgrades without a deliberate plan;
 - treat migration names as historical technical identifiers;
-- report uncertainty rather than inventing behaviour;
-- never claim production success without actual deployment and health evidence.
+- report uncertainty instead of inventing behavior;
+- never claim production success without Railway deployment/health/browser evidence.
 
-SukuuNova is one evolving system. The goal is continuous improvement in reliability, usefulness, security and product coherence—not a sequence of product-stage gates.
+SukuuNova is one evolving system. The goal is continuous improvement in reliability, usefulness, security and product coherence.
