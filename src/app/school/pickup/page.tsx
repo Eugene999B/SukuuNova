@@ -47,7 +47,7 @@ export default async function PickupPage() {
       tx.student.findMany({ where: { schoolId: session.schoolId, status: "active" }, orderBy: { name: "asc" }, take: 500, select: { id: true, name: true, admissionNo: true, class: { select: { name: true, level: true } } } }),
       tx.guardian.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, take: 500, select: { id: true, name: true, phone: true } }),
       tx.approvedPickup.findMany({ where: { schoolId: session.schoolId }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, studentId: true, guardianId: true, student: { select: { name: true, admissionNo: true } }, guardian: { select: { name: true, phone: true } } } }),
-      tx.pickupApprovalRequest.findMany({ where: { schoolId: session.schoolId, status: "pending" }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, studentId: true, collectedByGuardianId: true, requestedByUserId: true, createdAt: true, student: { select: { name: true, admissionNo: true, class: { select: { name: true } } } }, collectingGuardian: { select: { name: true, phone: true } }, requestedByUser: { select: { name: true } } } }),
+      tx.pickupApprovalRequest.findMany({ where: { schoolId: session.schoolId, status: "pending" }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, studentId: true, collectedByGuardianId: true, requestedByUserId: true, createdAt: true, student: { select: { name: true, admissionNo: true, class: { select: { name: true } } } }, collectingGuardian: { select: { name: true, phone: true } }, requester: { select: { name: true } } } }),
       tx.pickupEvent.findMany({ where: { schoolId: session.schoolId }, orderBy: { timestamp: "desc" }, take: 80, select: { id: true, timestamp: true, wasPreApproved: true, student: { select: { name: true, admissionNo: true, class: { select: { name: true } } } }, collectingGuardian: { select: { name: true } } } }),
       hasPermission(tx, session.userId, "attendance:pickup_approve"),
       hasPermission(tx, session.userId, "attendance:record"),
@@ -94,7 +94,7 @@ export default async function PickupPage() {
             return <article className="pickup-request" key={request.id}>
               <div className="pickup-request-person"><strong>{request.student.name}</strong><span>{request.student.admissionNo}{request.student.class?.name ? ` · ${request.student.class.name}` : ""}</span></div>
               <div className="pickup-request-collector"><small>Collector</small><strong>{request.collectingGuardian.name}</strong><span>{request.collectingGuardian.phone ?? "No phone recorded"}</span></div>
-              <div className="pickup-request-meta"><span>{timeLabel(request.createdAt)}</span><span>Requested by {request.requestedByUser?.name ?? "gate staff"}</span></div>
+              <div className="pickup-request-meta"><span>{timeLabel(request.createdAt)}</span><span>Requested by {request.requester?.name ?? "gate staff"}</span></div>
               {data.canApprove && !ownRequest ? <form action={review} className="pickup-review-actions">
                 <input type="hidden" name="requestId" value={request.id} />
                 <button type="submit" name="decision" value="rejected" className="reject">Reject</button>
