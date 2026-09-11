@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Download, ImageOff, RefreshCw, Search, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { Download, ImageOff, Printer, RefreshCw, Search, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import "./identity-card-manager.css";
 
 type Card = {
@@ -140,7 +140,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
       anchor.click();
       anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setMessage("Front-and-back ID card print pack downloaded. Print at 100% / Actual Size and use duplex long-edge flipping.");
+      setMessage("Front-and-back CR80 print pack downloaded. Each card is 85.60 × 53.98 mm. Print at 100% / Actual Size; for A4 duplex sheets use long-edge flipping and do not Fit to Page.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to create the print pack.");
     } finally {
@@ -198,7 +198,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
 
   return <div className="identity-manager">
     <section className="identity-manager-command">
-      <div><span className="app-eyebrow">SCHOOL IDENTITY</span><h2>Professional student & staff ID cards</h2><p>Every download now contains a designed front and back at standard CR80 card size. The front carries the school logo, portrait and school ID; the QR verification code and practical details live on the back.</p></div>
+      <div><span className="app-eyebrow">SCHOOL IDENTITY</span><h2>Professional student & staff ID cards</h2><p>Every download contains a designed front and back at standard CR80 bank-card size. The front carries the school logo, portrait and school ID; the QR verification code and practical details live on the back.</p></div>
       <button type="button" className="app-pill" onClick={() => void load()} disabled={loading}><RefreshCw size={14}/> Refresh</button>
     </section>
 
@@ -206,6 +206,12 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
       <div><SlidersHorizontal size={18}/><span><strong>Card validity</strong><small>One school-wide period for all student and staff ID downloads. Default: 5 years.</small></span></div>
       <label><span>Validity period</span><select value={validityMonths} onChange={(event) => setValidityMonths(Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => (index + 1) * 12).map((months) => <option value={months} key={months}>{months / 12} year{months === 12 ? "" : "s"}</option>)}</select></label>
       <button type="button" className="button primary" disabled={Boolean(busy)} onClick={() => void saveValidity()}>{busy === "validity" ? "Saving…" : "Save validity"}</button>
+    </section>
+
+    <section className="identity-manager-settings identity-print-guide">
+      <div><Printer size={18}/><span><strong>Printer setup · CR80 85.60 × 53.98 mm</strong><small>This is the same physical size used for bank cards and common PVC school ID printers.</small></span></div>
+      <div><span><strong>PVC / card printer</strong><small>Use the Print ID action on one person. The downloaded PDF pages are exact CR80 front and back.</small></span></div>
+      <div><span><strong>A4 office printer</strong><small>Use the bulk actions below. Print at 100% / Actual Size, duplex long-edge, then cut on the card borders.</small></span></div>
     </section>
 
     <section className="identity-manager-kpis">
@@ -246,6 +252,9 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
         <table className="identity-manager-table"><thead><tr><th><input type="checkbox" checked={allFilteredSelected} onChange={toggleAll} aria-label="Select visible current identity cards"/></th><th>Person</th><th>School ID</th><th>Portrait</th><th>Card number</th><th>Valid until</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map((card) => {
           const current = isCurrent(card);
           const profileHref = card.personType === "student" ? `/school/students/${encodeURIComponent(card.studentId ?? "")}` : `/school/staff/${encodeURIComponent(card.staffId ?? "")}`;
+          const printHref = card.personType === "student"
+            ? `/api/school/identity-cards/student/${encodeURIComponent(card.studentId ?? "")}`
+            : `/api/school/identity-cards/staff/${encodeURIComponent(card.staffId ?? "")}`;
           return <tr key={card.id}>
             <td><input type="checkbox" checked={selected.has(card.id)} disabled={!current} onChange={() => toggle(card.id)} aria-label={`Select ${card.personName}`}/></td>
             <td><Link href={profileHref}><strong>{card.personName}</strong></Link><small>{card.personType === "student" ? card.className ?? "No class" : card.roleName ?? "Staff"}</small></td>
@@ -254,7 +263,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
             <td><code>{card.serial}</code></td>
             <td>{new Date(card.expiresAt).toLocaleDateString("en-GB")}</td>
             <td><span className={current ? "identity-card-state is-current" : "identity-card-state is-invalid"}>{current ? "Current" : card.status === "revoked" ? "Revoked" : "Expired"}</span></td>
-            <td><div className="identity-row-actions"><Link href={profileHref}><ShieldCheck size={13}/> Profile</Link><button type="button" disabled={Boolean(busy) || !current} onClick={() => void mutate("reissue", card.id)}>Reissue</button>{card.status === "active" ? <button type="button" className="is-danger" disabled={Boolean(busy)} onClick={() => void mutate("revoke", card.id)}>Revoke</button> : null}</div></td>
+            <td><div className="identity-row-actions">{current ? <a href={printHref}><Printer size={13}/> Print ID</a> : null}<Link href={profileHref}><ShieldCheck size={13}/> Profile</Link><button type="button" disabled={Boolean(busy) || !current} onClick={() => void mutate("reissue", card.id)}>Reissue</button>{card.status === "active" ? <button type="button" className="is-danger" disabled={Boolean(busy)} onClick={() => void mutate("revoke", card.id)}>Revoke</button> : null}</div></td>
           </tr>;
         })}</tbody></table>
       </div>}
