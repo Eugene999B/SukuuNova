@@ -201,7 +201,70 @@ export async function GET(
         };
       }
 
-      if (dataset === "fees" || dataset === "arrears") {
+      // Keep the established fee-balances export contract unchanged for existing consumers.
+      if (dataset === "fees") {
+        const rows = await tx.invoice.findMany({
+          orderBy: { createdAt: "desc" },
+          take: MAX_EXPORT_ROWS + 1,
+          select: {
+            totalAmount: true,
+            status: true,
+            createdAt: true,
+            student: {
+              select: {
+                admissionNo: true,
+                name: true,
+                class: { select: { name: true } },
+              },
+            },
+            payments: { select: { amount: true, reversals: { select: { amount: true } } } },
+          },
+        });
+        assertWithinExportLimit(rows.length);
+        return {
+          filename: `${school.uniqueCode}-fee-balances.csv`,
+          body: csv(
+            [
+              "Created",
+              "Admission No",
+              "Student",
+              "Class",
+              "Invoice Total",
+              "Paid",
+              "Balance",
+              "Status",
+            ],
+            rows.map((row) => {
+              const paid = row.payments.reduce(
+                (sum, payment) =>
+                  sum
+                    .plus(new Prisma.Decimal(String(payment.amount)))
+                    .minus(
+                      payment.reversals.reduce(
+                        (reversed, reversal) => reversed.plus(new Prisma.Decimal(String(reversal.amount))),
+                        new Prisma.Decimal(0),
+                      ),
+                    ),
+                new Prisma.Decimal(0),
+              );
+              const total = new Prisma.Decimal(String(row.totalAmount));
+              const balance = total.minus(paid);
+              return [
+                row.createdAt.toISOString().slice(0, 10),
+                row.student.admissionNo,
+                row.student.name,
+                row.student.class?.name ?? "",
+                total.toFixed(2),
+                paid.toFixed(2),
+                balance.toFixed(2),
+                row.status,
+              ];
+            }),
+          ),
+        };
+      }
+
+      if (dataset === "arrears") {
         const rows = await tx.invoice.findMany({
           orderBy: { createdAt: "desc" },
           take: MAX_EXPORT_ROWS + 1,
@@ -222,20 +285,19 @@ export async function GET(
           },
         });
         assertWithinExportLimit(rows.length);
-
-        const balances = rows.map((row) => {
-          const total = new Prisma.Decimal(String(row.totalAmount));
-          const paid = netPaid(row.payments);
-          const rawBalance = total.minus(paid);
-          const balance = rawBalance.lt(0) ? ZERO : rawBalance;
-          return { row, total, paid, balance };
-        });
-        const exportRows = dataset === "arrears"
-          ? balances.filter(({ balance }) => balance.gt(0)).sort((a, b) => b.balance.comparedTo(a.balance))
-          : balances;
+        const arrears = rows
+          .map((row) => {
+            const total = new Prisma.Decimal(String(row.totalAmount));
+            const paid = netPaid(row.payments);
+            const rawBalance = total.minus(paid);
+            const balance = rawBalance.lt(0) ? ZERO : rawBalance;
+            return { row, total, paid, balance };
+          })
+          .filter(({ balance }) => balance.gt(0))
+          .sort((a, b) => b.balance.comparedTo(a.balance));
 
         return {
-          filename: `${school.uniqueCode}-${dataset === "arrears" ? "arrears" : "fee-balances"}.csv`,
+          filename: `${school.uniqueCode}-arrears.csv`,
           body: csv(
             [
               "Invoice ID",
@@ -249,7 +311,7 @@ export async function GET(
               "Balance",
               "Status",
             ],
-            exportRows.map(({ row, total, paid, balance }) => [
+            arrears.map(({ row, total, paid, balance }) => [
               row.id,
               row.createdAt.toISOString().slice(0, 10),
               row.student.admissionNo,
@@ -259,7 +321,7 @@ export async function GET(
               total.toFixed(2),
               paid.toFixed(2),
               balance.toFixed(2),
-              balance.lte(0) ? "paid" : paid.gt(0) ? "partial" : row.status,
+              paid.gt(0) ? "partial" : row.status,
             ]),
           ),
         };
