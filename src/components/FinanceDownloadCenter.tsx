@@ -143,7 +143,7 @@ export default function FinanceDownloadCenter({ mode, canExport }: { mode: strin
         {exportCard(
           "/api/school/exports/fees",
           <FileSpreadsheet size={18} />,
-          "Finance ledger CSV",
+          "Fee balances CSV",
           `${ledger.length} invoice records`,
         )}
         {exportCard(
