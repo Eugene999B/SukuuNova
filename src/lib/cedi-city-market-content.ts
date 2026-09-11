@@ -157,18 +157,20 @@ function savingQuestion(index: number, difficulty: number): CediCityMarketQuesti
 }
 
 function budgetQuestion(index: number, difficulty: number): CediCityMarketQuestion {
-  const income = 140 + randomInt(0, 5 + difficulty) * 20;
   const transport = 30 + randomInt(0, difficulty + 1) * 5;
   const lunch = 40 + randomInt(0, difficulty + 2) * 5;
   const savings = 20 + randomInt(0, difficulty + 1) * 5;
-  const remaining = income - transport - lunch - savings;
+  const required = transport + lunch + savings;
+  const minimumIncome = Math.ceil((required + 20) / 20) * 20;
+  const income = minimumIncome + randomInt(0, 3 + difficulty) * 20;
+  const remaining = income - required;
   const basket = productBasket(2);
   return question(
     index,
     "budget",
     `Weekly money is ${money(income)}. Transport is ${money(transport)}, lunch is ${money(lunch)}, and savings must be ${money(savings)}. What remains for other spending?`,
     remaining,
-    [income - transport - lunch, income - savings, Math.max(0, remaining + 10)],
+    [income - transport - lunch, income - savings, remaining + 10],
     `${money(income)} − ${money(transport)} − ${money(lunch)} − ${money(savings)} = ${money(remaining)}.`,
     scene("budget", basket, income, "Protect required needs and savings before deciding what remains."),
     `market-budget:${income}:${transport}:${lunch}:${savings}`,
