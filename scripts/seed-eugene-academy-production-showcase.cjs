@@ -17,7 +17,8 @@ try {
   run("guarded permanent production demo seed", "seed-eugene-academy-production-demo.cjs");
   run("current role and workspace access refresh", "refresh-eugene-academy-access.cjs", { EUGENE_ACADEMY_ACCESS_TARGET: "production" });
   run("rich learner and guardian showcase", "seed-eugene-academy-learning-showcase.cjs", { EUGENE_ACADEMY_SHOWCASE_TARGET: "production" });
-  console.log("[eugene-academy] permanent production demonstration school and rich learning showcase are verified.");
+  run("school store and property showcase", "seed-eugene-academy-store-properties.cjs", { EUGENE_ACADEMY_OPERATIONS_TARGET: "production" });
+  console.log("[eugene-academy] permanent production demonstration school and rich showcase data are verified.");
 } catch (error) {
   console.error("[eugene-academy] production showcase pipeline failed:", error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
