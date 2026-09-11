@@ -59,8 +59,12 @@ jobs:
         run: npx prisma generate
       - name: Validate Prisma schema
         run: npx prisma validate
-      - name: Apply migrations
-        run: npm run db:migrate
+      - name: Validate guarded migration deployer syntax
+        run: node --check scripts/deploy-migrations.cjs
+      - name: Apply migrations through production deployer
+        run: |
+          npm run db:migrate
+          npm run db:migrate
       - name: Typecheck
         run: npx tsc --noEmit --pretty false
       - name: Lint
