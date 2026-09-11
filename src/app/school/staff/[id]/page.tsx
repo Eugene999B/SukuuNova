@@ -8,6 +8,7 @@ import { StaffPortraitEditor } from "@/components/staff/StaffPortraitEditor";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/rbac";
+import { isSchoolStaffAccount } from "@/lib/authorization";
 import { identityCardSignature, identityCardVerificationPath, listIdentityCards } from "@/lib/identity-card-service";
 import "./staff-profile.css";
 
@@ -22,7 +23,7 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
         where: { id: staffId, schoolId: session.schoolId },
         select: {
           id: true, name: true, email: true, phone: true, status: true, createdAt: true,
-          userRoles: { select: { role: { select: { name: true } } } },
+          userRoles: { select: { role: { select: { name: true, key: true } } } },
           classTeacherFor: { select: { id: true, name: true, level: true } },
           subjectAssignments: { select: { subject: { select: { name: true } }, class: { select: { name: true, level: true } } } },
         },
@@ -32,8 +33,7 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
       hasPermission(tx, session.userId, "users:write").catch(() => false),
     ]);
     if (!school || !staff) return null;
-    const isStaff = staff.userRoles.some((item) => !["Parent", "Student"].includes(item.role.name));
-    if (!isStaff) return null;
+    if (!isSchoolStaffAccount(staff.userRoles.map(({ role }) => role))) return null;
     const cards = canManageCards ? await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId) : [];
     const currentCard = cards.find((card) => card.personType === "staff" && card.staffId === staff.id && card.status === "active" && !card.isExpired) ?? null;
     return { school, staff, photoUrl: portrait[0]?.photoUrl ?? null, currentCard, canManageCards, canEditStaff };
