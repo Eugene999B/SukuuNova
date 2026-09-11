@@ -1,4 +1,4 @@
--- Release D integrity guards: deterministic guardian identity and timetable collision boundaries.
+-- Release D integrity guards: deterministic guardian identity, timetable collisions and pickup custody.
 
 -- Existing data may contain more than one primary guardian because the original schema did
 -- not enforce the intent. Keep one deterministic primary, preferring a linked active/pending
@@ -105,3 +105,53 @@ DROP TRIGGER IF EXISTS "TimetableSlot_collision_guard" ON "TimetableSlot";
 CREATE TRIGGER "TimetableSlot_collision_guard"
 BEFORE INSERT OR UPDATE OF "schoolId","teacherId","dayOfWeek","period","venue" ON "TimetableSlot"
 FOR EACH ROW EXECUTE FUNCTION sukuunova_guard_timetable_collision();
+
+-- A pickup event represents custody leaving the school. Never allow an inactive/withdrawn
+-- learner to be collected, and never record two completed pickups for the same learner on
+-- one school-local day. Historical duplicate events are retained as audit history; the guard
+-- prevents any new ambiguity.
+CREATE OR REPLACE FUNCTION sukuunova_guard_pickup_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  learner_status TEXT;
+  school_timezone TEXT;
+BEGIN
+  SELECT s."status" INTO learner_status
+  FROM "Student" s
+  WHERE s."id" = NEW."studentId" AND s."schoolId" = NEW."schoolId";
+
+  IF learner_status IS NULL THEN
+    RAISE EXCEPTION 'Pickup learner does not exist in this school' USING ERRCODE = '23514';
+  END IF;
+  IF learner_status <> 'active' THEN
+    RAISE EXCEPTION 'Pickup events require an active learner' USING ERRCODE = '23514';
+  END IF;
+
+  SELECT COALESCE(ss."timezone", 'Africa/Accra') INTO school_timezone
+  FROM "SchoolSettings" ss
+  WHERE ss."schoolId" = NEW."schoolId";
+  school_timezone := COALESCE(school_timezone, 'Africa/Accra');
+
+  IF EXISTS (
+    SELECT 1
+    FROM "PickupEvent" pe
+    WHERE pe."schoolId" = NEW."schoolId"
+      AND pe."studentId" = NEW."studentId"
+      AND pe."id" <> NEW."id"
+      AND (pe."timestamp" AT TIME ZONE school_timezone)::date
+          = (NEW."timestamp" AT TIME ZONE school_timezone)::date
+  ) THEN
+    RAISE EXCEPTION 'Learner already has a completed pickup for this school day'
+      USING ERRCODE = '23505';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS "PickupEvent_active_daily_guard" ON "PickupEvent";
+CREATE TRIGGER "PickupEvent_active_daily_guard"
+BEFORE INSERT OR UPDATE OF "schoolId","studentId","timestamp" ON "PickupEvent"
+FOR EACH ROW EXECUTE FUNCTION sukuunova_guard_pickup_event();
