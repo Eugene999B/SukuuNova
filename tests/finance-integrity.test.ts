@@ -71,11 +71,12 @@ describe("finance payment integrity", () => {
         studentId: student.id,
         termId: term.id
       });
+      expect(invoice).not.toBeNull();
 
       const first = await recordPayment(tx, {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
-        invoiceId: invoice.id,
+        invoiceId: invoice!.id,
         amount: 500,
         method: "momo",
         reference: "MOMO-FIN-001"
@@ -83,7 +84,7 @@ describe("finance payment integrity", () => {
       const retry = await recordPayment(tx, {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
-        invoiceId: invoice.id,
+        invoiceId: invoice!.id,
         amount: 500,
         method: "momo",
         reference: "MOMO-FIN-001"
@@ -95,7 +96,7 @@ describe("finance payment integrity", () => {
       await expect(recordPayment(tx, {
         schoolId: fixture.schoolId,
         actorId: fixture.ownerId,
-        invoiceId: invoice.id,
+        invoiceId: invoice!.id,
         amount: 200,
         method: "momo",
         reference: "MOMO-FIN-001"
@@ -144,7 +145,8 @@ describe("finance payment integrity", () => {
         studentId: student.id,
         termId: term.id
       });
-      invoiceId = invoice.id;
+      expect(invoice).not.toBeNull();
+      invoiceId = invoice!.id;
     });
 
     const attempts = await Promise.allSettled([
