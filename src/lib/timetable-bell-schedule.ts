@@ -50,7 +50,7 @@ export function breaksForTimetableDay(day: DayConfig, config: TimetableConfig): 
     }
   }
 
-  return visible.map(({ startMinutes: _start, endMinutes: _end, ...item }) => item);
+  return visible.map((item) => ({ name: item.name, start: item.start, end: item.end }));
 }
 
 export function safeDayBlocks(day: DayConfig, config: TimetableConfig) {
