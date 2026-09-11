@@ -2,7 +2,8 @@ import type { TenantDb } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
-import { dayBlocks, type TimetableGenerationMode } from "@/lib/timetable-engine-v2";
+import type { TimetableGenerationMode } from "@/lib/timetable-engine-v2";
+import { safeDayBlocks } from "@/lib/timetable-bell-schedule";
 import { assignmentKey, readTimetableExtensions } from "@/lib/timetable-generation-policy";
 import { optimizeTimetable, type FixedPlacement, type TimetableDemand } from "./timetable-optimizer";
 
@@ -61,6 +62,36 @@ function roomRequirement(raw: unknown, classId: string, subjectId: string) {
   };
 }
 
+function configuredRoomId(value: string | null, knownRoomIds: Set<string>) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const candidate = trimmed.startsWith("room:") ? trimmed.slice(5) : trimmed;
+  return knownRoomIds.has(candidate) ? candidate : null;
+}
+
+function assertPreservedPlacementsAreSafe(rows: ExistingSlot[], knownRoomIds: Set<string>) {
+  const classes = new Set<string>();
+  const teachers = new Set<string>();
+  const rooms = new Set<string>();
+  for (const row of rows) {
+    const classKey = `${row.classId}:${row.dayOfWeek}:${row.period}`;
+    if (classes.has(classKey)) throw new AppError("The current timetable already contains two lessons for one class in the same period. Fix that clash before generating.", 409, "EXISTING_CLASS_COLLISION");
+    classes.add(classKey);
+
+    const teacherKey = `${row.teacherId}:${row.dayOfWeek}:${row.period}`;
+    if (teachers.has(teacherKey)) throw new AppError("The current timetable already double-books a teacher. Fix that clash before generating.", 409, "EXISTING_TEACHER_COLLISION");
+    teachers.add(teacherKey);
+
+    const roomId = configuredRoomId(row.venue, knownRoomIds);
+    if (roomId) {
+      const roomKey = `${roomId}:${row.dayOfWeek}:${row.period}`;
+      if (rooms.has(roomKey)) throw new AppError("The current timetable already double-books a configured room. Fix that clash before generating.", 409, "EXISTING_ROOM_COLLISION");
+      rooms.add(roomKey);
+    }
+  }
+}
+
 export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTimetablePreviewInput) {
   await requirePermission(tx, input.actorId, "calendar:manage");
   const mode = input.mode ?? "fill_gaps";
@@ -81,15 +112,15 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
       select: { id: true, classId: true, subjectId: true, teacherId: true, dayOfWeek: true, period: true, venue: true },
     }) as Promise<ExistingSlot[]>,
   ]);
-  if (!classes.length) throw new AppError("Create at least one class before previewing NovaCore timetable optimization.", 409, "NO_CLASSES");
+  if (!classes.length) throw new AppError("Create at least one class before previewing timetable optimization.", 409, "NO_CLASSES");
 
   const classIds = new Set(classes.map((item) => item.id));
   const assignments = rawAssignments.filter((item) => classIds.has(item.classId) && item.teacher.status === "active");
-  if (!assignments.length) throw new AppError("Assign subjects to classes and active teachers before previewing NovaCore.", 409, "NO_ASSIGNMENTS");
+  if (!assignments.length) throw new AppError("Assign subjects to classes and active teachers before generating the timetable.", 409, "NO_ASSIGNMENTS");
 
   const timetable = academic.timetable;
-  const enabledDays = timetable.days.filter((day) => day.enabled);
-  const slots = enabledDays.flatMap((day) => dayBlocks(day, timetable).periods.map((period) => ({ dayOfWeek: day.dayOfWeek, period: period.period })));
+  const enabledDays = timetable.days.filter((day) => day.enabled).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+  const slots = enabledDays.flatMap((day) => safeDayBlocks(day, timetable).periods.map((period) => ({ dayOfWeek: day.dayOfWeek, period: period.period })));
   if (!slots.length) throw new AppError("Timetable Setup has no usable teaching periods.", 409, "NO_USABLE_PERIODS");
 
   const inScope = existing.filter((slot) => classIds.has(slot.classId));
@@ -105,7 +136,7 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
   const removeSlotIds = mode === "fill_gaps" ? [] : inScope.filter((slot) => !preservedIds.has(slot.id)).map((slot) => slot.id);
   const warnings: string[] = [];
   if (mode === "rebuild_preserving_locked" && requestedLocks.size > preservedInScope.length) {
-    warnings.push(`${requestedLocks.size - preservedInScope.length} requested lock(s) are outside this preview scope or no longer exist.`);
+    warnings.push(`${requestedLocks.size - preservedInScope.length} requested lock(s) are outside this generation scope or no longer exist.`);
   }
 
   const config = object(timetable);
@@ -127,12 +158,14 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
       })
     : [];
   const knownRoomIds = new Set(roomList.map((room) => room.id));
+  assertPreservedPlacementsAreSafe(preserved, knownRoomIds);
+
   const fixedPlacements: FixedPlacement[] = preserved.map((slot) => ({
     classId: slot.classId,
     teacherId: slot.teacherId,
     dayOfWeek: slot.dayOfWeek,
     period: slot.period,
-    roomId: slot.venue && knownRoomIds.has(slot.venue) ? slot.venue : null,
+    roomId: configuredRoomId(slot.venue, knownRoomIds),
     groupId: classIds.has(slot.classId) ? assignmentKeyOf(slot) : undefined,
   }));
 
@@ -150,6 +183,10 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
     if (requirement.room && !knownRoomIds.has(requirement.room)) {
       throw new AppError(`A timetable rule references room "${requirement.room}" but that room is not configured.`, 409, "ROOM_NOT_FOUND");
     }
+    if (requirement.roomType && !roomList.some((room) => room.type === requirement.roomType)) {
+      throw new AppError(`No configured room matches the required room type "${requirement.roomType}". Add a matching room or change the subject room rule.`, 409, "ROOM_TYPE_NOT_FOUND");
+    }
+
     const doublePairs = Math.min(doubles[row.subjectId] ?? 0, Math.floor(remainingPeriods / 2));
     const singles = remainingPeriods - doublePairs * 2;
     const common = {
@@ -185,6 +222,7 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
     demands,
     fixedPlacements,
     teacherUnavailable,
+    teacherDailySoftLimit: Math.max(1, Math.min(8, Math.ceil(slots.length / Math.max(enabledDays.length, 1)) - 1)),
     maxSearchNodes: input.maxSearchNodes,
   });
 
@@ -198,7 +236,7 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
         ...assignment,
         dayOfWeek: placement.dayOfWeek,
         period: placement.period + offset,
-        venue: placement.roomId,
+        venue: placement.roomId ? `room:${placement.roomId}` : null,
         demandId: placement.demandId,
         blockGroup,
       });
@@ -222,7 +260,7 @@ export async function previewNovaCoreTimetable(tx: TenantDb, input: NovaCoreTime
       if (count > maximum) dailyLimitViolations.push({ assignmentKey: key, dayOfWeek: day.dayOfWeek, count, maximum });
     }
   }
-  if (dailyLimitViolations.length) warnings.push(`${dailyLimitViolations.length} daily lesson-limit violation(s) remain in this candidate; it stays preview-only and cannot be promoted without resolving them.`);
+  if (dailyLimitViolations.length) warnings.push(`${dailyLimitViolations.length} daily lesson-limit violation(s) remain in this candidate; it cannot be published until they are resolved.`);
 
   const requestedPeriods = assignments.reduce((sum, row) => sum + Math.max(1, Math.min(10, weekly[assignmentKeyOf(row)] ?? 2)), 0);
   return {
