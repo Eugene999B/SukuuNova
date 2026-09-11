@@ -76,7 +76,8 @@ describe("premium identity-card print engine v3", () => {
     expect(compact).toContain("/v/EUG123/");
     expect(compact.length).toBeLessThan(legacy.length);
     // Live status/version updates must not invalidate the physical card's QR.
-    expect(verifyIdentityCardCompactToken({ ...baseCard, version: 2, status: "revoked" }, token)).toBe(true);
+    const liveStateChanged = { ...baseCard, version: 2, status: "revoked" as const };
+    expect(verifyIdentityCardCompactToken(liveStateChanged, token)).toBe(true);
     // A different issued credential must never inherit the old token.
     expect(verifyIdentityCardCompactToken({ ...baseCard, serial: `${baseCard.serial}-NEW` }, token)).toBe(false);
   });
