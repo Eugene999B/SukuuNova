@@ -5,7 +5,6 @@ import { appendSchoolAudit } from "@/lib/audit";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { enqueueSms } from "@/lib/message-outbox";
-import { freezeReportCardRanking } from "@/lib/report-card-ranking";
 import { calculateIntelligentReportCard } from "@/lib/report-card-intelligence";
 import { applyApprovedPromotion, readManualPromotionDecision } from "@/lib/report-card-promotion";
 import { resolveCurrentReportSignatures } from "@/lib/report-card-signatures";
@@ -40,23 +39,11 @@ async function freezeIntelligentReportCard(tx: TenantDb, schoolId: string, repor
     select: {
       id: true,
       calculationSnapshot: true,
-      student: {
-        select: {
-          id: true,
-          name: true,
-          admissionNo: true,
-          photoUrl: true,
-          classId: true,
-          class: { select: { name: true, level: true, classTeacher: { select: { name: true } } } },
-        },
-      },
+      student: { select: { id: true, name: true, admissionNo: true, photoUrl: true } },
     },
   });
   if (!report) return;
-  if (!report.student.classId || !report.student.class) {
-    await freezeReportCardRanking(tx, { schoolId, reportCardId: report.id });
-    return;
-  }
+
   const [data, signatureSnapshot] = await Promise.all([
     calculateIntelligentReportCard(tx, { schoolId, reportId }),
     resolveCurrentReportSignatures(tx, schoolId, { documentType: "report_card", documentId: reportId }),
@@ -75,7 +62,7 @@ async function freezeIntelligentReportCard(tx: TenantDb, schoolId: string, repor
     overallTotal: data.summary.total,
     average: data.summary.average,
     overallGrade: data.summary.grade,
-    positionScope: data.reportSettings.showOverallPosition ? "class" : "none",
+    positionScope: data.reportSettings.positionScope,
     overallPosition: data.position,
     classSize: data.classSize,
     rankedCount: data.rankedCount,
@@ -87,10 +74,10 @@ async function freezeIntelligentReportCard(tx: TenantDb, schoolId: string, repor
     studentName: report.student.name,
     admissionNo: report.student.admissionNo,
     studentPhotoUrl: report.student.photoUrl,
-    classId: report.student.classId,
-    className: report.student.class.name,
-    classLevel: report.student.class.level,
-    classTeacherName: report.student.class.classTeacher?.name ?? data.classTeacherName,
+    classId: data.student.classId,
+    className: data.student.className,
+    classLevel: data.student.level,
+    classTeacherName: data.classTeacherName,
   } as Prisma.InputJsonObject;
   await tx.reportCard.update({ where: { id: report.id }, data: { calculationSnapshot: snapshot, calculationVersion: 5 } });
 }
