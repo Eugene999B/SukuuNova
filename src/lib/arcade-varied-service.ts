@@ -11,6 +11,7 @@ import { createReadingQuestQuestions } from "./reading-quest-content";
 import { createCodeBotsQuestions } from "./codebots-content";
 import { createGeoQuestQuestions } from "./geoquest-content";
 import { createCediCityMarketQuestions } from "./cedi-city-market-content";
+import { createSignalShieldQuestions } from "./signal-shield-content";
 import type { ArcadeAgeBand } from "./arcade-catalog";
 
 type Context = { schoolId: string; guardianId: string; userId: string };
@@ -29,6 +30,7 @@ function generate(game: string, difficulty: number, length: number, weakKeys: re
   if (game === "coding-sequence") return createCodeBotsQuestions(difficulty, length);
   if (game === "ghana-map-master") return createGeoQuestQuestions(difficulty, length);
   if (game === "money-math-market") return createCediCityMarketQuestions(difficulty, length);
+  if (game === "cyber-safety") return createSignalShieldQuestions(difficulty, length);
   if (canGenerateArcadeContent(game)) return createArcadeGameQuestions(game, difficulty, length);
   if (canGenerateArcadeInteractionContent(game)) return createArcadeInteractionQuestions(game, difficulty, length);
   if (canGenerateArcadeResponseContent(game)) return createArcadeResponseQuestions(game, difficulty, length);
@@ -92,7 +94,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     uniqueConceptCount: varied.uniqueConceptCount,
     originalSuggestedDifficulty: round.difficulty,
     ageAdjustedDifficulty: learningPlan.targetDifficulty,
-    presentation: round.game === "keyboard-ninja" ? "turbotype_v1" : round.game === "comprehension-quest" ? "reading_quest_v1" : round.game === "coding-sequence" ? "codebots_v1" : round.game === "ghana-map-master" ? "geoquest_v1" : round.game === "money-math-market" ? "cedi_city_market_v1" : "adaptive_director_v1",
+    presentation: round.game === "keyboard-ninja" ? "turbotype_v1" : round.game === "comprehension-quest" ? "reading_quest_v1" : round.game === "coding-sequence" ? "codebots_v1" : round.game === "ghana-map-master" ? "geoquest_v1" : round.game === "money-math-market" ? "cedi_city_market_v1" : round.game === "cyber-safety" ? "signal_shield_v1" : "adaptive_director_v1",
   };
 
   await tx.$executeRaw`
