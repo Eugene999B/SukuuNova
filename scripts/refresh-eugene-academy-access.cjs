@@ -118,8 +118,31 @@ async function main() {
       await applyBaseline(principal, principalPermissions);
 
       const principalUsers = await tx.userRole.findMany({ where: { schoolId, roleId: principal.id }, select: { userId: true } });
-      if (principalUsers.length) {
-        await tx.userPermissionOverride.deleteMany({ where: { schoolId, userId: { in: principalUsers.map((item) => item.userId) } } });
+      const principalUserIds = [...new Set(principalUsers.map((item) => item.userId))];
+      if (principalUserIds.length) {
+        await tx.userPermissionOverride.deleteMany({ where: { schoolId, userId: { in: principalUserIds } } });
+
+        // hasPermission gives a direct override precedence over every inherited role.
+        // A Principal may have more than one role in the demo, so preserve an
+        // explicit deny whenever another assigned role would inherit delete access.
+        const deletePermissionId = permissionIds.get("students:delete");
+        for (const userId of principalUserIds) {
+          const inheritedDelete = await tx.userRole.findFirst({
+            where: {
+              schoolId,
+              userId,
+              role: { rolePermissions: { some: { permissionId: deletePermissionId } } },
+            },
+            select: { userId: true },
+          });
+          if (inheritedDelete) {
+            await tx.userPermissionOverride.upsert({
+              where: { userId_permissionId: { userId, permissionId: deletePermissionId } },
+              update: { schoolId, granted: false },
+              create: { schoolId, userId, permissionId: deletePermissionId, granted: false },
+            });
+          }
+        }
       }
 
       const critical = [
@@ -145,6 +168,28 @@ async function main() {
       const missing = critical.filter((key) => !principalSet.has(key));
       if (missing.length) throw new Error(`Principal access refresh verification failed: ${missing.join(", ")}`);
       if (principalSet.has("students:delete")) throw new Error("Principal must not receive students:delete.");
+
+      // Verify the effective delete decision for every Principal account, not
+      // just the Principal role bundle, because another assigned role may grant it.
+      const deletePermissionId = permissionIds.get("students:delete");
+      for (const userId of principalUserIds) {
+        const [override, inheritedDelete] = await Promise.all([
+          tx.userPermissionOverride.findUnique({
+            where: { userId_permissionId: { userId, permissionId: deletePermissionId } },
+            select: { granted: true },
+          }),
+          tx.userRole.findFirst({
+            where: {
+              schoolId,
+              userId,
+              role: { rolePermissions: { some: { permissionId: deletePermissionId } } },
+            },
+            select: { userId: true },
+          }),
+        ]);
+        const effectiveDelete = override ? override.granted : Boolean(inheritedDelete);
+        if (effectiveDelete) throw new Error(`Principal account ${userId} effectively has students:delete.`);
+      }
 
       return {
         school: school.name,
