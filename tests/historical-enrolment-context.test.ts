@@ -6,6 +6,7 @@ import { enterScore } from "../src/lib/gradebook-service";
 import { generateInvoice } from "../src/lib/finance-service";
 import { getClassSubjectIntelligence } from "../src/lib/performance-intelligence";
 import { calculateIntelligentReportCard } from "../src/lib/report-card-intelligence";
+import { approveAndQueuePublicReportCard } from "../src/lib/report-card-release-service";
 import { rulesFor } from "../src/lib/report-card-ranking";
 
 describe("historical enrolment context", () => {
@@ -134,12 +135,32 @@ describe("historical enrolment context", () => {
       expect(Number(invoice.totalAmount)).toBe(100);
 
       const report = await tx.reportCard.create({
-        data: { schoolId: fixture.schoolId, studentId: student.id, termId: term.id, pdfData: Buffer.from("historical-report") },
+        data: {
+          schoolId: fixture.schoolId,
+          studentId: student.id,
+          termId: term.id,
+          pdfData: Buffer.from("historical-report"),
+          status: "submitted",
+          submittedBy: fixture.memberId,
+          submittedAt: new Date(),
+        },
       });
       const calculated = await calculateIntelligentReportCard(tx, { schoolId: fixture.schoolId, reportId: report.id });
       expect(calculated.student.classId).toBe(classA.id);
       expect(calculated.student.className).toBe(classA.name);
       expect(calculated.results.map((row) => row.subject)).toContain(subject.name);
+
+      await approveAndQueuePublicReportCard(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        reportCardId: report.id,
+        origin: "https://school.example.test",
+      });
+      const approved = await tx.reportCard.findUniqueOrThrow({ where: { id: report.id }, select: { calculationSnapshot: true, status: true } });
+      const snapshot = approved.calculationSnapshot as Record<string, unknown>;
+      expect(approved.status).toBe("approved");
+      expect(snapshot.classId).toBe(classA.id);
+      expect(snapshot.className).toBe(classA.name);
 
       const current = await tx.student.findUniqueOrThrow({ where: { id: student.id }, select: { classId: true } });
       expect(current.classId).toBe(classB.id);
