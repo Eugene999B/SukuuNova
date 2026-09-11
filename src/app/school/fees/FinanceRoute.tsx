@@ -6,12 +6,18 @@ import { withTenant } from "@/lib/db";
 
 export default async function FinanceRoute({ mode }: { mode: "overview" | "fees" | "invoices" | "payments" | "arrears" | "reports" }) {
   const session = await requireSchoolSession();
-  const school = await withTenant(session.schoolId, (tx) => tx.school.findUnique({
-    where: { id: session.schoolId },
-    select: { name: true, uniqueCode: true },
-  }));
-  if (!school) throw new Error("School not found.");
+  let school: { name: string; uniqueCode: string } | null = null;
+  try {
+    school = await withTenant(session.schoolId, (tx) => tx.school.findUnique({
+      where: { id: session.schoolId },
+      select: { name: true, uniqueCode: true },
+    }));
+  } catch (error) {
+    console.error("Finance shell school identity lookup failed", error);
+  }
 
+  const schoolName = school?.name || "School";
+  const schoolCode = school?.uniqueCode || "";
   const active = mode === "invoices" ? "Invoices"
     : mode === "payments" ? "Payments"
       : mode === "arrears" ? "Arrears & Balances"
@@ -24,12 +30,12 @@ export default async function FinanceRoute({ mode }: { mode: "overview" | "fees"
     title={title}
     subtitle="Billing, collections, balances, receipts and controlled financial reporting."
     active={active}
-    schoolName={school.name}
-    schoolCode={school.uniqueCode}
+    schoolName={schoolName}
+    schoolCode={schoolCode}
     userName={session.name}
   >
     <FinanceRuntimeBoundary area="finance">
-      <FinanceWorkspace mode={mode} schoolName={school.name} />
+      <FinanceWorkspace mode={mode} schoolName={schoolName} />
     </FinanceRuntimeBoundary>
   </AppShell>;
 }
