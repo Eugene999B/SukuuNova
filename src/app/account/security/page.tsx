@@ -149,7 +149,7 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
   const platform = await getPlatformSession();
   const guardian = await getGuardianSession();
   if (!guardian && !school && !platform) redirect("/");
-  const required = (await searchParams).required === "1" || Boolean(guardian?.needsPasswordChange);
+  const requiredByRoute = (await searchParams).required === "1";
 
   if (school) {
     const data = await withTenant(school.schoolId, async (tx) => {
@@ -161,13 +161,14 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
     });
     if (!data) redirect("/dashboard");
     const universe = data.workspace === "teacher" ? "teacher" : "school";
-    return <AppShell universe={universe} title="Account Security" subtitle="Password and login protection." active="Account Security" schoolName={data.schoolRecord.name} schoolCode={data.schoolRecord.uniqueCode} userName={school.name} role={data.role || (universe === "teacher" ? "Teacher" : "School account")}><SecurityBody universe={universe} accountName={school.name} required={required} /></AppShell>;
+    return <AppShell universe={universe} title="Account Security" subtitle="Password and login protection." active="Account Security" schoolName={data.schoolRecord.name} schoolCode={data.schoolRecord.uniqueCode} userName={school.name} role={data.role || (universe === "teacher" ? "Teacher" : "School account")}><SecurityBody universe={universe} accountName={school.name} required={requiredByRoute} /></AppShell>;
   }
 
   if (platform) {
-    return <AppShell universe="platform" title="Account Security" subtitle="Password and login protection." active="Account Security" userName={platform.name} role={platform.role}><SecurityBody universe="platform" accountName={platform.name} required={required} /></AppShell>;
+    return <AppShell universe="platform" title="Account Security" subtitle="Password and login protection." active="Account Security" userName={platform.name} role={platform.role}><SecurityBody universe="platform" accountName={platform.name} required={requiredByRoute} /></AppShell>;
   }
 
   const currentGuardian = await requireGuardianSession();
-  return <AppShell universe="guardian" title="Account Security" subtitle="Password and family-login protection." active="Account Security" schoolName={currentGuardian.schoolName} userName={currentGuardian.name || "Guardian"} role="Guardian"><SecurityBody universe="guardian" accountName={currentGuardian.name || "Guardian account"} required={required} /></AppShell>;
+  const guardianRequired = requiredByRoute || Boolean(currentGuardian.needsPasswordChange);
+  return <AppShell universe="guardian" title="Account Security" subtitle="Password and family-login protection." active="Account Security" schoolName={currentGuardian.schoolName} userName={currentGuardian.name || "Guardian"} role="Guardian"><SecurityBody universe="guardian" accountName={currentGuardian.name || "Guardian account"} required={guardianRequired} /></AppShell>;
 }
