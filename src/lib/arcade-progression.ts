@@ -5,7 +5,7 @@ import { learningStreak, schoolDay } from "./arcade-content";
 import { standardBandFromClassLevel } from "./arcade-catalog";
 import { leaderboardDisplayName } from "./arcade-leaderboard";
 
-const FLAGSHIP_GAMES = ["math", "keyboard-ninja", "force-motion-lab"] as const;
+const UNIVERSE_GAMES = ["math", "keyboard-ninja", "force-motion-lab", "word"] as const;
 
 type Context = { schoolId: string; guardianId: string; userId: string };
 type ProgressStats = {
@@ -97,7 +97,7 @@ export function buildArcadeProgression(stats: ProgressStats, today: ProgressStat
     ],
     weeklyChallenges: [
       mission("weekly-rounds", "Arcade regular", "Complete five missions this school week.", week.rounds, 5, "missions"),
-      mission("weekly-worlds", "Three-world tour", "Visit all three flagship learning worlds this week.", week.games, 3, "games"),
+      mission("weekly-worlds", "Three-world tour", "Visit three different learning worlds this week.", week.games, 3, "games"),
       mission("weekly-xp", "Nova charge", "Earn 300 XP this school week.", week.xp, 300, "XP"),
     ],
     achievements,
@@ -121,7 +121,7 @@ export async function guardianArcadeProgression(tx: TenantDb, context: Context, 
   const today = schoolDay(new Date(), settings?.timezone ?? "Africa/Accra");
   const weekStart = schoolWeekStart(today);
   const standardBand = standardBandFromClassLevel(child.class?.level ?? null);
-  const gameList = Prisma.join(FLAGSHIP_GAMES);
+  const gameList = Prisma.join(UNIVERSE_GAMES);
 
   const summarySql = (extra: Prisma.Sql) => tx.$queryRaw<ProgressStats[]>`
     SELECT COUNT(*)::int AS "rounds",
