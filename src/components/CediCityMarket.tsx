@@ -75,7 +75,7 @@ export default function CediCityMarket({ learnerName, round, onComplete, onExit 
   const avatar = scene?.avatar || "star";
   const mission = (scene?.mission || "basket") as CediMarketMission;
   const products = useMemo(() => (scene?.priceTags ?? []).map(parsePriceTag), [scene?.priceTags]);
-  const basketCount = Math.max(1, scene?.basket?.length ?? products.length ?? 1);
+  const basketCount = Math.max(1, scene?.basket?.length ?? products.length);
   const boss = Boolean(plan?.bossGate && checkpoint === round.questions.length - 1);
   const duration = useMemo(
     () => marketPatienceDurationMs(round.difficulty, plan?.speedScale ?? 1, plan?.supportMode ?? "independent"),
