@@ -139,10 +139,11 @@ describe("historical enrolment context", () => {
         data: { schoolId: fixture.schoolId, termId: term.id, classId: classB.id, name: "Current Class B Fee", amount: 900 },
       });
       const invoice = await generateInvoice(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, studentId: student.id, termId: term.id });
-      const lines = await tx.invoiceLine.findMany({ where: { schoolId: fixture.schoolId, invoiceId: invoice.id }, select: { feeItemId: true } });
+      expect(invoice).not.toBeNull();
+      const lines = await tx.invoiceLine.findMany({ where: { schoolId: fixture.schoolId, invoiceId: invoice!.id }, select: { feeItemId: true } });
       expect(lines.map((line) => line.feeItemId)).toContain(classAFee.id);
       expect(lines.map((line) => line.feeItemId)).not.toContain(classBFee.id);
-      expect(Number(invoice.totalAmount)).toBe(100);
+      expect(Number(invoice!.totalAmount)).toBe(100);
 
       const report = await tx.reportCard.create({
         data: {
