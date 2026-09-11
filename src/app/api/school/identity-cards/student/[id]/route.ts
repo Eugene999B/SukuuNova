@@ -5,6 +5,7 @@ import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { listIdentityCards } from "@/lib/identity-card-service";
 import { identityCardThemeKeyFromBrandColors } from "@/lib/identity-card-themes";
+import { identityCardPublicOrigin } from "@/lib/identity-card-public-origin";
 import {
   buildIdentityCardSinglePdfV4,
   buildIdentityCardSvgV4,
@@ -45,8 +46,9 @@ export async function GET(
 
     const safe = data.studentName.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "student";
     const themeKey = identityCardThemeKeyFromBrandColors(data.school.brandColors);
+    const publicOrigin = identityCardPublicOrigin(requestUrl);
     if (requestedFormat === "svg") {
-      const svg = buildIdentityCardSvgV4(data.card, data.school, requestUrl.origin, side);
+      const svg = buildIdentityCardSvgV4(data.card, data.school, publicOrigin, side);
       return new NextResponse(svg, {
         status: 200,
         headers: {
@@ -58,7 +60,7 @@ export async function GET(
       });
     }
 
-    const pdf = await buildIdentityCardSinglePdfV4(data.card, data.school, requestUrl.origin);
+    const pdf = await buildIdentityCardSinglePdfV4(data.card, data.school, publicOrigin);
     return new NextResponse(pdf, {
       status: 200,
       headers: {

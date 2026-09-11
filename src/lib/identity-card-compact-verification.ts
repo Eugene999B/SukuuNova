@@ -8,6 +8,7 @@ type SignableIdentityCard = Pick<
 >;
 
 const TOKEN_BYTES = 16;
+const COMPACT_TOKEN_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 
 function compactSecret() {
   const value = process.env.SCHOOL_AUTH_SECRET;
@@ -38,9 +39,13 @@ export function identityCardCompactToken(card: SignableIdentityCard) {
   return signature.subarray(0, TOKEN_BYTES).toString("base64url");
 }
 
+export function isIdentityCardCompactToken(value: string) {
+  return COMPACT_TOKEN_PATTERN.test(value.trim());
+}
+
 export function verifyIdentityCardCompactToken(card: SignableIdentityCard, supplied: string) {
   const normalized = supplied.trim();
-  if (!/^[A-Za-z0-9_-]{22}$/.test(normalized)) return false;
+  if (!isIdentityCardCompactToken(normalized)) return false;
   const expected = identityCardCompactToken(card);
   const actualBytes = Buffer.from(normalized, "utf8");
   const expectedBytes = Buffer.from(expected, "utf8");

@@ -2,6 +2,10 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import type { IdentityCardView } from "../src/lib/identity-card-service";
 import {
+  identityCardCompactVerificationUrl,
+  verifyIdentityCardCompactToken,
+} from "../src/lib/identity-card-compact-verification";
+import {
   IDENTITY_CARD_THEMES,
   IDENTITY_CARD_THEME_KEYS,
   identityCardTheme,
@@ -48,6 +52,26 @@ const baseCard: IdentityCardView = {
   photoReady: false,
 };
 
+const staffCard: IdentityCardView = {
+  ...baseCard,
+  id: "card-staff-1",
+  personType: "staff",
+  studentId: null,
+  staffId: "staff-1",
+  serial: "SNV-EUG123-SF-FEDCBA9876543210",
+  personName: "Kwame Mensah",
+  personNumber: "STF-76543210",
+  admissionNo: null,
+  classId: null,
+  className: null,
+  roleName: "Teacher",
+  houseName: null,
+  guardianName: null,
+  guardianPhone: null,
+  contactPhone: "+233240000000",
+  contactEmail: "kwame@example.test",
+};
+
 const origin = "https://sukuunova-production.up.railway.app";
 
 function school(themeKey: string) {
@@ -83,34 +107,55 @@ describe("identity-card theme studio and print engine v4", () => {
     expect(identityCardTheme({ idCardTheme: "azure-wave" }).name).toBe("Azure Wave");
   });
 
-  it("renders every theme as an exact two-page CR80 PDF", async () => {
+  it("renders STUDENT and STAFF cards in every theme as exact two-page CR80 PDFs", async () => {
     for (const themeKey of IDENTITY_CARD_THEME_KEYS) {
-      const bytes = await buildIdentityCardSinglePdfV4(baseCard, school(themeKey), origin);
-      const pdf = await PDFDocument.load(bytes);
-      expect(pdf.getPageCount()).toBe(2);
-      for (const page of pdf.getPages()) {
-        expect(page.getWidth()).toBeCloseTo(85.6 * 72 / 25.4, 1);
-        expect(page.getHeight()).toBeCloseTo(53.98 * 72 / 25.4, 1);
+      for (const credential of [baseCard, staffCard]) {
+        const bytes = await buildIdentityCardSinglePdfV4(credential, school(themeKey), origin);
+        const pdf = await PDFDocument.load(bytes);
+        expect(pdf.getPageCount()).toBe(2);
+        for (const page of pdf.getPages()) {
+          expect(page.getWidth()).toBeCloseTo(85.6 * 72 / 25.4, 1);
+          expect(page.getHeight()).toBeCloseTo(53.98 * 72 / 25.4, 1);
+        }
       }
     }
   });
 
-  it("exports exact-size themed front/back SVG artwork with a large verification QR", () => {
+  it("exports exact-size STUDENT and STAFF themed SVG artwork with verification QR artwork", () => {
     for (const themeKey of IDENTITY_CARD_THEME_KEYS) {
       const themedSchool = school(themeKey);
       const theme = identityCardTheme(themedSchool.brandColors);
-      const front = buildIdentityCardSvgV4(baseCard, themedSchool, origin, "front");
-      const back = buildIdentityCardSvgV4(baseCard, themedSchool, origin, "back");
-      for (const svg of [front, back]) {
-        expect(svg).toContain('width="85.6mm"');
-        expect(svg).toContain('height="53.98mm"');
-        expect(svg).toContain('viewBox="0 0 856 539.8"');
+      for (const credential of [baseCard, staffCard]) {
+        const front = buildIdentityCardSvgV4(credential, themedSchool, origin, "front");
+        const back = buildIdentityCardSvgV4(credential, themedSchool, origin, "back");
+        for (const svg of [front, back]) {
+          expect(svg).toContain('width="85.6mm"');
+          expect(svg).toContain('height="53.98mm"');
+          expect(svg).toContain('viewBox="0 0 856 539.8"');
+        }
+        expect(front).toContain(credential.personName);
+        expect(front).toContain(theme.frontBackground);
+        expect(back).toContain("SCAN · VERIFY LIVE");
+        expect(back).toContain("Official holder + live status");
+        expect(back).toContain("<rect");
       }
-      expect(front).toContain("Akosua Frimpong");
-      expect(front).toContain(theme.frontBackground);
-      expect(back).toContain("SCAN · VERIFY LIVE");
-      expect(back).toContain("Official holder + live status");
-      expect(back).toContain("<rect");
+    }
+  });
+
+  it("keeps the signed QR payload valid for STUDENT and STAFF independently of the selected theme", () => {
+    for (const credential of [baseCard, staffCard]) {
+      const expectedUrl = identityCardCompactVerificationUrl(origin, baseSchool.uniqueCode, credential);
+      const parsed = new URL(expectedUrl);
+      const token = parsed.pathname.split("/").filter(Boolean).at(-1) ?? "";
+      expect(parsed.origin).toBe(origin);
+      expect(parsed.pathname).toContain(`/v/${baseSchool.uniqueCode}/${credential.serial}/`);
+      expect(verifyIdentityCardCompactToken(credential, token)).toBe(true);
+
+      for (const themeKey of IDENTITY_CARD_THEME_KEYS) {
+        const back = buildIdentityCardSvgV4(credential, school(themeKey), origin, "back");
+        expect(back.length).toBeGreaterThan(5_000);
+        expect(back).toContain("SCAN · VERIFY LIVE");
+      }
     }
   });
 
