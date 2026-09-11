@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import SchoolStoreWorkspace from "@/components/SchoolStoreWorkspace";
+import SchoolStoreDeepLinkController from "@/components/SchoolStoreDeepLinkController";
 import { requireSchoolSession } from "@/lib/auth";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { withTenant } from "@/lib/db";
@@ -17,6 +18,7 @@ export default async function SchoolStorePage() {
   });
   if (!context.school) return null;
   return <AppShell universe="school" title="School Store" subtitle="Products, stock, sales and receipts." active="School Store" schoolName={context.school.name} schoolCode={context.school.uniqueCode} userName={session.name} role={context.role}>
+    <SchoolStoreDeepLinkController />
     <SchoolStoreWorkspace />
   </AppShell>;
 }
