@@ -28,12 +28,17 @@ done
 # Build an authentic database at the exact pre-Release-C migration boundary.
 DATABASE_URL="${UPGRADE_DATABASE_URL}" npx prisma migrate deploy
 
-# Seed the minimum real finance history needed to make the Release C invoice backfill
-# exercise the old Phase 1 immutability trigger, matching the Railway production failure.
+# Seed historical finance data that forces Release C to change totalAmount: a GHS 100
+# invoice with an already-approved legacy GHS 20 discount. This reproduces Railway's
+# production-only collision with the original Phase 1 invoice immutability trigger.
 psql "${UPGRADE_DATABASE_URL}" -v ON_ERROR_STOP=1 <<'SQL'
 SELECT set_config('app.current_school_id', 'upgrade-school', false);
 INSERT INTO "School" ("id","uniqueCode","name")
 VALUES ('upgrade-school','upgrade-school','Upgrade Rehearsal School');
+INSERT INTO "User" ("id","schoolId","name","email","passwordHash")
+VALUES
+  ('upgrade-requester','upgrade-school','Requester','requester@upgrade.invalid','not-a-real-password-hash'),
+  ('upgrade-approver','upgrade-school','Approver','approver@upgrade.invalid','not-a-real-password-hash');
 INSERT INTO "AcademicYear" ("id","schoolId","name","startDate","endDate")
 VALUES ('upgrade-year','upgrade-school','2026/2027','2026-09-01','2027-07-31');
 INSERT INTO "Term" ("id","schoolId","academicYearId","name","startDate","endDate")
@@ -46,6 +51,10 @@ INSERT INTO "Invoice" ("id","schoolId","studentId","termId","totalAmount","statu
 VALUES ('upgrade-invoice','upgrade-school','upgrade-student','upgrade-term',100,'unpaid');
 INSERT INTO "InvoiceLine" ("schoolId","invoiceId","feeItemId","amount")
 VALUES ('upgrade-school','upgrade-invoice','upgrade-fee',100);
+INSERT INTO "P3FinanceAdjustment"
+  ("id","schoolId","studentId","invoiceId","kind","mode","value","reason","status","requestedBy","approvedBy","approvedAt")
+VALUES
+  ('upgrade-adjustment','upgrade-school','upgrade-student','upgrade-invoice','discount','fixed',20,'Legacy approved discount','approved','upgrade-requester','upgrade-approver',CURRENT_TIMESTAMP);
 SQL
 
 restore_migrations
@@ -57,7 +66,7 @@ DATABASE_URL="${UPGRADE_DATABASE_URL}" npx prisma migrate deploy
 raw_status=$?
 set -e
 if [ "${raw_status}" -eq 0 ]; then
-  echo "Expected raw Release C migration to fail against historical invoices, but it succeeded." >&2
+  echo "Expected raw Release C migration to fail against an adjusted historical invoice, but it succeeded." >&2
   exit 1
 fi
 
@@ -116,8 +125,8 @@ BEGIN
     FROM "Invoice"
    WHERE "id"='upgrade-invoice' AND "schoolId"='upgrade-school';
   IF projected."grossAmount" <> 100
-     OR projected."adjustmentAmount" <> 0
-     OR projected."totalAmount" <> 100
+     OR projected."adjustmentAmount" <> 20
+     OR projected."totalAmount" <> 80
      OR projected."status" <> 'unpaid' THEN
     RAISE EXCEPTION 'Recovered invoice projection is incorrect';
   END IF;
