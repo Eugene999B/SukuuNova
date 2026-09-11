@@ -81,17 +81,19 @@ function question(index: number, mission: CediMarketMission, prompt: string, ans
 }
 
 function changeQuestion(index: number, difficulty: number): CediCityMarketQuestion {
-  const basket = productBasket(difficulty >= 3 ? 2 : 1);
-  const cost = basket.reduce((sum, [, price]) => sum + price, 0) + randomInt(0, 1 + difficulty * 2);
+  const baseBasket = productBasket(difficulty >= 3 ? 2 : 1);
+  const modifier = randomInt(0, 1 + difficulty * 2);
+  const basket = baseBasket.map(([name, price], itemIndex) => [name, price + (itemIndex === 0 ? modifier : 0)] as const);
+  const cost = basket.reduce((sum, [, price]) => sum + price, 0);
   const walletStep = difficulty >= 4 ? 20 : 10;
   const wallet = Math.max(walletStep, Math.ceil((cost + 5) / walletStep) * walletStep);
   const answer = wallet - cost;
   return question(
     index,
     "change",
-    `${CUSTOMERS[index % CUSTOMERS.length]} pays ${money(wallet)} for a basket costing ${money(cost)}. What change should the till return?`,
+    `A customer pays ${money(wallet)} for a basket costing ${money(cost)}. What change should the till return?`,
     answer,
-    [wallet - answer, answer + 5, Math.max(0, answer - 5)],
+    [cost, answer + 5, Math.max(0, answer - 5)],
     `${money(wallet)} − ${money(cost)} = ${money(answer)} change.`,
     scene("change", basket, wallet, "Check the amount paid, subtract the basket total, then verify the change."),
     `market-change:${wallet}:${cost}`,
@@ -120,14 +122,15 @@ function basketQuestion(index: number, difficulty: number): CediCityMarketQuesti
 
 function flatDiscountQuestion(index: number, difficulty: number): CediCityMarketQuestion {
   const basket = productBasket(1);
+  const item = basket[0]?.[0] ?? "market item";
   const base = 30 + randomInt(0, 5 + difficulty) * 5;
   const discount = Math.min(base - 5, 5 + randomInt(0, Math.max(1, difficulty)) * 5);
   const final = base - discount;
-  const priced = [[basket[0][0], base]] as const;
+  const priced = [[item, base]] as const;
   return question(
     index,
     "discount",
-    `A ${basket[0][0]} is marked ${money(base)} and the market voucher removes ${money(discount)}. What price should appear on the receipt?`,
+    `A ${item} is marked ${money(base)} and the market voucher removes ${money(discount)}. What price should appear on the receipt?`,
     final,
     [base + discount, base, Math.max(0, final - 5)],
     `${money(base)} − ${money(discount)} = ${money(final)}.`,
@@ -217,16 +220,15 @@ function tradeoffQuestion(index: number, difficulty: number): CediCityMarketQues
   const budget = 100 + randomInt(0, 5 + difficulty) * 20;
   const essential = 40 + randomInt(0, difficulty + 3) * 5;
   const savings = 20 + randomInt(0, difficulty + 2) * 5;
-  const optional = 10 + randomInt(0, difficulty + 3) * 5;
-  const safeOptional = Math.max(0, Math.min(optional, budget - essential - savings));
+  const safeOptional = Math.max(0, budget - essential - savings);
   const basket = productBasket(2);
   return question(
     index,
     "tradeoff",
     `You have ${money(budget)}. An essential cost is ${money(essential)} and you must still save ${money(savings)}. What is the most you can safely use for an optional purchase without breaking the plan?`,
     safeOptional,
-    [optional + essential, budget - essential, budget - savings],
-    `After the essential cost and savings, ${money(Math.max(0, budget - essential - savings))} is the safe ceiling for optional spending.`,
+    [budget - essential, budget - savings, Math.max(0, safeOptional - 10)],
+    `After the essential cost and savings, ${money(safeOptional)} is the safe ceiling for optional spending.`,
     scene("tradeoff", basket, budget, "Needs and protected savings set the ceiling for optional spending."),
     `market-tradeoff:${budget}:${essential}:${savings}`,
   );
