@@ -20,7 +20,6 @@ export default async function StaffPage() {
         orderBy: { name: "asc" },
         select: {
           id: true, name: true, email: true, phone: true, status: true,
-          employee: { select: { id: true } },
           userRoles: { select: { role: { select: { name: true, key: true } } } },
           classTeacherFor: { select: { id: true, name: true, level: true } },
           subjectAssignments: { select: { subject: { select: { id: true, name: true } }, class: { select: { id: true, name: true, level: true } } } },
@@ -30,10 +29,7 @@ export default async function StaffPage() {
       tx.subject.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
       hasPermission(tx, session.userId, "identity_cards:manage").catch(() => false),
     ]);
-    const users = allUsers.filter((user) => {
-      if (user.employee) return true;
-      return user.userRoles.some(({ role }) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name)));
-    });
+    const users = allUsers.filter((user) => user.userRoles.some(({ role }) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name))));
     return { school, users, classes, subjects, canManageCards };
   });
 
