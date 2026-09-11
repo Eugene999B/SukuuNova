@@ -6,7 +6,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, Download, FileImage, LoaderCircle, ShieldCheck } from "lucide-react";
 import { identityCardQrSvgDataUri } from "@/lib/identity-card-qr";
+import { identityCardTheme } from "@/lib/identity-card-themes";
 import "./identity-card-preview.css";
+import "./identity-card-theme-preview.css";
 
 type Props = {
   school: { name: string; uniqueCode: string; logoUrl: string | null; brandColors: unknown };
@@ -33,15 +35,6 @@ type Props = {
   downloadHref: string;
   verifyHref: string;
 };
-
-function brand(value: unknown) {
-  const row = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  const safe = (candidate: unknown, fallback: string) => typeof candidate === "string" && /^#?[0-9a-f]{6}$/i.test(candidate) ? (candidate.startsWith("#") ? candidate : `#${candidate}`) : fallback;
-  return {
-    primary: safe(row.primary ?? row.primaryColor, "var(--sn-primary-deep)"),
-    accent: safe(row.accent ?? row.secondary, "var(--sn-primary)"),
-  };
-}
 
 function initials(name: string) {
   return name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "SN";
@@ -82,8 +75,22 @@ function saveBlob(blob: Blob, filename: string) {
 }
 
 export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: Props) {
-  const palette = brand(school.brandColors);
-  const style = { "--id-primary": palette.primary, "--id-accent": palette.accent } as CSSProperties;
+  const theme = identityCardTheme(school.brandColors);
+  const style = {
+    "--id-primary": theme.primary,
+    "--id-accent": theme.accent,
+    "--id-gold": theme.highlight,
+    "--id-paper": theme.frontBackground,
+    "--id-back-paper": theme.backBackground,
+    "--id-theme-ink": theme.ink,
+    "--id-theme-muted": theme.muted,
+    "--id-theme-surface": theme.surface,
+    "--id-theme-surface-alt": theme.surfaceAlt,
+    "--id-theme-line": theme.line,
+    "--id-theme-footer": theme.footer,
+    "--id-theme-footer-ink": theme.footerInk,
+    "--id-theme-portrait": theme.portraitBorder,
+  } as CSSProperties;
   const [downloading, setDownloading] = useState<"pdf" | "front" | "back" | null>(null);
   const [downloadStatus, setDownloadStatus] = useState("");
   const [downloadError, setDownloadError] = useState("");
@@ -121,10 +128,10 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
     }
   }
 
-  return <section className="identity-profile-card-wrap" style={style}>
+  return <section className="identity-profile-card-wrap" style={style} data-id-theme={theme.key}>
     <div className="identity-profile-print-note">
-      <div><strong>Premium CR80 school credential</strong><span>Front + Back · 85.60 × 53.98 mm · print at 100% / Actual Size</span></div>
-      <small>Designed as an institution credential: strong school identity and portrait on the front; a cleaner high-contrast QR on the back opens a signed live SukuuNova authenticity and status check.</small>
+      <div><strong>{theme.name} · CR80 school credential</strong><span>Front + Back · 85.60 × 53.98 mm · print at 100% / Actual Size</span></div>
+      <small>The selected school theme controls previews, PDF/SVG artwork and bulk sheets. The back carries a high-contrast QR that opens the live holder verification page.</small>
     </div>
 
     <div className="identity-profile-sides">
@@ -148,7 +155,7 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
               <strong>{schoolId}</strong>
               <small>{card.personType === "student" ? "CLASS / HOUSE" : "ROLE / POSITION"}</small>
               <p>{roleLine}</p>
-              <small>CARD NO.</small>
+              <small>CREDENTIAL NO.</small>
               <code>{card.serial}</code>
             </div>
           </div>
@@ -156,7 +163,7 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
             <div><small>ISSUED</small><strong>{date(card.issuedAt)}</strong></div>
             <div><small>VALID UNTIL</small><strong>{date(card.expiresAt)}</strong></div>
             <span className={current ? "is-current" : "is-invalid"}>{current ? "ACTIVE" : card.status === "revoked" ? "REVOKED" : "EXPIRED"}</span>
-            <div className="identity-verified-mark"><small>SUKUUNOVA</small><b>SECURE SCHOOL ID</b></div>
+            <div className="identity-verified-mark"><small>SUKUUNOVA</small><b>VERIFIED SCHOOL ID</b></div>
           </footer>
         </article>
       </div>
@@ -177,9 +184,9 @@ export function IdentityCardPreview({ school, card, downloadHref, verifyHref }: 
               <span>{contactLabel}</span><strong>{contactName}</strong><small>{contactValue}</small>
               <div className="identity-signature-row"><div className="identity-signature-line"><i/><b>AUTHORISED SIGNATURE</b></div><em>School code · {school.uniqueCode}</em></div>
             </div>
-            <Link className="identity-card-qr" href={verifyHref} target="_blank"><img src={qrDataUri} alt="QR code for live ID verification"/><b>SCAN · VERIFY LIVE</b><small>Authenticity + current status</small></Link>
+            <Link className="identity-card-qr" href={verifyHref} target="_blank"><img src={qrDataUri} alt="QR code for live ID verification"/><b>SCAN · VERIFY LIVE</b><small>Official holder + live status</small></Link>
           </div>
-          <footer className="identity-back-foot">If found, return to {school.name}. School credential only · not a national identity document.</footer>
+          <footer className="identity-back-foot">If found, return to {school.name}. Scan the QR for the official live holder record.</footer>
         </article>
       </div>
     </div>
