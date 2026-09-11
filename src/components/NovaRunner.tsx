@@ -87,6 +87,14 @@ function loadPhaser() {
   return window.__sukuuNovaPhaser;
 }
 
+function readToken(name: string) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function readTokenNumber(name: string) {
+  return Number.parseInt(readToken(name).replace("#", ""), 16);
+}
+
 function shortOption(value: string) {
   const trimmed = value.trim();
   return trimmed.length > 24 ? `${trimmed.slice(0, 22)}…` : trimmed;
@@ -148,9 +156,28 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
       const width = 960;
       const height = 540;
       const laneY = [205, 275, 345, 415];
-      const initialQuestion = Math.max(0, round.answers.findIndex((answer) => !answer.trim()));
-      const startIndex = initialQuestion < 0 ? round.questions.length : initialQuestion;
+      const firstUnanswered = round.answers.findIndex((answer) => !answer.trim());
+      const startIndex = firstUnanswered < 0 ? round.questions.length : firstUnanswered;
       const selectedAnswers = [...round.answers];
+      const palette = {
+        canvas: readTokenNumber("--arcade-canvas"),
+        surface: readTokenNumber("--arcade-surface"),
+        raised: readTokenNumber("--arcade-surface-raised"),
+        soft: readTokenNumber("--arcade-surface-soft"),
+        line: readTokenNumber("--arcade-line"),
+        lineStrong: readTokenNumber("--arcade-line-strong"),
+        text: readTokenNumber("--arcade-text"),
+        accent: readTokenNumber("--arcade-accent"),
+        accent2: readTokenNumber("--arcade-accent-2"),
+        danger: readTokenNumber("--arcade-danger"),
+        warning: readTokenNumber("--arcade-warning"),
+      };
+      const textPalette = {
+        text: readToken("--arcade-text"),
+        soft: readToken("--arcade-text-soft"),
+        muted: readToken("--arcade-muted"),
+        option: readToken("--arcade-option-bg"),
+      };
       let questionIndex = startIndex;
       let phase: "running" | "gate" | "finish" = startIndex >= round.questions.length ? "finish" : "running";
       let gateX = 1040;
@@ -177,9 +204,10 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
       let controlsText: TextLike;
       let keys: Record<string, KeyLike> = {};
 
+      const gateLaneMax = () => Math.max(0, Math.min(3, (round.questions[questionIndex]?.options.length ?? 1) - 1));
       const moveLane = (delta: number) => {
         if (phase !== "gate") return;
-        targetLane = Math.max(0, Math.min(3, targetLane + delta));
+        targetLane = Math.max(0, Math.min(gateLaneMax(), targetLane + delta));
         beep(soundRef.current, true);
       };
       const jump = () => {
@@ -215,7 +243,7 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
         width,
         height,
         parent: mount.current,
-        backgroundColor: "#071225",
+        backgroundColor: palette.canvas,
         transparent: false,
         antialias: true,
         render: { antialias: true, roundPixels: true },
@@ -223,11 +251,11 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
         scene: {
           create: function (this: SceneLike) {
             gfx = this.add.graphics();
-            promptText = this.add.text(width / 2, 82, "", { fontFamily: "system-ui, sans-serif", fontSize: "26px", fontStyle: "bold", color: "#ffffff", align: "center", wordWrap: { width: 760 } }).setOrigin(0.5, 0.5);
-            statusText = this.add.text(28, 26, "", { fontFamily: "system-ui, sans-serif", fontSize: "18px", fontStyle: "bold", color: "#d8f9ff" });
-            missionText = this.add.text(width - 28, 26, "", { fontFamily: "system-ui, sans-serif", fontSize: "16px", color: "#b6c8ff" }).setOrigin(1, 0);
-            controlsText = this.add.text(width / 2, 510, "RUN: SPACE/tap to jump  •  GATE: ↑ ↓ choose lane, SPACE enter", { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: "#9fb1d6" }).setOrigin(0.5, 0.5);
-            for (let index = 0; index < 4; index++) optionTexts.push(this.add.text(610, laneY[index], "", { fontFamily: "system-ui, sans-serif", fontSize: "17px", fontStyle: "bold", color: "#ffffff", backgroundColor: "rgba(5,12,35,.68)", padding: { x: 10, y: 7 } }).setOrigin(0.5, 0.5).setVisible(false));
+            promptText = this.add.text(width / 2, 82, "", { fontFamily: "system-ui, sans-serif", fontSize: "26px", fontStyle: "bold", color: textPalette.text, align: "center", wordWrap: { width: 760 } }).setOrigin(0.5, 0.5);
+            statusText = this.add.text(28, 26, "", { fontFamily: "system-ui, sans-serif", fontSize: "18px", fontStyle: "bold", color: textPalette.soft });
+            missionText = this.add.text(width - 28, 26, "", { fontFamily: "system-ui, sans-serif", fontSize: "16px", color: textPalette.muted }).setOrigin(1, 0);
+            controlsText = this.add.text(width / 2, 510, "RUN: SPACE/tap to jump  •  GATE: ↑ ↓ choose lane, SPACE enter", { fontFamily: "system-ui, sans-serif", fontSize: "14px", color: textPalette.muted }).setOrigin(0.5, 0.5);
+            for (let index = 0; index < 4; index++) optionTexts.push(this.add.text(610, laneY[index], "", { fontFamily: "system-ui, sans-serif", fontSize: "17px", fontStyle: "bold", color: textPalette.text, backgroundColor: textPalette.option, padding: { x: 10, y: 7 } }).setOrigin(0.5, 0.5).setVisible(false));
             keys = this.input.keyboard?.addKeys("UP,DOWN,SPACE,W,S") ?? {};
             this.input.on("pointerdown", (pointer) => {
               if (pausedRef.current) return;
@@ -235,11 +263,15 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
               if (phase === "gate") {
                 let closest = 0;
                 let distanceToLane = Number.POSITIVE_INFINITY;
-                laneY.forEach((value, index) => { const diff = Math.abs(pointer.y - value); if (diff < distanceToLane) { closest = index; distanceToLane = diff; } });
+                laneY.slice(0, gateLaneMax() + 1).forEach((value, index) => {
+                  const diff = Math.abs(pointer.y - value);
+                  if (diff < distanceToLane) { closest = index; distanceToLane = diff; }
+                });
                 targetLane = closest;
                 choose();
               }
             });
+            if (startIndex >= round.questions.length) window.setTimeout(() => completeRef.current([...selectedAnswers]), 300);
           },
           update: function (_time: number, delta: number) {
             if (!gfx) return;
@@ -276,47 +308,50 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
                 if (Math.abs(x - 145) < 24) { coins += 1; beep(soundRef.current, true); return -1000; }
                 return x;
               });
-              if (gateX <= 720) { phase = "gate"; targetLane = lane; }
+              if (gateX <= 720) {
+                phase = "gate";
+                targetLane = Math.max(0, Math.min(gateLaneMax(), Math.round(lane)));
+              }
             } else if (phase === "gate") {
               lane += (targetLane - lane) * Math.min(1, dt * 10);
             }
             flash *= Math.pow(0.04, dt);
 
             gfx.clear();
-            gfx.fillStyle(0x071225, 1).fillRect(0, 0, width, height);
-            gfx.fillStyle(0x0b2451, 1).fillRect(0, 112, width, 328);
-            gfx.fillStyle(0x123d6a, 0.9).fillTriangle(0, 440, 180 - (worldOffset * 0.06) % 240, 210, 360, 440);
-            gfx.fillStyle(0x174d73, 0.85).fillTriangle(280, 440, 500 - (worldOffset * 0.04) % 260, 230, 760, 440);
+            gfx.fillStyle(palette.canvas, 1).fillRect(0, 0, width, height);
+            gfx.fillStyle(palette.raised, 1).fillRect(0, 112, width, 328);
+            gfx.fillStyle(palette.soft, 0.9).fillTriangle(0, 440, 180 - (worldOffset * 0.06) % 240, 210, 360, 440);
+            gfx.fillStyle(palette.line, 0.85).fillTriangle(280, 440, 500 - (worldOffset * 0.04) % 260, 230, 760, 440);
             for (let star = 0; star < 24; star++) {
               const x = (star * 173 - worldOffset * (reducedMotionRef.current ? 0.02 : 0.08)) % (width + 40);
               const safeX = x < 0 ? x + width + 40 : x;
-              gfx.fillStyle(star % 3 === 0 ? 0x80f3ff : 0xffffff, 0.7).fillCircle(safeX, 135 + (star * 67) % 230, star % 5 === 0 ? 2.2 : 1.2);
+              gfx.fillStyle(star % 3 === 0 ? palette.accent : palette.text, 0.7).fillCircle(safeX, 135 + (star * 67) % 230, star % 5 === 0 ? 2.2 : 1.2);
             }
-            gfx.fillStyle(0x09172c, 1).fillRect(0, 440, width, 100);
+            gfx.fillStyle(palette.surface, 1).fillRect(0, 440, width, 100);
             for (let stripe = 0; stripe < 11; stripe++) {
               const x = ((stripe * 105 - worldOffset) % 1150 + 1150) % 1150 - 80;
-              gfx.fillStyle(0x1b3553, 0.75).fillRoundedRect(x, 463, 62, 7, 4);
+              gfx.fillStyle(palette.soft, 0.75).fillRoundedRect(x, 463, 62, 7, 4);
             }
 
             const playerY = laneY[Math.max(0, Math.min(3, Math.round(lane)))] + jumpY;
             const bob = reducedMotionRef.current ? 0 : Math.sin(worldOffset * 0.045) * 3;
-            gfx.fillStyle(flash < -0.08 ? 0xff5470 : 0x6cf2ff, 0.28).fillCircle(145, playerY + bob, 43);
-            gfx.fillStyle(0x132f59, 1).fillRoundedRect(122, playerY - 24 + bob, 46, 54, 12);
-            gfx.fillStyle(0x7af6ff, 1).fillRoundedRect(126, playerY - 20 + bob, 38, 20, 8);
-            gfx.fillStyle(0x071225, 1).fillRoundedRect(132, playerY - 14 + bob, 9, 7, 4).fillRoundedRect(150, playerY - 14 + bob, 9, 7, 4);
-            gfx.fillStyle(0xfdd66b, 1).fillCircle(145, playerY + 13 + bob, 5);
-            gfx.lineStyle(7, 0x7af6ff, 1).strokeCircle(131, playerY + 34 + bob, 7).strokeCircle(159, playerY + 34 + bob, 7);
+            gfx.fillStyle(flash < -0.08 ? palette.danger : palette.accent, 0.28).fillCircle(145, playerY + bob, 43);
+            gfx.fillStyle(palette.soft, 1).fillRoundedRect(122, playerY - 24 + bob, 46, 54, 12);
+            gfx.fillStyle(palette.accent, 1).fillRoundedRect(126, playerY - 20 + bob, 38, 20, 8);
+            gfx.fillStyle(palette.canvas, 1).fillRoundedRect(132, playerY - 14 + bob, 9, 7, 4).fillRoundedRect(150, playerY - 14 + bob, 9, 7, 4);
+            gfx.fillStyle(palette.warning, 1).fillCircle(145, playerY + 13 + bob, 5);
+            gfx.lineStyle(7, palette.accent, 1).strokeCircle(131, playerY + 34 + bob, 7).strokeCircle(159, playerY + 34 + bob, 7);
 
             obstacleX.forEach((x, index) => {
               if (x < -60 || x > width + 60) return;
-              gfx.fillStyle(obstacleHit.has(index) ? 0x435068 : 0xff5470, 0.9).fillRoundedRect(x - 17, laneY[1] + 18, 34, 55, 7);
-              gfx.fillStyle(0xffd45f, 0.9).fillTriangle(x - 15, laneY[1] + 18, x + 15, laneY[1] + 18, x, laneY[1] - 9);
+              gfx.fillStyle(obstacleHit.has(index) ? palette.lineStrong : palette.danger, 0.9).fillRoundedRect(x - 17, laneY[1] + 18, 34, 55, 7);
+              gfx.fillStyle(palette.warning, 0.9).fillTriangle(x - 15, laneY[1] + 18, x + 15, laneY[1] + 18, x, laneY[1] - 9);
             });
             coinX.forEach((x, index) => {
               if (x < -30 || x > width + 30) return;
               const y = laneY[1] - (index % 2 ? 54 : 15);
-              gfx.fillStyle(0xffd45f, 0.22).fillCircle(x, y, 17);
-              gfx.lineStyle(4, 0xffd45f, 1).strokeCircle(x, y, 10);
+              gfx.fillStyle(palette.warning, 0.22).fillCircle(x, y, 17);
+              gfx.lineStyle(4, palette.warning, 1).strokeCircle(x, y, 10);
             });
 
             optionTexts.forEach((text) => text.setVisible(false));
@@ -325,8 +360,8 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
               promptText.setText(question.prompt).setVisible(true);
               question.options.slice(0, 4).forEach((option, index) => {
                 const selected = targetLane === index;
-                gfx.fillStyle(selected ? 0x38e6cf : 0x31528c, selected ? 0.3 : 0.16).fillRoundedRect(510, laneY[index] - 28, 365, 56, 14);
-                gfx.lineStyle(selected ? 4 : 2, selected ? 0x67ffe7 : 0x5f7fbb, 0.95).strokeRoundedRect(510, laneY[index] - 28, 365, 56, 14);
+                gfx.fillStyle(selected ? palette.accent : palette.line, selected ? 0.3 : 0.16).fillRoundedRect(510, laneY[index] - 28, 365, 56, 14);
+                gfx.lineStyle(selected ? 4 : 2, selected ? palette.accent : palette.lineStrong, 0.95).strokeRoundedRect(510, laneY[index] - 28, 365, 56, 14);
                 optionTexts[index].setText(`${index + 1}. ${shortOption(option)}`).setPosition(692, laneY[index]).setVisible(true);
               });
               controlsText.setText("Choose a portal with ↑ ↓, then SPACE — or tap a portal");
@@ -336,8 +371,8 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
             }
             statusText.setText(`⚡ ${energy}   ◆ ${coins}   ↗ ${Math.floor(distance)}m`);
             missionText.setText(`KNOWLEDGE GATE ${Math.min(questionIndex + 1, round.questions.length)}/${round.questions.length}  •  LV ${round.difficulty}`);
-            if (flash > 0.08) gfx.fillStyle(0x61ffe3, Math.min(0.16, flash * 0.16)).fillRect(0, 0, width, height);
-            if (flash < -0.08) gfx.fillStyle(0xff395f, Math.min(0.13, Math.abs(flash) * 0.13)).fillRect(0, 0, width, height);
+            if (flash > 0.08) gfx.fillStyle(palette.accent, Math.min(0.16, flash * 0.16)).fillRect(0, 0, width, height);
+            if (flash < -0.08) gfx.fillStyle(palette.danger, Math.min(0.13, Math.abs(flash) * 0.13)).fillRect(0, 0, width, height);
           },
         },
       };
@@ -354,11 +389,17 @@ export default function NovaRunner({ learnerName, round, onComplete, onExit }: P
     };
   }, [round.id, round.answers, round.difficulty, round.questions]);
 
+  useEffect(() => {
+    const onFullscreenChange = () => setFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
   const toggleFullscreen = async () => {
     const element = mount.current?.parentElement;
     if (!element) return;
-    if (!document.fullscreenElement) { await element.requestFullscreen?.(); setFullscreen(true); }
-    else { await document.exitFullscreen?.(); setFullscreen(false); }
+    if (!document.fullscreenElement) await element.requestFullscreen?.();
+    else await document.exitFullscreen?.();
   };
 
   return <section className="nova-runner-shell" aria-label={`Nova Runner mission for ${learnerName}`}>
