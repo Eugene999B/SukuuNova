@@ -143,13 +143,14 @@ export async function resolveTermRoster(
     orderBy: { id: "asc" },
   });
   const rows = [];
+  const requireOfficialEnrollment = input.requireOfficialEnrollment ?? true;
   for (const student of students) {
     try {
       const context = await resolveStudentTermClass(tx, {
         schoolId: input.schoolId,
         studentId: student.id,
         termId: input.termId,
-        requireOfficialEnrollment: input.requireOfficialEnrollment,
+        requireOfficialEnrollment,
       });
       rows.push({ ...student, termClassId: context.classId, classSource: context.source, enrollmentStatus: context.enrollmentStatus });
     } catch (error) {
