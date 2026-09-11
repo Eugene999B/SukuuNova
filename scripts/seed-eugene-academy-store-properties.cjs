@@ -69,9 +69,9 @@ async function main() {
     if (!school || school.name !== SCHOOL_NAME || school.uniqueCode !== SCHOOL_CODE) throw new Error(`Refusing operations showcase: expected ${SCHOOL_NAME} (${SCHOOL_CODE}).`);
 
     const [actor, student, guardian] = await Promise.all([
-      tx.user.findFirst({ where: { schoolId, status: "active", userRoles: { some: { role: { OR: [{ key: "owner" }, { name: "Owner" }, { key: "principal" }, { name: "Principal" }] } } } }, orderBy: { createdAt: "asc" }, select: { id: true, name: true } }),
-      tx.student.findFirst({ where: { schoolId, status: "active" }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, admissionNo: true } }),
-      tx.guardian.findFirst({ where: { schoolId }, orderBy: { createdAt: "asc" }, select: { id: true, name: true, phone: true } }),
+      tx.user.findFirst({ where: { schoolId, status: "active", userRoles: { some: { role: { OR: [{ key: "owner" }, { name: "Owner" }, { key: "principal" }, { name: "Principal" }] } } } }, orderBy: { id: "asc" }, select: { id: true, name: true } }),
+      tx.student.findFirst({ where: { schoolId, status: "active" }, orderBy: { admissionNo: "asc" }, select: { id: true, name: true, admissionNo: true } }),
+      tx.guardian.findFirst({ where: { schoolId }, orderBy: { id: "asc" }, select: { id: true, name: true, phone: true } }),
     ]);
     if (!actor || !student || !guardian) throw new Error("Eugene Academy needs an active leadership account, student and guardian before operations showcase data can be created.");
 
