@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import FinanceRuntimeBoundary from "@/components/FinanceRuntimeBoundary";
-import PayrollWorkspace from "@/components/PayrollWorkspace";
+import PayrollWorkspaceSafe from "@/components/PayrollWorkspaceSafe";
 import "@/components/payroll-finance-v4.css";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
@@ -29,7 +29,7 @@ export default async function Page() {
     userName={session.name}
   >
     <FinanceRuntimeBoundary area="payroll">
-      <PayrollWorkspace schoolName={schoolName} />
+      <PayrollWorkspaceSafe schoolName={schoolName} />
     </FinanceRuntimeBoundary>
   </AppShell>;
 }
