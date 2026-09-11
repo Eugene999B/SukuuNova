@@ -10,11 +10,14 @@ const EXPORT_PERMISSIONS: Record<string, string> = {
   staff: "exports:staff",
   attendance: "exports:attendance",
   fees: "exports:finance",
+  payments: "exports:finance",
+  arrears: "exports:finance",
   gradebook: "exports:gradebook",
 };
 
 const MAX_EXPORT_ROWS = 5000;
 const MAX_GRADEBOOK_EXPORT_ROWS = 50000;
+const ZERO = new Prisma.Decimal(0);
 
 function csvCell(value: unknown) {
   const text = value == null ? "" : String(value);
@@ -48,6 +51,19 @@ function assertWithinExportLimit(count: number, limit = MAX_EXPORT_ROWS) {
       "EXPORT_TOO_LARGE",
     );
   }
+}
+
+function netPaid(
+  payments: Array<{ amount: Prisma.Decimal; reversals: Array<{ amount: Prisma.Decimal }> }>,
+) {
+  const paid = payments.reduce((sum, payment) => {
+    const reversed = payment.reversals.reduce(
+      (reversalSum, reversal) => reversalSum.plus(new Prisma.Decimal(String(reversal.amount))),
+      ZERO,
+    );
+    return sum.plus(new Prisma.Decimal(String(payment.amount))).minus(reversed);
+  }, ZERO);
+  return paid.lt(0) ? ZERO : paid;
 }
 
 export async function GET(
@@ -90,7 +106,7 @@ export async function GET(
           filename: `${school.uniqueCode}-students.csv`,
           body: csv(
             ["Admission No", "Student", "Class", "Status"],
-            rows.map((r) => [r.admissionNo, r.name, r.class?.name ?? "", r.status]),
+            rows.map((row) => [row.admissionNo, row.name, row.class?.name ?? "", row.status]),
           ),
         };
       }
@@ -110,11 +126,11 @@ export async function GET(
           },
         });
         const staff = rows.filter(
-          (r) =>
-            !r.userRoles.some((x) =>
+          (row) =>
+            !row.userRoles.some((assignment) =>
               ["parent", "guardian", "student"].includes(
-                x.role.key?.trim() ||
-                  x.role.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"),
+                assignment.role.key?.trim() ||
+                  assignment.role.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"),
               ),
             ),
         );
@@ -123,12 +139,12 @@ export async function GET(
           filename: `${school.uniqueCode}-staff.csv`,
           body: csv(
             ["Name", "Email", "Phone", "Roles", "Status"],
-            staff.map((r) => [
-              r.name,
-              r.email ?? "",
-              r.phone ?? "",
-              r.userRoles.map((x) => x.role.name).join("; "),
-              r.status,
+            staff.map((row) => [
+              row.name,
+              row.email ?? "",
+              row.phone ?? "",
+              row.userRoles.map((assignment) => assignment.role.name).join("; "),
+              row.status,
             ]),
           ),
         };
@@ -172,19 +188,20 @@ export async function GET(
           filename: `${school.uniqueCode}-attendance.csv`,
           body: csv(
             ["Date", "Admission No", "Student", "Class", "Type", "Method", "Late"],
-            rows.map((r) => [
-              r.attendanceDate.toISOString().slice(0, 10),
-              r.student?.admissionNo ?? "",
-              r.student?.name ?? "",
-              r.student?.class?.name ?? "",
-              r.type,
-              r.method,
-              r.isLate ? "Yes" : "No",
+            rows.map((row) => [
+              row.attendanceDate.toISOString().slice(0, 10),
+              row.student?.admissionNo ?? "",
+              row.student?.name ?? "",
+              row.student?.class?.name ?? "",
+              row.type,
+              row.method,
+              row.isLate ? "Yes" : "No",
             ]),
           ),
         };
       }
 
+      // Keep the established fee-balances export contract unchanged for existing consumers.
       if (dataset === "fees") {
         const rows = await tx.invoice.findMany({
           orderBy: { createdAt: "desc" },
@@ -217,19 +234,164 @@ export async function GET(
               "Balance",
               "Status",
             ],
-            rows.map((r) => {
-              const paid = r.payments.reduce((sum, p) => sum.plus(new Prisma.Decimal(String(p.amount))).minus(p.reversals.reduce((reversed, reversal) => reversed.plus(new Prisma.Decimal(String(reversal.amount))), new Prisma.Decimal(0))), new Prisma.Decimal(0));
-              const total = new Prisma.Decimal(String(r.totalAmount));
+            rows.map((row) => {
+              const paid = row.payments.reduce(
+                (sum, payment) =>
+                  sum
+                    .plus(new Prisma.Decimal(String(payment.amount)))
+                    .minus(
+                      payment.reversals.reduce(
+                        (reversed, reversal) => reversed.plus(new Prisma.Decimal(String(reversal.amount))),
+                        new Prisma.Decimal(0),
+                      ),
+                    ),
+                new Prisma.Decimal(0),
+              );
+              const total = new Prisma.Decimal(String(row.totalAmount));
               const balance = total.minus(paid);
               return [
-                r.createdAt.toISOString().slice(0, 10),
-                r.student.admissionNo,
-                r.student.name,
-                r.student.class?.name ?? "",
+                row.createdAt.toISOString().slice(0, 10),
+                row.student.admissionNo,
+                row.student.name,
+                row.student.class?.name ?? "",
                 total.toFixed(2),
                 paid.toFixed(2),
                 balance.toFixed(2),
-                r.status,
+                row.status,
+              ];
+            }),
+          ),
+        };
+      }
+
+      if (dataset === "arrears") {
+        const rows = await tx.invoice.findMany({
+          orderBy: { createdAt: "desc" },
+          take: MAX_EXPORT_ROWS + 1,
+          select: {
+            id: true,
+            totalAmount: true,
+            status: true,
+            createdAt: true,
+            term: { select: { name: true } },
+            student: {
+              select: {
+                admissionNo: true,
+                name: true,
+                class: { select: { name: true } },
+              },
+            },
+            payments: { select: { amount: true, reversals: { select: { amount: true } } } },
+          },
+        });
+        assertWithinExportLimit(rows.length);
+        const arrears = rows
+          .map((row) => {
+            const total = new Prisma.Decimal(String(row.totalAmount));
+            const paid = netPaid(row.payments);
+            const rawBalance = total.minus(paid);
+            const balance = rawBalance.lt(0) ? ZERO : rawBalance;
+            return { row, total, paid, balance };
+          })
+          .filter(({ balance }) => balance.gt(0))
+          .sort((a, b) => b.balance.comparedTo(a.balance));
+
+        return {
+          filename: `${school.uniqueCode}-arrears.csv`,
+          body: csv(
+            [
+              "Invoice ID",
+              "Created",
+              "Admission No",
+              "Student",
+              "Class",
+              "Term",
+              "Invoice Total",
+              "Net Paid",
+              "Balance",
+              "Status",
+            ],
+            arrears.map(({ row, total, paid, balance }) => [
+              row.id,
+              row.createdAt.toISOString().slice(0, 10),
+              row.student.admissionNo,
+              row.student.name,
+              row.student.class?.name ?? "",
+              row.term.name,
+              total.toFixed(2),
+              paid.toFixed(2),
+              balance.toFixed(2),
+              paid.gt(0) ? "partial" : row.status,
+            ]),
+          ),
+        };
+      }
+
+      if (dataset === "payments") {
+        const rows = await tx.payment.findMany({
+          orderBy: { createdAt: "desc" },
+          take: MAX_EXPORT_ROWS + 1,
+          select: {
+            id: true,
+            invoiceId: true,
+            amount: true,
+            method: true,
+            reference: true,
+            createdAt: true,
+            reversals: { select: { amount: true } },
+            invoice: {
+              select: {
+                term: { select: { name: true } },
+                student: {
+                  select: {
+                    admissionNo: true,
+                    name: true,
+                    class: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        });
+        assertWithinExportLimit(rows.length);
+        return {
+          filename: `${school.uniqueCode}-payments.csv`,
+          body: csv(
+            [
+              "Payment ID",
+              "Invoice ID",
+              "Created",
+              "Admission No",
+              "Student",
+              "Class",
+              "Term",
+              "Method",
+              "Reference",
+              "Gross Amount",
+              "Reversed",
+              "Net Amount",
+            ],
+            rows.map((row) => {
+              const gross = new Prisma.Decimal(String(row.amount));
+              const reversed = row.reversals.reduce(
+                (sum, reversal) => sum.plus(new Prisma.Decimal(String(reversal.amount))),
+                ZERO,
+              );
+              const rawNet = gross.minus(reversed);
+              const net = rawNet.lt(0) ? ZERO : rawNet;
+              return [
+                row.id,
+                row.invoiceId,
+                row.createdAt.toISOString(),
+                row.invoice.student.admissionNo,
+                row.invoice.student.name,
+                row.invoice.student.class?.name ?? "",
+                row.invoice.term.name,
+                row.method,
+                row.reference ?? "",
+                gross.toFixed(2),
+                reversed.toFixed(2),
+                net.toFixed(2),
               ];
             }),
           ),
