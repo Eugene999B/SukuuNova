@@ -100,3 +100,27 @@ export async function linkGuardianToStudent(
   }
   return { isPrimary };
 }
+
+export async function makePrimaryGuardianForStudent(
+  tx: TenantDb,
+  input: { schoolId: string; studentId: string; guardianId: string }
+): Promise<{ guardianId: string; studentId: string; changed: boolean }> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`guardian-link:${input.schoolId}:${input.studentId}`}))`;
+  const link = await tx.studentGuardian.findFirst({
+    where: { schoolId: input.schoolId, studentId: input.studentId, guardianId: input.guardianId },
+    select: { guardianId: true, isPrimary: true },
+  });
+  if (!link) throw new AppError("This guardian is not linked to the selected learner.", 404, "GUARDIAN_LINK_NOT_FOUND");
+  if (link.isPrimary) return { guardianId: input.guardianId, studentId: input.studentId, changed: false };
+
+  await tx.studentGuardian.updateMany({
+    where: { schoolId: input.schoolId, studentId: input.studentId, isPrimary: true },
+    data: { isPrimary: false },
+  });
+  const changed = await tx.studentGuardian.updateMany({
+    where: { schoolId: input.schoolId, studentId: input.studentId, guardianId: input.guardianId },
+    data: { isPrimary: true },
+  });
+  if (changed.count !== 1) throw new AppError("Primary guardian could not be changed.", 409, "PRIMARY_GUARDIAN_CHANGE_FAILED");
+  return { guardianId: input.guardianId, studentId: input.studentId, changed: true };
+}
