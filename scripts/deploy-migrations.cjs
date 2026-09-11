@@ -24,14 +24,24 @@ function runPrisma(args) {
   }
 }
 
+async function tableExists(client, table) {
+  const rows = await client.$queryRawUnsafe(
+    `SELECT to_regclass($1)::text AS "name"`,
+    `public.${table}`
+  );
+  return Boolean(rows[0]?.name);
+}
+
 async function restoreRls(client) {
   for (const table of RLS_TABLES) {
+    if (!(await tableExists(client, `"${table}"`))) continue;
     await client.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE ROW LEVEL SECURITY`);
     await client.$executeRawUnsafe(`ALTER TABLE "${table}" FORCE ROW LEVEL SECURITY`);
   }
 }
 
 async function ensureInvoiceProtection(client) {
+  if (!(await tableExists(client, '"Invoice"'))) return;
   const rows = await client.$queryRawUnsafe(`
     SELECT EXISTS (
       SELECT 1
@@ -51,6 +61,7 @@ async function ensureInvoiceProtection(client) {
 }
 
 async function failedReleaseCMigration(client) {
+  if (!(await tableExists(client, '"_prisma_migrations"'))) return false;
   const rows = await client.$queryRawUnsafe(`
     SELECT "migration_name", "finished_at", "rolled_back_at"
     FROM "_prisma_migrations"
