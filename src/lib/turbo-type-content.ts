@@ -65,7 +65,8 @@ export function turboTypeWeakKeysFromSnapshots(snapshots: unknown[]) {
 
 export function turboTypeTargetFromPrompt(prompt: string) {
   const marker = "Type this exactly: ";
-  return prompt.startsWith(marker) ? prompt.slice(marker.length) : prompt;
+  const markerIndex = prompt.lastIndexOf(marker);
+  return markerIndex >= 0 ? prompt.slice(markerIndex + marker.length) : prompt;
 }
 
 export function createTurboTypeQuestions(difficulty: number, length = 5, weakKeys: readonly string[] = []): ArcadeResponseQuestion[] {
