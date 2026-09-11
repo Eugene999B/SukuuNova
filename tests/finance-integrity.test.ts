@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
-import { withTenant } from "../src/lib/db";
+import { withTenant, type TenantDb } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 import { createFeeItem, generateInvoice, recordPayment } from "../src/lib/finance-service";
 
 async function createConfirmedFinanceStudent(
-  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tx: TenantDb,
   fixture: Awaited<ReturnType<typeof createTenantFixture>>,
   input: { yearId: string; termId: string; suffix: string },
 ) {
