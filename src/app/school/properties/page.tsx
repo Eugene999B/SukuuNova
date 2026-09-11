@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import SchoolPropertiesWorkspace from "@/components/SchoolPropertiesWorkspace";
+import SchoolPropertyReceiveShortcut from "@/components/SchoolPropertyReceiveShortcut";
 import { requireSchoolSession } from "@/lib/auth";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { withTenant } from "@/lib/db";
@@ -15,10 +16,11 @@ export default async function SchoolPropertiesPage() {
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       getSchoolAuthorization(tx, session.userId),
     ]);
-    return { school, role: access.roles.map((role) => role.name).join(" · ") || "School account" };
+    return { school, role: access.roles.map((role) => role.name).join(" · ") || "School account", canManage: propertyAccess.manage };
   });
   if (!context.school) return null;
   return <AppShell universe="school" title="School Properties" subtitle="Locations, custody, condition and movement." active="School Properties" schoolName={context.school.name} schoolCode={context.school.uniqueCode} userName={session.name} role={context.role}>
+    {context.canManage ? <SchoolPropertyReceiveShortcut /> : null}
     <SchoolPropertiesWorkspace />
   </AppShell>;
 }
