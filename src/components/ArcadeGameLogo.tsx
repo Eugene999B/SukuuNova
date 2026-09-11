@@ -1,6 +1,6 @@
-import { Atom, Keyboard, Orbit, Rocket, Shield, Sparkles, Zap } from "lucide-react";
+import { Atom, BookOpen, Crown, Keyboard, Orbit, Rocket, Shield, Sparkles, Zap } from "lucide-react";
 
-export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab";
+export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word";
 
 type Props = {
   game: ArcadeLogoGame;
@@ -20,6 +20,13 @@ export default function ArcadeGameLogo({ game, size = "card" }: Props) {
       <Orbit className="arcade-mark-orbit" aria-hidden="true"/>
       <Shield className="arcade-mark-main" aria-hidden="true"/>
       <Atom className="arcade-mark-core" aria-hidden="true"/>
+    </div>;
+  }
+  if (game === "word") {
+    return <div className={`arcade-mark arcade-mark-${size} arcade-mark-word`} aria-label="Word Kingdom logo">
+      <span className="arcade-mark-star" aria-hidden="true"><Sparkles size={14}/></span>
+      <BookOpen className="arcade-mark-main" aria-hidden="true"/>
+      <Crown className="arcade-mark-core" aria-hidden="true"/>
     </div>;
   }
   return <div className={`arcade-mark arcade-mark-${size} arcade-mark-runner`} aria-label="Nova Runner logo">
