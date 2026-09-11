@@ -22,7 +22,9 @@ export const PERMISSION_GROUP_LABELS: Record<string, string> = {
   library: "Library & learning resources",
   transport: "Transport",
   feeding: "Canteen & feeding",
-  assets: "Assets",
+  assets: "Legacy assets",
+  store: "School store",
+  properties: "School properties",
   recruitment: "Recruitment",
   risk_flags: "Student support & safeguarding",
   ai_drafts: "AI assistance",
@@ -86,7 +88,18 @@ const LABEL_OVERRIDES: Record<string, string> = {
   "exams:take": "Take assigned online assessments",
   "library:manage": "Manage library resources",
   "library:borrow": "Borrow/view learner library resources",
-  "assets:manage": "Manage school assets",
+  "assets:manage": "Manage legacy school assets",
+  "store:view": "View school store",
+  "store:manage_catalog": "Manage store products & sizes",
+  "store:stock": "Restock & adjust store stock",
+  "store:sell": "Record store sales",
+  "store:void_sale": "Void store sales",
+  "store:export": "Export store records",
+  "properties:view": "View school properties",
+  "properties:manage": "Create property locations & items",
+  "properties:move": "Transfer & update property condition",
+  "properties:dispose": "Record lost, destroyed or disposed property",
+  "properties:export": "Export property records",
   "fees:adjust": "Adjust fees",
   "fees:approve": "Approve fee changes",
   "recruitment:manage": "Manage recruitment",
@@ -122,6 +135,8 @@ const CRITICAL = new Set([
   "roles:create_custom",
   "payments:reverse",
   "broadcast:emergency_send",
+  "store:void_sale",
+  "properties:dispose",
 ]);
 
 const SENSITIVE = new Set([
@@ -146,6 +161,13 @@ const SENSITIVE = new Set([
   "exports:finance",
   "exports:gradebook",
   "identity_cards:manage",
+  "store:manage_catalog",
+  "store:stock",
+  "store:sell",
+  "store:export",
+  "properties:manage",
+  "properties:move",
+  "properties:export",
 ]);
 
 export function permissionGroup(key: string) {
