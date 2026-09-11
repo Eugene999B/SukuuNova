@@ -23,9 +23,14 @@ describe("timetable bell schedule safety", () => {
     expect(() => validateTimetableBellSchedule(base)).not.toThrow();
   });
 
-  it("rejects a break that partly crosses the end of a teaching day", () => {
+  it("clips a school-wide break that crosses the end of a shortened teaching day", () => {
     const config = { ...base, breaks: [{ name: "Late break", start: "11:50", end: "12:10" }] };
-    expect(() => safeDayBlocks(config.days[1], config)).toThrow(/partly falls outside Friday/i);
+    expect(breaksForTimetableDay(config.days[1], config)).toEqual([
+      { name: "Late break", start: "11:50", end: "12:00" },
+    ]);
+    const built = safeDayBlocks(config.days[1], config);
+    expect(built.blocks.some((block) => block.kind === "break" && block.start === "11:50" && block.end === "12:00")).toBe(true);
+    expect(() => validateTimetableBellSchedule(config)).not.toThrow();
   });
 
   it("rejects overlapping breaks on an enabled day", () => {
