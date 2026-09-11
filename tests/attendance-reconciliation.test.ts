@@ -69,30 +69,46 @@ describe("attendance event/register reconciliation", () => {
         },
       });
 
+      const excused = await tx.attendanceEvent.create({
+        data: {
+          schoolId: fixture.schoolId,
+          studentId: student.id,
+          type: "excused",
+          method: "school_register",
+          timestamp: new Date("2026-09-11T10:00:00.000Z"),
+          attendanceDate: day,
+          periodId: "P3",
+          recordedBy: fixture.ownerId,
+        },
+      });
+
       records = await tx.attendanceRecord.findMany({
         where: { schoolId: fixture.schoolId, studentId: student.id, attendanceDate: day },
         orderBy: { periodId: "asc" },
       });
-      expect(records).toHaveLength(2);
+      expect(records).toHaveLength(3);
 
       const p1 = records.find((row) => row.periodId === "P1");
       const p2 = records.find((row) => row.periodId === "P2");
+      const p3 = records.find((row) => row.periodId === "P3");
       expect(p1).toMatchObject({ status: "PENDING_REVIEW", classId: schoolClass.id });
       expect(p1?.eventIds).toEqual([absent.id, present.id]);
       expect(p2).toMatchObject({ status: "PRESENT", source: "MANUAL", classId: schoolClass.id });
       expect(p2?.eventIds).toEqual([periodTwo.id]);
+      expect(p3).toMatchObject({ status: "EXCUSED", source: "MANUAL", classId: schoolClass.id });
+      expect(p3?.eventIds).toEqual([excused.id]);
 
       const statusProducingEvents = await tx.attendanceEvent.count({
         where: {
           schoolId: fixture.schoolId,
           studentId: student.id,
           attendanceDate: day,
-          type: { in: ["absent", "late", "in"] },
+          type: { in: ["absent", "late", "in", "excused"] },
         },
       });
       const linkedEventIds = records.flatMap((row) => Array.isArray(row.eventIds) ? row.eventIds.map(String) : []);
       expect(new Set(linkedEventIds).size).toBe(statusProducingEvents);
-      expect(linkedEventIds).toEqual(expect.arrayContaining([absent.id, present.id, periodTwo.id]));
+      expect(linkedEventIds).toEqual(expect.arrayContaining([absent.id, present.id, periodTwo.id, excused.id]));
     });
   });
 });
