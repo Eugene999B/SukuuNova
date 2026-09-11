@@ -9,12 +9,13 @@ import WordKingdom from "./WordKingdom";
 import ReadingQuest from "./ReadingQuest";
 import CodeBotsFactory from "./CodeBotsFactory";
 import GeoQuest from "./GeoQuest";
+import CediCityMarket from "./CediCityMarket";
 import ArcadeProgressionHub from "./ArcadeProgressionHub";
 import ArcadeGameLogo from "./ArcadeGameLogo";
 import "./nova-learning-arcade.css";
 
 type AgeBand = "age_4_5" | "age_6_8" | "age_9_11" | "age_12_14" | "age_15_18";
-type LiveGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master";
+type LiveGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market";
 type Child = { id: string; name: string; classId: string | null; class: { name: string; level: string | null } | null };
 type Progress = { game: string; rounds: number; xp: number; level: number; accuracy: number | null; badges: string[] };
 type Overview = {
@@ -26,7 +27,20 @@ type Overview = {
   recommendedAgeBand: AgeBand | null;
   allowedAgeBands: AgeBand[];
 };
-type Question = { id: string; kind?: string; prompt: string; options: string[]; answer?: string; explanation?: string; correct?: boolean; scene?: { cue?: string; meterLabels?: string[]; x?: number; y?: number; boardTitle?: string } };
+type QuestionScene = {
+  cue?: string;
+  meterLabels?: string[];
+  x?: number;
+  y?: number;
+  boardTitle?: string;
+  customer?: string;
+  avatar?: string;
+  basket?: string[];
+  wallet?: number;
+  mission?: "change" | "basket" | "discount" | "saving" | "budget" | "profit" | "percentage" | "tradeoff";
+  priceTags?: string[];
+};
+type Question = { id: string; kind?: string; prompt: string; options: string[]; answer?: string; explanation?: string; correct?: boolean; scene?: QuestionScene };
 type LearningPlan = {
   version: 1;
   targetDifficulty: number;
@@ -60,7 +74,16 @@ type Leaderboard = { rows: Array<{ rank: number; studentId: string; displayName:
 const ageLabels: Record<AgeBand, string> = {
   age_4_5: "Age 4–5", age_6_8: "Age 6–8", age_9_11: "Age 9–11", age_12_14: "Age 12–14", age_15_18: "Age 15–18",
 };
-const gameLabels: Record<LiveGame, string> = { math: "Nova Runner", "keyboard-ninja": "TurboType", "force-motion-lab": "AstroLab Defender", word: "Word Kingdom", "comprehension-quest": "Reading Quest", "coding-sequence": "CodeBots Logic Factory", "ghana-map-master": "GeoQuest Ghana Expedition" };
+const gameLabels: Record<LiveGame, string> = {
+  math: "Nova Runner",
+  "keyboard-ninja": "TurboType",
+  "force-motion-lab": "AstroLab Defender",
+  word: "Word Kingdom",
+  "comprehension-quest": "Reading Quest",
+  "coding-sequence": "CodeBots Logic Factory",
+  "ghana-map-master": "GeoQuest Ghana Expedition",
+  "money-math-market": "Cedi City Market",
+};
 
 function displayAnswer(value?: string) {
   if (!value) return "—";
@@ -69,6 +92,17 @@ function displayAnswer(value?: string) {
     if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) return parsed.join(" → ");
   } catch {}
   return value;
+}
+
+function completionNoun(game: LiveGame) {
+  if (game === "keyboard-ninja") return "Race";
+  if (game === "force-motion-lab") return "Defence mission";
+  if (game === "word") return "Quest";
+  if (game === "comprehension-quest") return "Expedition";
+  if (game === "coding-sequence") return "Factory run";
+  if (game === "ghana-map-master") return "Survey";
+  if (game === "money-math-market") return "Market shift";
+  return "Mission";
 }
 
 async function api(path: string, body?: unknown) {
@@ -126,13 +160,13 @@ export default function LearningArcadeV3() {
     const completed = await api("/api/guardian/arcade", { action: "save", roundId: round.id, answers, finish: true, ...(typingTelemetry ? { typingTelemetry } : {}) }) as Round;
     const completedGame = round.game as LiveGame;
     setRound(null); setResult(completed);
-    setMessage(`${completedGame === "keyboard-ninja" ? "Race" : completedGame === "force-motion-lab" ? "Defence mission" : completedGame === "word" ? "Quest" : completedGame === "comprehension-quest" ? "Expedition" : completedGame === "coding-sequence" ? "Factory run" : completedGame === "ghana-map-master" ? "Survey" : "Mission"} complete — ${completed.xp} XP earned.`);
+    setMessage(`${completionNoun(completedGame)} complete — ${completed.xp} XP earned.`);
     await refresh(completed.studentId);
   });
 
   const exitRound = (answers: string[], typingTelemetry?: TurboTypeTelemetry) => run(async () => {
     if (!round) return;
-    const currentGame = round.game;
+    const currentGame = round.game as LiveGame;
     await api("/api/guardian/arcade", { action: "save", roundId: round.id, answers, finish: false, ...(typingTelemetry ? { typingTelemetry } : {}) });
     const studentId = round.studentId;
     setRound(null);
@@ -148,7 +182,9 @@ export default function LearningArcadeV3() {
               ? "Factory saved. CodeBots will resume at the next bot build."
               : currentGame === "ghana-map-master"
                 ? "Survey saved. GeoQuest will resume at the next atlas beacon."
-                : "Mission saved. Nova Runner will resume from your next Knowledge Gate.");
+                : currentGame === "money-math-market"
+                  ? "Market saved. Cedi City will resume with the next customer."
+                  : "Mission saved. Nova Runner will resume from your next Knowledge Gate.");
     await refresh(studentId);
   });
 
@@ -159,20 +195,23 @@ export default function LearningArcadeV3() {
     setLeaderboard(await api(`/api/guardian/arcade?${params.toString()}`) as Leaderboard);
   });
 
-  const runnerProgress = useMemo(() => data?.progress.find((item) => item.game === "math"), [data?.progress]);
-  const typingProgress = useMemo(() => data?.progress.find((item) => item.game === "keyboard-ninja"), [data?.progress]);
-  const astroProgress = useMemo(() => data?.progress.find((item) => item.game === "force-motion-lab"), [data?.progress]);
-  const wordProgress = useMemo(() => data?.progress.find((item) => item.game === "word"), [data?.progress]);
-  const readingProgress = useMemo(() => data?.progress.find((item) => item.game === "comprehension-quest"), [data?.progress]);
-  const codeBotsProgress = useMemo(() => data?.progress.find((item) => item.game === "coding-sequence"), [data?.progress]);
-  const geoProgress = useMemo(() => data?.progress.find((item) => item.game === "ghana-map-master"), [data?.progress]);
+  const progressFor = (game: LiveGame) => data?.progress.find((item) => item.game === game);
+  const runnerProgress = progressFor("math");
+  const typingProgress = progressFor("keyboard-ninja");
+  const astroProgress = progressFor("force-motion-lab");
+  const wordProgress = progressFor("word");
+  const readingProgress = progressFor("comprehension-quest");
+  const codeBotsProgress = progressFor("coding-sequence");
+  const geoProgress = progressFor("ghana-map-master");
+  const marketProgress = progressFor("money-math-market");
   const totalXp = useMemo(() => data?.progress.reduce((sum, item) => sum + item.xp, 0) ?? 0, [data?.progress]);
-  const highestGameLevel = Math.max(runnerProgress?.level ?? 1, typingProgress?.level ?? 1, astroProgress?.level ?? 1, wordProgress?.level ?? 1, readingProgress?.level ?? 1, codeBotsProgress?.level ?? 1, geoProgress?.level ?? 1);
+  const highestGameLevel = Math.max(runnerProgress?.level ?? 1, typingProgress?.level ?? 1, astroProgress?.level ?? 1, wordProgress?.level ?? 1, readingProgress?.level ?? 1, codeBotsProgress?.level ?? 1, geoProgress?.level ?? 1, marketProgress?.level ?? 1);
   const astroEligible = ageBand === "age_9_11" || ageBand === "age_12_14" || ageBand === "age_15_18";
   const wordEligible = ageBand !== "age_4_5";
   const readingEligible = astroEligible;
   const codeBotsEligible = astroEligible;
   const geoEligible = astroEligible;
+  const marketEligible = wordEligible;
 
   if (round && data?.selected) return <div className="nova-arcade">
     {round.game === "keyboard-ninja"
@@ -187,7 +226,9 @@ export default function LearningArcadeV3() {
               ? <CodeBotsFactory learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>
               : round.game === "ghana-map-master"
                 ? <GeoQuest learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>
-                : <NovaRunner learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>} 
+                : round.game === "money-math-market"
+                  ? <CediCityMarket learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>
+                  : <NovaRunner learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>} 
     {busy ? <div className="nova-arcade-message">Saving game progress…</div> : null}
     {error ? <div className="nova-arcade-alert" role="alert">{error}</div> : null}
   </div>;
@@ -200,12 +241,14 @@ export default function LearningArcadeV3() {
     const readingResult = resultGame === "comprehension-quest";
     const codeBotsResult = resultGame === "coding-sequence";
     const geoResult = resultGame === "ghana-map-master";
-    const unit = typingResult ? "typing checkpoints" : astroResult ? "science anomalies" : wordResult ? "kingdom runes" : readingResult ? "evidence chapters" : codeBotsResult ? "bot programs" : geoResult ? "atlas beacons" : "Knowledge Gates";
-    const kicker = typingResult ? "TURBOTYPE · RACE COMPLETE" : astroResult ? "ASTROLAB DEFENDER · LAB SECURED" : wordResult ? "WORD KINGDOM · CROWN SECURED" : readingResult ? "READING QUEST · MYSTERY MAPPED" : codeBotsResult ? "CODEBOTS · FACTORY ONLINE" : geoResult ? "GEOQUEST · ATLAS COMPLETE" : "NOVA RUNNER · MISSION COMPLETE";
-    const replayLabel = typingResult ? "race" : astroResult ? "defence mission" : wordResult ? "quest" : readingResult ? "expedition" : codeBotsResult ? "factory run" : geoResult ? "survey" : "mission";
+    const marketResult = resultGame === "money-math-market";
+    const unit = typingResult ? "typing checkpoints" : astroResult ? "science anomalies" : wordResult ? "kingdom runes" : readingResult ? "evidence chapters" : codeBotsResult ? "bot programs" : geoResult ? "atlas beacons" : marketResult ? "customer receipts" : "Knowledge Gates";
+    const kicker = typingResult ? "TURBOTYPE · RACE COMPLETE" : astroResult ? "ASTROLAB DEFENDER · LAB SECURED" : wordResult ? "WORD KINGDOM · CROWN SECURED" : readingResult ? "READING QUEST · MYSTERY MAPPED" : codeBotsResult ? "CODEBOTS · FACTORY ONLINE" : geoResult ? "GEOQUEST · ATLAS COMPLETE" : marketResult ? "CEDI CITY · MARKET CLOSED" : "NOVA RUNNER · MISSION COMPLETE";
+    const replayLabel = typingResult ? "race" : astroResult ? "defence mission" : wordResult ? "quest" : readingResult ? "expedition" : codeBotsResult ? "factory run" : geoResult ? "survey" : marketResult ? "market shift" : "mission";
+    const perfectTitle = typingResult ? "Perfect precision!" : astroResult ? "Lab fully stabilised!" : wordResult ? "Crown restored!" : readingResult ? "Mystery solved!" : codeBotsResult ? "Factory flawless!" : geoResult ? "Atlas mastered!" : marketResult ? "Market master!" : "Legendary run!";
     return <div className="nova-finish">
       <section className="nova-finish-card">
-        <div className="nova-finish-top"><div className="nova-finish-mark"><Trophy size={34}/></div><span className="nova-arcade-kicker">{kicker}</span><h1>{result.stars === 3 ? (typingResult ? "Perfect precision!" : astroResult ? "Lab fully stabilised!" : wordResult ? "Crown restored!" : readingResult ? "Mystery solved!" : codeBotsResult ? "Factory flawless!" : geoResult ? "Atlas mastered!" : "Legendary run!") : result.stars === 2 ? "Strong mission!" : "World cleared!"}</h1><p>{result.correct}/{result.roundLength} {unit} cleared correctly. The Adaptive Director will use this performance for the next game.</p><div className="nova-rewards"><div><strong>{result.stars}/3</strong><span>Stars</span></div><div><strong>+{result.xp}</strong><span>XP</span></div><div><strong>{result.score ?? 0}</strong><span>Score</span></div></div></div>
+        <div className="nova-finish-top"><div className="nova-finish-mark"><Trophy size={34}/></div><span className="nova-arcade-kicker">{kicker}</span><h1>{result.stars === 3 ? perfectTitle : result.stars === 2 ? "Strong mission!" : "World cleared!"}</h1><p>{result.correct}/{result.roundLength} {unit} cleared correctly. The Adaptive Director will use this performance for the next game.</p><div className="nova-rewards"><div><strong>{result.stars}/3</strong><span>Stars</span></div><div><strong>+{result.xp}</strong><span>XP</span></div><div><strong>{result.score ?? 0}</strong><span>Score</span></div></div></div>
         <div className="nova-result-list">{result.questions.map((question, index) => <div className={`nova-result ${question.correct ? "good" : "bad"}`} key={question.id}><div className="nova-result-icon">{question.correct ? <Check size={18}/> : <X size={18}/>}</div><div><p>{question.prompt}</p><small>{question.correct ? `Correct — ${displayAnswer(result.answers[index])}` : `You entered ${displayAnswer(result.answers[index])}. Target: ${displayAnswer(question.answer)}. ${question.explanation ?? ""}`}</small></div></div>)}</div>
         <div className="nova-finish-actions"><button type="button" onClick={() => { setResult(null); void startGame(resultGame); }} disabled={busy}><RefreshCw size={16}/> Play another {replayLabel}</button><button type="button" onClick={() => setResult(null)}>Back to Arcade</button></div>
       </section>
@@ -233,10 +276,11 @@ export default function LearningArcadeV3() {
       <article className="nova-game-card word-card"><span className={`nova-coming ${readingEligible ? "live" : ""}`}>{readingEligible ? "LIVE" : "AGE 9+"}</span><ArcadeGameLogo game="comprehension-quest"/><h3>Reading Quest</h3><p>Explore branching routes through short stories, reports and real-world texts. Manage story fog and focus lanterns while collecting evidence and making defensible reading decisions.</p><div className="nova-game-tags"><span>English</span><span>Reading comprehension</span><span>Evidence + inference</span><span>Branching exploration</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("comprehension-quest")} disabled={busy || loading || !data?.selected || !ageBand || !readingEligible}><Play size={17} fill="currentColor"/>{readingEligible ? (readingProgress?.rounds ? "Continue Reading Quest" : "Play Reading Quest") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("comprehension-quest")} disabled={busy || !data?.selected || !ageBand || !readingEligible}><Medal size={16}/>Ranking</button></div></article>
       <article className="nova-game-card astro-card"><span className={`nova-coming ${codeBotsEligible ? "live" : ""}`}>{codeBotsEligible ? "LIVE" : "AGE 9+"}</span><ArcadeGameLogo game="coding-sequence"/><h3>CodeBots Logic Factory</h3><p>Build executable command racks for robot workers while conveyor heat rises. Sequence algorithms, loops, conditions, debugging and real software workflows without turning coding into a decorated quiz.</p><div className="nova-game-tags"><span>Computing</span><span>Algorithms + logic</span><span>Robot factory</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("coding-sequence")} disabled={busy || loading || !data?.selected || !ageBand || !codeBotsEligible}><Play size={17} fill="currentColor"/>{codeBotsEligible ? (codeBotsProgress?.rounds ? "Continue CodeBots" : "Play CodeBots") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("coding-sequence")} disabled={busy || !data?.selected || !ageBand || !codeBotsEligible}><Medal size={16}/>Ranking</button></div></article>
       <article className="nova-game-card word-card"><span className={`nova-coming ${geoEligible ? "live" : ""}`}>{geoEligible ? "LIVE" : "AGE 9+"}</span><ArcadeGameLogo game="ghana-map-master"/><h3>GeoQuest Ghana Expedition</h3><p>Travel across a living Ghana atlas, choose field routes, manage weather and expedition energy, scan unknown beacons and map regions, capitals, borders and major geographic features.</p><div className="nova-game-tags"><span>Social Studies</span><span>Ghana geography</span><span>Atlas expedition</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("ghana-map-master")} disabled={busy || loading || !data?.selected || !ageBand || !geoEligible}><Play size={17} fill="currentColor"/>{geoEligible ? (geoProgress?.rounds ? "Continue GeoQuest" : "Play GeoQuest") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("ghana-map-master")} disabled={busy || !data?.selected || !ageBand || !geoEligible}><Medal size={16}/>Ranking</button></div></article>
+      <article className="nova-game-card market-card"><span className={`nova-coming ${marketEligible ? "live" : ""}`}>{marketEligible ? "LIVE" : "AGE 6+"}</span><ArcadeGameLogo game="money-math-market"/><h3>Cedi City Market</h3><p>Run a living Ghana-currency market. Serve customers, read baskets and receipts, manage queue pressure, stock and trust, and grow from change-making into budgets, discounts, profit and percentage decisions.</p><div className="nova-game-tags"><span>Mathematics</span><span>Financial literacy</span><span>Ghana cedi</span><span>Market simulation</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("money-math-market")} disabled={busy || loading || !data?.selected || !ageBand || !marketEligible}><Play size={17} fill="currentColor"/>{marketEligible ? (marketProgress?.rounds ? "Continue Cedi City" : "Play Cedi City Market") : "Available from Age 6–8"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("money-math-market")} disabled={busy || !data?.selected || !ageBand || !marketEligible}><Medal size={16}/>Ranking</button></div></article>
     </div>
 
     {leaderboard ? <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>{gameLabels[leaderboardGame]} · Weekly school-standard ranking</h3><p>Ranking stays inside the learner’s permitted school context.</p></div><Trophy size={22}/></div><div className="nova-leaderboard">{leaderboard.rows.length ? leaderboard.rows.map((row) => <div className="nova-leader-row" key={row.studentId}><b>#{row.rank}</b><strong>{row.displayName}</strong><span>{row.bestScore} best</span><span>{row.totalXp} XP · {row.rounds} runs</span></div>) : <div className="nova-empty">No ranked games yet. Be the first this week.</div>}</div></section> : null}
 
-    <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>Arcade foundation</h3><p>Seven distinct game loops now share one adaptive learning director and one authoritative progression universe.</p></div><Gamepad2 size={22}/></div><div className="nova-game-tags"><span><Rocket size={12}/> real-time gameplay</span><span><Zap size={12}/> adaptive learning director</span><span>daily + weekly missions</span><span>achievement cabinet</span><span>NovaCore physics</span><span>typing telemetry</span><span>save/resume</span><span>school-scoped ranking</span><span>server-side grading</span></div></section>
+    <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>Arcade foundation</h3><p>Eight distinct game loops now share one adaptive learning director and one authoritative progression universe.</p></div><Gamepad2 size={22}/></div><div className="nova-game-tags"><span><Rocket size={12}/> real-time gameplay</span><span><Zap size={12}/> adaptive learning director</span><span>daily + weekly missions</span><span>achievement cabinet</span><span>NovaCore physics</span><span>typing telemetry</span><span>Ghana geography</span><span>financial literacy</span><span>save/resume</span><span>school-scoped ranking</span><span>server-side grading</span></div></section>
   </div>;
 }

@@ -1,6 +1,6 @@
-import { Atom, BookOpen, Bot, Compass, Cpu, Crown, Keyboard, MapPin, Orbit, Rocket, Search, Shield, Sparkles, Zap } from "lucide-react";
+import { Atom, BookOpen, Bot, Compass, Cpu, Crown, Keyboard, MapPin, Orbit, Receipt, Rocket, Search, Shield, Sparkles, Store, Zap } from "lucide-react";
 
-export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master";
+export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market";
 
 type Props = {
   game: ArcadeLogoGame;
@@ -47,6 +47,13 @@ export default function ArcadeGameLogo({ game, size = "card" }: Props) {
     return <div className={`arcade-mark arcade-mark-${size} arcade-mark-geoquest`} aria-label="GeoQuest Ghana Expedition logo">
       <Compass className="arcade-mark-main" aria-hidden="true"/>
       <MapPin className="arcade-mark-core" aria-hidden="true"/>
+      <span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span>
+    </div>;
+  }
+  if (game === "money-math-market") {
+    return <div className={`arcade-mark arcade-mark-${size} arcade-mark-market`} aria-label="Cedi City Market logo">
+      <Store className="arcade-mark-main" aria-hidden="true"/>
+      <Receipt className="arcade-mark-core" aria-hidden="true"/>
       <span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span>
     </div>;
   }
