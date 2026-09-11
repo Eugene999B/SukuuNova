@@ -1,3 +1,4 @@
+import * as React from "react";
 import {
   PublicIdentityCardVerification,
   PublicIdentityCardVerificationFailure,
@@ -24,7 +25,7 @@ type CanonicalCard = {
 };
 
 function verificationFailure(serial: string | null, reason: string) {
-  return <PublicIdentityCardVerificationFailure serial={serial} reason={reason} />;
+  return React.createElement(PublicIdentityCardVerificationFailure, { serial, reason });
 }
 
 export default async function CompactIdentityCardVerificationPage({
