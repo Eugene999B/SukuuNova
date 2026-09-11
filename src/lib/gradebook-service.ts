@@ -4,6 +4,7 @@ import type { TenantDb } from "./db";
 import { AppError, ForbiddenError } from "./errors";
 import { appendSchoolAudit } from "./audit";
 import { hasPermission } from "./rbac";
+import { resolveStudentTermClass, resolveTermRoster } from "./student-term-context";
 
 async function lockTerm(tx: TenantDb, schoolId: string, termId: string) {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${schoolId}:${termId}`}))`;
@@ -39,8 +40,9 @@ export async function createAssessment(tx: TenantDb, input: { schoolId: string; 
     tx.subject.findFirst({ where: { id: input.subjectId, schoolId: input.schoolId }, select: { id: true, name: true } })
   ]);
   if (!term || !schoolClass || !subject) throw new AppError("The selected term, class or subject does not belong to this school.", 400, "INVALID_CONTEXT");
-  const finalizedCount = await tx.reportCard.count({ where: { schoolId: input.schoolId, termId: input.termId, status: { in: ["approved", "sent"] }, student: { classId: input.classId } } });
-  if (finalizedCount > 0) throw new AppError("This class already has finalized report cards for the term. New assessments cannot be added without reopening them.", 409, "REPORT_FINALIZED");
+  const finalized = await tx.reportCard.findMany({ where: { schoolId: input.schoolId, termId: input.termId, status: { in: ["approved", "sent"] } }, select: { studentId: true } });
+  const finalizedRoster = finalized.length ? await resolveTermRoster(tx, { schoolId: input.schoolId, termId: input.termId, studentIds: finalized.map((row) => row.studentId) }) : [];
+  if (finalizedRoster.some((student) => student.termClassId === input.classId)) throw new AppError("This class already has finalized report cards for the term. New assessments cannot be added without reopening them.", 409, "REPORT_FINALIZED");
   const assessment = await tx.assessment.create({ data: { schoolId: input.schoolId, termId: input.termId, classId: input.classId, subjectId: input.subjectId, name: input.name.trim(), type: input.type.trim(), weight: new Prisma.Decimal(input.weight), maxScore: new Prisma.Decimal(input.maxScore) } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "assessment.created", entityType: "Assessment", entityId: assessment.id, after: assessment });
   return assessment;
@@ -61,8 +63,8 @@ export async function enterScore(tx: TenantDb, input: { schoolId: string; actorI
   }
   await lockTerm(tx, input.schoolId, assessment.termId);
   await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
-  const student = await tx.student.findFirst({ where: { id: input.studentId, schoolId: input.schoolId }, select: { id: true, classId: true } });
-  if (!student || student.classId !== assessment.classId) throw new AppError("The student is not in the assessment class.", 400, "INVALID_STUDENT_CLASS");
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: input.studentId, termId: assessment.termId });
+  if (termClass.classId !== assessment.classId) throw new AppError("The learner was not enrolled in the assessment class for this term.", 400, "INVALID_STUDENT_CLASS");
   if (!Number.isFinite(input.value) || input.value < 0 || new Prisma.Decimal(input.value).greaterThan(assessment.maxScore)) throw new AppError("Score is outside the assessment range.", 400, "INVALID_SCORE");
   const status = input.status ?? "present";
   if (!["present", "absent", "excused"].includes(status) || (status !== "present" && input.value !== 0)) throw new AppError("Absent and excused marks must be zero.", 400, "INVALID_SCORE");
@@ -86,6 +88,8 @@ export async function clearScore(tx: TenantDb, input: { schoolId: string; actorI
   }
   await lockTerm(tx, input.schoolId, assessment.termId);
   await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: input.studentId, termId: assessment.termId });
+  if (termClass.classId !== assessment.classId) throw new AppError("The learner was not enrolled in the assessment class for this term.", 400, "INVALID_STUDENT_CLASS");
   const previous = await tx.score.findUnique({ where: { studentId_assessmentId: { studentId: input.studentId, assessmentId: assessment.id } } });
   assertScoreExpectation(previous, input.expected);
   if (!previous && input.expected === null) return { cleared: true };

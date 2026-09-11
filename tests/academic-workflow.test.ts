@@ -20,6 +20,18 @@ async function setup() {
     const student = await tx.student.create({ data: { schoolId: fixture.schoolId, classId: classroom.id, admissionNo: "one", name: "Linked child" } });
     const sibling = await tx.student.create({ data: { schoolId: fixture.schoolId, classId: classroom.id, admissionNo: "two", name: "Linked sibling" } });
     const unrelated = await tx.student.create({ data: { schoolId: fixture.schoolId, classId: classroom.id, admissionNo: "three", name: "Unrelated child" } });
+    for (const [index, child] of [student, sibling, unrelated].entries()) {
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "Enrollment" ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","guardianVerified","documentsReady","feeReady","createdBy") VALUES ($1,$2,$3,$4,$5,$6,'confirmed','returning',true,true,true,$7)`,
+        `academic-work-enrol-${index}-${child.id}`,
+        fixture.schoolId,
+        child.id,
+        year.id,
+        term.id,
+        classroom.id,
+        fixture.ownerId,
+      );
+    }
     for (const child of [student, sibling]) await tx.studentGuardian.create({ data: { schoolId: fixture.schoolId, studentId: child.id, guardianId: guardian.id, relationship: "Parent" } });
     const assessment = await tx.assessment.create({ data: { schoolId: fixture.schoolId, termId: term.id, classId: classroom.id, subjectId: subject.id, name: "Guardian work", type: "ca", weight: 100, maxScore: 10 } });
     await tx.$executeRaw`INSERT INTO "TeacherAcademicWork" ("id","schoolId","termId","classId","subjectId","teacherId","kind","title","workDate","weekNumber","maxScore","markingMode","answerGuide","dueAt","status") VALUES (${workId},${fixture.schoolId},${term.id},${classroom.id},${subject.id},${fixture.ownerId},'homework','Guardian work','2026-09-01',1,10,'auto','["teacher-private-guide"]'::jsonb,${new Date(Date.now()+86400000)},'published')`;

@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { getClassSubjectIntelligence } from "@/lib/performance-intelligence";
 import { calculateSubjectResult, gradeForPercentage, rankTotals, RANK_EPSILON, type AssessmentRules, type GradeBand } from "@/lib/assessment-engine";
+import { resolveStudentTermClass, resolveTermRoster } from "@/lib/student-term-context";
 
 function asObject(value: Prisma.JsonValue | null | undefined): Record<string, Prisma.JsonValue> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.JsonValue> : {};
@@ -91,15 +92,15 @@ export async function overallTotalsForScope(
   tx: TenantDb,
   input: { schoolId: string; termId: string; classIds: string[]; rules: AssessmentRules }
 ): Promise<ScopeTotals> {
-  const students = await tx.student.findMany({ where: { schoolId: input.schoolId, classId: { in: input.classIds }, status: "active" }, select: { id: true, name: true, classId: true }, orderBy: { id: "asc" } });
+  const roster = (await resolveTermRoster(tx, { schoolId: input.schoolId, termId: input.termId })).filter((student) => student.termClassId && input.classIds.includes(student.termClassId));
   const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: input.termId, classId: { in: input.classIds } }, select: { id: true, classId: true, subjectId: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true, status: true } }, subject: { select: { id: true, name: true } } } });
   const totals = new Map<string, number>();
   const names = new Map<string, string>();
-  for (const student of students) {
+  for (const student of roster) {
     names.set(student.id, student.name);
     const subjects = new Map<string, typeof assessments>();
     for (const assessment of assessments) {
-      if (assessment.classId !== student.classId) continue;
+      if (assessment.classId !== student.termClassId) continue;
       const rows = subjects.get(assessment.subjectId) ?? [];
       rows.push(assessment);
       subjects.set(assessment.subjectId, rows);
@@ -115,8 +116,11 @@ export async function overallTotalsForScope(
 }
 
 export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: string; reportCardId: string }) {
-  const report = await tx.reportCard.findFirst({ where: { id: input.reportCardId, schoolId: input.schoolId }, select: { id: true, studentId: true, termId: true, calculationSnapshot: true, student: { select: { classId: true, class: { select: { id: true, level: true } } } } } });
-  if (!report?.student.classId || !report.student.class) return;
+  const report = await tx.reportCard.findFirst({ where: { id: input.reportCardId, schoolId: input.schoolId }, select: { id: true, studentId: true, termId: true, calculationSnapshot: true } });
+  if (!report) return;
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.studentId, termId: report.termId });
+  const historicalClass = await tx.class.findFirst({ where: { id: termClass.classId, schoolId: input.schoolId }, select: { id: true, name: true, level: true } });
+  if (!historicalClass) return;
   const settings = await tx.schoolSettings.findUnique({
     where: { schoolId: input.schoolId },
     select: {
@@ -129,8 +133,8 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
   });
   if (!settings) return;
   const positionScope = settings.positionScope === "year_group" ? "year_group" : "class";
-  const classIds = positionScope === "year_group" && report.student.class.level ? (await tx.class.findMany({ where: { level: report.student.class.level }, select: { id: true } })).map((row) => row.id) : [report.student.class.id];
-  const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: report.termId, classId: report.student.class.id }, select: { classId: true, subjectId: true, subject: { select: { id: true, name: true } } } });
+  const classIds = positionScope === "year_group" && historicalClass.level ? (await tx.class.findMany({ where: { schoolId: input.schoolId, level: historicalClass.level }, select: { id: true } })).map((row) => row.id) : [historicalClass.id];
+  const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: report.termId, classId: historicalClass.id }, select: { classId: true, subjectId: true, subject: { select: { id: true, name: true } } } });
   const rules = rulesFor(settings);
   const { totals, names } = await overallTotalsForScope(tx, { schoolId: input.schoolId, termId: report.termId, classIds, rules });
   const rankedPositions = rankTotals(
@@ -138,7 +142,7 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
   );
   const overallPosition = rankedPositions.get(report.studentId) ?? null;
   const rankedCount = totals.size;
-  const subjectsForReport = [...new Set(assessments.filter((assessment) => assessment.classId === report.student.classId).map((assessment) => assessment.subjectId))];
+  const subjectsForReport = [...new Set(assessments.filter((assessment) => assessment.classId === historicalClass.id).map((assessment) => assessment.subjectId))];
   const scale = rules.gradingScale?.length ? rules.gradingScale : undefined;
   const policyRows = await tx.$queryRawUnsafe<Array<{ remarkSource: string; positionBandLabels: unknown; promotionRule: string; positionPromotionCutoffPercent: number | null }>>(
     `SELECT "remarkSource", "positionBandLabels", "promotionRule",
@@ -155,7 +159,7 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
   for (const subjectId of subjectsForReport) {
     const subject = assessments.find((assessment) => assessment.subjectId === subjectId)?.subject;
     if (!subject) continue;
-    const intelligence = await getClassSubjectIntelligence(tx, { classId: report.student.classId, subjectId, termId: report.termId, rules, scope: positionScope });
+    const intelligence = await getClassSubjectIntelligence(tx, { classId: historicalClass.id, subjectId, termId: report.termId, rules, scope: positionScope });
     const row = intelligence.rows.find((entry) => entry.studentId === report.studentId);
     const position = row?.position ?? null;
     const total = row?.total ?? null;
@@ -179,6 +183,9 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
     ...existing,
     calculationVersion: 4,
     rankingFrozenAt: new Date().toISOString(),
+    classId: historicalClass.id,
+    className: historicalClass.name,
+    classSource: termClass.source,
     positionScope,
     overallPosition,
     classSize: rankedCount,

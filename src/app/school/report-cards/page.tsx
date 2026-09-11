@@ -8,9 +8,11 @@ import { withTenant } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { submitReportCard } from "@/lib/report-card-service";
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
-import { getReportCardPrintData, reportBelongsToClass } from "@/lib/report-card-print-data";
+import { getReportCardPrintData } from "@/lib/report-card-print-data";
 import { readManualPromotionDecision, setReportPromotionDecision } from "@/lib/report-card-promotion";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+import { resolveStudentTermClass, resolveTermRoster } from "@/lib/student-term-context";
+import { selectAcademicTerm } from "@/lib/term-date";
 import "./report-cards.css";
 
 function origin() {
@@ -130,19 +132,20 @@ export default async function ReportCardsPage({
       hasPermission(tx, session.userId, "report_cards:approve"),
       tx.schoolSettings.findUnique({
         where: { schoolId: session.schoolId },
-        select: { reportCardConfig: true, reportCardTemplateId: true },
+        select: { reportCardConfig: true, reportCardTemplateId: true, timezone: true },
       }),
     ]);
 
     const now = new Date();
     const requestedTerm = params.term ? allTerms.find((item) => item.id === params.term) ?? null : null;
-    const selectedYear = (params.year ? academicYears.find((item) => item.id === params.year) : null)
-      ?? (requestedTerm ? academicYears.find((item) => item.id === requestedTerm.academicYearId) : null)
-      ?? academicYears.find((item) => item.startDate <= now && item.endDate >= now)
-      ?? academicYears[0]
-      ?? null;
+    const activeYears = academicYears.filter((item) => item.startDate <= now && item.endDate >= now);
+    const selectedYear = (params.year ? academicYears.find((item) => item.id === params.year) ?? null : null)
+      ?? (requestedTerm ? academicYears.find((item) => item.id === requestedTerm.academicYearId) ?? null : null)
+      ?? (activeYears.length === 1 ? activeYears[0] : null);
     const terms = selectedYear ? allTerms.filter((item) => item.academicYearId === selectedYear.id) : [];
-    const term = (requestedTerm && requestedTerm.academicYearId === selectedYear?.id ? requestedTerm : null) ?? terms[0] ?? null;
+    const requestedTermInYear = requestedTerm && requestedTerm.academicYearId === selectedYear?.id ? requestedTerm : null;
+    const term = requestedTermInYear
+      ?? (params.year ? terms[0] ?? null : selectAcademicTerm(terms, undefined, now, settings?.timezone ?? "Africa/Accra"));
     const selectedClass = params.classId ? classes.find((item) => item.id === params.classId) ?? null : classes[0] ?? null;
     const permissions = { canGenerate, canSubmit, canApprove };
     if (!selectedYear || !term || !selectedClass) {
@@ -155,7 +158,7 @@ export default async function ReportCardsPage({
         term,
         selectedClass,
         students: [],
-        currentStudents: [],
+        termStudents: [],
         reports: [],
         selectedReport: null,
         detail: null,
@@ -165,12 +168,8 @@ export default async function ReportCardsPage({
       };
     }
 
-    const [currentStudents, allReports, yearTerms] = await Promise.all([
-      tx.student.findMany({
-        where: { schoolId: session.schoolId, classId: selectedClass.id, status: "active" },
-        select: { id: true, name: true, admissionNo: true },
-        orderBy: { name: "asc" },
-      }),
+    const [roster, allReports, yearTerms] = await Promise.all([
+      resolveTermRoster(tx, { schoolId: session.schoolId, termId: term.id }),
       tx.reportCard.findMany({
         where: { schoolId: session.schoolId, termId: term.id },
         select: {
@@ -179,7 +178,7 @@ export default async function ReportCardsPage({
           status: true,
           createdAt: true,
           calculationSnapshot: true,
-          student: { select: { id: true, name: true, admissionNo: true, classId: true } },
+          student: { select: { id: true, name: true, admissionNo: true } },
         },
         orderBy: { createdAt: "desc" },
       }),
@@ -190,10 +189,16 @@ export default async function ReportCardsPage({
       }),
     ]);
 
-    const reports = allReports.filter((report) =>
-      reportBelongsToClass(report.calculationSnapshot, report.student.classId, selectedClass.id),
-    );
-    const studentMap = new Map(currentStudents.map((student) => [student.id, student]));
+    const termStudents = roster
+      .filter((student) => student.termClassId === selectedClass.id)
+      .map((student) => ({ id: student.id, name: student.name, admissionNo: student.admissionNo }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const reports = [] as typeof allReports;
+    for (const report of allReports) {
+      const context = await resolveStudentTermClass(tx, { schoolId: session.schoolId, studentId: report.studentId, termId: term.id });
+      if (context.classId === selectedClass.id) reports.push(report);
+    }
+    const studentMap = new Map(termStudents.map((student) => [student.id, student]));
     for (const report of reports) {
       if (!studentMap.has(report.studentId)) {
         studentMap.set(report.studentId, {
@@ -222,7 +227,7 @@ export default async function ReportCardsPage({
       term,
       selectedClass,
       students,
-      currentStudents,
+      termStudents,
       reports,
       selectedReport,
       detail,
@@ -238,8 +243,8 @@ export default async function ReportCardsPage({
       <AppShell universe="school" title="Report Cards" subtitle="Create and print student reports." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
         <main className="simple-reports">
           <section className="reports-empty">
-            <h1>Set up an academic year and reporting term first</h1>
-            <p>Report cards are always attached to a specific academic year and term. Create those periods in Academic Setup, then return here.</p>
+            <h1>Choose an unambiguous academic reporting context</h1>
+            <p>Report cards are attached to a specific academic year and term. If there is no single active period, select the year and term explicitly instead of relying on a guessed default.</p>
             <Link className="report-action primary" href="/school/academics/setup">Open Academic Setup</Link>
           </section>
         </main>
@@ -253,7 +258,7 @@ export default async function ReportCardsPage({
   const detail = data.detail;
   const report = data.selectedReport;
   const currentReportIds = new Set(data.reports.map((item) => item.studentId));
-  const missing = data.currentStudents.filter((student) => !currentReportIds.has(student.id)).length;
+  const missing = data.termStudents.filter((student) => !currentReportIds.has(student.id)).length;
   const hiddenContext = (studentId = detail?.student.id ?? "") => (
     <>
       <input type="hidden" name="academicYearId" value={selectedYear.id} />
@@ -294,13 +299,13 @@ export default async function ReportCardsPage({
             </div>
             <button className="report-action primary" type="submit">Open reporting context</button>
           </form>
-          <p className="reports-context-note">Changing the academic year narrows the term list on the next load. Historical years remain available without mixing their results into the current year.</p>
+          <p className="reports-context-note">The learner list comes from the selected term&apos;s enrolment context. Promotion or later class changes do not rewrite this historical roster.</p>
         </section>
 
         {!data.students.length ? (
           <section className="reports-empty">
-            <h2>No learners or historical reports in this class</h2>
-            <p>Add learners to the selected class or choose a different academic year, term or class.</p>
+            <h2>No learners or historical reports in this class for the selected term</h2>
+            <p>Confirm term enrolment records or choose a different academic year, term or class.</p>
           </section>
         ) : null}
 

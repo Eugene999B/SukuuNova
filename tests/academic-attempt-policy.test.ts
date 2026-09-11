@@ -14,6 +14,16 @@ async function setup(policy: "highest" | "latest" = "highest", attemptLimit = 3)
     const subject = await tx.subject.create({ data: { schoolId: fixture.schoolId, name: "Attempt subject" } });
     const guardian = await tx.guardian.create({ data: { schoolId: fixture.schoolId, name: "Attempt guardian" } });
     const student = await tx.student.create({ data: { schoolId: fixture.schoolId, classId: classroom.id, admissionNo: `AT-${policy}-${attemptLimit}`, name: "Attempt learner" } });
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "Enrollment" ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","guardianVerified","documentsReady","feeReady","createdBy") VALUES ($1,$2,$3,$4,$5,$6,'confirmed','returning',true,true,true,$7)`,
+      `attempt-enrol-${student.id}`,
+      fixture.schoolId,
+      student.id,
+      year.id,
+      term.id,
+      classroom.id,
+      fixture.ownerId,
+    );
     await tx.studentGuardian.create({ data: { schoolId: fixture.schoolId, studentId: student.id, guardianId: guardian.id, relationship: "Parent" } });
     return { termId: term.id, classId: classroom.id, subjectId: subject.id, guardianId: guardian.id, studentId: student.id };
   });

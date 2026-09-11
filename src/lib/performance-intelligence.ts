@@ -1,5 +1,6 @@
 import type { TenantDb } from "./db";
 import { calculateSubjectResult, gradeForPercentage, rankTotals, type AssessmentRules } from "./assessment-engine";
+import { resolveTermRoster } from "./student-term-context";
 
 export type PerformanceRow = {
   studentId: string;
@@ -20,28 +21,25 @@ type RankingInput = {
 };
 
 export async function getClassSubjectIntelligence(tx: TenantDb, input: RankingInput) {
-  const anchorClass = await tx.class.findUnique({ where: { id: input.classId }, select: { id: true, level: true } });
+  const anchorClass = await tx.class.findUnique({ where: { id: input.classId }, select: { id: true, schoolId: true, level: true } });
   if (!anchorClass) return emptyResult(input);
 
   const classIds = input.scope === "year_group" && anchorClass.level
-    ? (await tx.class.findMany({ where: { level: anchorClass.level }, select: { id: true } })).map((row) => row.id)
+    ? (await tx.class.findMany({ where: { schoolId: anchorClass.schoolId, level: anchorClass.level }, select: { id: true } })).map((row) => row.id)
     : [input.classId];
 
-  const [students, assessments] = await Promise.all([
-    tx.student.findMany({
-      where: { classId: { in: classIds }, status: "active" },
-      select: { id: true, name: true, admissionNo: true, classId: true },
-      orderBy: { name: "asc" }
-    }),
+  const [roster, assessments] = await Promise.all([
+    resolveTermRoster(tx, { schoolId: anchorClass.schoolId, termId: input.termId }),
     tx.assessment.findMany({
-      where: { classId: { in: classIds }, subjectId: input.subjectId, termId: input.termId },
+      where: { schoolId: anchorClass.schoolId, classId: { in: classIds }, subjectId: input.subjectId, termId: input.termId },
       select: { id: true, classId: true, name: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true, status: true } } },
       orderBy: [{ classId: "asc" }, { name: "asc" }]
     })
   ]);
+  const students = roster.filter((student) => student.termClassId && classIds.includes(student.termClassId));
 
   const rows: PerformanceRow[] = students.map((student) => {
-    const studentAssessments = assessments.filter((assessment) => assessment.classId === student.classId);
+    const studentAssessments = assessments.filter((assessment) => assessment.classId === student.termClassId);
     const result = calculateSubjectResult(
       studentAssessments.map((assessment) => {
         const hit = assessment.scores.find((score) => score.studentId === student.id);

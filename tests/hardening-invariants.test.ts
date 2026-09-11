@@ -17,6 +17,30 @@ vi.mock("../src/lib/report-card-ranking", () => ({
   freezeReportCardRanking: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("../src/lib/report-card-intelligence", () => ({
+  calculateIntelligentReportCard: vi.fn().mockResolvedValue({
+    gradingWeights: { ca: 40, exam: 60 },
+    results: [],
+    summary: { total: null, average: null, grade: null },
+    reportSettings: { positionScope: "class", promotionRule: "manual", themeId: "classic" },
+    position: null,
+    classSize: 1,
+    rankedCount: 0,
+    promotionDecision: "decision_required",
+    student: { classId: "class-1", className: "Class 1", level: "Primary 1" },
+    classTeacherName: "Teacher One",
+  }),
+}));
+
+vi.mock("../src/lib/report-card-signatures", () => ({
+  resolveCurrentReportSignatures: vi.fn().mockResolvedValue({}),
+}));
+
+vi.mock("../src/lib/report-card-promotion", () => ({
+  applyApprovedPromotion: vi.fn().mockResolvedValue({ applied: false, reason: "not_applicable" }),
+  readManualPromotionDecision: vi.fn().mockReturnValue(null),
+}));
+
 import { setSalaryStructure } from "../src/lib/payroll-service";
 import { getAcademicEngineConfig } from "../src/lib/academic-engine";
 import { approveAndQueuePublicReportCard } from "../src/lib/report-card-release-service";
@@ -140,20 +164,19 @@ describe("Hardening Invariants", () => {
           reportCard: {
             findFirst: vi.fn().mockImplementation(async () => ({
               id: "rc-1",
+              termId: "term-1",
               status: currentStatus,
               submittedBy: "teacher-1",
               studentId: "student-1",
-              student: { name: "Kwame", guardians: [] },
-              term: { name: "Term 1" },
+              calculationSnapshot: null,
+              student: { id: "student-1", name: "Kwame", admissionNo: "ADM-1", photoUrl: null, guardians: [] },
+              term: { id: "term-1", name: "Term 1" },
             })),
-            update: vi.fn().mockImplementation(async () => {
-              currentStatus = "approved";
-              return {
-                id: "rc-1",
-                status: "approved",
-                approvedBy: "principal-1",
-              };
-            }),
+            update: vi.fn().mockImplementation(async () => ({
+              id: "rc-1",
+              status: currentStatus,
+              approvedBy: null,
+            })),
             updateMany: vi.fn().mockImplementation(async (args: { where: { status?: string } }) => {
               if (currentStatus !== "submitted" || (args.where.status && args.where.status !== "submitted")) return { count: 0 };
               currentStatus = "approved";
@@ -166,6 +189,7 @@ describe("Hardening Invariants", () => {
                 channels: ["sms"],
                 automation: { report_card_ready: true },
               },
+              whatsappTemplateConfig: {},
               smsSenderId: "SukuuNova",
             }),
           },

@@ -17,6 +17,7 @@ import {
 } from "@/lib/report-card-ranking";
 import { readManualPromotionDecision } from "@/lib/report-card-promotion";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+import { resolveStudentTermClass } from "@/lib/student-term-context";
 
 type ReportConfig = {
   classAssessmentWeight: number;
@@ -175,13 +176,18 @@ export async function calculateIntelligentReportCard(tx: TenantDb, input: { scho
           name: true,
           admissionNo: true,
           photoUrl: true,
-          classId: true,
-          class: { select: { id: true, name: true, level: true, classTeacher: { select: { name: true } } } },
         },
       },
     },
   });
-  if (!report?.student.classId || !report.student.class) throw new AppError("Report card student has no class.", 409, "NO_CLASS");
+  if (!report) throw new AppError("Report card not found.", 404, "NOT_FOUND");
+
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.studentId, termId: report.termId });
+  const historicalClass = await tx.class.findFirst({
+    where: { id: termClass.classId, schoolId: input.schoolId },
+    select: { id: true, name: true, level: true, classTeacher: { select: { name: true } } },
+  });
+  if (!historicalClass) throw new AppError("The learner's class for this report term no longer exists.", 409, "TERM_CLASS_NOT_FOUND");
 
   const [school, settings, term, assignments] = await Promise.all([
     tx.school.findUnique({ where: { id: input.schoolId }, select: { id: true, name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
@@ -203,9 +209,9 @@ export async function calculateIntelligentReportCard(tx: TenantDb, input: { scho
         reportCardWatermark: true,
       },
     }),
-    tx.term.findUnique({ where: { id: report.termId }, select: { id: true, name: true, startDate: true, endDate: true, academicYear: { select: { name: true } } } }),
+    tx.term.findFirst({ where: { id: report.termId, schoolId: input.schoolId }, select: { id: true, name: true, startDate: true, endDate: true, academicYear: { select: { name: true } } } }),
     tx.classSubjectTeacher.findMany({
-      where: { schoolId: input.schoolId, classId: report.student.classId },
+      where: { schoolId: input.schoolId, classId: historicalClass.id },
       select: { subjectId: true, subject: { select: { id: true, name: true } } },
       orderBy: { subject: { name: "asc" } },
     }),
@@ -218,19 +224,19 @@ export async function calculateIntelligentReportCard(tx: TenantDb, input: { scho
   const effectiveScale = baseRules.gradingScale?.length ? baseRules.gradingScale : DEFAULT_SCALE;
   const rules = { ...baseRules, gradingScale: effectiveScale };
   const visibleSubjects = assignments.map((assignment) => ({ id: assignment.subjectId, name: assignment.subject.name }));
-  if (!visibleSubjects.length) throw new AppError("No subjects are assigned to this student's class.", 409, "NO_CLASS_SUBJECTS");
+  if (!visibleSubjects.length) throw new AppError("No subjects are assigned to this learner's class for the report term.", 409, "NO_CLASS_SUBJECTS");
 
   const positionScope = settings.positionScope === "year_group" ? "year_group" as const : "class" as const;
-  const scopeClassIds = positionScope === "year_group" && report.student.class.level
-    ? (await tx.class.findMany({ where: { schoolId: input.schoolId, level: report.student.class.level }, select: { id: true } })).map((row) => row.id)
-    : [report.student.class.id];
+  const scopeClassIds = positionScope === "year_group" && historicalClass.level
+    ? (await tx.class.findMany({ where: { schoolId: input.schoolId, level: historicalClass.level }, select: { id: true } })).map((row) => row.id)
+    : [historicalClass.id];
 
   const [assessmentRows, scopeTotals, subjectIntelligence, attendance, headRemarkValue] = await Promise.all([
     tx.assessment.findMany({
       where: {
         schoolId: input.schoolId,
         termId: report.termId,
-        classId: report.student.class.id,
+        classId: historicalClass.id,
         subjectId: { in: visibleSubjects.map((subject) => subject.id) },
       },
       select: {
@@ -248,7 +254,7 @@ export async function calculateIntelligentReportCard(tx: TenantDb, input: { scho
     Promise.all(visibleSubjects.map(async (subject) => ({
       subjectId: subject.id,
       intelligence: await getClassSubjectIntelligence(tx, {
-        classId: report.student.class!.id,
+        classId: historicalClass.id,
         subjectId: subject.id,
         termId: report.termId,
         rules,
@@ -341,10 +347,10 @@ export async function calculateIntelligentReportCard(tx: TenantDb, input: { scho
   const frozenStudentName = frozen && typeof snapshot.studentName === "string" ? snapshot.studentName : report.student.name;
   const frozenAdmissionNo = frozen && typeof snapshot.admissionNo === "string" ? snapshot.admissionNo : report.student.admissionNo;
   const frozenPhotoUrl = frozen && (typeof snapshot.studentPhotoUrl === "string" || snapshot.studentPhotoUrl === null) ? snapshot.studentPhotoUrl as string | null : report.student.photoUrl;
-  const frozenClassId = frozen && typeof snapshot.classId === "string" ? snapshot.classId : report.student.classId;
-  const frozenClassName = frozen && typeof snapshot.className === "string" ? snapshot.className : report.student.class.name;
-  const frozenClassLevel = frozen && (typeof snapshot.classLevel === "string" || snapshot.classLevel === null) ? snapshot.classLevel as string | null : report.student.class.level;
-  const frozenClassTeacherName = frozen && typeof snapshot.classTeacherName === "string" ? snapshot.classTeacherName : report.student.class.classTeacher?.name ?? "Class Teacher";
+  const frozenClassId = frozen && typeof snapshot.classId === "string" ? snapshot.classId : historicalClass.id;
+  const frozenClassName = frozen && typeof snapshot.className === "string" ? snapshot.className : historicalClass.name;
+  const frozenClassLevel = frozen && (typeof snapshot.classLevel === "string" || snapshot.classLevel === null) ? snapshot.classLevel as string | null : historicalClass.level;
+  const frozenClassTeacherName = frozen && typeof snapshot.classTeacherName === "string" ? snapshot.classTeacherName : historicalClass.classTeacher?.name ?? "Class Teacher";
   const themeId = frozen && typeof snapshot.themeId === "string" ? snapshot.themeId : workflow.themeId;
   const presentation = frozen ? jsonObject(snapshot.reportPresentation) : {};
   const show = (key: string, fallback: boolean) => typeof presentation[key] === "boolean" ? Boolean(presentation[key]) : fallback;

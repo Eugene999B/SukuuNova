@@ -4,6 +4,7 @@ import { AppError } from "@/lib/errors";
 import { reportAttendanceForTerm } from "@/lib/report-card-attendance";
 import { calculateIntelligentReportCard, readGradeScale, readReportCardConfig } from "@/lib/report-card-intelligence";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+import { resolveStudentTermClass } from "@/lib/student-term-context";
 
 export type FrozenPromotionDecision = "promoted" | "not_promoted" | "decision_required";
 
@@ -33,7 +34,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
       remarks: true,
       headRemark: true,
       calculationSnapshot: true,
-      student: { select: { id: true, name: true, admissionNo: true, photoUrl: true, classId: true, class: { select: { name: true, level: true, classTeacher: { select: { name: true } } } } } },
+      student: { select: { id: true, name: true, admissionNo: true, photoUrl: true } },
       term: { select: { id: true, name: true, startDate: true, endDate: true, academicYear: { select: { name: true } } } },
     },
   });
@@ -54,7 +55,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
     return { ...live, attendance, gradingScale: readGradeScale(liveSettings?.gradingScale) };
   }
 
-  const [school, settings] = await Promise.all([
+  const [school, settings, termClassContext] = await Promise.all([
     tx.school.findUnique({ where: { id: input.schoolId }, select: { id: true, name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
     tx.schoolSettings.findUnique({
       where: { schoolId: input.schoolId },
@@ -73,8 +74,14 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
         reportCardWatermark: true,
       },
     }),
+    resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.student.id, termId: report.term.id }),
   ]);
   if (!school || !settings) throw new AppError("Report-card configuration is incomplete.", 409, "REPORT_CONTEXT_INCOMPLETE");
+  const termClass = await tx.class.findFirst({
+    where: { id: termClassContext.classId, schoolId: input.schoolId },
+    select: { id: true, name: true, level: true, classTeacher: { select: { name: true } } },
+  });
+  if (!termClass) throw new AppError("The historical class for this report card no longer exists.", 409, "REPORT_CLASS_MISSING");
 
   const workflow = readReportWorkflowConfig(settings.reportCardConfig, settings.reportCardTemplateId);
   const legacy = readReportCardConfig(settings.reportCardConfig, Number(settings.gradeCaWeight), Number(settings.gradeExamWeight));
@@ -138,9 +145,9 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
       name: typeof snapshot.studentName === "string" ? snapshot.studentName : report.student.name,
       admissionNo: typeof snapshot.admissionNo === "string" ? snapshot.admissionNo : report.student.admissionNo,
       photoUrl: typeof snapshot.studentPhotoUrl === "string" || snapshot.studentPhotoUrl === null ? snapshot.studentPhotoUrl as string | null : report.student.photoUrl,
-      classId: typeof snapshot.classId === "string" ? snapshot.classId : report.student.classId,
-      className: typeof snapshot.className === "string" ? snapshot.className : report.student.class?.name ?? "—",
-      level: typeof snapshot.classLevel === "string" || snapshot.classLevel === null ? snapshot.classLevel as string | null : report.student.class?.level ?? null,
+      classId: typeof snapshot.classId === "string" ? snapshot.classId : termClass.id,
+      className: typeof snapshot.className === "string" ? snapshot.className : termClass.name,
+      level: typeof snapshot.classLevel === "string" || snapshot.classLevel === null ? snapshot.classLevel as string | null : termClass.level,
     },
     term: { ...report.term, academicYear: report.term.academicYear.name },
     gradingWeights: {
@@ -183,12 +190,16 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
       autoApplyPromotion: workflow.autoApplyPromotion,
     },
     watermark,
-    classTeacherName: typeof snapshot.classTeacherName === "string" ? snapshot.classTeacherName : report.student.class?.classTeacher?.name ?? "Class Teacher",
+    classTeacherName: typeof snapshot.classTeacherName === "string" ? snapshot.classTeacherName : termClass.classTeacher?.name ?? "Class Teacher",
   };
 }
 
-export function reportBelongsToClass(calculationSnapshot: Prisma.JsonValue | null | undefined, currentClassId: string | null, classId: string) {
+/**
+ * Frozen report membership must never fall back to the learner's current class.
+ * Legacy callers should resolve term context with resolveStudentTermClass instead.
+ */
+export function reportBelongsToClass(calculationSnapshot: Prisma.JsonValue | null | undefined, _currentClassId: string | null, classId: string) {
   const snapshot = object(calculationSnapshot);
   const frozenClassId = typeof snapshot.classId === "string" ? snapshot.classId : null;
-  return (frozenClassId ?? currentClassId) === classId;
+  return frozenClassId === classId;
 }

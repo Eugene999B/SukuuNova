@@ -5,6 +5,7 @@ import { AppError, ForbiddenError } from "@/lib/errors";
 import { reportAttendanceForTerm } from "@/lib/report-card-attendance";
 import { requirePermission } from "@/lib/rbac";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+import { resolveStudentTermClass } from "@/lib/student-term-context";
 
 export type PromotionDecision = "promoted" | "not_promoted";
 
@@ -120,13 +121,15 @@ export async function setReportPromotionDecision(tx: TenantDb, input: {
       termId: true,
       status: true,
       calculationSnapshot: true,
-      student: { select: { id: true, classId: true, class: { select: { classTeacherId: true, name: true } } } },
+      student: { select: { id: true } },
     },
   });
   if (!report) throw new AppError("Report card not found.", 404, "NOT_FOUND");
   if (report.status !== "draft") throw new AppError("Promotion can only be decided before the report is submitted.", 409, "REPORT_LOCKED");
-  if (!report.student.classId || report.student.class?.classTeacherId !== input.actorId) {
-    throw new ForbiddenError("Only the learner's assigned class teacher can decide promotion.");
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.student.id, termId: report.termId });
+  const historicalClass = await tx.class.findFirst({ where: { id: termClass.classId, schoolId: input.schoolId }, select: { id: true, classTeacherId: true, name: true } });
+  if (!historicalClass || historicalClass.classTeacherId !== input.actorId) {
+    throw new ForbiddenError("Only the learner's class teacher for this term can decide promotion.");
   }
   const context = await finalTermContext(tx, input.schoolId, report.termId);
   if (!context.final || context.final.id !== report.termId) {
@@ -136,6 +139,9 @@ export async function setReportPromotionDecision(tx: TenantDb, input: {
   const snapshot = object(report.calculationSnapshot);
   const nextSnapshot = {
     ...snapshot,
+    classId: historicalClass.id,
+    className: historicalClass.name,
+    classSource: termClass.source,
     manualPromotionDecision: input.decision,
     promotionDecidedBy: input.actorId,
     promotionDecidedAt: new Date().toISOString(),
@@ -152,7 +158,7 @@ export async function setReportPromotionDecision(tx: TenantDb, input: {
     entityType: "ReportCard",
     entityId: report.id,
     before: { decision: beforeDecision },
-    after: { decision: input.decision, classId: report.student.classId, termId: report.termId },
+    after: { decision: input.decision, classId: historicalClass.id, termId: report.termId },
   });
   return { reportCardId: report.id, decision: input.decision, finalTerm: context.final.name };
 }
@@ -172,7 +178,8 @@ export async function applyApprovedPromotion(tx: TenantDb, input: {
       student: { select: { id: true, classId: true, name: true } },
     },
   });
-  if (!report || report.status !== "approved" || !report.student.classId) return { applied: false, reason: "not_applicable" as const };
+  if (!report || report.status !== "approved") return { applied: false, reason: "not_applicable" as const };
+  const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.student.id, termId: report.termId });
 
   const frozenSnapshot = await freezeApprovedPresentation(tx, {
     schoolId: input.schoolId,
@@ -187,13 +194,13 @@ export async function applyApprovedPromotion(tx: TenantDb, input: {
   const context = await finalTermContext(tx, input.schoolId, report.termId);
   if (!context.final || context.final.id !== report.termId) return { applied: false, reason: "not_final_term" as const };
   if (!context.config.autoApplyPromotion) return { applied: false, reason: "automatic_progression_disabled" as const };
-  const targetClassId = context.config.classProgression[report.student.classId];
+  const targetClassId = context.config.classProgression[termClass.classId];
   if (!targetClassId) return { applied: false, reason: "next_class_not_configured" as const };
-  if (targetClassId === report.student.classId) throw new AppError("The configured next class cannot be the learner's current class.", 409, "INVALID_CLASS_PROGRESSION");
+  if (targetClassId === termClass.classId) throw new AppError("The configured next class cannot be the learner's current class.", 409, "INVALID_CLASS_PROGRESSION");
   const target = await tx.class.findFirst({ where: { id: targetClassId, schoolId: input.schoolId }, select: { id: true, name: true } });
   if (!target) throw new AppError("The configured next class no longer exists.", 409, "INVALID_CLASS_PROGRESSION");
   const moved = await tx.student.updateMany({
-    where: { id: report.student.id, schoolId: input.schoolId, classId: report.student.classId, status: "active" },
+    where: { id: report.student.id, schoolId: input.schoolId, classId: termClass.classId, status: "active" },
     data: { classId: target.id },
   });
   if (moved.count !== 1) return { applied: false, reason: "student_class_changed" as const };
@@ -203,8 +210,8 @@ export async function applyApprovedPromotion(tx: TenantDb, input: {
     action: "student.promoted_from_report_card",
     entityType: "Student",
     entityId: report.student.id,
-    before: { classId: report.student.classId },
-    after: { classId: target.id, targetClass: target.name, reportCardId: report.id },
+    before: { classId: termClass.classId },
+    after: { classId: target.id, targetClass: target.name, reportCardId: report.id, sourceTermId: report.termId },
   });
   return { applied: true, targetClassId: target.id, targetClassName: target.name };
 }
