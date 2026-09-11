@@ -3,11 +3,13 @@ import { PDFDocument } from "pdf-lib";
 import { withTenant } from "../src/lib/db";
 import {
   ensureIdentityCardsForSchool,
+  getIdentityCardSettings,
   getIdentityCardsByScope,
   listIdentityCards,
   buildIdentityCardPdf,
   buildSingleIdentityCardPdf,
   identityCardSignature,
+  updateIdentityCardSettings,
   verifyIdentityCardSignature,
 } from "../src/lib/identity-card-service";
 import { createTenantFixture, type Fixture } from "./helpers";
@@ -62,6 +64,25 @@ describe("school identity cards", () => {
       expect(cards.filter((card) => card.studentId === studentId && card.status === "active")).toHaveLength(1);
       expect(cards.filter((card) => card.studentId === secondStudentId && card.status === "active")).toHaveLength(1);
       expect(cards.filter((card) => card.staffId === staffId && card.status === "active")).toHaveLength(1);
+      expect(cards.find((card) => card.studentId === studentId)?.personNumber).toBe(`IC-${fixture.schoolId}`);
+      expect(cards.find((card) => card.staffId === staffId)?.personNumber).toMatch(/^STF-[A-Z0-9]{8}$/);
+    });
+  });
+
+  it("uses five years by default and lets the school change the validity for every active card", async () => {
+    await withTenant(fixture.schoolId, async (tx) => {
+      const settings = await getIdentityCardSettings(tx, fixture.schoolId);
+      expect(settings.validityMonths).toBe(60);
+      const before = await tx.$queryRawUnsafe<Array<{ version: number; issuedAt: Date; expiresAt: Date }>>(`SELECT "version","issuedAt","expiresAt" FROM "IdentityCard" WHERE "schoolId"=$1 AND "status"='active' ORDER BY "createdAt" ASC`, fixture.schoolId);
+      const result = await updateIdentityCardSettings(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, validityMonths: 36 });
+      expect(result.validityMonths).toBe(36);
+      expect(result.updatedCards).toBeGreaterThan(0);
+      const after = await tx.$queryRawUnsafe<Array<{ version: number; issuedAt: Date; expiresAt: Date }>>(`SELECT "version","issuedAt","expiresAt" FROM "IdentityCard" WHERE "schoolId"=$1 AND "status"='active' ORDER BY "createdAt" ASC`, fixture.schoolId);
+      expect(after[0]?.version).toBe((before[0]?.version ?? 0) + 1);
+      const expected = new Date(after[0]!.issuedAt);
+      expected.setUTCMonth(expected.getUTCMonth() + 36);
+      expect(after[0]!.expiresAt.toISOString()).toBe(expected.toISOString());
+      await updateIdentityCardSettings(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, validityMonths: 60 });
     });
   });
 
@@ -86,7 +107,7 @@ describe("school identity cards", () => {
     });
   });
 
-  it("produces wallet-size single-card PDFs and A4 class/school packs", async () => {
+  it("produces two-sided wallet cards and paired A4 front/back print sheets", async () => {
     await withTenant(fixture.schoolId, async (tx) => {
       const school = await tx.school.findUnique({ where: { id: fixture.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } });
       const cards = (await listIdentityCards(tx, fixture.schoolId, school!.uniqueCode, fixture.ownerId)).filter((card) => card.status === "active" && !card.isExpired);
@@ -94,24 +115,28 @@ describe("school identity cards", () => {
       const singlePdf = await buildSingleIdentityCardPdf(studentCard, school!, "https://sukuunova.example");
       expect(Buffer.byteLength(singlePdf)).toBeGreaterThan(1000);
       const singleDocument = await PDFDocument.load(singlePdf);
-      expect(singleDocument.getPageCount()).toBe(1);
-      const [singlePage] = singleDocument.getPages();
-      expect(singlePage.getWidth()).toBeGreaterThan(240);
-      expect(singlePage.getWidth()).toBeLessThan(245);
-      expect(singlePage.getHeight()).toBeGreaterThan(150);
-      expect(singlePage.getHeight()).toBeLessThan(155);
+      expect(singleDocument.getPageCount()).toBe(2);
+      const [front, back] = singleDocument.getPages();
+      for (const page of [front, back]) {
+        expect(page.getWidth()).toBeGreaterThan(240);
+        expect(page.getWidth()).toBeLessThan(245);
+        expect(page.getHeight()).toBeGreaterThan(150);
+        expect(page.getHeight()).toBeLessThan(155);
+      }
 
       const classCards = await getIdentityCardsByScope(tx, fixture.schoolId, school!.uniqueCode, "class", [], fixture.ownerId, classId);
       const packPdf = await buildIdentityCardPdf(classCards, school!, "https://sukuunova.example");
       expect(Buffer.byteLength(packPdf)).toBeGreaterThan(1000);
       const packDocument = await PDFDocument.load(packPdf);
-      expect(packDocument.getPageCount()).toBe(1);
+      expect(packDocument.getPageCount()).toBe(2);
+      expect(packDocument.getPages()[0]!.getWidth()).toBeCloseTo(595.28, 1);
+      expect(packDocument.getPages()[1]!.getWidth()).toBeCloseTo(595.28, 1);
     });
   });
 
   it("rejects tampered signatures", () => {
     const now = new Date("2026-09-02T10:00:00.000Z");
-    const card = { schoolId: "school-a", serial: "SNV-A-ST-123", personType: "student" as const, issuedAt: now, expiresAt: new Date("2028-09-02T10:00:00.000Z"), version: 1 };
+    const card = { schoolId: "school-a", serial: "SNV-A-ST-123", personType: "student" as const, issuedAt: now, expiresAt: new Date("2031-09-02T10:00:00.000Z"), version: 1 };
     const signature = identityCardSignature(card);
     expect(verifyIdentityCardSignature(card, signature)).toBe(true);
     expect(verifyIdentityCardSignature({ ...card, serial: "SNV-A-ST-999" }, signature)).toBe(false);
