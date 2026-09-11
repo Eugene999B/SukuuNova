@@ -65,7 +65,7 @@ describe("Release D system integrity", () => {
   it("enforces one guardian portal persona per user and one primary guardian per learner", async () => {
     const fixture = await createTenantFixture();
 
-    await rawDb.$transaction(async (tx) => {
+    const family = await rawDb.$transaction(async (tx) => {
       await setRawTenant(tx, fixture.schoolId);
       const student = await tx.student.create({
         data: { schoolId: fixture.schoolId, name: "Family Learner", admissionNo: `FG-${createId()}` },
@@ -76,24 +76,31 @@ describe("Release D system integrity", () => {
       const second = await tx.guardian.create({
         data: { schoolId: fixture.schoolId, name: "Secondary Guardian", phone: `021${Date.now()}` },
       });
-
-      await expect(tx.guardian.create({
-        data: { schoolId: fixture.schoolId, name: "Ambiguous Guardian", phone: `022${Date.now()}`, userId: fixture.memberId },
-      })).rejects.toBeTruthy();
-
       await tx.studentGuardian.create({
         data: { schoolId: fixture.schoolId, studentId: student.id, guardianId: first.id, relationship: "Parent", isPrimary: true },
       });
-      await expect(tx.studentGuardian.create({
-        data: { schoolId: fixture.schoolId, studentId: student.id, guardianId: second.id, relationship: "Guardian", isPrimary: true },
-      })).rejects.toBeTruthy();
+      return { studentId: student.id, secondGuardianId: second.id };
     });
+
+    await expect(rawDb.$transaction(async (tx) => {
+      await setRawTenant(tx, fixture.schoolId);
+      await tx.guardian.create({
+        data: { schoolId: fixture.schoolId, name: "Ambiguous Guardian", phone: `022${Date.now()}`, userId: fixture.memberId },
+      });
+    })).rejects.toBeTruthy();
+
+    await expect(rawDb.$transaction(async (tx) => {
+      await setRawTenant(tx, fixture.schoolId);
+      await tx.studentGuardian.create({
+        data: { schoolId: fixture.schoolId, studentId: family.studentId, guardianId: family.secondGuardianId, relationship: "Guardian", isPrimary: true },
+      });
+    })).rejects.toBeTruthy();
   });
 
   it("rejects direct timetable teacher and venue collisions", async () => {
     const fixture = await createTenantFixture();
 
-    await rawDb.$transaction(async (tx) => {
+    const timetable = await rawDb.$transaction(async (tx) => {
       await setRawTenant(tx, fixture.schoolId);
       const role = await tx.role.create({
         data: { schoolId: fixture.schoolId, name: `Teacher ${createId()}`, key: "teacher" },
@@ -119,15 +126,28 @@ describe("Release D system integrity", () => {
       await tx.timetableSlot.create({
         data: { schoolId: fixture.schoolId, classId: classA.id, subjectId: subjectA.id, teacherId: teacherA.id, dayOfWeek: 1, period: 1, venue: "Lab 1" },
       });
-
-      await expect(tx.timetableSlot.create({
-        data: { schoolId: fixture.schoolId, classId: classB.id, subjectId: subjectB.id, teacherId: teacherA.id, dayOfWeek: 1, period: 1, venue: "Lab 2" },
-      })).rejects.toBeTruthy();
-
-      await expect(tx.timetableSlot.create({
-        data: { schoolId: fixture.schoolId, classId: classC.id, subjectId: subjectB.id, teacherId: teacherB.id, dayOfWeek: 1, period: 1, venue: " lab 1 " },
-      })).rejects.toBeTruthy();
+      return {
+        teacherAId: teacherA.id,
+        teacherBId: teacherB.id,
+        classBId: classB.id,
+        classCId: classC.id,
+        subjectBId: subjectB.id,
+      };
     });
+
+    await expect(rawDb.$transaction(async (tx) => {
+      await setRawTenant(tx, fixture.schoolId);
+      await tx.timetableSlot.create({
+        data: { schoolId: fixture.schoolId, classId: timetable.classBId, subjectId: timetable.subjectBId, teacherId: timetable.teacherAId, dayOfWeek: 1, period: 1, venue: "Lab 2" },
+      });
+    })).rejects.toBeTruthy();
+
+    await expect(rawDb.$transaction(async (tx) => {
+      await setRawTenant(tx, fixture.schoolId);
+      await tx.timetableSlot.create({
+        data: { schoolId: fixture.schoolId, classId: timetable.classCId, subjectId: timetable.subjectBId, teacherId: timetable.teacherBId, dayOfWeek: 1, period: 1, venue: " lab 1 " },
+      });
+    })).rejects.toBeTruthy();
   });
 
   it("requires an active learner and allows only one completed pickup per school-local day", async () => {
