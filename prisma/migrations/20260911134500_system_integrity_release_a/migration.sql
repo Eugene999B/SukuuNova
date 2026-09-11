@@ -59,7 +59,7 @@ AS $$
          AND r."schoolId" = ur."schoolId"
         WHERE ur."userId" = u."id"
           AND ur."schoolId" = u."schoolId"
-          AND COALESCE(NULLIF(BTRIM(r."key"), ''), LOWER(REGEXP_REPLACE(BTRIM(r."name"), '[^a-zA-Z0-9]+', '_', 'g'))
+          AND COALESCE(NULLIF(BTRIM(r."key"), ''), LOWER(REGEXP_REPLACE(BTRIM(r."name"), '[^a-zA-Z0-9]+', '_', 'g')))
               IN ('teacher', 'class_teacher', 'subject_teacher', 'academic_coordinator', 'department_head')
       )
   );
@@ -132,21 +132,24 @@ CREATE TRIGGER "FaceMatchReview_staff_boundary"
 BEFORE INSERT OR UPDATE OF "candidateStaffId", "schoolId" ON "FaceMatchReview"
 FOR EACH ROW EXECUTE FUNCTION sukuunova_enforce_staff_reference('candidateStaffId');
 
--- Teaching-only foreign keys.
+-- Subject-teaching assignment is strict: only explicitly teaching/academic accounts qualify.
 DROP TRIGGER IF EXISTS "ClassSubjectTeacher_teacher_boundary" ON "ClassSubjectTeacher";
 CREATE TRIGGER "ClassSubjectTeacher_teacher_boundary"
 BEFORE INSERT OR UPDATE OF "teacherId", "schoolId" ON "ClassSubjectTeacher"
 FOR EACH ROW EXECUTE FUNCTION sukuunova_enforce_teacher_reference('teacherId');
 
+-- Legacy fixtures and some schools legitimately let leadership cover a class/slot without a
+-- separate Teacher role. These two edges therefore enforce staff (never family) at DB level;
+-- NovaCore/service writers remain responsible for the stronger teaching-role rule.
 DROP TRIGGER IF EXISTS "Class_class_teacher_boundary" ON "Class";
 CREATE TRIGGER "Class_class_teacher_boundary"
 BEFORE INSERT OR UPDATE OF "classTeacherId", "schoolId" ON "Class"
-FOR EACH ROW EXECUTE FUNCTION sukuunova_enforce_teacher_reference('classTeacherId');
+FOR EACH ROW EXECUTE FUNCTION sukuunova_enforce_staff_reference('classTeacherId');
 
 DROP TRIGGER IF EXISTS "TimetableSlot_teacher_boundary" ON "TimetableSlot";
 CREATE TRIGGER "TimetableSlot_teacher_boundary"
 BEFORE INSERT OR UPDATE OF "teacherId", "schoolId" ON "TimetableSlot"
-FOR EACH ROW EXECUTE FUNCTION sukuunova_enforce_teacher_reference('teacherId');
+FOR EACH ROW EXECUTE FUNCTION sukuunova_enforce_staff_reference('teacherId');
 
 -- 3) Attendance target validity must be checked regardless of manual/face/device writer.
 CREATE OR REPLACE FUNCTION sukuunova_enforce_attendance_target()
