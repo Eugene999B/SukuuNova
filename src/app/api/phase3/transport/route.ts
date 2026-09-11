@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
-import { withTenant } from "@/lib/db";
+import { withTenant, type TenantDb } from "@/lib/db";
 import { AppError, ForbiddenError, routeError } from "@/lib/errors";
 import { requireSchoolFeatureInTransaction } from "@/lib/feature-flags";
 import { getSchoolAuthorization } from "@/lib/authorization";
@@ -16,7 +16,7 @@ function isFamilyOnly(roleKeys: string[]) {
   return roleKeys.length > 0 && roleKeys.every((key) => FAMILY_ROLE_KEYS.has(key));
 }
 
-async function schoolTransport(tx: Parameters<Parameters<typeof withTenant>[1]>[0], schoolId: string, canManage: boolean) {
+async function schoolTransport(tx: TenantDb, schoolId: string, canManage: boolean) {
   const [vehicles, routes, stops, locations, boarding, reminders] = await Promise.all([
     tx.$queryRawUnsafe<Row[]>(`SELECT * FROM "P3Vehicle" WHERE "schoolId"=$1 ORDER BY "registrationNumber"`, schoolId),
     tx.$queryRawUnsafe<Row[]>(`SELECT * FROM "P3BusRoute" WHERE "schoolId"=$1 ORDER BY "name"`, schoolId),
@@ -28,7 +28,7 @@ async function schoolTransport(tx: Parameters<Parameters<typeof withTenant>[1]>[
   return { scope: "school" as const, canManage, vehicles, routes, stops, locations, boarding, reminders };
 }
 
-async function familyTransport(tx: Parameters<Parameters<typeof withTenant>[1]>[0], schoolId: string, actorId: string) {
+async function familyTransport(tx: TenantDb, schoolId: string, actorId: string) {
   const guardian = await tx.guardian.findFirst({ where: { userId: actorId }, select: { id: true } });
   if (!guardian) throw new ForbiddenError("Family transport access requires a linked guardian profile.");
   const parentLocation = await tx.$queryRawUnsafe<Array<{ routeId: string | null; latitude: string; longitude: string; updatedAt: Date }>>(
@@ -62,8 +62,6 @@ export async function GET() {
         ? familyTransport(tx, session.schoolId, session.userId)
         : schoolTransport(tx, session.schoolId, canManage);
     });
-    // SchoolLifeStudio consumes transport data directly; do not wrap it in the
-    // generic Phase 3 { result } envelope.
     return NextResponse.json(data, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return routeError(error);
