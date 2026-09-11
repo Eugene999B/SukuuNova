@@ -107,12 +107,14 @@ export async function saveArcadeRoundWithTelemetry(tx: TenantDb, context: Contex
     SELECT "settingsSnapshot" FROM "ArcadeRound"
     WHERE "id"=${input.roundId} AND "schoolId"=${context.schoolId} LIMIT 1
   `;
+  const previous = telemetryFromSnapshot(snapshotRows[0]?.settingsSnapshot);
+  if (previous?.final) return { ...result, typingTelemetry: previous };
   const merged = mergeTypingTelemetry(snapshotRows[0]?.settingsSnapshot, input.typingTelemetry, input.finish);
-  if (!merged || telemetryFromSnapshot(snapshotRows[0]?.settingsSnapshot)?.final) return result;
+  if (!merged) return result;
   await tx.$executeRaw`
     UPDATE "ArcadeRound"
     SET "settingsSnapshot"=jsonb_set(COALESCE("settingsSnapshot",'{}'::jsonb),'{typingTelemetry}',${JSON.stringify(merged)}::jsonb,true)
     WHERE "id"=${input.roundId} AND "schoolId"=${context.schoolId}
   `;
-  return result;
+  return { ...result, typingTelemetry: merged };
 }
