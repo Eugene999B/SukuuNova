@@ -4,8 +4,10 @@ import type { Prisma } from "@prisma/client";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
-import { generateSchoolTimetable, readTimetableExtensions } from "@/lib/timetable-generation-policy";
+import { readTimetableExtensions } from "@/lib/timetable-generation-policy";
+import { validateTimetableBellSchedule } from "@/lib/timetable-bell-schedule";
 import { getAcademicEngineConfig, saveAcademicEngineConfig } from "@/lib/academic-engine";
+import { applyNovaCoreTimetable } from "@/lib/novacore/timetable-apply-service";
 import { previewNovaCoreTimetableWithShadow } from "@/lib/novacore/timetable-shadow-service";
 
 const period = z.object({ period: z.number().int().min(1).max(16), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) });
@@ -135,6 +137,7 @@ export async function POST(request: Request) {
           const { maxDailyPeriods: _maxDailyPeriods, printTheme: _printTheme, ...rest } = incomingTimetable;
           return rest;
         })() : undefined;
+        if (canonicalTimetable) validateTimetableBellSchedule(canonicalTimetable);
 
         const result = await saveAcademicEngineConfig(tx, {
           schoolId: session.schoolId,
@@ -174,7 +177,7 @@ export async function POST(request: Request) {
         }), { headers: { "Cache-Control": "private, no-store" } });
       }
 
-      const result = await generateSchoolTimetable(tx, {
+      const result = await applyNovaCoreTimetable(tx, {
         schoolId: session.schoolId,
         actorId: session.userId,
         mode: input.mode,

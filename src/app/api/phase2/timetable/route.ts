@@ -9,7 +9,7 @@ import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
 import { isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
-import { dayBlocks } from "@/lib/timetable-engine-v2";
+import { safeDayBlocks } from "@/lib/timetable-bell-schedule";
 import { readTimetableExtensions } from "@/lib/timetable-generation-policy";
 import { confirmSubstitute, createTimetableSlot, deleteTimetableSlot, getTeacherWeeklyGrid, moveTimetableSlot, suggestSubstitutes, swapTimetableSlots, updateTimetableSlot } from "@/lib/timetable-service";
 
@@ -76,7 +76,7 @@ export async function GET(request: Request) {
         ...readTimetableExtensions(rawSettings?.timetableConfig),
         days: academic.timetable.days.map((day) => {
           if (!day.enabled) return day;
-          const periods = dayBlocks(day, academic.timetable).blocks.flatMap((block) =>
+          const periods = safeDayBlocks(day, academic.timetable).blocks.flatMap((block) =>
             block.kind === "lesson" && typeof block.period === "number" ? [{ period: block.period, start: block.start, end: block.end }] : [],
           );
           return { ...day, periods };
@@ -135,7 +135,7 @@ export async function POST(request: Request) {
         const assertConfiguredPeriod = (dayOfWeek: number, period: number) => {
           const day = academic.timetable.days.find((candidate) => candidate.dayOfWeek === dayOfWeek && candidate.enabled);
           if (!day) throw new AppError("This day is not enabled in Timetable Setup.", 409, "TIMETABLE_DAY_NOT_CONFIGURED");
-          const valid = dayBlocks(day, academic.timetable).periods.some((candidate) => candidate.period === period);
+          const valid = safeDayBlocks(day, academic.timetable).periods.some((candidate) => candidate.period === period);
           if (!valid) throw new AppError("This teaching period is not configured for the selected day.", 409, "TIMETABLE_PERIOD_NOT_CONFIGURED");
         };
         if (input.action === "saveSlot" || input.action === "updateSlot" || input.action === "moveSlot") {
