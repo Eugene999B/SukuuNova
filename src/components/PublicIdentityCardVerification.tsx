@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-import type { CSSProperties, ReactNode } from "react";
+import * as React from "react";
 
 type VerificationCard = {
   personType: "student" | "staff";
@@ -61,9 +61,9 @@ function verifiedAt() {
   });
 }
 
-function VerificationShell({ school, children }: { school?: SchoolVerificationBrand | null; children: ReactNode }) {
+function VerificationShell({ school, children }: { school?: SchoolVerificationBrand | null; children: React.ReactNode }) {
   const palette = brand(school?.brandColors);
-  const style = { "--verify-primary": palette.primary, "--verify-accent": palette.accent } as CSSProperties;
+  const style = { "--verify-primary": palette.primary, "--verify-accent": palette.accent } as React.CSSProperties;
   const schoolName = school?.name || "SukuuNova School Credential";
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-7 text-slate-950 sm:px-6 sm:py-12" style={style}>
