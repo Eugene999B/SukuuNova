@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { Check, LoaderCircle, Palette, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import {
@@ -56,6 +57,13 @@ export default function IdentityCardThemeStudio({ initialTheme }: Props) {
         {IDENTITY_CARD_THEMES.map((theme) => {
           const active = selected === theme.key;
           const applying = busy === theme.key;
+          const themeStyle = {
+            "--theme-bg": theme.frontBackground,
+            "--theme-ink": theme.ink,
+            "--theme-primary": theme.primary,
+            "--theme-accent": theme.accent,
+            "--theme-highlight": theme.highlight,
+          } as CSSProperties;
           return (
             <button
               type="button"
@@ -64,6 +72,7 @@ export default function IdentityCardThemeStudio({ initialTheme }: Props) {
               onClick={() => void applyTheme(theme.key)}
               disabled={Boolean(busy)}
               aria-pressed={active}
+              style={themeStyle}
             >
               <div className="identity-theme-mini" aria-hidden="true">
                 <div className="identity-theme-mini-brand"><span/><b>ACADEMY</b><i/></div>
