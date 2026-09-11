@@ -6,7 +6,7 @@ import { parseJson } from "@/lib/http";
 import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { generateReportCard } from "@/lib/report-card-service";
-import { reportBelongsToClass } from "@/lib/report-card-print-data";
+import { resolveStudentTermClass, resolveTermRoster } from "@/lib/student-term-context";
 
 const BATCH_SIZE = 3;
 const schema = z.object({
@@ -25,27 +25,26 @@ export async function POST(request: Request) {
 
     const scope = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "reports:generate");
-      const [term, classRow, students, candidates] = await Promise.all([
+      const [term, classRow, roster, candidates] = await Promise.all([
         tx.term.findFirst({ where: { id: input.termId, schoolId: session.schoolId }, select: { id: true } }),
         tx.class.findFirst({ where: { id: input.classId, schoolId: session.schoolId }, select: { id: true } }),
-        tx.student.findMany({
-          where: { schoolId: session.schoolId, classId: input.classId, status: "active" },
-          select: { id: true, admissionNo: true },
-          orderBy: { name: "asc" },
-        }),
+        resolveTermRoster(tx, { schoolId: session.schoolId, termId: input.termId }),
         tx.reportCard.findMany({
           where: { schoolId: session.schoolId, termId: input.termId },
-          select: { studentId: true, calculationSnapshot: true, student: { select: { classId: true } } },
+          select: { studentId: true },
         }),
       ]);
       if (!term) throw new AppError("The selected reporting term no longer exists.", 404, "TERM_NOT_FOUND");
       if (!classRow) throw new AppError("The selected class no longer exists.", 404, "CLASS_NOT_FOUND");
 
-      const existingIds = new Set(
-        candidates
-          .filter((row) => reportBelongsToClass(row.calculationSnapshot, row.student.classId, input.classId))
-          .map((row) => row.studentId),
-      );
+      const students = roster
+        .filter((student) => student.termClassId === input.classId)
+        .map((student) => ({ id: student.id, admissionNo: student.admissionNo, name: student.name }));
+      const existingIds = new Set<string>();
+      for (const report of candidates) {
+        const context = await resolveStudentTermClass(tx, { schoolId: session.schoolId, studentId: report.studentId, termId: input.termId });
+        if (context.classId === input.classId) existingIds.add(report.studentId);
+      }
       const pending = students.filter((student) => !existingIds.has(student.id) && !skippedIds.has(student.id));
       return { batch: pending.slice(0, BATCH_SIZE), pendingCount: pending.length };
     });
@@ -58,11 +57,6 @@ export async function POST(request: Request) {
     const failed: FailedReport[] = [];
     for (const student of scope.batch) {
       try {
-        // Intentionally use a fresh tenant transaction for each learner. The old
-        // class generator rendered every PDF inside one interactive transaction,
-        // so a large class could outlive Prisma's transaction window and fail
-        // unpredictably. Short isolated transactions keep memory/locks bounded
-        // and preserve successful learners even if one record is not ready.
         await withTenant(session.schoolId, (tx) =>
           generateReportCard(tx, {
             schoolId: session.schoolId,
