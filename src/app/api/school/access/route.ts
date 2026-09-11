@@ -5,7 +5,7 @@ import { hash } from "bcryptjs";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/rbac";
-import { requireCanAssignRoles, requireCanGrantPermissions, getSchoolAuthorization, isSchoolStaffRoleKey, isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
+import { requireCanAssignRoles, requireCanGrantPermissions, getSchoolAuthorization, isSchoolStaffAccount, isSchoolStaffRoleKey, isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
 import { appendSchoolAudit } from "@/lib/audit";
 import { routeError, ForbiddenError, AppError } from "@/lib/errors";
 import { syncDefaultRbac } from "@/lib/role-builder-service";
@@ -20,7 +20,7 @@ async function roleIdsForNames(tx:Parameters<typeof requirePermission>[0],school
 function isTeachingRole(name:string){return isTeachingRoleKey(roleKeyForName(name))}
 function roleKey(role:{key?:string|null;name:string}){return role.key?.trim()||roleKeyForName(role.name)}
 function validateRoleBundle(roleNames:string[]){const roleKeys=roleNames.map((name)=>roleKeyForName(name));if(roleKeys.some((key)=>!isSchoolStaffRoleKey(key)))throw new ForbiddenError("People & Access manages staff accounts only. Student and guardian portal identities belong in their own workspaces.");if(roleKeys.includes("owner")&&roleKeys.some(isTeachingRoleKey))throw new ForbiddenError("A teacher cannot be assigned the Owner role. Keep school ownership separate from teaching access.")}
-function userIsStaff(user:{userRoles:Array<{role:{key:string|null;name:string}}>}){return user.userRoles.some(({role})=>isSchoolStaffRoleKey(roleKey(role)))}
+function userIsStaff(user:{userRoles:Array<{role:{key:string|null;name:string}}>}){return isSchoolStaffAccount(user.userRoles.map(({role})=>role))}
 
 export async function GET(){try{const session=await requireSchoolSession();return NextResponse.json(await withTenant(session.schoolId,async tx=>{await syncDefaultRbac(tx,session.schoolId);const canRead=await hasPermission(tx,session.userId,"users:read").catch(()=>false);if(!canRead)throw new ForbiddenError("You do not have permission to view school accounts.");const full=await canManage(tx,session.userId);const [school,allUsers,allRoles,permissions]=await Promise.all([tx.school.findUnique({where:{id:session.schoolId},select:{name:true,uniqueCode:true}}),tx.user.findMany({orderBy:{name:"asc"},select:{id:true,name:true,email:full,phone:full,status:true,createdAt:true,userRoles:{select:{role:{select:{id:true,name:true,key:true,isSystem:true}}}},permissionOverrides:full?{select:{granted:true,permission:{select:{key:true,description:true}}}}:false}}),tx.role.findMany({where:{schoolId:session.schoolId},orderBy:[{isSystem:"desc"},{name:"asc"}],select:{id:true,name:true,key:true,isSystem:true,rolePermissions:{select:{permission:{select:{key:true}}}}}}),tx.permission.findMany({orderBy:{key:"asc"},select:{id:true,key:true,description:true}})]);const users=allUsers.filter(userIsStaff);const roles=allRoles.filter((role)=>isSchoolStaffRoleKey(roleKey(role)));return{school,users,roles,permissions,me:session.userId,canManage:full,canControlRoles:await canControlRoles(tx,session.userId)};}))}catch(error){return routeError(error)}}
 
