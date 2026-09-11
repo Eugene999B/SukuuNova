@@ -4,14 +4,15 @@ import { canGenerateArcadeContent, createArcadeGameQuestions, type ArcadeQuestio
 import { canGenerateArcadeInteractionContent, createArcadeInteractionQuestions, type ArcadeInteractionQuestion } from "./arcade-interaction-content";
 import { canGenerateArcadeResponseContent, createArcadeResponseQuestions, type ArcadeResponseQuestion } from "./arcade-response-content";
 import { canGenerateArcadeWorldContent, createArcadeWorldQuestions, type ArcadeWorldQuestion } from "./arcade-world-content";
-import { arcadeDifficultyForAge, arcadeQuestionHistorySignatures, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge, type ArcadeVariationAgeBand } from "./arcade-variation";
+import { arcadeQuestionHistorySignatures, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge, type ArcadeVariationAgeBand } from "./arcade-variation";
+import { buildAdaptiveLearningPlan, publicAdaptiveLearningPlan, type AdaptiveHistoryRound } from "./adaptive-learning-director";
 import type { ArcadeAgeBand } from "./arcade-catalog";
 
 type Context = { schoolId: string; guardianId: string; userId: string };
 type StartInput = { studentId: string; game: string; ageBand?: ArcadeAgeBand; easier?: boolean; roundLength?: number; challengeMode?: boolean };
 type StoredQuestion = ArcadeQuestion | ArcadeInteractionQuestion | ArcadeResponseQuestion | ArcadeWorldQuestion;
 type SnapshotRow = { settingsSnapshot: unknown };
-type HistoryRow = { questions: unknown };
+type HistoryRow = AdaptiveHistoryRound & { questions: unknown; completedRoundCount: number };
 
 function object(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -27,17 +28,17 @@ function generate(game: string, difficulty: number, length: number): StoredQuest
 
 export async function startVariedArcadeRound(tx: TenantDb, context: Context, input: StartInput) {
   const round = await startArcadeRound(tx, context, input);
-  if (round.status !== "in_progress" || round.answers.some((answer) => answer.trim().length > 0)) return round;
-
   const snapshotRows = await tx.$queryRaw<SnapshotRow[]>`
     SELECT "settingsSnapshot" FROM "ArcadeRound"
     WHERE "schoolId"=${context.schoolId} AND "id"=${round.id} LIMIT 1
   `;
   const snapshot = object(snapshotRows[0]?.settingsSnapshot);
-  if (snapshot.variationVersion === 2) return round;
+  const savedPlan = publicAdaptiveLearningPlan(snapshot.learningPlan);
+  if (round.status !== "in_progress" || round.answers.some((answer) => answer.trim().length > 0)) return { ...round, learningPlan: savedPlan };
+  if (snapshot.variationVersion === 3 && snapshot.directorVersion === 1) return { ...round, learningPlan: savedPlan };
 
   const history = await tx.$queryRaw<HistoryRow[]>`
-    SELECT "questions" FROM "ArcadeRound"
+    SELECT "questions","difficulty","correct","roundLength",COUNT(*) OVER()::int AS "completedRoundCount" FROM "ArcadeRound"
     WHERE "schoolId"=${context.schoolId}
       AND "studentId"=${round.studentId}
       AND "game"=${round.game}
@@ -45,20 +46,24 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
       AND "id"<>${round.id}
       AND "ageBand" IS NOT DISTINCT FROM ${round.ageBand}
     ORDER BY "completedAt" DESC
-    LIMIT 4
+    LIMIT 6
   `;
   const recentSignatures = arcadeQuestionHistorySignatures(history);
   const ageBand = (round.ageBand || "age_6_8") as ArcadeVariationAgeBand;
-  const ageAdjustedDifficulty = arcadeDifficultyForAge(round.difficulty, ageBand);
+  const learningPlan = buildAdaptiveLearningPlan({
+    game: round.game,
+    ageBand,
+    suggestedDifficulty: round.difficulty,
+    completedRounds: history,
+    completedRoundCount: history[0]?.completedRoundCount ?? 0,
+    missionId: round.id,
+    challengeMode: round.challengeMode,
+  });
   let generationAttempt = 0;
   const generator = () => {
+    const sequence = learningPlan.generationDifficulties;
+    const candidateDifficulty = sequence[generationAttempt % sequence.length] ?? learningPlan.targetDifficulty;
     generationAttempt += 1;
-    // First exhaust unseen material at the learner's age-capped mastery depth.
-    // Only then mix in one-step-easier reinforcement. Never increase difficulty
-    // simply to manufacture novelty.
-    const candidateDifficulty = generationAttempt <= 4 || ageAdjustedDifficulty <= 1
-      ? ageAdjustedDifficulty
-      : Math.max(1, ageAdjustedDifficulty - 1);
     return generate(round.game, candidateDifficulty, round.roundLength);
   };
 
@@ -66,25 +71,28 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
   const presented = varied.questions.map((question, index) => presentArcadeQuestionForAge(question, ageBand, round.id, index));
   const nextSnapshot = {
     ...snapshot,
-    variationVersion: 2,
+    variationVersion: 3,
+    directorVersion: 1,
+    learningPlan,
     recentRoundWindow: history.length,
     freshQuestionCount: varied.freshCount,
     reusedQuestionCount: varied.reusedCount,
     uniqueConceptCount: varied.uniqueConceptCount,
     originalSuggestedDifficulty: round.difficulty,
-    ageAdjustedDifficulty,
-    presentation: "age_aware_motion_v1",
+    ageAdjustedDifficulty: learningPlan.targetDifficulty,
+    presentation: "adaptive_director_v1",
   };
 
   await tx.$executeRaw`
     UPDATE "ArcadeRound"
     SET "questions"=${JSON.stringify(presented)}::jsonb,
         "answers"=${JSON.stringify(presented.map(() => ""))}::jsonb,
-        "difficulty"=${ageAdjustedDifficulty},
+        "difficulty"=${learningPlan.targetDifficulty},
         "roundLength"=${presented.length},
         "settingsSnapshot"=${JSON.stringify(nextSnapshot)}::jsonb
     WHERE "schoolId"=${context.schoolId} AND "id"=${round.id} AND "status"='in_progress'
   `;
 
-  return readArcadeRound(tx, context, round.id);
+  const publicRound = await readArcadeRound(tx, context, round.id);
+  return { ...publicRound, learningPlan: publicAdaptiveLearningPlan(learningPlan) };
 }
