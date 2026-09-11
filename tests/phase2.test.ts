@@ -252,8 +252,17 @@ describe("Phase 2 differentiator safety gates", () => {
       await expect(reviewPickupRequest(tx, { schoolId: fixture.schoolId, actorId: fixture.memberId, requestId: attempted.request.id, decision: "approved" })).rejects.toMatchObject({ status: 403 });
       await reviewPickupRequest(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, requestId: attempted.request.id, decision: "approved" });
       expect(await tx.pickupEvent.count({ where: { studentId, collectedByGuardianId: unlinkedGuardianId } })).toBe(1);
-      await addApprovedPickup(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, studentId, guardianId });
-      await expect(attemptPickup(tx, { schoolId: fixture.schoolId, actorId: fixture.memberId, studentId, guardianId })).resolves.toMatchObject({ status: "completed" });
+
+      const preapprovedStudent = await tx.student.create({
+        data: {
+          schoolId: fixture.schoolId,
+          admissionNo: "P2-PRE-" + fixture.schoolId,
+          name: "Pre-approved Pickup Student",
+          classId
+        }
+      });
+      await addApprovedPickup(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, studentId: preapprovedStudent.id, guardianId });
+      await expect(attemptPickup(tx, { schoolId: fixture.schoolId, actorId: fixture.memberId, studentId: preapprovedStudent.id, guardianId })).resolves.toMatchObject({ status: "completed" });
     });
   });
 
