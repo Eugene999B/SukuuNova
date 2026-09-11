@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/AppShell";
-import FinanceWorkspace from "@/components/FinanceWorkspace";
 import FinanceRuntimeBoundary from "@/components/FinanceRuntimeBoundary";
+import FinanceWorkspaceSafe from "@/components/FinanceWorkspaceSafe";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 
@@ -35,7 +35,7 @@ export default async function FinanceRoute({ mode }: { mode: "overview" | "fees"
     userName={session.name}
   >
     <FinanceRuntimeBoundary area="finance">
-      <FinanceWorkspace mode={mode} schoolName={schoolName} />
+      <FinanceWorkspaceSafe mode={mode} schoolName={schoolName} />
     </FinanceRuntimeBoundary>
   </AppShell>;
 }
