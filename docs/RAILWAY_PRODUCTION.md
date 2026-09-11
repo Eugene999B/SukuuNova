@@ -1,5 +1,13 @@
 # SukuuNova Railway Production Setup
 
+## Canonical production URL
+
+The official SukuuNova production application URL is:
+
+`https://sukuunova-production.up.railway.app`
+
+Use this Railway URL for production links, QR verification URLs, browser testing, operational documentation and the public application origin. Do not treat Vercel preview URLs as SukuuNova production URLs.
+
 ## Services
 
 - `SukuuNova` application service: deploy from GitHub `Eugene999B/SukuuNova`, branch `main`.
@@ -14,7 +22,7 @@ Set these on the **SukuuNova application service**.
 - `GUARDIAN_AUTH_SECRET` — a different random secret, at least 32 characters
 - `QR_AUTH_SECRET` — a different random secret, at least 32 characters
 - `PLATFORM_AUTH_SECRET` — a different random secret, at least 32 characters
-- `NEXT_PUBLIC_APP_URL` — the public HTTPS URL for the SukuuNova application
+- `NEXT_PUBLIC_APP_URL=https://sukuunova-production.up.railway.app`
 - `NODE_ENV=production`
 
 ## Runtime database isolation
@@ -99,10 +107,11 @@ Railway pre-deploy commands run separately before the new application deployment
 
 After the first successful deployment:
 
-1. `GET /api/health` returns HTTP 200 and confirms PostgreSQL connectivity.
+1. `GET https://sukuunova-production.up.railway.app/api/health` returns HTTP 200 and confirms PostgreSQL connectivity.
 2. Prisma reports no pending migrations.
 3. The production log reports that the `sukuunova_app` application role was provisioned/updated or was already safe.
-4. School login works after deliberate school/owner initialization.
-5. Platform login works after deliberate platform-admin initialization.
+4. School login works at `https://sukuunova-production.up.railway.app` after deliberate school/owner initialization.
+5. Platform login works at the same Railway production origin after deliberate platform-admin initialization.
 6. Protected routes reject unauthenticated requests.
-7. Remove one-time seed/reset authorization variables after successful initialization/reset.
+7. ID-card QR verification and generated production links resolve against `https://sukuunova-production.up.railway.app`, not a preview host.
+8. Remove one-time seed/reset authorization variables after successful initialization/reset.
