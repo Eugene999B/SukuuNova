@@ -17,6 +17,15 @@ INSERT INTO "IdentityCardSetting" ("schoolId", "validityMonths")
 SELECT "id", 60 FROM "School"
 ON CONFLICT ("schoolId") DO NOTHING;
 
+-- Bring existing active credentials onto the new five-year policy. Bumping the
+-- version intentionally invalidates older printed QR signatures so the next
+-- download becomes the authoritative credential after this policy change.
+UPDATE "IdentityCard"
+SET "expiresAt" = "issuedAt" + INTERVAL '60 months',
+    "version" = "version" + 1,
+    "updatedAt" = CURRENT_TIMESTAMP
+WHERE "status" = 'active';
+
 ALTER TABLE "IdentityCardSetting" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "IdentityCardSetting" FORCE ROW LEVEL SECURITY;
 CREATE POLICY "IdentityCardSetting_tenant_isolation"
