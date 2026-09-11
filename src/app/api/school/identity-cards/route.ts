@@ -5,6 +5,7 @@ import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
+import { alignActiveIdentityCardValidity } from "@/lib/identity-card-policy";
 import {
   buildIdentityCardPdf,
   getIdentityCardSettings,
@@ -39,6 +40,7 @@ export async function GET() {
         getIdentityCardSettings(tx, session.schoolId),
       ]);
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
+      await alignActiveIdentityCardValidity(tx, session.schoolId, settings.validityMonths);
       return { school, classes, settings, cards: await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId) };
     });
     return NextResponse.json({ ok: true, ...result });
@@ -64,6 +66,8 @@ export async function POST(request: Request) {
       if (input.action === "reissue") return { kind: "json" as const, value: await reissueIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
       if (input.action === "revoke") return { kind: "json" as const, value: await revokeIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
 
+      const settings = await getIdentityCardSettings(tx, session.schoolId);
+      await alignActiveIdentityCardValidity(tx, session.schoolId, settings.validityMonths);
       const scope: IdentityCardScope = input.scope === "students" ? "student" : input.scope;
       const cards = (await getIdentityCardsByScope(tx, session.schoolId, school.uniqueCode, scope, input.ids ?? [], session.userId, input.classId))
         .filter((card) => card.status === "active" && !card.isExpired);
