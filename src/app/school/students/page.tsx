@@ -22,6 +22,14 @@ function createIndexNumber() {
   return `SN-${year}-${String(randomInt(0, 1_000_000)).padStart(6, "0")}`;
 }
 
+function parseAdmissionDate(value: string) {
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error("Admission date must be a valid calendar date.");
+  const date = new Date(`${value}T00:00:00.000Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw new Error("Admission date must be a valid calendar date.");
+  return date;
+}
+
 async function getStudentsPageData(schoolId: string) {
   return cachedSchoolRead(schoolId, "students-page-v2", () => withTenant(schoolId, async (tx) => {
     const [school, classes, students, academicYears] = await Promise.all([
@@ -54,14 +62,18 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
     if (!ENTRY_TYPES.has(entryType)) throw new Error("Choose a valid student entry type.");
     if (photoData && (!photoData.startsWith("data:image/") || photoData.length > 800_000)) throw new Error("Student photo is invalid or too large. Capture the live photo again.");
     if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
+    const admissionDate = parseAdmissionDate(admissionDateRaw);
     await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "students:write");
       const [schoolClass, intakeYear] = await Promise.all([
         classId ? tx.class.findFirst({ where: { id: classId, schoolId: session.schoolId }, select: { id: true } }) : Promise.resolve(null),
-        tx.academicYear.findFirst({ where: { id: intakeAcademicYearId, schoolId: session.schoolId }, select: { id: true, name: true } }),
+        tx.academicYear.findFirst({ where: { id: intakeAcademicYearId, schoolId: session.schoolId }, select: { id: true, name: true, startDate: true, endDate: true } }),
       ]);
       if (classId && !schoolClass) throw new Error("The selected class does not belong to this school.");
       if (!intakeYear) throw new Error("The selected intake academic year does not belong to this school.");
+      if (admissionDate && (admissionDate < intakeYear.startDate || admissionDate > intakeYear.endDate)) {
+        throw new Error(`Admission date must fall inside ${intakeYear.name}.`);
+      }
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${session.schoolId}`}))`;
       let indexNumber = createIndexNumber();
       for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -76,7 +88,6 @@ async function createStudent(_previousState: StudentActionState, formData: FormD
         if ((error as { code?: string }).code === "P2002") throw new Error("A learner with this index number was just created. Try again.");
         throw error;
       }
-      const admissionDate = admissionDateRaw ? new Date(`${admissionDateRaw}T00:00:00.000Z`) : null;
       await tx.$executeRaw`INSERT INTO "StudentAcademicIntake" ("schoolId","studentId","academicYearId","admissionDate","entryType","createdBy") VALUES (${session.schoolId},${student.id},${intakeAcademicYearId},${admissionDate},${entryType},${session.userId})`;
       if (guardianName && guardianPhone) {
         const guardian = await tx.guardian.upsert({ where: { schoolId_phone: { schoolId: session.schoolId, phone: guardianPhone } }, update: { name: guardianName }, create: { schoolId: session.schoolId, name: guardianName, phone: guardianPhone } });
