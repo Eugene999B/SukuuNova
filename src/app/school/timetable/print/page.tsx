@@ -3,9 +3,10 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
-import { dayBlocks } from "@/lib/timetable-engine-v2";
+import { safeDayBlocks } from "@/lib/timetable-bell-schedule";
 import { readTimetableExtensions } from "@/lib/timetable-generation-policy";
 import AutoPrintTimetable from "./AutoPrintTimetable";
+import "./print.css";
 
 export default async function TimetablePrintPage({ searchParams }: { searchParams: Promise<{ view?: string; classId?: string; teacherId?: string }> }) {
   const session = await requireSchoolSession();
@@ -27,9 +28,9 @@ export default async function TimetablePrintPage({ searchParams }: { searchParam
     if (mode === "teacher" && !teacherId) return null;
     const visible = slots.filter((slot) => mode === "class" ? slot.classId === classId : slot.teacherId === teacherId);
     const title = mode === "class" ? (classes.find((item) => item.id === classId)?.name || "Class timetable") : (visible[0]?.teacher.name || "Teacher timetable");
-    const config = academic.timetable as Parameters<typeof dayBlocks>[1];
+    const config = academic.timetable;
     const days = config.days.filter((day) => day.enabled && day.dayOfWeek >= 1 && day.dayOfWeek <= 6).sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-    const blocksByDay = Object.fromEntries(days.map((day) => [day.dayOfWeek, dayBlocks(day, config).blocks]));
+    const blocksByDay = Object.fromEntries(days.map((day) => [day.dayOfWeek, safeDayBlocks(day, config).blocks]));
     const { printTheme } = readTimetableExtensions(rawSettings?.timetableConfig);
     return { school, title, mode, days, blocksByDay, slots: visible, rooms: config.rooms ?? [], printTheme };
   });
