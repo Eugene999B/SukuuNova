@@ -4,6 +4,7 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { readBoundedJson } from "@/lib/bounded-json";
+import { isOperationalStaffAccount, requireActiveStaffTarget } from "@/lib/authorization";
 import { createPropertyItem, createPropertyLocation, receiveProperty, reportPropertyOutcome, schoolPropertiesWorkspace, transferProperty } from "@/lib/school-properties-service";
 
 const optionalText = (max: number) => z.union([z.string().trim().max(max), z.null()]).optional();
@@ -19,7 +20,19 @@ const bodySchema = z.discriminatedUnion("action", [
 export async function GET() {
   try {
     const session = await requireSchoolSession();
-    const data = await withTenant(session.schoolId, (tx) => schoolPropertiesWorkspace(tx, session.schoolId, session.userId));
+    const data = await withTenant(session.schoolId, async (tx) => {
+      const workspace = await schoolPropertiesWorkspace(tx, session.schoolId, session.userId);
+      const candidates = await tx.user.findMany({
+        where: { schoolId: session.schoolId, status: "active" },
+        orderBy: { name: "asc" },
+        take: 1500,
+        select: { id: true, name: true, userRoles: { select: { role: { select: { key: true, name: true } } } } }
+      });
+      const users = candidates
+        .filter((user) => isOperationalStaffAccount(user.userRoles.map(({ role }) => role)))
+        .map(({ userRoles: _roles, ...user }) => user);
+      return { ...workspace, users };
+    });
     return NextResponse.json(data, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return routeError(error);
@@ -31,6 +44,9 @@ export async function POST(request: Request) {
     const session = await requireSchoolSession();
     const parsed = bodySchema.parse(await readBoundedJson(request, 96 * 1024, "School properties request"));
     const result = await withTenant(session.schoolId, async (tx) => {
+      if ((parsed.action === "createItem" || parsed.action === "receive") && parsed.custodianUserId) {
+        await requireActiveStaffTarget(tx, session.schoolId, parsed.custodianUserId);
+      }
       if (parsed.action === "createLocation") return createPropertyLocation(tx, { schoolId: session.schoolId, actorId: session.userId, ...parsed });
       if (parsed.action === "createItem") return createPropertyItem(tx, { schoolId: session.schoolId, actorId: session.userId, ...parsed });
       if (parsed.action === "receive") return receiveProperty(tx, { schoolId: session.schoolId, actorId: session.userId, ...parsed });
