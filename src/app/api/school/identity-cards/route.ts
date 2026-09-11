@@ -5,7 +5,16 @@ import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
-import { buildIdentityCardPdf, getIdentityCardsByScope, listIdentityCards, reissueIdentityCard, revokeIdentityCard, type IdentityCardScope } from "@/lib/identity-card-service";
+import {
+  buildIdentityCardPdf,
+  getIdentityCardSettings,
+  getIdentityCardsByScope,
+  listIdentityCards,
+  reissueIdentityCard,
+  revokeIdentityCard,
+  updateIdentityCardSettings,
+  type IdentityCardScope,
+} from "@/lib/identity-card-service";
 
 const schema = z.discriminatedUnion("action", [
   z.object({
@@ -14,6 +23,7 @@ const schema = z.discriminatedUnion("action", [
     ids: z.array(z.string().min(1).max(100)).max(2000).optional(),
     classId: z.string().min(1).max(100).optional(),
   }),
+  z.object({ action: z.literal("configure"), validityMonths: z.number().int().min(1).max(120) }),
   z.object({ action: z.literal("reissue"), cardId: z.string().min(1).max(100) }),
   z.object({ action: z.literal("revoke"), cardId: z.string().min(1).max(100) }),
 ]);
@@ -23,12 +33,13 @@ export async function GET() {
     const session = await requireSchoolSession();
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "identity_cards:manage");
-      const [school, classes] = await Promise.all([
+      const [school, classes, settings] = await Promise.all([
         tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
         tx.class.findMany({ where: { schoolId: session.schoolId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+        getIdentityCardSettings(tx, session.schoolId),
       ]);
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
-      return { school, classes, cards: await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId) };
+      return { school, classes, settings, cards: await listIdentityCards(tx, session.schoolId, school.uniqueCode, session.userId) };
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
@@ -45,6 +56,9 @@ export async function POST(request: Request) {
 
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "identity_cards:manage");
+      if (input.action === "configure") {
+        return { kind: "json" as const, value: await updateIdentityCardSettings(tx, { schoolId: session.schoolId, actorId: session.userId, validityMonths: input.validityMonths }) };
+      }
       const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } });
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
       if (input.action === "reissue") return { kind: "json" as const, value: await reissueIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
@@ -62,7 +76,7 @@ export async function POST(request: Request) {
       status: 200,
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": `attachment; filename="${schoolSafeFilename(session.schoolId)}-${result.scope}-identity-cards.pdf"`,
+        "content-disposition": `attachment; filename="${schoolSafeFilename(session.schoolId)}-${result.scope}-identity-cards-front-back.pdf"`,
         "cache-control": "private, no-store",
       },
     });
