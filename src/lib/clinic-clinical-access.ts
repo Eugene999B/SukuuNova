@@ -20,6 +20,10 @@ function plainJson(value: unknown) {
   return JSON.stringify(value);
 }
 
+export function clinicProfileAllowsCare(profile: Pick<ClinicActorProfile, "status"> | null) {
+  return profile === null || profile.status === "active";
+}
+
 /**
  * A staff member may work in Clinic when RBAC grants the required clinic permission.
  * Nurse profiles add management metadata and an explicit suspension switch. If a
@@ -31,7 +35,7 @@ export async function assertClinicClinicalActor(tx: TenantDb, userId: string): P
     userId,
   );
   const profile = profiles[0] ?? null;
-  if (profile && profile.status !== "active") {
+  if (!clinicProfileAllowsCare(profile)) {
     throw new ForbiddenError("This nurse profile is suspended from clinical work.");
   }
   return profile;
