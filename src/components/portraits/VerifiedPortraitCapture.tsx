@@ -359,7 +359,7 @@ export function VerifiedPortraitCapture({
     }
   }
 
-  async function useCandidate() {
+  async function acceptCandidate() {
     if (!candidate || usingCandidate || busy) return;
     setUsingCandidate(true);
     try {
@@ -404,7 +404,7 @@ export function VerifiedPortraitCapture({
     </div> : null}
 
     {candidate ? <div className="verified-portrait-review-actions">
-      <button type="button" className="button primary" onClick={() => void useCandidate()} disabled={locked}><CheckCircle2 size={16}/>{usingCandidate || busy ? " Saving…" : " Use this photo"}</button>
+      <button type="button" className="button primary" onClick={() => void acceptCandidate()} disabled={locked}><CheckCircle2 size={16}/>{usingCandidate || busy ? " Saving…" : " Use this photo"}</button>
       <button type="button" className="button secondary" onClick={retryCandidate} disabled={locked}><RefreshCw size={16}/> Retry</button>
     </div> : <div className="verified-camera-launchers">
       <button type="button" className="button primary" onClick={() => void startCamera("environment")} disabled={locked}><Camera size={16}/> Rear camera</button>
