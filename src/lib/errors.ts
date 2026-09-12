@@ -24,6 +24,12 @@ export class ForbiddenError extends AppError {
   }
 }
 
+export class NotFoundError extends AppError {
+  constructor(message = "The requested record could not be found.") {
+    super(message, 404, "NOT_FOUND");
+  }
+}
+
 export class TenantScopeError extends AppError {
   constructor(message = "The requested record is outside the authenticated tenant.") {
     super(message, 403, "TENANT_SCOPE_VIOLATION");

@@ -21,6 +21,7 @@ import {
   Gamepad2,
   GraduationCap,
   Headset,
+  HeartPulse,
   Inbox,
   LayoutDashboard,
   Mail,
@@ -223,7 +224,9 @@ function initials(value: string) { return value.trim().split(/\s+/).map((part) =
 
 export function AppShell({ universe, title, subtitle, active = "Overview", schoolName = "School Workspace", schoolCode = "", userName = universe === "platform" ? "Platform Administrator" : universe === "guardian" ? "Guardian" : universe === "teacher" ? "Teacher" : "School Administrator", role = universe === "platform" ? "Super Admin" : universe === "guardian" ? "Guardian" : universe === "teacher" ? "Teacher" : "Administrator", children }: Props) {
   const platformAccess = usePlatformNavigationAccess();
-  const baseGroups = universe === "platform" ? platformGroups : universe === "teacher" ? teacherGroups : universe === "guardian" ? guardianGroups : schoolGroups;
+  const leadershipClinicAccess = universe === "school" && /(^|\s|·)(Owner|Administrator|Principal|Vice Principal)(\s|·|$)/i.test(role);
+  const schoolNavigationGroups = useMemo(() => leadershipClinicAccess ? schoolGroups.map((group) => group.label === "Operations" ? { ...group, items: [{ icon: HeartPulse, label: "Clinic", href: "/school/clinic", primary: true }, ...group.items] } : group) : schoolGroups, [leadershipClinicAccess]);
+  const baseGroups = universe === "platform" ? platformGroups : universe === "teacher" ? teacherGroups : universe === "guardian" ? guardianGroups : schoolNavigationGroups;
   const groups = universe === "platform" && platformAccess ? baseGroups.map((group) => ({ ...group, items: group.items.filter((item) => !item.permission || platformAccess[item.permission]) })).filter((group) => group.items.length > 0) : baseGroups;
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);

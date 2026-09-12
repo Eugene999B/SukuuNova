@@ -4,7 +4,7 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { AppError, routeError } from "@/lib/errors";
-import { requirePermission } from "@/lib/rbac";
+import { hasPermission, requirePermission } from "@/lib/rbac";
 import { issuePortraitVerificationToken, verifyPortraitImage } from "@/lib/portrait-verification";
 
 const schema = z.object({
@@ -23,7 +23,13 @@ export async function POST(request: Request) {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
     await withTenant(session.schoolId, async (tx) => {
-      await requirePermission(tx, session.userId, input.target === "student" ? "students:write" : "users:write");
+      if (input.target === "student") {
+        await requirePermission(tx, session.userId, "students:write");
+        return;
+      }
+      if (!(await hasPermission(tx, session.userId, "users:write"))) {
+        await requirePermission(tx, session.userId, "clinic:nurses_manage");
+      }
     });
 
     try {

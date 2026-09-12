@@ -61,7 +61,7 @@ function isPublicOrSpecialApi(pathname: string) {
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  const protectedSchool = pathname.startsWith("/school") || protectedApiKind(pathname) === "school";
+  const protectedSchool = pathname.startsWith("/school") || pathname.startsWith("/clinic") || protectedApiKind(pathname) === "school";
   const protectedPlatform = pathname.startsWith("/platform") || protectedApiKind(pathname) === "platform";
   const protectedTeacher = pathname.startsWith("/teacher");
   const protectedGuardian = pathname.startsWith("/guardian");
@@ -86,6 +86,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/school/:path*",
+    "/clinic/:path*",
     "/platform/:path*",
     "/teacher/:path*",
     "/guardian/:path*",

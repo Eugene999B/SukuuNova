@@ -26,7 +26,7 @@ const MAP: Record<string, PermissionKey[]> = {
   "Learning Support Assistant": ["students:read","attendance:view_own","parents:read_linked","risk_flags:view","payroll:view_own"],
   "Early Years / Nursery Teacher": TEACHING,
   "School Counsellor": ["students:read","attendance:view_own","parents:read_linked","risk_flags:view","reports:generate","payroll:view_own"],
-  "School Nurse": ["students:read","attendance:view_own","risk_flags:view","reports:generate","payroll:view_own"],
+  "School Nurse": ["students:read","clinic:care","clinic:records","clinic:inventory","clinic:export","payroll:view_own","support:create","support:view_own"],
   "Discipline Officer": ["students:read","attendance:view_own","risk_flags:view","reports:generate","payroll:view_own"],
   "Safeguarding / Child Protection Officer": ["students:read","attendance:view_own","risk_flags:view","audit:read","reports:generate","payroll:view_own"],
   Administrator: ADMIN,

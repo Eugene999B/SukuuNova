@@ -43,6 +43,9 @@ function canonicalPermissions() {
   return [...new Set(keys)];
 }
 
+const CLINICAL_ONLY_PERMISSIONS = new Set(["clinic:care", "clinic:records", "clinic:inventory", "clinic:export"]);
+const managementPermissions = (keys) => keys.filter((key) => !CLINICAL_ONLY_PERMISSIONS.has(key));
+
 const canonicalRoleKeys = new Map([
   ["Owner", "owner"],
   ["Administrator", "administrator"],
@@ -58,6 +61,7 @@ const canonicalRoleKeys = new Map([
   ["Teacher", "teacher"],
   ["Front Desk/Gate Security", "front_desk_security"],
   ["Transport Officer", "transport_officer"],
+  ["School Nurse", "school_nurse"],
   ["Parent", "parent"],
   ["Guardian", "guardian"],
   ["Student", "student"],
@@ -72,7 +76,8 @@ async function main() {
     if (!directory) throw new Error(`Eugene Academy directory '${SCHOOL_CODE}' was not found.`);
     const schoolId = directory.schoolId;
     const allPermissions = canonicalPermissions();
-    const principalPermissions = allPermissions.filter((key) => key !== "students:delete");
+    const ownerPermissions = managementPermissions(allPermissions);
+    const principalPermissions = ownerPermissions.filter((key) => key !== "students:delete");
 
     const result = await prisma.$transaction(async (tx) => {
       await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id',$1,true)", schoolId);
@@ -114,7 +119,7 @@ async function main() {
         }
       }
 
-      await applyBaseline(owner, allPermissions);
+      await applyBaseline(owner, ownerPermissions);
       await applyBaseline(principal, principalPermissions);
 
       const principalUsers = await tx.userRole.findMany({ where: { schoolId, roleId: principal.id }, select: { userId: true } });
@@ -159,6 +164,8 @@ async function main() {
         "identity_cards:manage",
         "finance:read",
         "exports:finance",
+        "clinic:overview",
+        "clinic:nurses_manage",
       ];
       const principalRows = await tx.rolePermission.findMany({
         where: { schoolId, roleId: principal.id },
@@ -168,6 +175,9 @@ async function main() {
       const missing = critical.filter((key) => !principalSet.has(key));
       if (missing.length) throw new Error(`Principal access refresh verification failed: ${missing.join(", ")}`);
       if (principalSet.has("students:delete")) throw new Error("Principal must not receive students:delete.");
+      for (const key of CLINICAL_ONLY_PERMISSIONS) {
+        if (principalSet.has(key)) throw new Error(`Principal must not receive clinical-only permission ${key}.`);
+      }
 
       // Verify the effective delete decision for every Principal account, not
       // just the Principal role bundle, because another assigned role may grant it.
@@ -195,7 +205,7 @@ async function main() {
         school: school.name,
         code: school.uniqueCode,
         rolesCanonicalized: roles.filter((role) => canonicalRoleKeys.has(role.name)).length,
-        ownerPermissions: allPermissions.length,
+        ownerPermissions: ownerPermissions.length,
         principalPermissions: principalSet.size,
         principalAccounts: principalUsers.length,
       };
