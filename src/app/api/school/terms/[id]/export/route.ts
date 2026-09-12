@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { appendSchoolAudit } from "@/lib/audit";
 import { withTenant } from "@/lib/db";
 import { AppError, routeError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
@@ -11,12 +12,19 @@ type Row = { label: string; value: string };
 
 const categories = new Set<ExportCategory>(["academic", "lesson_plans", "attendance", "finance"]);
 const formats = new Set<ExportFormat>(["pdf", "csv", "doc"]);
+const categoryPermission: Record<ExportCategory, "reports:generate" | "lesson_plans:review" | "exports:attendance" | "exports:finance"> = {
+  academic: "reports:generate",
+  lesson_plans: "lesson_plans:review",
+  attendance: "exports:attendance",
+  finance: "exports:finance",
+};
 
 function safeName(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "term";
 }
 function csvCell(value: string) {
-  return `"${value.replaceAll('"', '""')}"`;
+  const protectedValue = /^[=+\-@]/.test(value.trimStart()) ? `'${value}` : value;
+  return `"${protectedValue.replaceAll('"', '""')}"`;
 }
 function escapeHtml(value: string) {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -33,7 +41,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     if (!formats.has(format)) throw new AppError("Unknown term-report format.", 400, "INVALID_TERM_EXPORT_FORMAT");
 
     const report = await withTenant(session.schoolId, async (tx) => {
-      await requirePermission(tx, session.userId, "reports:generate");
+      await requirePermission(tx, session.userId, categoryPermission[category]);
       const term = await tx.term.findFirst({ where: { id, schoolId: session.schoolId }, include: { academicYear: true } });
       if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
       const rows: Row[] = [];
@@ -51,7 +59,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
           { label: "Recorded scores", value: String(Number(scores[0]?.count ?? 0)) },
           { label: "Average score", value: scores[0]?.average == null ? "Not available" : `${Number(scores[0].average).toFixed(1)}%` },
         );
-        for (const report of reports) rows.push({ label: `Report cards - ${report.status}`, value: String(report._count._all) });
+        for (const reportRow of reports) rows.push({ label: `Report cards - ${reportRow.status}`, value: String(reportRow._count._all) });
       }
 
       if (category === "lesson_plans") {
@@ -89,6 +97,14 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
         );
       }
 
+      await appendSchoolAudit(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        action: "academic.term_exported",
+        entityType: "Term",
+        entityId: term.id,
+        after: { category, format, rowCount: rows.length },
+      });
       return { term, rows };
     });
 
