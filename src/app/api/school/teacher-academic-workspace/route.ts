@@ -6,13 +6,17 @@ import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { termLifecycle, selectAcademicTerm } from "@/lib/term-date";
 import { createTeacherAcademicNote, createTeacherAcademicWork, getTeacherAcademicContexts, getTeacherAcademicRoster, publishTeacherAcademicNote, publishTeacherAcademicWork, saveTeacherWorkMarks } from "@/lib/teacher-academic-workspace-service";
+import { ensureWorkAssessment } from "@/lib/academic-work-gradebook";
+import { assertTeachingWeekNumber, DEFAULT_TEACHING_WEEKS, getTeachingWeekMap } from "@/lib/term-teaching-weeks";
 
+const workKind = z.enum(["Classwork","Homework","Exercise","Participation","Quiz","Exam"]);
 const questionSchema = z.object({ type: z.string().trim().min(1).max(40), prompt: z.string().trim().min(1).max(4000), points: z.number().finite().positive().max(1000), options: z.array(z.string().trim().max(500)).max(20).optional(), acceptedAnswers: z.array(z.string().trim().max(500)).max(20).optional() });
 const schema = z.discriminatedUnion("action", [
-  z.object({ action: z.literal("createWork"), termId: z.string().min(1), classId: z.string().min(1), subjectId: z.string().min(1), kind: z.enum(["Classwork","Homework","Exercise","Participation","Quiz","Exam"]), title: z.string().trim().min(1).max(160), instructions: z.string().max(8000).optional(), workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), weekNumber: z.number().int().min(1).max(60), workNumber: z.number().int().min(1).max(50), maxScore: z.number().finite().positive().max(100000), markingMode: z.enum(["manual","auto","review"]), attemptLimit: z.number().int().min(1).max(10).default(1), attemptScorePolicy: z.enum(["highest","latest"]).default("highest"), opensAt: z.string().datetime().nullable().optional(), dueAt: z.string().datetime().nullable().optional(), answerGuide: z.unknown().optional(), questionList: z.array(questionSchema).max(100).optional() }),
+  z.object({ action: z.literal("createMarkSheet"), termId: z.string().min(1), classId: z.string().min(1), subjectId: z.string().min(1), kind: workKind, workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), weekNumber: z.number().int().min(1).max(30), maxScore: z.number().finite().positive().max(100000) }),
+  z.object({ action: z.literal("createWork"), termId: z.string().min(1), classId: z.string().min(1), subjectId: z.string().min(1), kind: workKind, title: z.string().trim().min(1).max(160), instructions: z.string().max(8000).optional(), workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), weekNumber: z.number().int().min(1).max(30), workNumber: z.number().int().min(1).max(50), maxScore: z.number().finite().positive().max(100000), markingMode: z.enum(["manual","auto","review"]), attemptLimit: z.number().int().min(1).max(10).default(1), attemptScorePolicy: z.enum(["highest","latest"]).default("highest"), opensAt: z.string().datetime().nullable().optional(), dueAt: z.string().datetime().nullable().optional(), answerGuide: z.unknown().optional(), questionList: z.array(questionSchema).max(100).optional() }),
   z.object({ action: z.literal("publishWork"), workId: z.string().min(1) }),
   z.object({ action: z.literal("saveMarks"), workId: z.string().min(1), marks: z.array(z.object({ studentId: z.string().min(1), value: z.number().finite().nonnegative().max(100000), status: z.enum(["present","absent","excused"]).optional(), expected: z.object({ id: z.string().min(1), value: z.number().finite(), status: z.enum(["present","absent","excused"]), enteredAt: z.string().datetime() }).nullable() })).max(5000) }),
-  z.object({ action: z.literal("createNote"), termId: z.string().min(1), classId: z.string().min(1), subjectId: z.string().min(1), title: z.string().trim().min(1).max(160), content: z.unknown(), weekNumber: z.number().int().min(1).max(60).optional() }),
+  z.object({ action: z.literal("createNote"), termId: z.string().min(1), classId: z.string().min(1), subjectId: z.string().min(1), title: z.string().trim().min(1).max(160), content: z.unknown(), weekNumber: z.number().int().min(1).max(30).optional() }),
   z.object({ action: z.literal("publishNote"), noteId: z.string().min(1) }),
 ]);
 
@@ -22,12 +26,14 @@ async function timezone(tx: TenantDb, schoolId: string) {
 }
 
 async function authoritativeTerm(tx: TenantDb, schoolId: string) {
-  const [terms, zone] = await Promise.all([
+  const [terms, zone, weekMap] = await Promise.all([
     tx.term.findMany({ where: { schoolId }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true }, orderBy: { startDate: "desc" } }),
     timezone(tx, schoolId),
+    getTeachingWeekMap(tx, schoolId),
   ]);
-  const active = selectAcademicTerm(terms, undefined, new Date(), zone);
-  return { active, terms, zone };
+  const normalizedTerms = terms.map((term) => ({ ...term, teachingWeeks: weekMap.get(term.id) ?? DEFAULT_TEACHING_WEEKS }));
+  const active = selectAcademicTerm(normalizedTerms, undefined, new Date(), zone);
+  return { active, terms: normalizedTerms, zone };
 }
 
 async function assertWritableTerm(tx: TenantDb, schoolId: string, termId: string) {
@@ -84,8 +90,38 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     return await withTenant(session.schoolId, async tx => {
       const common = { schoolId: session.schoolId, teacherId: session.userId };
+      if (input.action === "createMarkSheet") {
+        const term = await assertWritableTerm(tx, session.schoolId, input.termId);
+        assertTeachingWeekNumber(input.weekNumber, term.teachingWeeks);
+        const sequence = await tx.$queryRawUnsafe<Array<{ next: number }>>(
+          `SELECT (COALESCE(MAX("workNumber"),0)+1)::int AS "next" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "termId"=$2 AND "classId"=$3 AND "subjectId"=$4 AND "kind"=$5 AND "weekNumber"=$6`,
+          session.schoolId, input.termId, input.classId, input.subjectId, input.kind, input.weekNumber,
+        );
+        const workNumber = sequence[0]?.next ?? 1;
+        if (workNumber > 50) throw new AppError(`Week ${input.weekNumber} already has the maximum number of ${input.kind.toLowerCase()} sheets.`, 409, "WORK_NUMBER_LIMIT");
+        const title = `${input.kind} · Week ${input.weekNumber} · #${workNumber}`;
+        const result = await createTeacherAcademicWork(tx, {
+          ...common,
+          termId: input.termId,
+          classId: input.classId,
+          subjectId: input.subjectId,
+          kind: input.kind,
+          title,
+          workDate: input.workDate,
+          weekNumber: input.weekNumber,
+          workNumber,
+          maxScore: input.maxScore,
+          markingMode: "manual",
+          attemptLimit: 1,
+          attemptScorePolicy: "highest",
+          questionList: [],
+        });
+        const assessment = await ensureWorkAssessment(tx, session.schoolId, result.id, session.userId);
+        return NextResponse.json({ ok: true, result: { ...result, assessmentId: assessment.id, title, workNumber } });
+      }
       if (input.action === "createWork") {
-        await assertWritableTerm(tx, session.schoolId, input.termId);
+        const term = await assertWritableTerm(tx, session.schoolId, input.termId);
+        assertTeachingWeekNumber(input.weekNumber, term.teachingWeeks);
         if (input.opensAt && input.dueAt && Date.parse(input.opensAt) >= Date.parse(input.dueAt)) throw new AppError("The closing time must be later than the opening time.", 400, "INVALID_WORK_WINDOW");
         const result = await createTeacherAcademicWork(tx, { ...common, ...input });
         if (input.opensAt) await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicWork" SET "opensAt"=$3::timestamptz,"updatedAt"=NOW() WHERE "schoolId"=$1 AND "id"=$2`, session.schoolId, result.id, input.opensAt);
@@ -104,7 +140,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: true, result: await saveTeacherWorkMarks(tx, { ...common, workId: input.workId, marks: input.marks }) });
       }
       if (input.action === "createNote") {
-        await assertWritableTerm(tx, session.schoolId, input.termId);
+        const term = await assertWritableTerm(tx, session.schoolId, input.termId);
+        if (input.weekNumber != null) assertTeachingWeekNumber(input.weekNumber, term.teachingWeeks);
         return NextResponse.json({ ok: true, result: await createTeacherAcademicNote(tx, { ...common, ...input }) });
       }
       const termId = await noteTermId(tx, session.schoolId, input.noteId);
