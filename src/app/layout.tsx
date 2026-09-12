@@ -9,6 +9,7 @@ import "./mobile-shell-fixes.css";
 import "@/components/ui/skeleton.css";
 import "./product-ui.css";
 import "./ux-simplification.css";
+import "./mobile-responsive-hardening.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
