@@ -1,0 +1,282 @@
+.class-curriculum {
+  display: grid;
+  gap: 18px;
+}
+
+.class-curriculum-intro {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.class-curriculum-intro > div,
+.class-curriculum-add,
+.class-offering-card,
+.class-curriculum-empty {
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+
+.class-curriculum-intro > div {
+  padding: 14px 16px;
+  display: grid;
+  gap: 4px;
+}
+
+.class-curriculum-intro strong,
+.class-curriculum-add strong,
+.class-curriculum-empty strong {
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.class-curriculum-intro span,
+.class-curriculum-add span,
+.class-curriculum-empty span,
+.class-curriculum-note,
+.class-curriculum-footer span {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.class-curriculum-add {
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.class-curriculum-add-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.class-curriculum-add-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.class-subject-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  max-height: 250px;
+  overflow: auto;
+  padding: 2px;
+}
+
+.class-subject-choice {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-background-soft);
+  cursor: pointer;
+}
+
+.class-subject-choice input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.class-subject-choice span {
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.class-offering-list {
+  display: grid;
+  gap: 10px;
+}
+
+.class-offering-card {
+  padding: 15px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.class-offering-title,
+.class-offering-actions,
+.class-curriculum-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.class-offering-title > div {
+  display: grid;
+  gap: 3px;
+}
+
+.class-offering-title a {
+  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.class-offering-title a:hover,
+.class-curriculum-footer a:hover {
+  text-decoration: underline;
+}
+
+.class-offering-title span:not(.class-offering-status) {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.class-offering-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.class-offering-status.ready {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
+}
+
+.class-offering-status.attention {
+  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+  color: var(--color-text-primary);
+}
+
+.class-teacher-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.class-teacher-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 8px 5px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-background-soft);
+}
+
+.class-teacher-chip > span {
+  font-size: 12px;
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.class-teacher-chip button,
+.class-remove-subject {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.class-teacher-chip button {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.class-teacher-chip button:hover,
+.class-remove-subject:hover {
+  color: var(--color-danger);
+}
+
+.class-teacher-assign-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.class-teacher-assign-form label {
+  min-width: 0;
+}
+
+.class-teacher-assign-form select {
+  min-height: 38px;
+  max-width: 240px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  padding: 0 10px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.class-remove-subject {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  padding: 8px;
+}
+
+.class-curriculum-empty {
+  padding: 20px;
+  display: grid;
+  gap: 5px;
+}
+
+.class-curriculum-empty a,
+.class-curriculum-footer a {
+  width: fit-content;
+  color: var(--color-brand);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.class-curriculum-footer {
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}
+
+@media (max-width: 760px) {
+  .class-curriculum-intro {
+    grid-template-columns: 1fr;
+  }
+
+  .class-curriculum-add-head,
+  .class-offering-actions,
+  .class-curriculum-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .class-curriculum-add-head .button,
+  .class-teacher-assign-form .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .class-subject-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .class-teacher-assign-form {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .class-teacher-assign-form select,
+  .class-teacher-assign-form label {
+    width: 100%;
+    max-width: none;
+  }
+
+  .class-remove-subject {
+    width: 100%;
+    text-align: left;
+  }
+}
