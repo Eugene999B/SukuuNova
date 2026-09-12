@@ -13,7 +13,10 @@ import {
   NUMBER_BLOOM_SCHEMA,
   numberBloomArcadeAdapter,
 } from "../src/lib/arcade-vnext/games/number-bloom/adapter";
-import { buildNumberBloomMission } from "../src/lib/arcade-vnext/games/number-bloom/domain";
+import {
+  buildNumberBloomMission,
+  numberBloomStateSchema,
+} from "../src/lib/arcade-vnext/games/number-bloom/domain";
 import { createTenantFixture } from "./helpers";
 
 const plantCountAdapter: ArcadeGameAdapter = {
@@ -102,12 +105,15 @@ describe("Number Bloom through Arcade vNext persistence", () => {
       tx, f.context, started.id, registry,
     ));
     expect(resumed.sessionSequence).toBe(2);
-    expect(resumed.state).toMatchObject({
-      interactionCount: 2,
-      items: [
-        { id: "seed-1", containerId: "plant-bed", slot: 0 },
-        { id: "seed-2", containerId: "plant-bed", slot: 1 },
-      ],
+    const resumedState = numberBloomStateSchema.parse(resumed.state);
+    expect(resumedState.interactionCount).toBe(2);
+    expect(resumedState.items.find((item) => item.id === "seed-1")).toMatchObject({
+      containerId: "plant-bed",
+      slot: 0,
+    });
+    expect(resumedState.items.find((item) => item.id === "seed-2")).toMatchObject({
+      containerId: "plant-bed",
+      slot: 1,
     });
 
     const completedConstruction = await withTenant(f.schoolId, (tx) => applyArcadeVNextAction(
