@@ -41,6 +41,7 @@ export const PERMISSION_GROUP_LABELS: Record<string, string> = {
   invoices: "Invoices",
   payments: "Payments",
   academic_readiness: "Academic readiness",
+  clinic: "Clinic & health centre",
 };
 
 const LABEL_OVERRIDES: Record<string, string> = {
@@ -126,6 +127,12 @@ const LABEL_OVERRIDES: Record<string, string> = {
   "support:create": "Create support cases",
   "support:view_own": "View own support cases",
   "support:manage": "Manage school support cases",
+  "clinic:overview": "View clinic intelligence overview",
+  "clinic:nurses_manage": "Create & manage clinic nurses",
+  "clinic:care": "Record clinic consultations",
+  "clinic:records": "View detailed health records",
+  "clinic:inventory": "Manage clinic medicines & dispensing",
+  "clinic:export": "Export authorised clinic health documents",
 };
 
 const CRITICAL = new Set([
@@ -170,6 +177,11 @@ const SENSITIVE = new Set([
   "properties:manage",
   "properties:move",
   "properties:export",
+  "clinic:nurses_manage",
+  "clinic:care",
+  "clinic:records",
+  "clinic:inventory",
+  "clinic:export",
 ]);
 
 export function permissionGroup(key: string) {
