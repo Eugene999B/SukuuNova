@@ -7,7 +7,132 @@ import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 
-const patchSchema = z.object({ name: z.string().trim().min(2).max(80), startDate: z.coerce.date(), endDate: z.coerce.date(), isLocked: z.boolean().optional() });
-function termStatus(startDate: Date, endDate: Date, isLocked = false, now = new Date()) { if(isLocked)return "locked" as const; return now < startDate ? "upcoming" as const : now > endDate ? "ended" as const : "active" as const; }
-export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) { try { const session=await requireSchoolSession(); const {id}=await context.params; const input=await parseJson(request,patchSchema); if(Number.isNaN(input.startDate.getTime())||Number.isNaN(input.endDate.getTime()))throw new AppError("Term dates are invalid.",400,"INVALID_TERM_DATE"); if(input.endDate<=input.startDate)throw new AppError("Term end date must be after its start.",400,"INVALID_TERM_RANGE"); const term=await withTenant(session.schoolId,async tx=>{await requirePermission(tx,session.userId,"settings:manage_school");const before=await tx.term.findUnique({where:{id},include:{academicYear:true}});if(!before)throw new AppError("Term not found.",404,"NOT_FOUND");await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-year-terms:${session.schoolId}:${before.academicYearId}`}))`;await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${session.schoolId}:${id}`}))`;const current=await tx.term.findUnique({where:{id},include:{academicYear:true}});if(!current)throw new AppError("Term not found.",404,"NOT_FOUND");const nextLocked=input.isLocked??current.isLocked;if(current.isLocked&&!nextLocked){await requirePermission(tx,session.userId,"calendar:manage");const finalized=await tx.reportCard.count({where:{schoolId:session.schoolId,termId:id,status:{in:["approved","sent"]}}});if(finalized>0)throw new AppError(`This term has ${finalized} finalized report card(s). Reopen is blocked to protect issued results.`,409,"TERM_HAS_FINALIZED_REPORTS");}if(current.isLocked&&(input.name!==current.name||input.startDate.getTime()!==current.startDate.getTime()||input.endDate.getTime()!==current.endDate.getTime()))throw new AppError("A locked term cannot be edited. Reopen it first.",409,"TERM_LOCKED");if(input.startDate<current.academicYear.startDate||input.endDate>current.academicYear.endDate)throw new AppError("Term dates must sit inside the academic year.",400,"TERM_OUTSIDE_YEAR");const overlap=await tx.term.findFirst({where:{schoolId:session.schoolId,academicYearId:current.academicYearId,id:{not:id},startDate:{lt:input.endDate},endDate:{gt:input.startDate}}});if(overlap)throw new AppError(`Term dates overlap ${overlap.name}.`,409,"TERM_OVERLAP");const updated=await tx.term.update({where:{id},data:{name:input.name,startDate:input.startDate,endDate:input.endDate,isLocked:nextLocked}});await appendSchoolAudit(tx,{schoolId:session.schoolId,actorId:session.userId,action:nextLocked!==current.isLocked?(nextLocked?"academic.term_locked":"academic.term_reopened"):"academic.term_updated",entityType:"Term",entityId:id,before:current,after:updated});return updated;});return NextResponse.json({ok:true,term,status:termStatus(term.startDate,term.endDate,term.isLocked),needsFinalization:!term.isLocked&&new Date()>term.endDate});}catch(error){return routeError(error)}}
-export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) { try { const session=await requireSchoolSession(); const {id}=await context.params; const result=await withTenant(session.schoolId,async tx=>{await requirePermission(tx,session.userId,"reports:generate");const term=await tx.term.findUnique({where:{id},include:{academicYear:true}});if(!term)throw new AppError("Term not found.",404,"NOT_FOUND");const [students,assessments,scoreAgg,reportCards,attendanceAgg,financeAgg]=await Promise.all([tx.student.count({where:{schoolId:session.schoolId,status:"active"}}),tx.assessment.count({where:{schoolId:session.schoolId,termId:id}}),tx.$queryRawUnsafe<Array<{count:string;average:string|null}>>(`SELECT COUNT(*)::text AS "count", AVG("value" / NULLIF("maxScore", 0) * 100)::text AS "average" FROM (SELECT s."value", a."maxScore" FROM "Score" s JOIN "Assessment" a ON a."id" = s."assessmentId" AND a."schoolId" = s."schoolId" WHERE s."schoolId" = $1 AND a."termId" = $2) AS "term_scores"`,session.schoolId,id),tx.reportCard.count({where:{schoolId:session.schoolId,termId:id}}),tx.$queryRawUnsafe<Array<{records:string;present:string;late:string;absent:string}>>(`SELECT COUNT(*)::text AS "records", COUNT(*) FILTER (WHERE "type" = 'in')::text AS "present", COUNT(*) FILTER (WHERE "isLate" IS TRUE)::text AS "late", COUNT(*) FILTER (WHERE "type" IN ('absence', 'absent'))::text AS "absent" FROM "AttendanceEvent" WHERE "schoolId" = $1 AND "attendanceDate" >= $2 AND "attendanceDate" <= $3`,session.schoolId,term.startDate,term.endDate),tx.$queryRawUnsafe<Array<{invoices:string;invoiced:string;collected:string}>>(`SELECT COUNT(*)::text AS "invoices", COALESCE(SUM("totalAmount"), 0)::text AS "invoiced", COALESCE((SELECT SUM(p."amount" - COALESCE((SELECT SUM(r."amount") FROM "PaymentReversal" r WHERE r."paymentId" = p."id" AND r."schoolId" = p."schoolId"), 0)) FROM "Payment" p JOIN "Invoice" pi ON pi."id" = p."invoiceId" AND pi."schoolId" = p."schoolId" WHERE p."schoolId" = $1 AND pi."termId" = $2), 0)::text AS "collected" FROM "Invoice" i WHERE i."schoolId" = $1 AND i."termId" = $2`,session.schoolId,id)]);const scoreCount=Number(scoreAgg[0]?.count??0);const scorePct=scoreAgg[0]?.average==null?null:Number(scoreAgg[0].average);const attendance={records:Number(attendanceAgg[0]?.records??0),present:Number(attendanceAgg[0]?.present??0),late:Number(attendanceAgg[0]?.late??0),absent:Number(attendanceAgg[0]?.absent??0)};const finance={invoiceCount:Number(financeAgg[0]?.invoices??0),invoiced:Number(financeAgg[0]?.invoiced??0),collected:Number(financeAgg[0]?.collected??0)};return{term,status:termStatus(term.startDate,term.endDate,term.isLocked),needsFinalization:!term.isLocked&&new Date()>term.endDate,students,assessments,scores:scoreCount,scorePct,reportCards,attendance,finance:{...finance,outstanding:Math.max(finance.invoiced-finance.collected,0)}};});return NextResponse.json(result);}catch(error){return routeError(error)}}
+const patchSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  teachingWeeks: z.coerce.number().int().min(1).max(30).optional(),
+  isLocked: z.boolean().optional(),
+});
+
+function termStatus(startDate: Date, endDate: Date, isLocked = false, now = new Date()) {
+  if (isLocked) return "locked" as const;
+  return now < startDate ? "upcoming" as const : now > endDate ? "ended" as const : "active" as const;
+}
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await requireSchoolSession();
+    const { id } = await context.params;
+    const input = await parseJson(request, patchSchema);
+    if (Number.isNaN(input.startDate.getTime()) || Number.isNaN(input.endDate.getTime())) throw new AppError("Term dates are invalid.", 400, "INVALID_TERM_DATE");
+    if (input.endDate <= input.startDate) throw new AppError("Term end date must be after its start.", 400, "INVALID_TERM_RANGE");
+
+    const result = await withTenant(session.schoolId, async (tx) => {
+      await requirePermission(tx, session.userId, "settings:manage_school");
+      const before = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
+      if (!before) throw new AppError("Term not found.", 404, "NOT_FOUND");
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-year-terms:${session.schoolId}:${before.academicYearId}`}))`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${session.schoolId}:${id}`}))`;
+      const current = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
+      if (!current) throw new AppError("Term not found.", 404, "NOT_FOUND");
+      const weekRows = await tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id);
+      const currentWeeks = weekRows[0]?.teachingWeeks ?? 13;
+      const nextWeeks = input.teachingWeeks ?? currentWeeks;
+      const nextLocked = input.isLocked ?? current.isLocked;
+
+      if (current.isLocked && !nextLocked) {
+        await requirePermission(tx, session.userId, "calendar:manage");
+        const finalized = await tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: { in: ["approved", "sent"] } } });
+        if (finalized > 0) throw new AppError(`This term has ${finalized} finalized report card(s). Reopen is blocked to protect issued results.`, 409, "TERM_HAS_FINALIZED_REPORTS");
+      }
+      const changingLockedTerm = input.name !== current.name || input.startDate.getTime() !== current.startDate.getTime() || input.endDate.getTime() !== current.endDate.getTime() || nextWeeks !== currentWeeks;
+      if (current.isLocked && changingLockedTerm) throw new AppError("A locked term cannot be edited. Reopen it first.", 409, "TERM_LOCKED");
+      if (input.startDate < current.academicYear.startDate || input.endDate > current.academicYear.endDate) throw new AppError("Term dates must sit inside the academic year.", 400, "TERM_OUTSIDE_YEAR");
+      const overlap = await tx.term.findFirst({ where: { schoolId: session.schoolId, academicYearId: current.academicYearId, id: { not: id }, startDate: { lt: input.endDate }, endDate: { gt: input.startDate } } });
+      if (overlap) throw new AppError(`Term dates overlap ${overlap.name}.`, 409, "TERM_OVERLAP");
+
+      const updated = await tx.term.update({ where: { id }, data: { name: input.name, startDate: input.startDate, endDate: input.endDate, isLocked: nextLocked } });
+      if (nextWeeks !== currentWeeks) await tx.$executeRawUnsafe(`UPDATE "Term" SET "teachingWeeks"=$1 WHERE "id"=$2 AND "schoolId"=$3`, nextWeeks, id, session.schoolId);
+
+      let releasedReportCards = 0;
+      if (!current.isLocked && nextLocked) {
+        const released = await tx.reportCard.updateMany({ where: { schoolId: session.schoolId, termId: id, status: "approved" }, data: { status: "sent" } });
+        releasedReportCards = released.count;
+      }
+
+      await appendSchoolAudit(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        action: nextLocked !== current.isLocked ? (nextLocked ? "academic.term_locked" : "academic.term_reopened") : "academic.term_updated",
+        entityType: "Term",
+        entityId: id,
+        before: { ...current, teachingWeeks: currentWeeks },
+        after: { ...updated, teachingWeeks: nextWeeks, releasedReportCards },
+      });
+      return { term: { ...updated, teachingWeeks: nextWeeks }, releasedReportCards };
+    });
+
+    return NextResponse.json({ ok: true, ...result, status: termStatus(result.term.startDate, result.term.endDate, result.term.isLocked), needsFinalization: !result.term.isLocked && new Date() > result.term.endDate });
+  } catch (error) {
+    return routeError(error);
+  }
+}
+
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    const session = await requireSchoolSession();
+    const { id } = await context.params;
+    const result = await withTenant(session.schoolId, async (tx) => {
+      await requirePermission(tx, session.userId, "reports:generate");
+      const term = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
+      if (!term) throw new AppError("Term not found.", 404, "NOT_FOUND");
+      const weekRows = await tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id);
+      const teachingWeeks = weekRows[0]?.teachingWeeks ?? 13;
+
+      const [students, assessments, scoreAgg, reportCards, approvedReports, sentReports, attendanceAgg, financeAgg, lessonAgg, teachingAssignments] = await Promise.all([
+        tx.student.count({ where: { schoolId: session.schoolId, status: "active" } }),
+        tx.assessment.count({ where: { schoolId: session.schoolId, termId: id } }),
+        tx.$queryRawUnsafe<Array<{ count: string; average: string | null }>>(`SELECT COUNT(*)::text AS "count", AVG("value" / NULLIF("maxScore", 0) * 100)::text AS "average" FROM (SELECT s."value", a."maxScore" FROM "Score" s JOIN "Assessment" a ON a."id" = s."assessmentId" AND a."schoolId" = s."schoolId" WHERE s."schoolId" = $1 AND a."termId" = $2) AS "term_scores"`, session.schoolId, id),
+        tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id } }),
+        tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: "approved" } }),
+        tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: "sent" } }),
+        tx.$queryRawUnsafe<Array<{ records: string; present: string; late: string; absent: string }>>(`SELECT COUNT(*)::text AS "records", COUNT(*) FILTER (WHERE "type" = 'in')::text AS "present", COUNT(*) FILTER (WHERE "isLate" IS TRUE)::text AS "late", COUNT(*) FILTER (WHERE "type" IN ('absence', 'absent'))::text AS "absent" FROM "AttendanceEvent" WHERE "schoolId" = $1 AND "attendanceDate" >= $2 AND "attendanceDate" <= $3`, session.schoolId, term.startDate, term.endDate),
+        tx.$queryRawUnsafe<Array<{ invoices: string; invoiced: string; collected: string }>>(`SELECT COUNT(*)::text AS "invoices", COALESCE(SUM("totalAmount"), 0)::text AS "invoiced", COALESCE((SELECT SUM(p."amount" - COALESCE((SELECT SUM(r."amount") FROM "PaymentReversal" r WHERE r."paymentId" = p."id" AND r."schoolId" = p."schoolId"), 0)) FROM "Payment" p JOIN "Invoice" pi ON pi."id" = p."invoiceId" AND pi."schoolId" = p."schoolId" WHERE p."schoolId" = $1 AND pi."termId" = $2), 0)::text AS "collected" FROM "Invoice" i WHERE i."schoolId" = $1 AND i."termId" = $2`, session.schoolId, id),
+        tx.$queryRawUnsafe<Array<{ total: string; submitted: string; approved: string; changesRequested: string }>>(`SELECT COUNT(*)::text AS "total", COUNT(*) FILTER (WHERE "status"='submitted')::text AS "submitted", COUNT(*) FILTER (WHERE "status" IN ('approved','completed','archived'))::text AS "approved", COUNT(*) FILTER (WHERE "status"='changes_requested')::text AS "changesRequested" FROM "LessonPlan" WHERE "schoolId"=$1 AND "termId"=$2`, session.schoolId, id),
+        tx.classSubjectTeacher.count({ where: { schoolId: session.schoolId } }),
+      ]);
+
+      const scoreCount = Number(scoreAgg[0]?.count ?? 0);
+      const scorePct = scoreAgg[0]?.average == null ? null : Number(scoreAgg[0].average);
+      const attendance = { records: Number(attendanceAgg[0]?.records ?? 0), present: Number(attendanceAgg[0]?.present ?? 0), late: Number(attendanceAgg[0]?.late ?? 0), absent: Number(attendanceAgg[0]?.absent ?? 0) };
+      const finance = { invoiceCount: Number(financeAgg[0]?.invoices ?? 0), invoiced: Number(financeAgg[0]?.invoiced ?? 0), collected: Number(financeAgg[0]?.collected ?? 0) };
+      const lesson = lessonAgg[0];
+      const lessonPlans = {
+        total: Number(lesson?.total ?? 0),
+        submitted: Number(lesson?.submitted ?? 0),
+        approved: Number(lesson?.approved ?? 0),
+        changesRequested: Number(lesson?.changesRequested ?? 0),
+        expected: teachingAssignments * teachingWeeks,
+      };
+
+      return {
+        term: { ...term, teachingWeeks },
+        status: termStatus(term.startDate, term.endDate, term.isLocked),
+        needsFinalization: !term.isLocked && new Date() > term.endDate,
+        students,
+        assessments,
+        scores: scoreCount,
+        scorePct,
+        reportCards,
+        reportCardReadiness: { generated: reportCards, approved: approvedReports, released: sentReports, expected: students },
+        attendance,
+        lessonPlans,
+        finance: { ...finance, outstanding: Math.max(finance.invoiced - finance.collected, 0) },
+      };
+    });
+    return NextResponse.json(result);
+  } catch (error) {
+    return routeError(error);
+  }
+}
