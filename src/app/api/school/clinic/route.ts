@@ -7,6 +7,7 @@ import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { routeError, AppError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
+import { assertPortraitVerificationToken } from "@/lib/portrait-verification";
 import {
   addClinicMedication,
   adjustClinicMedicationStock,
@@ -31,7 +32,8 @@ const createNurseSchema = z.object({
   title: z.string().trim().min(2).max(100).default("School Nurse"),
   qualification: z.string().trim().max(160).optional().or(z.literal("")),
   licenseNo: z.string().trim().max(100).optional().or(z.literal("")),
-  photoUrl: z.string().max(1_500_000).optional().or(z.literal("")),
+  photoUrl: z.string().max(800_000).optional().or(z.literal("")),
+  verificationToken: z.string().max(4_000).optional().or(z.literal("")),
 });
 
 const visitSchema = z.object({
@@ -119,7 +121,8 @@ export async function GET(request: Request) {
             `SELECT "clinicName","phone","room","emergencyContact","referralHospital" FROM "ClinicSettings" LIMIT 1`,
           ),
         ]);
-        return { mode, ...snapshot, settings: settings[0] ?? null };
+        const safeRecent = snapshot.recent.map(({ complaint: _complaint, assessment: _assessment, ...visit }) => visit);
+        return { mode, ...snapshot, recent: safeRecent, settings: settings[0] ?? null };
       }
       if (mode === "nurse") {
         await requirePermission(tx, session.userId, "clinic:care");
@@ -156,6 +159,10 @@ export async function POST(request: Request) {
         await requirePermission(tx, session.userId, "clinic:nurses_manage");
         const phone = normalizePhone(input.phone);
         const email = input.email?.trim().toLowerCase() || null;
+        if (input.photoUrl) {
+          if (!input.verificationToken) throw new AppError("Verify the nurse portrait before creating the profile.", 400, "NURSE_PORTRAIT_NOT_VERIFIED");
+          assertPortraitVerificationToken({ token: input.verificationToken, schoolId: session.schoolId, target: "staff", image: input.photoUrl });
+        }
         if (email) {
           const emailOwner = await tx.user.findFirst({ where: { email }, select: { id: true } });
           if (emailOwner) throw new AppError("That email is already used by a school account.", 409, "DUPLICATE_NURSE_EMAIL");
@@ -193,7 +200,7 @@ export async function POST(request: Request) {
           profileId,user.id,input.photoUrl || null,input.title,input.qualification || null,input.licenseNo || null);
         await tx.auditLogSchool.create({
           data: { schoolId: session.schoolId, actorId: session.userId, action: "clinic.nurse.created", entityType: "ClinicNurseProfile", entityId: profileId,
-            after: { userId: user.id, name: user.name, email: user.email, phone: user.phone, title: input.title, qualification: input.qualification || null, licenseNo: input.licenseNo || null, firstLoginPasswordSource: "phone" } },
+            after: { userId: user.id, name: user.name, email: user.email, phone: user.phone, title: input.title, qualification: input.qualification || null, licenseNo: input.licenseNo || null, portraitCaptured: Boolean(input.photoUrl), firstLoginPasswordSource: "phone" } },
         });
         return { ok: true, nurse: { id: profileId, ...user, title: input.title }, message: `${user.name} can now sign in under Staff using the phone number or email. The phone number is the first password and must be changed after first login.` };
       }
