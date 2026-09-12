@@ -2,8 +2,10 @@
 "use client";
 
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { Camera, CheckCircle2, RefreshCw, ShieldCheck, Smartphone, Upload } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Camera, CheckCircle2, RefreshCw, ShieldCheck, Smartphone, Upload, X } from "lucide-react";
 import "@/components/students/student-photo-capture.css";
+import "@/components/portraits/verified-portrait-capture.css";
 
 type PortraitTarget = "student" | "staff";
 type CameraFacing = "user" | "environment";
@@ -40,39 +42,54 @@ type Props = {
   busy?: boolean;
 };
 
+type FrameSignal = {
+  qualityOk: boolean;
+  stable: boolean;
+  message: string;
+  grey: Float32Array;
+};
+
 function cameraErrorMessage(error: unknown) {
   const name = error instanceof DOMException ? error.name : "";
   if (name === "NotAllowedError" || name === "SecurityError") return "Camera access is blocked. Allow camera access for SukuuNova in your browser settings, then try again.";
-  if (name === "NotFoundError" || name === "OverconstrainedError") return "That camera is not available on this device. Choose the other camera or use the device-camera fallback.";
+  if (name === "NotFoundError" || name === "OverconstrainedError") return "That camera is not available on this device. Switch cameras or use the device-camera fallback.";
   if (name === "NotReadableError" || name === "AbortError") return "The camera is busy in another app. Close other camera apps and try again.";
   return error instanceof Error && error.message ? error.message : "The camera could not start. Check camera permission and try again.";
 }
 
-function portraitCanvas(source: CanvasImageSource, sourceWidth: number, sourceHeight: number) {
+function cropRect(sourceWidth: number, sourceHeight: number) {
   const targetRatio = 4 / 5;
-  let cropWidth = sourceWidth;
-  let cropHeight = sourceHeight;
-  if (sourceWidth / sourceHeight > targetRatio) cropWidth = sourceHeight * targetRatio;
-  else cropHeight = sourceWidth / targetRatio;
-  const sx = Math.max(0, (sourceWidth - cropWidth) / 2);
-  const sy = Math.max(0, (sourceHeight - cropHeight) / 2);
-  const outputWidth = Math.min(720, Math.max(1, Math.round(cropWidth)));
-  const outputHeight = Math.max(1, Math.round(outputWidth / targetRatio));
+  let width = sourceWidth;
+  let height = sourceHeight;
+  if (sourceWidth / sourceHeight > targetRatio) width = sourceHeight * targetRatio;
+  else height = sourceWidth / targetRatio;
+  return {
+    sx: Math.max(0, (sourceWidth - width) / 2),
+    sy: Math.max(0, (sourceHeight - height) / 2),
+    width,
+    height,
+  };
+}
+
+function portraitCanvas(source: CanvasImageSource, sourceWidth: number, sourceHeight: number) {
+  const crop = cropRect(sourceWidth, sourceHeight);
+  const outputWidth = Math.min(720, Math.max(1, Math.round(crop.width)));
+  const outputHeight = Math.max(1, Math.round(outputWidth / (4 / 5)));
   const canvas = document.createElement("canvas");
   canvas.width = outputWidth;
   canvas.height = outputHeight;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) throw new Error("Portrait processing is unavailable in this browser.");
-  context.drawImage(source, sx, sy, cropWidth, cropHeight, 0, 0, outputWidth, outputHeight);
+  context.drawImage(source, crop.sx, crop.sy, crop.width, crop.height, 0, 0, outputWidth, outputHeight);
   return canvas;
 }
 
 function encodePortrait(canvas: HTMLCanvasElement) {
-  for (let quality = 0.88; quality >= 0.5; quality -= 0.06) {
+  for (let quality = 0.9; quality >= 0.54; quality -= 0.06) {
     const image = canvas.toDataURL("image/jpeg", quality);
     if (image.length <= 680_000) return image;
   }
-  return canvas.toDataURL("image/jpeg", 0.46);
+  return canvas.toDataURL("image/jpeg", 0.5);
 }
 
 function localFrameQuality(canvas: HTMLCanvasElement) {
@@ -92,8 +109,8 @@ function localFrameQuality(canvas: HTMLCanvasElement) {
     sum += value;
   }
   const mean = sum / grey.length;
-  if (mean < 38) return { ok: false, message: "More light is needed on the face." };
-  if (mean > 228) return { ok: false, message: "The image is too bright. Move away from direct light." };
+  if (mean < 36) return { ok: false, message: "Move into better light so the face is clearly visible." };
+  if (mean > 230) return { ok: false, message: "Move away from strong direct light." };
   let edge = 0;
   let samples = 0;
   for (let y = 1; y < sample.height; y += 1) {
@@ -103,8 +120,49 @@ function localFrameQuality(canvas: HTMLCanvasElement) {
       samples += 2;
     }
   }
-  if (edge / Math.max(1, samples) < 2.8) return { ok: false, message: "Hold still while the camera focuses." };
+  if (edge / Math.max(1, samples) < 2.6) return { ok: false, message: "Hold the camera steady while it focuses." };
   return { ok: true, message: "" };
+}
+
+function liveFrameSignal(video: HTMLVideoElement, previous: Float32Array | null): FrameSignal {
+  const crop = cropRect(video.videoWidth, video.videoHeight);
+  const canvas = document.createElement("canvas");
+  canvas.width = 72;
+  canvas.height = 90;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return { qualityOk: true, stable: true, message: "Hold steady for automatic capture.", grey: new Float32Array(0) };
+  context.drawImage(video, crop.sx, crop.sy, crop.width, crop.height, 0, 0, canvas.width, canvas.height);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const grey = new Float32Array(canvas.width * canvas.height);
+  let sum = 0;
+  let edge = 0;
+  let edgeSamples = 0;
+  for (let index = 0, pixel = 0; index < pixels.length; index += 4, pixel += 1) {
+    const value = pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114;
+    grey[pixel] = value;
+    sum += value;
+  }
+  const mean = sum / Math.max(1, grey.length);
+  if (mean < 34) return { qualityOk: false, stable: false, message: "More light is needed.", grey };
+  if (mean > 232) return { qualityOk: false, stable: false, message: "Move away from direct light.", grey };
+  for (let y = 1; y < canvas.height; y += 1) {
+    for (let x = 1; x < canvas.width; x += 1) {
+      const i = y * canvas.width + x;
+      edge += Math.abs(grey[i] - grey[i - 1]) + Math.abs(grey[i] - grey[i - canvas.width]);
+      edgeSamples += 2;
+    }
+  }
+  if (edge / Math.max(1, edgeSamples) < 2.35) return { qualityOk: false, stable: false, message: "Hold steady while the camera focuses.", grey };
+  if (!previous || previous.length !== grey.length) return { qualityOk: true, stable: false, message: "Hold steady for automatic capture.", grey };
+  let motion = 0;
+  for (let index = 0; index < grey.length; index += 1) motion += Math.abs(grey[index] - previous[index]);
+  const motionScore = motion / grey.length;
+  return {
+    qualityOk: true,
+    stable: motionScore <= 6.5,
+    message: motionScore <= 6.5 ? "Hold steady — SukuuNova is checking the face." : "Keep the camera still for a moment.",
+    grey,
+  };
 }
 
 function imageFromFile(file: File) {
@@ -149,27 +207,46 @@ export function VerifiedPortraitCapture({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const validatingRef = useRef(false);
-  const validFramesRef = useRef(0);
   const settleUntilRef = useRef(0);
+  const previousScanRef = useRef<Float32Array | null>(null);
+  const steadySamplesRef = useRef(0);
+  const lastServerAttemptRef = useRef(0);
+  const feedbackUntilRef = useRef(0);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [facing, setFacing] = useState<CameraFacing>("environment");
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [checks, setChecks] = useState<VerificationCheck[]>([]);
-  const [status, setStatus] = useState("Ready for verified face capture");
-  const [message, setMessage] = useState("Rear camera is recommended when a staff member is photographing someone else.");
+  const [status, setStatus] = useState("Ready for fast automatic face capture");
+  const [message, setMessage] = useState("Open the camera. SukuuNova will capture automatically as soon as one clear biometric-ready face is stable.");
   const [usingCandidate, setUsingCandidate] = useState(false);
+
+  function resetScanner() {
+    previousScanRef.current = null;
+    steadySamplesRef.current = 0;
+    lastServerAttemptRef.current = 0;
+    feedbackUntilRef.current = 0;
+  }
 
   function releaseStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
-    validFramesRef.current = 0;
+    resetScanner();
     setCameraReady(false);
+    setChecking(false);
   }
 
   useEffect(() => () => releaseStream(), []);
+
+  useEffect(() => {
+    if (!cameraOpen && !candidate) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [cameraOpen, candidate]);
 
   function closeCamera() {
     releaseStream();
@@ -178,7 +255,7 @@ export function VerifiedPortraitCapture({
   }
 
   async function waitForVideoElement() {
-    for (let attempt = 0; attempt < 18; attempt += 1) {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
       if (videoRef.current) return videoRef.current;
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     }
@@ -206,7 +283,7 @@ export function VerifiedPortraitCapture({
     });
     await video.play();
     if (!video.videoWidth || !video.videoHeight) throw new Error("The camera started without a usable video frame.");
-    settleUntilRef.current = Date.now() + 1200;
+    settleUntilRef.current = Date.now() + 700;
     setCameraReady(true);
   }
 
@@ -214,13 +291,13 @@ export function VerifiedPortraitCapture({
     if (cameraStarting || busy) return;
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus("Live camera unavailable in this browser");
-      setMessage("Use the device-camera fallback below. The image will still be verified before it can be accepted.");
+      setMessage("Use the device-camera fallback. The resulting image will still need to pass server verification.");
       return;
     }
     setCameraStarting(true);
     setCandidate(null);
     setChecks([]);
-    validFramesRef.current = 0;
+    resetScanner();
     setFacing(requestedFacing);
     setStatus(requestedFacing === "environment" ? "Starting rear camera…" : "Starting selfie camera…");
     setMessage("Allow camera access when your browser asks.");
@@ -233,8 +310,9 @@ export function VerifiedPortraitCapture({
           audio: false,
           video: {
             facingMode: { ideal: requestedFacing },
-            width: { ideal: 1280 },
-            height: { ideal: 1600 },
+            width: { ideal: 1920 },
+            height: { ideal: 1440 },
+            frameRate: { ideal: 30 },
           },
         });
       } catch (error) {
@@ -246,8 +324,8 @@ export function VerifiedPortraitCapture({
       const actualFacing = stream.getVideoTracks()[0]?.getSettings().facingMode;
       if (actualFacing === "user" || actualFacing === "environment") setFacing(actualFacing);
       await attachAndPlay(stream);
-      setStatus("Looking for one verification-ready face");
-      setMessage("Centre one face in the oval, look straight at the camera and hold still. SukuuNova will not capture until the server confirms a usable face.");
+      setStatus("Automatic face capture is active");
+      setMessage("Keep one face and the shoulders clearly visible. There is no oval to fit — just look toward the camera and hold still briefly.");
     } catch (error) {
       releaseStream();
       setCameraOpen(false);
@@ -272,11 +350,10 @@ export function VerifiedPortraitCapture({
   async function verifyImage(image: string, mode: "auto" | "manual" | "fallback") {
     if (validatingRef.current || busy || candidate) return;
     validatingRef.current = true;
+    setChecking(true);
+    setStatus("Checking biometric readiness…");
+    setMessage("Confirming one face, visibility, position, head angle, eyes, lighting and sharpness.");
     try {
-      if (mode !== "auto") {
-        setStatus("Verifying face…");
-        setMessage("Checking face presence, position, head angle, eyes, occlusion, lighting and sharpness.");
-      }
       const response = await fetch("/api/school/portrait/validate", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -286,50 +363,68 @@ export function VerifiedPortraitCapture({
       if (!response.ok) throw new Error(payload.message ?? payload.error ?? "Face verification could not be completed.");
       setChecks(payload.checks ?? []);
       if (!payload.ok || !payload.biometricReady || !payload.verificationToken) {
-        validFramesRef.current = 0;
-        setStatus("Face not ready yet");
-        setMessage(payload.message ?? "Improve the face position or image quality and try again.");
+        feedbackUntilRef.current = Date.now() + (mode === "auto" ? 850 : 0);
+        steadySamplesRef.current = 0;
+        setStatus("Keep the camera open");
+        setMessage(payload.message ?? "Adjust slightly and SukuuNova will try again automatically.");
         return;
       }
 
-      if (mode === "auto") {
-        validFramesRef.current += 1;
-        if (validFramesRef.current < 2) {
-          setStatus("Face verified — hold still once more");
-          setMessage("One verification-ready frame passed. SukuuNova is confirming a second stable frame before auto-capture.");
-          return;
-        }
-      }
-
-      validFramesRef.current = 0;
       setCandidate({ image, token: payload.verificationToken });
       setStatus("Verified face captured");
-      setMessage("Review this biometric-ready portrait. Choose Use this photo to accept it, or Retry to take another one.");
+      setMessage("Review the portrait, then use it to continue registration or retry immediately.");
       closeCamera();
     } catch (error) {
-      validFramesRef.current = 0;
-      setStatus(mode === "auto" ? "Verification check paused" : "Face was not accepted");
+      steadySamplesRef.current = 0;
+      feedbackUntilRef.current = Date.now() + (mode === "auto" ? 900 : 0);
+      setStatus(mode === "auto" ? "Automatic verification will retry" : "Face was not accepted");
       setMessage(error instanceof Error ? error.message : "Face verification could not be completed.");
     } finally {
       validatingRef.current = false;
+      setChecking(false);
     }
   }
 
   async function autoEvaluate() {
     if (validatingRef.current || candidate || !cameraReady || Date.now() < settleUntilRef.current || busy) return;
+    if (Date.now() < feedbackUntilRef.current) return;
+    const video = videoRef.current;
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) return;
+
+    const signal = liveFrameSignal(video, previousScanRef.current);
+    previousScanRef.current = signal.grey;
+    if (!signal.qualityOk) {
+      steadySamplesRef.current = 0;
+      setStatus("Preparing a clear frame");
+      setMessage(signal.message);
+      return;
+    }
+    if (!signal.stable) {
+      steadySamplesRef.current = 0;
+      setStatus("Automatic capture is watching");
+      setMessage(signal.message);
+      return;
+    }
+
+    steadySamplesRef.current += 1;
+    setStatus("Hold still — almost ready");
+    setMessage("The frame is stable. SukuuNova is selecting a clean frame for face verification.");
+    if (steadySamplesRef.current < 3 || Date.now() - lastServerAttemptRef.current < 700) return;
+
+    lastServerAttemptRef.current = Date.now();
     try {
-      const image = currentFrame();
-      await verifyImage(image, "auto");
+      await verifyImage(currentFrame(), "auto");
     } catch (error) {
-      validFramesRef.current = 0;
-      setStatus("Preparing a better frame");
+      steadySamplesRef.current = 0;
+      feedbackUntilRef.current = Date.now() + 700;
+      setStatus("Preparing another frame");
       setMessage(error instanceof Error ? error.message : "Hold still in even lighting.");
     }
   }
 
   useEffect(() => {
     if (!cameraOpen || !cameraReady || candidate || busy) return;
-    const timer = window.setInterval(() => { void autoEvaluate(); }, 1400);
+    const timer = window.setInterval(() => { void autoEvaluate(); }, 180);
     return () => window.clearInterval(timer);
   // autoEvaluate intentionally reads the newest refs/state on each tick.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -366,7 +461,7 @@ export function VerifiedPortraitCapture({
       await onUse(candidate.image, candidate.token);
       setCandidate(null);
       setStatus("Verified portrait accepted");
-      setMessage("This portrait passed the face-verification checks and is ready to be used as the official profile image.");
+      setMessage("The verified portrait is attached. Continue the registration form.");
     } catch (error) {
       setStatus("Portrait could not be saved");
       setMessage(error instanceof Error ? error.message : "Could not save this portrait.");
@@ -379,60 +474,81 @@ export function VerifiedPortraitCapture({
     setCandidate(null);
     setChecks([]);
     setStatus("Ready to retry");
-    setMessage("Choose Rear camera or Selfie camera and SukuuNova will verify the next capture again.");
+    setMessage("The camera will reopen and capture automatically when the face is ready.");
     void startCamera(facing);
   }
 
   const displayImage = candidate?.image || value || "";
   const locked = busy || usingCandidate || cameraStarting;
+  const portalReady = typeof document !== "undefined";
+
+  const cameraScreen = cameraOpen && portalReady ? createPortal(
+    <div className="sukuunova-camera-screen" role="dialog" aria-modal="true" aria-label={`Capture ${subjectLabel} portrait`}>
+      <div className="sukuunova-camera-topbar">
+        <button type="button" className="sukuunova-camera-icon-button" onClick={closeCamera} disabled={locked} aria-label="Close camera"><X size={20}/></button>
+        <div className="sukuunova-camera-title"><strong>Automatic biometric portrait</strong><span>Full-screen camera · one clear face · automatic capture</span></div>
+        <button
+          type="button"
+          className="sukuunova-camera-icon-button"
+          onClick={() => void startCamera(facing === "user" ? "environment" : "user")}
+          disabled={locked}
+          aria-label={facing === "user" ? "Switch to rear camera" : "Switch to selfie camera"}
+        >{facing === "user" ? <Camera size={20}/> : <Smartphone size={20}/>}</button>
+      </div>
+      <div className="sukuunova-camera-viewport">
+        <video ref={videoRef} muted autoPlay playsInline className={`sukuunova-camera-video${facing === "user" ? " selfie" : ""}`}/>
+        <div className="sukuunova-camera-capture-zone" aria-hidden="true"/>
+        <div className={`sukuunova-camera-progress${checking ? " checking" : ""}`}><span className="sukuunova-camera-progress-dot"/>{checking ? "Verifying face…" : "Auto capture active"}</div>
+        <div className="sukuunova-camera-live-status" role="status"><strong>{status}</strong><span>{message}</span></div>
+      </div>
+      <div className="sukuunova-camera-bottombar">
+        <button type="button" className="sukuunova-camera-action" onClick={() => void startCamera(facing === "user" ? "environment" : "user")} disabled={locked}>{facing === "user" ? "Use rear camera" : "Use selfie camera"}</button>
+        <button type="button" className="sukuunova-camera-action primary" onClick={() => void captureNow()} disabled={!cameraReady || locked}>Capture now</button>
+      </div>
+    </div>,
+    document.body,
+  ) : null;
+
+  const reviewScreen = candidate && portalReady ? createPortal(
+    <div className="sukuunova-portrait-review-screen" role="dialog" aria-modal="true" aria-label="Review verified portrait">
+      <div className="sukuunova-review-heading"><strong>Verified portrait captured</strong><span>Check the photo, then continue registration or retry.</span></div>
+      <div className="sukuunova-review-photo-wrap"><img src={candidate.image} alt={`${subjectLabel} verified portrait`} className="sukuunova-review-photo"/></div>
+      <div className="sukuunova-review-actions">
+        <button type="button" className="sukuunova-camera-action" onClick={retryCandidate} disabled={locked}><RefreshCw size={16}/> Retry</button>
+        <button type="button" className="sukuunova-camera-action primary" onClick={() => void acceptCandidate()} disabled={locked}><CheckCircle2 size={16}/>{usingCandidate || busy ? " Saving…" : " Use photo & continue"}</button>
+      </div>
+    </div>,
+    document.body,
+  ) : null;
 
   return <section className="photo-capture professional-portrait-capture verified-portrait-capture">
     <div className="verified-portrait-heading">
-      <div><span className="verified-portrait-eyebrow"><ShieldCheck size={14}/> Server-verified capture</span><strong>Biometric-ready {subjectLabel} portrait</strong><p>Automatic capture is accepted only after SukuuNova confirms exactly one usable face. Nothing is saved until you approve the preview.</p></div>
-      <span className={candidate ? "verified-portrait-badge ready" : "verified-portrait-badge"}>{candidate ? "Verified · review" : "Waiting for verified face"}</span>
+      <div><span className="verified-portrait-eyebrow"><ShieldCheck size={14}/> Fast verified capture</span><strong>Biometric-ready {subjectLabel} portrait</strong><p>Open the full-screen camera and look toward it naturally. SukuuNova automatically chooses a stable frame and only accepts it after server face verification.</p></div>
+      <span className={candidate ? "verified-portrait-badge ready" : "verified-portrait-badge"}>{candidate ? "Verified · review" : "Automatic capture ready"}</span>
     </div>
 
-    {!cameraOpen ? <div className="portrait-capture-layout">
+    <div className="portrait-capture-layout">
       <div className="photo-preview-wrap portrait-preview-wrap">
-        {displayImage ? <img src={displayImage} alt={`${subjectLabel} portrait preview`} className="photo-preview" /> : <div className="photo-placeholder"><Camera size={28}/><span>No verified portrait yet</span><small>Use the rear or selfie camera below</small></div>}
+        {displayImage ? <img src={displayImage} alt={`${subjectLabel} portrait preview`} className="photo-preview" /> : <div className="photo-placeholder"><Camera size={28}/><span>No verified portrait yet</span><small>Full-screen automatic capture is ready</small></div>}
       </div>
       <div className="portrait-guidance">
-        <strong>{candidate ? "Review before saving" : "For reliable face recognition"}</strong>
-        {candidate ? <p>This image has passed face-presence and biometric-quality checks. Make sure you are happy with the expression and framing before accepting it.</p> : <p>Use a full, front-facing head-and-shoulders view in even light. The system checks the face itself, not just whether the image is bright or sharp.</p>}
-        <ul><li>Only one person in the frame.</li><li>Face looking forward with both eyes visible.</li><li>No mask, dark sunglasses, hand or object covering the face.</li><li>Keep the head and shoulders inside the guide.</li></ul>
+        <strong>Easy framing — no face oval</strong>
+        <p>Keep one person visible from the head through the shoulders. The guide is deliberately wide so the user does not have to force their face into a small shape.</p>
+        <ul><li>Look toward the camera with both eyes visible.</li><li>Use even light and keep the camera steady briefly.</li><li>Remove masks, dark sunglasses or anything covering the face.</li><li>SukuuNova captures automatically once the image is verification-ready.</li></ul>
       </div>
-    </div> : null}
+    </div>
 
-    {candidate ? <div className="verified-portrait-review-actions">
-      <button type="button" className="button primary" onClick={() => void acceptCandidate()} disabled={locked}><CheckCircle2 size={16}/>{usingCandidate || busy ? " Saving…" : " Use this photo"}</button>
-      <button type="button" className="button secondary" onClick={retryCandidate} disabled={locked}><RefreshCw size={16}/> Retry</button>
-    </div> : <div className="verified-camera-launchers">
-      <button type="button" className="button primary" onClick={() => void startCamera("environment")} disabled={locked}><Camera size={16}/> Rear camera</button>
-      <button type="button" className="button secondary" onClick={() => void startCamera("user")} disabled={locked}><Smartphone size={16}/> Selfie camera</button>
+    <div className="verified-camera-launchers">
+      <button type="button" className="button primary" onClick={() => void startCamera("environment")} disabled={locked}><Camera size={16}/> Open rear camera</button>
+      <button type="button" className="button secondary" onClick={() => void startCamera("user")} disabled={locked}><Smartphone size={16}/> Open selfie camera</button>
       {allowFileFallback ? <label className="button secondary photo-upload"><Upload size={16}/> Device-camera fallback<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={fileFallback} disabled={locked}/></label> : null}
       {value && onRemove ? <button type="button" className="photo-remove" onClick={() => void onRemove()} disabled={locked}>{removeLabel}</button> : null}
-    </div>}
+    </div>
 
-    {cameraOpen ? <div className="camera-panel portrait-camera-panel verified-camera-panel">
-      <div className="portrait-camera-toolbar verified-camera-toolbar">
-        <div><span className="live-dot"/> {facing === "environment" ? "Rear camera" : "Selfie camera"}</div>
-        <div className="verified-camera-switcher" role="group" aria-label="Choose camera">
-          <button type="button" className={facing === "environment" ? "active" : ""} onClick={() => void startCamera("environment")} disabled={locked}>Rear</button>
-          <button type="button" className={facing === "user" ? "active" : ""} onClick={() => void startCamera("user")} disabled={locked}>Selfie</button>
-        </div>
-      </div>
-      <div className="portrait-camera-stage verified-camera-stage">
-        <video ref={videoRef} muted autoPlay playsInline className="camera-video" style={{ transform: facing === "user" ? "scaleX(-1)" : undefined }}/>
-        <div className="portrait-camera-guide verified-face-guide" aria-hidden="true"><span/><small>Face inside oval · head &amp; shoulders visible</small></div>
-        <div className="verified-camera-status-overlay"><strong>{status}</strong><span>{validatingRef.current ? "Checking…" : "Auto verification on"}</span></div>
-      </div>
-      <div className="portrait-camera-actions verified-camera-actions">
-        <button type="button" className="button primary" onClick={() => void captureNow()} disabled={!cameraReady || locked}>Verify &amp; capture now</button>
-        <button type="button" className="button secondary" onClick={closeCamera} disabled={locked}>Close camera</button>
-      </div>
-    </div> : null}
-
+    <p className="sukuunova-capture-note">Automatic capture uses rapid local stability and image-quality checks to avoid unnecessary network delay; the accepted frame still has to pass SukuuNova's server verification before it can be saved.</p>
     <div className="verified-portrait-status" role="status"><strong>{status}</strong><span>{message}</span></div>
-    {checks.length ? <div className="portrait-quality-grid verified-quality-grid" aria-label="Face verification checks">{checks.map((check) => <div key={check.key} className={check.passed ? "passed" : "failed"}><span>{check.passed ? "✓" : "!"}</span><div><strong>{check.label}</strong><small>{check.detail}</small></div></div>)}</div> : null}
+    {checks.length && !candidate ? <div className="portrait-quality-grid verified-quality-grid" aria-label="Face verification checks">{checks.map((check) => <div key={check.key} className={check.passed ? "passed" : "failed"}><span>{check.passed ? "✓" : "!"}</span><div><strong>{check.label}</strong><small>{check.detail}</small></div></div>)}</div> : null}
+    {cameraScreen}
+    {reviewScreen}
   </section>;
 }
