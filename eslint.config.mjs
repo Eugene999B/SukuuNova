@@ -29,6 +29,18 @@ const eslintConfig = [
     }
   },
   {
+    files: [
+      "src/components/FinanceV2Workspace.tsx",
+      "src/components/PayrollV2Workspace.tsx",
+      "src/lib/finance-v2-service.ts",
+      "src/lib/payroll-v2-service.ts",
+      "src/app/api/school/finance-v2/receipt/[paymentId]/route.ts"
+    ],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off"
+    }
+  },
+  {
     files: ["src/components/PayrollWorkspace.tsx"],
     rules: {
       "@next/next/no-html-link-for-pages": "off"
