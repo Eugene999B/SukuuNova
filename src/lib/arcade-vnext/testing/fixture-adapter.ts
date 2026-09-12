@@ -34,6 +34,9 @@ const noteArtifactSchema = z.object({
   note: z.string().min(1).max(200),
 }).strict();
 
+const actionTypeSchema = z.enum(["place", "clear"]);
+const artifactTypeSchema = z.literal("note");
+
 type FixtureAction =
   | { kind: "place"; slot: number; value: number }
   | { kind: "clear"; slot: number };
@@ -62,15 +65,13 @@ export const fixtureArcadeAdapter: ArcadeGameAdapter = {
   },
 
   parseAction(actionType, payload): FixtureAction {
-    if (actionType === "place") return { kind: "place", ...placeSchema.parse(payload) };
-    if (actionType === "clear") return { kind: "clear", ...clearSchema.parse(payload) };
-    throw new z.ZodError([{ code: "custom", path: ["actionType"], message: "Unsupported fixture action." }]);
+    const kind = actionTypeSchema.parse(actionType);
+    if (kind === "place") return { kind, ...placeSchema.parse(payload) };
+    return { kind, ...clearSchema.parse(payload) };
   },
 
   parseArtifact(artifactType, payload) {
-    if (artifactType !== "note") {
-      throw new z.ZodError([{ code: "custom", path: ["artifactType"], message: "Unsupported fixture artifact." }]);
-    }
+    artifactTypeSchema.parse(artifactType);
     return noteArtifactSchema.parse(payload);
   },
 
