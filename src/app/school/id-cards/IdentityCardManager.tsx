@@ -326,7 +326,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || body.error || "Unable to save ID card validity.");
-      setMessage(`ID card validity updated to ${validityMonths / 12} year${validityMonths === 12 ? "" : "s"}. Reprint active cards so expiry and QR credentials match.`);
+      setMessage(`ID card validity updated to ${validityMonths / 12} year${validityMonths === 12 ? "" : "s"}. Reprint active cards so the expiry date printed on each card matches the live verification record.`);
       setSelected(new Set());
       await load();
     } catch (reason) {
@@ -338,7 +338,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
 
   async function mutate(action: "reissue" | "revoke", cardId: string) {
     const prompt = action === "reissue"
-      ? "Reissue this card? The current credential will stop verifying as current."
+      ? "Reissue this card? A new credential will be issued and this printed card will no longer be current."
       : "Revoke this card? It will immediately stop verifying as current.";
     if (!window.confirm(prompt)) return;
     setBusy(cardId);
@@ -444,7 +444,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
             <td><code>{card.serial}</code></td>
             <td>{new Date(card.expiresAt).toLocaleDateString("en-GB")}</td>
             <td><span className={current ? "identity-card-state is-current" : "identity-card-state is-invalid"}>{current ? "Current" : card.status === "revoked" ? "Revoked" : "Expired"}</span></td>
-            <td><div className="identity-row-actions">{current ? <button type="button" disabled={Boolean(busy)} onClick={() => void downloadSingle(card)}>{printingThis ? <LoaderCircle className="identity-spin" size={13}/> : <Printer size={13}/>} {printingThis ? "Preparing…" : "Print ID"}</button> : null}<Link href={profileHref}><ShieldCheck size={13}/> Profile</Link><button type="button" disabled={Boolean(busy) || !current} onClick={() => void mutate("reissue", card.id)}>Reissue</button>{card.status === "active" ? <button type="button" className="is-danger" disabled={Boolean(busy)} onClick={() => void mutate("revoke", card.id)}>Revoke</button> : null}</div></td>
+            <td><div className="identity-row-actions">{current ? <button type="button" disabled={Boolean(busy)} onClick={() => void downloadSingle(card)}>{printingThis ? <LoaderCircle className="identity-spin" size={13}/> : <Printer size={13}/>} {printingThis ? "Preparing…" : "Print ID"}</button> : null}<Link href={profileHref}><ShieldCheck size={13}/> Profile</Link><button type="button" disabled={Boolean(busy) || card.status === "revoked"} onClick={() => void mutate("reissue", card.id)}>{card.status === "active" && card.isExpired ? "Renew" : "Reissue"}</button>{card.status === "active" ? <button type="button" className="is-danger" disabled={Boolean(busy)} onClick={() => void mutate("revoke", card.id)}>Revoke</button> : null}</div></td>
           </tr>;
         })}</tbody></table>
       </div>}
