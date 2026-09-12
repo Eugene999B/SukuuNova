@@ -87,11 +87,22 @@ export function isSchoolStaffRoleKey(roleKey: string): boolean {
   return Boolean(normalized) && !isFamilyPortalRoleKey(normalized);
 }
 
+/**
+ * Staff account boundary shared by Staff & Teachers, staff profiles and People & Access.
+ * Custom school roles count as staff roles. A role-less school account is also retained so
+ * pending/legacy staff can be repaired instead of becoming unreachable. Accounts whose
+ * roles are exclusively Parent/Guardian/Student stay in their dedicated family workspaces.
+ */
 export function isSchoolStaffAccount(roles: readonly AccountRole[]): boolean {
   if (roles.length === 0) return true;
   return roles.some((role) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name)));
 }
 
+/**
+ * Stronger boundary for operational staff-only foreign keys such as payroll, devices,
+ * visitor hosts, custodians and attendance. Role-less repair accounts are intentionally
+ * excluded here until a real staff role is assigned.
+ */
 export function isOperationalStaffAccount(roles: readonly AccountRole[]): boolean {
   return roles.some((role) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name)));
 }
@@ -131,8 +142,8 @@ export async function requireActiveTeachingTarget(tx: TenantDb, schoolId: string
 
 export function resolveSchoolWorkspace(roleKeys: string[]): SchoolWorkspace {
   const normalized = roleKeys.map((key) => key.trim()).filter(Boolean);
-  if (normalized.some((key) => CLINIC_WORKSPACE_ROLE_KEYS.has(key))) return "clinic";
   if (normalized.some((key) => SCHOOL_WORKSPACE_ROLE_KEYS.has(key))) return "school";
+  if (normalized.some((key) => CLINIC_WORKSPACE_ROLE_KEYS.has(key))) return "clinic";
   if (normalized.some((key) => TEACHER_WORKSPACE_ROLE_KEYS.has(key))) return "teacher";
   return "school";
 }
