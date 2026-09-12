@@ -4,6 +4,7 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { AppError, routeError } from "@/lib/errors";
 import { getClinicPatientRecord, type ClinicPatientType } from "@/lib/clinic";
+import { assertClinicClinicalActor } from "@/lib/clinic-clinical-access";
 import { requirePermission } from "@/lib/rbac";
 
 const typeSchema = z.enum(["student", "staff"]);
@@ -104,6 +105,7 @@ export async function GET(request: Request) {
 
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "clinic:export");
+      await assertClinicClinicalActor(tx, session.userId);
       const [school, record] = await Promise.all([
         tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true } }),
         getClinicPatientRecord(tx, type, patientId),
