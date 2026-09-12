@@ -1,9 +1,9 @@
 /* eslint-disable @next/next/no-img-element */
-import type { CSSProperties, ReactNode } from "react";
+import * as React from "react";
 
 type VerificationCard = {
   personType: "student" | "staff";
-  personName: string;
+  personName: string | null;
   personNumber?: string | null;
   admissionNo: string | null;
   className: string | null;
@@ -44,11 +44,12 @@ function brand(value: unknown) {
   };
 }
 
-function initials(name: string) {
-  return name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "SN";
+function initials(name: string | null | undefined) {
+  return (name ?? "").trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("") || "SN";
 }
 
-function displayDate(value: Date) {
+function displayDate(value: Date | null | undefined) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return "Not available";
   return value.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
@@ -60,9 +61,9 @@ function verifiedAt() {
   });
 }
 
-function VerificationShell({ school, children }: { school?: SchoolVerificationBrand | null; children: ReactNode }) {
+function VerificationShell({ school, children }: { school?: SchoolVerificationBrand | null; children: React.ReactNode }) {
   const palette = brand(school?.brandColors);
-  const style = { "--verify-primary": palette.primary, "--verify-accent": palette.accent } as CSSProperties;
+  const style = { "--verify-primary": palette.primary, "--verify-accent": palette.accent } as React.CSSProperties;
   const schoolName = school?.name || "SukuuNova School Credential";
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-7 text-slate-950 sm:px-6 sm:py-12" style={style}>
@@ -97,25 +98,26 @@ function VerificationShell({ school, children }: { school?: SchoolVerificationBr
 
 export function PublicIdentityCardVerification({ school, card, state }: Props) {
   const verified = state === "verified";
+  const holderName = card.personName?.trim() || "Credential holder";
   const statusTitle = verified
-    ? "VERIFIED — CURRENT CREDENTIAL"
+    ? "VALID — VERIFIED CURRENT CREDENTIAL"
     : state === "revoked"
-      ? "CREDENTIAL REVOKED"
+      ? "INVALID — CREDENTIAL REVOKED"
       : state === "expired"
-        ? "CREDENTIAL EXPIRED"
-        : "HOLDER INACTIVE";
+        ? "INVALID — CREDENTIAL EXPIRED"
+        : "INVALID — HOLDER INACTIVE";
   const holderId = card.personNumber || card.admissionNo || card.serial;
   const roleLine = card.personType === "student"
     ? card.className || "Class not assigned"
     : card.roleName || "Staff member";
   const statusCopy = verified
     ? "The signed QR is authentic and this holder is currently active in the issuing school's SukuuNova record."
-    : "The QR is authentic, but this printed credential must not be treated as a current active school ID.";
+    : "The QR is authentic, but this printed credential is not a current valid school ID and must not be accepted as one.";
 
   return (
     <VerificationShell school={school}>
       <div className="p-5 sm:p-8">
-        <div className={`mb-7 rounded-2xl border p-4 ${verified ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
+        <div className={`mb-7 rounded-2xl border p-4 ${verified ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`} role="status">
           <div className="flex items-start gap-3">
             <div className={`mt-0.5 grid h-11 w-11 shrink-0 place-items-center rounded-full text-xl font-black ${verified ? "bg-emerald-600 text-white" : "bg-rose-600 text-white"}`}>
               {verified ? "✓" : "!"}
@@ -132,8 +134,8 @@ export function PublicIdentityCardVerification({ school, card, state }: Props) {
           <div className="mx-auto w-[145px] sm:mx-0">
             <div className="aspect-[4/5] overflow-hidden rounded-2xl border-2 bg-slate-100 shadow-sm" style={{ borderColor: "var(--verify-accent)" }}>
               {card.photoUrl
-                ? <img src={card.photoUrl} alt={`${card.personName} portrait`} className="h-full w-full object-cover" />
-                : <div className="grid h-full place-items-center text-3xl font-black" style={{ color: "var(--verify-primary)" }}>{initials(card.personName)}</div>}
+                ? <img src={card.photoUrl} alt={`${holderName} portrait`} className="h-full w-full object-cover" />
+                : <div className="grid h-full place-items-center text-3xl font-black" style={{ color: "var(--verify-primary)" }}>{initials(holderName)}</div>}
             </div>
             <div className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
               {card.personType === "student" ? "Student credential" : "Staff credential"}
@@ -142,7 +144,7 @@ export function PublicIdentityCardVerification({ school, card, state }: Props) {
 
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Verified credential holder</p>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{card.personName}</h2>
+            <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{holderName}</h2>
             <div className="mt-3 h-1 w-20 rounded-full" style={{ background: "var(--verify-accent)" }} />
 
             <dl className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -157,7 +159,9 @@ export function PublicIdentityCardVerification({ school, card, state }: Props) {
         <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">Credential serial</span>
-            <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold text-emerald-700 shadow-sm">SIGNED QR · LIVE RECORD</span>
+            <span className={`rounded-full bg-white px-3 py-1 text-[10px] font-bold shadow-sm ${verified ? "text-emerald-700" : "text-rose-700"}`}>
+              {verified ? "VALID · SIGNED QR · LIVE RECORD" : "NOT VALID · SIGNED QR · LIVE RECORD"}
+            </span>
           </div>
           <p className="mt-2 break-all font-mono text-xs font-semibold text-slate-700">{card.serial}</p>
         </div>
@@ -174,11 +178,11 @@ export function PublicIdentityCardVerificationFailure({ school, serial, reason }
   return (
     <VerificationShell school={school}>
       <div className="p-5 sm:p-8">
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5" role="alert">
           <div className="flex items-start gap-3">
             <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rose-600 text-xl font-black text-white">!</div>
             <div>
-              <p className="text-sm font-black tracking-[0.08em] text-rose-800">CREDENTIAL COULD NOT BE VERIFIED</p>
+              <p className="text-sm font-black tracking-[0.08em] text-rose-800">INVALID / UNVERIFIED CREDENTIAL</p>
               <p className="mt-1 text-sm leading-6 text-slate-700">{reason}</p>
               <p className="mt-2 text-xs font-semibold text-slate-500">Checked · {verifiedAt()} GMT</p>
             </div>

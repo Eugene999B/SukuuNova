@@ -21,6 +21,7 @@ import {
   identityCardThemeKeyFromBrandColors,
 } from "@/lib/identity-card-themes";
 import { buildIdentityCardBulkPdfV4, ID_CARD_PACK_LIMIT } from "@/lib/identity-card-print-v4";
+import { identityCardPublicOrigin } from "@/lib/identity-card-public-origin";
 
 const schema = z.discriminatedUnion("action", [
   z.object({
@@ -119,7 +120,7 @@ export async function POST(request: Request) {
 
     if (result.kind === "json") return NextResponse.json({ ok: true, result: result.value });
 
-    const pdf = await buildIdentityCardBulkPdfV4(result.cards, result.school, new URL(request.url).origin);
+    const pdf = await buildIdentityCardBulkPdfV4(result.cards, result.school, identityCardPublicOrigin(request.url));
     const suffix = result.totalParts > 1 ? `-part-${result.part}-of-${result.totalParts}` : "";
     return new NextResponse(pdf, {
       status: 200,
