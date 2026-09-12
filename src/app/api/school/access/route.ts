@@ -5,46 +5,207 @@ import { hash } from "bcryptjs";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/rbac";
-import { requireCanAssignRoles, requireCanGrantPermissions, getSchoolAuthorization, isSchoolStaffAccount, isSchoolStaffRoleKey, isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
+import {
+  requireCanAssignRoles,
+  requireCanGrantPermissions,
+  getSchoolAuthorization,
+  isSchoolStaffAccount,
+  isSchoolStaffRoleKey,
+  isTeachingRoleKey,
+  roleKeyForName,
+} from "@/lib/authorization";
 import { appendSchoolAudit } from "@/lib/audit";
 import { routeError, ForbiddenError, AppError } from "@/lib/errors";
 import { syncDefaultRbac } from "@/lib/role-builder-service";
 import { ensureIdentityCardsForSchool } from "@/lib/identity-card-service";
 import { readBoundedJson } from "@/lib/bounded-json";
+import { passwordLengthError, passwordMinimumForAccount } from "@/lib/password-policy";
 
-const createSchema = z.object({ name:z.string().trim().min(2).max(160), email:z.string().trim().email().optional().or(z.literal("")), phone:z.string().trim().min(3).max(40).optional().or(z.literal("")), password:z.string().min(12).max(256), roleNames:z.array(z.string().min(2).max(80)).min(1).max(12).optional(), roleName:z.string().min(2).max(80).optional() }).refine((x)=>Boolean(x.roleNames?.length||x.roleName),{message:"At least one role is required."}).refine((x)=>Boolean(x.email||x.phone),{message:"Provide an email address or phone number for login."});
-const updateSchema = z.object({ userId:z.string().min(1), status:z.enum(["active","suspended","pending"]), name:z.string().trim().min(2).max(160).optional(), email:z.string().trim().email().optional().or(z.literal("")), phone:z.string().trim().min(3).max(40).optional(), password:z.string().min(12).max(256).optional(), roleNames:z.array(z.string().min(2).max(80)).min(1).max(12).optional(), roleName:z.string().min(2).max(80).optional(), grantedPermissionKeys:z.array(z.string()).max(100).optional(), deniedPermissionKeys:z.array(z.string()).max(100).optional(), clearPermissionOverrides:z.boolean().optional() }).refine((x)=>x.email===undefined||x.email!==""||Boolean(x.phone),{message:"An account needs an email address or phone number for login."});
-async function canManage(tx:Parameters<typeof requirePermission>[0],userId:string){try{await requirePermission(tx,userId,"users:write");return true}catch{return false}}
-async function canControlRoles(tx:Parameters<typeof requirePermission>[0],userId:string){try{await requirePermission(tx,userId,"roles:create_custom");return true}catch{return false}}
-async function roleIdsForNames(tx:Parameters<typeof requirePermission>[0],schoolId:string,names:string[]){const unique=[...new Set(names.map((n)=>n.trim()).filter(Boolean))];const roles=await tx.role.findMany({where:{schoolId,name:{in:unique}}});if(roles.length!==unique.length)throw new ForbiddenError("One or more selected roles are not available in this school.");return roles;}
-function isTeachingRole(name:string){return isTeachingRoleKey(roleKeyForName(name))}
-function roleKey(role:{key?:string|null;name:string}){return role.key?.trim()||roleKeyForName(role.name)}
-function validateRoleBundle(roleNames:string[]){const roleKeys=roleNames.map((name)=>roleKeyForName(name));if(roleKeys.some((key)=>!isSchoolStaffRoleKey(key)))throw new ForbiddenError("People & Access manages staff accounts only. Student and guardian portal identities belong in their own workspaces.");if(roleKeys.includes("owner")&&roleKeys.some(isTeachingRoleKey))throw new ForbiddenError("A teacher cannot be assigned the Owner role. Keep school ownership separate from teaching access.")}
-function userIsStaff(user:{userRoles:Array<{role:{key:string|null;name:string}}>}){return isSchoolStaffAccount(user.userRoles.map(({role})=>role))}
+const createSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  phone: z.string().trim().min(3).max(40).optional().or(z.literal("")),
+  password: z.string().max(256).optional().default(""),
+  roleNames: z.array(z.string().min(2).max(80)).min(1).max(12).optional(),
+  roleName: z.string().min(2).max(80).optional(),
+}).refine((x) => Boolean(x.roleNames?.length || x.roleName), { message: "At least one role is required." })
+  .refine((x) => Boolean(x.email || x.phone), { message: "Provide an email address or phone number for login." });
 
-export async function GET(){try{const session=await requireSchoolSession();return NextResponse.json(await withTenant(session.schoolId,async tx=>{await syncDefaultRbac(tx,session.schoolId);const canRead=await hasPermission(tx,session.userId,"users:read").catch(()=>false);if(!canRead)throw new ForbiddenError("You do not have permission to view school accounts.");const full=await canManage(tx,session.userId);const [school,allUsers,allRoles,permissions]=await Promise.all([tx.school.findUnique({where:{id:session.schoolId},select:{name:true,uniqueCode:true}}),tx.user.findMany({orderBy:{name:"asc"},select:{id:true,name:true,email:full,phone:full,status:true,createdAt:true,userRoles:{select:{role:{select:{id:true,name:true,key:true,isSystem:true}}}},permissionOverrides:full?{select:{granted:true,permission:{select:{key:true,description:true}}}}:false}}),tx.role.findMany({where:{schoolId:session.schoolId},orderBy:[{isSystem:"desc"},{name:"asc"}],select:{id:true,name:true,key:true,isSystem:true,rolePermissions:{select:{permission:{select:{key:true}}}}}}),tx.permission.findMany({orderBy:{key:"asc"},select:{id:true,key:true,description:true}})]);const users=allUsers.filter(userIsStaff);const roles=allRoles.filter((role)=>isSchoolStaffRoleKey(roleKey(role)));return{school,users,roles,permissions,me:session.userId,canManage:full,canControlRoles:await canControlRoles(tx,session.userId)};}))}catch(error){return routeError(error)}}
+const updateSchema = z.object({
+  userId: z.string().min(1),
+  status: z.enum(["active", "suspended", "pending"]),
+  name: z.string().trim().min(2).max(160).optional(),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  phone: z.string().trim().min(3).max(40).optional(),
+  password: z.string().max(256).optional(),
+  roleNames: z.array(z.string().min(2).max(80)).min(1).max(12).optional(),
+  roleName: z.string().min(2).max(80).optional(),
+  grantedPermissionKeys: z.array(z.string()).max(100).optional(),
+  deniedPermissionKeys: z.array(z.string()).max(100).optional(),
+  clearPermissionOverrides: z.boolean().optional(),
+}).refine((x) => x.email === undefined || x.email !== "" || Boolean(x.phone), { message: "An account needs an email address or phone number for login." });
 
-export async function POST(request:Request){try{const session=await requireSchoolSession();const input=createSchema.parse(await readBoundedJson(request,64*1024,"School access request"));return NextResponse.json(await withTenant(session.schoolId,async tx=>{await lockSchoolAccess(tx,session.schoolId);if(!(await canManage(tx,session.userId)))throw new ForbiddenError("You do not have permission to manage sub-accounts.");await syncDefaultRbac(tx,session.schoolId);const roleNames=input.roleNames?.length?input.roleNames:[input.roleName!];validateRoleBundle(roleNames);if(roleNames.some(isTeachingRole))throw new ForbiddenError("Create the teacher in Staff & Teachers first, then activate the teacher's login from People & Access.");const roles=await roleIdsForNames(tx,session.schoolId,roleNames);await requireCanAssignRoles(tx,session.userId,session.userId,roles.map((role)=>role.id));const email=input.email?.trim().toLowerCase()||undefined;const phone=input.phone?.trim()||undefined;const user=await tx.user.create({data:{schoolId:session.schoolId,name:input.name.trim(),email,phone,passwordHash:await hash(input.password,12),needsPasswordChange:true,status:"active"},select:{id:true,name:true,email:true,phone:true,status:true}});await tx.userRole.createMany({data:roles.map((role)=>({schoolId:session.schoolId,userId:user.id,roleId:role.id}))});const school=await tx.school.findUnique({where:{id:session.schoolId},select:{uniqueCode:true}});if(!school?.uniqueCode)throw new AppError("The school's identification code is missing.",500,"SCHOOL_CODE_MISSING");await ensureIdentityCardsForSchool(tx,session.schoolId,school.uniqueCode,session.userId);await appendSchoolAudit(tx,{schoolId:session.schoolId,actorId:session.userId,action:"user.subaccount_created",entityType:"User",entityId:user.id,after:{roleNames:roles.map((role)=>role.name),email:user.email,phone:user.phone}});return user;}),{status:201})}catch(error){return routeError(error)}}
+const ELEVATED_ROLE_KEYS = new Set(["owner", "administrator", "principal", "vice_principal"]);
 
-export async function PATCH(request:Request){try{const session=await requireSchoolSession();const input=updateSchema.parse(await readBoundedJson(request,96*1024,"School access request"));return NextResponse.json(await withTenant(session.schoolId,async tx=>{await lockSchoolAccess(tx,session.schoolId);if(!(await canManage(tx,session.userId)))throw new ForbiddenError("You do not have permission to manage sub-accounts.");await syncDefaultRbac(tx,session.schoolId);if(input.userId===session.userId&&input.status==="suspended")throw new ForbiddenError("You cannot suspend your own account.");const target=await tx.user.findUnique({where:{id:input.userId},select:{id:true,name:true,status:true,email:true,phone:true,passwordHash:true,userRoles:{select:{role:{select:{key:true,name:true}}}}}});if(!target)throw new ForbiddenError("Account not found.");if(!userIsStaff(target))throw new ForbiddenError("People & Access cannot modify student or guardian portal identities.");
- const actorAccess = await getSchoolAuthorization(tx, session.userId);
- const targetIsOwner = target.userRoles.some(({ role }) => roleKey(role) === "owner");
- if (targetIsOwner && !actorAccess.isOwner) throw new ForbiddenError("Only the school Owner can modify the Owner account.");
- await requireOwnerContinuity(tx, session.schoolId, input.userId, { status: input.status });
- const activatingPending = target.status === "pending" && input.status === "active";
- if(activatingPending&&!input.password)throw new AppError("Set a login password before activating this staff member.",400,"PASSWORD_REQUIRED");
- const roleControlRequested=Boolean(input.roleNames?.length||input.roleName||input.grantedPermissionKeys?.length||input.deniedPermissionKeys?.length||input.clearPermissionOverrides);if(roleControlRequested&&!(await canControlRoles(tx,session.userId)))throw new ForbiddenError("Only an account with role-control permission can change roles or direct permissions.");
- let targetRoles = target.userRoles.map(({role})=>role);
- if(input.roleNames?.length||input.roleName){const roleNames=input.roleNames?.length?input.roleNames:[input.roleName!];validateRoleBundle(roleNames);const roles=await roleIdsForNames(tx,session.schoolId,roleNames);await requireCanAssignRoles(tx,session.userId,input.userId,roles.map((role)=>role.id));await requireOwnerContinuity(tx,session.schoolId,input.userId,{status:input.status,roleIds:roles.map((role)=>role.id)});await tx.userRole.deleteMany({where:{userId:input.userId,schoolId:session.schoolId}});await tx.userRole.createMany({data:roles.map((role)=>({schoolId:session.schoolId,userId:input.userId,roleId:role.id}))});targetRoles=roles;}
- const grants=input.grantedPermissionKeys??[];const denies=input.deniedPermissionKeys??[];if(grants.length)await requireCanGrantPermissions(tx,session.userId,grants);const all=[...new Set([...grants,...denies])];if(all.length){const idsRows=await tx.permission.findMany({where:{key:{in:all}},select:{id:true,key:true}});if(idsRows.length!==all.length)throw new AppError("One or more permission keys are invalid.",400,"INVALID_PERMISSION");}const user=await tx.user.update({where:{id:input.userId},data:{status:input.status,...(input.name!==undefined?{name:input.name.trim()}:{}) ,...(input.email!==undefined?{email:input.email.trim().toLowerCase()||null}:{}),...(input.phone!==undefined?{phone:input.phone.trim()||null}:{}),...(input.password?{passwordHash:await hash(input.password,12),needsPasswordChange:true}:{})},select:{id:true,name:true,email:true,phone:true,status:true,needsPasswordChange:true}});
- if(input.clearPermissionOverrides) {
-   const removedDenials = await tx.userPermissionOverride.findMany({
-     where: { userId: input.userId, schoolId: session.schoolId, granted: false },
-     select: { permission: { select: { key: true } } }
-   });
-   await requireCanGrantPermissions(tx, session.userId, removedDenials.map(({ permission }) => permission.key).filter((key) => !denies.includes(key)));
-   await tx.userPermissionOverride.deleteMany({where:{userId:input.userId,schoolId:session.schoolId}});
- }
- if(grants.length||denies.length){const idsRows=await tx.permission.findMany({where:{key:{in:all}},select:{id:true,key:true}});const ids=new Map(idsRows.map((row)=>[row.key,row.id]));for(const key of grants)await tx.userPermissionOverride.upsert({where:{userId_permissionId:{userId:input.userId,permissionId:ids.get(key)!}},update:{schoolId:session.schoolId,granted:true},create:{schoolId:session.schoolId,userId:input.userId,permissionId:ids.get(key)!,granted:true}});for(const key of denies)await tx.userPermissionOverride.upsert({where:{userId_permissionId:{userId:input.userId,permissionId:ids.get(key)!}},update:{schoolId:session.schoolId,granted:false},create:{schoolId:session.schoolId,userId:input.userId,permissionId:ids.get(key)!,granted:false}});}
- if(input.status==="active"&&targetRoles.some((role)=>isSchoolStaffRoleKey(roleKey(role)))){const school=await tx.school.findUnique({where:{id:session.schoolId},select:{uniqueCode:true}});if(!school?.uniqueCode)throw new AppError("The school's identification code is missing.",500,"SCHOOL_CODE_MISSING");await ensureIdentityCardsForSchool(tx,session.schoolId,school.uniqueCode,session.userId);}
- await appendSchoolAudit(tx,{schoolId:session.schoolId,actorId:session.userId,action:activatingPending?"user.staff_login_activated":"user.subaccount_updated",entityType:"User",entityId:user.id,after:{status:user.status,name:user.name,email:user.email,phone:user.phone,roleNames:input.roleNames??(input.roleName?[input.roleName]:undefined),grants,denies,overridesCleared:Boolean(input.clearPermissionOverrides),loginActivated:activatingPending}});return user;}))}catch(error){return routeError(error)}}
+async function canManage(tx: Parameters<typeof requirePermission>[0], userId: string) {
+  try { await requirePermission(tx, userId, "users:write"); return true; } catch { return false; }
+}
+async function canControlRoles(tx: Parameters<typeof requirePermission>[0], userId: string) {
+  try { await requirePermission(tx, userId, "roles:create_custom"); return true; } catch { return false; }
+}
+async function roleIdsForNames(tx: Parameters<typeof requirePermission>[0], schoolId: string, names: string[]) {
+  const unique = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  const roles = await tx.role.findMany({ where: { schoolId, name: { in: unique } } });
+  if (roles.length !== unique.length) throw new ForbiddenError("One or more selected roles are not available in this school.");
+  return roles;
+}
+function isTeachingRole(name: string) { return isTeachingRoleKey(roleKeyForName(name)); }
+function roleKey(role: { key?: string | null; name: string }) { return role.key?.trim() || roleKeyForName(role.name); }
+function isElevatedRoleBundle(roles: Array<{ key?: string | null; name: string }>) { return roles.some((role) => ELEVATED_ROLE_KEYS.has(roleKey(role))); }
+function validateRoleBundle(roleNames: string[]) {
+  const roleKeys = roleNames.map((name) => roleKeyForName(name));
+  if (roleKeys.some((key) => !isSchoolStaffRoleKey(key))) throw new ForbiddenError("People & Access manages staff accounts only. Student and guardian portal identities belong in their own workspaces.");
+  if (roleKeys.includes("owner") && roleKeys.some(isTeachingRoleKey)) throw new ForbiddenError("A teacher cannot be assigned the Owner role. Keep school ownership separate from teaching access.");
+}
+function userIsStaff(user: { userRoles: Array<{ role: { key: string | null; name: string } }> }) { return isSchoolStaffAccount(user.userRoles.map(({ role }) => role)); }
+function requireValidTemporaryPassword(password: string, elevated: boolean) {
+  const minimum = passwordMinimumForAccount("school", elevated);
+  const error = passwordLengthError(password, minimum);
+  if (error) throw new AppError(error, 400, "WEAK_PASSWORD");
+}
+
+export async function GET() {
+  try {
+    const session = await requireSchoolSession();
+    return NextResponse.json(await withTenant(session.schoolId, async (tx) => {
+      await syncDefaultRbac(tx, session.schoolId);
+      const canRead = await hasPermission(tx, session.userId, "users:read").catch(() => false);
+      if (!canRead) throw new ForbiddenError("You do not have permission to view school accounts.");
+      const full = await canManage(tx, session.userId);
+      const [school, allUsers, allRoles, permissions] = await Promise.all([
+        tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
+        tx.user.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, email: full, phone: full, status: true, createdAt: true, userRoles: { select: { role: { select: { id: true, name: true, key: true, isSystem: true } } } }, permissionOverrides: full ? { select: { granted: true, permission: { select: { key: true, description: true } } } } : false } }),
+        tx.role.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ isSystem: "desc" }, { name: "asc" }], select: { id: true, name: true, key: true, isSystem: true, rolePermissions: { select: { permission: { select: { key: true } } } } } }),
+        tx.permission.findMany({ orderBy: { key: "asc" }, select: { id: true, key: true, description: true } }),
+      ]);
+      const users = allUsers.filter(userIsStaff);
+      const roles = allRoles.filter((role) => isSchoolStaffRoleKey(roleKey(role)));
+      return { school, users, roles, permissions, me: session.userId, canManage: full, canControlRoles: await canControlRoles(tx, session.userId) };
+    }));
+  } catch (error) { return routeError(error); }
+}
+
+export async function POST(request: Request) {
+  try {
+    const session = await requireSchoolSession();
+    const input = createSchema.parse(await readBoundedJson(request, 64 * 1024, "School access request"));
+    return NextResponse.json(await withTenant(session.schoolId, async (tx) => {
+      await lockSchoolAccess(tx, session.schoolId);
+      if (!(await canManage(tx, session.userId))) throw new ForbiddenError("You do not have permission to manage sub-accounts.");
+      await syncDefaultRbac(tx, session.schoolId);
+      const roleNames = input.roleNames?.length ? input.roleNames : [input.roleName!];
+      validateRoleBundle(roleNames);
+      if (roleNames.some(isTeachingRole)) throw new ForbiddenError("Create the teacher in Staff & Teachers first, then activate the teacher's login from People & Access.");
+      const roles = await roleIdsForNames(tx, session.schoolId, roleNames);
+      await requireCanAssignRoles(tx, session.userId, session.userId, roles.map((role) => role.id));
+      const email = input.email?.trim().toLowerCase() || undefined;
+      const phone = input.phone?.trim() || undefined;
+      const elevated = isElevatedRoleBundle(roles);
+      const usesPhoneTemporaryPassword = Boolean(phone) && !elevated;
+      const temporaryPassword = usesPhoneTemporaryPassword ? phone! : input.password;
+      if (!temporaryPassword) throw new AppError(`Set a temporary password of at least ${passwordMinimumForAccount("school", elevated)} characters.`, 400, "PASSWORD_REQUIRED");
+      requireValidTemporaryPassword(temporaryPassword, elevated);
+      const user = await tx.user.create({ data: { schoolId: session.schoolId, name: input.name.trim(), email, phone, passwordHash: await hash(temporaryPassword, 12), needsPasswordChange: true, status: "active" }, select: { id: true, name: true, email: true, phone: true, status: true } });
+      await tx.userRole.createMany({ data: roles.map((role) => ({ schoolId: session.schoolId, userId: user.id, roleId: role.id })) });
+      const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
+      if (!school?.uniqueCode) throw new AppError("The school's identification code is missing.", 500, "SCHOOL_CODE_MISSING");
+      await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "user.subaccount_created", entityType: "User", entityId: user.id, after: { roleNames: roles.map((role) => role.name), email: user.email, phone: user.phone, temporaryCredential: usesPhoneTemporaryPassword ? "phone" : "admin_set", mustChangePassword: true } });
+      return { ...user, temporaryPasswordSource: usesPhoneTemporaryPassword ? "phone" : "admin_set" };
+    }), { status: 201 });
+  } catch (error) { return routeError(error); }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const session = await requireSchoolSession();
+    const input = updateSchema.parse(await readBoundedJson(request, 96 * 1024, "School access request"));
+    return NextResponse.json(await withTenant(session.schoolId, async (tx) => {
+      await lockSchoolAccess(tx, session.schoolId);
+      if (!(await canManage(tx, session.userId))) throw new ForbiddenError("You do not have permission to manage sub-accounts.");
+      await syncDefaultRbac(tx, session.schoolId);
+      if (input.userId === session.userId && input.status === "suspended") throw new ForbiddenError("You cannot suspend your own account.");
+      const target = await tx.user.findUnique({ where: { id: input.userId }, select: { id: true, name: true, status: true, email: true, phone: true, passwordHash: true, userRoles: { select: { role: { select: { key: true, name: true } } } } } });
+      if (!target) throw new ForbiddenError("Account not found.");
+      if (!userIsStaff(target)) throw new ForbiddenError("People & Access cannot modify student or guardian portal identities.");
+
+      const actorAccess = await getSchoolAuthorization(tx, session.userId);
+      const targetIsOwner = target.userRoles.some(({ role }) => roleKey(role) === "owner");
+      if (targetIsOwner && !actorAccess.isOwner) throw new ForbiddenError("Only the school Owner can modify the Owner account.");
+      await requireOwnerContinuity(tx, session.schoolId, input.userId, { status: input.status });
+      const activatingPending = target.status === "pending" && input.status === "active";
+      const roleControlRequested = Boolean(input.roleNames?.length || input.roleName || input.grantedPermissionKeys?.length || input.deniedPermissionKeys?.length || input.clearPermissionOverrides);
+      if (roleControlRequested && !(await canControlRoles(tx, session.userId))) throw new ForbiddenError("Only an account with role-control permission can change roles or direct permissions.");
+
+      let targetRoles = target.userRoles.map(({ role }) => role);
+      if (input.roleNames?.length || input.roleName) {
+        const roleNames = input.roleNames?.length ? input.roleNames : [input.roleName!];
+        validateRoleBundle(roleNames);
+        const roles = await roleIdsForNames(tx, session.schoolId, roleNames);
+        await requireCanAssignRoles(tx, session.userId, input.userId, roles.map((role) => role.id));
+        await requireOwnerContinuity(tx, session.schoolId, input.userId, { status: input.status, roleIds: roles.map((role) => role.id) });
+        await tx.userRole.deleteMany({ where: { userId: input.userId, schoolId: session.schoolId } });
+        await tx.userRole.createMany({ data: roles.map((role) => ({ schoolId: session.schoolId, userId: input.userId, roleId: role.id })) });
+        targetRoles = roles;
+      }
+
+      const elevated = isElevatedRoleBundle(targetRoles);
+      const activationPhone = input.phone?.trim() || target.phone || "";
+      const usesPhoneTemporaryPassword = activatingPending && Boolean(activationPhone) && !elevated;
+      const effectivePassword = usesPhoneTemporaryPassword ? activationPhone : input.password;
+      if (activatingPending && !effectivePassword) {
+        throw new AppError(`Set a temporary password of at least ${passwordMinimumForAccount("school", elevated)} characters before activating this staff member.`, 400, "PASSWORD_REQUIRED");
+      }
+      if (effectivePassword) requireValidTemporaryPassword(effectivePassword, elevated);
+
+      const grants = input.grantedPermissionKeys ?? [];
+      const denies = input.deniedPermissionKeys ?? [];
+      if (grants.length) await requireCanGrantPermissions(tx, session.userId, grants);
+      const all = [...new Set([...grants, ...denies])];
+      if (all.length) {
+        const idsRows = await tx.permission.findMany({ where: { key: { in: all } }, select: { id: true, key: true } });
+        if (idsRows.length !== all.length) throw new AppError("One or more permission keys are invalid.", 400, "INVALID_PERMISSION");
+      }
+      const user = await tx.user.update({
+        where: { id: input.userId },
+        data: {
+          status: input.status,
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() || null } : {}),
+          ...(input.phone !== undefined ? { phone: input.phone.trim() || null } : {}),
+          ...(effectivePassword ? { passwordHash: await hash(effectivePassword, 12), needsPasswordChange: true } : {}),
+        },
+        select: { id: true, name: true, email: true, phone: true, status: true, needsPasswordChange: true },
+      });
+
+      if (input.clearPermissionOverrides) {
+        const removedDenials = await tx.userPermissionOverride.findMany({ where: { userId: input.userId, schoolId: session.schoolId, granted: false }, select: { permission: { select: { key: true } } } });
+        await requireCanGrantPermissions(tx, session.userId, removedDenials.map(({ permission }) => permission.key).filter((key) => !denies.includes(key)));
+        await tx.userPermissionOverride.deleteMany({ where: { userId: input.userId, schoolId: session.schoolId } });
+      }
+      if (grants.length || denies.length) {
+        const idsRows = await tx.permission.findMany({ where: { key: { in: all } }, select: { id: true, key: true } });
+        const ids = new Map(idsRows.map((row) => [row.key, row.id]));
+        for (const key of grants) await tx.userPermissionOverride.upsert({ where: { userId_permissionId: { userId: input.userId, permissionId: ids.get(key)! } }, update: { schoolId: session.schoolId, granted: true }, create: { schoolId: session.schoolId, userId: input.userId, permissionId: ids.get(key)!, granted: true } });
+        for (const key of denies) await tx.userPermissionOverride.upsert({ where: { userId_permissionId: { userId: input.userId, permissionId: ids.get(key)! } }, update: { schoolId: session.schoolId, granted: false }, create: { schoolId: session.schoolId, userId: input.userId, permissionId: ids.get(key)!, granted: false } });
+      }
+      if (input.status === "active" && targetRoles.some((role) => isSchoolStaffRoleKey(roleKey(role)))) {
+        const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { uniqueCode: true } });
+        if (!school?.uniqueCode) throw new AppError("The school's identification code is missing.", 500, "SCHOOL_CODE_MISSING");
+        await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId);
+      }
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: activatingPending ? "user.staff_login_activated" : "user.subaccount_updated", entityType: "User", entityId: user.id, after: { status: user.status, name: user.name, email: user.email, phone: user.phone, roleNames: input.roleNames ?? (input.roleName ? [input.roleName] : undefined), grants, denies, overridesCleared: Boolean(input.clearPermissionOverrides), loginActivated: activatingPending, temporaryCredential: activatingPending ? (usesPhoneTemporaryPassword ? "phone" : "admin_set") : undefined, mustChangePassword: activatingPending || Boolean(input.password) } });
+      return { ...user, temporaryPasswordSource: activatingPending ? (usesPhoneTemporaryPassword ? "phone" : "admin_set") : undefined };
+    }));
+  } catch (error) { return routeError(error); }
+}
