@@ -29,8 +29,8 @@ describe("Learning Arcade V6 experience contract", () => {
     }
   });
 
-  it("keeps early numeracy, reasoning, reading, engineering, coding, history, biology and creative design explicitly untimed", () => {
-    const untimed: ArcadeV5GameKey[] = ["number-pop", "logic", "circuit-logic", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline", "culture-heritage"];
+  it("keeps early numeracy, reasoning, creative storytelling, reading, engineering, coding, history, biology and creative design explicitly untimed", () => {
+    const untimed: ArcadeV5GameKey[] = ["number-pop", "logic", "circuit-logic", "word", "sentence-scramble", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline", "culture-heritage"];
     for (const game of untimed) expect(arcadeExperienceProfile(game).timing).toBe("untimed");
   });
 
@@ -49,6 +49,16 @@ describe("Learning Arcade V6 experience contract", () => {
     expect(millionaire.timing).toBe("untimed");
     expect(millionaire.timingLabel).toContain("think before you lock");
     expect(millionaire.help.join(" ").toLowerCase()).toContain("never reveals the answer");
+  });
+
+  it("makes Animation Story Lab an untimed creation experience where free imagination is not graded", () => {
+    const story = arcadeExperienceProfile("sentence-scramble");
+    expect(story.family).toBe("Animation story lab");
+    expect(story.openingStyle).toBe("animation-lab");
+    expect(story.timing).toBe("untimed");
+    expect(story.timingLabel.toLowerCase()).toContain("imagination");
+    expect(story.help.join(" ").toLowerCase()).toContain("no grades");
+    expect(story.help.join(" ").toLowerCase()).toContain("without revealing the graded answer");
   });
 
   it("uses navigation drift as soft world pressure without expiring astronomy answers", () => {
