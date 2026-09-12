@@ -26,6 +26,12 @@ ALTER TABLE "ClassHodAssignment"
   ADD CONSTRAINT "ClassHodAssignment_creator_fkey"
   FOREIGN KEY ("createdBy","schoolId") REFERENCES "User"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
 
+ALTER TABLE "ClassHodAssignment" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "ClassHodAssignment" FORCE ROW LEVEL SECURITY;
+CREATE POLICY "class_hod_assignment_tenant" ON "ClassHodAssignment"
+  USING ("schoolId" = NULLIF(current_setting('app.current_school_id', true), ''))
+  WITH CHECK ("schoolId" = NULLIF(current_setting('app.current_school_id', true), ''));
+
 CREATE TABLE "SubjectHodAssignment" (
   "schoolId" TEXT NOT NULL,
   "subjectId" TEXT NOT NULL,
@@ -53,3 +59,9 @@ ALTER TABLE "SubjectHodAssignment"
 ALTER TABLE "SubjectHodAssignment"
   ADD CONSTRAINT "SubjectHodAssignment_creator_fkey"
   FOREIGN KEY ("createdBy","schoolId") REFERENCES "User"("id","schoolId") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+ALTER TABLE "SubjectHodAssignment" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "SubjectHodAssignment" FORCE ROW LEVEL SECURITY;
+CREATE POLICY "subject_hod_assignment_tenant" ON "SubjectHodAssignment"
+  USING ("schoolId" = NULLIF(current_setting('app.current_school_id', true), ''))
+  WITH CHECK ("schoolId" = NULLIF(current_setting('app.current_school_id', true), ''));
