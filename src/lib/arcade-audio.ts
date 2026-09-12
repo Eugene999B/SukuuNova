@@ -140,6 +140,7 @@ export function playArcadeSound(cue: ArcadeSoundCue, game: string) {
 
 function musicProfile(game: string) {
   switch (game) {
+    case "number-pop": return { scale:[1, 1.25, 1.5, 1.25, 1.75, 1.5], type:"sine" as OscillatorType, tempo:1060 };
     case "keyboard-ninja": return { scale:[1, 1.125, 1.25, 1.5, 1.6875], type:"square" as OscillatorType, tempo:520 };
     case "force-motion-lab": return { scale:[1, 1.2, 1.5, 1.8, 1.5], type:"sine" as OscillatorType, tempo:860 };
     case "circuit-logic": return { scale:[1, 1.25, 1.5, 2, 1.5], type:"triangle" as OscillatorType, tempo:620 };

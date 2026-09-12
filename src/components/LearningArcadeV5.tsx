@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowRight, CheckCircle2, RefreshCw, Sparkles, Star, Trophy } from "lucide-react";
 import NovaRunner from "./NovaRunner";
+import NumberBloomGarden from "./NumberBloomGarden";
 import TurboType, { type TurboTypeTelemetry } from "./TurboType";
 import AstroLabDefender from "./AstroLabDefender";
 import WordKingdom from "./WordKingdom";
@@ -37,12 +38,13 @@ type LearningPlan = { version: 1; targetDifficulty: number; masteryPercent: numb
 type SessionRemix = { version: 1; seedId: string; mutationKey: string; progressionMode: ArcadeProgressionMode; progressionNode: number | null; worldState: string; missionFrame: string; pressureProfile: string; objectiveModifier: string; encounterPattern: string; bonusCondition: string; varietyFloor: number };
 type Round = { id: string; studentId: string; game: string; difficulty: number; status: string; answers: string[]; correct: number | null; xp: number; stars: number; ageBand: AgeBand | null; roundLength: number; score: number | null; questions: Question[]; learningPlan?: LearningPlan | null; progressionMode?: ArcadeProgressionMode; progressionNode?: number | null; progressionNodeName?: string | null; sessionRemix?: SessionRemix | null; selectedLevel?: number | null; levelName?: string | null };
 type Leaderboard = { rows: Array<{ rank: number; studentId: string; displayName: string; bestScore: number; totalXp: number; rounds: number }> };
-type GameInfo = { minAgeRank: number; lockedLabel: string; description: string; tags: readonly string[] };
+type GameInfo = { minAgeRank: number; maxAgeRank?: number; lockedLabel: string; description: string; tags: readonly string[] };
 
 const AGE_LABELS: Record<AgeBand, string> = { age_4_5: "Age 4–5", age_6_8: "Age 6–8", age_9_11: "Age 9–11", age_12_14: "Age 12–14", age_15_18: "Age 15–18" };
 const AGE_RANK: Record<AgeBand, number> = { age_4_5: 0, age_6_8: 1, age_9_11: 2, age_12_14: 3, age_15_18: 4 };
 const GAMES = Object.keys(ARCADE_V5_IDENTITIES) as LiveGame[];
 const INFO: Record<LiveGame, GameInfo> = {
+  "number-pop": { minAgeRank:0, maxAgeRank:0, lockedLabel:"AGE 4–5", description:"Grow quantities, match numerals, compare little groups and make numbers in a calm touch-first garden with almost no reading.", tags:["Early numeracy","Age 4–5","Touch-first"] },
   math: { minAgeRank:1, lockedLabel:"AGE 6+", description:"High-speed adaptive mathematics across a changing sci-fi causeway.", tags:["Mathematics","Endless runner","Adaptive"] },
   "keyboard-ninja": { minAgeRank:1, lockedLabel:"AGE 6+", description:"Precision typing races that learn weak keys, accuracy and pace.", tags:["ICT","Typing","Tournament"] },
   "force-motion-lab": { minAgeRank:2, lockedLabel:"AGE 9+", description:"Defend a research station using force, motion and systems reasoning.", tags:["Science","Physics","Survival"] },
@@ -79,7 +81,7 @@ export default function LearningArcadeV5() {
   const run=async(action:()=>Promise<void>)=>{if(operation.current)return;operation.current=true;setBusy(true);setError("");try{await action();}catch(reason){setError(reason instanceof Error?reason.message:"The Arcade action could not be completed.");}finally{operation.current=false;setBusy(false);}};
   const progressFor=(game:LiveGame):GameProgress=>{const identity=arcadeV5Identity(game);return data?.gameProgress?.find((item)=>item.game===game)??{game,rounds:0,v5Rounds:0,progressionMode:identity.progression.mode,modeLabel:identity.progression.modeLabel,selectableNodes:identity.progression.selectableNodes,nodeCount:identity.progression.nodes.length,highestCompletedNode:null,clearedThroughNode:null,unlockedNode:identity.progression.selectableNodes?1:null,xp:0,stars:0,rewardCount:0,accuracy:null};};
   const currentAgeRank=ageBand?AGE_RANK[ageBand]:-1;
-  const eligible=(game:LiveGame)=>currentAgeRank>=INFO[game].minAgeRank;
+  const eligible=(game:LiveGame)=>currentAgeRank>=INFO[game].minAgeRank&&(INFO[game].maxAgeRank===undefined||currentAgeRank<=INFO[game].maxAgeRank);
   const totalGameXp=useMemo(()=>GAMES.reduce((sum,game)=>sum+(data?.gameProgress?.find((item)=>item.game===game)?.xp??0),0),[data?.gameProgress]);
 
   const openPortal=(game:LiveGame)=>{if(!eligible(game))return;const progress=progressFor(game);setSelectedNode(progress.unlockedNode??1);setPortalGame(game);setLeaderboard(null);playArcadeSound("open",game);};
@@ -95,6 +97,7 @@ export default function LearningArcadeV5() {
     const common={learnerName:data.selected.name,round,onComplete:(answers:string[])=>void finishRound(answers),onExit:(answers:string[])=>void exitRound(answers)};
     let gameView;
     switch(game){
+      case "number-pop":gameView=<NumberBloomGarden {...common}/>;break;
       case "keyboard-ninja":gameView=<TurboType learnerName={data.selected.name} round={round} onComplete={(answers,telemetry)=>void finishRound(answers,telemetry)} onExit={(answers,telemetry)=>void exitRound(answers,telemetry)}/>;break;
       case "force-motion-lab":gameView=<AstroLabDefender {...common}/>;break;
       case "circuit-logic":gameView=<CircuitForge {...common}/>;break;
@@ -125,7 +128,7 @@ export default function LearningArcadeV5() {
   if(portalGame&&data?.selected){const progress=progressFor(portalGame);return <ArcadeV5LaunchPortal game={portalGame} progress={progress} selectedNode={selectedNode} playerId={data.selected.id} leaderboard={leaderboard} leaderboardBusy={busy} onSelectNode={setSelectedNode} onLaunch={(node)=>void startGame(portalGame,node)} onBack={()=>{setPortalGame(null);setLeaderboard(null);}} onRefreshLeaderboard={()=>void loadLeaderboard(portalGame)}/>;}
 
   return <main className="v5-arcade">
-    <div className="v5-arcade-top"><div><span className="v5-kicker"><Sparkles size={12}/> SUKUUNOVA ARCADE V5</span><h1>Choose a world. Never expect one script.</h1><p>Every flagship has its own genre, progression, rewards and ranking. Some are endless. Some are adventures, simulations, campaigns, expeditions, survival games, tournaments, contracts or navigation missions.</p></div><div className="v5-arcade-player"><b>{data?.selected?.name?.trim()?.[0]?.toUpperCase()??"N"}</b><div><span>PLAYER</span><strong>{data?.selected?.name??(loading?"Loading…":"Choose learner")}</strong><small>{totalGameXp} XP across all worlds · {data?.streak??0} day streak</small></div></div></div>
+    <div className="v5-arcade-top"><div><span className="v5-kicker"><Sparkles size={12}/> SUKUUNOVA ARCADE V5</span><h1>Choose a world. Never expect one script.</h1><p>Every flagship has its own genre, progression, rewards and ranking. Some are gardens, endless runs, adventures, simulations, campaigns, expeditions, survival games, tournaments, contracts or navigation missions.</p></div><div className="v5-arcade-player"><b>{data?.selected?.name?.trim()?.[0]?.toUpperCase()??"N"}</b><div><span>PLAYER</span><strong>{data?.selected?.name??(loading?"Loading…":"Choose learner")}</strong><small>{totalGameXp} XP across all worlds · {data?.streak??0} day streak</small></div></div></div>
     {error?<div className="nova-arcade-alert" role="alert">{error}</div>:null}
     <div className="v5-arcade-toolbar"><div><strong>Game worlds</strong><p>Progression, rewards and rankings stay game-specific. Session content keeps adapting and remixing.</p></div><div>{data?.children?.length?<select aria-label="Learner" value={data.selected?.id??""} onChange={(event)=>void refresh(event.target.value)} disabled={busy||loading}>{data.children.map((child)=><option key={child.id} value={child.id}>{child.name} · {child.class?.name??"No class"}</option>)}</select>:null}{data?.allowedAgeBands?.length?<select aria-label="Learning band" value={ageBand} onChange={(event)=>setAgeBand(event.target.value as AgeBand)}>{data.allowedAgeBands.map((age)=><option key={age} value={age}>{AGE_LABELS[age]}</option>)}</select>:null}</div></div>
     <div className="v5-arcade-grid">{GAMES.map((game)=>{const identity=arcadeV5Identity(game),progression=identity.progression,progress=progressFor(game),allowed=eligible(game);return <button type="button" className="v5-game-tile" key={game} style={theme(game)} onClick={()=>openPortal(game)} disabled={!allowed}><div className="v5-game-tile-top"><ArcadeGameLogo game={game}/><span className="v5-live-pill">{allowed?progression.modeLabel:INFO[game].lockedLabel}</span></div><span>{identity.world}</span><h2>{identity.name}</h2><p>{INFO[game].description}</p><div className="v5-game-tile-stats"><div><b>{progression.selectableNodes?`${progress.unlockedNode??1}/${progress.nodeCount}`:progress.rounds}</b><small>{progression.selectableNodes?`${progression.unitPlural} open`:progression.unitPlural}</small></div><div><b>{progress.rewardCount}</b><small>{identity.rewardName}</small></div><div><b>{progress.accuracy===null?"—":`${progress.accuracy}%`}</b><small>accuracy</small></div></div><div className="v5-game-tile-footer"><strong>{INFO[game].tags.join(" · ")}</strong><span>{allowed?<>Open world <ArrowRight size={13}/></>:<>Locked</>}</span></div></button>;})}</div>
