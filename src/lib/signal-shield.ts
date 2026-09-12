@@ -1,5 +1,6 @@
 export type SignalSupportMode = "guided" | "supported" | "independent" | "challenge";
 
+/** Ambient incident pulse only; defensive reasoning is not a speed test. */
 export function signalIncidentDurationMs(difficulty: number, speedScale: number, supportMode: SignalSupportMode) {
   const safeDifficulty = Math.max(1, Math.min(5, Math.trunc(difficulty)));
   const safeSpeed = Math.max(0.65, Math.min(1.45, speedScale));
@@ -8,12 +9,8 @@ export function signalIncidentDurationMs(difficulty: number, speedScale: number,
   return Math.round(Math.max(7600, Math.min(24500, duration)));
 }
 
-export function signalBreachDamage(threatPressure: number, hazardDensity: number, boss = false) {
-  const pressure = Math.max(0, Math.min(100, threatPressure));
-  if (pressure < 84) return 0;
-  const hazard = Math.max(0.45, Math.min(1.55, hazardDensity));
-  const damage = 4 + Math.ceil(((pressure - 84) / 16) * 6 * hazard) + (boss ? 3 : 0);
-  return Math.max(4, Math.min(15, damage));
+export function signalBreachDamage(_threatPressure: number, _hazardDensity: number, _boss = false) {
+  return 0;
 }
 
 export function signalScannerRecovery(threatPressure: number, hintStrength: 0 | 1 | 2) {
@@ -21,25 +18,18 @@ export function signalScannerRecovery(threatPressure: number, hintStrength: 0 | 
   return Math.max(0, Math.min(100, threatPressure) - recovery);
 }
 
-export function signalIntegrityReward(threatPressure: number, difficulty: number) {
-  const pressure = Math.max(0, Math.min(100, threatPressure));
+export function signalIntegrityReward(_threatPressure: number, difficulty: number) {
   const safeDifficulty = Math.max(1, Math.min(5, Math.trunc(difficulty)));
-  const speedBonus = pressure <= 30 ? 4 : pressure <= 58 ? 2 : 0;
-  return Math.max(2, Math.min(10, 2 + Math.ceil(safeDifficulty / 2) + speedBonus));
+  return Math.max(3, Math.min(7, 3 + Math.ceil(safeDifficulty / 2)));
 }
 
-export function signalIntelReward(threatLevel: number, threatPressure: number) {
+export function signalIntelReward(threatLevel: number, _threatPressure: number) {
   const level = Math.max(1, Math.min(5, Math.trunc(threatLevel)));
-  const pressure = Math.max(0, Math.min(100, threatPressure));
-  const calmBonus = pressure <= 45 ? 2 : pressure <= 72 ? 1 : 0;
-  return Math.max(1, Math.min(9, level + calmBonus));
+  return Math.max(2, Math.min(6, level + 1));
 }
 
-export function signalChainGain(threatPressure: number) {
-  const pressure = Math.max(0, Math.min(100, threatPressure));
-  if (pressure <= 34) return 2;
-  if (pressure <= 72) return 1;
-  return 0;
+export function signalChainGain(_threatPressure: number) {
+  return 1;
 }
 
 export function signalQuarantineCost(threatLevel: number, difficulty: number) {
