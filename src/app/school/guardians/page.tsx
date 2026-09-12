@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { randomBytes } from "crypto";
 import { hash } from "bcryptjs";
 import { HeartHandshake } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
@@ -22,6 +21,7 @@ async function createGuardian(formData: FormData) {
   const relationship = String(formData.get("relationship") ?? "Parent").trim() || "Parent";
   const studentIds = [...new Set(formData.getAll("studentIds").map(String).filter(Boolean))];
   if (!name || !phone) throw new Error("Guardian name and phone are required.");
+  if (phone.length < 6) throw new Error("Enter a valid guardian phone number with at least 6 characters.");
   if (studentIds.length === 0) throw new Error("Choose at least one learner to link.");
   await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:write");
@@ -43,9 +43,8 @@ async function createGuardian(formData: FormData) {
       if (emailOwner && emailOwner.id !== guardian.userId) throw new Error("That email address is already used by another school account.");
     }
     if (!guardian.userId) {
-      const opaqueInitialSecret = randomBytes(24).toString("base64url");
       try {
-        const user = await tx.user.create({ data: { schoolId: session.schoolId, name, phone, email, passwordHash: await hash(opaqueInitialSecret, 12), status: "pending", needsPasswordChange: true }, select: { id: true } });
+        const user = await tx.user.create({ data: { schoolId: session.schoolId, name, phone, email, passwordHash: await hash(phone, 12), status: "pending", needsPasswordChange: true }, select: { id: true } });
         await tx.guardian.update({ where: { id: guardian.id }, data: { userId: user.id, name, phone } });
         guardian = { ...guardian, userId: user.id };
       } catch (error) {
@@ -60,7 +59,7 @@ async function createGuardian(formData: FormData) {
       if (!student) continue;
       await linkGuardianToStudent(tx, { schoolId: session.schoolId, studentId, guardianId: guardian.id, relationship });
     }
-    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: existingGuardian ? "guardian.updated" : "guardian.created", entityType: "Guardian", entityId: guardian.id, after: { name, phone, email, linkedChildren: studentIds.length, loginAccess: "pending" } } });
+    await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: existingGuardian ? "guardian.updated" : "guardian.created", entityType: "Guardian", entityId: guardian.id, after: { name, phone, email, linkedChildren: studentIds.length, loginAccess: "pending", temporaryCredential: "phone", mustChangePassword: true } } });
   });
   redirect("/school/guardians");
 }
@@ -98,7 +97,7 @@ export default async function GuardiansPage() {
         <ProductPageHeader
           eyebrow="People · Family directory"
           title="Every family relationship, clear"
-          description="Find a guardian, see linked learners and portal state, then act. Each learner can have at most two linked guardian portal accounts — enforced server-side."
+          description="Find a guardian, see linked learners and portal state, then act. New guardian portal accounts use the recorded phone number as the temporary first-login password and require a password change after sign-in."
           stats={[
             { label: "Guardians", value: String(data.guardians.length) },
             { label: "Portal active", value: String(portalEnabled) },
@@ -126,7 +125,7 @@ export default async function GuardiansPage() {
           <DetailGrid
             items={[
               { label: "Children linked", value: String([...data.linksByGuardian.values()].reduce((n, arr) => n + arr.length, 0)) },
-              { label: "Pending portal", value: String(pendingAccess), hint: pendingAccess ? "Activate on first sign-in" : "All clear" },
+              { label: "Pending portal", value: String(pendingAccess), hint: pendingAccess ? "First login uses the guardian phone number" : "All clear" },
               { label: "Active learners", value: String(data.students.length), hint: "Searchable in the dialog" },
             ]}
           />

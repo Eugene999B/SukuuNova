@@ -18,6 +18,7 @@ type PortraitResult = {
   height: number;
 };
 
+type CameraFacing = "user" | "environment";
 type FaceBox = { x: number; y: number; width: number; height: number };
 type FaceDetectorInstance = { detect: (source: CanvasImageSource) => Promise<Array<{ boundingBox: FaceBox }>> };
 type FaceDetectorConstructor = new (options?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorInstance;
@@ -104,26 +105,117 @@ function faceIsWellPlaced(box: FaceBox, width: number, height: number) {
   return horizontalOffset <= 0.14 && verticalOffset <= 0.18 && faceRatio >= 0.06 && faceRatio <= 0.55;
 }
 
+function cameraErrorMessage(error: unknown) {
+  const name = error instanceof DOMException ? error.name : "";
+  if (name === "NotAllowedError" || name === "SecurityError") return "Camera access is blocked. In iPhone Safari, allow Camera for this site, then tap Try camera again.";
+  if (name === "NotFoundError" || name === "OverconstrainedError") return "That camera is not available on this device. Try the other camera or reload this page.";
+  if (name === "NotReadableError" || name === "AbortError") return "The camera is busy in another app or could not start. Close other camera apps and try again.";
+  return "The camera could not start. Check camera permission and try again.";
+}
+
 export function StudentPhotoCapture() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const stableFramesRef = useRef(0);
   const evaluatingRef = useRef(false);
+  const settleUntilRef = useRef(0);
   const [photo, setPhoto] = useState("");
   const [checks, setChecks] = useState<QualityCheck[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [facing, setFacing] = useState<CameraFacing>("environment");
   const [message, setMessage] = useState("");
   const [faceState, setFaceState] = useState("Camera not started");
 
-  useEffect(() => () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-  }, []);
-
-  function stopCamera() {
+  function releaseStream() {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
     stableFramesRef.current = 0;
+    setCameraReady(false);
+  }
+
+  useEffect(() => () => releaseStream(), []);
+
+  function stopCamera() {
+    releaseStream();
     setCameraOpen(false);
+    setCameraStarting(false);
+  }
+
+  async function waitForVideoElement() {
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      if (videoRef.current) return videoRef.current;
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+    throw new Error("The camera preview could not be prepared. Try again.");
+  }
+
+  async function attachAndPlay(stream: MediaStream) {
+    const video = await waitForVideoElement();
+    video.srcObject = stream;
+    video.muted = true;
+    video.playsInline = true;
+    await new Promise<void>((resolve, reject) => {
+      if (video.readyState >= HTMLMediaElement.HAVE_METADATA && video.videoWidth > 0) { resolve(); return; }
+      const timeout = window.setTimeout(() => reject(new Error("Camera preview timed out.")), 6000);
+      const ready = () => { window.clearTimeout(timeout); resolve(); };
+      video.addEventListener("loadedmetadata", ready, { once: true });
+    });
+    await video.play();
+    if (!video.videoWidth || !video.videoHeight) throw new Error("The camera started without a usable video frame.");
+    setCameraReady(true);
+    settleUntilRef.current = Date.now() + 1400;
+  }
+
+  async function openCamera(requestedFacing: CameraFacing = facing) {
+    if (cameraStarting) return;
+    setCameraStarting(true);
+    setMessage("");
+    setChecks([]);
+    stableFramesRef.current = 0;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setFaceState("Live camera unavailable");
+      setMessage("Open SukuuNova in Safari or another camera-enabled browser on a secure HTTPS connection.");
+      setCameraStarting(false);
+      return;
+    }
+    releaseStream();
+    setCameraOpen(true);
+    setFaceState(requestedFacing === "environment" ? "Starting rear camera…" : "Starting front camera…");
+    try {
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: requestedFacing }, width: { ideal: 1280 }, height: { ideal: 1600 } },
+          audio: false,
+        });
+      } catch (error) {
+        const name = error instanceof DOMException ? error.name : "";
+        if (name !== "OverconstrainedError" && name !== "NotFoundError") throw error;
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+      streamRef.current = stream;
+      const actualFacing = stream.getVideoTracks()[0]?.getSettings().facingMode;
+      setFacing(actualFacing === "user" || actualFacing === "environment" ? actualFacing : requestedFacing);
+      await attachAndPlay(stream);
+      setFaceState("Camera ready — centre the learner and hold still");
+      setMessage("Automatic capture starts after the camera focuses. Use Capture now if you want to take the photo yourself.");
+    } catch (error) {
+      releaseStream();
+      setCameraOpen(false);
+      setFaceState("Camera could not start");
+      setMessage(cameraErrorMessage(error));
+    } finally {
+      setCameraStarting(false);
+    }
+  }
+
+  async function flipCamera() {
+    const next: CameraFacing = facing === "environment" ? "user" : "environment";
+    setFacing(next);
+    await openCamera(next);
   }
 
   function acceptPortrait(result: PortraitResult) {
@@ -131,26 +223,38 @@ export function StudentPhotoCapture() {
     if (result.checks.every((check) => check.passed)) {
       setPhoto(result.dataUrl);
       setFaceState("Face captured and quality verified");
-      setMessage("Live portrait captured automatically. This becomes the learner's canonical school photo; biometric device enrollment remains subject to the school's consent controls.");
+      setMessage("Portrait captured. This becomes the learner's canonical school photo; biometric device enrollment remains subject to the school's consent controls.");
       stopCamera();
       return true;
     }
-    setMessage("Hold still while SukuuNova checks lighting, clarity and face position.");
+    setMessage("The photo is not clear enough yet. Improve the failed checks, hold still, then try again.");
     return false;
   }
 
-  async function evaluateLiveFrame() {
-    if (evaluatingRef.current || photo) return;
+  function captureCurrentFrame() {
     const video = videoRef.current;
-    if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+    if (!cameraReady || !video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
+      setMessage("The camera is still preparing. Keep it open for a moment and try again.");
+      return;
+    }
+    try {
+      acceptPortrait(preparePortrait(video, video.videoWidth, video.videoHeight));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not capture this frame.");
+    }
+  }
+
+  async function evaluateLiveFrame() {
+    if (evaluatingRef.current || photo || !cameraReady || Date.now() < settleUntilRef.current) return;
+    const video = videoRef.current;
+    if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) return;
     evaluatingRef.current = true;
     try {
       const result = preparePortrait(video, video.videoWidth, video.videoHeight);
       setChecks(result.checks);
-      const qualityPassed = result.checks.every((check) => check.passed);
-      if (!qualityPassed) {
+      if (!result.checks.every((check) => check.passed)) {
         stableFramesRef.current = 0;
-        setFaceState("Improving image quality…");
+        setFaceState("Improving focus, lighting and clarity…");
         return;
       }
 
@@ -160,7 +264,7 @@ export function StudentPhotoCapture() {
         const faces = await detector.detect(video);
         if (faces.length !== 1) {
           stableFramesRef.current = 0;
-          setFaceState(faces.length ? "Only one learner should be in view" : "Move face into the guide");
+          setFaceState(faces.length ? "Only one learner should be in view" : "Move the learner's face into the guide");
           return;
         }
         if (!faceIsWellPlaced(faces[0].boundingBox, video.videoWidth, video.videoHeight)) {
@@ -171,52 +275,23 @@ export function StudentPhotoCapture() {
       }
 
       stableFramesRef.current += 1;
-      setFaceState(stableFramesRef.current >= 2 ? "Face verified — capturing…" : "Face detected — hold still");
-      if (stableFramesRef.current >= 3) acceptPortrait(result);
+      setFaceState(stableFramesRef.current >= 3 ? "Clear and steady — capturing…" : "Good position — hold still");
+      if (stableFramesRef.current >= 4) acceptPortrait(result);
     } catch (error) {
       stableFramesRef.current = 0;
-      setMessage(error instanceof Error ? error.message : "Live face quality verification is unavailable.");
+      setMessage(error instanceof Error ? error.message : "Live image quality verification is unavailable. Use Capture now.");
     } finally {
       evaluatingRef.current = false;
     }
   }
 
   useEffect(() => {
-    if (!cameraOpen || photo) return;
+    if (!cameraOpen || !cameraReady || photo) return;
     const timer = window.setInterval(() => { void evaluateLiveFrame(); }, 650);
     return () => window.clearInterval(timer);
   // evaluateLiveFrame intentionally reads current refs/state on each interval tick.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraOpen, photo]);
-
-  async function startCamera() {
-    setMessage("");
-    setChecks([]);
-    stableFramesRef.current = 0;
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setFaceState("Live camera unavailable");
-      setMessage("Student registration requires live camera capture. Open this page on a camera-enabled browser or device.");
-      return;
-    }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 1200 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      setCameraOpen(true);
-      setFaceState("Starting face verification…");
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          void videoRef.current.play();
-        }
-      });
-    } catch {
-      setFaceState("Camera permission required");
-      setMessage("Allow camera permission to capture the learner's live portrait. File uploads are intentionally disabled for student face registration.");
-    }
-  }
+  }, [cameraOpen, cameraReady, photo]);
 
   return (
     <div className="photo-capture professional-portrait-capture">
@@ -226,7 +301,7 @@ export function StudentPhotoCapture() {
         </div>
         <div className="portrait-guidance">
           <strong>Automatic face capture</strong>
-          <p>SukuuNova checks the live camera continuously and captures automatically once one clear, centred face stays stable.</p>
+          <p>The rear camera opens first so a staff member can photograph a learner. Flip to the front camera only when needed.</p>
           <ul>
             <li>Only the learner should be in the camera view.</li>
             <li>Remove sunglasses, masks and face-covering hats.</li>
@@ -236,10 +311,21 @@ export function StudentPhotoCapture() {
       </div>
 
       <div className="photo-controls">
-        {!photo ? <button type="button" className="button primary" onClick={() => (cameraOpen ? stopCamera() : void startCamera())}>{cameraOpen ? "Stop camera" : "Start live face capture"}</button> : <button type="button" className="photo-remove" onClick={() => { setPhoto(""); setChecks([]); setMessage(""); setFaceState("Ready to retake"); }}>Retake live photo</button>}
+        {!photo ? <button type="button" className="button primary" onClick={() => (cameraOpen ? stopCamera() : void openCamera())} disabled={cameraStarting}>{cameraOpen ? "Stop camera" : cameraStarting ? "Starting camera…" : "Start live face capture"}</button> : <button type="button" className="photo-remove" onClick={() => { setPhoto(""); setChecks([]); setMessage(""); setFaceState("Ready to retake"); }}>Retake live photo</button>}
       </div>
 
-      {cameraOpen ? <div className="camera-panel portrait-camera-panel"><div className="portrait-camera-stage"><video ref={videoRef} muted playsInline className="camera-video" /><div className="portrait-camera-guide" aria-hidden="true"><span /></div></div><div className="photo-message" role="status"><strong>{faceState}</strong><br /><span>No shutter button is needed. Hold still until capture completes.</span></div></div> : null}
+      {cameraOpen ? <div className="camera-panel portrait-camera-panel">
+        <div className="portrait-camera-toolbar">
+          <span>{facing === "environment" ? "Rear camera" : "Front camera"}</span>
+          <button type="button" className="button secondary portrait-camera-flip" onClick={() => void flipCamera()} disabled={cameraStarting} aria-label="Switch between front and rear camera">↻ Flip camera</button>
+        </div>
+        <div className="portrait-camera-stage">
+          <video ref={videoRef} muted autoPlay playsInline className="camera-video" style={{ transform: facing === "user" ? "scaleX(-1)" : undefined }} />
+          <div className="portrait-camera-guide" aria-hidden="true"><span /></div>
+        </div>
+        <div className="portrait-camera-actions"><button type="button" className="button secondary" onClick={captureCurrentFrame} disabled={!cameraReady || cameraStarting}>Capture now</button></div>
+        <div className="photo-message" role="status"><strong>{faceState}</strong><br /><span>{message || "Hold still until automatic capture completes."}</span></div>
+      </div> : null}
 
       {checks.length ? <div className="portrait-quality-grid" aria-label="Portrait quality checks">{checks.map((check) => <div key={check.key} className={check.passed ? "passed" : "failed"}><span>{check.passed ? "✓" : "!"}</span><div><strong>{check.label}</strong><small>{check.detail}</small></div></div>)}</div> : null}
       {!cameraOpen ? <p className="photo-message" role="status"><strong>{faceState}</strong>{message ? <><br /><span>{message}</span></> : null}</p> : null}

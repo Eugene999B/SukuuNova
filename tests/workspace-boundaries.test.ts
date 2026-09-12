@@ -94,8 +94,9 @@ describe("workspace and account boundary contracts", () => {
   it("keeps People & Access bound to the current school and logged-in account", () => {
     const accessApi = source("src/app/api/school/access/route.ts");
     const accessPage = source("src/app/school/settings/access/page.tsx");
-    expect(accessApi).toContain('select:{name:true,uniqueCode:true}');
-    expect(accessApi).toContain('return{school,users,roles,permissions,me:session.userId');
+    const compactAccessApi = accessApi.replace(/\s+/g, "");
+    expect(compactAccessApi).toContain('select:{name:true,uniqueCode:true}');
+    expect(compactAccessApi).toContain('return{school,users,roles,permissions,me:session.userId');
     expect(accessPage).toContain('schoolName={data?.school?.name ?? "School Workspace"}');
     expect(accessPage).toContain('userName={currentUser?.name ?? "School account"}');
     expect(accessPage).toContain("role={currentRoleLabel}");
