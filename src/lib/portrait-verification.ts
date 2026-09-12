@@ -64,7 +64,7 @@ export function assessPortraitFaces(faces: FaceDetail[]): PortraitVerificationRe
     return {
       ok: false,
       biometricReady: false,
-      message: none ? "No face was detected. Place one face inside the guide." : "More than one face was detected. Keep only one person in view.",
+      message: none ? "No face was detected yet. Keep one face clearly visible and SukuuNova will retry automatically." : "More than one face was detected. Keep only one person in view.",
       checks: [
         { key: "face", label: "One face", passed: false, detail: none ? "No usable face detected." : `${faces.length} faces detected.` },
         { key: "position", label: "Face position", passed: false, detail: "Waiting for one face." },
@@ -79,16 +79,23 @@ export function assessPortraitFaces(faces: FaceDetail[]): PortraitVerificationRe
   const face = faces[0];
   const box = face.BoundingBox;
   const confidence = face.Confidence ?? 0;
+  const left = box?.Left ?? 0;
+  const top = box?.Top ?? 0;
   const width = box?.Width ?? 0;
   const height = box?.Height ?? 0;
-  const centerX = (box?.Left ?? 0) + width / 2;
-  const centerY = (box?.Top ?? 0) + height / 2;
-  const positionPassed = width >= 0.2 && width <= 0.72 && height >= 0.25 && height <= 0.78 && centerX >= 0.34 && centerX <= 0.66 && centerY >= 0.27 && centerY <= 0.62;
+  const right = left + width;
+  const bottom = top + height;
+  const centerX = left + width / 2;
+  const centerY = top + height / 2;
+  const sizePassed = width >= 0.18 && width <= 0.7 && height >= 0.22 && height <= 0.8;
+  const comfortablyVisible = left >= 0.015 && top >= 0.015 && right <= 0.985 && bottom <= 0.95;
+  const naturallyFramed = centerX >= 0.24 && centerX <= 0.76 && centerY >= 0.22 && centerY <= 0.69;
+  const positionPassed = sizePassed && comfortablyVisible && naturallyFramed;
 
   const yaw = Math.abs(face.Pose?.Yaw ?? 99);
   const pitch = Math.abs(face.Pose?.Pitch ?? 99);
   const roll = Math.abs(face.Pose?.Roll ?? 99);
-  const posePassed = yaw <= 18 && pitch <= 15 && roll <= 15;
+  const posePassed = yaw <= 22 && pitch <= 20 && roll <= 18;
 
   const eyesPassed = boolWithConfidence(face.EyesOpen, true);
   const sunglassesPassed = !face.Sunglasses || boolWithConfidence(face.Sunglasses, false);
@@ -96,15 +103,15 @@ export function assessPortraitFaces(faces: FaceDetail[]): PortraitVerificationRe
 
   const brightness = face.Quality?.Brightness ?? 0;
   const sharpness = face.Quality?.Sharpness ?? 0;
-  const qualityPassed = confidence >= 98 && brightness >= 35 && brightness <= 95 && sharpness >= 45;
+  const qualityPassed = confidence >= 98 && brightness >= 30 && brightness <= 96 && sharpness >= 40;
 
   const checks: PortraitVerificationCheck[] = [
     { key: "face", label: "One face", passed: confidence >= 98, detail: confidence >= 98 ? `Face detected at ${confidence.toFixed(1)}% confidence.` : "Face detection confidence is too low." },
-    { key: "position", label: "Face position", passed: positionPassed, detail: positionPassed ? "Face size and position are suitable." : "Centre the face and move slightly closer or farther away." },
-    { key: "pose", label: "Face angle", passed: posePassed, detail: posePassed ? "Face is looking sufficiently straight ahead." : "Look straight at the camera and keep the head level." },
-    { key: "eyes", label: "Eyes visible", passed: eyesPassed, detail: eyesPassed ? "Eyes are open and visible." : "Open both eyes and look at the camera." },
+    { key: "position", label: "Face position", passed: positionPassed, detail: positionPassed ? "Head-and-shoulders framing is suitable." : "Keep the full face visible and move slightly closer, farther away, or toward the middle." },
+    { key: "pose", label: "Face angle", passed: posePassed, detail: posePassed ? "Face is looking sufficiently straight ahead." : "Look toward the camera and keep the head reasonably level." },
+    { key: "eyes", label: "Eyes visible", passed: eyesPassed, detail: eyesPassed ? "Eyes are open and visible." : "Open both eyes and look toward the camera." },
     { key: "occlusion", label: "Face unobstructed", passed: occlusionPassed, detail: occlusionPassed ? "No blocking sunglasses or face obstruction detected." : "Remove sunglasses or anything covering the face." },
-    { key: "quality", label: "Biometric quality", passed: qualityPassed, detail: qualityPassed ? `Lighting ${brightness.toFixed(0)}/100 · sharpness ${sharpness.toFixed(0)}/100.` : "Use brighter, even light and hold the camera steady until the face is sharp." },
+    { key: "quality", label: "Biometric quality", passed: qualityPassed, detail: qualityPassed ? `Lighting ${brightness.toFixed(0)}/100 · sharpness ${sharpness.toFixed(0)}/100.` : "Use even light and hold the camera steady until the face is sharp." },
   ];
   const ok = checks.every((check) => check.passed);
   return {
@@ -121,7 +128,7 @@ export async function verifyPortraitImage(image: string): Promise<PortraitVerifi
   try {
     const result = await new RekognitionClient({ region }).send(new DetectFacesCommand({
       Image: { Bytes: decodeImage(image) },
-      Attributes: ["ALL"],
+      Attributes: ["DEFAULT", "EYES_OPEN", "FACE_OCCLUDED", "SUNGLASSES"],
     }));
     return assessPortraitFaces(result.FaceDetails ?? []);
   } catch (error) {

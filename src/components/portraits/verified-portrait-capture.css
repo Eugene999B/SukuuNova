@@ -1,0 +1,301 @@
+.sukuunova-camera-screen,
+.sukuunova-portrait-review-screen{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  width:100vw;
+  min-height:100vh;
+  min-height:100dvh;
+  background:var(--identity-ink);
+  color:var(--identity-paper);
+  overflow:hidden;
+}
+
+.sukuunova-camera-screen{
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+}
+
+.sukuunova-camera-video{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  background:var(--identity-ink);
+}
+
+.sukuunova-camera-video.selfie{
+  transform:scaleX(-1);
+}
+
+.sukuunova-camera-viewport{
+  position:relative;
+  min-height:0;
+  overflow:hidden;
+  background:var(--identity-ink);
+}
+
+.sukuunova-camera-topbar,
+.sukuunova-camera-bottombar{
+  position:relative;
+  z-index:4;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding-left:max(16px,env(safe-area-inset-left));
+  padding-right:max(16px,env(safe-area-inset-right));
+  background:color-mix(in srgb,var(--identity-ink) 86%,transparent);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+
+.sukuunova-camera-topbar{
+  justify-content:space-between;
+  padding-top:max(12px,env(safe-area-inset-top));
+  padding-bottom:12px;
+  border-bottom:1px solid color-mix(in srgb,var(--identity-paper) 12%,transparent);
+}
+
+.sukuunova-camera-bottombar{
+  justify-content:center;
+  flex-wrap:wrap;
+  padding-top:14px;
+  padding-bottom:max(14px,env(safe-area-inset-bottom));
+  border-top:1px solid color-mix(in srgb,var(--identity-paper) 12%,transparent);
+}
+
+.sukuunova-camera-title{
+  min-width:0;
+  display:grid;
+  gap:2px;
+  text-align:center;
+}
+
+.sukuunova-camera-title strong{
+  font-size:14px;
+  line-height:1.2;
+}
+
+.sukuunova-camera-title span{
+  color:color-mix(in srgb,var(--identity-paper) 72%,transparent);
+  font-size:11px;
+  line-height:1.25;
+}
+
+.sukuunova-camera-icon-button{
+  display:inline-grid;
+  flex:0 0 auto;
+  width:44px;
+  height:44px;
+  place-items:center;
+  border:1px solid color-mix(in srgb,var(--identity-paper) 20%,transparent);
+  border-radius:var(--radius-pill);
+  background:color-mix(in srgb,var(--identity-ink) 70%,transparent);
+  color:var(--identity-paper);
+  cursor:pointer;
+  touch-action:manipulation;
+}
+
+.sukuunova-camera-icon-button:disabled{
+  cursor:not-allowed;
+  opacity:.5;
+}
+
+.sukuunova-camera-capture-zone{
+  pointer-events:none;
+  position:absolute;
+  z-index:2;
+  left:50%;
+  top:50%;
+  width:min(86vw,62dvh);
+  max-width:620px;
+  aspect-ratio:4/5;
+  transform:translate(-50%,-50%);
+  border-radius:var(--radius-2xl);
+  background:
+    linear-gradient(var(--identity-paper),var(--identity-paper)) left top/44px 3px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) left top/3px 44px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) right top/44px 3px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) right top/3px 44px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) left bottom/44px 3px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) left bottom/3px 44px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) right bottom/44px 3px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) right bottom/3px 44px no-repeat;
+}
+
+.sukuunova-camera-capture-zone::after{
+  content:"";
+  position:absolute;
+  inset:12%;
+  border-radius:var(--radius-xl);
+  border:1px solid color-mix(in srgb,var(--identity-paper) 18%,transparent);
+}
+
+.sukuunova-camera-live-status{
+  position:absolute;
+  z-index:3;
+  left:50%;
+  bottom:18px;
+  width:min(92%,620px);
+  transform:translateX(-50%);
+  display:grid;
+  gap:4px;
+  padding:12px 14px;
+  border:1px solid color-mix(in srgb,var(--identity-paper) 16%,transparent);
+  border-radius:var(--radius-lg);
+  background:color-mix(in srgb,var(--identity-ink) 76%,transparent);
+  box-shadow:var(--shadow-md);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  text-align:center;
+}
+
+.sukuunova-camera-live-status strong{
+  font-size:14px;
+  line-height:1.25;
+}
+
+.sukuunova-camera-live-status span{
+  color:color-mix(in srgb,var(--identity-paper) 76%,transparent);
+  font-size:12px;
+  line-height:1.35;
+}
+
+.sukuunova-camera-progress{
+  position:absolute;
+  z-index:3;
+  left:50%;
+  top:18px;
+  transform:translateX(-50%);
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:7px 11px;
+  border-radius:var(--radius-pill);
+  background:color-mix(in srgb,var(--identity-ink) 72%,transparent);
+  color:var(--identity-paper);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.01em;
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+
+.sukuunova-camera-progress-dot{
+  width:8px;
+  height:8px;
+  border-radius:var(--radius-pill);
+  background:var(--color-success);
+  box-shadow:0 0 0 5px var(--color-success-soft);
+}
+
+.sukuunova-camera-progress.checking .sukuunova-camera-progress-dot{
+  animation:sukuunova-camera-pulse .8s ease-in-out infinite alternate;
+}
+
+@keyframes sukuunova-camera-pulse{
+  to{opacity:.45;transform:scale(.72)}
+}
+
+.sukuunova-camera-action{
+  min-height:44px;
+  padding:0 16px;
+  border:1px solid color-mix(in srgb,var(--identity-paper) 18%,transparent);
+  border-radius:var(--radius-pill);
+  background:color-mix(in srgb,var(--identity-paper) 10%,transparent);
+  color:var(--identity-paper);
+  font:inherit;
+  font-size:13px;
+  font-weight:800;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+
+.sukuunova-camera-action.primary{
+  border-color:color-mix(in srgb,var(--identity-paper) 72%,transparent);
+  background:var(--identity-paper);
+  color:var(--identity-ink);
+}
+
+.sukuunova-camera-action:disabled{
+  cursor:not-allowed;
+  opacity:.5;
+}
+
+.sukuunova-portrait-review-screen{
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  padding-top:max(14px,env(safe-area-inset-top));
+  padding-bottom:max(14px,env(safe-area-inset-bottom));
+  padding-left:max(16px,env(safe-area-inset-left));
+  padding-right:max(16px,env(safe-area-inset-right));
+}
+
+.sukuunova-review-heading{
+  display:grid;
+  justify-items:center;
+  gap:4px;
+  padding:10px 0 14px;
+  text-align:center;
+}
+
+.sukuunova-review-heading strong{
+  font-size:18px;
+}
+
+.sukuunova-review-heading span{
+  color:color-mix(in srgb,var(--identity-paper) 70%,transparent);
+  font-size:12px;
+}
+
+.sukuunova-review-photo-wrap{
+  min-height:0;
+  display:grid;
+  place-items:center;
+  padding:8px 0 14px;
+}
+
+.sukuunova-review-photo{
+  width:min(92vw,520px);
+  max-height:72dvh;
+  aspect-ratio:4/5;
+  object-fit:cover;
+  border-radius:var(--radius-2xl);
+  border:1px solid color-mix(in srgb,var(--identity-paper) 20%,transparent);
+  box-shadow:var(--shadow-2xl);
+}
+
+.sukuunova-review-actions{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.sukuunova-review-actions .sukuunova-camera-action{
+  min-width:170px;
+}
+
+.sukuunova-capture-note{
+  margin-top:2px;
+  color:var(--color-text-muted);
+  font-size:var(--sn-font-xs);
+  line-height:1.5;
+}
+
+@media(max-width:720px){
+  .sukuunova-camera-title span{display:none}
+  .sukuunova-camera-topbar{gap:8px}
+  .sukuunova-camera-capture-zone{width:min(90vw,61dvh);border-radius:var(--radius-xl)}
+  .sukuunova-camera-capture-zone::after{inset:10%;border-radius:var(--radius-lg)}
+  .sukuunova-camera-live-status{bottom:12px;width:calc(100% - 24px)}
+  .sukuunova-camera-bottombar{justify-content:stretch}
+  .sukuunova-camera-action{flex:1 1 140px}
+  .sukuunova-review-actions{align-items:stretch;flex-direction:column}
+  .sukuunova-review-actions .sukuunova-camera-action{width:100%;min-width:0}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .sukuunova-camera-progress.checking .sukuunova-camera-progress-dot{animation:none}
+}
