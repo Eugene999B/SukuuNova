@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
 import { hash } from "bcryptjs";
+import { getSchoolAuthorization } from "./authorization";
 import { db, withTenant } from "./db";
 import { AppError, UnauthorizedError } from "./errors";
+import { passwordLengthError, passwordMinimumForAccount } from "./password-policy";
 
 const RESET_TTL_MS = 30 * 60 * 1000;
-const MIN_PASSWORD_LENGTH = 12;
 
 export type ResetDeliveryEnvelope = {
   universe: "school" | "guardian" | "platform";
@@ -25,7 +26,10 @@ export type SchoolPasswordResetResult = {
 function tokenHash(token: string): string { return createHash("sha256").update(token).digest("hex"); }
 function newToken(): string { return randomBytes(32).toString("base64url"); }
 function normalizeIdentifier(value: string): string { const trimmed = value.trim(); return trimmed.includes("@") ? trimmed.toLowerCase() : trimmed; }
-function validateNewPassword(password: string) { if (password.length < MIN_PASSWORD_LENGTH) throw new AppError(`New password must contain at least ${MIN_PASSWORD_LENGTH} characters.`, 400, "WEAK_PASSWORD"); }
+function validateNewPassword(password: string, minimum: number) {
+  const error = passwordLengthError(password, minimum);
+  if (error) throw new AppError(error, 400, "WEAK_PASSWORD");
+}
 
 export async function issueSchoolPasswordReset(input: { uniqueCode: string; identifier: string; universe?: "school" | "guardian" }): Promise<ResetDeliveryEnvelope | null> {
   const uniqueCode = input.uniqueCode.trim().toLowerCase();
@@ -60,7 +64,6 @@ export async function issueSchoolPasswordReset(input: { uniqueCode: string; iden
 }
 
 export async function confirmSchoolPasswordReset(input: { uniqueCode: string; token: string; newPassword: string; universe?: "school" | "guardian" }): Promise<SchoolPasswordResetResult> {
-  validateNewPassword(input.newPassword);
   const universe = input.universe ?? "school";
   const schoolCode = input.uniqueCode.trim().toLowerCase();
   const directory = await db.schoolLoginDirectory.findUnique({ where: { uniqueCode: schoolCode } });
@@ -89,6 +92,10 @@ export async function confirmSchoolPasswordReset(input: { uniqueCode: string; to
     `;
     const reset = claimed[0];
     if (!reset) throw new UnauthorizedError("Invalid or expired reset token.");
+    const isElevatedSchoolAccount = universe === "school"
+      ? (await getSchoolAuthorization(tx, reset.userId)).isElevated
+      : false;
+    validateNewPassword(input.newPassword, passwordMinimumForAccount(universe, isElevatedSchoolAccount));
     const passwordHash = await hash(input.newPassword, 12);
     const user = await tx.user.update({
       where: { id: reset.userId },
@@ -122,7 +129,7 @@ export async function issuePlatformPasswordReset(emailInput: string): Promise<Re
 }
 
 export async function confirmPlatformPasswordReset(input: { token: string; newPassword: string }): Promise<void> {
-  validateNewPassword(input.newPassword);
+  validateNewPassword(input.newPassword, passwordMinimumForAccount("platform"));
   await db.$transaction(async (tx) => {
     const now = new Date();
     const claimed = await tx.$queryRaw<Array<{ id: string; adminId: string }>>`
