@@ -8,6 +8,7 @@ export function readingQuestRouteForChoice(checkpoint: number, choice: number): 
   return ROUTES[(safeCheckpoint + safeChoice) % ROUTES.length] ?? "river-trail";
 }
 
+/** Ambient expedition pacing only. It must never grade reading speed or damage progress. */
 export function readingQuestFogDurationMs(difficulty: number, speedScale: number, supportMode: "guided" | "supported" | "independent" | "challenge") {
   const safeDifficulty = Math.max(1, Math.min(5, Math.trunc(difficulty)));
   const safeSpeed = Math.max(0.65, Math.min(1.45, speedScale));
@@ -15,17 +16,14 @@ export function readingQuestFogDurationMs(difficulty: number, speedScale: number
   return Math.round(Math.max(5600, Math.min(16000, ((14500 - safeDifficulty * 900) * support) / safeSpeed)));
 }
 
-export function readingQuestTrailDamage(fog: number, hazardDensity: number, boss: boolean) {
-  const safeFog = Math.max(0, Math.min(100, fog));
-  const density = Math.max(0.5, Math.min(1.5, hazardDensity));
-  const pressure = safeFog / 100;
-  return Math.max(1, Math.min(14, Math.round(2 + pressure * 7 * density + (boss ? 3 : 0))));
+export function readingQuestTrailDamage(_fog: number, _hazardDensity: number, _boss: boolean) {
+  // Reading carefully is never a failure state. Fog is presentation, not punishment.
+  return 0;
 }
 
-export function readingQuestLanternReward(fog: number) {
-  if (fog <= 34) return 2;
-  if (fog <= 66) return 1;
-  return 0;
+export function readingQuestLanternReward(_fog: number) {
+  // Reward the completed evidence step consistently; do not reward rushing a passage.
+  return 1;
 }
 
 export function readingQuestFocusRecovery(fog: number) {
