@@ -5,6 +5,7 @@ import { Accessibility, ArrowLeft, CircleHelp, Crown, Eye, Lightbulb, LockKeyhol
 import { arcadeAudioSettings, playArcadeSound, setArcadeAudioSettings, startArcadeMusic, stopArcadeMusic, unlockArcadeAudio } from "@/lib/arcade-audio";
 import { millionaireCheckpointReached, millionaireLifelineTokens, millionaireReasoningCategory, millionaireReasoningCue, millionaireStageLabel, type MillionaireSupportMode } from "@/lib/nova-millionaire";
 import "./nova-millionaire.css";
+import "./nova-millionaire-portal.css";
 
 type MillionaireQuestion = { id: string; kind?: string; prompt: string; options: string[] };
 type MillionairePlan = { supportMode: MillionaireSupportMode; hintStrength: 0 | 1 | 2 };
