@@ -19,14 +19,16 @@ type VerificationCheck = {
 
 type VerificationPayload = {
   ok?: boolean;
+  captureReady?: boolean;
   biometricReady?: boolean;
+  verificationDeferred?: boolean;
   message?: string;
   checks?: VerificationCheck[];
   verificationToken?: string | null;
   error?: string;
 };
 
-type Candidate = { image: string; token: string };
+type Candidate = { image: string; token: string; biometricReady: boolean };
 
 type Props = {
   target: PortraitTarget;
@@ -116,8 +118,8 @@ export function VerifiedPortraitCapture({
   const [facing, setFacing] = useState<CameraFacing>("environment");
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [checks, setChecks] = useState<VerificationCheck[]>([]);
-  const [status, setStatus] = useState("Ready for automatic face capture");
-  const [message, setMessage] = useState("Open the camera. SukuuNova will begin checking frames automatically instead of waiting for a fragile local trigger.");
+  const [status, setStatus] = useState("Ready for automatic photo capture");
+  const [message, setMessage] = useState("Open the camera. SukuuNova will capture the portrait automatically; biometric readiness is checked when the school's face service is available.");
   const [usingCandidate, setUsingCandidate] = useState(false);
 
   const resetScanner = useCallback(() => {
@@ -186,7 +188,7 @@ export function VerifiedPortraitCapture({
     if (cameraStarting || busy) return;
     if (!navigator.mediaDevices?.getUserMedia) {
       setStatus("Live camera unavailable in this browser");
-      setMessage("Use the device-camera fallback. The image will still pass the same server verification.");
+      setMessage("Use the device-camera fallback. The image can still be attached to registration and verified later for biometrics.");
       return;
     }
     setCameraStarting(true);
@@ -213,8 +215,8 @@ export function VerifiedPortraitCapture({
       const actualFacing = stream.getVideoTracks()[0]?.getSettings().facingMode;
       if (actualFacing === "user" || actualFacing === "environment") setFacing(actualFacing);
       await attachAndPlay(stream);
-      setStatus("Automatic verification is active");
-      setMessage("Keep one face and the shoulders visible. SukuuNova is already checking frames and will capture as soon as the server accepts one.");
+      setStatus("Automatic capture is active");
+      setMessage("Keep the head and shoulders visible. SukuuNova is already checking frames and will capture automatically.");
     } catch (error) {
       releaseStream();
       setCameraOpen(false);
@@ -231,7 +233,7 @@ export function VerifiedPortraitCapture({
       throw new Error("The camera is still preparing. Keep it open briefly and try again.");
     }
     const canvas = portraitCanvas(video, video.videoWidth, video.videoHeight);
-    if (canvas.width < 320 || canvas.height < 400) throw new Error("Camera resolution is too low for face verification.");
+    if (canvas.width < 320 || canvas.height < 400) throw new Error("Camera resolution is too low for a clear portrait.");
     return encodePortrait(canvas);
   }, [cameraReady]);
 
@@ -239,8 +241,8 @@ export function VerifiedPortraitCapture({
     if (validatingRef.current || busy) return;
     validatingRef.current = true;
     setChecking(true);
-    setStatus("Checking the face…");
-    setMessage("Confirming one face, framing, pose, eyes, obstruction, lighting and sharpness.");
+    setStatus("Capturing photo…");
+    setMessage("Saving this exact portrait and checking biometric readiness when the face service is available.");
     try {
       const response = await fetch("/api/school/portrait/validate", {
         method: "POST",
@@ -248,22 +250,26 @@ export function VerifiedPortraitCapture({
         body: JSON.stringify({ target, image }),
       });
       const payload = await response.json() as VerificationPayload;
-      if (!response.ok) throw new Error(payload.message ?? payload.error ?? "Face verification could not be completed.");
+      if (!response.ok) throw new Error(payload.message ?? payload.error ?? "Portrait capture could not be completed.");
       setChecks(payload.checks ?? []);
-      if (!payload.ok || !payload.biometricReady || !payload.verificationToken) {
+      const captureReady = payload.captureReady ?? Boolean(payload.ok && payload.biometricReady);
+      if (!captureReady || !payload.verificationToken) {
         retryAfterRef.current = Date.now() + (mode === "auto" ? 400 : 0);
         setStatus("Adjust slightly — retrying automatically");
         setMessage(payload.message ?? "Keep the face visible. SukuuNova will check another frame automatically.");
         return;
       }
-      setCandidate({ image, token: payload.verificationToken });
-      setStatus("Verified face captured");
-      setMessage("Review the portrait, then use it to continue registration or retry.");
+      const biometricReady = Boolean(payload.biometricReady);
+      setCandidate({ image, token: payload.verificationToken, biometricReady });
+      setStatus(biometricReady ? "Verified face captured" : "Photo captured");
+      setMessage(payload.verificationDeferred
+        ? (payload.message ?? "The photo is ready for registration; biometric verification can be completed later.")
+        : "Review the portrait, then use it to continue registration or retry.");
       closeCamera();
     } catch (error) {
       retryAfterRef.current = Date.now() + (mode === "auto" ? 500 : 0);
-      setStatus(mode === "auto" ? "Checking another frame automatically" : "Face was not accepted");
-      setMessage(error instanceof Error ? error.message : "Face verification could not be completed.");
+      setStatus(mode === "auto" ? "Taking another frame automatically" : "Photo was not accepted");
+      setMessage(error instanceof Error ? error.message : "Portrait capture could not be completed.");
     } finally {
       validatingRef.current = false;
       setChecking(false);
@@ -307,7 +313,7 @@ export function VerifiedPortraitCapture({
       await verifyImage(image, "fallback");
     } catch (error) {
       setStatus("Image not accepted");
-      setMessage(error instanceof Error ? error.message : "This image could not be verified.");
+      setMessage(error instanceof Error ? error.message : "This image could not be captured.");
     }
   }
 
@@ -317,7 +323,7 @@ export function VerifiedPortraitCapture({
     try {
       await onUse(candidate.image, candidate.token);
       setCandidate(null);
-      setStatus("Verified portrait accepted");
+      setStatus("Portrait accepted");
       setMessage("The portrait is attached. Continue registration.");
     } catch (error) {
       setStatus("Portrait could not be saved");
@@ -329,7 +335,7 @@ export function VerifiedPortraitCapture({
     setCandidate(null);
     setChecks([]);
     setStatus("Ready to retry");
-    setMessage("The camera will reopen and begin verification automatically.");
+    setMessage("The camera will reopen and begin automatic capture.");
     void startCamera(facing);
   }
 
@@ -341,13 +347,13 @@ export function VerifiedPortraitCapture({
     <div className="sukuunova-camera-screen" role="dialog" aria-modal="true" aria-label={`Capture ${subjectLabel} portrait`}>
       <div className="sukuunova-camera-topbar">
         <button type="button" className="sukuunova-camera-icon-button" onClick={closeCamera} disabled={locked} aria-label="Close camera"><X size={20}/></button>
-        <div className="sukuunova-camera-title"><strong>Automatic biometric portrait</strong><span>Full-screen camera · continuous verification · automatic capture</span></div>
+        <div className="sukuunova-camera-title"><strong>Automatic portrait capture</strong><span>Full-screen camera · automatic capture · biometric check when available</span></div>
         <button type="button" className="sukuunova-camera-icon-button" onClick={() => void startCamera(facing === "user" ? "environment" : "user")} disabled={locked} aria-label={facing === "user" ? "Switch to rear camera" : "Switch to selfie camera"}>{facing === "user" ? <Camera size={20}/> : <Smartphone size={20}/>}</button>
       </div>
       <div className="sukuunova-camera-viewport">
         <video ref={videoRef} muted autoPlay playsInline className={`sukuunova-camera-video${facing === "user" ? " selfie" : ""}`}/>
         <div className="sukuunova-camera-capture-zone" aria-hidden="true"/>
-        <div className={`sukuunova-camera-progress${checking ? " checking" : ""}`}><span className="sukuunova-camera-progress-dot"/>{checking ? "Verifying face…" : "Auto verification active"}</div>
+        <div className={`sukuunova-camera-progress${checking ? " checking" : ""}`}><span className="sukuunova-camera-progress-dot"/>{checking ? "Checking photo…" : "Auto capture active"}</div>
         <div className="sukuunova-camera-live-status" role="status"><strong>{status}</strong><span>{message}</span></div>
       </div>
       <div className="sukuunova-camera-bottombar">
@@ -357,9 +363,9 @@ export function VerifiedPortraitCapture({
     </div>, document.body) : null;
 
   const reviewScreen = candidate && portalReady ? createPortal(
-    <div className="sukuunova-portrait-review-screen" role="dialog" aria-modal="true" aria-label="Review verified portrait">
-      <div className="sukuunova-review-heading"><strong>Verified portrait captured</strong><span>Check the photo, then continue registration or retry.</span></div>
-      <div className="sukuunova-review-photo-wrap"><img src={candidate.image} alt={`${subjectLabel} verified portrait`} className="sukuunova-review-photo"/></div>
+    <div className="sukuunova-portrait-review-screen" role="dialog" aria-modal="true" aria-label="Review portrait">
+      <div className="sukuunova-review-heading"><strong>{candidate.biometricReady ? "Verified portrait captured" : "Photo captured"}</strong><span>{candidate.biometricReady ? "Biometric checks passed. Review the photo, then continue registration or retry." : "The photo is ready for registration. Biometric verification can be completed later."}</span></div>
+      <div className="sukuunova-review-photo-wrap"><img src={candidate.image} alt={`${subjectLabel} portrait`} className="sukuunova-review-photo"/></div>
       <div className="sukuunova-review-actions">
         <button type="button" className="sukuunova-camera-action" onClick={retryCandidate} disabled={locked}><RefreshCw size={16}/> Retry</button>
         <button type="button" className="sukuunova-camera-action primary" onClick={() => void acceptCandidate()} disabled={locked}><CheckCircle2 size={16}/>{usingCandidate || busy ? " Saving…" : " Use photo & continue"}</button>
@@ -368,12 +374,12 @@ export function VerifiedPortraitCapture({
 
   return <section className="photo-capture professional-portrait-capture verified-portrait-capture">
     <div className="verified-portrait-heading">
-      <div><span className="verified-portrait-eyebrow"><ShieldCheck size={14}/> Fast verified capture</span><strong>Biometric-ready {subjectLabel} portrait</strong><p>Open the full-screen camera and look toward it naturally. Verification starts automatically; there is no oval and no local stability gate that can leave the camera waiting forever.</p></div>
-      <span className={candidate ? "verified-portrait-badge ready" : "verified-portrait-badge"}>{candidate ? "Verified · review" : "Automatic capture ready"}</span>
+      <div><span className="verified-portrait-eyebrow"><ShieldCheck size={14}/> Fast portrait capture</span><strong>Registration-ready {subjectLabel} portrait</strong><p>Open the full-screen camera and look toward it naturally. The photo is captured automatically. If biometric verification is configured, SukuuNova checks it too; if not, registration is never blocked.</p></div>
+      <span className={candidate ? "verified-portrait-badge ready" : "verified-portrait-badge"}>{candidate ? (candidate.biometricReady ? "Verified · review" : "Captured · review") : "Automatic capture ready"}</span>
     </div>
     <div className="portrait-capture-layout">
-      <div className="photo-preview-wrap portrait-preview-wrap">{displayImage ? <img src={displayImage} alt={`${subjectLabel} portrait preview`} className="photo-preview" /> : <div className="photo-placeholder"><Camera size={28}/><span>No verified portrait yet</span><small>Full-screen automatic capture is ready</small></div>}</div>
-      <div className="portrait-guidance"><strong>Easy framing — no face oval</strong><p>Keep one person visible from the head through the shoulders. SukuuNova checks frames continuously and accepts the first one that passes server verification.</p><ul><li>Look toward the camera with both eyes visible.</li><li>Use reasonable light; you do not need perfect studio lighting.</li><li>Remove masks, dark sunglasses or anything covering the face.</li><li>If automatic capture is not accepted immediately, the system keeps trying without requiring another tap.</li></ul></div>
+      <div className="photo-preview-wrap portrait-preview-wrap">{displayImage ? <img src={displayImage} alt={`${subjectLabel} portrait preview`} className="photo-preview" /> : <div className="photo-placeholder"><Camera size={28}/><span>No portrait yet</span><small>Full-screen automatic capture is ready</small></div>}</div>
+      <div className="portrait-guidance"><strong>Easy framing — no face oval</strong><p>Keep one person visible from the head through the shoulders. SukuuNova captures automatically and uses face-quality checks whenever the biometric service is available.</p><ul><li>Look toward the camera with both eyes visible.</li><li>Use reasonable light; you do not need perfect studio lighting.</li><li>Use Retry if you do not like the captured photo.</li><li>A missing biometric-provider configuration will not stop student or staff registration.</li></ul></div>
     </div>
     <div className="verified-camera-launchers">
       <button type="button" className="button primary" onClick={() => void startCamera("environment")} disabled={locked}><Camera size={16}/> Open rear camera</button>
@@ -381,7 +387,7 @@ export function VerifiedPortraitCapture({
       {allowFileFallback ? <label className="button secondary photo-upload"><Upload size={16}/> Device-camera fallback<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={fileFallback} disabled={locked}/></label> : null}
       {value && onRemove ? <button type="button" className="photo-remove" onClick={() => void onRemove()} disabled={locked}>{removeLabel}</button> : null}
     </div>
-    <p className="sukuunova-capture-note">The browser no longer blocks automatic capture on fragile local sharpness/motion thresholds. Frames are submitted automatically and the server remains authoritative for biometric quality.</p>
+    <p className="sukuunova-capture-note">Portrait capture is independent of the biometric provider. The exact image is signed for registration, while biometric enrollment can perform authoritative face verification when the school's face service is configured.</p>
     <div className="verified-portrait-status" role="status"><strong>{status}</strong><span>{message}</span></div>
     {checks.length && !candidate ? <div className="portrait-quality-grid verified-quality-grid" aria-label="Face verification checks">{checks.map((check) => <div key={check.key} className={check.passed ? "passed" : "failed"}><span>{check.passed ? "✓" : "!"}</span><div><strong>{check.label}</strong><small>{check.detail}</small></div></div>)}</div> : null}
     {cameraScreen}
