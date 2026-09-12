@@ -42,7 +42,7 @@ describe("canonical learner onboarding", () => {
     await rawDb.$disconnect();
   });
 
-  it("creates intake and draft placement without mutating the learner's live class", async () => {
+  it("creates intake and confirms the learner's selected class in one registration", async () => {
     const result = await onboardStudent({
       schoolId: fixture.schoolId,
       actorId: fixture.ownerId,
@@ -56,12 +56,12 @@ describe("canonical learner onboarding", () => {
     });
 
     expect(result.enrollmentId).toBeTruthy();
-    expect(result.student.classId).toBeNull();
+    expect(result.student.classId).toBe(classId);
 
     await rawDb.$transaction(async (tx) => {
       await setRawTenant(tx, fixture.schoolId);
       const student = await tx.student.findFirstOrThrow({ where: { id: result.student.id, schoolId: fixture.schoolId } });
-      expect(student.classId).toBeNull();
+      expect(student.classId).toBe(classId);
 
       const intake = await tx.$queryRaw<Array<{ academicYearId: string; entryType: string }>>`
         SELECT "academicYearId","entryType" FROM "StudentAcademicIntake"
@@ -73,7 +73,7 @@ describe("canonical learner onboarding", () => {
         SELECT "termId","classId","status","guardianVerified" FROM "Enrollment"
         WHERE "schoolId"=${fixture.schoolId} AND "studentId"=${result.student.id}
       `;
-      expect(enrollment).toEqual([{ termId, classId, status: "draft", guardianVerified: true }]);
+      expect(enrollment).toEqual([{ termId, classId, status: "confirmed", guardianVerified: true }]);
     });
   });
 });

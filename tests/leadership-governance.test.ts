@@ -57,6 +57,7 @@ describe("leadership governance", () => {
     }));
     const form = new FormData();
     form.set("name", "New principal");
+    form.set("phone", `024${Date.now().toString().slice(-7)}`);
     form.set("staffCategory", "Leadership");
     form.set("role", "Principal");
     const result = await createStaff(form);
@@ -69,6 +70,7 @@ describe("leadership governance", () => {
     session.userId = fixture.memberId;
     const form = new FormData();
     form.set("name", "Unauthorized principal");
+    form.set("phone", `025${Date.now().toString().slice(-7)}`);
     form.set("staffCategory", "Leadership");
     form.set("role", "Principal");
     expect((await createStaff(form)).ok).toBe(false);

@@ -61,13 +61,9 @@ export async function onboardStudentInTransaction(tx: TenantDb, input: StudentOn
   await requirePermission(tx, input.actorId, "students:write");
   const name = input.name.trim();
   if (!name) throw new AppError("Student name is required.", 400, "NAME_REQUIRED");
-  if (!input.intakeAcademicYearId) {
-    throw new AppError("Choose the academic year in which the learner joined the school.", 400, "INTAKE_YEAR_REQUIRED");
-  }
+  if (!input.intakeAcademicYearId) throw new AppError("Choose the academic year in which the learner joined the school.", 400, "INTAKE_YEAR_REQUIRED");
   const entryType = input.entryType ?? "New enrollment";
-  if (!(STUDENT_ENTRY_TYPES as readonly string[]).includes(entryType)) {
-    throw new AppError("Choose a valid student entry type.", 400, "ENTRY_TYPE_INVALID");
-  }
+  if (!(STUDENT_ENTRY_TYPES as readonly string[]).includes(entryType)) throw new AppError("Choose a valid student entry type.", 400, "ENTRY_TYPE_INVALID");
   validatePhoto(input.photoUrl);
 
   const intakeYear = await tx.academicYear.findFirst({
@@ -82,18 +78,10 @@ export async function onboardStudentInTransaction(tx: TenantDb, input: StudentOn
   let placementTerm: { id: string; academicYearId: string; name: string; isLocked: boolean } | null = null;
   let placementClass: { id: string; name: string } | null = null;
   if (input.placement?.termId || input.placement?.classId) {
-    if (!input.placement?.termId || !input.placement?.classId) {
-      throw new AppError("Both placement term and intended class are required together.", 400, "PLACEMENT_INCOMPLETE");
-    }
+    if (!input.placement?.termId || !input.placement?.classId) throw new AppError("Both placement term and class are required together.", 400, "PLACEMENT_INCOMPLETE");
     [placementTerm, placementClass] = await Promise.all([
-      tx.term.findFirst({
-        where: { id: input.placement.termId, schoolId: input.schoolId },
-        select: { id: true, academicYearId: true, name: true, isLocked: true },
-      }),
-      tx.class.findFirst({
-        where: { id: input.placement.classId, schoolId: input.schoolId },
-        select: { id: true, name: true },
-      }),
+      tx.term.findFirst({ where: { id: input.placement.termId, schoolId: input.schoolId }, select: { id: true, academicYearId: true, name: true, isLocked: true } }),
+      tx.class.findFirst({ where: { id: input.placement.classId, schoolId: input.schoolId }, select: { id: true, name: true } }),
     ]);
     if (!placementTerm) throw new AppError("The selected placement term does not belong to this school.", 400, "PLACEMENT_TERM_NOT_FOUND");
     if (placementTerm.isLocked) throw new AppError("The selected placement term is locked.", 409, "PLACEMENT_TERM_LOCKED");
@@ -103,19 +91,14 @@ export async function onboardStudentInTransaction(tx: TenantDb, input: StudentOn
   const guardian = input.guardian
     ? { name: input.guardian.name.trim(), phone: input.guardian.phone.trim(), relationship: input.guardian.relationship?.trim() || "Parent/Guardian" }
     : null;
-  if (guardian && (!guardian.name || !guardian.phone)) {
-    throw new AppError("Guardian name and phone number are required together.", 400, "GUARDIAN_INCOMPLETE");
-  }
+  if (guardian && (!guardian.name || !guardian.phone)) throw new AppError("Guardian name and phone number are required together.", 400, "GUARDIAN_INCOMPLETE");
 
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-registration:${input.schoolId}`}))`;
 
   let admissionNo = input.admissionNo?.trim() || generatedAdmissionNo(input.admissionDate);
   if (!input.admissionNo) {
     for (let attempt = 0; attempt < 12; attempt += 1) {
-      const exists = await tx.student.findFirst({
-        where: { schoolId: input.schoolId, admissionNo },
-        select: { id: true },
-      });
+      const exists = await tx.student.findFirst({ where: { schoolId: input.schoolId, admissionNo }, select: { id: true } });
       if (!exists) break;
       admissionNo = generatedAdmissionNo(input.admissionDate);
     }
@@ -130,15 +113,13 @@ export async function onboardStudentInTransaction(tx: TenantDb, input: StudentOn
         admissionNo,
         name,
         dob: input.dob ?? null,
-        classId: null,
+        classId: placementClass?.id ?? null,
         status: "active",
         photoUrl: input.photoUrl || null,
       },
     });
   } catch (error) {
-    if ((error as { code?: string }).code === "P2002") {
-      throw new AppError("A learner with this admission number already exists in this school.", 409, "DUPLICATE_ADMISSION_NO");
-    }
+    if ((error as { code?: string }).code === "P2002") throw new AppError("A learner with this admission number already exists in this school.", 409, "DUPLICATE_ADMISSION_NO");
     throw error;
   }
 
@@ -157,29 +138,13 @@ export async function onboardStudentInTransaction(tx: TenantDb, input: StudentOn
       create: { schoolId: input.schoolId, name: guardian.name, phone: guardian.phone },
     });
     guardianId = guardianRow.id;
-    await tx.studentGuardian.create({
-      data: {
-        schoolId: input.schoolId,
-        studentId: student.id,
-        guardianId: guardianRow.id,
-        relationship: guardian.relationship,
-        isPrimary: true,
-      },
-    });
+    await tx.studentGuardian.create({ data: { schoolId: input.schoolId, studentId: student.id, guardianId: guardianRow.id, relationship: guardian.relationship, isPrimary: true } });
   }
 
-  const houses = await tx.house.findMany({
-    where: { schoolId: input.schoolId, isActive: true },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  const houses = await tx.house.findMany({ where: { schoolId: input.schoolId, isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
   let house: { id: string; name: string } | null = null;
   if (houses.length) {
-    const grouped = await tx.student.groupBy({
-      by: ["houseId"],
-      where: { schoolId: input.schoolId, status: "active", houseId: { not: null } },
-      _count: { _all: true },
-    });
+    const grouped = await tx.student.groupBy({ by: ["houseId"], where: { schoolId: input.schoolId, status: "active", houseId: { not: null } }, _count: { _all: true } });
     const counts = new Map(houses.map((item) => [item.id, grouped.find((row) => row.houseId === item.id)?._count._all ?? 0]));
     house = [...houses].sort((a, b) => (counts.get(a.id)! - counts.get(b.id)!) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))[0] ?? null;
     if (house) await tx.student.update({ where: { id: student.id }, data: { houseId: house.id } });
@@ -188,12 +153,12 @@ export async function onboardStudentInTransaction(tx: TenantDb, input: StudentOn
   let enrollmentId: string | null = null;
   if (placementTerm && placementClass && input.placement) {
     enrollmentId = createId();
-    const notes = input.placement.notes?.trim() || "Created during learner onboarding; confirm when admission checks are complete.";
+    const notes = input.placement.notes?.trim() || "Confirmed automatically during learner registration.";
     await tx.$executeRaw`
       INSERT INTO "Enrollment"
         ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","startDate","guardianVerified","documentsReady","feeReady","notes","createdBy")
       VALUES
-        (${enrollmentId},${input.schoolId},${student.id},${placementTerm.academicYearId},${placementTerm.id},${placementClass.id},'draft',${enrollmentEntryType(entryType)},${null},${Boolean(guardianId)},false,false,${notes},${input.actorId})
+        (${enrollmentId},${input.schoolId},${student.id},${placementTerm.academicYearId},${placementTerm.id},${placementClass.id},'confirmed',${enrollmentEntryType(entryType)},${input.admissionDate ?? null},${Boolean(guardianId)},true,true,${notes},${input.actorId})
     `;
   }
 
@@ -206,7 +171,7 @@ export async function onboardStudentInTransaction(tx: TenantDb, input: StudentOn
     after: {
       name,
       admissionNo,
-      currentClassId: null,
+      currentClassId: placementClass?.id ?? null,
       intakeAcademicYearId: intakeYear.id,
       intakeAcademicYear: intakeYear.name,
       admissionDate: input.admissionDate?.toISOString().slice(0, 10) ?? null,
@@ -220,6 +185,7 @@ export async function onboardStudentInTransaction(tx: TenantDb, input: StudentOn
       placementTermName: placementTerm?.name ?? null,
       placementClassId: placementClass?.id ?? null,
       placementClassName: placementClass?.name ?? null,
+      enrollmentStatus: enrollmentId ? "confirmed" : null,
       source: input.auditSource ?? "students",
     },
   });

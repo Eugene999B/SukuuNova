@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireSchoolSession } from "@/lib/school-auth";
-import { onboardStudent, STUDENT_ENTRY_TYPES, type StudentEntryType } from "@/lib/student-onboarding-service";
+import { onboardStudent } from "@/lib/student-onboarding-service";
 import { assertPortraitVerificationToken } from "@/lib/portrait-verification";
 
 export type StudentActionState = { message: string | null };
@@ -24,7 +24,6 @@ export async function createStudentAction(_previousState: StudentActionState, fo
   const dobRaw = String(formData.get("dob") ?? "").trim();
   const intakeAcademicYearId = String(formData.get("intakeAcademicYearId") ?? "").trim();
   const admissionDateRaw = String(formData.get("admissionDate") ?? "").trim();
-  const entryTypeRaw = String(formData.get("entryType") ?? "New enrollment").trim() || "New enrollment";
   const placementTermId = String(formData.get("placementTermId") ?? "").trim();
   const classId = String(formData.get("classId") ?? "").trim();
   const guardianName = String(formData.get("guardianName") ?? "").trim();
@@ -35,20 +34,12 @@ export async function createStudentAction(_previousState: StudentActionState, fo
 
   try {
     if (!name) throw new Error("Student name is required.");
-    if (!intakeAcademicYearId) throw new Error("Choose the academic year in which the learner joined the school.");
-    if (!(STUDENT_ENTRY_TYPES as readonly string[]).includes(entryTypeRaw)) throw new Error("Choose a valid student entry type.");
+    if (!intakeAcademicYearId || !placementTermId) throw new Error("The school needs a current academic year and open term before students can be registered.");
+    if (!classId) throw new Error("Choose the student's class. Registration places the student into that class immediately.");
     if (guardianPhone && !guardianName) throw new Error("Enter the guardian name when providing a guardian phone number.");
     if (guardianName && !guardianPhone) throw new Error("Enter the guardian phone number when providing a guardian name.");
-    if ((placementTermId && !classId) || (classId && !placementTermId)) {
-      throw new Error("Choose both a placement term and intended class, or leave both unassigned.");
-    }
     if (photoData) {
-      assertPortraitVerificationToken({
-        token: photoVerificationToken,
-        schoolId: session.schoolId,
-        target: "student",
-        image: photoData,
-      });
+      assertPortraitVerificationToken({ token: photoVerificationToken, schoolId: session.schoolId, target: "student", image: photoData });
     }
 
     await onboardStudent({
@@ -58,15 +49,15 @@ export async function createStudentAction(_previousState: StudentActionState, fo
       dob: parseDateInput(dobRaw, "Date of birth"),
       intakeAcademicYearId,
       admissionDate: parseDateInput(admissionDateRaw, "Admission date"),
-      entryType: entryTypeRaw as StudentEntryType,
+      entryType: "New enrollment",
       photoUrl: photoData || null,
       guardian: guardianName && guardianPhone ? { name: guardianName, phone: guardianPhone, relationship: guardianRelationship } : null,
-      placement: placementTermId && classId ? { termId: placementTermId, classId } : null,
+      placement: { termId: placementTermId, classId },
       auditSource: "students_workspace",
     });
 
     revalidatePath("/school/students");
-    revalidatePath("/school/admissions/enrolment");
+    revalidatePath("/school/classes");
   } catch (error) {
     console.error("Student registration action failed", error);
     return { message: error instanceof Error && error.message ? error.message : "Student registration could not be completed. Nothing was saved. Please try again." };

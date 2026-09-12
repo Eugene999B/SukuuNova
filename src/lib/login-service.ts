@@ -10,7 +10,11 @@ const SYNTHETIC_TEST_SCHOOL = "sn-test-2026";
 const globalForAuthPrisma = globalThis as unknown as { sukuunovaAuthPrisma?: PrismaClient };
 const authDb = globalForAuthPrisma.sukuunovaAuthPrisma ?? new PrismaClient({ log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"] });
 if (process.env.NODE_ENV !== "production") globalForAuthPrisma.sukuunovaAuthPrisma = authDb;
-function normalizedIdentifier(value: string): string { const trimmed = value.trim(); return trimmed.includes("@") ? trimmed.toLowerCase() : trimmed; }
+function normalizedIdentifier(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.includes("@")) return trimmed.toLowerCase();
+  return /^\+?[0-9 ()-]+$/.test(trimmed) ? trimmed.replace(/[\s()-]+/g, "") : trimmed;
+}
 function isSyntheticTestSchool(uniqueCode: string): boolean { return uniqueCode === SYNTHETIC_TEST_SCHOOL; }
 function diagnosticIdentifier(value: string) {
   const trimmed = value.trim();
@@ -29,7 +33,6 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     if (synthetic) logSyntheticLoginDiagnostic("directory_failure", { uniqueCode, found: Boolean(directory), status: directory?.status ?? null });
     throw new UnauthorizedError(LOGIN_FAILURE);
   }
-  if (input.password.length < MIN_PASSWORD_LENGTH) throw new UnauthorizedError("This password is too short. Use the password reset flow to secure the account.");
   return authDb.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
     const [contextRows, schoolRows] = await Promise.all([
@@ -68,6 +71,9 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     if (!passwordMatches) {
       if (synthetic) logSyntheticLoginDiagnostic("password_failure", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier) });
       throw new UnauthorizedError(LOGIN_FAILURE);
+    }
+    if (input.password.length < MIN_PASSWORD_LENGTH && !user.needsPasswordChange) {
+      throw new UnauthorizedError("This password is too short. Use the password reset flow to secure the account.");
     }
     if (synthetic) logSyntheticLoginDiagnostic("credentials_ok", { uniqueCode, userId: user.id, identifier: diagnosticIdentifier(input.identifier) });
 
