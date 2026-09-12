@@ -55,13 +55,14 @@ describe("Arcade variation engine", () => {
     expect(varied.reusedCount).toBe(0);
   });
 
-  it("reads stable concept keys from stored history so age presentation does not defeat repeat detection", () => {
+  it("keeps mission framing as metadata so it does not corrupt the learner-facing sentence", () => {
     const base = createArcadeGameQuestions("vocabulary-vault", 3, 1)[0];
     const presented = presentArcadeQuestionForAge(base, "age_12_14", "mission-one", 0);
     const history = arcadeQuestionHistorySignatures([{ questions: [presented] }]);
     expect(history.has(arcadeQuestionSignature(base))).toBe(true);
     expect(presented.answer).toBe(base.answer);
-    expect(presented.prompt).toContain(" · ");
+    expect(presented.prompt).toBe(base.prompt);
+    expect(presented.prompt).not.toContain(" · ");
     expect(presented.conceptKey).toBe(arcadeQuestionSignature(base));
     expect(presented.presentationVariant.length).toBeGreaterThan(0);
   });

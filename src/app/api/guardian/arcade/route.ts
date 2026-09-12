@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireGuardianSession } from "@/lib/guardian-auth";
 import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
-import { ForbiddenError, routeError } from "@/lib/errors";
+import { AppError, ForbiddenError, routeError } from "@/lib/errors";
 import { arcadeOverview, guardianArcadeLeaderboard, readArcadeRound } from "@/lib/arcade-service";
 import { saveArcadeRoundWithTelemetry } from "@/lib/arcade-telemetry-service";
 import { startVariedArcadeRound } from "@/lib/arcade-varied-service";
@@ -38,6 +38,14 @@ async function session() {
   const current = await requireGuardianSession();
   if (current.needsPasswordChange) throw new ForbiddenError("Change your temporary password before opening Learning Arcade.");
   return current;
+}
+function assertNovaLocksPreserved(stored: string[], submitted: string[]) {
+  for (let index = 0; index < stored.length; index += 1) {
+    const locked = stored[index]?.trim();
+    if (locked && submitted[index] !== stored[index]) {
+      throw new AppError("A judged Nova Millionaire answer cannot be changed after it is locked.", 409, "ANSWER_ALREADY_LOCKED");
+    }
+  }
 }
 export async function GET(request: Request) {
   try {
@@ -96,6 +104,8 @@ export async function POST(request: Request) {
         return round;
       }
       if (input.action === "view") return readArcadeRound(tx, current, input.roundId);
+      const existing = await readArcadeRound(tx, current, input.roundId);
+      if (existing.game === "logic") assertNovaLocksPreserved(existing.answers, input.answers);
       return saveArcadeRoundWithTelemetry(tx, current, input);
     }));
   } catch (error) { return routeError(error); }

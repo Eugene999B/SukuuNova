@@ -3,6 +3,7 @@ export type MillionaireSupportMode = "guided" | "supported" | "independent" | "c
 export type MillionaireClueInput = {
   kind?: string;
   prompt: string;
+  scene?: { mode?: string };
 };
 
 function normalise(value: string) {
@@ -18,6 +19,15 @@ export function millionaireLifelineTokens(difficulty: number, supportMode: Milli
 }
 
 export function millionaireReasoningCategory(input: MillionaireClueInput) {
+  const mode = input.scene?.mode;
+  if (mode === "case-file") return "Deduction";
+  if (mode === "code-vault") return "Symbol reasoning";
+  if (mode === "analogy-bridge") return "Analogy";
+  if (mode === "evidence-desk") return "Evidence reasoning";
+  if (mode === "rule-gate") return "Rule testing";
+  if (mode === "order-track") return "Ordering logic";
+  if (mode === "logic-switch") return "Conditional logic";
+  if (mode === "pattern-wall") return "Pattern reasoning";
   const source = `${input.kind ?? ""} ${input.prompt}`.toLowerCase();
   if (/sequence|next|pattern|series|continue/.test(source)) return "Pattern & sequence";
   if (/odd|different|does not belong|doesn't belong|classification|group/.test(source)) return "Classification";
@@ -28,6 +38,15 @@ export function millionaireReasoningCategory(input: MillionaireClueInput) {
 }
 
 export function millionaireReasoningCue(input: MillionaireClueInput) {
+  const mode = input.scene?.mode;
+  if (mode === "case-file") return "Turn each clue into a small fact, then combine the facts. Do not guess from names or order of presentation.";
+  if (mode === "code-vault") return "Replace every symbol with its stated value first. Only then follow the operation signs in their normal order.";
+  if (mode === "analogy-bridge") return "Describe the relationship in the first pair in a few words. Choose the option that creates the same relationship in the second pair.";
+  if (mode === "evidence-desk") return "Separate what was actually observed from claims that add new assumptions. Prefer the conclusion supported directly by the evidence.";
+  if (mode === "rule-gate") return "Test each option against every condition one by one. An option that fails even one condition cannot pass the gate.";
+  if (mode === "order-track") return "Write the clues as a single chain in your head. Then check which position is forced by the whole chain.";
+  if (mode === "logic-switch") return "Use only what the if-then rule guarantees. A possible story is not enough; the conclusion must follow from the rule.";
+  if (mode === "pattern-wall") return "Compare the full pattern, not only the last two items. Find a rule that explains every step before choosing.";
   const source = normalise(`${input.kind ?? ""} ${input.prompt}`);
   if (/sequence|next|series|continue/.test(source)) return "Compare each step with the one before it. Look for one change that works all the way through.";
   if (/pattern/.test(source)) return "Name the repeating or changing feature first. Then test the same rule against every choice.";
