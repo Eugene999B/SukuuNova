@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { rawDb } from "@/lib/db";
-import { RateLimitError } from "@/lib/errors";
-import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 
 const schema = z.object({ uniqueCode: z.string().trim().min(2).max(80) });
 
@@ -13,18 +11,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, message: "Enter a valid school code." }, { status: 400 });
     }
 
+    // A school code is a shared routing key, not an account credential.
+    // Do not rate-limit school discovery: many staff, guardians and devices
+    // can legitimately resolve the same code, including from one network.
     const uniqueCode = parsed.data.uniqueCode.toLowerCase();
-    try {
-      await recordLoginAttempt("school-resolve", uniqueCode, requestIp(request.headers));
-    } catch (error) {
-      if (error instanceof RateLimitError) {
-        return NextResponse.json(
-          { ok: false, message: "Too many attempts. Try again later." },
-          { status: 429, headers: { "Retry-After": String(error.retryAfterSeconds) } }
-        );
-      }
-      throw error;
-    }
 
     const directory = await rawDb.schoolLoginDirectory.findUnique({
       where: { uniqueCode },
