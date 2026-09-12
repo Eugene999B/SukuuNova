@@ -134,7 +134,7 @@ export default function NumberBloomGarden({ learnerName, round, onComplete, onEx
     playArcadeSound(next === 0 ? "open" : "reward", "number-pop");
   };
 
-  const optionVisual = (option: string, index: number) => {
+  const optionVisual = (option: string) => {
     const challenge = scene?.bloomChallenge;
     const numeric = Number(option);
     if (challenge === "compare") {
@@ -160,7 +160,7 @@ export default function NumberBloomGarden({ learnerName, round, onComplete, onEx
     <header className="bloom-top"><div><Leaf size={19}/><span>NUMBER BLOOM</span></div><button type="button" onClick={() => exitRef.current([...answersRef.current])}><LogOut size={15}/>Save & exit</button></header>
     <main className="bloom-opening">
       <div className="bloom-opening-copy"><span className="bloom-kicker">COUNT · GROW · DISCOVER</span><h1>Grow a garden<br/>with numbers.</h1><p>Touch, count and make little number patterns at your own pace. No race. No answer countdown.</p><div className="bloom-menu"><button type="button" className="primary" onClick={() => enter("garden")}><Play size={21}/><span><strong>Play Garden</strong><small>Continue at patch {Math.min(patch + 1, round.questions.length)}</small></span></button><button type="button" onClick={() => enter("free")}><Sparkles size={21}/><span><strong>Free Grow</strong><small>Make 1 to 10 with no grades</small></span></button><button type="button" onClick={() => enter("help")}><CircleHelp size={21}/><span><strong>How to Play</strong><small>Simple picture guide</small></span></button><button type="button" onClick={() => setScreen("settings")}><Settings2 size={21}/><span><strong>Settings</strong><small>Sound and comfort</small></span></button></div></div>
-      <div className="bloom-hero-garden" aria-hidden="true">{Array.from({ length:5 }, (_, index) => <GardenFlower key={index} open={index <= growth}/>)}<div className="bloom-sun"><Sparkles size={28}/></div><span>{petals} PETALS</span></div>
+      <div className="bloom-hero-garden" aria-hidden="true">{Array.from({ length:5 }, (_, index) => <GardenFlower key={index} open={index < growth}/>)}<div className="bloom-sun"><Sparkles size={28}/></div><span>{petals} PETALS</span></div>
     </main>
   </section>;
 
@@ -177,7 +177,7 @@ export default function NumberBloomGarden({ learnerName, round, onComplete, onEx
     <div className="bloom-progress"><span style={{ width:`${progress}%` }}/></div>
     <main className="bloom-play">
       <aside className="bloom-growth"><span className="bloom-kicker">YOUR GARDEN</span><div className="bloom-growth-row">{Array.from({ length:5 }, (_, index) => <GardenFlower key={index} open={index < growth || growing && index === growth}/>)}</div><strong>{petals} petals</strong><small>Patch {patch + 1} of {round.questions.length}</small></aside>
-      <section className="bloom-challenge"><span className="bloom-kicker">{scene?.gardenPatch ?? `PATCH ${patch + 1}`}</span><h1>{question.prompt}</h1><p className="bloom-visual-instruction">{scene?.visualInstruction}</p><div className="bloom-stage">{challengeVisual()}</div><div className="bloom-choices">{question.options.map((option, index) => <button type="button" className={selected === index ? "selected" : ""} onClick={() => choose(index)} key={`${option}-${index}`} aria-pressed={selected === index}><span>{optionVisual(option, index)}</span><b>{index + 1}</b></button>)}</div>{hintVisible ? <div className="bloom-hint"><Lightbulb size={19}/><span>{scene?.cue ?? "Point to each object once as you count."}</span></div> : null}<div className="bloom-actions"><button type="button" onClick={showHint} disabled={hintTokens <= 0 || hintVisible}><Lightbulb size={18}/>Clue · {hintTokens}</button><button type="button" className="primary" onClick={commit} disabled={selected < 0 || growing}><Leaf size={18}/>Grow!</button></div><p className="bloom-message">{message}</p></section>
+      <section className="bloom-challenge"><span className="bloom-kicker">{scene?.gardenPatch ?? `PATCH ${patch + 1}`}</span><h1>{question.prompt}</h1><p className="bloom-visual-instruction">{scene?.visualInstruction}</p><div className="bloom-stage">{challengeVisual()}</div><div className="bloom-choices">{question.options.map((option, index) => <button type="button" className={selected === index ? "selected" : ""} onClick={() => choose(index)} key={`${option}-${index}`} aria-pressed={selected === index}><span>{optionVisual(option)}</span><b>{index + 1}</b></button>)}</div>{hintVisible ? <div className="bloom-hint"><Lightbulb size={19}/><span>{scene?.cue ?? "Point to each object once as you count."}</span></div> : null}<div className="bloom-actions"><button type="button" onClick={showHint} disabled={hintTokens <= 0 || hintVisible}><Lightbulb size={18}/>Clue · {hintTokens}</button><button type="button" className="primary" onClick={commit} disabled={selected < 0 || growing}><Leaf size={18}/>Grow!</button></div><p className="bloom-message">{message}</p></section>
     </main>
   </section>;
 }
