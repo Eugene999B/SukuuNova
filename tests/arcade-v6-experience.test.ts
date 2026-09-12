@@ -33,4 +33,12 @@ describe("Learning Arcade V6 experience contract", () => {
     const untimed: ArcadeV5GameKey[] = ["circuit-logic", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline", "culture-heritage"];
     for (const game of untimed) expect(arcadeExperienceProfile(game).timing).toBe("untimed");
   });
+
+  it("uses navigation drift as soft world pressure without expiring astronomy answers", () => {
+    const solar = arcadeExperienceProfile("space-explorer");
+    expect(solar.family).toBe("Astronomy mission control");
+    expect(solar.openingStyle).toBe("mission-control");
+    expect(solar.timing).toBe("soft-pressure");
+    expect(solar.timingLabel).toContain("no answer expires");
+  });
 });

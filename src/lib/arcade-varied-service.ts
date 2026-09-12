@@ -17,6 +17,7 @@ import { createBioQuestQuestions } from "./bioquest-content";
 import { createChronicleVaultQuestions } from "./chronicle-vault-content";
 import { createCircuitForgeQuestions } from "./circuit-forge-content";
 import { createStyleStudioQuestions } from "./style-studio-ghana-content";
+import { createSolarNavigatorQuestions } from "./solar-navigator-content";
 import { arcadeProgressionDifficulty, arcadeProgressionNodeName, arcadeV5Progression } from "./arcade-v5-design";
 import { createArcadeSessionRemix, type ArcadeSessionRemix } from "./arcade-session-remix";
 import type { ArcadeAgeBand } from "./arcade-catalog";
@@ -51,6 +52,7 @@ function generate(game: string, difficulty: number, length: number, weakKeys: re
   if (game === "history-timeline") return createChronicleVaultQuestions(difficulty, length);
   if (game === "circuit-logic") return createCircuitForgeQuestions(difficulty, length);
   if (game === "culture-heritage") return createStyleStudioQuestions(difficulty, length);
+  if (game === "space-explorer") return createSolarNavigatorQuestions(difficulty, length);
   if (canGenerateArcadeContent(game)) return createArcadeGameQuestions(game, difficulty, length);
   if (canGenerateArcadeInteractionContent(game)) return createArcadeInteractionQuestions(game, difficulty, length);
   if (canGenerateArcadeResponseContent(game)) return createArcadeResponseQuestions(game, difficulty, length);
@@ -79,7 +81,6 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     progressionNode,
     progressionNodeName,
     sessionRemix,
-    // Compatibility aliases for V4/V5 clients that may still have a round open during rollout.
     selectedLevel: progressionNode,
     levelName: progressionNodeName,
   };
@@ -139,7 +140,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     progressionRequestedDifficulty: progressionDifficulty,
     levelRequestedDifficulty: progressionDifficulty,
     ageAdjustedDifficulty: learningPlan.targetDifficulty,
-    presentation: round.game === "keyboard-ninja" ? "turbotype_v1" : round.game === "comprehension-quest" ? "reading_quest_v1" : round.game === "coding-sequence" ? "codebots_v1" : round.game === "ghana-map-master" ? "geoquest_v1" : round.game === "money-math-market" ? "cedi_city_market_v1" : round.game === "cyber-safety" ? "signal_shield_v1" : round.game === "environment-guardian" ? "ecogrid_ghana_v1" : round.game === "body-explorer" ? "bioquest_human_systems_v1" : round.game === "history-timeline" ? "chronicle_vault_v1" : round.game === "circuit-logic" ? "circuit_forge_v1" : round.game === "culture-heritage" ? "style_studio_ghana_v1" : "adaptive_director_v1",
+    presentation: round.game === "keyboard-ninja" ? "turbotype_v1" : round.game === "comprehension-quest" ? "reading_quest_v1" : round.game === "coding-sequence" ? "codebots_v1" : round.game === "ghana-map-master" ? "geoquest_v1" : round.game === "money-math-market" ? "cedi_city_market_v1" : round.game === "cyber-safety" ? "signal_shield_v1" : round.game === "environment-guardian" ? "ecogrid_ghana_v1" : round.game === "body-explorer" ? "bioquest_human_systems_v1" : round.game === "history-timeline" ? "chronicle_vault_v1" : round.game === "circuit-logic" ? "circuit_forge_v1" : round.game === "culture-heritage" ? "style_studio_ghana_v1" : round.game === "space-explorer" ? "solar_navigator_v1" : "adaptive_director_v1",
   };
 
   await tx.$executeRaw`

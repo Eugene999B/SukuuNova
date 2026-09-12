@@ -1,6 +1,6 @@
 import { arcadeV5Identity } from "./arcade-v5-design";
 
-export type ArcadeSoundCue = "open" | "select" | "launch" | "success" | "unlock" | "error" | "reward";
+export type ArcadeSoundCue = "open" | "select" | "launch" | "success" | "unlock" | "error" | "reward" | "scan";
 export type ArcadeAudioSettings = {
   music: boolean;
   soundEffects: boolean;
@@ -124,6 +124,7 @@ function playCueNow(cue: ArcadeSoundCue, game: string) {
     unlock: [[1, .07, .02, "triangle"], [1.33, .08, .022, "triangle"], [1.66, .1, .024, "sine"], [2, .2, .022, "sine"]],
     error: [[.86, .12, .018, "triangle"], [.7, .18, .016, "sine"]],
     reward: [[1.5, .07, .02, "sine"], [2, .09, .022, "triangle"], [2.5, .18, .02, "sine"]],
+    scan: [[.75, .07, .014, "sine"], [1, .08, .018, "sine"], [1.5, .11, .02, "triangle"], [2, .16, .014, "sine"]],
   };
   patterns[cue].forEach(([ratio, duration, cueVolume, type], index) => tone(root * ratio, duration, cueVolume * volume, type, index * .065));
 }
@@ -152,6 +153,7 @@ function musicProfile(game: string) {
     case "body-explorer": return { scale:[1, 1.25, 1.5, 1.333], type:"sine" as OscillatorType, tempo:920 };
     case "history-timeline": return { scale:[1, 1.2, 1.5, 1.8, 1.2], type:"triangle" as OscillatorType, tempo:1180 };
     case "culture-heritage": return { scale:[1, 1.25, 1.5, 1.75, 2, 1.5], type:"triangle" as OscillatorType, tempo:820 };
+    case "space-explorer": return { scale:[1, 1.2, 1.5, 2, 1.8, 1.333], type:"sine" as OscillatorType, tempo:940 };
     default: return { scale:[1, 1.125, 1.5, 1.6875, 2], type:"triangle" as OscillatorType, tempo:680 };
   }
 }
