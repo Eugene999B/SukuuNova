@@ -22,10 +22,13 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
   const storageKey = `sukuunova-sidebar-groups:v2:${storageScope}`;
   const scrollStorageKey = `sukuunova-sidebar-scroll:v1:${storageScope}`;
   const isTeacherScope = storageScope.startsWith("teacher:");
-  const navigationGroups = useMemo(() => isTeacherScope ? groups.map(group => ({
+  const isSchoolScope = storageScope.startsWith("school:");
+  const navigationGroups = useMemo(() => groups.map((group) => ({
     ...group,
-    items: group.items.map(item => ({ ...item, href: teacherDestinations[item.label] ?? item.href })),
-  })) : groups, [groups, isTeacherScope]);
+    items: group.items
+      .filter((item) => !(isSchoolScope && item.href === "/school/people"))
+      .map((item) => isTeacherScope ? ({ ...item, href: teacherDestinations[item.label] ?? item.href }) : item),
+  })).filter((group) => group.items.length > 0), [groups, isSchoolScope, isTeacherScope]);
   const activeLabel = useMemo(() => {
     const matches = navigationGroups
       .flatMap((group) => group.items.map((item) => ({ ...item, group: group.label })))
