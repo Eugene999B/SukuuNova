@@ -55,11 +55,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const updated = await tx.term.update({ where: { id }, data: { name: input.name, startDate: input.startDate, endDate: input.endDate, isLocked: nextLocked } });
       if (nextWeeks !== currentWeeks) await tx.$executeRawUnsafe(`UPDATE "Term" SET "teachingWeeks"=$1 WHERE "id"=$2 AND "schoolId"=$3`, nextWeeks, id, session.schoolId);
 
-      let releasedReportCards = 0;
-      if (!current.isLocked && nextLocked) {
-        const released = await tx.reportCard.updateMany({ where: { schoolId: session.schoolId, termId: id, status: "approved" }, data: { status: "sent" } });
-        releasedReportCards = released.count;
-      }
+      const approvedReportCardsAwaitingRelease = !current.isLocked && nextLocked
+        ? await tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: "approved" } })
+        : 0;
 
       await appendSchoolAudit(tx, {
         schoolId: session.schoolId,
@@ -68,9 +66,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         entityType: "Term",
         entityId: id,
         before: { ...current, teachingWeeks: currentWeeks },
-        after: { ...updated, teachingWeeks: nextWeeks, releasedReportCards },
+        after: { ...updated, teachingWeeks: nextWeeks, approvedReportCardsAwaitingRelease, reportReleaseStatusPreserved: true },
       });
-      return { term: { ...updated, teachingWeeks: nextWeeks }, releasedReportCards };
+      return { term: { ...updated, teachingWeeks: nextWeeks }, approvedReportCardsAwaitingRelease };
     });
 
     return NextResponse.json({ ok: true, ...result, status: termStatus(result.term.startDate, result.term.endDate, result.term.isLocked), needsFinalization: !result.term.isLocked && new Date() > result.term.endDate });
