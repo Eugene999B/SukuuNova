@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { resolveAccountLoginRateIdentity } from "@/lib/account-login-identity";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { issueSchoolPasswordReset } from "@/lib/password-reset";
@@ -16,9 +17,10 @@ export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
     const schoolCode = input.uniqueCode.toLowerCase();
+    const rateIdentity = await resolveAccountLoginRateIdentity({ schoolCode, identifier: input.identifier, universe: input.universe });
     await recordLoginAttempt(
       "school-password-reset:" + schoolCode,
-      input.identifier
+      rateIdentity
     );
     const envelope = await issueSchoolPasswordReset(input);
     if (envelope) await deliverResetToken(envelope);
