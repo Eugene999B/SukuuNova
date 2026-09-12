@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveSchoolWorkspace } from "../src/lib/authorization";
+import { clinicProfileAllowsCare } from "../src/lib/clinic-clinical-access";
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } from "../src/lib/default-rbac";
 import { permissionRisk } from "../src/lib/permission-catalog";
 
@@ -29,6 +30,12 @@ describe("Clinic health centre access model", () => {
     expect(nurse).toEqual(expect.arrayContaining(["clinic:care", "clinic:records", "clinic:inventory", "clinic:export"]));
     expect(nurse).not.toContain("clinic:overview");
     expect(nurse).not.toContain("clinic:nurses_manage");
+  });
+
+  it("allows explicitly authorised clinical staff without a nurse profile, but blocks a suspended nurse profile", () => {
+    expect(clinicProfileAllowsCare(null)).toBe(true);
+    expect(clinicProfileAllowsCare({ status: "active" })).toBe(true);
+    expect(clinicProfileAllowsCare({ status: "suspended" })).toBe(false);
   });
 
   it("registers clinic keys in the global permission catalogue and marks health operations sensitive", () => {
