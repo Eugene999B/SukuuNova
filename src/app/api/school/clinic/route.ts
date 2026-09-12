@@ -11,15 +11,18 @@ import { assertPortraitVerificationToken } from "@/lib/portrait-verification";
 import {
   addClinicMedication,
   adjustClinicMedicationStock,
-  createClinicVisit,
   getClinicManagementSnapshot,
-  getClinicNurseSnapshot,
   getClinicPatientRecord,
   listClinicMedications,
   saveClinicHealthProfile,
   searchClinicPatients,
   type ClinicPatientType,
 } from "@/lib/clinic";
+import {
+  assertClinicClinicalActor,
+  createAuthorizedClinicVisit,
+  getClinicClinicalSnapshot,
+} from "@/lib/clinic-clinical-access";
 
 const patientType = z.enum(["student", "staff"]);
 const disposition = z.enum(["returned_to_class", "resting_in_clinic", "sent_home", "referred", "emergency_transfer"]);
@@ -121,25 +124,39 @@ export async function GET(request: Request) {
             `SELECT "clinicName","phone","room","emergencyContact","referralHospital" FROM "ClinicSettings" LIMIT 1`,
           ),
         ]);
-        const safeRecent = snapshot.recent.map(({ complaint: _complaint, assessment: _assessment, ...visit }) => visit);
+        const safeRecent = snapshot.recent.map((visit) => ({
+          id: visit.id,
+          patientType: visit.patientType,
+          patientId: visit.patientId,
+          patientName: visit.patientName,
+          patientMeta: visit.patientMeta,
+          disposition: visit.disposition,
+          status: visit.status,
+          startedAt: visit.startedAt,
+          followUpAt: visit.followUpAt,
+          nurseName: visit.nurseName,
+        }));
         return { mode, ...snapshot, recent: safeRecent, settings: settings[0] ?? null };
       }
       if (mode === "nurse") {
         await requirePermission(tx, session.userId, "clinic:care");
-        return { mode, ...(await getClinicNurseSnapshot(tx, session.userId)) };
+        return { mode, ...(await getClinicClinicalSnapshot(tx, session.userId)) };
       }
       if (mode === "search") {
         await requirePermission(tx, session.userId, "clinic:care");
+        await assertClinicClinicalActor(tx, session.userId);
         return { mode, patients: await searchClinicPatients(tx, url.searchParams.get("q") ?? "") };
       }
       if (mode === "patient") {
         await requirePermission(tx, session.userId, "clinic:records");
+        await assertClinicClinicalActor(tx, session.userId);
         const type = patientType.parse(url.searchParams.get("type")) as ClinicPatientType;
         const patientId = z.string().min(8).max(128).parse(url.searchParams.get("id"));
         return { mode, record: await getClinicPatientRecord(tx, type, patientId) };
       }
       if (mode === "medications") {
         await requirePermission(tx, session.userId, "clinic:inventory");
+        await assertClinicClinicalActor(tx, session.userId);
         return { mode, medicines: await listClinicMedications(tx, 250) };
       }
       throw new AppError("Unknown clinic view.", 400, "UNKNOWN_CLINIC_VIEW");
@@ -173,10 +190,14 @@ export async function POST(request: Request) {
         const permissionKeys = ["students:read", "clinic:care", "clinic:records", "clinic:inventory", "clinic:export", "payroll:view_own", "support:create", "support:view_own"];
         const permissions = await tx.permission.findMany({ where: { key: { in: permissionKeys } }, select: { id: true, key: true } });
         if (permissions.length !== permissionKeys.length) throw new AppError("Clinic permissions are not fully installed. Apply the latest database migration first.", 503, "CLINIC_PERMISSIONS_MISSING");
-        let role = await tx.role.findUnique({ where: { schoolId_name: { schoolId: session.schoolId, name: "School Nurse" } }, select: { id: true } });
-        if (!role) role = await tx.role.create({ data: { schoolId: session.schoolId, name: "School Nurse", key: "school_nurse", isSystem: true }, select: { id: true } });
+        let role = await tx.role.findUnique({ where: { schoolId_name: { schoolId: session.schoolId, name: "School Nurse" } }, select: { id: true, key: true } });
+        if (!role) {
+          role = await tx.role.create({ data: { schoolId: session.schoolId, name: "School Nurse", key: "school_nurse", isSystem: true }, select: { id: true, key: true } });
+        } else if (role.key !== "school_nurse") {
+          role = await tx.role.update({ where: { id: role.id }, data: { key: "school_nurse", isSystem: true }, select: { id: true, key: true } });
+        }
         await tx.rolePermission.createMany({
-          data: permissions.map((permission) => ({ schoolId: session.schoolId, roleId: role!.id, permissionId: permission.id })),
+          data: permissions.map((permission) => ({ schoolId: session.schoolId, roleId: role.id, permissionId: permission.id })),
           skipDuplicates: true,
         });
 
@@ -202,14 +223,18 @@ export async function POST(request: Request) {
           data: { schoolId: session.schoolId, actorId: session.userId, action: "clinic.nurse.created", entityType: "ClinicNurseProfile", entityId: profileId,
             after: { userId: user.id, name: user.name, email: user.email, phone: user.phone, title: input.title, qualification: input.qualification || null, licenseNo: input.licenseNo || null, portraitCaptured: Boolean(input.photoUrl), firstLoginPasswordSource: "phone" } },
         });
-        return { ok: true, nurse: { id: profileId, ...user, title: input.title }, message: `${user.name} can now sign in under Staff using the phone number or email. The phone number is the first password and must be changed after first login.` };
+        return {
+          ok: true,
+          nurse: { profileId, userId: user.id, name: user.name, email: user.email, phone: user.phone, title: input.title },
+          message: `${user.name} can now sign in under Staff using the phone number or email. The phone number is the first password and must be changed after first login.`,
+        };
       }
 
       if (input.action === "save_visit") {
         await requirePermission(tx, session.userId, "clinic:care");
         if ((input.dispensed?.length ?? 0) > 0) await requirePermission(tx, session.userId, "clinic:inventory");
-        const visitId = await createClinicVisit(tx, {
-          nurseId: session.userId,
+        const visitId = await createAuthorizedClinicVisit(tx, {
+          actorId: session.userId,
           patientType: input.patientType,
           patientId: input.patientId,
           complaint: input.complaint,
@@ -232,6 +257,7 @@ export async function POST(request: Request) {
 
       if (input.action === "save_health_profile") {
         await requirePermission(tx, session.userId, "clinic:records");
+        await assertClinicClinicalActor(tx, session.userId);
         const profileId = await saveClinicHealthProfile(tx, { ...input, actorId: session.userId });
         await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "clinic.health_profile.updated", entityType: "ClinicHealthProfile", entityId: profileId, after: { patientType: input.patientType, patientId: input.patientId } } });
         return { ok: true, profileId };
@@ -239,6 +265,7 @@ export async function POST(request: Request) {
 
       if (input.action === "add_medication") {
         await requirePermission(tx, session.userId, "clinic:inventory");
+        await assertClinicClinicalActor(tx, session.userId);
         const medicationId = await addClinicMedication(tx, { actorId: session.userId, name: input.name, strength: input.strength, form: input.form, unit: input.unit, quantity: input.quantity, minimumStock: input.minimumStock, batchNo: input.batchNo, expiryDate: input.expiryDate ? new Date(`${input.expiryDate}T00:00:00Z`) : null });
         await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "clinic.medication.created", entityType: "ClinicMedication", entityId: medicationId, after: { name: input.name, quantity: input.quantity, unit: input.unit } } });
         return { ok: true, medicationId };
@@ -246,6 +273,7 @@ export async function POST(request: Request) {
 
       if (input.action === "adjust_stock") {
         await requirePermission(tx, session.userId, "clinic:inventory");
+        await assertClinicClinicalActor(tx, session.userId);
         await adjustClinicMedicationStock(tx, { ...input, actorId: session.userId });
         await tx.auditLogSchool.create({ data: { schoolId: session.schoolId, actorId: session.userId, action: "clinic.stock.adjusted", entityType: "ClinicMedication", entityId: input.medicationId, after: { type: input.type, quantity: input.quantity, note: input.note || null } } });
         return { ok: true };
