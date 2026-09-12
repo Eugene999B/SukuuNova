@@ -1,4 +1,5 @@
 import { appendPlatformAudit, appendSchoolAudit } from "@/lib/audit";
+import { accountLoginRateIdentityForUserId } from "@/lib/account-login-identity";
 import { withTenant } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import { issueSchoolPasswordReset } from "@/lib/password-reset";
@@ -44,10 +45,10 @@ async function accountContext(schoolId: string, userId: string) {
 
 export async function getSchoolUserSupportState(schoolId: string, userId: string) {
   const context = await accountContext(schoolId, userId);
-  const identities = [context.user.email, context.user.phone];
+  const rateIdentity = accountLoginRateIdentityForUserId(context.user.id);
   const [schoolLock, guardianLock] = await Promise.all([
-    accountLoginLockState(`school-login:${context.school.uniqueCode.toLowerCase()}`, identities),
-    accountLoginLockState(`guardian-login:${context.school.uniqueCode.toLowerCase()}`, identities),
+    accountLoginLockState(`school-login:${context.school.uniqueCode.toLowerCase()}`, [rateIdentity]),
+    accountLoginLockState(`guardian-login:${context.school.uniqueCode.toLowerCase()}`, [rateIdentity]),
   ]);
   const blockedUntil = [schoolLock.blockedUntil, guardianLock.blockedUntil]
     .filter((value): value is Date => Boolean(value))
@@ -69,11 +70,11 @@ export async function getSchoolUserSupportState(schoolId: string, userId: string
 
 export async function clearSchoolUserLoginLock(schoolId: string, userId: string, actor: SupportActor, reason: string) {
   const context = await accountContext(schoolId, userId);
-  const identities = [context.user.email, context.user.phone];
+  const rateIdentity = accountLoginRateIdentityForUserId(context.user.id);
   const schoolCode = context.school.uniqueCode.toLowerCase();
   await Promise.all([
-    clearAccountLoginAttempts(`school-login:${schoolCode}`, identities),
-    clearAccountLoginAttempts(`guardian-login:${schoolCode}`, identities),
+    clearAccountLoginAttempts(`school-login:${schoolCode}`, [rateIdentity]),
+    clearAccountLoginAttempts(`guardian-login:${schoolCode}`, [rateIdentity]),
   ]);
   await withTenant(schoolId, async (tx) => {
     await appendSchoolAudit(tx, {
