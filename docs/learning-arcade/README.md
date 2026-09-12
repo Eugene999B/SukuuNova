@@ -13,6 +13,7 @@ This directory is the source of truth for the Learning Arcade rebuild.
 - `PORTFOLIO_MECHANICS_AUDIT.md` — source-grounded audit of the current 18 implementations, preservation/rebuild classification and production waves.
 - `TECHNICAL_ARCHITECTURE_RESET.md` — vNext separation between shared platform services and game-owned runtimes; replaces the universal question/answer assumption with versioned game schemas, structured actions and authoritative graders.
 - `ARCADE_SESSION_VNEXT_RFC.md` — implementable session/API proposal covering game adapters, action journals, idempotency, snapshots, authoritative grading, legacy coexistence and the four proof adapters.
+- `GREYBOX_PLAYTEST_PROTOCOL.md` — shared observation/playtest protocol for interaction comprehension, learning transfer, replay, accessibility and promotion decisions.
 
 ### Approved pre-production references / prototype candidates
 
@@ -57,13 +58,23 @@ The mechanics audit intentionally avoids a blanket rewrite:
 
 “Strong base” does not mean finished; it means the core player action is already worth preserving.
 
+## Execution tracks
+
+- **#167** — Arcade Session API vNext platform: adapter registry, persistence, action API, client session layer and test-only fixture adapter.
+- **#168** — Number Bloom direct-manipulation greybox.
+- **#169** — Cedi City money/business-simulation greybox.
+- **#170** — CodeBots executable robot/programming greybox.
+- **#171** — Signal Shield defensive evidence/incident-response greybox.
+- **#172** — shared performance, accessibility, security, content-quality and learner-playtest gates.
+
+All tracks remain under umbrella issue #159. Implementation branches should start from the then-current `main`, not from this documentation branch.
+
 ## Immediate next milestones
 
-1. Review the studio package, mechanics audit and four prototype Bibles against issue #159.
-2. Turn `ARCADE_SESSION_VNEXT_RFC.md` into work packages and a zero-game-enabled platform prototype while legacy sessions remain operational.
+1. Review the studio package, mechanics audit, RFC and four prototype Bibles against issue #159.
+2. Implement #167 as a **zero-game-enabled** platform prototype while legacy sessions remain operational.
 3. Prove idempotency, public/private mission separation, save/resume and authoritative grading using a test-only fixture adapter before a real game depends on vNext.
-4. Build greybox prototypes before polished production code: Number Bloom direct manipulation, CodeBots deterministic robot interpreter/world, Signal Shield evidence workstation and Cedi City transaction simulation.
-5. Create explicit playtest scripts and measurable promotion gates for each slice.
-6. Test the four loops with representative learners before scaling content, campaigns or art production.
-7. Promote one slice at a time through concept → paper prototype → greybox → learning prototype → vertical slice → child playtest → controlled rollout.
-8. Continue writing Bibles for the remaining 14 live flagships; do not declare the Arcade rebuild complete until every title passes its game-specific bar.
+4. Build greybox prototypes before polished production code: #168 Number Bloom, #169 Cedi City, #170 CodeBots and #171 Signal Shield.
+5. Run every slice through `GREYBOX_PLAYTEST_PROTOCOL.md` and the shared #172 promotion gate before scaling content, campaigns or art production.
+6. Promote one slice at a time through concept → paper prototype → greybox → learning prototype → vertical slice → representative learner playtest → controlled rollout.
+7. Continue writing Bibles for the remaining 14 live flagships; do not declare the Arcade rebuild complete until every title passes its game-specific bar.
