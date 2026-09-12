@@ -1,6 +1,6 @@
-import { Atom, BookOpen, Bot, Compass, Cpu, Crown, Keyboard, Leaf, Lock, MapPin, Orbit, Receipt, Recycle, Rocket, Search, Shield, Sparkles, Store, Zap } from "lucide-react";
+import { Activity, Atom, BookOpen, Bot, Compass, Cpu, Crown, Heart, Keyboard, Leaf, Lock, MapPin, Orbit, Receipt, Recycle, Rocket, Search, Shield, Sparkles, Store, Zap } from "lucide-react";
 
-export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market" | "cyber-safety" | "environment-guardian";
+export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market" | "cyber-safety" | "environment-guardian" | "body-explorer";
 
 type Props = {
   game: ArcadeLogoGame;
@@ -68,6 +68,13 @@ export default function ArcadeGameLogo({ game, size = "card" }: Props) {
     return <div className={`arcade-mark arcade-mark-${size} arcade-mark-eco`} aria-label="EcoGrid Ghana logo">
       <Leaf className="arcade-mark-main" aria-hidden="true"/>
       <Recycle className="arcade-mark-core" aria-hidden="true"/>
+      <span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span>
+    </div>;
+  }
+  if (game === "body-explorer") {
+    return <div className={`arcade-mark arcade-mark-${size} arcade-mark-bio`} aria-label="BioQuest Human Systems logo">
+      <Heart className="arcade-mark-main" aria-hidden="true"/>
+      <Activity className="arcade-mark-core" aria-hidden="true"/>
       <span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span>
     </div>;
   }
