@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fingerprint } from "lucide-react";
 import { useState } from "react";
+import { DossierExportActions } from "./DossierExportActions";
 
 export function StudentPrintActions({ studentId, studentName }: { studentId: string; studentName: string }) {
   const [state, setState] = useState<{ kind: "idle" | "working" | "error" | "done"; message?: string }>({ kind: "idle" });
@@ -38,6 +39,7 @@ export function StudentPrintActions({ studentId, studentName }: { studentId: str
       <button type="button" className="button secondary" onClick={downloadIdCard} disabled={state.kind === "working"} aria-busy={state.kind === "working"}>
         {state.kind === "working" ? "Preparing PDF…" : "Print ID card"}
       </button>
+      <DossierExportActions kind="student" id={studentId} />
       {state.kind === "error" ? <p className="product-field-error" role="alert">{state.message}</p> : null}
       {state.kind === "done" ? <p className="product-success-note" role="status">{state.message}</p> : null}
     </div>
