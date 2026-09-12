@@ -14,6 +14,28 @@ END $$;
 ALTER TABLE "LessonPlan"
   ADD COLUMN IF NOT EXISTS "weekNumber" INTEGER;
 
+-- Preserve the best available week information for historical plans. Structured
+-- plans may already carry a week number; older plans can infer it from the plan
+-- date relative to their term start instead of being flattened into Week 1.
+UPDATE "LessonPlan" lp
+SET "weekNumber" = CASE
+  WHEN (lp."documentContent"->>'weekNumber') ~ '^[0-9]+$'
+    THEN LEAST(30, GREATEST(1, (lp."documentContent"->>'weekNumber')::INTEGER))
+  ELSE LEAST(
+    30,
+    GREATEST(
+      1,
+      1 + FLOOR(EXTRACT(EPOCH FROM (lp."plannedDate" - t."startDate")) / 604800)::INTEGER
+    )
+  )
+END
+FROM "Term" t
+WHERE lp."weekNumber" IS NULL
+  AND lp."termId" = t."id"
+  AND lp."schoolId" = t."schoolId";
+
+-- Legacy plans without a term cannot be placed relative to a calendar. Keep a
+-- deterministic fallback while still honoring any structured week metadata.
 UPDATE "LessonPlan"
 SET "weekNumber" = CASE
   WHEN ("documentContent"->>'weekNumber') ~ '^[0-9]+$'
