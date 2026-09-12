@@ -9,6 +9,7 @@ import {
   selectNumberBloomMission,
   type NumberBloomMechanic,
 } from "./domain";
+import { validateNumberBloomMission } from "./validation";
 
 export const NUMBER_BLOOM_GAME = "number-bloom";
 export const NUMBER_BLOOM_SCHEMA = "v1";
@@ -29,6 +30,7 @@ export const numberBloomArcadeAdapter: ArcadeGameAdapter = {
 
   createMission(ctx) {
     const mission = selectNumberBloomMission(ctx.studentId);
+    validateNumberBloomMission(mission.publicMission, mission.privateMission, mission.initialState);
     return {
       ...mission,
       skillTargets: mission.publicMission.mechanic === "free_grow"
@@ -46,13 +48,16 @@ export const numberBloomArcadeAdapter: ArcadeGameAdapter = {
   },
 
   applyAction({ publicMission, privateMission, state, action }) {
-    const publicParsed = numberBloomPublicMissionSchema.parse(publicMission);
-    const privateParsed = numberBloomPrivateMissionSchema.parse(privateMission);
-    const current = numberBloomStateSchema.parse(state);
-    const next = applyNumberBloomAction(publicParsed, current, action as ReturnType<typeof parseNumberBloomAction>);
-    const evaluation = evaluateNumberBloomState(privateParsed, next);
-    const skillKey = skillFor(publicParsed.mechanic);
-    const ungraded = publicParsed.mechanic === "free_grow";
+    const validated = validateNumberBloomMission(publicMission, privateMission, state);
+    const next = applyNumberBloomAction(
+      validated.publicMission,
+      validated.state,
+      action as ReturnType<typeof parseNumberBloomAction>,
+    );
+    validateNumberBloomMission(validated.publicMission, validated.privateMission, next);
+    const evaluation = evaluateNumberBloomState(validated.privateMission, next);
+    const skillKey = skillFor(validated.publicMission.mechanic);
+    const ungraded = validated.publicMission.mechanic === "free_grow";
 
     return {
       state: next,
@@ -66,7 +71,7 @@ export const numberBloomArcadeAdapter: ArcadeGameAdapter = {
         message: evaluation.demonstrated
           ? "The garden shows the number relationship."
           : "The garden changed. You can keep moving things.",
-        focus: publicParsed.mechanic,
+        focus: validated.publicMission.mechanic,
         data: { progress: evaluation.progress },
       }],
       evidence: ungraded ? [] : [{
@@ -86,20 +91,18 @@ export const numberBloomArcadeAdapter: ArcadeGameAdapter = {
   },
 
   grade({ publicMission, privateMission, state }) {
-    const publicParsed = numberBloomPublicMissionSchema.parse(publicMission);
-    const privateParsed = numberBloomPrivateMissionSchema.parse(privateMission);
-    const current = numberBloomStateSchema.parse(state);
-    const evaluation = evaluateNumberBloomState(privateParsed, current);
-    const ungraded = publicParsed.mechanic === "free_grow";
+    const validated = validateNumberBloomMission(publicMission, privateMission, state);
+    const evaluation = evaluateNumberBloomState(validated.privateMission, validated.state);
+    const ungraded = validated.publicMission.mechanic === "free_grow";
 
     if (ungraded) {
       return {
         evidence: [],
         summary: {
           ungraded: true,
-          interactions: current.interactionCount,
-          selfCorrections: current.selfCorrections,
-          supportRequests: current.supportRequests,
+          interactions: validated.state.interactionCount,
+          selfCorrections: validated.state.selfCorrections,
+          supportRequests: validated.state.supportRequests,
         },
         rewards: {},
       };
@@ -107,24 +110,24 @@ export const numberBloomArcadeAdapter: ArcadeGameAdapter = {
 
     return {
       evidence: [{
-        skillKey: skillFor(publicParsed.mechanic),
+        skillKey: skillFor(validated.publicMission.mechanic),
         evidenceType: "authoritative_garden_state",
         outcome: evaluation.demonstrated ? "demonstrated" : "not_yet",
         confidence: 1,
         misconception: evaluation.misconception,
         context: {
           ...evaluation.context,
-          interactions: current.interactionCount,
-          selfCorrections: current.selfCorrections,
-          supportRequests: current.supportRequests,
+          interactions: validated.state.interactionCount,
+          selfCorrections: validated.state.selfCorrections,
+          supportRequests: validated.state.supportRequests,
         },
       }],
       summary: {
         demonstrated: evaluation.demonstrated,
-        mechanic: publicParsed.mechanic,
-        interactions: current.interactionCount,
-        selfCorrections: current.selfCorrections,
-        supportRequests: current.supportRequests,
+        mechanic: validated.publicMission.mechanic,
+        interactions: validated.state.interactionCount,
+        selfCorrections: validated.state.selfCorrections,
+        supportRequests: validated.state.supportRequests,
       },
       rewards: {},
     };
