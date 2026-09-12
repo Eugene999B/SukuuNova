@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { compare, hash } from "bcryptjs";
-import { KeyRound, LockKeyhole, ShieldCheck, UserCog, UsersRound } from "lucide-react";
+import { HeartPulse, KeyRound, LockKeyhole, ShieldCheck, UserCog, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { ClinicShell } from "@/components/ClinicShell";
 import { SettingsHero, SettingsRouteCard, SettingsSection } from "@/components/SettingsHub";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { GUARDIAN_COOKIE, getGuardianSession, createGuardianSessionToken, requireGuardianSession } from "@/lib/guardian-auth";
@@ -11,6 +12,7 @@ import { db, withTenant } from "@/lib/db";
 import { passwordLengthError, passwordMinimumForAccount, type PasswordPolicyUniverse } from "@/lib/password-policy";
 import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 import "@/components/settings-hub.css";
+import "@/app/clinic/clinic.css";
 
 type SecurityUniverse = PasswordPolicyUniverse;
 
@@ -32,8 +34,6 @@ async function changePassword(formData: FormData) {
   if (next !== confirm) throw new Error("New passwords do not match.");
 
   if (universe === "school" || universe === "teacher") {
-    // Require the same universe that rendered the form. A stale guardian or
-    // platform cookie must never redirect this action to another identity.
     const currentSchool = await requireSchoolSession();
     await throttlePasswordChange(`school:${currentSchool.schoolId}:${currentSchool.userId}`);
     const workspace = await withTenant(currentSchool.schoolId, async (tx) => {
@@ -50,7 +50,7 @@ async function changePassword(formData: FormData) {
     const token = await createSchoolSessionToken({ kind: "school", userId: currentSchool.userId, schoolId: currentSchool.schoolId, name: currentSchool.name, authorizationVersion: currentSchool.authorizationVersion, impersonationId: currentSchool.impersonationId, impersonatedByAdminId: currentSchool.impersonatedByAdminId });
     responseCookies.set(SCHOOL_COOKIE, token, sessionCookieOptions());
     responseCookies.delete(GUARDIAN_COOKIE);
-    redirect(workspace === "teacher" ? "/teacher/settings" : "/dashboard");
+    redirect(workspace === "teacher" ? "/teacher/settings" : workspace === "clinic" ? "/clinic" : "/dashboard");
   }
 
   if (universe === "guardian") {
@@ -92,8 +92,10 @@ async function changePassword(formData: FormData) {
   redirect("/");
 }
 
-function SecurityBody({ universe, required, accountName, minimumPasswordLength }: { universe: SecurityUniverse; required: boolean; accountName: string; minimumPasswordLength: number }) {
-  const related = universe === "platform" ? [
+function SecurityBody({ universe, required, accountName, minimumPasswordLength, clinic = false }: { universe: SecurityUniverse; required: boolean; accountName: string; minimumPasswordLength: number; clinic?: boolean }) {
+  const related = clinic ? [
+    { href: "/clinic", icon: HeartPulse, title: "Clinic workspace", description: "Return to consultations, health records and clinic medicines." },
+  ] : universe === "platform" ? [
     { href: "/account/settings", icon: UserCog, title: "My settings", description: "Return to your personal platform workspace preferences." },
     { href: "/platform/admins", icon: UsersRound, title: "Platform workers", description: "Review worker roles and permissions separately from your own password." },
     { href: "/platform/audit", icon: ShieldCheck, title: "Security audit", description: "Review privileged platform actions when your role permits it." },
@@ -171,6 +173,9 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
     if (!data) redirect("/dashboard");
     const universe = data.workspace === "teacher" ? "teacher" : "school";
     const minimumPasswordLength = passwordMinimumForAccount(universe, data.isElevated);
+    if (data.workspace === "clinic") {
+      return <ClinicShell schoolName={data.schoolRecord.name} schoolCode={data.schoolRecord.uniqueCode} userName={school.name} role={data.role || "Clinic staff"}><SecurityBody universe="school" clinic accountName={school.name} required={requiredByRoute} minimumPasswordLength={minimumPasswordLength} /></ClinicShell>;
+    }
     return <AppShell universe={universe} title="Account Security" subtitle="Password and login protection." active="Account Security" schoolName={data.schoolRecord.name} schoolCode={data.schoolRecord.uniqueCode} userName={school.name} role={data.role || (universe === "teacher" ? "Teacher" : "School account")}><SecurityBody universe={universe} accountName={school.name} required={requiredByRoute} minimumPasswordLength={minimumPasswordLength} /></AppShell>;
   }
 
