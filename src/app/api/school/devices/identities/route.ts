@@ -8,7 +8,7 @@ import { appendSchoolAudit } from "@/lib/audit";
 import { isOperationalStaffAccount, requireActiveStaffTarget } from "@/lib/authorization";
 
 const createSchema = z.object({
-  deviceKind: z.enum(["fingerprint", "card"]),
+  deviceKind: z.enum(["face", "fingerprint", "card"]),
   externalId: z.string().trim().min(1).max(200),
   targetType: z.enum(["student", "staff"]),
   targetId: z.string().min(1).max(100)
