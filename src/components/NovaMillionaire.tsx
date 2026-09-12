@@ -61,7 +61,7 @@ export default function NovaMillionaire({ learnerName, round, onComplete, onExit
         event.preventDefault();
         lockAnswer();
       } else if (event.key.toLowerCase() === "l") {
-        useLifeline();
+        openNovaLens();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -89,7 +89,7 @@ export default function NovaMillionaire({ learnerName, round, onComplete, onExit
     playArcadeSound("select", "logic");
   };
 
-  const useLifeline = () => {
+  const openNovaLens = () => {
     if (!question || locking || clue || lifelines <= 0) return;
     setLifelines((value) => Math.max(0, value - 1));
     setClue(`${millionaireReasoningCategory(question)} · ${millionaireReasoningCue(question)}`);
@@ -138,7 +138,7 @@ export default function NovaMillionaire({ learnerName, round, onComplete, onExit
         <div className="millionaire-question"><Eye size={19}/><h1>{question.prompt}</h1></div>
         <div className="millionaire-options">{question.options.map((option, index) => <button type="button" key={`${question.id}-${index}`} className={selected === index ? "selected" : ""} onClick={() => choose(index)} disabled={locking}><b>{String.fromCharCode(65 + index)}</b><span>{option}</span></button>)}</div>
         {clue ? <div className="millionaire-clue"><Lightbulb size={18}/><div><strong>NOVA LENS</strong><p>{clue}</p></div></div> : null}
-        <div className="millionaire-actions"><button type="button" onClick={useLifeline} disabled={locking || Boolean(clue) || lifelines <= 0}><Lightbulb size={17}/>Nova Lens <small>L</small></button><button type="button" className="primary" onClick={lockAnswer} disabled={locking || selected < 0}><LockKeyhole size={17}/>{locking ? "Locked" : "Lock answer"} <small>Enter</small></button></div>
+        <div className="millionaire-actions"><button type="button" onClick={openNovaLens} disabled={locking || Boolean(clue) || lifelines <= 0}><Lightbulb size={17}/>Nova Lens <small>L</small></button><button type="button" className="primary" onClick={lockAnswer} disabled={locking || selected < 0}><LockKeyhole size={17}/>{locking ? "Locked" : "Lock answer"} <small>Enter</small></button></div>
         <p className="millionaire-message" aria-live="polite">{message}</p>
       </section>
     </main>
