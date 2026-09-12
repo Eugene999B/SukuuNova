@@ -166,6 +166,9 @@
     .academic-page-actions,
     .platform-hero-actions,
     .school-page-actions,
+    .product-header-actions,
+    .property-hero-actions,
+    .store-hero-actions,
     .settings-action-row,
     [class*="action-row"],
     [class*="actions"]
@@ -182,10 +185,24 @@
     .academic-page-actions,
     .platform-hero-actions,
     .school-page-actions,
+    .product-header-actions,
+    .property-hero-actions,
+    .store-hero-actions,
     .settings-action-row
   ) > * {
-    min-width: 0;
+    min-width: 0 !important;
     max-width: 100%;
+  }
+
+  .product-header-actions {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .product-header-actions > * {
+    width: 100%;
+    justify-content: center;
   }
 
   /* Tab bars remain single-line and intentionally scroll inside themselves,
@@ -194,13 +211,16 @@
     .module-tabs,
     .module-tabbar,
     .school-page-tabs,
+    .product-tabs,
+    .property-tabs,
+    .store-tabs,
     .lessons-tabs,
     .homework-tabs,
     .settings-jump,
     [role="tablist"]
   ) {
-    width: 100%;
-    max-width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
     min-width: 0;
     flex-wrap: nowrap !important;
     overflow-x: auto !important;
@@ -214,6 +234,9 @@
     .module-tabs,
     .module-tabbar,
     .school-page-tabs,
+    .product-tabs,
+    .property-tabs,
+    .store-tabs,
     .lessons-tabs,
     .homework-tabs,
     .settings-jump,
@@ -226,6 +249,9 @@
     .module-tabs,
     .module-tabbar,
     .school-page-tabs,
+    .product-tabs,
+    .property-tabs,
+    .store-tabs,
     .lessons-tabs,
     .homework-tabs,
     .settings-jump,
@@ -240,7 +266,9 @@
   .module-stats,
   .school-page-metrics,
   .school-page-finance-strip,
-  .module-metrics {
+  .module-metrics,
+  .property-metrics,
+  .store-metrics {
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -249,14 +277,18 @@
 
   .module-stat,
   .school-page-metric,
-  .module-metrics > * {
+  .module-metrics > *,
+  .property-metrics > *,
+  .store-metrics > * {
     min-width: 0;
     overflow: hidden;
   }
 
   .module-stat small,
   .school-page-metric span,
-  .module-metrics span {
+  .module-metrics span,
+  .property-metrics span,
+  .store-metrics span {
     overflow-wrap: anywhere;
   }
 
@@ -264,8 +296,10 @@
   .sn-page-body :where(
     .module-table-wrap,
     .module-responsive,
-    .module-table-wrap,
     .school-page-matrix,
+    .product-table-wrap,
+    .property-table-wrap,
+    .store-table-wrap,
     .table-wrap,
     .table-scroll,
     .data-table-wrap,
@@ -283,7 +317,7 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  .sn-page-body :where(.module-table, table) {
+  .sn-page-body :where(.module-table, .product-table, table) {
     max-width: none;
   }
 
@@ -352,7 +386,13 @@
   .module-panel,
   .module-card,
   .module-side-card,
-  .school-page-card {
+  .school-page-card,
+  .product-header,
+  .product-section,
+  .property-card,
+  .property-section,
+  .store-card,
+  .store-section {
     padding: 13px !important;
   }
 
@@ -361,7 +401,9 @@
   .hero-actions,
   .academic-page-actions,
   .platform-hero-actions,
-  .school-page-actions {
+  .school-page-actions,
+  .property-hero-actions,
+  .store-hero-actions {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
     width: 100%;
@@ -372,9 +414,27 @@
   .hero-actions > *,
   .academic-page-actions > *,
   .platform-hero-actions > *,
-  .school-page-actions > * {
+  .school-page-actions > *,
+  .property-hero-actions > *,
+  .store-hero-actions > * {
     width: 100%;
     justify-content: center;
+  }
+
+  .property-hero,
+  .store-hero {
+    padding: 14px !important;
+  }
+
+  .property-hero h1,
+  .store-hero h1 {
+    font-size: clamp(23px, 7vw, 30px) !important;
+    line-height: 1.08 !important;
+  }
+
+  .property-hero p,
+  .store-hero p {
+    display: none;
   }
 
   .app-bottom-nav-item {
@@ -398,7 +458,9 @@
   .module-stats,
   .school-page-metrics,
   .school-page-finance-strip,
-  .module-metrics {
+  .module-metrics,
+  .property-metrics,
+  .store-metrics {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
