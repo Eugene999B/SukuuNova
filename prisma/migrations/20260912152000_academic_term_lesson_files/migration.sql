@@ -55,6 +55,27 @@ DO $$ BEGIN
   END IF;
 END $$;
 
+-- The previous structured lesson-plan API stores weekNumber in documentContent.
+-- Keep that compatibility path aligned with the indexed column so cached/older
+-- clients cannot silently create a Week-1 record after this migration.
+CREATE OR REPLACE FUNCTION sukuunova_sync_lesson_plan_week_number()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF NEW."documentContent" IS NOT NULL
+     AND (NEW."documentContent"->>'weekNumber') ~ '^[0-9]+$' THEN
+    NEW."weekNumber" := LEAST(30, GREATEST(1, (NEW."documentContent"->>'weekNumber')::INTEGER));
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS "LessonPlan_sync_week_number" ON "LessonPlan";
+CREATE TRIGGER "LessonPlan_sync_week_number"
+BEFORE INSERT OR UPDATE OF "documentContent" ON "LessonPlan"
+FOR EACH ROW EXECUTE FUNCTION sukuunova_sync_lesson_plan_week_number();
+
 CREATE INDEX IF NOT EXISTS "LessonPlan_school_term_class_subject_week_idx"
   ON "LessonPlan"("schoolId","termId","classId","subjectId","weekNumber");
 
