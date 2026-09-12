@@ -8,14 +8,18 @@ const source = (file: string) => fs.readFileSync(path.join(root, file), "utf8");
 
 describe("workspace and account boundary contracts", () => {
   it("keeps the canonical Principal baseline aligned with leadership expectations", () => {
-    const expected = DEFAULT_PERMISSIONS.filter((key) => key !== "students:delete");
+    const clinicalOnly = new Set(["clinic:care", "clinic:records", "clinic:inventory", "clinic:export"]);
+    const expected = DEFAULT_PERMISSIONS.filter((key) => key !== "students:delete" && !clinicalOnly.has(key));
     expect(new Set(DEFAULT_ROLE_PERMISSIONS.Principal)).toEqual(new Set(expected));
     expect(DEFAULT_ROLE_PERMISSIONS.Principal).toContain("settings:manage_roles");
     expect(DEFAULT_ROLE_PERMISSIONS.Principal).toContain("attendance:display");
     expect(DEFAULT_ROLE_PERMISSIONS.Principal).toContain("attendance:pickup_approve");
     expect(DEFAULT_ROLE_PERMISSIONS.Principal).toContain("visitors:log");
     expect(DEFAULT_ROLE_PERMISSIONS.Principal).toContain("transport:manage");
+    expect(DEFAULT_ROLE_PERMISSIONS.Principal).toContain("clinic:overview");
+    expect(DEFAULT_ROLE_PERMISSIONS.Principal).toContain("clinic:nurses_manage");
     expect(DEFAULT_ROLE_PERMISSIONS.Principal).not.toContain("students:delete");
+    for (const permission of clinicalOnly) expect(DEFAULT_ROLE_PERMISSIONS.Principal).not.toContain(permission);
   });
 
   it("refreshes Eugene Academy access in both trial and production showcase pipelines", () => {
