@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const rootLayout = readFileSync(new URL("../src/app/layout.tsx", import.meta.url), "utf8");
 const hardening = readFileSync(new URL("../src/app/mobile-responsive-hardening.css", import.meta.url), "utf8");
+const guardianDirectory = readFileSync(new URL("../src/components/product/GuardianDirectory.tsx", import.meta.url), "utf8");
 
 describe("mobile responsive layout contract", () => {
   it("loads the mobile hardening layer after the product simplification styles", () => {
@@ -40,5 +41,12 @@ describe("mobile responsive layout contract", () => {
     expect(hardening).toContain("grid-template-columns: minmax(0, 1fr) 38px !important;");
     expect(hardening).toContain(".sn-theme-switcher");
     expect(hardening).toContain(".app-icon-button {\n    display: flex !important;");
+  });
+
+  it("uses mobile family cards instead of forcing guardians through a wide table", () => {
+    expect(guardianDirectory).toContain('className="guardian-directory-cards"');
+    expect(guardianDirectory).toContain('className="guardian-directory-table"');
+    expect(hardening).toContain(".guardian-directory-table {\n    display: none !important;");
+    expect(hardening).toContain(".guardian-directory-cards {\n    display: grid;");
   });
 });
