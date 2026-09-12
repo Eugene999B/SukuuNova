@@ -4,8 +4,11 @@ import { CalendarCheck2, BookOpenCheck, UsersRound } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import { requirePermission } from "@/lib/rbac";
+import { hasPermission, requirePermission } from "@/lib/rbac";
+import { isTeachingAccount } from "@/lib/authorization";
+import { listClassSubjectOfferings } from "@/lib/class-subject-offerings";
 import { DetailGrid, ProductEmpty, ProductPageHeader, ProductSection, StatusBadge } from "@/components/product/ProductWorkspace";
+import { ClassCurriculumManager } from "./ClassCurriculumManager";
 import "@/components/product/product-workspace.css";
 
 export default async function ClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -13,7 +16,7 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
   const { id } = await params;
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "students:read");
-    const [school, klass] = await Promise.all([
+    const [school, klass, subjects, teacherCandidates, canManage] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.class.findFirst({
         where: { id, schoolId: session.schoolId },
@@ -23,15 +26,28 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
           level: true,
           classTeacher: { select: { id: true, name: true } },
           students: { orderBy: { name: "asc" }, take: 50, select: { id: true, name: true, admissionNo: true, status: true } },
-          subjectAssignments: { select: { subject: { select: { id: true, name: true } }, teacher: { select: { id: true, name: true } } } },
           timetableSlots: { orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }], take: 20, select: { dayOfWeek: true, period: true, subject: { select: { name: true } }, teacher: { select: { name: true } } } },
-          _count: { select: { students: true, subjectAssignments: true, timetableSlots: true } },
+          _count: { select: { students: true, timetableSlots: true } },
         },
       }),
+      tx.subject.findMany({ where: { schoolId: session.schoolId }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      tx.user.findMany({
+        where: { schoolId: session.schoolId, status: "active" },
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, userRoles: { select: { role: { select: { key: true, name: true } } } } },
+      }),
+      hasPermission(tx, session.userId, "classes:manage", session.schoolId),
     ]);
-    if (!klass) return { school, klass: null, attendance: [] as Array<{ type: string; count: number }> };
-    const attendance = await tx.attendanceEvent.groupBy({ by: ["type"], where: { schoolId: session.schoolId, student: { classId: klass.id } }, _count: { _all: true } });
-    return { school, klass, attendance: attendance.map((r) => ({ type: r.type, count: r._count._all })) };
+    if (!klass) return { school, klass: null, attendance: [] as Array<{ type: string; count: number }>, subjects, teachers: [], offerings: [], canManage };
+
+    const [offerings, attendance] = await Promise.all([
+      listClassSubjectOfferings(tx, session.schoolId, klass.id),
+      tx.attendanceEvent.groupBy({ by: ["type"], where: { schoolId: session.schoolId, student: { classId: klass.id } }, _count: { _all: true } }),
+    ]);
+    const teachers = teacherCandidates
+      .filter((user) => isTeachingAccount(user.userRoles.map(({ role }) => role)))
+      .map(({ userRoles: _roles, ...user }) => user);
+    return { school, klass, attendance: attendance.map((r) => ({ type: r.type, count: r._count._all })), subjects, teachers, offerings, canManage };
   });
   if (!data.school) notFound();
   if (!data.klass) {
@@ -45,17 +61,17 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
   }
   const k = data.klass;
   return (
-    <AppShell universe="school" title={`${k.level ? `${k.level} · ` : ""}${k.name}`} subtitle="Class workspace — roster, teaching, timetable and attendance." active="Classes & Houses" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+    <AppShell universe="school" title={`${k.level ? `${k.level} · ` : ""}${k.name}`} subtitle="Class workspace — roster, subjects, teachers, timetable and attendance." active="Classes & Houses" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
       <div className="product-workspace">
         <ProductPageHeader
           eyebrow={`Class · ${k.level ?? "Ungraded"}`}
           title={k.name}
-          description={k.classTeacher ? `Led by ${k.classTeacher.name} · ${k._count.students} learners · ${k._count.subjectAssignments} subject assignments` : `No class teacher yet · ${k._count.students} learners`}
+          description={k.classTeacher ? `Led by ${k.classTeacher.name} · ${k._count.students} learners · ${data.offerings.length} subjects` : `No class teacher yet · ${k._count.students} learners · ${data.offerings.length} subjects`}
           backHref="/school/classes"
           backLabel="Classes"
           stats={[
             { label: "Learners", value: String(k._count.students) },
-            { label: "Subjects", value: String(k._count.subjectAssignments) },
+            { label: "Subjects", value: String(data.offerings.length) },
             { label: "Timetable slots", value: String(k._count.timetableSlots) },
           ]}
           actions={
@@ -74,6 +90,7 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
           tabs={[
             { label: "Overview", href: `/school/classes/${k.id}`, active: true },
             { label: "Learners", href: `/school/students?classId=${k.id}`, count: k._count.students },
+            { label: "Subjects & Teachers", href: "#subjects", count: data.offerings.length },
             { label: "Timetable", href: "/school/timetable" },
           ]}
         />
@@ -86,35 +103,14 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
             ]}
           />
         </ProductSection>
-        <ProductSection eyebrow="Teaching" title={`Subjects (${k.subjectAssignments.length})`} description="Which subjects are taught here and by whom.">
-          {k.subjectAssignments.length === 0 ? (
-            <ProductEmpty title="No subjects assigned" description="Assign subjects to this class from Subjects so timetable and gradebook unlock." action={<Link className="button secondary" href="/school/subjects">Open subjects</Link>} />
-          ) : (
-            <div className="product-table-wrap">
-              <table className="product-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Subject</th>
-                    <th scope="col">Teacher</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {k.subjectAssignments.map((a, i) => (
-                    <tr key={`${a.subject.id}-${i}`}>
-                      <td>
-                        <Link href={`/school/subjects/${a.subject.id}`}>{a.subject.name}</Link>
-                      </td>
-                      <td>{a.teacher.name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </ProductSection>
+        <div id="subjects">
+          <ProductSection eyebrow="Curriculum" title={`Subjects & teachers (${data.offerings.length})`} description="Choose what this class learns first, then assign one or more teachers to each subject.">
+            <ClassCurriculumManager classId={k.id} offerings={data.offerings} subjects={data.subjects} teachers={data.teachers} canManage={data.canManage} />
+          </ProductSection>
+        </div>
         <ProductSection eyebrow="Timetable" title="Weekly slots" description="First 20 slots. Full editing lives in the timetable workspace.">
           {k.timetableSlots.length === 0 ? (
-            <ProductEmpty title="No timetable yet" description="Build the weekly grid so teachers and learners know where to be." action={<Link className="button secondary" href="/school/timetable">Open timetable</Link>} />
+            <ProductEmpty title="No timetable yet" description="Build the weekly grid after subjects and teachers are ready." action={<Link className="button secondary" href="/school/timetable">Open timetable</Link>} />
           ) : (
             <div className="product-table-wrap">
               <table className="product-table">
