@@ -13,6 +13,7 @@ import CediCityMarket from "./CediCityMarket";
 import SignalShield from "./SignalShield";
 import EcoGridGhana from "./EcoGridGhana";
 import BioQuestHumanSystems from "./BioQuestHumanSystems";
+import StyleStudioGhana from "./StyleStudioGhana";
 import ChronicleVault from "./ChronicleVault";
 import CircuitForge from "./CircuitForge";
 import ArcadeGameLogo from "./ArcadeGameLogo";
@@ -54,6 +55,7 @@ const INFO: Record<LiveGame, GameInfo> = {
   "environment-guardian": { minAgeRank:1, lockedLabel:"AGE 6+", description:"Restore Ghanaian districts through water, waste, energy and resilience systems.", tags:["Environment","Climate","Campaign"] },
   "body-explorer": { minAgeRank:1, lockedLabel:"AGE 6+", description:"Explore organs and coordinated human systems through fictional biology cases.", tags:["Science","Biology","Case adventure"] },
   "history-timeline": { minAgeRank:2, lockedLabel:"AGE 9+", description:"Repair a historical archive through chronology, sources and causal evidence.", tags:["History","Evidence","Investigation"] },
+  "culture-heritage": { minAgeRank:1, lockedLabel:"AGE 6+", description:"Create looks freely or solve untimed design briefs about textiles, patterns, function, repair and Ghanaian weaving heritage.", tags:["Creative Arts","Textiles","Design studio"] },
 };
 
 async function api(path: string, body?: unknown) {
@@ -103,6 +105,7 @@ export default function LearningArcadeV5() {
       case "environment-guardian":gameView=<EcoGridGhana {...common}/>;break;
       case "body-explorer":gameView=<BioQuestHumanSystems {...common}/>;break;
       case "history-timeline":gameView=<ChronicleVault {...common}/>;break;
+      case "culture-heritage":gameView=<StyleStudioGhana {...common}/>;break;
       default:gameView=<NovaRunner {...common}/>;break;
     }
     return <ArcadeV5GameShell game={game} sessionLabel={sessionLabel} sessionDetail={sessionDetail}>{gameView}{busy?<div className="nova-arcade-message">Saving game progress…</div>:null}{error?<div className="nova-arcade-alert" role="alert">{error}</div>:null}</ArcadeV5GameShell>;
