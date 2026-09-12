@@ -1,20 +1,33 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { PLATFORM_COOKIE, SCHOOL_COOKIE, createSchoolSessionTokenFromAuthorizationVersion, sessionCookieOptions } from "@/lib/auth";
+import { resolveAccountLoginRateIdentity } from "@/lib/account-login-identity";
 import { GUARDIAN_COOKIE } from "@/lib/guardian-auth";
-import { routeError } from "@/lib/errors";
+import { AppError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { authenticateSchoolUser } from "@/lib/login-service";
-import { clearLoginAttempts, recordLoginAttempt, requestIp } from "@/lib/rate-limit";
+import { assertAccountLoginAllowed, clearAccountLoginAttempts, recordFailedAccountLogin } from "@/lib/rate-limit";
 
 const schema = z.object({ uniqueCode: z.string().trim().min(2).max(80), identifier: z.string().trim().min(3).max(254), password: z.string().min(1).max(256) });
 
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
-    const rateKey = await recordLoginAttempt("school-login:" + input.uniqueCode.toLowerCase(), input.identifier, requestIp(request.headers));
-    const account = await authenticateSchoolUser(input);
-    await clearLoginAttempts(rateKey);
+    const scope = "school-login:" + input.uniqueCode.toLowerCase();
+    const rateIdentity = await resolveAccountLoginRateIdentity({ schoolCode: input.uniqueCode, identifier: input.identifier, universe: "school" });
+    await assertAccountLoginAllowed(scope, rateIdentity);
+
+    let account;
+    try {
+      account = await authenticateSchoolUser(input);
+    } catch (error) {
+      if (error instanceof AppError && error.status === 401) {
+        await recordFailedAccountLogin(scope, rateIdentity);
+      }
+      throw error;
+    }
+
+    await clearAccountLoginAttempts(scope, [rateIdentity]);
     const response = NextResponse.json({ ok: true, user: { name: account.name, schoolName: account.schoolName, portal: account.portal, roles: account.roles, needsPasswordChange: account.needsPasswordChange } });
     response.cookies.set(SCHOOL_COOKIE, await createSchoolSessionTokenFromAuthorizationVersion({ kind: "school", userId: account.userId, schoolId: account.schoolId, name: account.name }, account.authorizationVersion), sessionCookieOptions());
     response.cookies.delete(PLATFORM_COOKIE);
