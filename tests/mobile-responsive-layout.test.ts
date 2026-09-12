@@ -37,9 +37,10 @@ describe("mobile responsive layout contract", () => {
     expect(hardening).toContain(".sn-speed-dial {\n    display: none !important;");
   });
 
-  it("uses the compact phone header for search plus notifications", () => {
-    expect(hardening).toContain("grid-template-columns: minmax(0, 1fr) 38px !important;");
-    expect(hardening).toContain(".sn-theme-switcher");
+  it("uses the compact phone header without hiding theme or notification controls", () => {
+    expect(hardening).toContain("grid-template-columns: minmax(0, 1fr) 38px 38px !important;");
+    expect(hardening).toContain(".sn-theme-button .sn-theme-button-icon");
+    expect(hardening).toContain("display: inline-flex !important;");
     expect(hardening).toContain(".app-icon-button {\n    display: flex !important;");
   });
 
