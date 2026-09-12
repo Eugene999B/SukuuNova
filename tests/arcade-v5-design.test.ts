@@ -4,12 +4,12 @@ import { ARCADE_SESSION_VARIETY_MIN, ARCADE_V5_IDENTITIES, arcadeGameRewardCount
 describe("Learning Arcade V5 identities", () => {
   it("gives every flagship its own world, reward and genre-aware progression", () => {
     const identities = Object.values(ARCADE_V5_IDENTITIES);
-    expect(identities).toHaveLength(16);
-    expect(new Set(identities.map((item) => item.game)).size).toBe(16);
-    expect(new Set(identities.map((item) => item.world)).size).toBe(16);
-    expect(new Set(identities.map((item) => item.rewardName)).size).toBe(16);
-    expect(new Set(identities.map((item) => item.accent)).size).toBe(16);
-    expect(new Set(identities.map((item) => item.progression.mode)).size).toBeGreaterThanOrEqual(9);
+    expect(identities).toHaveLength(17);
+    expect(new Set(identities.map((item) => item.game)).size).toBe(17);
+    expect(new Set(identities.map((item) => item.world)).size).toBe(17);
+    expect(new Set(identities.map((item) => item.rewardName)).size).toBe(17);
+    expect(new Set(identities.map((item) => item.accent)).size).toBe(17);
+    expect(new Set(identities.map((item) => item.progression.mode)).size).toBeGreaterThanOrEqual(10);
     for (const identity of identities) {
       expect(identity.introTitle.length).toBeGreaterThan(8);
       expect(identity.introCopy.length).toBeGreaterThan(40);
@@ -27,9 +27,12 @@ describe("Learning Arcade V5 identities", () => {
     expect(ARCADE_V5_IDENTITIES["money-math-market"].progression.nodes).toHaveLength(0);
   });
 
-  it("uses different progression structures for gardens, adventures, tournaments, expeditions, contracts and navigation", () => {
+  it("uses different progression structures for gardens, ladders, adventures, tournaments, expeditions, contracts and navigation", () => {
     expect(ARCADE_V5_IDENTITIES["number-pop"].progression.mode).toBe("garden");
     expect(ARCADE_V5_IDENTITIES["number-pop"].progression.nodes).toHaveLength(10);
+    expect(ARCADE_V5_IDENTITIES.logic.progression.mode).toBe("ladder");
+    expect(ARCADE_V5_IDENTITIES.logic.progression.nodes).toHaveLength(10);
+    expect(ARCADE_V5_IDENTITIES.logic.progression.nodes.at(-1)).toBe("Nova Crown");
     expect(ARCADE_V5_IDENTITIES.word.progression.mode).toBe("adventure");
     expect(ARCADE_V5_IDENTITIES.word.progression.nodes).toHaveLength(10);
     expect(ARCADE_V5_IDENTITIES["keyboard-ninja"].progression.mode).toBe("tournament");
@@ -49,6 +52,8 @@ describe("Learning Arcade V5 adaptive progression", () => {
   it("maps each node journey proportionally onto five adaptive difficulty tiers", () => {
     expect(arcadeProgressionDifficulty("number-pop", 1)).toBe(1);
     expect(arcadeProgressionDifficulty("number-pop", 10)).toBe(5);
+    expect(arcadeProgressionDifficulty("logic", 1)).toBe(1);
+    expect(arcadeProgressionDifficulty("logic", 10)).toBe(5);
     expect(arcadeProgressionDifficulty("keyboard-ninja", 1)).toBe(1);
     expect(arcadeProgressionDifficulty("keyboard-ninja", 8)).toBe(5);
     expect(arcadeProgressionDifficulty("word", 5)).toBe(3);
