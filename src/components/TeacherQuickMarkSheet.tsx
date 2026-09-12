@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClipboardCheck, Loader2, Plus } from "lucide-react";
 
-type Kind = "Classwork" | "Homework" | "Exercise" | "Participation" | "Quiz" | "Exam";
+export type QuickMarkKind = "Classwork" | "Homework" | "Exercise" | "Participation" | "Quiz" | "Exam";
 
 type Props = {
   classId: string;
@@ -13,9 +13,8 @@ type Props = {
   teachingWeeks: number;
   termStart: string;
   termEnd: string;
+  allowedKinds: QuickMarkKind[];
 };
-
-const kinds: Kind[] = ["Classwork", "Homework", "Exercise", "Participation", "Quiz", "Exam"];
 
 function boundedToday(start: string, end: string) {
   const today = new Date().toISOString().slice(0, 10);
@@ -31,10 +30,11 @@ function suggestedWeek(date: string, start: string, teachingWeeks: number) {
   return Math.max(1, Math.min(teachingWeeks, Math.floor((dateMs - startMs) / 604800000) + 1));
 }
 
-export default function TeacherQuickMarkSheet({ classId, subjectId, termId, teachingWeeks, termStart, termEnd }: Props) {
+export default function TeacherQuickMarkSheet({ classId, subjectId, termId, teachingWeeks, termStart, termEnd, allowedKinds }: Props) {
   const router = useRouter();
   const initialDate = boundedToday(termStart, termEnd);
-  const [kind, setKind] = useState<Kind>("Classwork");
+  const kinds = allowedKinds.length ? allowedKinds : (["Classwork"] as QuickMarkKind[]);
+  const [kind, setKind] = useState<QuickMarkKind>(kinds[0]);
   const [weekNumber, setWeekNumber] = useState(() => suggestedWeek(initialDate, termStart, teachingWeeks));
   const [workDate, setWorkDate] = useState(initialDate);
   const [maxScore, setMaxScore] = useState(10);
@@ -72,7 +72,7 @@ export default function TeacherQuickMarkSheet({ classId, subjectId, termId, teac
         <ClipboardCheck size={19} />
       </div>
       <div className="gradebook-quick-sheet-fields">
-        <label><span>Type</span><select value={kind} disabled={busy} onChange={(event) => setKind(event.target.value as Kind)}>{kinds.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label><span>Type</span><select value={kind} disabled={busy} onChange={(event) => setKind(event.target.value as QuickMarkKind)}>{kinds.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <label><span>Week</span><select value={weekNumber} disabled={busy} onChange={(event) => setWeekNumber(Number(event.target.value))}>{weekOptions.map((week) => <option key={week} value={week}>Week {week}</option>)}</select></label>
         <label><span>Date</span><input type="date" min={termStart} max={termEnd} value={workDate} disabled={busy} onChange={(event) => setWorkDate(event.target.value)} /></label>
         <label><span>Out of</span><input type="number" min={1} max={100000} inputMode="decimal" value={maxScore} disabled={busy} onChange={(event) => setMaxScore(Number(event.target.value))} /></label>
