@@ -19,6 +19,7 @@ import { createCircuitForgeQuestions } from "./circuit-forge-content";
 import { createStyleStudioQuestions } from "./style-studio-ghana-content";
 import { createSolarNavigatorQuestions } from "./solar-navigator-content";
 import { createNumberBloomQuestions } from "./number-bloom-content";
+import { createAnimationStoryLabQuestions } from "./animation-story-lab-content";
 import { arcadeProgressionDifficulty, arcadeProgressionNodeName, arcadeV5Progression } from "./arcade-v5-design";
 import { createArcadeSessionRemix, type ArcadeSessionRemix } from "./arcade-session-remix";
 import type { ArcadeAgeBand } from "./arcade-catalog";
@@ -43,6 +44,7 @@ function storedRemix(value: unknown) {
 
 function generate(game: string, difficulty: number, length: number, weakKeys: readonly string[] = []): StoredQuestion[] {
   if (game === "number-pop") return createNumberBloomQuestions(difficulty, length);
+  if (game === "sentence-scramble") return createAnimationStoryLabQuestions(difficulty, length);
   if (game === "keyboard-ninja") return createTurboTypeQuestions(difficulty, length, weakKeys);
   if (game === "comprehension-quest") return createReadingQuestQuestions(difficulty, length);
   if (game === "coding-sequence") return createCodeBotsQuestions(difficulty, length);
@@ -125,7 +127,9 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
   const varied = buildVariedArcadeQuestionSet(generator, round.roundLength, recentSignatures, 12);
   const presented = varied.questions.map((question, index) => {
     const agePresented = presentArcadeQuestionForAge(question, ageBand, `${round.id}:${sessionRemix.mutationKey}`, index);
-    return round.game === "number-pop" ? { ...agePresented, prompt: question.prompt, presentationVariant: "Number Bloom picture garden" } : agePresented;
+    if (round.game === "number-pop") return { ...agePresented, prompt: question.prompt, presentationVariant: "Number Bloom picture garden" };
+    if (round.game === "sentence-scramble") return { ...agePresented, prompt: question.prompt, presentationVariant: "Animation Story Lab storyboard" };
+    return agePresented;
   });
   const nextSnapshot = {
     ...snapshot,
@@ -147,7 +151,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     progressionRequestedDifficulty: progressionDifficulty,
     levelRequestedDifficulty: progressionDifficulty,
     ageAdjustedDifficulty: learningPlan.targetDifficulty,
-    presentation: round.game === "number-pop" ? "number_bloom_v1" : round.game === "logic" ? "nova_millionaire_v1" : round.game === "keyboard-ninja" ? "turbotype_v1" : round.game === "comprehension-quest" ? "reading_quest_v1" : round.game === "coding-sequence" ? "codebots_v1" : round.game === "ghana-map-master" ? "geoquest_v1" : round.game === "money-math-market" ? "cedi_city_market_v1" : round.game === "cyber-safety" ? "signal_shield_v1" : round.game === "environment-guardian" ? "ecogrid_ghana_v1" : round.game === "body-explorer" ? "bioquest_human_systems_v1" : round.game === "history-timeline" ? "chronicle_vault_v1" : round.game === "circuit-logic" ? "circuit_forge_v1" : round.game === "culture-heritage" ? "style_studio_ghana_v1" : round.game === "space-explorer" ? "solar_navigator_v1" : "adaptive_director_v1",
+    presentation: round.game === "number-pop" ? "number_bloom_v1" : round.game === "logic" ? "nova_millionaire_v1" : round.game === "sentence-scramble" ? "animation_story_lab_v1" : round.game === "keyboard-ninja" ? "turbotype_v1" : round.game === "comprehension-quest" ? "reading_quest_v1" : round.game === "coding-sequence" ? "codebots_v1" : round.game === "ghana-map-master" ? "geoquest_v1" : round.game === "money-math-market" ? "cedi_city_market_v1" : round.game === "cyber-safety" ? "signal_shield_v1" : round.game === "environment-guardian" ? "ecogrid_ghana_v1" : round.game === "body-explorer" ? "bioquest_human_systems_v1" : round.game === "history-timeline" ? "chronicle_vault_v1" : round.game === "circuit-logic" ? "circuit_forge_v1" : round.game === "culture-heritage" ? "style_studio_ghana_v1" : round.game === "space-explorer" ? "solar_navigator_v1" : "adaptive_director_v1",
   };
 
   await tx.$executeRaw`
