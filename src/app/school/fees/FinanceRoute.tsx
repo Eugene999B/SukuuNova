@@ -1,41 +1,9 @@
-import { AppShell } from "@/components/AppShell";
-import FinanceRuntimeBoundary from "@/components/FinanceRuntimeBoundary";
-import FinanceWorkspaceSafe from "@/components/FinanceWorkspaceSafe";
-import { requireSchoolSession } from "@/lib/school-auth";
-import { withTenant } from "@/lib/db";
+import { redirect } from "next/navigation";
 
-export default async function FinanceRoute({ mode }: { mode: "overview" | "fees" | "invoices" | "payments" | "arrears" | "reports" }) {
-  const session = await requireSchoolSession();
-  let school: { name: string; uniqueCode: string } | null = null;
-  try {
-    school = await withTenant(session.schoolId, (tx) => tx.school.findUnique({
-      where: { id: session.schoolId },
-      select: { name: true, uniqueCode: true },
-    }));
-  } catch (error) {
-    console.error("Finance shell school identity lookup failed", error);
-  }
-
-  const schoolName = school?.name || "School";
-  const schoolCode = school?.uniqueCode || "";
-  const active = mode === "invoices" ? "Invoices"
-    : mode === "payments" ? "Payments"
-      : mode === "arrears" ? "Arrears & Balances"
-        : mode === "reports" ? "Finance Reports"
-          : "School Fees";
-  const title = mode === "reports" ? "Finance Reports" : mode === "arrears" ? "Arrears & Balances" : mode === "payments" ? "Payments" : mode === "invoices" ? "Invoices" : "School Fees";
-
-  return <AppShell
-    universe="school"
-    title={title}
-    subtitle="Billing, collections, balances, receipts and controlled financial reporting."
-    active={active}
-    schoolName={schoolName}
-    schoolCode={schoolCode}
-    userName={session.name}
-  >
-    <FinanceRuntimeBoundary area="finance">
-      <FinanceWorkspaceSafe mode={mode} schoolName={schoolName} />
-    </FinanceRuntimeBoundary>
-  </AppShell>;
+export default function FinanceRoute({ mode }: { mode: "overview" | "fees" | "invoices" | "payments" | "arrears" | "reports" }) {
+  if (mode === "payments") redirect("/school/finance/payments");
+  if (mode === "reports") redirect("/school/finance/reports");
+  if (mode === "arrears" || mode === "invoices") redirect("/school/finance/history");
+  if (mode === "fees") redirect("/school/finance/fees");
+  redirect("/school/finance");
 }
