@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Droplets, RotateCcw, Volume2 } from "lucide-react";
 import type {
   NumberBloomContainer,
@@ -8,6 +8,7 @@ import type {
   NumberBloomPublicMission,
   NumberBloomState,
 } from "@/lib/arcade-vnext/games/number-bloom/domain";
+import { findNearestNumberBloomSnap } from "@/lib/arcade-vnext/games/number-bloom/snap";
 import "./number-bloom.css";
 import "./number-bloom-vnext.css";
 
@@ -43,8 +44,16 @@ function pairNumber(state: NumberBloomState, itemId: string) {
 }
 
 function objectSymbol(item: NumberBloomItemState, watered: boolean) {
-  if (item.kind === "seed" && watered) return "🌱";
+  if (item.kind === "seed" && watered) return "🌼";
   return OBJECT_SYMBOLS[item.kind];
+}
+
+function slotAddress(element: HTMLElement | null) {
+  if (!element) return null;
+  const containerId = element.dataset.containerId;
+  const slot = Number(element.dataset.slot);
+  if (!containerId || !Number.isInteger(slot)) return null;
+  return { containerId, slot };
 }
 
 export default function NumberBloomVNextGreybox({
@@ -55,6 +64,7 @@ export default function NumberBloomVNextGreybox({
   reducedMotion = false,
   feedback,
 }: Props) {
+  const rootRef = useRef<HTMLElement | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [dragItemId, setDragItemId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -122,22 +132,44 @@ export default function NumberBloomVNextGreybox({
   const startPointerDrag = (event: ReactPointerEvent<HTMLElement>, itemId: string) => {
     if (disabled || busy) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     setDragItemId(itemId);
     setSelectedItemId(itemId);
+  };
+
+  const nearestOpenSlot = (x: number, y: number) => {
+    const root = rootRef.current;
+    if (!root || typeof document === "undefined") return null;
+
+    const directElement = document.elementFromPoint(x, y)?.closest("[data-bloom-slot]") as HTMLElement | null;
+    if (directElement && root.contains(directElement)) {
+      const direct = slotAddress(directElement);
+      if (direct && !itemInSlot(state, direct.containerId, direct.slot)) return direct;
+    }
+
+    const candidates = Array.from(root.querySelectorAll<HTMLElement>("[data-bloom-slot]"))
+      .map((element) => {
+        const address = slotAddress(element);
+        if (!address || itemInSlot(state, address.containerId, address.slot)) return null;
+        const rect = element.getBoundingClientRect();
+        return {
+          ...address,
+          rect: { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom },
+        };
+      })
+      .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null);
+
+    return findNearestNumberBloomSnap(x, y, candidates);
   };
 
   const finishPointerDrag = async (event: ReactPointerEvent<HTMLElement>) => {
     if (!dragItemId || disabled || busy) return;
     const item = state.items.find((candidate) => candidate.id === dragItemId);
     setDragItemId(null);
-    if (!item || typeof document === "undefined") return;
-    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-bloom-slot]") as HTMLElement | null;
+    if (!item) return;
+    const target = nearestOpenSlot(event.clientX, event.clientY);
     if (!target) return;
-    const containerId = target.dataset.containerId;
-    const targetSlot = Number(target.dataset.slot);
-    if (!containerId || !Number.isInteger(targetSlot)) return;
-    if (itemInSlot(state, containerId, targetSlot)) return;
-    await sendPlacement(item, containerId, targetSlot);
+    await sendPlacement(item, target.containerId, target.slot);
   };
 
   const removeSelected = async () => {
@@ -196,6 +228,7 @@ export default function NumberBloomVNextGreybox({
 
   return (
     <section
+      ref={rootRef}
       className="number-bloom bloom-vnext"
       data-reduced-motion={reducedMotion ? "true" : "false"}
       aria-label="Number Bloom direct manipulation greybox"
@@ -214,8 +247,12 @@ export default function NumberBloomVNextGreybox({
       </header>
 
       <main className="bloom-vnext-play">
-        <section className="bloom-vnext-goal" aria-label={mission.instruction.spoken}>
-          {targetNumber !== null ? <strong aria-hidden="true">{targetNumber}</strong> : <span aria-hidden="true">👀 ↔ 🌼</span>}
+        <section className={`bloom-vnext-goal ${mission.mechanic === "free_grow" ? "toy" : ""}`} aria-label={mission.instruction.spoken}>
+          {mission.mechanic === "free_grow"
+            ? <span aria-hidden="true">🌱 💧 🌼 🧺</span>
+            : targetNumber !== null
+              ? <strong aria-hidden="true">{targetNumber}</strong>
+              : <span aria-hidden="true">👀 ↔ 🌼</span>}
           <p>{mission.instruction.spoken}</p>
         </section>
 
@@ -249,7 +286,8 @@ export default function NumberBloomVNextGreybox({
           </section>
         ) : null}
 
-        <section className="bloom-vnext-tray" aria-label="Garden object tray">
+        <section className="bloom-vnext-tray" aria-label={mission.mechanic === "free_grow" ? "Seed basket" : "Garden object tray"}>
+          {mission.mechanic === "free_grow" ? <span className="bloom-vnext-basket-label" aria-hidden="true">🧺</span> : null}
           <div className="bloom-vnext-loose">
             {looseItems.map((item) => (
               <button
@@ -268,7 +306,12 @@ export default function NumberBloomVNextGreybox({
 
           <div className="bloom-vnext-tools">
             {selectedItem?.containerId ? (
-              <button type="button" disabled={disabled || busy} onClick={() => void removeSelected()} aria-label="Return selected object to the tray">
+              <button
+                type="button"
+                disabled={disabled || busy}
+                onClick={() => void removeSelected()}
+                aria-label={mission.mechanic === "free_grow" ? "Gather selected bloom into the basket" : "Return selected object to the tray"}
+              >
                 <RotateCcw size={24} aria-hidden="true" />
                 <span aria-hidden="true">🧺</span>
               </button>
@@ -289,7 +332,9 @@ export default function NumberBloomVNextGreybox({
         </section>
 
         <div className="bloom-vnext-status" aria-live="polite">
-          {busy ? "Garden changing…" : feedback ?? "Touch an object, then touch a place for it."}
+          {busy ? "Garden changing…" : feedback ?? (mission.mechanic === "free_grow"
+            ? "Plant, water, gather, and rearrange anything you like."
+            : "Touch an object, then touch a place for it.")}
         </div>
       </main>
     </section>
