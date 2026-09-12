@@ -1,6 +1,8 @@
+import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { requirePlatformSession } from "@/lib/auth";
-import { requirePlatformPermission, getPlatformSchoolScope } from "@/lib/platform-permissions";
+import { requirePlatformPermission, getPlatformSchoolScope, hasPlatformPermission } from "@/lib/platform-permissions";
 import { getPlatformOverview } from "@/lib/platform-admin-service";
 import { getScopedPlatformOverview } from "@/lib/platform-scoped-overview";
 import { getPlatformOwnerIntelligence } from "@/lib/platform-owner-intelligence";
@@ -19,9 +21,10 @@ export default async function SchoolsPage() {
     const id = (value as Record<string, unknown>).id;
     return typeof id === "string" ? [id] : [];
   });
-  const [intelligence, storageBySchool] = await Promise.all([
+  const [intelligence, storageBySchool, canSecurity] = await Promise.all([
     getPlatformOwnerIntelligence({ schoolIds: schoolScope === null ? schoolIds : schoolScope }),
     getSchoolStorageEstimates(schoolIds),
+    hasPlatformPermission(session, "security.manage"),
   ]);
 
   return (
@@ -33,6 +36,7 @@ export default async function SchoolsPage() {
       userName={session.name}
       role={session.role}
     >
+      {canSecurity ? <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}><Link href="/platform/account-control" className="app-action"><ShieldCheck size={15}/><strong>Account Control</strong></Link></div> : null}
       <PlatformSchoolsConsole overview={overview} intelligence={intelligence} storageBySchool={storageBySchool} />
     </AppShell>
   );
