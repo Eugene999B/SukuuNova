@@ -64,13 +64,13 @@
     display: none !important;
   }
 
-  /* On phones, operational notifications are more useful than a permanent
-   * theme control. Theme choice remains available from settings. */
+  /* Phone header: search plus two compact utilities. The previous mobile rule
+   * hid every span inside the theme button, including the icon itself. */
   .app-top-actions {
     width: 100%;
     min-width: 0;
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) 38px !important;
+    grid-template-columns: minmax(0, 1fr) 38px 38px !important;
     gap: 8px !important;
     align-items: center;
   }
@@ -89,8 +89,34 @@
   }
 
   .app-search-kbd,
-  .app-search kbd,
+  .app-search kbd {
+    display: none !important;
+  }
+
   .sn-theme-switcher {
+    display: block !important;
+    width: 38px;
+    min-width: 38px;
+    position: relative !important;
+    right: auto !important;
+    bottom: auto !important;
+  }
+
+  .sn-theme-button {
+    width: 38px !important;
+    min-width: 38px !important;
+    height: 38px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+
+  .sn-theme-button .sn-theme-button-icon {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sn-theme-button .sn-theme-button-label {
     display: none !important;
   }
 
