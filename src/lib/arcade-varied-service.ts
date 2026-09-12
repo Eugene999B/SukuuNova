@@ -116,7 +116,8 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
   let generationAttempt = 0;
   const generator = () => {
     const sequence = learningPlan.generationDifficulties;
-    const candidateDifficulty = sequence[generationAttempt % sequence.length] ?? learningPlan.targetDifficulty;
+    const directedDifficulty = sequence[generationAttempt % sequence.length] ?? learningPlan.targetDifficulty;
+    const candidateDifficulty = round.game === "number-pop" && progressionDifficulty ? progressionDifficulty : directedDifficulty;
     generationAttempt += 1;
     return generate(round.game, candidateDifficulty, round.roundLength, weakKeys);
   };
@@ -132,6 +133,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     progressionNode,
     progressionNodeName,
     sessionRemix,
+    ...(round.game === "number-pop" ? { numberBloomTier: progressionDifficulty ?? 1 } : {}),
     ...(round.game === "keyboard-ninja" ? { typingFocusKeys: weakKeys } : {}),
     ...(progressionNode ? { selectedLevel: progressionNode, levelName: progressionNodeName } : {}),
     recentRoundWindow: history.length,
