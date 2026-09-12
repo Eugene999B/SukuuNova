@@ -1,7 +1,7 @@
 import type { ArcadeV5GameKey } from "./arcade-v5-design";
 
 export type ArcadeTimingPolicy = "untimed" | "soft-pressure" | "skill-timed";
-export type ArcadeOpeningStyle = "runner" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive";
+export type ArcadeOpeningStyle = "runner" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio";
 
 export type ArcadeExperienceProfile = {
   family: string;
@@ -144,6 +144,16 @@ export const ARCADE_V6_EXPERIENCES: Record<ArcadeV5GameKey, ArcadeExperienceProf
     timingLabel: "Untimed investigation · evidence before verdict",
     help: ["Inspect the archive case and its sources.", "Check chronology, provenance and corroborating evidence.", "Make a verdict only after the evidence supports it."],
     controls: ["Tap evidence and choices", "Compare: inspect sources", "Enter: submit verdict"],
+  },
+  "culture-heritage": {
+    family: "Dress-up design studio",
+    openingStyle: "studio",
+    menuSubtitle: "Create freely, style a model, then solve design briefs without grading personal taste.",
+    learningPromise: "Textile heritage, pattern mathematics, functional design, repair and source respect are learned through dressing and making.",
+    timing: "untimed",
+    timingLabel: "Untimed studio · creativity and careful design come first",
+    help: ["Use Free Style to mix outfits with no correctness score.", "Open Design Missions when you want a client brief with one objective learning constraint.", "Try pieces on the model, ask for a clue, then commit the look for secure review."],
+    controls: ["Touch / 1–4 / arrows: choose wardrobe pieces", "H: studio clue", "Enter: commit a Design Mission"],
   },
 };
 

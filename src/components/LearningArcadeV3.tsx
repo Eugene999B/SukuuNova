@@ -13,12 +13,13 @@ import CediCityMarket from "./CediCityMarket";
 import SignalShield from "./SignalShield";
 import EcoGridGhana from "./EcoGridGhana";
 import BioQuestHumanSystems from "./BioQuestHumanSystems";
+import StyleStudioGhana from "./StyleStudioGhana";
 import ArcadeProgressionHub from "./ArcadeProgressionHub";
 import ArcadeGameLogo from "./ArcadeGameLogo";
 import "./nova-learning-arcade.css";
 
 type AgeBand = "age_4_5" | "age_6_8" | "age_9_11" | "age_12_14" | "age_15_18";
-type LiveGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market" | "cyber-safety" | "environment-guardian" | "body-explorer";
+type LiveGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market" | "cyber-safety" | "environment-guardian" | "body-explorer" | "culture-heritage";
 type Child = { id: string; name: string; classId: string | null; class: { name: string; level: string | null } | null };
 type Progress = { game: string; rounds: number; xp: number; level: number; accuracy: number | null; badges: string[] };
 type Overview = {
@@ -29,6 +30,13 @@ type Overview = {
   recent: Array<{ id: string; game: string; correct: number; stars: number; difficulty: number; xp: number; score: number; roundLength: number }>;
   recommendedAgeBand: AgeBand | null;
   allowedAgeBands: AgeBand[];
+};
+type StudioPiece = {
+  id: string;
+  label: string;
+  slot: "fabric" | "top" | "bottom" | "wrap" | "accessory" | "outer";
+  pattern: "kente" | "stripe" | "check" | "solid" | "repeat" | "mirror" | "rework" | "weather";
+  swatch: "sun" | "forest" | "sky" | "berry" | "earth" | "night" | "coral" | "mint";
 };
 type QuestionScene = {
   cue?: string;
@@ -65,6 +73,14 @@ type QuestionScene = {
   strainLevel?: 1 | 2 | 3 | 4 | 5;
   bay?: string;
   caseId?: string;
+  studioMission?: "weaving" | "heritage" | "pattern" | "function" | "repair" | "materials";
+  client?: string;
+  brief?: string;
+  constraint?: string;
+  runwayTheme?: string;
+  wardrobe?: StudioPiece[];
+  heritageNote?: string;
+  studioId?: string;
 };
 type Question = { id: string; kind?: string; prompt: string; options: string[]; answer?: string; explanation?: string; correct?: boolean; scene?: QuestionScene };
 type LearningPlan = {
@@ -97,6 +113,20 @@ type Round = {
 };
 type Leaderboard = { rows: Array<{ rank: number; studentId: string; displayName: string; bestScore: number; totalXp: number; rounds: number }> };
 
+type GameCard = {
+  game: LiveGame;
+  className: string;
+  title: string;
+  description: string;
+  tags: string[];
+  eligible: boolean;
+  lockedLabel: string;
+  progress?: Progress;
+  playLabel: string;
+  continueLabel: string;
+  primary?: boolean;
+};
+
 const ageLabels: Record<AgeBand, string> = {
   age_4_5: "Age 4–5", age_6_8: "Age 6–8", age_9_11: "Age 9–11", age_12_14: "Age 12–14", age_15_18: "Age 15–18",
 };
@@ -112,6 +142,7 @@ const gameLabels: Record<LiveGame, string> = {
   "cyber-safety": "Signal Shield",
   "environment-guardian": "EcoGrid Ghana",
   "body-explorer": "BioQuest: Human Systems",
+  "culture-heritage": "Style Studio Ghana",
 };
 
 function displayAnswer(value?: string) {
@@ -134,6 +165,7 @@ function completionNoun(game: LiveGame) {
   if (game === "cyber-safety") return "CyberOps shift";
   if (game === "environment-guardian") return "Restoration shift";
   if (game === "body-explorer") return "BioLab shift";
+  if (game === "culture-heritage") return "Design collection";
   return "Mission";
 }
 
@@ -222,7 +254,9 @@ export default function LearningArcadeV3() {
                       ? "EcoGrid saved. Community restoration will resume at the next project."
                       : currentGame === "body-explorer"
                         ? "BioLab saved. BioQuest will resume at the next human-systems case."
-                        : "Mission saved. Nova Runner will resume from your next Knowledge Gate.");
+                        : currentGame === "culture-heritage"
+                          ? "Style Studio saved. Your collection will resume at the next design brief."
+                          : "Mission saved. Nova Runner will resume from your next Knowledge Gate.");
     await refresh(studentId);
   });
 
@@ -245,8 +279,9 @@ export default function LearningArcadeV3() {
   const signalProgress = progressFor("cyber-safety");
   const ecoProgress = progressFor("environment-guardian");
   const bioProgress = progressFor("body-explorer");
+  const styleProgress = progressFor("culture-heritage");
   const totalXp = useMemo(() => data?.progress.reduce((sum, item) => sum + item.xp, 0) ?? 0, [data?.progress]);
-  const highestGameLevel = Math.max(runnerProgress?.level ?? 1, typingProgress?.level ?? 1, astroProgress?.level ?? 1, wordProgress?.level ?? 1, readingProgress?.level ?? 1, codeBotsProgress?.level ?? 1, geoProgress?.level ?? 1, marketProgress?.level ?? 1, signalProgress?.level ?? 1, ecoProgress?.level ?? 1, bioProgress?.level ?? 1);
+  const highestGameLevel = Math.max(runnerProgress?.level ?? 1, typingProgress?.level ?? 1, astroProgress?.level ?? 1, wordProgress?.level ?? 1, readingProgress?.level ?? 1, codeBotsProgress?.level ?? 1, geoProgress?.level ?? 1, marketProgress?.level ?? 1, signalProgress?.level ?? 1, ecoProgress?.level ?? 1, bioProgress?.level ?? 1, styleProgress?.level ?? 1);
   const astroEligible = ageBand === "age_9_11" || ageBand === "age_12_14" || ageBand === "age_15_18";
   const wordEligible = ageBand !== "age_4_5";
   const readingEligible = astroEligible;
@@ -256,6 +291,22 @@ export default function LearningArcadeV3() {
   const signalEligible = astroEligible;
   const ecoEligible = wordEligible;
   const bioEligible = wordEligible;
+  const styleEligible = wordEligible;
+
+  const cards: GameCard[] = [
+    { game:"math", className:"primary", title:"Nova Runner", description:"Race through an original sci-fi world. Jump hazards, collect Nova energy and enter Knowledge Gates where mathematics changes with the learner’s level and recent play.", tags:["Mathematics","Adaptive Director","Runner","Keyboard + touch","5–10 min"], eligible:true, lockedLabel:"", progress:runnerProgress, playLabel:"Play Nova Runner", continueLabel:"Continue Nova Runner", primary:true },
+    { game:"keyboard-ninja", className:"turbo-card", title:"TurboType", description:"Race by typing exact targets. Every correct character moves your vehicle; accuracy, WPM and troublesome keys shape future practice.", tags:["ICT","Typing","Weak-key training","Adaptive"], eligible:true, lockedLabel:"", progress:typingProgress, playLabel:"Play TurboType", continueLabel:"Continue TurboType" },
+    { game:"force-motion-lab", className:"astro-card", title:"AstroLab Defender", description:"Defend a living research station by reading real force-and-motion telemetry, choosing science responses and managing shields, reactor power and navigation.", tags:["Science","NovaCore physics","Systems strategy","Adaptive"], eligible:astroEligible, lockedLabel:"AGE 9+", progress:astroProgress, playLabel:"Play AstroLab", continueLabel:"Continue AstroLab" },
+    { game:"word", className:"word-card", title:"Word Kingdom", description:"Protect a fantasy kingdom from the Shadow Scribe. Vocabulary, grammar, opposites, meaning and sentence choices become rune gates while mana and castle defence create a real quest loop.", tags:["English","Vocabulary + grammar","Castle defence","Adaptive"], eligible:wordEligible, lockedLabel:"AGE 6+", progress:wordProgress, playLabel:"Play Word Kingdom", continueLabel:"Continue Word Kingdom" },
+    { game:"comprehension-quest", className:"word-card", title:"Reading Quest", description:"Explore branching routes through short stories, reports and real-world texts. Collect evidence and make defensible reading decisions without losing to a reading clock.", tags:["English","Reading comprehension","Evidence + inference","Branching exploration"], eligible:readingEligible, lockedLabel:"AGE 9+", progress:readingProgress, playLabel:"Play Reading Quest", continueLabel:"Continue Reading Quest" },
+    { game:"coding-sequence", className:"astro-card", title:"CodeBots Logic Factory", description:"Build executable command racks for robot workers. Sequence algorithms, loops, conditions and debugging without turning coding into a decorated quiz.", tags:["Computing","Algorithms + logic","Robot factory","Adaptive"], eligible:codeBotsEligible, lockedLabel:"AGE 9+", progress:codeBotsProgress, playLabel:"Play CodeBots", continueLabel:"Continue CodeBots" },
+    { game:"ghana-map-master", className:"word-card", title:"GeoQuest Ghana Expedition", description:"Travel across a living Ghana atlas, choose field routes, scan unknown beacons and map regions, capitals, borders and major geographic features.", tags:["Social Studies","Ghana geography","Atlas expedition","Adaptive"], eligible:geoEligible, lockedLabel:"AGE 9+", progress:geoProgress, playLabel:"Play GeoQuest", continueLabel:"Continue GeoQuest" },
+    { game:"money-math-market", className:"market-card", title:"Cedi City Market", description:"Run a Ghana-currency market. Serve customers, read baskets and receipts, manage stock and grow from change-making into budgets, discounts, profit and percentage decisions.", tags:["Mathematics","Financial literacy","Ghana cedi","Market simulation","Adaptive"], eligible:marketEligible, lockedLabel:"AGE 6+", progress:marketProgress, playLabel:"Play Cedi City Market", continueLabel:"Continue Cedi City" },
+    { game:"cyber-safety", className:"signal-card", title:"Signal Shield", description:"Operate a school CyberOps centre. Inspect suspicious signals, protect accounts and privacy, contain incidents and practise defensive digital citizenship.", tags:["ICT","Cyber safety","Digital citizenship","Network defence simulation","Adaptive"], eligible:signalEligible, lockedLabel:"AGE 9+", progress:signalProgress, playLabel:"Play Signal Shield", continueLabel:"Continue Signal Shield" },
+    { game:"environment-guardian", className:"word-card", title:"EcoGrid Ghana", description:"Restore a living Ghanaian community by balancing water, waste, energy, habitat and climate resilience through untimed systems-level environmental planning.", tags:["Environmental Studies","Water + waste","Climate resilience","Community strategy","Adaptive"], eligible:ecoEligible, lockedLabel:"AGE 6+", progress:ecoProgress, playLabel:"Play EcoGrid Ghana", continueLabel:"Continue EcoGrid" },
+    { game:"body-explorer", className:"astro-card", title:"BioQuest: Human Systems", description:"Enter a virtual anatomy lab and connect organs and body systems through fictional educational cases, clue-only BioScans and whole-body reasoning.", tags:["Science","Human biology","Anatomy + physiology","Systems lab","Adaptive"], eligible:bioEligible, lockedLabel:"AGE 6+", progress:bioProgress, playLabel:"Play BioQuest", continueLabel:"Continue BioQuest" },
+    { game:"culture-heritage", className:"word-card", title:"Style Studio Ghana", description:"Open a real dress-up studio with Free Style, fitting-room mix-and-match and animated runway reveals, then solve design briefs about Ghanaian weaving heritage, pattern, function, repair and source respect. Personal style is never marked wrong.", tags:["Creative Arts","Dress + design","Ghana textile heritage","Free Style + missions","Untimed"], eligible:styleEligible, lockedLabel:"AGE 6+", progress:styleProgress, playLabel:"Play Style Studio", continueLabel:"Continue Style Studio" },
+  ];
 
   if (round && data?.selected) return <div className="nova-arcade">
     {round.game === "keyboard-ninja"
@@ -278,7 +329,9 @@ export default function LearningArcadeV3() {
                       ? <EcoGridGhana learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>
                       : round.game === "body-explorer"
                         ? <BioQuestHumanSystems learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>
-                        : <NovaRunner learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>} 
+                        : round.game === "culture-heritage"
+                          ? <StyleStudioGhana learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>
+                          : <NovaRunner learnerName={data.selected.name} round={round} onComplete={(answers) => void finishRound(answers)} onExit={(answers) => void exitRound(answers)}/>}
     {busy ? <div className="nova-arcade-message">Saving game progress…</div> : null}
     {error ? <div className="nova-arcade-alert" role="alert">{error}</div> : null}
   </div>;
@@ -295,13 +348,14 @@ export default function LearningArcadeV3() {
     const signalResult = resultGame === "cyber-safety";
     const ecoResult = resultGame === "environment-guardian";
     const bioResult = resultGame === "body-explorer";
-    const unit = typingResult ? "typing checkpoints" : astroResult ? "science anomalies" : wordResult ? "kingdom runes" : readingResult ? "evidence chapters" : codeBotsResult ? "bot programs" : geoResult ? "atlas beacons" : marketResult ? "customer receipts" : signalResult ? "security incidents" : ecoResult ? "restoration projects" : bioResult ? "human-systems cases" : "Knowledge Gates";
-    const kicker = typingResult ? "TURBOTYPE · RACE COMPLETE" : astroResult ? "ASTROLAB DEFENDER · LAB SECURED" : wordResult ? "WORD KINGDOM · CROWN SECURED" : readingResult ? "READING QUEST · MYSTERY MAPPED" : codeBotsResult ? "CODEBOTS · FACTORY ONLINE" : geoResult ? "GEOQUEST · ATLAS COMPLETE" : marketResult ? "CEDI CITY · MARKET CLOSED" : signalResult ? "SIGNAL SHIELD · NETWORK SECURED" : ecoResult ? "ECOGRID GHANA · COMMUNITY RESTORED" : bioResult ? "BIOQUEST · SYSTEMS STABILISED" : "NOVA RUNNER · MISSION COMPLETE";
-    const replayLabel = typingResult ? "race" : astroResult ? "defence mission" : wordResult ? "quest" : readingResult ? "expedition" : codeBotsResult ? "factory run" : geoResult ? "survey" : marketResult ? "market shift" : signalResult ? "CyberOps shift" : ecoResult ? "restoration shift" : bioResult ? "BioLab shift" : "mission";
-    const perfectTitle = typingResult ? "Perfect precision!" : astroResult ? "Lab fully stabilised!" : wordResult ? "Crown restored!" : readingResult ? "Mystery solved!" : codeBotsResult ? "Factory flawless!" : geoResult ? "Atlas mastered!" : marketResult ? "Market master!" : signalResult ? "Network guardian!" : ecoResult ? "EcoGrid fully restored!" : bioResult ? "Human systems master!" : "Legendary run!";
+    const styleResult = resultGame === "culture-heritage";
+    const unit = typingResult ? "typing checkpoints" : astroResult ? "science anomalies" : wordResult ? "kingdom runes" : readingResult ? "evidence chapters" : codeBotsResult ? "bot programs" : geoResult ? "atlas beacons" : marketResult ? "customer receipts" : signalResult ? "security incidents" : ecoResult ? "restoration projects" : bioResult ? "human-systems cases" : styleResult ? "objective design briefs" : "Knowledge Gates";
+    const kicker = typingResult ? "TURBOTYPE · RACE COMPLETE" : astroResult ? "ASTROLAB DEFENDER · LAB SECURED" : wordResult ? "WORD KINGDOM · CROWN SECURED" : readingResult ? "READING QUEST · MYSTERY MAPPED" : codeBotsResult ? "CODEBOTS · FACTORY ONLINE" : geoResult ? "GEOQUEST · ATLAS COMPLETE" : marketResult ? "CEDI CITY · MARKET CLOSED" : signalResult ? "SIGNAL SHIELD · NETWORK SECURED" : ecoResult ? "ECOGRID GHANA · COMMUNITY RESTORED" : bioResult ? "BIOQUEST · SYSTEMS STABILISED" : styleResult ? "STYLE STUDIO GHANA · COLLECTION COMPLETE" : "NOVA RUNNER · MISSION COMPLETE";
+    const replayLabel = typingResult ? "race" : astroResult ? "defence mission" : wordResult ? "quest" : readingResult ? "expedition" : codeBotsResult ? "factory run" : geoResult ? "survey" : marketResult ? "market shift" : signalResult ? "CyberOps shift" : ecoResult ? "restoration shift" : bioResult ? "BioLab shift" : styleResult ? "design collection" : "mission";
+    const perfectTitle = typingResult ? "Perfect precision!" : astroResult ? "Lab fully stabilised!" : wordResult ? "Crown restored!" : readingResult ? "Mystery solved!" : codeBotsResult ? "Factory flawless!" : geoResult ? "Atlas mastered!" : marketResult ? "Market master!" : signalResult ? "Network guardian!" : ecoResult ? "EcoGrid fully restored!" : bioResult ? "Human systems master!" : styleResult ? "Design brief master!" : "Legendary run!";
     return <div className="nova-finish">
       <section className="nova-finish-card">
-        <div className="nova-finish-top"><div className="nova-finish-mark"><Trophy size={34}/></div><span className="nova-arcade-kicker">{kicker}</span><h1>{result.stars === 3 ? perfectTitle : result.stars === 2 ? "Strong mission!" : "World cleared!"}</h1><p>{result.correct}/{result.roundLength} {unit} cleared correctly. The Adaptive Director will use this performance for the next game.</p><div className="nova-rewards"><div><strong>{result.stars}/3</strong><span>Stars</span></div><div><strong>+{result.xp}</strong><span>XP</span></div><div><strong>{result.score ?? 0}</strong><span>Score</span></div></div></div>
+        <div className="nova-finish-top"><div className="nova-finish-mark"><Trophy size={34}/></div><span className="nova-arcade-kicker">{kicker}</span><h1>{result.stars === 3 ? perfectTitle : result.stars === 2 ? "Strong mission!" : "World cleared!"}</h1><p>{styleResult ? `${result.correct ?? 0}/${result.roundLength} objective design briefs cleared. Free Style choices are never graded.` : `${result.correct ?? 0}/${result.roundLength} ${unit} cleared correctly. The Adaptive Director will use this performance for the next game.`}</p><div className="nova-rewards"><div><strong>{result.stars}/3</strong><span>Stars</span></div><div><strong>+{result.xp}</strong><span>XP</span></div><div><strong>{result.score ?? 0}</strong><span>Score</span></div></div></div>
         <div className="nova-result-list">{result.questions.map((question, index) => <div className={`nova-result ${question.correct ? "good" : "bad"}`} key={question.id}><div className="nova-result-icon">{question.correct ? <Check size={18}/> : <X size={18}/>}</div><div><p>{question.prompt}</p><small>{question.correct ? `Correct — ${displayAnswer(result.answers[index])}` : `You entered ${displayAnswer(result.answers[index])}. Target: ${displayAnswer(question.answer)}. ${question.explanation ?? ""}`}</small></div></div>)}</div>
         <div className="nova-finish-actions"><button type="button" onClick={() => { setResult(null); void startGame(resultGame); }} disabled={busy}><RefreshCw size={16}/> Play another {replayLabel}</button><button type="button" onClick={() => setResult(null)}>Back to Arcade</button></div>
       </section>
@@ -322,21 +376,17 @@ export default function LearningArcadeV3() {
     {data?.selected ? <ArcadeProgressionHub key={data.selected.id} studentId={data.selected.id} playerName={data.selected.name}/> : null}
 
     <div className="nova-game-grid">
-      <article className="nova-game-card primary"><ArcadeGameLogo game="math"/><h3>Nova Runner</h3><p>Race through an original sci-fi world. Jump hazards, collect Nova energy and enter Knowledge Gates where mathematics changes with the learner’s level and recent play.</p><div className="nova-game-tags"><span>Mathematics</span><span>Adaptive Director</span><span>Runner</span><span>Keyboard + touch</span><span>5–10 min</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("math")} disabled={busy || loading || !data?.selected || !ageBand}><Play size={17} fill="currentColor"/>{busy ? "Preparing world…" : runnerProgress?.rounds ? "Continue Nova Runner" : "Play Nova Runner"}</button><button className="nova-rank-button" type="button" onClick={() => void loadLeaderboard("math")} disabled={busy || !data?.selected || !ageBand}><Medal size={16}/>Weekly ranking</button></div>{data?.allowedAgeBands?.length ? <div className="nova-game-actions"><label htmlFor="nova-age" className="nova-age-label">Learning band</label><select id="nova-age" className="nova-arcade-select" value={ageBand} onChange={(event) => setAgeBand(event.target.value as AgeBand)}>{data.allowedAgeBands.map((age) => <option key={age} value={age}>{ageLabels[age]}</option>)}</select></div> : null}</article>
-      <article className="nova-game-card turbo-card"><span className="nova-coming live">LIVE</span><ArcadeGameLogo game="keyboard-ninja"/><h3>TurboType</h3><p>Race by typing exact targets. Every correct character moves your vehicle; accuracy, WPM and troublesome keys shape future practice.</p><div className="nova-game-tags"><span>ICT</span><span>Typing</span><span>Weak-key training</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("keyboard-ninja")} disabled={busy || loading || !data?.selected || !ageBand}><Play size={17} fill="currentColor"/>{typingProgress?.rounds ? "Continue TurboType" : "Play TurboType"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("keyboard-ninja")} disabled={busy || !data?.selected || !ageBand}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card astro-card"><span className={`nova-coming ${astroEligible ? "live" : ""}`}>{astroEligible ? "LIVE" : "AGE 9+"}</span><ArcadeGameLogo game="force-motion-lab"/><h3>AstroLab Defender</h3><p>Defend a living research station by reading real force-and-motion telemetry, choosing science responses and managing shields, reactor power and navigation.</p><div className="nova-game-tags"><span>Science</span><span>NovaCore physics</span><span>Systems strategy</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("force-motion-lab")} disabled={busy || loading || !data?.selected || !ageBand || !astroEligible}><Play size={17} fill="currentColor"/>{astroEligible ? (astroProgress?.rounds ? "Continue AstroLab" : "Play AstroLab") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("force-motion-lab")} disabled={busy || !data?.selected || !ageBand || !astroEligible}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card word-card"><span className={`nova-coming ${wordEligible ? "live" : ""}`}>{wordEligible ? "LIVE" : "AGE 6+"}</span><ArcadeGameLogo game="word"/><h3>Word Kingdom</h3><p>Protect a fantasy kingdom from the Shadow Scribe. Vocabulary, grammar, opposites, meaning and sentence choices become rune gates while mana and castle defence create a real quest loop.</p><div className="nova-game-tags"><span>English</span><span>Vocabulary + grammar</span><span>Castle defence</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("word")} disabled={busy || loading || !data?.selected || !ageBand || !wordEligible}><Play size={17} fill="currentColor"/>{wordEligible ? (wordProgress?.rounds ? "Continue Word Kingdom" : "Play Word Kingdom") : "Available from Age 6–8"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("word")} disabled={busy || !data?.selected || !ageBand || !wordEligible}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card word-card"><span className={`nova-coming ${readingEligible ? "live" : ""}`}>{readingEligible ? "LIVE" : "AGE 9+"}</span><ArcadeGameLogo game="comprehension-quest"/><h3>Reading Quest</h3><p>Explore branching routes through short stories, reports and real-world texts. Manage story fog and focus lanterns while collecting evidence and making defensible reading decisions.</p><div className="nova-game-tags"><span>English</span><span>Reading comprehension</span><span>Evidence + inference</span><span>Branching exploration</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("comprehension-quest")} disabled={busy || loading || !data?.selected || !ageBand || !readingEligible}><Play size={17} fill="currentColor"/>{readingEligible ? (readingProgress?.rounds ? "Continue Reading Quest" : "Play Reading Quest") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("comprehension-quest")} disabled={busy || !data?.selected || !ageBand || !readingEligible}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card astro-card"><span className={`nova-coming ${codeBotsEligible ? "live" : ""}`}>{codeBotsEligible ? "LIVE" : "AGE 9+"}</span><ArcadeGameLogo game="coding-sequence"/><h3>CodeBots Logic Factory</h3><p>Build executable command racks for robot workers while conveyor heat rises. Sequence algorithms, loops, conditions, debugging and real software workflows without turning coding into a decorated quiz.</p><div className="nova-game-tags"><span>Computing</span><span>Algorithms + logic</span><span>Robot factory</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("coding-sequence")} disabled={busy || loading || !data?.selected || !ageBand || !codeBotsEligible}><Play size={17} fill="currentColor"/>{codeBotsEligible ? (codeBotsProgress?.rounds ? "Continue CodeBots" : "Play CodeBots") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("coding-sequence")} disabled={busy || !data?.selected || !ageBand || !codeBotsEligible}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card word-card"><span className={`nova-coming ${geoEligible ? "live" : ""}`}>{geoEligible ? "LIVE" : "AGE 9+"}</span><ArcadeGameLogo game="ghana-map-master"/><h3>GeoQuest Ghana Expedition</h3><p>Travel across a living Ghana atlas, choose field routes, manage weather and expedition energy, scan unknown beacons and map regions, capitals, borders and major geographic features.</p><div className="nova-game-tags"><span>Social Studies</span><span>Ghana geography</span><span>Atlas expedition</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("ghana-map-master")} disabled={busy || loading || !data?.selected || !ageBand || !geoEligible}><Play size={17} fill="currentColor"/>{geoEligible ? (geoProgress?.rounds ? "Continue GeoQuest" : "Play GeoQuest") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("ghana-map-master")} disabled={busy || !data?.selected || !ageBand || !geoEligible}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card market-card"><span className={`nova-coming ${marketEligible ? "live" : ""}`}>{marketEligible ? "LIVE" : "AGE 6+"}</span><ArcadeGameLogo game="money-math-market"/><h3>Cedi City Market</h3><p>Run a living Ghana-currency market. Serve customers, read baskets and receipts, manage queue pressure, stock and trust, and grow from change-making into budgets, discounts, profit and percentage decisions.</p><div className="nova-game-tags"><span>Mathematics</span><span>Financial literacy</span><span>Ghana cedi</span><span>Market simulation</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("money-math-market")} disabled={busy || loading || !data?.selected || !ageBand || !marketEligible}><Play size={17} fill="currentColor"/>{marketEligible ? (marketProgress?.rounds ? "Continue Cedi City" : "Play Cedi City Market") : "Available from Age 6–8"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("money-math-market")} disabled={busy || !data?.selected || !ageBand || !marketEligible}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card signal-card"><span className={`nova-coming ${signalEligible ? "live" : ""}`}>{signalEligible ? "LIVE" : "AGE 9+"}</span><ArcadeGameLogo game="cyber-safety"/><h3>Signal Shield</h3><p>Operate a school CyberOps centre. Triage suspicious messages, inspect link and identity signals, protect accounts and privacy, contain incidents and keep firewall integrity stable under adaptive threat pressure.</p><div className="nova-game-tags"><span>ICT</span><span>Cyber safety</span><span>Digital citizenship</span><span>Network defence simulation</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("cyber-safety")} disabled={busy || loading || !data?.selected || !ageBand || !signalEligible}><Play size={17} fill="currentColor"/>{signalEligible ? (signalProgress?.rounds ? "Continue Signal Shield" : "Play Signal Shield") : "Available from Age 9–11"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("cyber-safety")} disabled={busy || !data?.selected || !ageBand || !signalEligible}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card word-card"><span className={`nova-coming ${ecoEligible ? "live" : ""}`}>{ecoEligible ? "LIVE" : "AGE 6+"}</span><ArcadeGameLogo game="environment-guardian"/><h3>EcoGrid Ghana</h3><p>Restore a living Ghanaian community by balancing water, waste, energy, habitat and climate resilience. Run field surveys, manage eco stress and grow from simple clean-up choices into systems-level environmental planning.</p><div className="nova-game-tags"><span>Environmental Studies</span><span>Water + waste</span><span>Climate resilience</span><span>Community strategy</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("environment-guardian")} disabled={busy || loading || !data?.selected || !ageBand || !ecoEligible}><Play size={17} fill="currentColor"/>{ecoEligible ? (ecoProgress?.rounds ? "Continue EcoGrid" : "Play EcoGrid Ghana") : "Available from Age 6–8"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("environment-guardian")} disabled={busy || !data?.selected || !ageBand || !ecoEligible}><Medal size={16}/>Ranking</button></div></article>
-      <article className="nova-game-card astro-card"><span className={`nova-coming ${bioEligible ? "live" : ""}`}>{bioEligible ? "LIVE" : "AGE 6+"}</span><ArcadeGameLogo game="body-explorer"/><h3>BioQuest: Human Systems</h3><p>Enter a virtual anatomy lab and stabilise a living training avatar. Trace organs and body systems, run clue-only BioScans, manage system strain and grow from visible body functions into nervous, immune, endocrine and whole-body coordination.</p><div className="nova-game-tags"><span>Science</span><span>Human biology</span><span>Anatomy + physiology</span><span>Systems lab</span><span>Adaptive</span></div><div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame("body-explorer")} disabled={busy || loading || !data?.selected || !ageBand || !bioEligible}><Play size={17} fill="currentColor"/>{bioEligible ? (bioProgress?.rounds ? "Continue BioQuest" : "Play BioQuest") : "Available from Age 6–8"}</button><button className="nova-secondary-button" type="button" onClick={() => void loadLeaderboard("body-explorer")} disabled={busy || !data?.selected || !ageBand || !bioEligible}><Medal size={16}/>Ranking</button></div></article>
+      {cards.map((card) => <article className={`nova-game-card ${card.className}`} key={card.game}>
+        {!card.primary ? <span className={`nova-coming ${card.eligible ? "live" : ""}`}>{card.eligible ? "LIVE" : card.lockedLabel}</span> : null}
+        <ArcadeGameLogo game={card.game}/><h3>{card.title}</h3><p>{card.description}</p>
+        <div className="nova-game-tags">{card.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>
+        <div className="nova-game-actions"><button className="nova-play-button" type="button" onClick={() => void startGame(card.game)} disabled={busy || loading || !data?.selected || !ageBand || !card.eligible}><Play size={17} fill="currentColor"/>{card.eligible ? (card.progress?.rounds ? card.continueLabel : card.playLabel) : `Available from ${card.lockedLabel.replace("AGE ", "Age ")}`}</button><button className={card.primary ? "nova-rank-button" : "nova-secondary-button"} type="button" onClick={() => void loadLeaderboard(card.game)} disabled={busy || !data?.selected || !ageBand || !card.eligible}><Medal size={16}/>{card.primary ? "Weekly ranking" : "Ranking"}</button></div>
+        {card.primary && data?.allowedAgeBands?.length ? <div className="nova-game-actions"><label htmlFor="nova-age" className="nova-age-label">Learning band</label><select id="nova-age" className="nova-arcade-select" value={ageBand} onChange={(event) => setAgeBand(event.target.value as AgeBand)}>{data.allowedAgeBands.map((age) => <option key={age} value={age}>{ageLabels[age]}</option>)}</select></div> : null}
+      </article>)}
     </div>
 
     {leaderboard ? <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>{gameLabels[leaderboardGame]} · Weekly school-standard ranking</h3><p>Ranking stays inside the learner’s permitted school context.</p></div><Trophy size={22}/></div><div className="nova-leaderboard">{leaderboard.rows.length ? leaderboard.rows.map((row) => <div className="nova-leader-row" key={row.studentId}><b>#{row.rank}</b><strong>{row.displayName}</strong><span>{row.bestScore} best</span><span>{row.totalXp} XP · {row.rounds} runs</span></div>) : <div className="nova-empty">No ranked games yet. Be the first this week.</div>}</div></section> : null}
 
-    <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>Arcade foundation</h3><p>Eleven distinct game loops now share one adaptive learning director and one authoritative progression universe.</p></div><Gamepad2 size={22}/></div><div className="nova-game-tags"><span><Rocket size={12}/> real-time gameplay</span><span><Zap size={12}/> adaptive learning director</span><span>daily + weekly missions</span><span>achievement cabinet</span><span>NovaCore physics</span><span>typing telemetry</span><span>Ghana geography</span><span>financial literacy</span><span>cyber safety</span><span>environmental strategy</span><span>human biology</span><span>save/resume</span><span>school-scoped ranking</span><span>server-side grading</span></div></section>
+    <section className="nova-arcade-panel"><div className="nova-arcade-panel-head"><div><h3>Arcade foundation</h3><p>Twelve distinct live game loops now share one adaptive learning director and one authoritative progression universe.</p></div><Gamepad2 size={22}/></div><div className="nova-game-tags"><span><Rocket size={12}/> real-time gameplay</span><span><Zap size={12}/> adaptive learning director</span><span>daily + weekly missions</span><span>achievement cabinet</span><span>NovaCore physics</span><span>typing telemetry</span><span>Ghana geography</span><span>financial literacy</span><span>cyber safety</span><span>environmental strategy</span><span>human biology</span><span>creative design + textile heritage</span><span>save/resume</span><span>school-scoped ranking</span><span>server-side grading</span></div></section>
   </div>;
 }

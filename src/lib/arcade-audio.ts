@@ -151,6 +151,7 @@ function musicProfile(game: string) {
     case "environment-guardian": return { scale:[1, 1.2, 1.5, 1.8, 1.5], type:"sine" as OscillatorType, tempo:1080 };
     case "body-explorer": return { scale:[1, 1.25, 1.5, 1.333], type:"sine" as OscillatorType, tempo:920 };
     case "history-timeline": return { scale:[1, 1.2, 1.5, 1.8, 1.2], type:"triangle" as OscillatorType, tempo:1180 };
+    case "culture-heritage": return { scale:[1, 1.25, 1.5, 1.75, 2, 1.5], type:"triangle" as OscillatorType, tempo:820 };
     default: return { scale:[1, 1.125, 1.5, 1.6875, 2], type:"triangle" as OscillatorType, tempo:680 };
   }
 }

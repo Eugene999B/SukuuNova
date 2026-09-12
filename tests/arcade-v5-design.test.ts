@@ -4,11 +4,11 @@ import { ARCADE_SESSION_VARIETY_MIN, ARCADE_V5_IDENTITIES, arcadeGameRewardCount
 describe("Learning Arcade V5 identities", () => {
   it("gives every flagship its own world, reward and genre-aware progression", () => {
     const identities = Object.values(ARCADE_V5_IDENTITIES);
-    expect(identities).toHaveLength(13);
-    expect(new Set(identities.map((item) => item.game)).size).toBe(13);
-    expect(new Set(identities.map((item) => item.world)).size).toBe(13);
-    expect(new Set(identities.map((item) => item.rewardName)).size).toBe(13);
-    expect(new Set(identities.map((item) => item.accent)).size).toBe(13);
+    expect(identities).toHaveLength(14);
+    expect(new Set(identities.map((item) => item.game)).size).toBe(14);
+    expect(new Set(identities.map((item) => item.world)).size).toBe(14);
+    expect(new Set(identities.map((item) => item.rewardName)).size).toBe(14);
+    expect(new Set(identities.map((item) => item.accent)).size).toBe(14);
     expect(new Set(identities.map((item) => item.progression.mode)).size).toBeGreaterThanOrEqual(7);
     for (const identity of identities) {
       expect(identity.introTitle.length).toBeGreaterThan(8);

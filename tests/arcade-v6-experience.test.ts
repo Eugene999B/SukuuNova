@@ -29,8 +29,8 @@ describe("Learning Arcade V6 experience contract", () => {
     }
   });
 
-  it("keeps reading, engineering, coding, history and biology explicitly untimed", () => {
-    const untimed: ArcadeV5GameKey[] = ["circuit-logic", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline"];
+  it("keeps reading, engineering, coding, history, biology and creative design explicitly untimed", () => {
+    const untimed: ArcadeV5GameKey[] = ["circuit-logic", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline", "culture-heritage"];
     for (const game of untimed) expect(arcadeExperienceProfile(game).timing).toBe("untimed");
   });
 });

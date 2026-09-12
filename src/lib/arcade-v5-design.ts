@@ -11,9 +11,10 @@ export type ArcadeV5GameKey =
   | "cyber-safety"
   | "environment-guardian"
   | "body-explorer"
-  | "history-timeline";
+  | "history-timeline"
+  | "culture-heritage";
 
-export type ArcadeProgressionMode = "endless" | "tournament" | "survival" | "contracts" | "adventure" | "expedition" | "simulation" | "campaign" | "investigation";
+export type ArcadeProgressionMode = "endless" | "tournament" | "survival" | "contracts" | "adventure" | "expedition" | "simulation" | "campaign" | "investigation" | "studio";
 
 export type ArcadeProgressionSpec = {
   mode: ArcadeProgressionMode;
@@ -77,6 +78,7 @@ export const ARCADE_V5_IDENTITIES: Record<ArcadeV5GameKey, ArcadeGameIdentity> =
   "environment-guardian": { game:"environment-guardian", name:"EcoGrid Ghana", world:"Green Districts", rewardName:"Eco Seeds", rewardSymbol:"♻", accent:"#16a34a", accent2:"#84cc16", glow:"rgba(22,163,74,.4)", canvas:"#081a0c", surface:"#12351a", introKicker:"GREEN DISTRICTS", introTitle:"Restore the community.", introCopy:"Restore districts through a campaign whose projects, risks, forecasts and resource pressure change from one attempt to the next.", progression:progression("campaign","RESTORATION CAMPAIGN","district","districts",NODES.eco,"Enter district","Choose a restoration district","Districts unlock a broader environmental campaign, while projects, forecasts and resource trade-offs are regenerated each visit.") },
   "body-explorer": { game:"body-explorer", name:"BioQuest: Human Systems", world:"BioLab Complex", rewardName:"Bio Cells", rewardSymbol:"♥", accent:"#f43f5e", accent2:"#fb7185", glow:"rgba(244,63,94,.4)", canvas:"#210810", surface:"#40101d", introKicker:"BIOLAB COMPLEX", introTitle:"Human systems need stabilising.", introCopy:"Work through age-appropriate biology cases where organs, clues and systems relationships change without pretending to diagnose real patients.", progression:progression("adventure","BIOLOGY CASE ADVENTURE","case","cases",NODES.bio,"Open case","Choose a BioLab case","Case families unlock progressively, while fictional educational scenarios and system clues are varied on every attempt.") },
   "history-timeline": { game:"history-timeline", name:"Chronicle Vault", world:"Archive Continuum", rewardName:"Chronicle Seals", rewardSymbol:"⌛", accent:"#d97706", accent2:"#f5d0a9", glow:"rgba(217,119,6,.4)", canvas:"#211408", surface:"#3b260f", introKicker:"ARCHIVE CONTINUUM", introTitle:"History has fractured.", introCopy:"Investigate archive cases through chronology, sources, provenance, cause and consequence as evidence sets shift between visits.", progression:progression("investigation","ARCHIVE INVESTIGATION","case","cases",NODES.chronicle,"Open investigation","Choose an archive investigation","Cases unlock deeper historical reasoning while evidence order, source combinations and investigation framing change on replay.") },
+  "culture-heritage": { game:"culture-heritage", name:"Style Studio Ghana", world:"Ghana Design House", rewardName:"Studio Sparks", rewardSymbol:"✂", accent:"var(--color-accent-indigo)", accent2:"var(--color-success)", glow:"color-mix(in srgb,var(--color-accent-indigo) 40%,transparent)", canvas:"var(--color-brand-deep)", surface:"var(--sn-ink)", introKicker:"GHANA DESIGN HOUSE", introTitle:"Curtains open. Your collection starts here.", introCopy:"Create freely, then take design briefs that connect textile heritage, pattern mathematics, practical function, repair and respectful sourcing without grading personal taste.", progression:progression("studio","DESIGN STUDIO","collection","collections",[],"Open the studio","Create a collection, not a worksheet","Free Style has no correctness score. Design Missions regenerate objective briefs while your wardrobe, runway and creative choices remain yours.") },
 };
 
 export const ARCADE_SESSION_VARIETY_MIN = 16 * 12 * 10 * 10 * 8 * 8;
