@@ -153,6 +153,40 @@ describe("Number Bloom vNext domain", () => {
     )).toThrow(/unknown container/);
   });
 
+  it("rejects corrupted inventory, watering and comparison-pair state", () => {
+    const plant = buildNumberBloomMission("plant_count", 0);
+    expect(() => validateNumberBloomMission(
+      { ...plant.publicMission, inventoryCount: plant.publicMission.inventoryCount - 1 },
+      plant.privateMission,
+      plant.initialState,
+    )).toThrow(/inventory count/);
+
+    const free = buildNumberBloomMission("free_grow", 0);
+    expect(() => validateNumberBloomMission(
+      free.publicMission,
+      free.privateMission,
+      { ...free.initialState, wateredContainers: ["missing-bed"] },
+    )).toThrow(/watering state/);
+
+    const compare = buildNumberBloomMission("compare_patches", 0);
+    if (compare.privateMission.mechanic !== "compare_patches") throw new Error("Unexpected mechanic");
+    const leftItem = compare.initialState.items.find(
+      (item) => item.containerId === compare.privateMission.criterion.leftContainerId,
+    );
+    const rightItem = compare.initialState.items.find(
+      (item) => item.containerId === compare.privateMission.criterion.rightContainerId,
+    );
+    if (!leftItem || !rightItem) throw new Error("Missing comparison objects");
+    expect(() => validateNumberBloomMission(
+      compare.publicMission,
+      compare.privateMission,
+      {
+        ...compare.initialState,
+        pairs: [{ leftItemId: rightItem.id, rightItemId: leftItem.id }],
+      },
+    )).toThrow(/left patch to the right patch/);
+  });
+
   it("snapshots and resumes constructed state without converting actions to answers", async () => {
     const bundle = buildNumberBloomMission("plant_count", 1);
     if (bundle.publicMission.mechanic !== "plant_count") throw new Error("Unexpected mechanic");
