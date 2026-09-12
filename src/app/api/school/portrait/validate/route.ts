@@ -10,7 +10,7 @@ import { issuePortraitVerificationToken, verifyPortraitImage } from "@/lib/portr
 const schema = z.object({
   target: z.enum(["student", "staff"]),
   image: z.string().min(2_000).max(800_000),
-  mode: z.enum(["auto", "manual", "fallback"]).default("manual"),
+  mode: z.enum(["auto", "local_auto", "manual", "fallback"]).default("manual"),
 });
 
 const DEFERRED_VERIFICATION_CODES = new Set([
@@ -45,8 +45,8 @@ export async function POST(request: Request) {
     } catch (error) {
       if (!(error instanceof AppError) || !DEFERRED_VERIFICATION_CODES.has(error.code)) throw error;
 
-      // Never let automatic capture become a timer that accepts arbitrary scenery.
-      // Auto mode pauses until a real face-verification provider is available.
+      // Plain auto mode still requires an authoritative face-verification provider.
+      // It must never degrade into a timer that signs arbitrary scenery.
       if (input.mode === "auto") {
         return NextResponse.json(
           {
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
             captureReady: false,
             biometricReady: false,
             verificationDeferred: true,
-            message: "Automatic capture paused because face verification is unavailable. Keep the face clearly framed and use Capture now.",
+            message: "Automatic cloud face verification is unavailable. SukuuNova will use the on-device face gate when supported, otherwise keep the camera open for manual capture.",
             checks: [],
             verificationToken: null,
           },
@@ -62,22 +62,27 @@ export async function POST(request: Request) {
         );
       }
 
-      // Manual/device-camera capture remains available so ordinary registration is
-      // never blocked by an optional biometric provider. A human intentionally
-      // chooses the frame, and the signed token still binds the exact image to the
-      // school and target. Biometric enrollment can validate it later.
+      // local_auto is intentionally NOT biometric verification. The browser-side
+      // detector only controls when the UI chooses a frame; a client claim is not
+      // trusted as identity, liveness or anti-spoof evidence. This server treats it
+      // with the same trust level as an operator-selected manual frame and signs
+      // only the exact image so registration can proceed without storing scenery.
       const verificationToken = issuePortraitVerificationToken({
         schoolId: session.schoolId,
         target: input.target,
         image: input.image,
       });
+      const locallyGated = input.mode === "local_auto";
       return NextResponse.json(
         {
           ok: false,
           captureReady: true,
           biometricReady: false,
           verificationDeferred: true,
-          message: "Photo captured manually. Biometric verification is deferred until the school's face service is configured and available.",
+          localFaceGate: locallyGated,
+          message: locallyGated
+            ? "Portrait captured automatically after the on-device face-presence gate. Biometric identity verification is deferred until the school's face service is available."
+            : "Photo captured manually. Biometric verification is deferred until the school's face service is configured and available.",
           checks: [],
           verificationToken,
         },
