@@ -5,15 +5,18 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
 import { getGradebookConfiguration, getClassSubjectPerformance } from "@/lib/academic-engine";
+import { normalizeAssessmentType } from "@/lib/assessment-engine";
 import { selectAcademicTerm, termLifecycle } from "@/lib/term-date";
 import { gradeScale } from "@/lib/report-card-ranking";
 import { DEFAULT_TEACHING_WEEKS, getTeachingWeekMap } from "@/lib/term-teaching-weeks";
 import GradebookEntryGrid from "@/components/GradebookEntryGrid";
-import TeacherQuickMarkSheet from "@/components/TeacherQuickMarkSheet";
+import TeacherQuickMarkSheet, { type QuickMarkKind } from "@/components/TeacherQuickMarkSheet";
 import "@/app/school/module-workspace.css";
 import "@/app/school/academic-workspace.css";
 import "@/app/school/gradebook/studio/gradebook-entry.css";
 import "../teacher-gradebook.css";
+
+const QUICK_MARK_KINDS: QuickMarkKind[] = ["Classwork", "Homework", "Exercise", "Participation", "Quiz", "Exam"];
 
 export default async function TeacherGradebookContextPage({ params, searchParams }: {
   params: Promise<{ context: string }>; searchParams: Promise<{ term?: string }>;
@@ -44,7 +47,9 @@ export default async function TeacherGradebookContextPage({ params, searchParams
     const readOnly = !selectedTerm || selectedTerm.id !== activeTerm?.id || lifecycle?.state !== "active";
     const performance = selectedTerm ? await getClassSubjectPerformance(tx, classId, subjectId, selectedTerm.id) : null;
     const teachingWeeks = selectedTerm ? (weekMap.get(selectedTerm.id) ?? DEFAULT_TEACHING_WEEKS) : DEFAULT_TEACHING_WEEKS;
-    return { school, assignment, selectedTerm, activeTerm, lifecycle, performance, readOnly, terms: config.terms, gradeScale: gradeScale(settings?.gradingScale), teachingWeeks };
+    const configuredTypes = new Set((performance?.config.categories ?? []).map(category => normalizeAssessmentType(category.name)));
+    const quickMarkKinds = QUICK_MARK_KINDS.filter(kind => configuredTypes.has(normalizeAssessmentType(kind)));
+    return { school, assignment, selectedTerm, activeTerm, lifecycle, performance, readOnly, terms: config.terms, gradeScale: gradeScale(settings?.gradingScale), teachingWeeks, quickMarkKinds };
   });
   const contextPath = "/teacher/gradebook/" + encodeURIComponent(classId) + "__" + encodeURIComponent(subjectId);
 
@@ -58,7 +63,8 @@ export default async function TeacherGradebookContextPage({ params, searchParams
       {!data.selectedTerm || !data.performance ? <section className="module-card module-empty"><strong>No academic term is available.</strong><p>School leadership controls the academic calendar. Your current markbook appears automatically when a live term is configured.</p></section> : <>
         <section className="module-metrics"><article><span>Learners</span><strong>{data.performance.rows.length}</strong></article><article><span>Assessments</span><strong>{data.performance.assessments.length}</strong></article><article><span>Teaching weeks</span><strong>{data.teachingWeeks}</strong></article><article><span>Term state</span><strong>{data.lifecycle?.state ?? "—"}</strong></article></section>
         <section className="module-card" id="marks"><div className="module-section-title"><div><span>Focused mark sheet</span><h3>{data.readOnly ? "Review marks" : "Record marks"}</h3></div>{!data.readOnly ? <Link href="/teacher/studio#activities" className="button secondary">Create online assessment →</Link> : null}</div>
-          {!data.readOnly ? <TeacherQuickMarkSheet classId={classId} subjectId={subjectId} termId={data.selectedTerm.id} teachingWeeks={data.teachingWeeks} termStart={data.selectedTerm.startDate.toISOString().slice(0,10)} termEnd={data.selectedTerm.endDate.toISOString().slice(0,10)} /> : null}
+          {!data.readOnly && data.quickMarkKinds.length ? <TeacherQuickMarkSheet classId={classId} subjectId={subjectId} termId={data.selectedTerm.id} teachingWeeks={data.teachingWeeks} termStart={data.selectedTerm.startDate.toISOString().slice(0,10)} termEnd={data.selectedTerm.endDate.toISOString().slice(0,10)} allowedKinds={data.quickMarkKinds} /> : null}
+          {!data.readOnly && !data.quickMarkKinds.length ? <div className="module-notice"><strong>No quick mark categories are configured.</strong><p>School leadership must enable at least one supported category in Academic Setup before teachers create ordinary mark sheets.</p></div> : null}
           {data.performance.assessments.length === 0 ? <div className="module-empty"><strong>No mark sheets yet.</strong><span>Use Record marks above for ordinary classwork, homework, exercises, quizzes, participation or exams. Use Create online assessment only when learners need questions to answer in SukuuNova.</span></div> :
             <GradebookEntryGrid key={context + ":" + data.selectedTerm.id + ":" + data.performance.assessments.length} locked={data.readOnly || data.selectedTerm.isLocked}
               assessments={data.performance.assessments} gradeScale={data.gradeScale}
