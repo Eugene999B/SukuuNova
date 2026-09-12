@@ -3,7 +3,7 @@ import { z } from "zod";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { confirmSchoolPasswordReset } from "@/lib/password-reset";
-import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
+import { clearAccountLoginAttempts, recordLoginAttempt } from "@/lib/rate-limit";
 
 const schema = z.object({
   uniqueCode: z.string().trim().min(2).max(80),
@@ -17,10 +17,14 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     await recordLoginAttempt(
       "school-password-reset-confirm:" + input.uniqueCode.toLowerCase(),
-      input.token.slice(0, 16),
-      requestIp(request.headers)
+      input.token.slice(0, 16)
     );
-    await confirmSchoolPasswordReset(input);
+    const reset = await confirmSchoolPasswordReset(input);
+    const identities = [reset.email, reset.phone];
+    await Promise.all([
+      clearAccountLoginAttempts("school-login:" + reset.schoolCode, identities),
+      clearAccountLoginAttempts("guardian-login:" + reset.schoolCode, identities),
+    ]);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return routeError(error);
