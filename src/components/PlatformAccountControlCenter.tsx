@@ -9,7 +9,7 @@ import {
   LifeBuoy,
   LockKeyhole,
   LogOut,
-  MailKey,
+  Mail,
   RefreshCw,
   Search,
   ShieldAlert,
@@ -164,7 +164,7 @@ export default function PlatformAccountControlCenter({ schools, canSecurity, can
 
           {canSecurity ? <div className="account-control-actions">
             <div><span><LockKeyhole size={16}/></span><div><strong>Login recovery</strong><small>Only this account is affected.</small></div><button type="button" disabled={busy || reason.trim().length < 8} onClick={() => void runAction("account-support", { action: "clear_login_lock" }, "Failed-login lock cleared for this account.")}>Clear login lock</button></div>
-            <div><span><MailKey size={16}/></span><div><strong>Send password reset</strong><small>Email is preferred; SMS is used when email is unavailable.</small></div><button type="button" disabled={busy || reason.trim().length < 8 || !(selected.email || selected.phone)} onClick={() => void runAction("account-support", { action: "send_password_reset" }, "Password recovery instructions were issued for this account.")}>Send reset</button></div>
+            <div><span><Mail size={16}/></span><div><strong>Send password reset</strong><small>Email is preferred; SMS is used when email is unavailable.</small></div><button type="button" disabled={busy || reason.trim().length < 8 || !(selected.email || selected.phone)} onClick={() => void runAction("account-support", { action: "send_password_reset" }, "Password recovery instructions were issued for this account.")}>Send reset</button></div>
             <div><span><LogOut size={16}/></span><div><strong>Force sign-in again</strong><small>Revokes this user’s current school/guardian sessions.</small></div><button type="button" disabled={busy || reason.trim().length < 8} onClick={() => void runAction("control", { action: "force_user_signout" }, "Current sessions revoked for this account.")}>Sign out account</button></div>
             <div><span><KeyRound size={16}/></span><div><strong>Require password change</strong><small>Forces a security update on the next authenticated flow.</small></div><button type="button" disabled={busy || reason.trim().length < 8} onClick={() => void runAction("control", { action: "require_password_change" }, "Password change is now required for this account.")}>Require change</button></div>
             {selected.status === "active" ? <div className="is-danger"><span><UserRoundX size={16}/></span><div><strong>Suspend account</strong><small>Blocks future login and revokes current sessions.</small></div><button type="button" disabled={busy || reason.trim().length < 8} onClick={() => void runAction("control", { action: "set_user_status", status: "suspended" }, "Account suspended and sessions revoked.")}>Suspend</button></div> : <div><span><UserRoundCheck size={16}/></span><div><strong>Reactivate account</strong><small>Restores login eligibility; password rules still apply.</small></div><button type="button" disabled={busy || reason.trim().length < 8} onClick={() => void runAction("control", { action: "set_user_status", status: "active" }, "Account reactivated.")}>Reactivate</button></div>}
