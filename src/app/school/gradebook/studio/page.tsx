@@ -12,7 +12,7 @@ import "../../academic-workspace.css";
 import "../gradebook-simple.css";
 import "./gradebook-entry.css";
 
-type SearchParams = Promise<{ class?: string; subject?: string; term?: string }>;
+type SearchParams = Promise<{ class?: string; subject?: string }>;
 
 export default async function GradebookStudioPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await requireSchoolSession();
@@ -35,7 +35,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
     const selectedClass = params.class || "";
     const selectedSubject = params.subject || "";
     const timezone = settings?.timezone || "Africa/Accra";
-    const selectedTerm = selectAcademicTerm(config.terms, params.term, new Date(), timezone);
+    const selectedTerm = selectAcademicTerm(config.terms, undefined, new Date(), timezone);
     const assignment = assignments.find((item) => item.classId === selectedClass && item.subjectId === selectedSubject) ?? null;
 
     let performance: Awaited<ReturnType<typeof getClassSubjectPerformanceForRuntime>> | null = null;
@@ -75,7 +75,6 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
       .filter((item) => !params.class || item.classId === params.class)
       .map((item) => [item.subjectId, item.subject]),
   ).values()).sort((a, b) => a.name.localeCompare(b.name));
-  const terms = data.config.terms;
   const contextQuery = data.assignment && data.selectedTerm
     ? `?class=${encodeURIComponent(data.assignment.classId)}&subject=${encodeURIComponent(data.assignment.subjectId)}&term=${encodeURIComponent(data.selectedTerm.id)}`
     : "";
@@ -86,7 +85,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
   );
   const totalCells = (data.performance?.assessments.length ?? 0) * rows.length;
   const completion = totalCells ? Math.round(marked / totalCells * 100) : 0;
-  const termLabel = data.selectedTerm?.name ?? "Choose a term";
+  const termLabel = data.selectedTerm?.name ?? "No active term";
   const classLabel = data.assignment
     ? `${data.assignment.class.level ? `${data.assignment.class.level} · ` : ""}${data.assignment.class.name}`
     : "Choose a class";
@@ -96,7 +95,7 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
     <AppShell
       universe="school"
       title="Enter marks"
-      subtitle="Choose the teaching context, then work directly in the mark sheet."
+      subtitle="Choose the class and subject. SukuuNova already knows the current academic term."
       active="Gradebook"
       schoolName={data.school?.name ?? "School Workspace"}
       schoolCode={data.school?.uniqueCode ?? ""}
@@ -106,8 +105,8 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
         <section className="academic-context-card">
           <div className="gb-section-head">
             <div>
-              <h2>Choose class, subject and term</h2>
-              <p>Only valid teaching assignments are available.</p>
+              <h2>Choose class and subject</h2>
+              <p>{data.selectedTerm ? `Current academic period: ${data.selectedTerm.name}. It is attached automatically.` : "No single active term is available. Academic management must correct Terms & Calendar before marks can be entered."}</p>
             </div>
             <Link className="academic-btn-secondary" href="/school/gradebook">Back to gradebook</Link>
           </div>
@@ -127,13 +126,10 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
               </select>
             </div>
             <div className="academic-field">
-              <label htmlFor="gradebook-term">Term</label>
-              <select id="gradebook-term" name="term" defaultValue={data.selectedTerm?.id ?? ""}>
-                <option value="">Choose term</option>
-                {terms.map((item) => <option key={item.id} value={item.id}>{item.name}{item.isLocked ? " · Locked" : ""}</option>)}
-              </select>
+              <label htmlFor="gradebook-current-term">Current term</label>
+              <input id="gradebook-current-term" value={termLabel} readOnly aria-readonly="true" />
             </div>
-            <button className="academic-context-submit" type="submit">Open mark sheet</button>
+            <button className="academic-context-submit" type="submit" disabled={!data.selectedTerm}>Load Students &amp; Enter Marks</button>
           </form>
         </section>
 
@@ -152,17 +148,22 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
             <div className="academic-empty-actions">
               <Link href="/school/exams">Review assessments</Link>
               <Link href="/school/academics/setup">Review grading setup</Link>
-              <Link href={`/school/gradebook/studio${contextQuery}`}>Retry mark sheet</Link>
+              <Link href={`/school/gradebook/studio?class=${encodeURIComponent(data.assignment?.classId ?? "")}&subject=${encodeURIComponent(data.assignment?.subjectId ?? "")}`}>Retry mark sheet</Link>
             </div>
+          </section>
+        ) : !data.selectedTerm ? (
+          <section className="academic-empty">
+            <strong>There is no single active academic term.</strong>
+            <p>Mark entry is paused rather than asking staff to guess a term. Correct the current term dates or lock the finished term in Academic Terms.</p>
+            <div className="academic-empty-actions"><Link href="/school/terms">Open Academic Terms</Link></div>
           </section>
         ) : !data.assignment || !data.performance ? (
           <section className="academic-empty">
-            <strong>{data.selectedTerm ? "Choose a valid class and subject." : "Choose a term before entering marks."}</strong>
-            <p>{data.selectedTerm ? "The class and subject must be connected through the school teaching assignment." : "SukuuNova will not guess when the academic period is ambiguous."}</p>
+            <strong>Choose a valid class and subject.</strong>
+            <p>The class and subject must be connected through the school teaching assignment. The current term is already selected by SukuuNova.</p>
             <div className="academic-empty-actions">
               <Link href="/school/classes">Class assignments</Link>
               <Link href="/school/exams">Assessments</Link>
-              <Link href="/school/terms">Terms</Link>
             </div>
           </section>
         ) : (

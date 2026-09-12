@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createId } from "@paralleldrive/cuid2";
 import { canTransitionAdmission } from "../src/lib/admissions-v2";
+import { onboardStudentInTransaction } from "../src/lib/student-onboarding-service";
 import { createTenantFixture, rawDb, setRawTenant, type Fixture } from "./helpers";
 
 describe("Admissions V2 lifecycle", () => {
@@ -45,6 +46,41 @@ describe("Admissions V2 lifecycle", () => {
       await setRawTenant(tx, fixture.schoolId);
       await tx.$executeRaw`UPDATE "AdmissionApplication" SET "status"='enrolled' WHERE "id"=${applicationId} AND "schoolId"=${fixture.schoolId}`;
     })).rejects.toThrow();
+  });
+
+  it("reuses one guardian record when siblings are registered with the same guardian phone", async () => {
+    const guardianPhone = `024${String(Date.now()).slice(-7)}`;
+    const result = await rawDb.$transaction(async (tx) => {
+      await setRawTenant(tx, fixture.schoolId);
+      const first = await onboardStudentInTransaction(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        name: "Sibling One",
+        admissionNo: `SIB-A-${applicationId.slice(0, 6)}`,
+        intakeAcademicYearId: yearId,
+        guardian: { name: "Shared Guardian", phone: guardianPhone, relationship: "Parent" },
+        auditSource: "admissions-test",
+      });
+      const second = await onboardStudentInTransaction(tx, {
+        schoolId: fixture.schoolId,
+        actorId: fixture.ownerId,
+        name: "Sibling Two",
+        admissionNo: `SIB-B-${applicationId.slice(0, 6)}`,
+        intakeAcademicYearId: yearId,
+        guardian: { name: "Shared Guardian", phone: guardianPhone, relationship: "Parent" },
+        auditSource: "admissions-test",
+      });
+      const guardians = await tx.guardian.findMany({ where: { schoolId: fixture.schoolId, phone: guardianPhone }, select: { id: true } });
+      const links = guardians[0]
+        ? await tx.studentGuardian.findMany({ where: { schoolId: fixture.schoolId, guardianId: guardians[0].id }, select: { studentId: true } })
+        : [];
+      return { first, second, guardians, links };
+    });
+
+    expect(result.first.guardianId).toBeTruthy();
+    expect(result.second.guardianId).toBe(result.first.guardianId);
+    expect(result.guardians).toHaveLength(1);
+    expect(new Set(result.links.map((link) => link.studentId))).toEqual(new Set([result.first.student.id, result.second.student.id]));
   });
 
   it("keeps applications isolated to the active school tenant", async () => {
