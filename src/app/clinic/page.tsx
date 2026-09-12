@@ -2,6 +2,7 @@ import { ClinicShell } from "@/components/ClinicShell";
 import ClinicNurseWorkspace from "@/components/ClinicNurseWorkspace";
 import { requireSchoolSession } from "@/lib/auth";
 import { getSchoolAuthorization } from "@/lib/authorization";
+import { assertClinicClinicalActor } from "@/lib/clinic-clinical-access";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
 import "./clinic.css";
@@ -10,6 +11,7 @@ export default async function ClinicPage() {
   const session = await requireSchoolSession();
   const context = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "clinic:care");
+    await assertClinicClinicalActor(tx, session.userId);
     const [school, access] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       getSchoolAuthorization(tx, session.userId),
