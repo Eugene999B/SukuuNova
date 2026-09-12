@@ -14,6 +14,7 @@ export function wordKingdomRegionForCheckpoint(checkpoint: number, boss = false)
   return regions[Math.abs(checkpoint) % regions.length] ?? "whispering-woods";
 }
 
+/** Ambient shadow motion only; reading and language reasoning are never speed-scored. */
 export function wordKingdomThreatDurationMs(
   difficulty: number,
   speedScale = 1,
@@ -25,22 +26,17 @@ export function wordKingdomThreatDurationMs(
   return Math.round(Math.min(15000, Math.max(4600, (base * SUPPORT_TIME_SCALE[supportMode]) / boundedSpeed)));
 }
 
-export function wordKingdomGateDamage(threatPercent: number, hazardDensity = 1, boss = false) {
-  const threat = Math.min(100, Math.max(0, threatPercent));
-  const hazard = Math.min(1.6, Math.max(0.5, hazardDensity));
-  const pressure = 3 + Math.floor(threat / 22) + Math.round((hazard - 0.5) * 4) + (boss ? 3 : 0);
-  return Math.min(16, Math.max(3, pressure));
+export function wordKingdomGateDamage(_threatPercent: number, _hazardDensity = 1, _boss = false) {
+  return 0;
 }
 
-export function wordKingdomManaReward(threatPercent: number, focusChain: number) {
-  const threat = Math.min(100, Math.max(0, threatPercent));
-  const quick = threat <= 45 ? 2 : threat <= 75 ? 1 : 0;
+export function wordKingdomManaReward(_threatPercent: number, focusChain: number) {
   const chain = focusChain >= 3 ? 1 : 0;
-  return Math.min(3, quick + chain);
+  return Math.min(3, 1 + chain);
 }
 
-export function wordKingdomFocusChain(previous: number, threatPercent: number) {
-  return threatPercent <= 65 ? Math.min(9, Math.max(0, previous) + 1) : 0;
+export function wordKingdomFocusChain(previous: number, _threatPercent: number) {
+  return Math.min(9, Math.max(0, previous) + 1);
 }
 
 export function wordKingdomWardRecovery(integrity: number, threatPercent: number) {
