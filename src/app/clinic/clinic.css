@@ -1,0 +1,56 @@
+.clinic-input {
+  width: 100%;
+  border: 1px solid rgb(203 213 225);
+  border-radius: 0.75rem;
+  background: white;
+  padding: 0.7rem 0.85rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: rgb(15 23 42);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.clinic-input:focus {
+  border-color: rgb(5 150 105);
+  box-shadow: 0 0 0 3px rgb(16 185 129 / 0.12);
+}
+
+.clinic-input::placeholder {
+  color: rgb(148 163 184);
+}
+
+textarea.clinic-input {
+  min-height: 7rem;
+  resize: vertical;
+}
+
+select.clinic-input {
+  appearance: auto;
+}
+
+.clinic-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top right, rgb(209 250 229 / 0.65), transparent 28rem),
+    rgb(248 250 252);
+}
+
+.clinic-shell-nav {
+  border-bottom: 1px solid rgb(226 232 240);
+  background: rgb(255 255 255 / 0.94);
+  backdrop-filter: blur(14px);
+}
+
+.clinic-tab-strip {
+  scrollbar-width: none;
+}
+
+.clinic-tab-strip::-webkit-scrollbar {
+  display: none;
+}
+
+@media print {
+  .clinic-no-print { display: none !important; }
+  .clinic-shell { background: white !important; }
+}
