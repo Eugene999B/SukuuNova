@@ -123,7 +123,10 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
   };
 
   const varied = buildVariedArcadeQuestionSet(generator, round.roundLength, recentSignatures, 12);
-  const presented = varied.questions.map((question, index) => presentArcadeQuestionForAge(question, ageBand, `${round.id}:${sessionRemix.mutationKey}`, index));
+  const presented = varied.questions.map((question, index) => {
+    const agePresented = presentArcadeQuestionForAge(question, ageBand, `${round.id}:${sessionRemix.mutationKey}`, index);
+    return round.game === "number-pop" ? { ...agePresented, prompt: question.prompt, presentationVariant: "Number Bloom picture garden" } : agePresented;
+  });
   const nextSnapshot = {
     ...snapshot,
     variationVersion: 4,
