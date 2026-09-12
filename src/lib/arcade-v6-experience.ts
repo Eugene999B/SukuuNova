@@ -1,7 +1,7 @@
 import type { ArcadeV5GameKey } from "./arcade-v5-design";
 
 export type ArcadeTimingPolicy = "untimed" | "soft-pressure" | "skill-timed";
-export type ArcadeOpeningStyle = "garden" | "runner" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio" | "mission-control";
+export type ArcadeOpeningStyle = "garden" | "runner" | "quiz-show" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio" | "mission-control";
 
 export type ArcadeExperienceProfile = {
   family: string;
@@ -34,6 +34,16 @@ export const ARCADE_V6_EXPERIENCES: Record<ArcadeV5GameKey, ArcadeExperienceProf
     timingLabel: "No answer countdown · movement creates the pressure",
     help: ["Run through a changing sci-fi route and avoid hazards.", "Knowledge Gates pause the run so you can think before choosing.", "The route adapts to recent mastery; a wrong answer never ends the run."],
     controls: ["Space / tap: jump", "1–4: choose at a Knowledge Gate", "P: pause"],
+  },
+  logic: {
+    family: "Knowledge-show ladder",
+    openingStyle: "quiz-show",
+    menuSubtitle: "Take the spotlight and reason your way up an untimed knowledge-show ladder.",
+    learningPromise: "Patterns, sequences, classification and deduction become dramatic reasoning events with answer-neutral support instead of disposable quiz cards.",
+    timing: "untimed",
+    timingLabel: "Untimed show · think before you lock an answer",
+    help: ["Study the puzzle and compare all four choices before selecting.", "Use Nova Lens for a reasoning strategy or category clue that never reveals the answer.", "Lock your choice when ready; the server keeps correctness hidden until the show ends."],
+    controls: ["1–4 / tap: choose", "L: Nova Lens", "Enter: lock answer"],
   },
   "keyboard-ninja": {
     family: "Typing tournament",
