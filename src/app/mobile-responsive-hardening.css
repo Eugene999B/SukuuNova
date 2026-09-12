@@ -6,6 +6,10 @@
  * into phone layouts while preserving horizontal scrolling for truly tabular data.
  */
 
+.guardian-directory-cards {
+  display: none;
+}
+
 @media (max-width: 768px) {
   html,
   body {
@@ -435,6 +439,102 @@
   .property-hero p,
   .store-hero p {
     display: none;
+  }
+
+  /* Relational family data becomes phone-native cards instead of requiring a
+   * three-column sideways table swipe. */
+  .guardian-directory-table {
+    display: none !important;
+  }
+
+  .guardian-directory-cards {
+    display: grid;
+    gap: 9px;
+    margin-top: 12px;
+  }
+
+  .guardian-directory-card {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--color-border-subtle, var(--sn-line));
+    border-radius: 12px;
+    background: var(--color-surface-soft, var(--sn-surface-2));
+  }
+
+  .guardian-directory-card > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .guardian-directory-card > header > div {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .guardian-directory-card > header a {
+    color: var(--color-text-primary, var(--sn-ink));
+    font-weight: 750;
+    text-decoration: none;
+  }
+
+  .guardian-directory-card > header small {
+    color: var(--color-text-muted, var(--sn-muted));
+    overflow-wrap: anywhere;
+  }
+
+  .guardian-directory-children {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border-subtle, var(--sn-line));
+  }
+
+  .guardian-directory-children > span {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--color-text-muted, var(--sn-muted));
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+
+  .guardian-directory-children > div {
+    display: grid;
+    gap: 6px;
+  }
+
+  .guardian-directory-children a {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 8px;
+    border-radius: 9px;
+    background: var(--color-surface, var(--sn-surface));
+    color: var(--color-text-primary, var(--sn-ink));
+    text-decoration: none;
+  }
+
+  .guardian-directory-children a strong {
+    min-width: 0;
+    font-size: 12px;
+  }
+
+  .guardian-directory-children a small {
+    flex: 0 1 auto;
+    color: var(--color-text-muted, var(--sn-muted));
+    font-size: 10.5px;
+    text-align: right;
+  }
+
+  .guardian-directory-children p {
+    margin: 0;
+    color: var(--color-text-muted, var(--sn-muted));
+    font-size: 12px;
   }
 
   .app-bottom-nav-item {
