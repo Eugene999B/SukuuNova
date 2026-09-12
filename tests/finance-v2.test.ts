@@ -3,13 +3,13 @@ import { Prisma } from "@prisma/client";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 import {
-  awardScholarshipV2,
   createFeeStructureV2,
   createScholarshipProgramV2,
   ensureDefaultFinanceCategories,
   publishFeeStructureV2,
 } from "../src/lib/finance-v2-service";
 import { recordAllocatedPaymentV2Safe } from "../src/lib/finance-v2-payment-service";
+import { decideScholarshipV2, requestScholarshipV2 } from "../src/lib/finance-v2-scholarship-service";
 import { saveSalaryStructureV2 } from "../src/lib/payroll-v2-service";
 import { runPayrollV2ForEffectiveStaff } from "../src/lib/payroll-v2-run-guard";
 
@@ -32,7 +32,7 @@ async function academicContext(schoolId:string,ownerId:string,suffix:string){
 }
 
 describe("Finance V2 accounting integrity",()=>{
-  it("publishes class fees once, allocates partial payments idempotently and applies category scholarships without recording fake cash",async()=>{
+  it("publishes class fees once, allocates partial payments idempotently and applies only independently approved scholarship relief",async()=>{
     const fixture=await createTenantFixture();
     const context=await academicContext(fixture.schoolId,fixture.ownerId,"CORE");
 
@@ -71,8 +71,20 @@ describe("Finance V2 accounting integrity",()=>{
       expect(paidCharge[0]?.status).toBe("partial");
 
       const program=await createScholarshipProgramV2(tx,{schoolId:fixture.schoolId,actorId:fixture.ownerId,name:"Merit Scholarship",sponsor:"School Board"});
-      const award=await awardScholarshipV2(tx,{schoolId:fixture.schoolId,actorId:fixture.ownerId,programId:program.id,studentId:context.student.id,termId:context.term.id,categoryId:canteen!.id,mode:"percentage",value:50});
-      expect(award.reduction).toBe("100.00");
+      const request=await requestScholarshipV2(tx,{schoolId:fixture.schoolId,actorId:fixture.ownerId,programId:program.id,studentId:context.student.id,termId:context.term.id,categoryId:canteen!.id,mode:"percentage",value:50});
+      expect(request).toMatchObject({reduction:"100.00",status:"pending"});
+      const beforeApproval=await tx.$queryRawUnsafe<ChargeRow[]>(`SELECT "id","categoryId","invoiceId","originalAmount","scholarshipAmount","netAmount","status" FROM "FinanceStudentCharge" WHERE "schoolId"=$1 AND "id"=$2`,fixture.schoolId,canteenCharge.id);
+      expect(beforeApproval[0]?.scholarshipAmount.toFixed(2)).toBe("0.00");
+      expect(beforeApproval[0]?.netAmount.toFixed(2)).toBe("200.00");
+      expect((await tx.invoice.findFirst({where:{id:tuitionCharge.invoiceId,schoolId:fixture.schoolId}}))?.totalAmount.toFixed(2)).toBe("1200.00");
+      await expect(decideScholarshipV2(tx,{schoolId:fixture.schoolId,actorId:fixture.ownerId,awardId:request.id,decision:"approve"})).rejects.toMatchObject({statusCode:403});
+
+      await tx.userPermissionOverride.createMany({data:[
+        {schoolId:fixture.schoolId,userId:fixture.memberId,permissionId:fixture.permissionIds.get("finance:scholarships_approve")!,granted:true},
+        {schoolId:fixture.schoolId,userId:fixture.memberId,permissionId:fixture.permissionIds.get("fees:approve")!,granted:true},
+      ]});
+      const approved=await decideScholarshipV2(tx,{schoolId:fixture.schoolId,actorId:fixture.memberId,awardId:request.id,decision:"approve"});
+      expect(approved).toMatchObject({status:"active",reduction:"100.00"});
       const reduced=await tx.$queryRawUnsafe<ChargeRow[]>(`SELECT "id","categoryId","invoiceId","originalAmount","scholarshipAmount","netAmount","status" FROM "FinanceStudentCharge" WHERE "schoolId"=$1 AND "id"=$2`,fixture.schoolId,canteenCharge.id);
       expect(reduced[0]?.scholarshipAmount.toFixed(2)).toBe("100.00");
       expect(reduced[0]?.netAmount.toFixed(2)).toBe("100.00");
