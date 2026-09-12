@@ -47,7 +47,11 @@ export async function effectiveArcadeCatalog(tx: TenantDb, schoolId: string): Pr
       || canGenerateArcadeWorldContent(definition.gameKey);
     const overrideLength = row?.defaultRoundLength ?? null;
     const effectiveRoundLength = overrideLength && definition.roundLengths.includes(overrideLength) ? overrideLength : definition.defaultRoundLength;
-    const flagshipAgeBands: readonly ArcadeAgeBand[] = definition.gameKey === "number-pop" ? ["age_4_5"] : definition.ageBands;
+    const flagshipAgeBands: readonly ArcadeAgeBand[] = definition.gameKey === "number-pop"
+      ? ["age_4_5"]
+      : definition.gameKey === "logic"
+        ? ["age_6_8", "age_9_11", "age_12_14", "age_15_18"]
+        : definition.ageBands;
     return {
       ...definition,
       live: contentReady,
