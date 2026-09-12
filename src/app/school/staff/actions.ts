@@ -60,6 +60,8 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
   const primaryClassId = String(formData.get("primaryClassId") ?? "").trim();
   const subjectId = String(formData.get("subjectId") ?? "").trim();
   const makeClassHead = String(formData.get("makeClassHead") ?? "") === "on";
+  const hodClassId = String(formData.get("hodClassId") ?? "").trim();
+  const hodSubjectId = String(formData.get("hodSubjectId") ?? "").trim();
 
   const requestedStaffType = String(formData.get("staffType") ?? "").trim().toLowerCase();
   const staffType = requestedStaffType === "teaching" || requestedStaffType === "non-teaching" ? requestedStaffType : "non-teaching";
@@ -72,7 +74,7 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
   if (!staffCategory) return { ok: false, message: "Select a workforce area." };
   if (!roleName) return { ok: false, message: "Select a staff role." };
   if (roleKey === "owner") return { ok: false, message: "The Owner account is reserved for the school's primary owner." };
-  if (!isTeachingRole && (primaryClassId || subjectId || makeClassHead)) return { ok: false, message: "Class and subject assignments are available for teaching staff." };
+  if (!isTeachingRole && (primaryClassId || subjectId || makeClassHead || hodClassId || hodSubjectId)) return { ok: false, message: "Teaching, class-lead and HOD assignments are available for teaching staff." };
   if (makeClassHead && !primaryClassId) return { ok: false, message: "Choose a class before making this staff member the class headteacher." };
 
   return withTenant(session.schoolId, async (tx) => {
@@ -87,12 +89,17 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
     const phoneOwner = await tx.user.findFirst({ where: { phone } });
     if (phoneOwner) return { ok: false, message: "That phone number is already used by a school account." };
 
-    const [schoolClass, subject] = await Promise.all([
-      primaryClassId ? tx.class.findFirst({ where: { id: primaryClassId, schoolId: session.schoolId }, select: { id: true, name: true } }) : Promise.resolve(null),
+    const [schoolClass, subject, hodClass, hodSubject] = await Promise.all([
+      primaryClassId ? tx.class.findFirst({ where: { id: primaryClassId, schoolId: session.schoolId }, select: { id: true, name: true, classTeacherId: true } }) : Promise.resolve(null),
       subjectId ? tx.subject.findFirst({ where: { id: subjectId, schoolId: session.schoolId }, select: { id: true, name: true } }) : Promise.resolve(null),
+      hodClassId ? tx.class.findFirst({ where: { id: hodClassId, schoolId: session.schoolId }, select: { id: true, name: true } }) : Promise.resolve(null),
+      hodSubjectId ? tx.subject.findFirst({ where: { id: hodSubjectId, schoolId: session.schoolId }, select: { id: true, name: true } }) : Promise.resolve(null),
     ]);
-    if (primaryClassId && !schoolClass) return { ok: false, message: "The selected class no longer exists." };
-    if (subjectId && !subject) return { ok: false, message: "The selected subject no longer exists." };
+    if (primaryClassId && !schoolClass) return { ok: false, message: "The selected teaching class no longer exists." };
+    if (subjectId && !subject) return { ok: false, message: "The selected teaching subject no longer exists." };
+    if (hodClassId && !hodClass) return { ok: false, message: "The selected HOD class no longer exists." };
+    if (hodSubjectId && !hodSubject) return { ok: false, message: "The selected HOD subject no longer exists." };
+    if (makeClassHead && schoolClass?.classTeacherId) return { ok: false, message: `${schoolClass.name} already has a headteacher. Change that assignment from the class or staff management page first.` };
 
     const existingRole = await tx.role.findUnique({
       where: { schoolId_name: { schoolId: session.schoolId, name: roleName } },
@@ -138,6 +145,20 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
     if (isTeachingRole && schoolClass && makeClassHead) {
       await tx.class.update({ where: { id: schoolClass.id }, data: { classTeacherId: user.id } });
     }
+    if (isTeachingRole && hodClass) {
+      await tx.$executeRaw`
+        INSERT INTO "ClassHodAssignment" ("schoolId","classId","userId","createdBy")
+        VALUES (${session.schoolId},${hodClass.id},${user.id},${session.userId})
+        ON CONFLICT DO NOTHING
+      `;
+    }
+    if (isTeachingRole && hodSubject) {
+      await tx.$executeRaw`
+        INSERT INTO "SubjectHodAssignment" ("schoolId","subjectId","userId","createdBy")
+        VALUES (${session.schoolId},${hodSubject.id},${user.id},${session.userId})
+        ON CONFLICT DO NOTHING
+      `;
+    }
 
     await tx.auditLogSchool.create({
       data: {
@@ -158,13 +179,20 @@ export async function createStaff(formData: FormData): Promise<StaffCreateResult
           primaryClassId: schoolClass?.id ?? null,
           subjectId: subject?.id ?? null,
           classHeadteacher: Boolean(schoolClass && makeClassHead),
+          hodClassId: hodClass?.id ?? null,
+          hodSubjectId: hodSubject?.id ?? null,
           loginCreated: true,
           firstLoginPasswordSource: "phone",
         }
       }
     });
 
-    const assignment = schoolClass && subject ? ` Assigned to ${schoolClass.name} · ${subject.name}.` : schoolClass && makeClassHead ? ` Set as headteacher for ${schoolClass.name}.` : "";
+    const assignmentParts: string[] = [];
+    if (schoolClass && subject) assignmentParts.push(`teaches ${subject.name} in ${schoolClass.name}`);
+    if (schoolClass && makeClassHead) assignmentParts.push(`headteacher of ${schoolClass.name}`);
+    if (hodClass) assignmentParts.push(`class HOD for ${hodClass.name}`);
+    if (hodSubject) assignmentParts.push(`subject HOD for ${hodSubject.name}`);
+    const assignment = assignmentParts.length ? ` Assignments: ${assignmentParts.join("; ")}.` : "";
     return { ok: true, name: user.name, status: "active", message: `${user.name} is ready. Login is active immediately: use the phone number or email as the username, and the phone number as the first password.${assignment}` };
   });
 }
