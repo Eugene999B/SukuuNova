@@ -12,9 +12,10 @@ export type ArcadeV5GameKey =
   | "environment-guardian"
   | "body-explorer"
   | "history-timeline"
-  | "culture-heritage";
+  | "culture-heritage"
+  | "space-explorer";
 
-export type ArcadeProgressionMode = "endless" | "tournament" | "survival" | "contracts" | "adventure" | "expedition" | "simulation" | "campaign" | "investigation" | "studio";
+export type ArcadeProgressionMode = "endless" | "tournament" | "survival" | "contracts" | "adventure" | "expedition" | "simulation" | "campaign" | "investigation" | "studio" | "navigation";
 
 export type ArcadeProgressionSpec = {
   mode: ArcadeProgressionMode;
@@ -58,6 +59,7 @@ const NODES = {
   eco: ["Water Ward", "Waste Works", "Sanitation Street", "Energy Quarter", "Habitat Grove", "E-Waste Depot", "Transit Loop", "Climate Ridge", "Circular City", "Eco Summit"],
   bio: ["Heart Case", "Breathing Case", "Digestive Case", "Movement Case", "Nerve Case", "Kidney Case", "Immune Case", "Hormone Case", "Systems Link", "Bio Command"],
   chronicle: ["Time Rail", "Source Desk", "Ghana Record", "Empire Wing", "Cause Chamber", "Evidence Vault", "Corroboration Hall", "World Record", "Paradox Gallery", "Chronicle Crown"],
+  solar: ["Launch Bay", "Inner Worlds", "Earth-Moon Link", "Mars Relay", "Asteroid Passage", "Jupiter Flyby", "Saturn Ring Plane", "Ice Giants", "Kuiper Watch", "Solar System Command"],
 } as const;
 
 function progression(mode: ArcadeProgressionMode, modeLabel: string, unitLabel: string, unitPlural: string, nodes: readonly string[], startLabel: string, portalTitle: string, portalCopy: string): ArcadeProgressionSpec {
@@ -79,6 +81,7 @@ export const ARCADE_V5_IDENTITIES: Record<ArcadeV5GameKey, ArcadeGameIdentity> =
   "body-explorer": { game:"body-explorer", name:"BioQuest: Human Systems", world:"BioLab Complex", rewardName:"Bio Cells", rewardSymbol:"♥", accent:"#f43f5e", accent2:"#fb7185", glow:"rgba(244,63,94,.4)", canvas:"#210810", surface:"#40101d", introKicker:"BIOLAB COMPLEX", introTitle:"Human systems need stabilising.", introCopy:"Work through age-appropriate biology cases where organs, clues and systems relationships change without pretending to diagnose real patients.", progression:progression("adventure","BIOLOGY CASE ADVENTURE","case","cases",NODES.bio,"Open case","Choose a BioLab case","Case families unlock progressively, while fictional educational scenarios and system clues are varied on every attempt.") },
   "history-timeline": { game:"history-timeline", name:"Chronicle Vault", world:"Archive Continuum", rewardName:"Chronicle Seals", rewardSymbol:"⌛", accent:"#d97706", accent2:"#f5d0a9", glow:"rgba(217,119,6,.4)", canvas:"#211408", surface:"#3b260f", introKicker:"ARCHIVE CONTINUUM", introTitle:"History has fractured.", introCopy:"Investigate archive cases through chronology, sources, provenance, cause and consequence as evidence sets shift between visits.", progression:progression("investigation","ARCHIVE INVESTIGATION","case","cases",NODES.chronicle,"Open investigation","Choose an archive investigation","Cases unlock deeper historical reasoning while evidence order, source combinations and investigation framing change on replay.") },
   "culture-heritage": { game:"culture-heritage", name:"Style Studio Ghana", world:"Ghana Design House", rewardName:"Studio Sparks", rewardSymbol:"✂", accent:"var(--color-accent-indigo)", accent2:"var(--color-success)", glow:"color-mix(in srgb,var(--color-accent-indigo) 40%,transparent)", canvas:"var(--color-brand-deep)", surface:"var(--sn-ink)", introKicker:"GHANA DESIGN HOUSE", introTitle:"Curtains open. Your collection starts here.", introCopy:"Create freely, then take design briefs that connect textile heritage, pattern mathematics, practical function, repair and respectful sourcing without grading personal taste.", progression:progression("studio","DESIGN STUDIO","collection","collections",[],"Open the studio","Create a collection, not a worksheet","Free Style has no correctness score. Design Missions regenerate objective briefs while your wardrobe, runway and creative choices remain yours.") },
+  "space-explorer": { game:"space-explorer", name:"Solar Navigator: Mission Control", world:"Helios Mission Control", rewardName:"Orbit Badges", rewardSymbol:"◌", accent:"#6366f1", accent2:"#f59e0b", glow:"rgba(99,102,241,.42)", canvas:"#080b22", surface:"#12193b", introKicker:"HELIOS MISSION CONTROL", introTitle:"Plot the route. Read the sky.", introCopy:"Command astronomy missions through planets, moons and deep space by reading telemetry, managing navigation resources and committing evidence-based flight plans.", progression:progression("navigation","SOLAR NAVIGATION","mission","missions",NODES.solar,"Launch mission","Choose a Solar System mission","Mission sectors unlock deeper astronomy while target bodies, telemetry, flight rules and navigation pressure remix on every launch.") },
 };
 
 export const ARCADE_SESSION_VARIETY_MIN = 16 * 12 * 10 * 10 * 8 * 8;

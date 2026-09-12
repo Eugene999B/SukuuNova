@@ -4,12 +4,12 @@ import { ARCADE_SESSION_VARIETY_MIN, ARCADE_V5_IDENTITIES, arcadeGameRewardCount
 describe("Learning Arcade V5 identities", () => {
   it("gives every flagship its own world, reward and genre-aware progression", () => {
     const identities = Object.values(ARCADE_V5_IDENTITIES);
-    expect(identities).toHaveLength(14);
-    expect(new Set(identities.map((item) => item.game)).size).toBe(14);
-    expect(new Set(identities.map((item) => item.world)).size).toBe(14);
-    expect(new Set(identities.map((item) => item.rewardName)).size).toBe(14);
-    expect(new Set(identities.map((item) => item.accent)).size).toBe(14);
-    expect(new Set(identities.map((item) => item.progression.mode)).size).toBeGreaterThanOrEqual(7);
+    expect(identities).toHaveLength(15);
+    expect(new Set(identities.map((item) => item.game)).size).toBe(15);
+    expect(new Set(identities.map((item) => item.world)).size).toBe(15);
+    expect(new Set(identities.map((item) => item.rewardName)).size).toBe(15);
+    expect(new Set(identities.map((item) => item.accent)).size).toBe(15);
+    expect(new Set(identities.map((item) => item.progression.mode)).size).toBeGreaterThanOrEqual(8);
     for (const identity of identities) {
       expect(identity.introTitle.length).toBeGreaterThan(8);
       expect(identity.introCopy.length).toBeGreaterThan(40);
@@ -27,13 +27,15 @@ describe("Learning Arcade V5 identities", () => {
     expect(ARCADE_V5_IDENTITIES["money-math-market"].progression.nodes).toHaveLength(0);
   });
 
-  it("uses different progression structures for adventures, tournaments, expeditions and contracts", () => {
+  it("uses different progression structures for adventures, tournaments, expeditions, contracts and navigation", () => {
     expect(ARCADE_V5_IDENTITIES.word.progression.mode).toBe("adventure");
     expect(ARCADE_V5_IDENTITIES.word.progression.nodes).toHaveLength(10);
     expect(ARCADE_V5_IDENTITIES["keyboard-ninja"].progression.mode).toBe("tournament");
     expect(ARCADE_V5_IDENTITIES["keyboard-ninja"].progression.nodes).toHaveLength(8);
     expect(ARCADE_V5_IDENTITIES["ghana-map-master"].progression.mode).toBe("expedition");
     expect(ARCADE_V5_IDENTITIES["circuit-logic"].progression.mode).toBe("contracts");
+    expect(ARCADE_V5_IDENTITIES["space-explorer"].progression.mode).toBe("navigation");
+    expect(ARCADE_V5_IDENTITIES["space-explorer"].progression.nodes).toHaveLength(10);
   });
 
   it("falls back safely to Nova Runner for unknown presentation lookups", () => {
@@ -46,6 +48,7 @@ describe("Learning Arcade V5 adaptive progression", () => {
     expect(arcadeProgressionDifficulty("keyboard-ninja", 1)).toBe(1);
     expect(arcadeProgressionDifficulty("keyboard-ninja", 8)).toBe(5);
     expect(arcadeProgressionDifficulty("word", 5)).toBe(3);
+    expect(arcadeProgressionDifficulty("space-explorer", 10)).toBe(5);
     expect(arcadeProgressionDifficulty("math", 1)).toBeNull();
   });
 

@@ -1,7 +1,7 @@
 import type { ArcadeV5GameKey } from "./arcade-v5-design";
 
 export type ArcadeTimingPolicy = "untimed" | "soft-pressure" | "skill-timed";
-export type ArcadeOpeningStyle = "runner" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio";
+export type ArcadeOpeningStyle = "runner" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio" | "mission-control";
 
 export type ArcadeExperienceProfile = {
   family: string;
@@ -154,6 +154,16 @@ export const ARCADE_V6_EXPERIENCES: Record<ArcadeV5GameKey, ArcadeExperienceProf
     timingLabel: "Untimed studio · creativity and careful design come first",
     help: ["Use Free Style to mix outfits with no correctness score.", "Open Design Missions when you want a client brief with one objective learning constraint.", "Try pieces on the model, ask for a clue, then commit the look for secure review."],
     controls: ["Touch / 1–4 / arrows: choose wardrobe pieces", "H: studio clue", "Enter: commit a Design Mission"],
+  },
+  "space-explorer": {
+    family: "Astronomy mission control",
+    openingStyle: "mission-control",
+    menuSubtitle: "Plot spacecraft routes through planets, moons and deep-space telemetry.",
+    learningPromise: "Solar System structure, motion, planetary classes and scientific communication become navigation decisions instead of flashcards.",
+    timing: "soft-pressure",
+    timingLabel: "Navigation drift · evidence stays readable and no answer expires",
+    help: ["Read the target, sector, mission objective and flight telemetry.", "Use Star Scan for an evidence clue that never reveals the graded answer.", "Lock a course when the astronomical evidence supports it; the server grades after the mission."],
+    controls: ["1–4 / tap: choose a course", "S: Star Scan", "Enter: lock course"],
   },
 };
 

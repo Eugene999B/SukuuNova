@@ -5,7 +5,7 @@ import { learningStreak, schoolDay } from "./arcade-content";
 import { standardBandFromClassLevel } from "./arcade-catalog";
 import { leaderboardDisplayName } from "./arcade-leaderboard";
 
-const UNIVERSE_GAMES = ["math", "keyboard-ninja", "force-motion-lab", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "money-math-market", "cyber-safety", "environment-guardian", "body-explorer", "history-timeline", "circuit-logic", "culture-heritage"] as const;
+const UNIVERSE_GAMES = ["math", "keyboard-ninja", "force-motion-lab", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "money-math-market", "cyber-safety", "environment-guardian", "body-explorer", "history-timeline", "circuit-logic", "culture-heritage", "space-explorer"] as const;
 
 type Context = { schoolId: string; guardianId: string; userId: string };
 type ProgressStats = {

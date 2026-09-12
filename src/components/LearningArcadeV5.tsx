@@ -16,6 +16,7 @@ import BioQuestHumanSystems from "./BioQuestHumanSystems";
 import StyleStudioGhana from "./StyleStudioGhana";
 import ChronicleVault from "./ChronicleVault";
 import CircuitForge from "./CircuitForge";
+import SolarNavigatorMissionControl from "./SolarNavigatorMissionControl";
 import ArcadeGameLogo from "./ArcadeGameLogo";
 import ArcadeV5LaunchPortal from "./ArcadeV5LaunchPortal";
 import ArcadeV5GameShell from "./ArcadeV5GameShell";
@@ -56,6 +57,7 @@ const INFO: Record<LiveGame, GameInfo> = {
   "body-explorer": { minAgeRank:1, lockedLabel:"AGE 6+", description:"Explore organs and coordinated human systems through fictional biology cases.", tags:["Science","Biology","Case adventure"] },
   "history-timeline": { minAgeRank:2, lockedLabel:"AGE 9+", description:"Repair a historical archive through chronology, sources and causal evidence.", tags:["History","Evidence","Investigation"] },
   "culture-heritage": { minAgeRank:1, lockedLabel:"AGE 6+", description:"Create looks freely or solve untimed design briefs about textiles, patterns, function, repair and Ghanaian weaving heritage.", tags:["Creative Arts","Textiles","Design studio"] },
+  "space-explorer": { minAgeRank:1, lockedLabel:"AGE 6+", description:"Command Solar System missions by reading astronomy telemetry, managing navigation resources and plotting evidence-based spacecraft routes.", tags:["Science","Astronomy","Mission control"] },
 };
 
 async function api(path: string, body?: unknown) {
@@ -106,6 +108,7 @@ export default function LearningArcadeV5() {
       case "body-explorer":gameView=<BioQuestHumanSystems {...common}/>;break;
       case "history-timeline":gameView=<ChronicleVault {...common}/>;break;
       case "culture-heritage":gameView=<StyleStudioGhana {...common}/>;break;
+      case "space-explorer":gameView=<SolarNavigatorMissionControl {...common}/>;break;
       default:gameView=<NovaRunner {...common}/>;break;
     }
     return <ArcadeV5GameShell game={game} sessionLabel={sessionLabel} sessionDetail={sessionDetail}>{gameView}{busy?<div className="nova-arcade-message">Saving game progress…</div>:null}{error?<div className="nova-arcade-alert" role="alert">{error}</div>:null}</ArcadeV5GameShell>;
@@ -122,7 +125,7 @@ export default function LearningArcadeV5() {
   if(portalGame&&data?.selected){const progress=progressFor(portalGame);return <ArcadeV5LaunchPortal game={portalGame} progress={progress} selectedNode={selectedNode} playerId={data.selected.id} leaderboard={leaderboard} leaderboardBusy={busy} onSelectNode={setSelectedNode} onLaunch={(node)=>void startGame(portalGame,node)} onBack={()=>{setPortalGame(null);setLeaderboard(null);}} onRefreshLeaderboard={()=>void loadLeaderboard(portalGame)}/>;}
 
   return <main className="v5-arcade">
-    <div className="v5-arcade-top"><div><span className="v5-kicker"><Sparkles size={12}/> SUKUUNOVA ARCADE V5</span><h1>Choose a world. Never expect one script.</h1><p>Every flagship has its own genre, progression, rewards and ranking. Some are endless. Some are adventures, simulations, campaigns, expeditions, survival games, tournaments or contracts.</p></div><div className="v5-arcade-player"><b>{data?.selected?.name?.trim()?.[0]?.toUpperCase()??"N"}</b><div><span>PLAYER</span><strong>{data?.selected?.name??(loading?"Loading…":"Choose learner")}</strong><small>{totalGameXp} XP across all worlds · {data?.streak??0} day streak</small></div></div></div>
+    <div className="v5-arcade-top"><div><span className="v5-kicker"><Sparkles size={12}/> SUKUUNOVA ARCADE V5</span><h1>Choose a world. Never expect one script.</h1><p>Every flagship has its own genre, progression, rewards and ranking. Some are endless. Some are adventures, simulations, campaigns, expeditions, survival games, tournaments, contracts or navigation missions.</p></div><div className="v5-arcade-player"><b>{data?.selected?.name?.trim()?.[0]?.toUpperCase()??"N"}</b><div><span>PLAYER</span><strong>{data?.selected?.name??(loading?"Loading…":"Choose learner")}</strong><small>{totalGameXp} XP across all worlds · {data?.streak??0} day streak</small></div></div></div>
     {error?<div className="nova-arcade-alert" role="alert">{error}</div>:null}
     <div className="v5-arcade-toolbar"><div><strong>Game worlds</strong><p>Progression, rewards and rankings stay game-specific. Session content keeps adapting and remixing.</p></div><div>{data?.children?.length?<select aria-label="Learner" value={data.selected?.id??""} onChange={(event)=>void refresh(event.target.value)} disabled={busy||loading}>{data.children.map((child)=><option key={child.id} value={child.id}>{child.name} · {child.class?.name??"No class"}</option>)}</select>:null}{data?.allowedAgeBands?.length?<select aria-label="Learning band" value={ageBand} onChange={(event)=>setAgeBand(event.target.value as AgeBand)}>{data.allowedAgeBands.map((age)=><option key={age} value={age}>{AGE_LABELS[age]}</option>)}</select>:null}</div></div>
     <div className="v5-arcade-grid">{GAMES.map((game)=>{const identity=arcadeV5Identity(game),progression=identity.progression,progress=progressFor(game),allowed=eligible(game);return <button type="button" className="v5-game-tile" key={game} style={theme(game)} onClick={()=>openPortal(game)} disabled={!allowed}><div className="v5-game-tile-top"><ArcadeGameLogo game={game}/><span className="v5-live-pill">{allowed?progression.modeLabel:INFO[game].lockedLabel}</span></div><span>{identity.world}</span><h2>{identity.name}</h2><p>{INFO[game].description}</p><div className="v5-game-tile-stats"><div><b>{progression.selectableNodes?`${progress.unlockedNode??1}/${progress.nodeCount}`:progress.rounds}</b><small>{progression.selectableNodes?`${progression.unitPlural} open`:progression.unitPlural}</small></div><div><b>{progress.rewardCount}</b><small>{identity.rewardName}</small></div><div><b>{progress.accuracy===null?"—":`${progress.accuracy}%`}</b><small>accuracy</small></div></div><div className="v5-game-tile-footer"><strong>{INFO[game].tags.join(" · ")}</strong><span>{allowed?<>Open world <ArrowRight size={13}/></>:<>Locked</>}</span></div></button>;})}</div>
