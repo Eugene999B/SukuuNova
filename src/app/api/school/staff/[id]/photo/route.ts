@@ -50,7 +50,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const staff = rows[0];
       if (!staff) throw new AppError("Staff member not found.", 404, "STAFF_NOT_FOUND");
       await tx.$executeRawUnsafe(
-        `UPDATE "User" SET "photoUrl"=$3 WHERE "schoolId"=$1 AND u."id"=$2`.replace('u."id"', '"id"'),
+        `UPDATE "User" SET "photoUrl"=$3 WHERE "schoolId"=$1 AND "id"=$2`,
         session.schoolId,
         staffId,
         photoData,
