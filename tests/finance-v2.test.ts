@@ -77,7 +77,7 @@ describe("Finance V2 accounting integrity",()=>{
       expect(beforeApproval[0]?.scholarshipAmount.toFixed(2)).toBe("0.00");
       expect(beforeApproval[0]?.netAmount.toFixed(2)).toBe("200.00");
       expect((await tx.invoice.findFirst({where:{id:tuitionCharge.invoiceId,schoolId:fixture.schoolId}}))?.totalAmount.toFixed(2)).toBe("1200.00");
-      await expect(decideScholarshipV2(tx,{schoolId:fixture.schoolId,actorId:fixture.ownerId,awardId:request.id,decision:"approve"})).rejects.toMatchObject({statusCode:403});
+      await expect(decideScholarshipV2(tx,{schoolId:fixture.schoolId,actorId:fixture.ownerId,awardId:request.id,decision:"approve"})).rejects.toMatchObject({status:403,code:"FORBIDDEN"});
 
       await tx.userPermissionOverride.createMany({data:[
         {schoolId:fixture.schoolId,userId:fixture.memberId,permissionId:fixture.permissionIds.get("finance:scholarships_approve")!,granted:true},
