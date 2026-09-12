@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { accountLoginRateIdentityForUserId } from "@/lib/account-login-identity";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { confirmSchoolPasswordReset } from "@/lib/password-reset";
@@ -20,10 +21,10 @@ export async function POST(request: Request) {
       input.token.slice(0, 16)
     );
     const reset = await confirmSchoolPasswordReset(input);
-    const identities = [reset.email, reset.phone];
+    const rateIdentity = accountLoginRateIdentityForUserId(reset.userId);
     await Promise.all([
-      clearAccountLoginAttempts("school-login:" + reset.schoolCode, identities),
-      clearAccountLoginAttempts("guardian-login:" + reset.schoolCode, identities),
+      clearAccountLoginAttempts("school-login:" + reset.schoolCode, [rateIdentity]),
+      clearAccountLoginAttempts("guardian-login:" + reset.schoolCode, [rateIdentity]),
     ]);
     return NextResponse.json({ ok: true });
   } catch (error) {
