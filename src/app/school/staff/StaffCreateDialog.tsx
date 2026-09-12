@@ -53,8 +53,7 @@ export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subj
     if (!phone.trim()) return setResult({ ok: false, message: "Enter a phone number. It is also the first-login password." });
     if (!finalRole) return setResult({ ok: false, message: "Select a staff role." });
 
-    const nativeForm = event.currentTarget;
-    const form = new FormData(nativeForm);
+    const form = new FormData(event.currentTarget);
     form.set("name", name.trim());
     form.set("phone", phone.trim());
     if (email.trim()) form.set("email", email.trim());
@@ -73,7 +72,7 @@ export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subj
     {open ? <div className="staff-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
       <section className="staff-modal staff-modal-wide staff-dialog-region" role="dialog" aria-modal="true" aria-labelledby="staff-dialog-title">
         <div className="staff-modal-head">
-          <div><span>STAFF · ONE-STEP SETUP</span><h2 id="staff-dialog-title">Add staff and make the account ready</h2><p>Create the person, login, role and first teaching assignment together. There is no separate login-activation step.</p></div>
+          <div><span>STAFF · ONE-STEP SETUP</span><h2 id="staff-dialog-title">Add staff and make the account ready</h2><p>Create the person, login, role, teaching assignment and leadership responsibility together. There is no separate login-activation step.</p></div>
           <button type="button" onClick={() => setOpen(false)} aria-label="Close">×</button>
         </div>
 
@@ -89,16 +88,18 @@ export function StaffCreateDialog({ classes, subjects }: { classes: Item[]; subj
             <label>{isCustom ? "Role name" : "Primary role"}{isCustom ? <input className="staff-dialog-field" name="customRole" required value={customRole} onChange={(event) => setCustomRole(event.target.value)} placeholder="e.g. School Photographer" /> : <select className="staff-dialog-field" name="role" value={role} onChange={(event) => setRole(event.target.value)}>{category.roles.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}</select>}</label>
 
             {isTeaching ? <>
-              <label>Class assignment<select className="staff-dialog-field" name="primaryClassId" defaultValue=""><option value="">No class assignment yet</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></label>
+              <label>Class taught<select className="staff-dialog-field" name="primaryClassId" defaultValue=""><option value="">No class assignment yet</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></label>
               <label>Subject taught<select className="staff-dialog-field" name="subjectId" defaultValue=""><option value="">No subject assignment yet</option>{subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
               <label className="wide" style={{ display: "flex", alignItems: "center", gap: 10 }}><input type="checkbox" name="makeClassHead" style={{ width: 18, height: 18 }} /><span>Make this teacher the headteacher/class teacher of the selected class</span></label>
+              <label>Class HOD responsibility<select className="staff-dialog-field" name="hodClassId" defaultValue=""><option value="">No class HOD responsibility</option>{classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></label>
+              <label>Subject HOD responsibility<select className="staff-dialog-field" name="hodSubjectId" defaultValue=""><option value="">No subject HOD responsibility</option>{subjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
             </> : null}
 
             <div className="staff-role-summary">
               <span>Selected role</span><strong>{isCustom ? (customRole || "Custom role") : selectedRole?.name}</strong><small>{isCustom ? "Permissions can be refined later in Roles & Permissions." : selectedRole?.description}</small>
             </div>
             <div className="staff-form-note wide"><strong>Login is created now</strong><span>The staff account becomes active immediately. The staff member can sign in with the phone number or email. The phone number is the first password, and SukuuNova will require a password change after first login.</span></div>
-            {isTeaching ? <div className="staff-form-note wide"><strong>Assignments are not a second workflow</strong><span>If you select both a class and subject, the teaching assignment is saved during staff creation. You can later add or remove more assignments, roles and permissions without recreating the staff member.</span></div> : null}
+            {isTeaching ? <div className="staff-form-note wide"><strong>Configure teaching and leadership once</strong><span>The class/subject teaching assignment, class headteacher and class/subject HOD responsibility are saved with the staff member. They remain scoped to the exact class or subject instead of becoming vague global roles.</span></div> : null}
             {result && !result.ok ? <div className="staff-form-note wide" role="alert"><strong>Check the form</strong><span>{result.message}</span></div> : null}
           </div>
           <div className="staff-modal-actions"><button className="staff-secondary-button" type="button" onClick={() => setOpen(false)}>Cancel</button><button className="staff-primary-button" disabled={pending || (isCustom && !customRole.trim())} type="submit">{pending ? "Creating staff & login…" : "Add staff & activate login"}</button></div>
