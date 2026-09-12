@@ -2,6 +2,26 @@
 -- TeacherAcademicWork previously projected most work kinds into Assessment.type='ca',
 -- which made Homework / Exercise / Quiz / Project behave like Classwork. Preserve
 -- historical scores while restoring the category identity of already-linked work.
+--
+-- The original Phase 1 database constraint only allowed ca / exam / participation.
+-- Expand it before the backfill so canonical teacher-work categories can be stored.
+ALTER TABLE "Assessment"
+  DROP CONSTRAINT IF EXISTS "Assessment_type_check";
+
+ALTER TABLE "Assessment"
+  ADD CONSTRAINT "Assessment_type_check" CHECK (
+    "type" IN (
+      'ca',
+      'classwork',
+      'homework',
+      'exercises',
+      'quizzes',
+      'project',
+      'participation',
+      'exam'
+    )
+  );
+
 WITH canonical AS (
   SELECT
     w."schoolId",
