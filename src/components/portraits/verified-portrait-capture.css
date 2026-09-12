@@ -6,8 +6,8 @@
   width:100vw;
   min-height:100vh;
   min-height:100dvh;
-  background:#05070b;
-  color:#fff;
+  background:var(--identity-ink);
+  color:var(--identity-paper);
   overflow:hidden;
 }
 
@@ -22,7 +22,7 @@
   width:100%;
   height:100%;
   object-fit:cover;
-  background:#05070b;
+  background:var(--identity-ink);
 }
 
 .sukuunova-camera-video.selfie{
@@ -33,7 +33,7 @@
   position:relative;
   min-height:0;
   overflow:hidden;
-  background:#05070b;
+  background:var(--identity-ink);
 }
 
 .sukuunova-camera-topbar,
@@ -45,7 +45,7 @@
   gap:12px;
   padding-left:max(16px,env(safe-area-inset-left));
   padding-right:max(16px,env(safe-area-inset-right));
-  background:color-mix(in srgb,#05070b 86%,transparent);
+  background:color-mix(in srgb,var(--identity-ink) 86%,transparent);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
 }
@@ -54,7 +54,7 @@
   justify-content:space-between;
   padding-top:max(12px,env(safe-area-inset-top));
   padding-bottom:12px;
-  border-bottom:1px solid rgba(255,255,255,.12);
+  border-bottom:1px solid color-mix(in srgb,var(--identity-paper) 12%,transparent);
 }
 
 .sukuunova-camera-bottombar{
@@ -62,7 +62,7 @@
   flex-wrap:wrap;
   padding-top:14px;
   padding-bottom:max(14px,env(safe-area-inset-bottom));
-  border-top:1px solid rgba(255,255,255,.12);
+  border-top:1px solid color-mix(in srgb,var(--identity-paper) 12%,transparent);
 }
 
 .sukuunova-camera-title{
@@ -78,7 +78,7 @@
 }
 
 .sukuunova-camera-title span{
-  color:rgba(255,255,255,.72);
+  color:color-mix(in srgb,var(--identity-paper) 72%,transparent);
   font-size:11px;
   line-height:1.25;
 }
@@ -89,10 +89,10 @@
   width:44px;
   height:44px;
   place-items:center;
-  border:1px solid rgba(255,255,255,.2);
-  border-radius:999px;
-  background:rgba(8,12,20,.7);
-  color:#fff;
+  border:1px solid color-mix(in srgb,var(--identity-paper) 20%,transparent);
+  border-radius:var(--radius-pill);
+  background:color-mix(in srgb,var(--identity-ink) 70%,transparent);
+  color:var(--identity-paper);
   cursor:pointer;
   touch-action:manipulation;
 }
@@ -112,25 +112,24 @@
   max-width:620px;
   aspect-ratio:4/5;
   transform:translate(-50%,-50%);
-  border-radius:28px;
+  border-radius:var(--radius-2xl);
   background:
-    linear-gradient(#fff,#fff) left top/44px 3px no-repeat,
-    linear-gradient(#fff,#fff) left top/3px 44px no-repeat,
-    linear-gradient(#fff,#fff) right top/44px 3px no-repeat,
-    linear-gradient(#fff,#fff) right top/3px 44px no-repeat,
-    linear-gradient(#fff,#fff) left bottom/44px 3px no-repeat,
-    linear-gradient(#fff,#fff) left bottom/3px 44px no-repeat,
-    linear-gradient(#fff,#fff) right bottom/44px 3px no-repeat,
-    linear-gradient(#fff,#fff) right bottom/3px 44px no-repeat;
-  filter:drop-shadow(0 2px 8px rgba(0,0,0,.55));
+    linear-gradient(var(--identity-paper),var(--identity-paper)) left top/44px 3px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) left top/3px 44px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) right top/44px 3px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) right top/3px 44px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) left bottom/44px 3px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) left bottom/3px 44px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) right bottom/44px 3px no-repeat,
+    linear-gradient(var(--identity-paper),var(--identity-paper)) right bottom/3px 44px no-repeat;
 }
 
 .sukuunova-camera-capture-zone::after{
   content:"";
   position:absolute;
   inset:12%;
-  border-radius:24px;
-  border:1px solid rgba(255,255,255,.18);
+  border-radius:var(--radius-xl);
+  border:1px solid color-mix(in srgb,var(--identity-paper) 18%,transparent);
 }
 
 .sukuunova-camera-live-status{
@@ -143,10 +142,10 @@
   display:grid;
   gap:4px;
   padding:12px 14px;
-  border:1px solid rgba(255,255,255,.16);
-  border-radius:16px;
-  background:rgba(5,8,14,.76);
-  box-shadow:0 12px 36px rgba(0,0,0,.28);
+  border:1px solid color-mix(in srgb,var(--identity-paper) 16%,transparent);
+  border-radius:var(--radius-lg);
+  background:color-mix(in srgb,var(--identity-ink) 76%,transparent);
+  box-shadow:var(--shadow-md);
   backdrop-filter:blur(12px);
   -webkit-backdrop-filter:blur(12px);
   text-align:center;
@@ -158,7 +157,7 @@
 }
 
 .sukuunova-camera-live-status span{
-  color:rgba(255,255,255,.76);
+  color:color-mix(in srgb,var(--identity-paper) 76%,transparent);
   font-size:12px;
   line-height:1.35;
 }
@@ -173,9 +172,9 @@
   align-items:center;
   gap:7px;
   padding:7px 11px;
-  border-radius:999px;
-  background:rgba(5,8,14,.72);
-  color:#fff;
+  border-radius:var(--radius-pill);
+  background:color-mix(in srgb,var(--identity-ink) 72%,transparent);
+  color:var(--identity-paper);
   font-size:11px;
   font-weight:800;
   letter-spacing:.01em;
@@ -186,9 +185,9 @@
 .sukuunova-camera-progress-dot{
   width:8px;
   height:8px;
-  border-radius:999px;
-  background:#38d47a;
-  box-shadow:0 0 0 5px rgba(56,212,122,.16);
+  border-radius:var(--radius-pill);
+  background:var(--color-success);
+  box-shadow:0 0 0 5px var(--color-success-soft);
 }
 
 .sukuunova-camera-progress.checking .sukuunova-camera-progress-dot{
@@ -202,10 +201,10 @@
 .sukuunova-camera-action{
   min-height:44px;
   padding:0 16px;
-  border:1px solid rgba(255,255,255,.18);
-  border-radius:999px;
-  background:rgba(255,255,255,.1);
-  color:#fff;
+  border:1px solid color-mix(in srgb,var(--identity-paper) 18%,transparent);
+  border-radius:var(--radius-pill);
+  background:color-mix(in srgb,var(--identity-paper) 10%,transparent);
+  color:var(--identity-paper);
   font:inherit;
   font-size:13px;
   font-weight:800;
@@ -214,9 +213,9 @@
 }
 
 .sukuunova-camera-action.primary{
-  border-color:rgba(255,255,255,.72);
-  background:#fff;
-  color:#111827;
+  border-color:color-mix(in srgb,var(--identity-paper) 72%,transparent);
+  background:var(--identity-paper);
+  color:var(--identity-ink);
 }
 
 .sukuunova-camera-action:disabled{
@@ -246,7 +245,7 @@
 }
 
 .sukuunova-review-heading span{
-  color:rgba(255,255,255,.7);
+  color:color-mix(in srgb,var(--identity-paper) 70%,transparent);
   font-size:12px;
 }
 
@@ -262,9 +261,9 @@
   max-height:72dvh;
   aspect-ratio:4/5;
   object-fit:cover;
-  border-radius:24px;
-  border:1px solid rgba(255,255,255,.2);
-  box-shadow:0 24px 70px rgba(0,0,0,.46);
+  border-radius:var(--radius-2xl);
+  border:1px solid color-mix(in srgb,var(--identity-paper) 20%,transparent);
+  box-shadow:var(--shadow-2xl);
 }
 
 .sukuunova-review-actions{
@@ -288,8 +287,8 @@
 @media(max-width:720px){
   .sukuunova-camera-title span{display:none}
   .sukuunova-camera-topbar{gap:8px}
-  .sukuunova-camera-capture-zone{width:min(90vw,61dvh);border-radius:22px}
-  .sukuunova-camera-capture-zone::after{inset:10%;border-radius:20px}
+  .sukuunova-camera-capture-zone{width:min(90vw,61dvh);border-radius:var(--radius-xl)}
+  .sukuunova-camera-capture-zone::after{inset:10%;border-radius:var(--radius-lg)}
   .sukuunova-camera-live-status{bottom:12px;width:calc(100% - 24px)}
   .sukuunova-camera-bottombar{justify-content:stretch}
   .sukuunova-camera-action{flex:1 1 140px}
