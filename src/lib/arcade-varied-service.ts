@@ -68,7 +68,8 @@ function generate(game: string, difficulty: number, length: number, weakKeys: re
 }
 
 export async function startVariedArcadeRound(tx: TenantDb, context: Context, input: StartInput) {
-  const round = await startArcadeRound(tx, context, input);
+  const normalizedInput = input.game === "logic" ? { ...input, roundLength: Math.max(10, input.roundLength ?? 10) } : input;
+  const round = await startArcadeRound(tx, context, normalizedInput);
   const snapshotRows = await tx.$queryRaw<SnapshotRow[]>`
     SELECT "settingsSnapshot" FROM "ArcadeRound"
     WHERE "schoolId"=${context.schoolId} AND "id"=${round.id} LIMIT 1
