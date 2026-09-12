@@ -1,5 +1,6 @@
 export type MarketSupportMode = "guided" | "supported" | "independent" | "challenge";
 
+/** Ambient queue animation only; careful money maths is never punished. */
 export function marketPatienceDurationMs(difficulty: number, speedScale: number, supportMode: MarketSupportMode) {
   const safeDifficulty = Math.max(1, Math.min(5, Math.trunc(difficulty)));
   const safeSpeed = Math.max(0.65, Math.min(1.45, speedScale));
@@ -8,12 +9,8 @@ export function marketPatienceDurationMs(difficulty: number, speedScale: number,
   return Math.round(Math.max(7000, Math.min(22000, duration)));
 }
 
-export function marketQueueTrustLoss(queuePressure: number, hazardDensity: number, boss = false) {
-  const pressure = Math.max(0, Math.min(100, queuePressure));
-  if (pressure < 82) return 0;
-  const hazard = Math.max(0.45, Math.min(1.55, hazardDensity));
-  const loss = 3 + Math.ceil(((pressure - 82) / 18) * 5 * hazard) + (boss ? 2 : 0);
-  return Math.max(3, Math.min(12, loss));
+export function marketQueueTrustLoss(_queuePressure: number, _hazardDensity: number, _boss = false) {
+  return 0;
 }
 
 export function marketScanRecovery(queuePressure: number, hintStrength: 0 | 1 | 2) {
@@ -27,21 +24,15 @@ export function marketStockCost(basketSize: number, difficulty: number) {
   return Math.max(2, Math.min(18, size * 2 + safeDifficulty));
 }
 
-export function marketTillReward(queuePressure: number, difficulty: number) {
-  const pressure = Math.max(0, Math.min(100, queuePressure));
+export function marketTillReward(_queuePressure: number, difficulty: number) {
   const safeDifficulty = Math.max(1, Math.min(5, Math.trunc(difficulty)));
-  const speedBonus = pressure <= 28 ? 5 : pressure <= 52 ? 3 : pressure <= 76 ? 1 : 0;
-  return 4 + safeDifficulty + speedBonus;
+  return 7 + safeDifficulty;
 }
 
-export function marketComboGain(queuePressure: number) {
-  const pressure = Math.max(0, Math.min(100, queuePressure));
-  if (pressure <= 35) return 2;
-  if (pressure <= 70) return 1;
-  return 0;
+export function marketComboGain(_queuePressure: number) {
+  return 1;
 }
 
-export function marketRestockGain(queuePressure: number) {
-  const pressure = Math.max(0, Math.min(100, queuePressure));
-  return pressure <= 45 ? 2 : pressure <= 75 ? 1 : 0;
+export function marketRestockGain(_queuePressure: number) {
+  return 1;
 }
