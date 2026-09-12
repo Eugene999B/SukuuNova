@@ -8,13 +8,19 @@ import { getSchoolAuthorization } from "@/lib/authorization";
 import { GUARDIAN_COOKIE, getGuardianSession, createGuardianSessionToken, requireGuardianSession } from "@/lib/guardian-auth";
 import { getPlatformSession, getSchoolSession, requirePlatformSession, requireSchoolSession, createPlatformSessionToken, createSchoolSessionToken, PLATFORM_COOKIE, PLATFORM_SESSION_SECONDS, SCHOOL_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { db, withTenant } from "@/lib/db";
+import { passwordLengthError, passwordMinimumForAccount, type PasswordPolicyUniverse } from "@/lib/password-policy";
 import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 import "@/components/settings-hub.css";
 
-type SecurityUniverse = "platform" | "school" | "teacher" | "guardian";
+type SecurityUniverse = PasswordPolicyUniverse;
 
 async function throttlePasswordChange(identity: string) {
   await recordLoginAttempt("password-change", identity, requestIp(await headers()));
+}
+
+function requirePasswordLength(password: string, minimum: number) {
+  const error = passwordLengthError(password, minimum);
+  if (error) throw new Error(error);
 }
 
 async function changePassword(formData: FormData) {
@@ -23,7 +29,6 @@ async function changePassword(formData: FormData) {
   const current = String(formData.get("currentPassword") ?? "");
   const next = String(formData.get("newPassword") ?? "");
   const confirm = String(formData.get("confirmPassword") ?? "");
-  if (next.length < 12 || next.length > 256) throw new Error("New password must contain 12–256 characters.");
   if (next !== confirm) throw new Error("New passwords do not match.");
 
   if (universe === "school" || universe === "teacher") {
@@ -34,10 +39,12 @@ async function changePassword(formData: FormData) {
     const workspace = await withTenant(currentSchool.schoolId, async (tx) => {
       const user = await tx.user.findUnique({ where: { id: currentSchool.userId }, select: { passwordHash: true } });
       if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
+      const access = await getSchoolAuthorization(tx, currentSchool.userId);
+      requirePasswordLength(next, passwordMinimumForAccount(universe, access.isElevated));
       const now = new Date();
       await tx.user.update({ where: { id: currentSchool.userId }, data: { passwordHash: await hash(next, 12) } });
       await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: currentSchool.schoolId, userId: currentSchool.userId, usedAt: null }, data: { usedAt: now } });
-      return (await getSchoolAuthorization(tx, currentSchool.userId)).workspace;
+      return access.workspace;
     });
     const responseCookies = await cookies();
     const token = await createSchoolSessionToken({ kind: "school", userId: currentSchool.userId, schoolId: currentSchool.schoolId, name: currentSchool.name, authorizationVersion: currentSchool.authorizationVersion, impersonationId: currentSchool.impersonationId, impersonatedByAdminId: currentSchool.impersonatedByAdminId });
@@ -49,11 +56,12 @@ async function changePassword(formData: FormData) {
   if (universe === "guardian") {
     const currentGuardian = await requireGuardianSession();
     await throttlePasswordChange(`guardian:${currentGuardian.schoolId}:${currentGuardian.userId}`);
+    requirePasswordLength(next, passwordMinimumForAccount("guardian"));
     await withTenant(currentGuardian.schoolId, async (tx) => {
       const user = await tx.user.findUnique({ where: { id: currentGuardian.userId }, select: { passwordHash: true } });
       if (!user || !(await compare(current, user.passwordHash))) throw new Error("Current password is incorrect.");
       const now = new Date();
-      await tx.user.update({ where: { id: currentGuardian.userId }, data: { passwordHash: await hash(next, 12) } });
+      await tx.user.update({ where: { id: currentGuardian.userId }, data: { passwordHash: await hash(next, 12), needsPasswordChange: false } });
       await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: currentGuardian.schoolId, userId: currentGuardian.userId, usedAt: null }, data: { usedAt: now } });
     });
     const responseCookies = await cookies();
@@ -66,6 +74,7 @@ async function changePassword(formData: FormData) {
   if (universe === "platform") {
     const currentPlatform = await requirePlatformSession();
     await throttlePasswordChange(`platform:${currentPlatform.adminId}`);
+    requirePasswordLength(next, passwordMinimumForAccount("platform"));
     const admin = await db.platformAdmin.findUnique({ where: { id: currentPlatform.adminId }, select: { passwordHash: true } });
     if (!admin || !(await compare(current, admin.passwordHash))) throw new Error("Current password is incorrect.");
     const now = new Date();
@@ -83,7 +92,7 @@ async function changePassword(formData: FormData) {
   redirect("/");
 }
 
-function SecurityBody({ universe, required, accountName }: { universe: SecurityUniverse; required: boolean; accountName: string }) {
+function SecurityBody({ universe, required, accountName, minimumPasswordLength }: { universe: SecurityUniverse; required: boolean; accountName: string; minimumPasswordLength: number }) {
   const related = universe === "platform" ? [
     { href: "/account/settings", icon: UserCog, title: "My settings", description: "Return to your personal platform workspace preferences." },
     { href: "/platform/admins", icon: UsersRound, title: "Platform workers", description: "Review worker roles and permissions separately from your own password." },
@@ -115,14 +124,14 @@ function SecurityBody({ universe, required, accountName }: { universe: SecurityU
         <header>
           <span className="settings-hub-eyebrow">Password</span>
           <h2>{required ? "Set a new private password" : "Change password"}</h2>
-          <p>Use at least 12 characters. Your current password is required so another person cannot change it from an unlocked session.</p>
+          <p>Use at least {minimumPasswordLength} characters. Your current password is required so another person cannot change it from an unlocked session.</p>
         </header>
         <div className="settings-focus-body">
           <form action={changePassword} className="security-settings-form">
             <input type="hidden" name="universe" value={universe} />
             <label className="settings-field"><span>Current password</span><input name="currentPassword" type="password" autoComplete="current-password" required /></label>
-            <label className="settings-field"><span>New password</span><input name="newPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
-            <label className="settings-field"><span>Confirm new password</span><input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={256} required /></label>
+            <label className="settings-field"><span>New password</span><input name="newPassword" type="password" autoComplete="new-password" minLength={minimumPasswordLength} maxLength={256} required /></label>
+            <label className="settings-field"><span>Confirm new password</span><input name="confirmPassword" type="password" autoComplete="new-password" minLength={minimumPasswordLength} maxLength={256} required /></label>
             <div className="settings-save-row"><span className="security-password-guidance"><LockKeyhole size={14} aria-hidden="true" /> Avoid reusing a password from email, banking or another school system.</span><button type="submit" className="settings-primary-action"><KeyRound size={14} aria-hidden="true" /> Update password</button></div>
           </form>
         </div>
@@ -157,18 +166,19 @@ export default async function SecurityPage({ searchParams }: { searchParams: Pro
         tx.school.findUnique({ where: { id: school.schoolId }, select: { name: true, uniqueCode: true } }),
         getSchoolAuthorization(tx, school.userId),
       ]);
-      return schoolRecord ? { schoolRecord, workspace: access.workspace, role: access.roles.map((role) => role.name).join(" · ") } : null;
+      return schoolRecord ? { schoolRecord, workspace: access.workspace, role: access.roles.map((role) => role.name).join(" · "), isElevated: access.isElevated } : null;
     });
     if (!data) redirect("/dashboard");
     const universe = data.workspace === "teacher" ? "teacher" : "school";
-    return <AppShell universe={universe} title="Account Security" subtitle="Password and login protection." active="Account Security" schoolName={data.schoolRecord.name} schoolCode={data.schoolRecord.uniqueCode} userName={school.name} role={data.role || (universe === "teacher" ? "Teacher" : "School account")}><SecurityBody universe={universe} accountName={school.name} required={requiredByRoute} /></AppShell>;
+    const minimumPasswordLength = passwordMinimumForAccount(universe, data.isElevated);
+    return <AppShell universe={universe} title="Account Security" subtitle="Password and login protection." active="Account Security" schoolName={data.schoolRecord.name} schoolCode={data.schoolRecord.uniqueCode} userName={school.name} role={data.role || (universe === "teacher" ? "Teacher" : "School account")}><SecurityBody universe={universe} accountName={school.name} required={requiredByRoute} minimumPasswordLength={minimumPasswordLength} /></AppShell>;
   }
 
   if (platform) {
-    return <AppShell universe="platform" title="Account Security" subtitle="Password and login protection." active="Account Security" userName={platform.name} role={platform.role}><SecurityBody universe="platform" accountName={platform.name} required={requiredByRoute} /></AppShell>;
+    return <AppShell universe="platform" title="Account Security" subtitle="Password and login protection." active="Account Security" userName={platform.name} role={platform.role}><SecurityBody universe="platform" accountName={platform.name} required={requiredByRoute} minimumPasswordLength={passwordMinimumForAccount("platform")} /></AppShell>;
   }
 
   const currentGuardian = await requireGuardianSession();
   const guardianRequired = requiredByRoute || Boolean(currentGuardian.needsPasswordChange);
-  return <AppShell universe="guardian" title="Account Security" subtitle="Password and family-login protection." active="Account Security" schoolName={currentGuardian.schoolName} userName={currentGuardian.name || "Guardian"} role="Guardian"><SecurityBody universe="guardian" accountName={currentGuardian.name || "Guardian account"} required={guardianRequired} /></AppShell>;
+  return <AppShell universe="guardian" title="Account Security" subtitle="Password and family-login protection." active="Account Security" schoolName={currentGuardian.schoolName} userName={currentGuardian.name || "Guardian"} role="Guardian"><SecurityBody universe="guardian" accountName={currentGuardian.name || "Guardian account"} required={guardianRequired} minimumPasswordLength={passwordMinimumForAccount("guardian")} /></AppShell>;
 }
