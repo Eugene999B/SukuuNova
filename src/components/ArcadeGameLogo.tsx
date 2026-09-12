@@ -1,6 +1,6 @@
-import { Atom, BookOpen, Bot, Compass, Cpu, Crown, Keyboard, Lock, MapPin, Orbit, Receipt, Rocket, Search, Shield, Sparkles, Store, Zap } from "lucide-react";
+import { Atom, BookOpen, Bot, Compass, Cpu, Crown, Keyboard, Leaf, Lock, MapPin, Orbit, Receipt, Recycle, Rocket, Search, Shield, Sparkles, Store, Zap } from "lucide-react";
 
-export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market" | "cyber-safety";
+export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market" | "cyber-safety" | "environment-guardian";
 
 type Props = {
   game: ArcadeLogoGame;
@@ -62,6 +62,13 @@ export default function ArcadeGameLogo({ game, size = "card" }: Props) {
       <Shield className="arcade-mark-main" aria-hidden="true"/>
       <Lock className="arcade-mark-core" aria-hidden="true"/>
       <span className="arcade-mark-star" aria-hidden="true"><Zap size={13}/></span>
+    </div>;
+  }
+  if (game === "environment-guardian") {
+    return <div className={`arcade-mark arcade-mark-${size} arcade-mark-eco`} aria-label="EcoGrid Ghana logo">
+      <Leaf className="arcade-mark-main" aria-hidden="true"/>
+      <Recycle className="arcade-mark-core" aria-hidden="true"/>
+      <span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span>
     </div>;
   }
   return <div className={`arcade-mark arcade-mark-${size} arcade-mark-runner`} aria-label="Nova Runner logo">
