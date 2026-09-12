@@ -4,6 +4,7 @@ import { AppError, RateLimitError } from "../src/lib/errors";
 const mocks = vi.hoisted(() => ({
   authenticateSchoolUser: vi.fn(),
   authenticateGuardianUser: vi.fn(),
+  resolveAccountLoginRateIdentity: vi.fn(),
   assertAccountLoginAllowed: vi.fn(),
   clearAccountLoginAttempts: vi.fn(),
   recordFailedAccountLogin: vi.fn(),
@@ -14,6 +15,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/login-service", () => ({
   authenticateSchoolUser: mocks.authenticateSchoolUser,
   authenticateGuardianUser: mocks.authenticateGuardianUser,
+}));
+
+vi.mock("@/lib/account-login-identity", () => ({
+  resolveAccountLoginRateIdentity: mocks.resolveAccountLoginRateIdentity,
 }));
 
 vi.mock("@/lib/rate-limit", () => ({
@@ -68,6 +73,7 @@ const guardianAccount = {
 describe("account-scoped school login throttling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveAccountLoginRateIdentity.mockImplementation(async (input: { universe: string }) => input.universe === "guardian" ? "user:user-2" : "user:user-1");
     mocks.assertAccountLoginAllowed.mockResolvedValue(undefined);
     mocks.clearAccountLoginAttempts.mockResolvedValue(undefined);
     mocks.recordFailedAccountLogin.mockResolvedValue(undefined);
@@ -80,16 +86,17 @@ describe("account-scoped school login throttling", () => {
   it("does not consume a failed-attempt counter for a successful staff login", async () => {
     const response = await schoolLogin(request({ uniqueCode: "EUG123", identifier: "0244000000", password: "correct-password" }));
     expect(response.status).toBe(200);
-    expect(mocks.assertAccountLoginAllowed).toHaveBeenCalledWith("school-login:eug123", "0244000000");
+    expect(mocks.resolveAccountLoginRateIdentity).toHaveBeenCalledWith({ schoolCode: "EUG123", identifier: "0244000000", universe: "school" });
+    expect(mocks.assertAccountLoginAllowed).toHaveBeenCalledWith("school-login:eug123", "user:user-1");
     expect(mocks.recordFailedAccountLogin).not.toHaveBeenCalled();
-    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("school-login:eug123", ["0244000000"]);
+    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("school-login:eug123", ["user:user-1"]);
   });
 
-  it("records a failed credential attempt only against that staff identity", async () => {
+  it("records failed credentials against the canonical user account rather than the typed identifier", async () => {
     mocks.authenticateSchoolUser.mockRejectedValueOnce(new AppError("Invalid credentials or inactive account.", 401, "UNAUTHORIZED"));
     const response = await schoolLogin(request({ uniqueCode: "EUG123", identifier: "teacher@gmail.com", password: "wrong-password" }));
     expect(response.status).toBe(401);
-    expect(mocks.recordFailedAccountLogin).toHaveBeenCalledWith("school-login:eug123", "teacher@gmail.com");
+    expect(mocks.recordFailedAccountLogin).toHaveBeenCalledWith("school-login:eug123", "user:user-1");
     expect(mocks.clearAccountLoginAttempts).not.toHaveBeenCalled();
   });
 
@@ -101,11 +108,20 @@ describe("account-scoped school login throttling", () => {
     expect(response.headers.get("retry-after")).toBe("900");
   });
 
+  it("maps phone and email to the same canonical staff bucket", async () => {
+    await schoolLogin(request({ uniqueCode: "EUG123", identifier: "0244000000", password: "correct-password" }));
+    await schoolLogin(request({ uniqueCode: "EUG123", identifier: "teacher@gmail.com", password: "correct-password" }));
+    expect(mocks.resolveAccountLoginRateIdentity).toHaveBeenNthCalledWith(1, { schoolCode: "EUG123", identifier: "0244000000", universe: "school" });
+    expect(mocks.resolveAccountLoginRateIdentity).toHaveBeenNthCalledWith(2, { schoolCode: "EUG123", identifier: "teacher@gmail.com", universe: "school" });
+    expect(mocks.assertAccountLoginAllowed).toHaveBeenNthCalledWith(1, "school-login:eug123", "user:user-1");
+    expect(mocks.assertAccountLoginAllowed).toHaveBeenNthCalledWith(2, "school-login:eug123", "user:user-1");
+  });
+
   it("uses the same per-account behavior for guardian phone/email login", async () => {
     const response = await guardianLogin(request({ schoolCode: "EUG123", identifier: "parent@gmail.com", password: "correct-password" }));
     expect(response.status).toBe(200);
-    expect(mocks.assertAccountLoginAllowed).toHaveBeenCalledWith("guardian-login:eug123", "parent@gmail.com");
+    expect(mocks.assertAccountLoginAllowed).toHaveBeenCalledWith("guardian-login:eug123", "user:user-2");
     expect(mocks.recordFailedAccountLogin).not.toHaveBeenCalled();
-    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("guardian-login:eug123", ["parent@gmail.com"]);
+    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("guardian-login:eug123", ["user:user-2"]);
   });
 });
