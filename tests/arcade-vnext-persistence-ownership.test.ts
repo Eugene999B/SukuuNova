@@ -54,10 +54,10 @@ describe("Arcade vNext persistence ownership", () => {
       for (const table of OWNED_TABLES) {
         const forbidden = [
           ["drop table", new RegExp(`DROP\\s+TABLE(?:\\s+IF\\s+EXISTS)?\\s+"${table}"`, "i")],
-          ["rename table", new RegExp(`ALTER\\s+TABLE\\s+"${table}"[\\s\\S]*?\\bRENAME\\s+TO\\b`, "i")],
+          ["rename table", new RegExp(`ALTER\\s+TABLE\\s+"${table}"[^;]*?\\bRENAME\\s+TO\\b`, "i")],
           ["disable RLS", new RegExp(`ALTER\\s+TABLE\\s+"${table}"\\s+DISABLE\\s+ROW\\s+LEVEL\\s+SECURITY`, "i")],
           ["remove FORCE RLS", new RegExp(`ALTER\\s+TABLE\\s+"${table}"\\s+NO\\s+FORCE\\s+ROW\\s+LEVEL\\s+SECURITY`, "i")],
-          ["drop tenant policy", new RegExp(`DROP\\s+POLICY[\\s\\S]*?\\s+ON\\s+"${table}"`, "i")],
+          ["drop tenant policy", new RegExp(`DROP\\s+POLICY(?:\\s+IF\\s+EXISTS)?\\s+"[^"]+"\\s+ON\\s+"${table}"`, "i")],
         ] as const;
 
         for (const [rule, pattern] of forbidden) {
