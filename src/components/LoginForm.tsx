@@ -92,6 +92,7 @@ export function LoginForm(props: Props) {
       if (!response.ok) { setError(result.message || "The email or password is incorrect."); return; }
       if (props.universe === "school" && schoolRole === "guardian") router.push("/guardian");
       else if (props.universe === "school" && result.user?.needsPasswordChange) router.push("/account/security?required=1");
+      else if (props.universe === "school" && result.user?.portal === "clinic") router.push("/clinic");
       else if (props.universe === "school" && result.user?.portal === "teacher") router.push("/teacher");
       else router.push(props.universe === "platform" ? "/platform" : "/dashboard");
       router.refresh();
@@ -113,7 +114,7 @@ export function LoginForm(props: Props) {
       {schoolName ? <p className="auth-help-text">{schoolName}</p> : null}
       <div className="auth-role-heading"><span className="auth-context">Choose your access</span><h2>How are you signing in?</h2><p>Select the account type provided by your school.</p></div>
       <div className="auth-role-grid">
-        <button type="button" className="auth-role-card" onClick={() => { setSchoolRole("staff"); setSchoolStage("credentials"); }}><span className="auth-role-icon"><UsersRoundIcon /></span><strong>Staff</strong><small>Teachers, leadership, finance, administration and school support staff.</small><em>Continue as Staff →</em></button>
+        <button type="button" className="auth-role-card" onClick={() => { setSchoolRole("staff"); setSchoolStage("credentials"); }}><span className="auth-role-icon"><UsersRoundIcon /></span><strong>Staff</strong><small>Teachers, leadership, finance, administration, clinic and school support staff.</small><em>Continue as Staff →</em></button>
         <button type="button" className="auth-role-card" onClick={() => { setSchoolRole("guardian"); setSchoolStage("credentials"); }}><span className="auth-role-icon"><GuardianIcon /></span><strong>Guardian</strong><small>Parents and guardians who monitor children connected to their family account.</small><em>Continue as Guardian →</em></button>
       </div>
       {error ? <p className="auth-error" role="alert">{error}</p> : null}
