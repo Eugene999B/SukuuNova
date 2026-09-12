@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { onboardStudent, STUDENT_ENTRY_TYPES, type StudentEntryType } from "@/lib/student-onboarding-service";
+import { assertPortraitVerificationToken } from "@/lib/portrait-verification";
 
 export type StudentActionState = { message: string | null };
 
@@ -30,6 +31,7 @@ export async function createStudentAction(_previousState: StudentActionState, fo
   const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
   const guardianRelationship = String(formData.get("guardianRelationship") ?? "Parent/Guardian").trim() || "Parent/Guardian";
   const photoData = String(formData.get("photoData") ?? "").trim();
+  const photoVerificationToken = String(formData.get("photoVerificationToken") ?? "").trim();
 
   try {
     if (!name) throw new Error("Student name is required.");
@@ -39,6 +41,14 @@ export async function createStudentAction(_previousState: StudentActionState, fo
     if (guardianName && !guardianPhone) throw new Error("Enter the guardian phone number when providing a guardian name.");
     if ((placementTermId && !classId) || (classId && !placementTermId)) {
       throw new Error("Choose both a placement term and intended class, or leave both unassigned.");
+    }
+    if (photoData) {
+      assertPortraitVerificationToken({
+        token: photoVerificationToken,
+        schoolId: session.schoolId,
+        target: "student",
+        image: photoData,
+      });
     }
 
     await onboardStudent({
