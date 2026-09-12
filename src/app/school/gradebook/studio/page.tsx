@@ -126,8 +126,8 @@ export default async function GradebookStudioPage({ searchParams }: { searchPara
               </select>
             </div>
             <div className="academic-field">
-              <label>Current term</label>
-              <div className="academic-context-static">{termLabel}</div>
+              <label htmlFor="gradebook-current-term">Current term</label>
+              <input id="gradebook-current-term" value={termLabel} readOnly aria-readonly="true" />
             </div>
             <button className="academic-context-submit" type="submit" disabled={!data.selectedTerm}>Load Students &amp; Enter Marks</button>
           </form>
