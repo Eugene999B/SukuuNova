@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { PLATFORM_COOKIE, SCHOOL_COOKIE, createSchoolSessionTokenFromAuthorizationVersion, sessionCookieOptions } from "@/lib/auth";
+import { resolveAccountLoginRateIdentity } from "@/lib/account-login-identity";
 import { GUARDIAN_COOKIE } from "@/lib/guardian-auth";
 import { AppError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
@@ -13,19 +14,20 @@ export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
     const scope = "school-login:" + input.uniqueCode.toLowerCase();
-    await assertAccountLoginAllowed(scope, input.identifier);
+    const rateIdentity = await resolveAccountLoginRateIdentity({ schoolCode: input.uniqueCode, identifier: input.identifier, universe: "school" });
+    await assertAccountLoginAllowed(scope, rateIdentity);
 
     let account;
     try {
       account = await authenticateSchoolUser(input);
     } catch (error) {
       if (error instanceof AppError && error.status === 401) {
-        await recordFailedAccountLogin(scope, input.identifier);
+        await recordFailedAccountLogin(scope, rateIdentity);
       }
       throw error;
     }
 
-    await clearAccountLoginAttempts(scope, [input.identifier]);
+    await clearAccountLoginAttempts(scope, [rateIdentity]);
     const response = NextResponse.json({ ok: true, user: { name: account.name, schoolName: account.schoolName, portal: account.portal, roles: account.roles, needsPasswordChange: account.needsPasswordChange } });
     response.cookies.set(SCHOOL_COOKIE, await createSchoolSessionTokenFromAuthorizationVersion({ kind: "school", userId: account.userId, schoolId: account.schoolId, name: account.name }, account.authorizationVersion), sessionCookieOptions());
     response.cookies.delete(PLATFORM_COOKIE);
