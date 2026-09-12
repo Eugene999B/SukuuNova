@@ -49,6 +49,7 @@ export default function SolarNavigatorMissionControl({ learnerName, round, onCom
   exitRef.current = onExit;
 
   const question = round.questions[checkpoint];
+  const hasQuestion = Boolean(question);
   const scene = question?.scene;
   const flightWindow = solarFlightWindowMs(round.difficulty, plan?.speedScale ?? 1, supportMode);
   const pressure = Math.max(0, Math.min(1, elapsed / Math.max(1, flightWindow)));
@@ -58,13 +59,13 @@ export default function SolarNavigatorMissionControl({ learnerName, round, onCom
   useEffect(() => () => stopArcadeMusic(), []);
 
   useEffect(() => {
-    if (screen !== "mission" || !question) return;
+    if (screen !== "mission" || !hasQuestion) return;
     const timer = window.setInterval(() => {
       setElapsed((value) => value + 1000);
       setNavIntegrity((value) => Math.max(25, value - solarDriftDamage(pressure, plan?.hazardDensity ?? 1, scene?.fuelRisk ?? 1) * .12));
     }, 1000);
     return () => window.clearInterval(timer);
-  }, [screen, question?.id, pressure, plan?.hazardDensity, scene?.fuelRisk]);
+  }, [screen, hasQuestion, question?.id, pressure, plan?.hazardDensity, scene?.fuelRisk]);
 
   useEffect(() => {
     if (checkpoint >= round.questions.length && screen === "mission" && !completedRef.current) {
