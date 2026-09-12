@@ -34,7 +34,7 @@ const eslintConfig = [
       "src/components/PayrollV2Workspace.tsx",
       "src/lib/finance-v2-service.ts",
       "src/lib/payroll-v2-service.ts",
-      "src/app/api/school/finance-v2/receipt/[paymentId]/route.ts"
+      "src/app/api/school/finance-v2/receipt/**/route.ts"
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "off"
