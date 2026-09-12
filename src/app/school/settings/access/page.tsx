@@ -48,6 +48,7 @@ type Data = {
 type FormState = { name: string; email: string; phone: string; password: string };
 type Mode = "accounts" | "create";
 const emptyForm: FormState = { name: "", email: "", phone: "", password: "" };
+const elevatedRoleNames = new Set(["Owner", "Administrator", "Principal", "Vice Principal"]);
 
 const rolePurpose: Record<string, string> = {
   Owner: "Ultimate school authority. Keep this role protected.",
@@ -69,6 +70,10 @@ const rolePurpose: Record<string, string> = {
 
 function initials(name: string) {
   return name.split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+}
+
+function strongPasswordRequired(roles: string[]) {
+  return roles.some((role) => elevatedRoleNames.has(role));
 }
 
 function AccessPageInner() {
@@ -118,6 +123,10 @@ function AccessPageInner() {
   const pendingStaff = (data?.users ?? []).filter((user) => user.status === "pending");
   const activeCount = (data?.users ?? []).filter((user) => user.status === "active").length;
   const suspendedCount = (data?.users ?? []).filter((user) => user.status === "suspended").length;
+  const createStrongPassword = strongPasswordRequired(roleNames);
+  const createUsesPhonePassword = Boolean(form.phone.trim()) && !createStrongPassword;
+  const selectedStrongPassword = strongPasswordRequired(draftRoles);
+  const selectedUsesPhonePassword = Boolean(selected?.phone) && !selectedStrongPassword;
 
   const filteredUsers = useMemo(() => {
     const query = accountSearch.trim().toLowerCase();
@@ -177,13 +186,18 @@ function AccessPageInner() {
 
   async function createDirectAccount() {
     if (!roleNames.length) { setMessage("Choose at least one normal role for this account."); return; }
+    if (!createUsesPhonePassword) {
+      const minimum = createStrongPassword ? 12 : 6;
+      if (form.password.length < minimum) { setMessage(`Set a temporary password of at least ${minimum} characters.`); return; }
+    }
     setSaving(true);
     setMessage("");
     try {
       const response = await fetch("/api/school/access", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...form, roleNames }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || payload.error || "Could not create account.");
-      setHandoff({ name: payload.name, login: payload.email || payload.phone || form.email || form.phone, roles: roleNames, password: form.password });
+      const temporaryPassword = payload.temporaryPasswordSource === "phone" ? (payload.phone || form.phone) : form.password;
+      setHandoff({ name: payload.name, login: payload.email || payload.phone || form.email || form.phone, roles: roleNames, password: temporaryPassword });
       setMessage(`Account for ${payload.name} is ready.`);
       await load();
     } catch (error) {
@@ -194,7 +208,10 @@ function AccessPageInner() {
   async function saveSelectedUser() {
     if (!selected || !data?.canControlRoles) return;
     if (!draftRoles.length) { setMessage("Choose at least one role before saving this account."); return; }
-    if (selected.status === "pending" && form.password.length < 12) { setMessage("Set a login password of at least 12 characters before activating this staff member."); return; }
+    if (selected.status === "pending" && !selectedUsesPhonePassword) {
+      const minimum = selectedStrongPassword ? 12 : 6;
+      if (form.password.length < minimum) { setMessage(`Set a login password of at least ${minimum} characters before activating this staff member.`); return; }
+    }
     setSaving(true);
     setMessage("");
     try {
@@ -205,7 +222,7 @@ function AccessPageInner() {
         body: JSON.stringify({
           userId: selected.id,
           status: activating ? "active" : selected.status,
-          password: activating ? form.password : undefined,
+          password: activating && !selectedUsesPhonePassword ? form.password : undefined,
           roleNames: draftRoles,
           grantedPermissionKeys: grantKeys,
           deniedPermissionKeys: denyKeys,
@@ -215,7 +232,8 @@ function AccessPageInner() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || payload.error || "Could not update account.");
       if (activating) {
-        setHandoff({ name: selected.name, login: selected.email || selected.phone || "No login contact recorded", roles: draftRoles, password: form.password });
+        const temporaryPassword = payload.temporaryPasswordSource === "phone" ? (selected.phone || "") : form.password;
+        setHandoff({ name: selected.name, login: selected.email || selected.phone || "No login contact recorded", roles: draftRoles, password: temporaryPassword });
         setMessage(`${selected.name}'s staff login is now active.`);
       } else {
         setMessage(`${selected.name}'s access was updated.`);
@@ -247,7 +265,7 @@ function AccessPageInner() {
         <SettingsHero
           eyebrow="School access"
           title="Choose the person first. Give them the job they actually do."
-          description="Most accounts only need a normal role such as Principal, Accountant or Subject Teacher. Use direct permission exceptions only when a person's job genuinely differs from the role."
+          description="Most accounts only need a normal role such as Principal, Accountant or Subject Teacher. Ordinary staff can start with their phone number as the temporary password; they must change it after signing in."
           contextLabel="Account health"
           contextValue={`${activeCount} active · ${pendingStaff.length} pending`}
           contextMeta={`${suspendedCount} suspended · ${data?.users.length ?? 0} total identities`}
@@ -275,7 +293,7 @@ function AccessPageInner() {
                     <label>Full name<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Ama Mensah" /></label>
                     <label>Email<input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="name@school.com" /></label>
                     <label>Phone / WhatsApp<input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} placeholder="Optional if email is provided" /></label>
-                    <label>Temporary password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="At least 12 characters" /></label>
+                    {createUsesPhonePassword ? <div className="access-note"><strong>Temporary password: {form.phone}</strong> This ordinary staff member will use the phone number for the first login, then SukuuNova will require a new password of at least 6 characters.</div> : <label>Temporary password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={`At least ${createStrongPassword ? 12 : 6} characters`} /></label>}
                   </div>
                   <div>
                     <b className="field-label">What job will this person do?</b>
@@ -330,7 +348,7 @@ function AccessPageInner() {
                     <p>{selected.email || selected.phone || "No login contact"} · {selected.status}</p>
                   </header>
                   <div className="settings-focus-body">
-                    {selected.status === "pending" ? <div className="access-note"><strong>This person already exists as staff.</strong> Choose their role and set a temporary password to activate the same identity without losing teaching relationships.</div> : null}
+                    {selected.status === "pending" ? <div className="access-note"><strong>This person already exists as staff.</strong> Choose their role. If they have a phone number and are not Owner/Administrator/Principal/Vice Principal, that phone number becomes the temporary first-login password automatically.</div> : null}
 
                     <div className="access-summary-grid">
                       <div className="settings-readonly"><span>Role rights</span><strong>{inheritedKeys.size}</strong></div>
@@ -346,7 +364,7 @@ function AccessPageInner() {
                       </div>
                     </div>
 
-                    {selected.status === "pending" ? <label className="access-password-field">Temporary login password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="At least 12 characters" disabled={!data?.canControlRoles} /></label> : null}
+                    {selected.status === "pending" ? (selectedUsesPhonePassword ? <div className="access-note"><strong>First-login password: {selected.phone}</strong> The staff member must change it after signing in. Their new ordinary-user password may be 6 characters or longer.</div> : <label className="access-password-field">Temporary login password<input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={`At least ${selectedStrongPassword ? 12 : 6} characters`} disabled={!data?.canControlRoles} /></label>) : null}
 
                     <div className="access-step">
                       <div className="access-step-head"><span>2</span><div><h3>Only add exceptions when the role is not enough</h3><p>Direct denials override everything. Advanced access is for genuine exceptions, not normal account setup.</p></div></div>
@@ -386,7 +404,7 @@ function AccessPageInner() {
 
         {handoff ? (
           <section className="settings-focus-panel" role="status" aria-live="polite">
-            <header><span className="settings-hub-eyebrow">Account ready</span><h2>Give these details to {handoff.name} securely</h2><p>The temporary password appears because you just set it. It is not recoverable from this handoff after you leave this flow.</p></header>
+            <header><span className="settings-hub-eyebrow">Account ready</span><h2>Give these details to {handoff.name} securely</h2><p>This is the temporary first-login password. SukuuNova requires the person to change it after signing in.</p></header>
             <div className="settings-focus-body"><div className="access-handoff-grid"><div className="settings-readonly"><span>Login</span><strong>{handoff.login}</strong></div><div className="settings-readonly"><span>Role</span><strong>{handoff.roles.join(" + ")}</strong></div><div className="settings-readonly"><span>Temporary password</span><strong>{handoff.password}</strong></div></div></div>
           </section>
         ) : null}
