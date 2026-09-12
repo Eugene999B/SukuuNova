@@ -1,104 +1,73 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { requireSchoolSession } from "@/lib/school-auth";
+import { requirePermission } from "@/lib/rbac";
 import { withTenant } from "@/lib/db";
-import "./applications.css";
+import { ADMISSION_STATUSES, admissionStatusLabel, isAdmissionStatus, type AdmissionApplicationRow } from "@/lib/admissions-v2";
+import "./admissions-v2.css";
 
-const stages = ["Draft", "Submitted", "Review", "Accepted", "Rejected"] as const;
+type ListRow = Pick<AdmissionApplicationRow, "id" | "reference" | "studentName" | "guardianName" | "guardianPhone" | "intendedClassName" | "status" | "createdAt" | "updatedAt" | "convertedStudentId">;
 
-type Application = {
-  id: string;
-  reference: string;
-  applicant: string;
-  guardian: string;
-  className: string;
-  submittedAt: Date | null;
-  status: string;
-  completeness: number;
-};
-
-export default async function ApplicationsPage() {
+export default async function AdmissionsApplicationsPage({ searchParams }: { searchParams: Promise<{ q?: string; status?: string }> }) {
   const session = await requireSchoolSession();
-  const data = await withTenant(session.schoolId, async (tx) => {
-    const [school, enquiries, students, classes] = await Promise.all([
-      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
-      tx.$queryRaw<Array<{ id:string; reference:string; studentName:string; guardianName:string|null; intendedClass:string|null; stage:string; createdAt:Date; updatedAt:Date }>>`
-        SELECT "id","reference","studentName","guardianName","intendedClass","stage","createdAt","updatedAt"
-        FROM "AdmissionEnquiry"
-        WHERE "schoolId"=${session.schoolId}
-          AND "stage" IN ('applied','accepted','rejected')
-        ORDER BY "createdAt" DESC
-        LIMIT 100
-      `,
-      tx.student.count({ where: { schoolId: session.schoolId, status: "active" } }),
-      tx.class.count({ where: { schoolId: session.schoolId } }),
-    ]);
+  const params = await searchParams;
+  const q = String(params.q ?? "").trim().toLowerCase();
+  const requestedStatus = String(params.status ?? "");
+  const status = isAdmissionStatus(requestedStatus) ? requestedStatus : "";
 
-    const applicationRows: Application[] = enquiries.map((item) => ({
-      id: item.id,
-      reference: item.reference,
-      applicant: item.studentName,
-      guardian: item.guardianName ?? "Not recorded",
-      className: item.intendedClass ?? "Not selected",
-      submittedAt: item.updatedAt,
-      status: item.stage === "applied" ? "Submitted" : item.stage === "accepted" ? "Accepted" : "Rejected",
-      completeness: item.stage === "accepted" || item.stage === "rejected" ? 100 : 70,
-    }));
-    return { school, applications: applicationRows, enquiries: enquiries.length, students, classes };
+  const data = await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "students:read");
+    const [school, rows] = await Promise.all([
+      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
+      tx.$queryRawUnsafe<ListRow[]>(`SELECT "id","reference","studentName","guardianName","guardianPhone","intendedClassName","status","createdAt","updatedAt","convertedStudentId" FROM "AdmissionApplication" WHERE "schoolId"=$1 ORDER BY "createdAt" DESC LIMIT 500`, session.schoolId),
+    ]);
+    return { school, rows };
   });
 
-  const counts = {
-    draft: data.applications.filter((a) => a.status === "Draft").length,
-    submitted: data.applications.filter((a) => a.status === "Submitted").length,
-    review: data.applications.filter((a) => a.status === "Submitted").length,
-    accepted: data.applications.filter((a) => a.status === "Accepted").length,
-    rejected: data.applications.filter((a) => a.status === "Rejected").length,
-  };
-  const completion = data.applications.length ? Math.round(data.applications.reduce((sum, item) => sum + item.completeness, 0) / data.applications.length) : 0;
+  const counts = Object.fromEntries(ADMISSION_STATUSES.map((item) => [item, data.rows.filter((row) => row.status === item).length]));
+  const filtered = data.rows.filter((row) => {
+    if (status && row.status !== status) return false;
+    if (!q) return true;
+    return [row.studentName, row.guardianName, row.guardianPhone, row.reference, row.intendedClassName ?? ""].some((value) => value.toLowerCase().includes(q));
+  });
+  const active = data.rows.filter((row) => !["declined", "enrolled"].includes(row.status)).length;
 
   return (
-    <AppShell universe="school" title="Applications" subtitle="Applications." active="Applications" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
-      <div className="applications-page">
-        <section className="applications-hero">
-          <div>
-            <span className="applications-eyebrow">Admissions · Applications</span>
-            <h2>Move promising applicants forward.</h2>
-
-          </div>
-          <div className="applications-hero-actions">
-            <Link href="/school/admissions/enquiries" className="app-button secondary">View enquiries</Link>
-            <Link href="/school/admissions/applications?action=new" className="app-button primary">+ New application</Link>
-          </div>
+    <AppShell universe="school" title="Admissions & Enrolment" subtitle="Applications, offers, acceptance and permanent admission history." active="Applications" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+      <div className="admissions-v2">
+        <section className="admissions-hero">
+          <div><span className="admissions-kicker">Official admissions</span><h2>One controlled path into the Student register.</h2><p>Prospective families can begin as enquiries. A submitted application is reviewed, offered and accepted here; only the final enrolment step creates the official student record.</p></div>
+          <div className="admissions-actions"><Link className="button secondary" href="/school/admissions/enquiries">Enquiries</Link><Link className="button primary" href="/school/admissions/applications/new">+ New admission</Link></div>
         </section>
 
-        <section className="application-kpis">
-          <article className="application-kpi accent"><span>Applications</span><strong>{data.applications.length}</strong><small>Current admissions workload</small></article>
-          <article className="application-kpi"><span>Submitted</span><strong>{counts.submitted}</strong><small>Ready for review</small></article>
-          <article className="application-kpi"><span>Accepted</span><strong>{counts.accepted}</strong><small>Ready for enrolment</small></article>
-          <article className="application-kpi"><span>Average complete</span><strong>{completion}%</strong><small>Application completeness</small></article>
+        <section className="admissions-kpis" aria-label="Admission summary">
+          <div className="admissions-kpi"><span>Active pipeline</span><strong>{active}</strong></div>
+          <div className="admissions-kpi"><span>Submitted</span><strong>{counts.submitted ?? 0}</strong></div>
+          <div className="admissions-kpi"><span>Review</span><strong>{counts.under_review ?? 0}</strong></div>
+          <div className="admissions-kpi"><span>Offers</span><strong>{counts.offered ?? 0}</strong></div>
+          <div className="admissions-kpi"><span>Accepted</span><strong>{counts.accepted ?? 0}</strong></div>
+          <div className="admissions-kpi"><span>Enrolled</span><strong>{counts.enrolled ?? 0}</strong></div>
         </section>
 
-        <section className="application-pipeline">
-          <div className="application-section-head"><div><span className="applications-eyebrow">Decision pipeline</span><h3>Application stages</h3></div><Link href="/school/admissions/enrolment" className="application-inline-link">Open enrolment →</Link></div>
-          <div className="pipeline-grid">
-            {stages.map((stage) => {
-              const value = stage === "Draft" ? counts.draft : stage === "Submitted" ? counts.submitted : stage === "Review" ? counts.review : stage === "Accepted" ? counts.accepted : counts.rejected;
-              return <Link className={`pipeline-stage stage-${stage.toLowerCase()}`} href={`/school/admissions/applications?view=${encodeURIComponent(stage)}`} key={stage}><span>{stage}</span><strong>{value}</strong><small>{stage === "Review" ? "Needs a decision" : stage === "Accepted" ? "Ready to enrol" : stage === "Rejected" ? "Closed" : "In this stage"}</small></Link>;
-            })}
-          </div>
-        </section>
-
-        <section className="applications-main-grid">
-          <div className="applications-register">
-            <div className="application-section-head"><div><span className="applications-eyebrow">Application register</span><h3>Recent applications</h3><p>Search, filter and open the complete application record.</p></div><div className="application-head-actions"><Link href="/school/admissions/applications?view=Submitted">Needs review</Link><Link href="/school/admissions/applications?view=Accepted">Accepted</Link></div></div>
-            <form className="application-toolbar" action="/school/admissions/applications" method="get"><input name="q" placeholder="Search applicant, guardian or reference"/><select name="status" defaultValue="all"><option value="all">All stages</option>{stages.map((stage) => <option value={stage} key={stage}>{stage}</option>)}</select><select name="class" defaultValue="all"><option value="all">All classes</option></select><button className="app-button secondary" type="submit">Filter</button></form>
-            {data.applications.length ? <div className="applications-table-wrap"><table className="applications-table"><thead><tr><th>Applicant</th><th>Applying for</th><th>Completeness</th><th>Status</th><th /></tr></thead><tbody>{data.applications.map((application) => <tr key={application.id}><td><div className="applicant-cell"><span className="applicant-avatar">{application.applicant.slice(0, 2).toUpperCase()}</span><div><strong>{application.applicant}</strong><span>{application.reference} · {application.guardian}</span></div></div></td><td>{application.className}</td><td><div className="completion-cell"><div><span>{application.completeness}%</span></div><i><em style={{ width: `${application.completeness}%` }} /></i></div></td><td><span className={`application-status ${application.status.toLowerCase()}`}>{application.status}</span></td><td><Link href={`/school/admissions/applications/${application.id}`} className="application-open">Open →</Link></td></tr>)}</tbody></table></div> : <div className="applications-empty"><span className="empty-orb">◎</span><strong>No applications yet</strong><Link href="/school/admissions/enquiries" className="app-button primary">Open admissions enquiries</Link></div>}
-          </div>
-
-          <aside className="application-side">
-            <div className="application-side-card priority"><span className="applications-eyebrow">Admissions health</span><h3>Keep decisions moving.</h3><div className="side-stat"><strong>{counts.submitted}</strong><span>submitted applications awaiting review</span></div><div className="side-stat"><strong>{counts.accepted}</strong><span>accepted applicants ready for enrolment</span></div><Link href="/school/admissions/applications?view=Submitted" className="side-action">Start reviewing →</Link></div>
-            <div className="application-side-card"><span className="applications-eyebrow">Connected records</span><div className="connected-stat"><strong>{data.enquiries}</strong><span>current application enquiries</span></div><div className="connected-stat"><strong>{data.students}</strong><span>active learners already enrolled</span></div><div className="connected-stat"><strong>{data.classes}</strong><span>classes available for placement</span></div></div>
-          </aside>
+        <section className="admissions-card">
+          <div className="admissions-card-head"><div><span className="admissions-kicker">Admission history</span><h3>Applications register</h3><p>{filtered.length} record{filtered.length === 1 ? "" : "s"} in this view. Enrolled and declined records remain here for historical reference.</p></div></div>
+          <nav className="admissions-tabs" aria-label="Application status filters">
+            <Link className={!status ? "active" : ""} href="/school/admissions/applications">All · {data.rows.length}</Link>
+            {ADMISSION_STATUSES.map((item) => <Link key={item} className={status === item ? "active" : ""} href={`/school/admissions/applications?status=${item}`}>{admissionStatusLabel(item)} · {counts[item] ?? 0}</Link>)}
+          </nav>
+          <form className="admissions-search" action="/school/admissions/applications" method="get">
+            {status ? <input type="hidden" name="status" value={status} /> : null}
+            <input name="q" defaultValue={params.q ?? ""} placeholder="Search learner, guardian, phone, application no. or class" />
+            <button className="button secondary" type="submit">Search</button>
+          </form>
+          {filtered.length ? <div className="admissions-list">{filtered.map((row) => (
+            <article className="admissions-row" key={row.id}>
+              <div className="mobile-full"><span className="admissions-ref">{row.reference}</span><h4>{row.studentName}</h4><p>{row.guardianName} · {row.guardianPhone}</p></div>
+              <div><span className="admission-status" data-status={row.status}>{admissionStatusLabel(row.status)}</span><p>{row.intendedClassName ?? "Placement pending"}</p></div>
+              <div className="hide-tablet"><strong>{new Date(row.createdAt).toLocaleDateString("en-GH")}</strong><small>Last updated {new Date(row.updatedAt).toLocaleDateString("en-GH")}</small></div>
+              <Link className="button secondary" href={`/school/admissions/applications/${row.id}`}>Open →</Link>
+            </article>
+          ))}</div> : <div className="admissions-empty"><strong>No applications found.</strong><p>Start a new admission or change the filters.</p></div>}
         </section>
       </div>
     </AppShell>

@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Activity, Atom, BatteryCharging, BookMarked, BookOpen, Bot, CircuitBoard, Compass, Cpu, Crown, Heart, Hourglass, Keyboard, Landmark, Leaf, Lock, MapPin, Orbit, Palette, Receipt, Recycle, Rocket, Scissors, Search, Shield, Shirt, Sparkles, Store, Zap } from "lucide-react";
+import { Activity, Atom, BatteryCharging, BookMarked, BookOpen, Bot, CircuitBoard, Compass, Cpu, Crown, Heart, Hourglass, Keyboard, Landmark, Leaf, Lock, MapPin, Orbit, Palette, Receipt, Recycle, Rocket, Scissors, Search, Shield, Shirt, Sparkles, Sprout, Store, Zap } from "lucide-react";
 import { arcadeV5Identity, type ArcadeV5GameKey } from "@/lib/arcade-v5-design";
 
 export type ArcadeLogoGame = ArcadeV5GameKey;
@@ -14,6 +14,7 @@ export default function ArcadeGameLogo({ game, size = "card" }: Props) {
     borderColor: identity.accent2,
   };
   const root = (label: string, children: ReactNode, className = "") => <div className={`arcade-mark arcade-mark-${size} ${className}`} style={style} aria-label={label}>{children}</div>;
+  if (game === "number-pop") return root("Number Bloom logo", <><Sprout className="arcade-mark-main" aria-hidden="true"/><Leaf className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span></>, "arcade-mark-bloom");
   if (game === "keyboard-ninja") return root("TurboType logo", <><span className="arcade-mark-speed" aria-hidden="true"><Zap size={15}/></span><Keyboard className="arcade-mark-main" aria-hidden="true"/><strong>TT</strong></>, "arcade-mark-turbotype");
   if (game === "force-motion-lab") return root("AstroLab Defender logo", <><Orbit className="arcade-mark-orbit" aria-hidden="true"/><Shield className="arcade-mark-main" aria-hidden="true"/><Atom className="arcade-mark-core" aria-hidden="true"/></>, "arcade-mark-astrolab");
   if (game === "word") return root("Word Kingdom logo", <><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={14}/></span><BookOpen className="arcade-mark-main" aria-hidden="true"/><Crown className="arcade-mark-core" aria-hidden="true"/></>, "arcade-mark-word");

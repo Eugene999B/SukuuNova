@@ -29,9 +29,17 @@ describe("Learning Arcade V6 experience contract", () => {
     }
   });
 
-  it("keeps reading, engineering, coding, history, biology and creative design explicitly untimed", () => {
-    const untimed: ArcadeV5GameKey[] = ["circuit-logic", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline", "culture-heritage"];
+  it("keeps early numeracy, reading, engineering, coding, history, biology and creative design explicitly untimed", () => {
+    const untimed: ArcadeV5GameKey[] = ["number-pop", "circuit-logic", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline", "culture-heritage"];
     for (const game of untimed) expect(arcadeExperienceProfile(game).timing).toBe("untimed");
+  });
+
+  it("makes Number Bloom a distinct calm early-numeracy garden", () => {
+    const bloom = arcadeExperienceProfile("number-pop");
+    expect(bloom.family).toBe("Early numeracy garden");
+    expect(bloom.openingStyle).toBe("garden");
+    expect(bloom.timing).toBe("untimed");
+    expect(bloom.timingLabel).toContain("time to count");
   });
 
   it("uses navigation drift as soft world pressure without expiring astronomy answers", () => {

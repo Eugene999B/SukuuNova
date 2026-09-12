@@ -1,4 +1,5 @@
 export type ArcadeV5GameKey =
+  | "number-pop"
   | "math"
   | "keyboard-ninja"
   | "force-motion-lab"
@@ -15,7 +16,7 @@ export type ArcadeV5GameKey =
   | "culture-heritage"
   | "space-explorer";
 
-export type ArcadeProgressionMode = "endless" | "tournament" | "survival" | "contracts" | "adventure" | "expedition" | "simulation" | "campaign" | "investigation" | "studio" | "navigation";
+export type ArcadeProgressionMode = "endless" | "tournament" | "survival" | "contracts" | "adventure" | "expedition" | "simulation" | "campaign" | "investigation" | "studio" | "navigation" | "garden";
 
 export type ArcadeProgressionSpec = {
   mode: ArcadeProgressionMode;
@@ -49,6 +50,7 @@ export type ArcadeGameIdentity = {
 
 const REMIX = ["world state", "mission frame", "pressure profile", "objective modifier", "encounter pattern", "bonus condition"] as const;
 const NODES = {
+  bloom: ["Tiny Seeds", "Three-Flower Patch", "Five-Flower Patch", "Ladybird Lane", "Make-a-Number Bed", "More or Same Meadow", "Butterfly Count", "Rain Garden", "Number Steps", "Bloom Festival"],
   turbo: ["Rookie Cup", "Accuracy Cup", "Rhythm Cup", "Shift Cup", "Symbol Cup", "Velocity Cup", "Elite Cup", "Nova Championship"],
   circuit: ["Lighting Fault", "Switchboard Repair", "Series Retrofit", "Parallel Upgrade", "Meter Audit", "Fuse Recovery", "Ohm Works", "Grid Control", "Master Bus"],
   word: ["Rune Meadow", "Meaning Woods", "Grammar Keep", "Synonym Vale", "Sentence Forge", "Context Hall", "Scribe Maze", "Royal Library", "Crown Chamber", "Kingdom Throne"],
@@ -67,6 +69,7 @@ function progression(mode: ArcadeProgressionMode, modeLabel: string, unitLabel: 
 }
 
 export const ARCADE_V5_IDENTITIES: Record<ArcadeV5GameKey, ArcadeGameIdentity> = {
+  "number-pop": { game:"number-pop", name:"Number Bloom", world:"Blooming Number Garden", rewardName:"Petal Stars", rewardSymbol:"✿", accent:"var(--color-success)", accent2:"color-mix(in srgb,var(--color-success) 45%,var(--arcade-text))", glow:"color-mix(in srgb,var(--color-success) 40%,transparent)", canvas:"var(--color-brand-deep)", surface:"var(--sn-ink)", introKicker:"BLOOMING NUMBER GARDEN", introTitle:"Tiny numbers. Big blooms.", introCopy:"Grow an untimed touch-first garden where young learners count real groups, match numerals to quantities, compare amounts and build numbers through pictures instead of quiz cards.", progression:progression("garden","GARDEN JOURNEY","patch","patches",NODES.bloom,"Visit patch","Choose a garden patch","Garden patches grow from tiny quantities to numbers within ten. Visual objects, number goals and challenge order remix on every visit while the child always has time to count.") },
   math: { game:"math", name:"Nova Runner", world:"Nova Causeway", rewardName:"Nova Crystals", rewardSymbol:"✦", accent:"#f97316", accent2:"#facc15", glow:"rgba(249,115,22,.42)", canvas:"#160d28", surface:"#28153f", introKicker:"NOVA CAUSEWAY", introTitle:"Engines hot. Gates ahead.", introCopy:"Enter an endless mathematics run where the road, questions, pressure and route keep mutating around your mastery.", progression:progression("endless","ENDLESS RUN","run","runs",[],"Start a new run","The causeway never ends","There is no fixed Level 1 here. Every run is generated as a fresh route with new learning encounters, pace and world conditions.") },
   "keyboard-ninja": { game:"keyboard-ninja", name:"TurboType", world:"Velocity League", rewardName:"Turbo Bolts", rewardSymbol:"⚡", accent:"#22d3ee", accent2:"#a3e635", glow:"rgba(34,211,238,.4)", canvas:"#071b24", surface:"#0d3440", introKicker:"VELOCITY LEAGUE", introTitle:"Start your typing engine.", introCopy:"Race through changing tracks that learn weak keys, accuracy and pace. Cups unlock, but every heat is remixed.", progression:progression("tournament","RACING LEAGUE","cup","cups",NODES.turbo,"Enter selected cup","Choose a racing cup","Cups provide progression without fixed scripts: every heat changes key patterns, track pressure and precision targets.") },
   "force-motion-lab": { game:"force-motion-lab", name:"AstroLab Defender", world:"NovaCore Station", rewardName:"Reactor Cores", rewardSymbol:"◉", accent:"#a855f7", accent2:"#38bdf8", glow:"rgba(168,85,247,.42)", canvas:"#100b24", surface:"#211442", introKicker:"NOVACORE STATION", introTitle:"Science station under pressure.", introCopy:"Survive changing station emergencies using force, motion and energy reasoning. No two defence shifts need to unfold alike.", progression:progression("survival","SURVIVAL DEFENCE","shift","shifts",[],"Start defence shift","How long can the station hold?","Survival sessions remix hazards, incident order, pressure and science encounters rather than following a fixed level ladder.") },
