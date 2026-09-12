@@ -42,7 +42,7 @@ async function changePassword(formData: FormData) {
       const access = await getSchoolAuthorization(tx, currentSchool.userId);
       requirePasswordLength(next, passwordMinimumForAccount(universe, access.isElevated));
       const now = new Date();
-      await tx.user.update({ where: { id: currentSchool.userId }, data: { passwordHash: await hash(next, 12) } });
+      await tx.user.update({ where: { id: currentSchool.userId }, data: { passwordHash: await hash(next, 12), needsPasswordChange: false } });
       await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: currentSchool.schoolId, userId: currentSchool.userId, usedAt: null }, data: { usedAt: now } });
       return access.workspace;
     });
