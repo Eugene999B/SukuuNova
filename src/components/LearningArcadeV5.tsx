@@ -8,6 +8,7 @@ import NovaMillionaire from "./NovaMillionaire";
 import TurboType, { type TurboTypeTelemetry } from "./TurboType";
 import AstroLabDefender from "./AstroLabDefender";
 import WordKingdom from "./WordKingdom";
+import AnimationStoryLab from "./AnimationStoryLab";
 import ReadingQuest from "./ReadingQuest";
 import CodeBotsFactory from "./CodeBotsFactory";
 import GeoQuest from "./GeoQuest";
@@ -52,6 +53,7 @@ const INFO: Record<LiveGame, GameInfo> = {
   "force-motion-lab": { minAgeRank:2, lockedLabel:"AGE 9+", description:"Defend a research station using force, motion and systems reasoning.", tags:["Science","Physics","Survival"] },
   "circuit-logic": { minAgeRank:2, lockedLabel:"AGE 9+", description:"Restore a school microgrid through circuit engineering and fault diagnosis.", tags:["Science","Electricity","Contracts"] },
   word: { minAgeRank:1, lockedLabel:"AGE 6+", description:"Recover vocabulary and grammar runes across a fantasy kingdom.", tags:["English","Vocabulary","Adventure"] },
+  "sentence-scramble": { minAgeRank:1, lockedLabel:"AGE 6+", description:"Create mini animations freely, then direct untimed story-craft missions about sequencing, dialogue, camera choices and revision.", tags:["Creative writing","Animation","Storyboard journey"] },
   "comprehension-quest": { minAgeRank:2, lockedLabel:"AGE 9+", description:"Explore stories and reports through evidence, inference and source reasoning.", tags:["English","Reading","Expedition"] },
   "coding-sequence": { minAgeRank:2, lockedLabel:"AGE 9+", description:"Run a robot factory with algorithms, loops, conditions and debugging.", tags:["Computing","Algorithms","Factory jobs"] },
   "ghana-map-master": { minAgeRank:2, lockedLabel:"AGE 9+", description:"Travel a living Ghana atlas through regions, capitals and field routes.", tags:["Social Studies","Ghana","Expedition"] },
@@ -105,6 +107,7 @@ export default function LearningArcadeV5() {
       case "force-motion-lab":gameView=<AstroLabDefender {...common}/>;break;
       case "circuit-logic":gameView=<CircuitForge {...common}/>;break;
       case "word":gameView=<WordKingdom {...common}/>;break;
+      case "sentence-scramble":gameView=<AnimationStoryLab {...common}/>;break;
       case "comprehension-quest":gameView=<ReadingQuest {...common}/>;break;
       case "coding-sequence":gameView=<CodeBotsFactory {...common}/>;break;
       case "ghana-map-master":gameView=<GeoQuest {...common}/>;break;
@@ -131,7 +134,7 @@ export default function LearningArcadeV5() {
   if(portalGame&&data?.selected){const progress=progressFor(portalGame);return <ArcadeV5LaunchPortal game={portalGame} progress={progress} selectedNode={selectedNode} playerId={data.selected.id} leaderboard={leaderboard} leaderboardBusy={busy} onSelectNode={setSelectedNode} onLaunch={(node)=>void startGame(portalGame,node)} onBack={()=>{setPortalGame(null);setLeaderboard(null);}} onRefreshLeaderboard={()=>void loadLeaderboard(portalGame)}/>;}
 
   return <main className="v5-arcade">
-    <div className="v5-arcade-top"><div><span className="v5-kicker"><Sparkles size={12}/> SUKUUNOVA ARCADE V5</span><h1>Choose a world. Never expect one script.</h1><p>Every flagship has its own genre, progression, rewards and ranking. Some are gardens, knowledge shows, endless runs, adventures, simulations, campaigns, expeditions, survival games, tournaments, contracts or navigation missions.</p></div><div className="v5-arcade-player"><b>{data?.selected?.name?.trim()?.[0]?.toUpperCase()??"N"}</b><div><span>PLAYER</span><strong>{data?.selected?.name??(loading?"Loading…":"Choose learner")}</strong><small>{totalGameXp} XP across all worlds · {data?.streak??0} day streak</small></div></div></div>
+    <div className="v5-arcade-top"><div><span className="v5-kicker"><Sparkles size={12}/> SUKUUNOVA ARCADE V5</span><h1>Choose a world. Never expect one script.</h1><p>Every flagship has its own genre, progression, rewards and ranking. Some are gardens, knowledge shows, endless runs, adventures, storyboards, simulations, campaigns, expeditions, survival games, tournaments, contracts or navigation missions.</p></div><div className="v5-arcade-player"><b>{data?.selected?.name?.trim()?.[0]?.toUpperCase()??"N"}</b><div><span>PLAYER</span><strong>{data?.selected?.name??(loading?"Loading…":"Choose learner")}</strong><small>{totalGameXp} XP across all worlds · {data?.streak??0} day streak</small></div></div></div>
     {error?<div className="nova-arcade-alert" role="alert">{error}</div>:null}
     <div className="v5-arcade-toolbar"><div><strong>Game worlds</strong><p>Progression, rewards and rankings stay game-specific. Session content keeps adapting and remixing.</p></div><div>{data?.children?.length?<select aria-label="Learner" value={data.selected?.id??""} onChange={(event)=>void refresh(event.target.value)} disabled={busy||loading}>{data.children.map((child)=><option key={child.id} value={child.id}>{child.name} · {child.class?.name??"No class"}</option>)}</select>:null}{data?.allowedAgeBands?.length?<select aria-label="Learning band" value={ageBand} onChange={(event)=>setAgeBand(event.target.value as AgeBand)}>{data.allowedAgeBands.map((age)=><option key={age} value={age}>{AGE_LABELS[age]}</option>)}</select>:null}</div></div>
     <div className="v5-arcade-grid">{GAMES.map((game)=>{const identity=arcadeV5Identity(game),progression=identity.progression,progress=progressFor(game),allowed=eligible(game);return <button type="button" className="v5-game-tile" key={game} style={theme(game)} onClick={()=>openPortal(game)} disabled={!allowed}><div className="v5-game-tile-top"><ArcadeGameLogo game={game}/><span className="v5-live-pill">{allowed?progression.modeLabel:INFO[game].lockedLabel}</span></div><span>{identity.world}</span><h2>{identity.name}</h2><p>{INFO[game].description}</p><div className="v5-game-tile-stats"><div><b>{progression.selectableNodes?`${progress.unlockedNode??1}/${progress.nodeCount}`:progress.rounds}</b><small>{progression.selectableNodes?`${progression.unitPlural} open`:progression.unitPlural}</small></div><div><b>{progress.rewardCount}</b><small>{identity.rewardName}</small></div><div><b>{progress.accuracy===null?"—":`${progress.accuracy}%`}</b><small>accuracy</small></div></div><div className="v5-game-tile-footer"><strong>{INFO[game].tags.join(" · ")}</strong><span>{allowed?<>Open world <ArrowRight size={13}/></>:<>Locked</>}</span></div></button>;})}</div>

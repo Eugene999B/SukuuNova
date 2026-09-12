@@ -1,7 +1,7 @@
 import type { ArcadeV5GameKey } from "./arcade-v5-design";
 
 export type ArcadeTimingPolicy = "untimed" | "soft-pressure" | "skill-timed";
-export type ArcadeOpeningStyle = "garden" | "runner" | "quiz-show" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio" | "mission-control";
+export type ArcadeOpeningStyle = "garden" | "runner" | "quiz-show" | "racing" | "station" | "blueprint" | "storybook" | "animation-lab" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio" | "mission-control";
 
 export type ArcadeExperienceProfile = {
   family: string;
@@ -84,6 +84,16 @@ export const ARCADE_V6_EXPERIENCES: Record<ArcadeV5GameKey, ArcadeExperienceProf
     timingLabel: "Untimed adventure · read, think and explore",
     help: ["Meet characters and recover lost word-runes.", "Use context and grammar clues to make story decisions.", "Replays remix encounters so the chapter is not a memorised worksheet."],
     controls: ["Tap / 1–4: choose", "Enter: continue", "Read-aloud support can be enabled"],
+  },
+  "sentence-scramble": {
+    family: "Animation story lab",
+    openingStyle: "animation-lab",
+    menuSubtitle: "Write, direct and preview your own mini animation, then practise story craft through untimed director missions.",
+    learningPromise: "Sequencing, character goals, dialogue, transitions, cause and effect, camera choices and revision become tools for making stories move.",
+    timing: "untimed",
+    timingLabel: "Untimed creation · imagination is never raced or taste-graded",
+    help: ["Use Free Create to choose scenes, characters and actions, write short dialogue and preview a three-frame animation with no grades.", "Director Missions ask for the edit, shot, sequence or line that meets one objective story-craft constraint.", "Director Hint teaches a strategy without revealing the graded answer; the server keeps correctness sealed until production ends."],
+    controls: ["Touch / 1–4 / arrows: choose a director cut", "H: Director Hint", "Enter: lock cut", "Free Create: edit frames and preview"],
   },
   "comprehension-quest": {
     family: "Reading expedition",

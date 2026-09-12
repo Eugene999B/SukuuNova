@@ -61,7 +61,16 @@ export async function effectiveArcadeCatalog(tx: TenantDb, schoolId: string): Pr
           symbol: "♛",
           curriculumTags: ["patterns", "sequences", "classification", "deduction", "reasoning"] as const,
         }
-      : definition;
+      : definition.gameKey === "sentence-scramble"
+        ? {
+            ...definition,
+            name: "Animation Story Lab",
+            category: "Creative Writing & Media",
+            description: "Create mini animations freely, then practise sequencing, dialogue, cause and effect, camera choices and revision through untimed director missions.",
+            symbol: "▰",
+            curriculumTags: ["story-sequencing", "sentence-structure", "dialogue", "cause-effect", "visual-storytelling", "revision"] as const,
+          }
+        : definition;
     return {
       ...flagshipDefinition,
       live: contentReady,

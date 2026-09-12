@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { Activity, Atom, BatteryCharging, BookMarked, BookOpen, Bot, CircuitBoard, Compass, Cpu, Crown, Heart, Hourglass, Keyboard, Landmark, Leaf, Lock, MapPin, Orbit, Palette, Receipt, Recycle, Rocket, Scissors, Search, Shield, Shirt, Sparkles, Sprout, Store, Zap } from "lucide-react";
+import { Activity, Atom, BatteryCharging, BookMarked, BookOpen, Bot, CircuitBoard, Clapperboard, Compass, Cpu, Crown, Film, Heart, Hourglass, Keyboard, Landmark, Leaf, Lock, MapPin, Orbit, Palette, Receipt, Recycle, Rocket, Scissors, Search, Shield, Shirt, Sparkles, Sprout, Store, Zap } from "lucide-react";
 import { arcadeV5Identity, type ArcadeV5GameKey } from "@/lib/arcade-v5-design";
 
 export type ArcadeLogoGame = ArcadeV5GameKey;
@@ -19,6 +19,7 @@ export default function ArcadeGameLogo({ game, size = "card" }: Props) {
   if (game === "keyboard-ninja") return root("TurboType logo", <><span className="arcade-mark-speed" aria-hidden="true"><Zap size={15}/></span><Keyboard className="arcade-mark-main" aria-hidden="true"/><strong>TT</strong></>, "arcade-mark-turbotype");
   if (game === "force-motion-lab") return root("AstroLab Defender logo", <><Orbit className="arcade-mark-orbit" aria-hidden="true"/><Shield className="arcade-mark-main" aria-hidden="true"/><Atom className="arcade-mark-core" aria-hidden="true"/></>, "arcade-mark-astrolab");
   if (game === "word") return root("Word Kingdom logo", <><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={14}/></span><BookOpen className="arcade-mark-main" aria-hidden="true"/><Crown className="arcade-mark-core" aria-hidden="true"/></>, "arcade-mark-word");
+  if (game === "sentence-scramble") return root("Animation Story Lab logo", <><Clapperboard className="arcade-mark-main" aria-hidden="true"/><Film className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span></>, "arcade-mark-story-lab");
   if (game === "comprehension-quest") return root("Reading Quest logo", <><Compass className="arcade-mark-main" aria-hidden="true"/><Search className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><BookOpen size={13}/></span></>, "arcade-mark-reading");
   if (game === "coding-sequence") return root("CodeBots Logic Factory logo", <><Bot className="arcade-mark-main" aria-hidden="true"/><Cpu className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span></>, "arcade-mark-codebots");
   if (game === "ghana-map-master") return root("GeoQuest Ghana Expedition logo", <><Compass className="arcade-mark-main" aria-hidden="true"/><MapPin className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span></>, "arcade-mark-geoquest");

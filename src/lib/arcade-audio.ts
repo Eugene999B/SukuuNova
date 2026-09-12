@@ -146,6 +146,7 @@ function musicProfile(game: string) {
     case "force-motion-lab": return { scale:[1, 1.2, 1.5, 1.8, 1.5], type:"sine" as OscillatorType, tempo:860 };
     case "circuit-logic": return { scale:[1, 1.25, 1.5, 2, 1.5], type:"triangle" as OscillatorType, tempo:620 };
     case "word": return { scale:[1, 1.25, 1.5, 2, 1.5, 1.25], type:"sine" as OscillatorType, tempo:980 };
+    case "sentence-scramble": return { scale:[1, 1.25, 1.5, 1.333, 1.75, 2, 1.5], type:"triangle" as OscillatorType, tempo:840 };
     case "comprehension-quest": return { scale:[1, 1.2, 1.5, 1.8], type:"sine" as OscillatorType, tempo:1120 };
     case "coding-sequence": return { scale:[1, 1.5, 1.25, 2], type:"triangle" as OscillatorType, tempo:700 };
     case "ghana-map-master": return { scale:[1, 1.25, 1.5, 1.25, 1.8], type:"sine" as OscillatorType, tempo:1040 };
