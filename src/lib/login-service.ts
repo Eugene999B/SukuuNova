@@ -29,7 +29,6 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
     if (synthetic) logSyntheticLoginDiagnostic("directory_failure", { uniqueCode, found: Boolean(directory), status: directory?.status ?? null });
     throw new UnauthorizedError(LOGIN_FAILURE);
   }
-  if (input.password.length < MIN_PASSWORD_LENGTH) throw new UnauthorizedError("This password is too short. Use the password reset flow to secure the account.");
   return authDb.$transaction(async (tx) => {
     await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", directory.schoolId);
     const [contextRows, schoolRows] = await Promise.all([
@@ -63,6 +62,9 @@ export async function authenticateSchoolUser(input: { uniqueCode: string; identi
         logSyntheticLoginDiagnostic("user_failure", { uniqueCode, identifier: diagnosticIdentifier(input.identifier), activeCandidate: candidate ? candidate.status : null, candidateFound: Boolean(candidate), candidateEmailMatch: candidate?.email?.toLowerCase() === identifier, candidatePhoneMatch: candidate?.phone === identifier, candidateIsGuardian: guardianRows.length > 0 });
       }
       throw new UnauthorizedError(LOGIN_FAILURE);
+    }
+    if (input.password.length < MIN_PASSWORD_LENGTH && !user.needsPasswordChange) {
+      throw new UnauthorizedError("This password is too short. Use the password reset flow to secure the account.");
     }
     const passwordMatches = await compare(input.password, user.passwordHash);
     if (!passwordMatches) {
