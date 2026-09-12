@@ -6,6 +6,7 @@ import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
+import { termLifecycle } from "@/lib/term-date";
 
 const patchSchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -14,11 +15,6 @@ const patchSchema = z.object({
   teachingWeeks: z.coerce.number().int().min(1).max(30).optional(),
   isLocked: z.boolean().optional(),
 });
-
-function termStatus(startDate: Date, endDate: Date, isLocked = false, now = new Date()) {
-  if (isLocked) return "locked" as const;
-  return now < startDate ? "upcoming" as const : now > endDate ? "ended" as const : "active" as const;
-}
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -36,7 +32,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${session.schoolId}:${id}`}))`;
       const current = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!current) throw new AppError("Term not found.", 404, "NOT_FOUND");
-      const weekRows = await tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id);
+      const [weekRows, settings] = await Promise.all([
+        tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id),
+        tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
+      ]);
       const currentWeeks = weekRows[0]?.teachingWeeks ?? 13;
       const nextWeeks = input.teachingWeeks ?? currentWeeks;
       const nextLocked = input.isLocked ?? current.isLocked;
@@ -58,6 +57,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const approvedReportCardsAwaitingRelease = !current.isLocked && nextLocked
         ? await tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: "approved" } })
         : 0;
+      const lifecycle = termLifecycle(updated, new Date(), settings?.timezone || "Africa/Accra");
 
       await appendSchoolAudit(tx, {
         schoolId: session.schoolId,
@@ -68,10 +68,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         before: { ...current, teachingWeeks: currentWeeks },
         after: { ...updated, teachingWeeks: nextWeeks, approvedReportCardsAwaitingRelease, reportReleaseStatusPreserved: true },
       });
-      return { term: { ...updated, teachingWeeks: nextWeeks }, approvedReportCardsAwaitingRelease };
+      return { term: { ...updated, teachingWeeks: nextWeeks }, approvedReportCardsAwaitingRelease, lifecycle };
     });
 
-    return NextResponse.json({ ok: true, ...result, status: termStatus(result.term.startDate, result.term.endDate, result.term.isLocked), needsFinalization: !result.term.isLocked && new Date() > result.term.endDate });
+    return NextResponse.json({ ok: true, term: result.term, approvedReportCardsAwaitingRelease: result.approvedReportCardsAwaitingRelease, status: result.lifecycle.state, needsFinalization: result.lifecycle.shouldPromptLock });
   } catch (error) {
     return routeError(error);
   }
@@ -90,10 +90,14 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         hasPermission(tx, session.userId, "lesson_plans:review"),
         hasPermission(tx, session.userId, "reports:generate"),
       ]);
-      const term = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
+      const [term, settings] = await Promise.all([
+        tx.term.findUnique({ where: { id }, include: { academicYear: true } }),
+        tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
+      ]);
       if (!term) throw new AppError("Term not found.", 404, "NOT_FOUND");
       const weekRows = await tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id);
       const teachingWeeks = weekRows[0]?.teachingWeeks ?? 13;
+      const lifecycle = termLifecycle(term, new Date(), settings?.timezone || "Africa/Accra");
 
       const [students, assessments, scoreAgg, reportCards, approvedReports, sentReports, attendanceAgg, lessonAgg, teachingAssignments] = await Promise.all([
         tx.student.count({ where: { schoolId: session.schoolId, status: "active" } }),
@@ -129,8 +133,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
       return {
         term: { ...term, teachingWeeks },
-        status: termStatus(term.startDate, term.endDate, term.isLocked),
-        needsFinalization: !term.isLocked && new Date() > term.endDate,
+        status: lifecycle.state,
+        needsFinalization: lifecycle.shouldPromptLock,
         students,
         assessments,
         scores: scoreCount,
