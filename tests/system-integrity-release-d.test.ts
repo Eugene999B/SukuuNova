@@ -5,7 +5,7 @@ import { addApprovedPickup, attemptPickup } from "../src/lib/pickup-service";
 import { createTenantFixture, rawDb, setRawTenant } from "./helpers";
 
 describe("Release D system integrity", () => {
-  it("creates intake and draft placement without mutating the learner's live class", async () => {
+  it("creates intake and confirms the learner's selected class in one registration", async () => {
     const fixture = await createTenantFixture();
 
     await rawDb.$transaction(async (tx) => {
@@ -44,7 +44,7 @@ describe("Release D system integrity", () => {
       });
 
       const student = await tx.student.findUniqueOrThrow({ where: { id: result.student.id } });
-      expect(student.classId).toBeNull();
+      expect(student.classId).toBe(schoolClass.id);
 
       const intake = await tx.$queryRawUnsafe<Array<{ academicYearId: string }>>(
         `SELECT "academicYearId" FROM "StudentAcademicIntake" WHERE "schoolId"=$1 AND "studentId"=$2`,
@@ -58,7 +58,7 @@ describe("Release D system integrity", () => {
         fixture.schoolId,
         student.id,
       );
-      expect(enrollment).toEqual([{ termId: term.id, classId: schoolClass.id, status: "draft" }]);
+      expect(enrollment).toEqual([{ termId: term.id, classId: schoolClass.id, status: "confirmed" }]);
     });
   });
 
