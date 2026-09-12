@@ -10,4 +10,5 @@
 @keyframes millionairePortalBeamLeft{from{transform:rotate(-15deg);opacity:.28}to{transform:rotate(8deg);opacity:.68}}
 @keyframes millionairePortalBeamRight{from{transform:rotate(15deg);opacity:.28}to{transform:rotate(-8deg);opacity:.68}}
 @keyframes millionairePortalRing{from{transform:scale(.94) rotate(-7deg)}to{transform:scale(1.05) rotate(7deg)}}
-html[data-arcade-motion="reduced"] .v6-portal[data-opening="quiz-show"] .v6-opening-scene *,@media (prefers-reduced-motion:reduce){.v6-portal[data-opening="quiz-show"] .v6-opening-scene *{animation:none!important;transition:none!important}}
+html[data-arcade-motion="reduced"] .v6-portal[data-opening="quiz-show"] .v6-opening-scene *{animation:none!important;transition:none!important}
+@media (prefers-reduced-motion:reduce){.v6-portal[data-opening="quiz-show"] .v6-opening-scene *{animation:none!important;transition:none!important}}
