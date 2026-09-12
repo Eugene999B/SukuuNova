@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   issueSchoolPasswordReset: vi.fn(),
   confirmSchoolPasswordReset: vi.fn(),
   deliverResetToken: vi.fn(),
+  resolveAccountLoginRateIdentity: vi.fn(),
   recordLoginAttempt: vi.fn(),
   clearAccountLoginAttempts: vi.fn(),
 }));
@@ -13,6 +14,10 @@ vi.mock("@/lib/password-reset", () => ({
   confirmSchoolPasswordReset: mocks.confirmSchoolPasswordReset,
 }));
 
+vi.mock("@/lib/account-login-identity", () => ({
+  resolveAccountLoginRateIdentity: mocks.resolveAccountLoginRateIdentity,
+  accountLoginRateIdentityForUserId: (userId: string) => `user:${userId}`,
+}));
 vi.mock("@/lib/reset-delivery", () => ({ deliverResetToken: mocks.deliverResetToken }));
 vi.mock("@/lib/rate-limit", () => ({
   recordLoginAttempt: mocks.recordLoginAttempt,
@@ -33,6 +38,7 @@ function jsonRequest(url: string, body: unknown) {
 describe("school password recovery throttling", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.resolveAccountLoginRateIdentity.mockResolvedValue("user:user-1");
     mocks.recordLoginAttempt.mockResolvedValue("rate-key");
     mocks.clearAccountLoginAttempts.mockResolvedValue(undefined);
     mocks.issueSchoolPasswordReset.mockResolvedValue(null);
@@ -46,15 +52,16 @@ describe("school password recovery throttling", () => {
     });
   });
 
-  it("rate-limits reset requests by the selected account rather than a shared school/IP bucket", async () => {
+  it("rate-limits reset requests by the canonical account rather than a shared school/IP bucket", async () => {
     const response = await requestReset(jsonRequest("https://example.test/api/reset", {
       uniqueCode: "EUG123",
       identifier: "teacher@gmail.com",
       universe: "school",
     }));
     expect(response.status).toBe(202);
+    expect(mocks.resolveAccountLoginRateIdentity).toHaveBeenCalledWith({ schoolCode: "eug123", identifier: "teacher@gmail.com", universe: "school" });
     expect(mocks.recordLoginAttempt).toHaveBeenCalledTimes(1);
-    expect(mocks.recordLoginAttempt).toHaveBeenCalledWith("school-password-reset:eug123", "teacher@gmail.com");
+    expect(mocks.recordLoginAttempt).toHaveBeenCalledWith("school-password-reset:eug123", "user:user-1");
   });
 
   it("clears staff and guardian failed-login locks after a successful password reset", async () => {
@@ -65,7 +72,7 @@ describe("school password recovery throttling", () => {
       universe: "school",
     }));
     expect(response.status).toBe(200);
-    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("school-login:eug123", ["teacher@gmail.com", "0244000000"]);
-    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("guardian-login:eug123", ["teacher@gmail.com", "0244000000"]);
+    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("school-login:eug123", ["user:user-1"]);
+    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("guardian-login:eug123", ["user:user-1"]);
   });
 });
