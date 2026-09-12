@@ -4,7 +4,7 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
-import { requirePermission } from "@/lib/rbac";
+import { hasPermission, requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 
 const patchSchema = z.object({
@@ -82,13 +82,20 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const session = await requireSchoolSession();
     const { id } = await context.params;
     const result = await withTenant(session.schoolId, async (tx) => {
-      await requirePermission(tx, session.userId, "reports:generate");
+      await requirePermission(tx, session.userId, "calendar:manage");
+      const [canViewFinance, canExportFinance, canExportAttendance, canExportLessonPlans, canExportAcademic] = await Promise.all([
+        hasPermission(tx, session.userId, "finance:read"),
+        hasPermission(tx, session.userId, "exports:finance"),
+        hasPermission(tx, session.userId, "exports:attendance"),
+        hasPermission(tx, session.userId, "lesson_plans:review"),
+        hasPermission(tx, session.userId, "reports:generate"),
+      ]);
       const term = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!term) throw new AppError("Term not found.", 404, "NOT_FOUND");
       const weekRows = await tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id);
       const teachingWeeks = weekRows[0]?.teachingWeeks ?? 13;
 
-      const [students, assessments, scoreAgg, reportCards, approvedReports, sentReports, attendanceAgg, financeAgg, lessonAgg, teachingAssignments] = await Promise.all([
+      const [students, assessments, scoreAgg, reportCards, approvedReports, sentReports, attendanceAgg, lessonAgg, teachingAssignments] = await Promise.all([
         tx.student.count({ where: { schoolId: session.schoolId, status: "active" } }),
         tx.assessment.count({ where: { schoolId: session.schoolId, termId: id } }),
         tx.$queryRawUnsafe<Array<{ count: string; average: string | null }>>(`SELECT COUNT(*)::text AS "count", AVG("value" / NULLIF("maxScore", 0) * 100)::text AS "average" FROM (SELECT s."value", a."maxScore" FROM "Score" s JOIN "Assessment" a ON a."id" = s."assessmentId" AND a."schoolId" = s."schoolId" WHERE s."schoolId" = $1 AND a."termId" = $2) AS "term_scores"`, session.schoolId, id),
@@ -96,7 +103,6 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: "approved" } }),
         tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: "sent" } }),
         tx.$queryRawUnsafe<Array<{ records: string; present: string; late: string; absent: string }>>(`SELECT COUNT(*)::text AS "records", COUNT(*) FILTER (WHERE "type" = 'in')::text AS "present", COUNT(*) FILTER (WHERE "isLate" IS TRUE)::text AS "late", COUNT(*) FILTER (WHERE "type" IN ('absence', 'absent'))::text AS "absent" FROM "AttendanceEvent" WHERE "schoolId" = $1 AND "attendanceDate" >= $2 AND "attendanceDate" <= $3`, session.schoolId, term.startDate, term.endDate),
-        tx.$queryRawUnsafe<Array<{ invoices: string; invoiced: string; collected: string }>>(`SELECT COUNT(*)::text AS "invoices", COALESCE(SUM("totalAmount"), 0)::text AS "invoiced", COALESCE((SELECT SUM(p."amount" - COALESCE((SELECT SUM(r."amount") FROM "PaymentReversal" r WHERE r."paymentId" = p."id" AND r."schoolId" = p."schoolId"), 0)) FROM "Payment" p JOIN "Invoice" pi ON pi."id" = p."invoiceId" AND pi."schoolId" = p."schoolId" WHERE p."schoolId" = $1 AND pi."termId" = $2), 0)::text AS "collected" FROM "Invoice" i WHERE i."schoolId" = $1 AND i."termId" = $2`, session.schoolId, id),
         tx.$queryRawUnsafe<Array<{ total: string; submitted: string; approved: string; changesRequested: string }>>(`SELECT COUNT(*)::text AS "total", COUNT(*) FILTER (WHERE "status"='submitted')::text AS "submitted", COUNT(*) FILTER (WHERE "status" IN ('approved','completed','archived'))::text AS "approved", COUNT(*) FILTER (WHERE "status"='changes_requested')::text AS "changesRequested" FROM "LessonPlan" WHERE "schoolId"=$1 AND "termId"=$2`, session.schoolId, id),
         tx.classSubjectTeacher.count({ where: { schoolId: session.schoolId } }),
       ]);
@@ -104,7 +110,6 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       const scoreCount = Number(scoreAgg[0]?.count ?? 0);
       const scorePct = scoreAgg[0]?.average == null ? null : Number(scoreAgg[0].average);
       const attendance = { records: Number(attendanceAgg[0]?.records ?? 0), present: Number(attendanceAgg[0]?.present ?? 0), late: Number(attendanceAgg[0]?.late ?? 0), absent: Number(attendanceAgg[0]?.absent ?? 0) };
-      const finance = { invoiceCount: Number(financeAgg[0]?.invoices ?? 0), invoiced: Number(financeAgg[0]?.invoiced ?? 0), collected: Number(financeAgg[0]?.collected ?? 0) };
       const lesson = lessonAgg[0];
       const lessonPlans = {
         total: Number(lesson?.total ?? 0),
@@ -113,6 +118,14 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         changesRequested: Number(lesson?.changesRequested ?? 0),
         expected: teachingAssignments * teachingWeeks,
       };
+      let finance: { invoiceCount: number; invoiced: number; collected: number; outstanding: number } | null = null;
+      if (canViewFinance) {
+        const financeAgg = await tx.$queryRawUnsafe<Array<{ invoices: string; invoiced: string; collected: string }>>(`SELECT COUNT(*)::text AS "invoices", COALESCE(SUM("totalAmount"), 0)::text AS "invoiced", COALESCE((SELECT SUM(p."amount" - COALESCE((SELECT SUM(r."amount") FROM "PaymentReversal" r WHERE r."paymentId" = p."id" AND r."schoolId" = p."schoolId"), 0)) FROM "Payment" p JOIN "Invoice" pi ON pi."id" = p."invoiceId" AND pi."schoolId" = p."schoolId" WHERE p."schoolId" = $1 AND pi."termId" = $2), 0)::text AS "collected" FROM "Invoice" i WHERE i."schoolId" = $1 AND i."termId" = $2`, session.schoolId, id);
+        const row = financeAgg[0];
+        const invoiced = Number(row?.invoiced ?? 0);
+        const collected = Number(row?.collected ?? 0);
+        finance = { invoiceCount: Number(row?.invoices ?? 0), invoiced, collected, outstanding: Math.max(invoiced - collected, 0) };
+      }
 
       return {
         term: { ...term, teachingWeeks },
@@ -126,7 +139,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         reportCardReadiness: { generated: reportCards, approved: approvedReports, released: sentReports, expected: students },
         attendance,
         lessonPlans,
-        finance: { ...finance, outstanding: Math.max(finance.invoiced - finance.collected, 0) },
+        finance,
+        capabilities: { canViewFinance, canExportFinance, canExportAttendance, canExportLessonPlans, canExportAcademic },
       };
     });
     return NextResponse.json(result);
