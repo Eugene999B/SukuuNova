@@ -29,8 +29,8 @@ describe("Learning Arcade V6 experience contract", () => {
     }
   });
 
-  it("keeps early numeracy, reading, engineering, coding, history, biology and creative design explicitly untimed", () => {
-    const untimed: ArcadeV5GameKey[] = ["number-pop", "circuit-logic", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline", "culture-heritage"];
+  it("keeps early numeracy, reasoning, reading, engineering, coding, history, biology and creative design explicitly untimed", () => {
+    const untimed: ArcadeV5GameKey[] = ["number-pop", "logic", "circuit-logic", "word", "comprehension-quest", "coding-sequence", "ghana-map-master", "environment-guardian", "body-explorer", "history-timeline", "culture-heritage"];
     for (const game of untimed) expect(arcadeExperienceProfile(game).timing).toBe("untimed");
   });
 
@@ -40,6 +40,15 @@ describe("Learning Arcade V6 experience contract", () => {
     expect(bloom.openingStyle).toBe("garden");
     expect(bloom.timing).toBe("untimed");
     expect(bloom.timingLabel).toContain("time to count");
+  });
+
+  it("makes Nova Millionaire an untimed knowledge show rather than a casino loop", () => {
+    const millionaire = arcadeExperienceProfile("logic");
+    expect(millionaire.family).toBe("Knowledge-show ladder");
+    expect(millionaire.openingStyle).toBe("quiz-show");
+    expect(millionaire.timing).toBe("untimed");
+    expect(millionaire.timingLabel).toContain("think before you lock");
+    expect(millionaire.help.join(" ").toLowerCase()).toContain("never reveals the answer");
   });
 
   it("uses navigation drift as soft world pressure without expiring astronomy answers", () => {
