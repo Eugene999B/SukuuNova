@@ -127,6 +127,6 @@ export function presentArcadeQuestionForAge<T extends ArcadeVariationQuestion>(
     ...question,
     conceptKey,
     presentationVariant: frame,
-    prompt: `${frame} · ${question.prompt}`,
+    prompt: question.prompt,
   };
 }
