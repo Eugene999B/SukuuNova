@@ -4,12 +4,14 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
 import { Camera, CheckCircle2, RefreshCw, ShieldCheck, Smartphone, Upload, X } from "lucide-react";
+import { createLocalFaceDetector, faceBoxesAreStable, type LocalFaceBox, type LocalFaceDetector } from "@/lib/browser-face-gate";
 import "@/components/students/student-photo-capture.css";
 import "@/components/portraits/verified-portrait-capture.css";
 
 type PortraitTarget = "student" | "staff";
 type CameraFacing = "user" | "environment";
-type CaptureMode = "auto" | "manual" | "fallback";
+type CaptureMode = "auto" | "local_auto" | "manual" | "fallback";
+type LocalGateState = "loading" | "ready" | "unavailable";
 
 type VerificationCheck = {
   key: "face" | "position" | "pose" | "eyes" | "occlusion" | "quality";
@@ -23,13 +25,14 @@ type VerificationPayload = {
   captureReady?: boolean;
   biometricReady?: boolean;
   verificationDeferred?: boolean;
+  localFaceGate?: boolean;
   message?: string;
   checks?: VerificationCheck[];
   verificationToken?: string | null;
   error?: string;
 };
 
-type Candidate = { image: string; token: string; biometricReady: boolean };
+type Candidate = { image: string; token: string; biometricReady: boolean; localFaceGated: boolean };
 
 type Props = {
   target: PortraitTarget;
@@ -121,6 +124,11 @@ export function VerifiedPortraitCapture({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const validatingRef = useRef(false);
+  const localInspectingRef = useRef(false);
+  const localDetectorRef = useRef<LocalFaceDetector | null>(null);
+  const localDetectorPromiseRef = useRef<Promise<LocalFaceDetector> | null>(null);
+  const stableFaceFramesRef = useRef(0);
+  const lastFaceBoxRef = useRef<LocalFaceBox | null>(null);
   const settleUntilRef = useRef(0);
   const retryAfterRef = useRef(0);
   const lastAttemptRef = useRef(0);
@@ -129,17 +137,20 @@ export function VerifiedPortraitCapture({
   const [cameraStarting, setCameraStarting] = useState(false);
   const [checking, setChecking] = useState(false);
   const [autoCapturePaused, setAutoCapturePaused] = useState(false);
+  const [localGateState, setLocalGateState] = useState<LocalGateState>("loading");
   const [facing, setFacing] = useState<CameraFacing>("environment");
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [checks, setChecks] = useState<VerificationCheck[]>([]);
   const [status, setStatus] = useState("Ready for face-gated auto capture");
-  const [message, setMessage] = useState("Open the camera. Automatic capture only fires after SukuuNova confirms a real, usable face.");
+  const [message, setMessage] = useState("Open the camera. SukuuNova will look for one well-framed face before automatic capture can fire.");
   const [usingCandidate, setUsingCandidate] = useState(false);
 
   const resetScanner = useCallback(() => {
-    settleUntilRef.current = Date.now() + 450;
+    settleUntilRef.current = Date.now() + 650;
     retryAfterRef.current = 0;
     lastAttemptRef.current = 0;
+    stableFaceFramesRef.current = 0;
+    lastFaceBoxRef.current = null;
     setAutoCapturePaused(false);
   }, []);
 
@@ -149,9 +160,16 @@ export function VerifiedPortraitCapture({
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraReady(false);
     setChecking(false);
+    localInspectingRef.current = false;
+    stableFaceFramesRef.current = 0;
+    lastFaceBoxRef.current = null;
   }, []);
 
-  useEffect(() => () => releaseStream(), [releaseStream]);
+  useEffect(() => () => {
+    releaseStream();
+    localDetectorRef.current?.close();
+    localDetectorRef.current = null;
+  }, [releaseStream]);
 
   useEffect(() => {
     if (!cameraOpen && !candidate) return;
@@ -167,6 +185,35 @@ export function VerifiedPortraitCapture({
     setCameraOpen(false);
     setCameraStarting(false);
   }, [releaseStream]);
+
+  const prepareLocalFaceGate = useCallback(async () => {
+    if (localDetectorRef.current) {
+      setLocalGateState("ready");
+      return localDetectorRef.current;
+    }
+    if (localDetectorPromiseRef.current) return localDetectorPromiseRef.current;
+
+    setLocalGateState("loading");
+    setStatus("Preparing on-device face gate…");
+    setMessage("The detector checks face presence and framing on this device. It does not identify the person or prove liveness.");
+    const pending = createLocalFaceDetector();
+    localDetectorPromiseRef.current = pending;
+    try {
+      const detector = await pending;
+      localDetectorRef.current = detector;
+      setLocalGateState("ready");
+      setStatus("On-device face gate active");
+      setMessage("Center one face and hold still. Automatic capture will fire only after the face stays well framed across several checks.");
+      return detector;
+    } catch (error) {
+      setLocalGateState("unavailable");
+      setStatus("On-device face gate unavailable");
+      setMessage("SukuuNova will try the school's cloud face verifier. If that is unavailable too, the camera will remain open for manual Capture now.");
+      throw error;
+    } finally {
+      localDetectorPromiseRef.current = null;
+    }
+  }, []);
 
   async function waitForVideoElement() {
     for (let attempt = 0; attempt < 24; attempt += 1) {
@@ -250,8 +297,7 @@ export function VerifiedPortraitCapture({
       const actualFacing = stream.getVideoTracks()[0]?.getSettings().facingMode;
       if (actualFacing === "user" || actualFacing === "environment") setFacing(actualFacing);
       await attachAndPlay(stream);
-      setStatus("Face-gated automatic capture is active");
-      setMessage("Keep one face and the shoulders visible. SukuuNova will capture only after the face check passes.");
+      void prepareLocalFaceGate().catch(() => undefined);
     } catch (error) {
       releaseStream();
       setCameraOpen(false);
@@ -276,10 +322,13 @@ export function VerifiedPortraitCapture({
     if (validatingRef.current || busy) return;
     validatingRef.current = true;
     setChecking(true);
-    setStatus(mode === "auto" ? "Checking for a usable face…" : "Capturing portrait…");
-    setMessage(mode === "auto"
-      ? "Automatic capture will not save anything until face verification passes."
-      : "Saving this exact portrait for registration.");
+    const automatic = mode === "auto" || mode === "local_auto";
+    setStatus(mode === "local_auto" ? "Confirming face-gated portrait…" : mode === "auto" ? "Checking for a usable face…" : "Capturing portrait…");
+    setMessage(mode === "local_auto"
+      ? "The on-device face gate chose this exact frame. SukuuNova is now applying the school's server-side verification policy."
+      : mode === "auto"
+        ? "Automatic capture will not save anything until face verification passes."
+        : "Saving this exact portrait for registration.");
 
     try {
       const response = await fetch("/api/school/portrait/validate", {
@@ -294,28 +343,31 @@ export function VerifiedPortraitCapture({
       if (payload.verificationDeferred && mode === "auto") {
         setAutoCapturePaused(true);
         setStatus("Manual capture ready");
-        setMessage("Automatic face verification is not available right now. Keep the face clearly framed, then tap Capture now. Nothing will be captured automatically.");
+        setMessage("Both automatic face paths are unavailable on this device right now. Keep the face clearly framed, then tap Capture now. Nothing will be captured automatically.");
         return;
       }
 
       const captureReady = payload.captureReady ?? Boolean(payload.ok && payload.biometricReady);
       if (!captureReady || !payload.verificationToken) {
-        retryAfterRef.current = Date.now() + (mode === "auto" ? 450 : 0);
-        setStatus(mode === "auto" ? "Face not ready — still checking" : "Portrait not accepted");
+        retryAfterRef.current = Date.now() + (automatic ? 500 : 0);
+        setStatus(automatic ? "Face not ready — still checking" : "Portrait not accepted");
         setMessage(payload.message ?? "Keep one face clearly visible and try again.");
         return;
       }
 
       const biometricReady = Boolean(payload.biometricReady);
-      setCandidate({ image, token: payload.verificationToken, biometricReady });
-      setStatus(biometricReady ? "Verified face captured" : "Portrait captured manually");
+      const localFaceGated = Boolean(payload.localFaceGate || (mode === "local_auto" && payload.verificationDeferred));
+      setCandidate({ image, token: payload.verificationToken, biometricReady, localFaceGated });
+      setStatus(biometricReady ? "Verified face captured" : localFaceGated ? "Face-gated portrait captured" : "Portrait captured manually");
       setMessage(payload.verificationDeferred
-        ? "Review the portrait carefully. Biometric verification will be completed later when the school's face service is available."
+        ? localFaceGated
+          ? "The on-device face-presence gate passed and this exact frame is signed for registration. Biometric identity verification remains deferred."
+          : "Review the portrait carefully. Biometric verification will be completed later when the school's face service is available."
         : "Review the verified portrait, then use it to continue registration or retry.");
       closeCamera();
     } catch (error) {
-      retryAfterRef.current = Date.now() + (mode === "auto" ? 600 : 0);
-      setStatus(mode === "auto" ? "Face check unavailable — trying again" : "Portrait was not accepted");
+      retryAfterRef.current = Date.now() + (automatic ? 650 : 0);
+      setStatus(automatic ? "Automatic face check unavailable — trying safely" : "Portrait was not accepted");
       setMessage(error instanceof Error ? error.message : "Portrait capture could not be completed.");
     } finally {
       validatingRef.current = false;
@@ -324,25 +376,70 @@ export function VerifiedPortraitCapture({
   }, [busy, closeCamera, target]);
 
   const autoEvaluate = useCallback(async () => {
-    if (!cameraReady || validatingRef.current || busy || autoCapturePaused) return;
+    if (!cameraReady || validatingRef.current || localInspectingRef.current || busy || autoCapturePaused) return;
     const now = Date.now();
-    if (now < settleUntilRef.current || now < retryAfterRef.current || now - lastAttemptRef.current < 650) return;
+    if (now < settleUntilRef.current || now < retryAfterRef.current || now - lastAttemptRef.current < 240) return;
+
+    if (localGateState === "loading") return;
+
+    if (localGateState === "ready" && localDetectorRef.current) {
+      const video = videoRef.current;
+      if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) return;
+      localInspectingRef.current = true;
+      try {
+        const result = localDetectorRef.current.inspect(video, performance.now());
+        lastAttemptRef.current = now;
+        if (!result.acceptable || !result.box) {
+          stableFaceFramesRef.current = 0;
+          lastFaceBoxRef.current = result.box;
+          setStatus(result.faceCount > 1 ? "More than one face detected" : "Align face for automatic capture");
+          setMessage(result.message);
+          return;
+        }
+
+        const stable = faceBoxesAreStable(lastFaceBoxRef.current, result.box);
+        lastFaceBoxRef.current = result.box;
+        stableFaceFramesRef.current = stable ? Math.min(3, stableFaceFramesRef.current + 1) : 1;
+        if (stableFaceFramesRef.current < 3) {
+          setStatus(`Face found — hold still ${stableFaceFramesRef.current}/3`);
+          setMessage("Keep the face centered. SukuuNova is waiting for a stable frame before capturing automatically.");
+          return;
+        }
+
+        stableFaceFramesRef.current = 0;
+        lastFaceBoxRef.current = null;
+        await verifyImage(currentFrame(), "local_auto");
+      } catch {
+        setLocalGateState("unavailable");
+        stableFaceFramesRef.current = 0;
+        lastFaceBoxRef.current = null;
+        retryAfterRef.current = Date.now() + 350;
+        setStatus("On-device face gate unavailable");
+        setMessage("SukuuNova will try the school's cloud face verifier next. Automatic capture still will not become timer-based.");
+      } finally {
+        localInspectingRef.current = false;
+      }
+      return;
+    }
+
+    // If the local detector cannot run, preserve the existing authoritative cloud
+    // auto path. When that provider is unavailable too, the server pauses auto and
+    // the operator must explicitly choose Capture now.
     try {
-      const image = currentFrame();
       lastAttemptRef.current = now;
-      await verifyImage(image, "auto");
+      await verifyImage(currentFrame(), "auto");
     } catch (error) {
       retryAfterRef.current = Date.now() + 350;
       setStatus("Camera preparing");
       setMessage(error instanceof Error ? error.message : "Preparing the next frame.");
     }
-  }, [autoCapturePaused, busy, cameraReady, currentFrame, verifyImage]);
+  }, [autoCapturePaused, busy, cameraReady, currentFrame, localGateState, verifyImage]);
 
   useEffect(() => {
     if (!cameraOpen || !cameraReady || candidate || busy || autoCapturePaused) return;
     const timer = window.setInterval(() => {
       void autoEvaluate();
-    }, 220);
+    }, 180);
     return () => window.clearInterval(timer);
   }, [autoCapturePaused, autoEvaluate, busy, cameraOpen, cameraReady, candidate]);
 
@@ -390,7 +487,7 @@ export function VerifiedPortraitCapture({
     setCandidate(null);
     setChecks([]);
     setStatus("Ready to retry");
-    setMessage("The camera will reopen. Automatic capture will only run when face verification is available.");
+    setMessage("The camera will reopen and wait for a stable face before automatic capture.");
     void startCamera(facing);
   }
 
@@ -404,16 +501,16 @@ export function VerifiedPortraitCapture({
         <button type="button" className="sukuunova-camera-icon-button" onClick={closeCamera} disabled={locked} aria-label="Close camera"><X size={20}/></button>
         <div className="sukuunova-camera-title">
           <strong>{autoCapturePaused ? "Manual portrait capture" : "Face-gated automatic capture"}</strong>
-          <span>{autoCapturePaused ? "Full-screen camera · operator-confirmed frame" : "Full-screen camera · real face check · automatic capture"}</span>
+          <span>{autoCapturePaused ? "Full-screen camera · operator-confirmed frame" : "On-device face presence · stable-frame gate · server policy"}</span>
         </div>
         <button type="button" className="sukuunova-camera-icon-button" onClick={() => void startCamera(facing === "user" ? "environment" : "user")} disabled={locked} aria-label={facing === "user" ? "Switch to rear camera" : "Switch to selfie camera"}>{facing === "user" ? <Camera size={20}/> : <Smartphone size={20}/>}</button>
       </div>
       <div className="sukuunova-camera-viewport">
         <video ref={videoRef} muted autoPlay playsInline className={`sukuunova-camera-video${facing === "user" ? " selfie" : ""}`}/>
         <div className="sukuunova-camera-capture-zone" aria-hidden="true"/>
-        <div className={`sukuunova-camera-progress${checking ? " checking" : ""}`}>
+        <div className={`sukuunova-camera-progress${checking || localGateState === "loading" ? " checking" : ""}`}>
           <span className="sukuunova-camera-progress-dot"/>
-          {checking ? "Checking face…" : autoCapturePaused ? "Manual capture ready" : "Face-gated auto capture active"}
+          {checking ? "Confirming portrait…" : autoCapturePaused ? "Manual capture ready" : localGateState === "loading" ? "Loading face gate…" : localGateState === "ready" ? "On-device face gate active" : "Cloud face gate fallback"}
         </div>
         <div className="sukuunova-camera-live-status" role="status"><strong>{status}</strong><span>{message}</span></div>
       </div>
@@ -426,8 +523,8 @@ export function VerifiedPortraitCapture({
   const reviewScreen = candidate && portalReady ? createPortal(
     <div className="sukuunova-portrait-review-screen" role="dialog" aria-modal="true" aria-label="Review portrait">
       <div className="sukuunova-review-heading">
-        <strong>{candidate.biometricReady ? "Verified portrait captured" : "Portrait captured"}</strong>
-        <span>{candidate.biometricReady ? "Face checks passed. Review the photo, then continue registration or retry." : "Review the face carefully before continuing. Biometric verification will be completed later."}</span>
+        <strong>{candidate.biometricReady ? "Verified portrait captured" : candidate.localFaceGated ? "Face-gated portrait captured" : "Portrait captured"}</strong>
+        <span>{candidate.biometricReady ? "Server face checks passed. Review the photo, then continue registration or retry." : candidate.localFaceGated ? "One stable face was detected on this device. Review the exact frame; biometric identity verification remains deferred." : "Review the face carefully before continuing. Biometric verification will be completed later."}</span>
       </div>
       <div className="sukuunova-review-photo-wrap"><img src={candidate.image} alt={`${subjectLabel} portrait`} className="sukuunova-review-photo"/></div>
       <div className="sukuunova-review-actions">
@@ -441,9 +538,9 @@ export function VerifiedPortraitCapture({
       <div>
         <span className="verified-portrait-eyebrow"><ShieldCheck size={14}/> Face-gated portrait capture</span>
         <strong>Registration-ready {subjectLabel} portrait</strong>
-        <p>Automatic capture never runs on a timer alone. It fires only after a face check passes. If the biometric service is unavailable, SukuuNova switches safely to manual capture instead of photographing anything in view.</p>
+        <p>Automatic capture is gated by one stable, well-framed face on the device and then follows the school's server verification policy. Local face presence is not identity verification, liveness or anti-spoofing.</p>
       </div>
-      <span className={candidate ? "verified-portrait-badge ready" : "verified-portrait-badge"}>{candidate ? (candidate.biometricReady ? "Verified · review" : "Captured · review") : "Face gate ready"}</span>
+      <span className={candidate ? "verified-portrait-badge ready" : "verified-portrait-badge"}>{candidate ? (candidate.biometricReady ? "Verified · review" : candidate.localFaceGated ? "Face-gated · review" : "Captured · review") : "Face gate ready"}</span>
     </div>
     <div className="portrait-capture-layout">
       <div className="photo-preview-wrap portrait-preview-wrap">
@@ -451,12 +548,12 @@ export function VerifiedPortraitCapture({
       </div>
       <div className="portrait-guidance">
         <strong>One clear face, no restrictive oval</strong>
-        <p>Keep one person visible from the head through the shoulders. This gives future face enrollment a useful registration portrait without forcing the person into a tiny shape.</p>
+        <p>Keep one person visible from the head through the shoulders. SukuuNova waits for the face to be centered and stable before it can capture automatically.</p>
         <ul>
-          <li>Look toward the camera with both eyes visible.</li>
+          <li>Look toward the camera with the face clearly visible.</li>
           <li>Use reasonable, even light.</li>
-          <li>Automatic capture only happens after face verification succeeds.</li>
-          <li>If verification is unavailable, use Capture now only when the face is clearly framed.</li>
+          <li>Automatic capture requires a stable on-device face gate or the configured cloud verifier.</li>
+          <li>If both automatic paths are unavailable, use Capture now only when the face is clearly framed.</li>
         </ul>
       </div>
     </div>
@@ -466,7 +563,7 @@ export function VerifiedPortraitCapture({
       {allowFileFallback ? <label className="button secondary photo-upload"><Upload size={16}/> Device-camera fallback<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={fileFallback} disabled={locked}/></label> : null}
       {value && onRemove ? <button type="button" className="photo-remove" onClick={() => void onRemove()} disabled={locked}>{removeLabel}</button> : null}
     </div>
-    <p className="sukuunova-capture-note">Registration remains available without the biometric provider, but automatic capture is never allowed to save an unverified frame. This protects portrait quality for later face enrollment and attendance.</p>
+    <p className="sukuunova-capture-note">The local detector evaluates face presence and framing on the device. The exact-image signed token remains the registration authority, and biometric identity/liveness verification is never inferred from the local gate.</p>
     <div className="verified-portrait-status" role="status"><strong>{status}</strong><span>{message}</span></div>
     {checks.length && !candidate ? <div className="portrait-quality-grid verified-quality-grid" aria-label="Face verification checks">{checks.map((check) => <div key={check.key} className={check.passed ? "passed" : "failed"}><span>{check.passed ? "✓" : "!"}</span><div><strong>{check.label}</strong><small>{check.detail}</small></div></div>)}</div> : null}
     {cameraScreen}
