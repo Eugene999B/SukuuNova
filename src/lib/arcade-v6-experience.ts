@@ -1,7 +1,7 @@
 import type { ArcadeV5GameKey } from "./arcade-v5-design";
 
 export type ArcadeTimingPolicy = "untimed" | "soft-pressure" | "skill-timed";
-export type ArcadeOpeningStyle = "runner" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio" | "mission-control";
+export type ArcadeOpeningStyle = "garden" | "runner" | "racing" | "station" | "blueprint" | "storybook" | "trail" | "factory" | "atlas" | "market" | "cyber" | "eco" | "biolab" | "archive" | "studio" | "mission-control";
 
 export type ArcadeExperienceProfile = {
   family: string;
@@ -15,6 +15,16 @@ export type ArcadeExperienceProfile = {
 };
 
 export const ARCADE_V6_EXPERIENCES: Record<ArcadeV5GameKey, ArcadeExperienceProfile> = {
+  "number-pop": {
+    family: "Early numeracy garden",
+    openingStyle: "garden",
+    menuSubtitle: "Touch, count and grow a calm picture garden made for ages four to five.",
+    learningPromise: "Subitising, one-to-one counting, numeral-quantity matching, comparison and early number composition grow through visual play within ten.",
+    timing: "untimed",
+    timingLabel: "Untimed early learning · every child gets time to count",
+    help: ["Look at the big number or picture group.", "Point to each object once, or use a garden clue for a counting strategy.", "Tap a choice and grow the patch; Free Grow has no grades at all."],
+    controls: ["Touch / 1–4: choose", "Enter: Grow", "H: picture clue"],
+  },
   math: {
     family: "Arcade runner",
     openingStyle: "runner",
