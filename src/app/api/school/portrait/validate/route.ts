@@ -10,6 +10,7 @@ import { issuePortraitVerificationToken, verifyPortraitImage } from "@/lib/portr
 const schema = z.object({
   target: z.enum(["student", "staff"]),
   image: z.string().min(2_000).max(800_000),
+  mode: z.enum(["auto", "manual", "fallback"]).default("manual"),
 });
 
 const DEFERRED_VERIFICATION_CODES = new Set([
@@ -38,10 +39,27 @@ export async function POST(request: Request) {
     } catch (error) {
       if (!(error instanceof AppError) || !DEFERRED_VERIFICATION_CODES.has(error.code)) throw error;
 
-      // Registration must not depend on an optional external biometric service.
-      // The signed token still binds this exact captured image to the school and
-      // target. Biometric enrollment can perform authoritative face checks later
-      // when the school's provider is configured and reachable.
+      // Never let automatic capture become a timer that accepts arbitrary scenery.
+      // Auto mode pauses until a real face-verification provider is available.
+      if (input.mode === "auto") {
+        return NextResponse.json(
+          {
+            ok: false,
+            captureReady: false,
+            biometricReady: false,
+            verificationDeferred: true,
+            message: "Automatic capture paused because face verification is unavailable. Keep the face clearly framed and use Capture now.",
+            checks: [],
+            verificationToken: null,
+          },
+          { headers: { "cache-control": "private, no-store" } },
+        );
+      }
+
+      // Manual/device-camera capture remains available so ordinary registration is
+      // never blocked by an optional biometric provider. A human intentionally
+      // chooses the frame, and the signed token still binds the exact image to the
+      // school and target. Biometric enrollment can validate it later.
       const verificationToken = issuePortraitVerificationToken({
         schoolId: session.schoolId,
         target: input.target,
@@ -53,7 +71,7 @@ export async function POST(request: Request) {
           captureReady: true,
           biometricReady: false,
           verificationDeferred: true,
-          message: "Photo captured. Biometric verification is deferred until the school's face service is configured and available.",
+          message: "Photo captured manually. Biometric verification is deferred until the school's face service is configured and available.",
           checks: [],
           verificationToken,
         },
