@@ -27,7 +27,8 @@ type Summary = {
   reportCardReadiness: { generated: number; approved: number; released: number; expected: number };
   lessonPlans: { total: number; submitted: number; approved: number; changesRequested: number; expected: number };
   attendance: { records: number; present: number; late: number; absent: number };
-  finance: { invoiceCount: number; invoiced: number; collected: number; outstanding: number };
+  finance: { invoiceCount: number; invoiced: number; collected: number; outstanding: number } | null;
+  capabilities: { canViewFinance: boolean; canExportFinance: boolean; canExportAttendance: boolean; canExportLessonPlans: boolean; canExportAcademic: boolean };
 };
 
 type FormState = {
@@ -235,7 +236,7 @@ export function AcademicTermsHub() {
                 <div className={styles.readinessCard}><span>Lesson plans</span><strong>{summary.lessonPlans.approved} accepted / {summary.lessonPlans.expected} expected</strong><small>{summary.lessonPlans.submitted} awaiting review · {summary.lessonPlans.changesRequested} returned for correction.</small><div className={styles.progress}><i style={{ width: `${lessonProgress}%` }}/></div></div>
                 <div className={styles.readinessCard}><span>Report cards</span><strong>{summary.reportCardReadiness.generated} generated / {summary.reportCardReadiness.expected} students</strong><small>{summary.reportCardReadiness.approved} approved · {summary.reportCardReadiness.released} already released. Release remains controlled from Report Cards.</small><div className={styles.progress}><i style={{ width: `${reportProgress}%` }}/></div></div>
                 <div className={styles.readinessCard}><span>Attendance</span><strong>{summary.attendance.records} records</strong><small>{summary.attendance.present} present events · {summary.attendance.late} late · {summary.attendance.absent} absent.</small></div>
-                <div className={styles.readinessCard}><span>Finance</span><strong>₵{summary.finance.collected.toFixed(2)} collected</strong><small>₵{summary.finance.outstanding.toFixed(2)} outstanding across {summary.finance.invoiceCount} invoices.</small></div>
+                {summary.finance ? <div className={styles.readinessCard}><span>Finance</span><strong>₵{summary.finance.collected.toFixed(2)} collected</strong><small>₵{summary.finance.outstanding.toFixed(2)} outstanding across {summary.finance.invoiceCount} invoices.</small></div> : <div className={styles.readinessCard}><span>Finance</span><strong>Restricted</strong><small>Your role does not include finance visibility.</small></div>}
                 <div className={styles.readinessCard}><span>Term state</span><strong>{active.status === "active" ? "System working term" : active.status === "locked" ? "Read-only history" : active.status === "ended" ? "Ready for finalisation" : "Upcoming"}</strong><small>{active.status === "active" ? "Teachers do not choose this term manually; SukuuNova attaches it automatically." : active.status === "locked" ? "Historical marks, plans and reports remain preserved; report delivery keeps its own audited release status." : active.status === "ended" ? "Review unfinished work before closing and locking." : "This term will become the working term automatically on its start date."}</small></div>
               </div>
 
@@ -246,10 +247,10 @@ export function AcademicTermsHub() {
                 <Link href="/school/attendance">Attendance →</Link>
               </div>
               <div className={styles.exports}>
-                <a href={`/api/school/terms/${active.id}/export?category=academic&format=pdf`}>Academic PDF</a>
-                <a href={`/api/school/terms/${active.id}/export?category=lesson_plans&format=csv`}>Lesson plans · Excel/CSV</a>
-                <a href={`/api/school/terms/${active.id}/export?category=attendance&format=csv`}>Attendance · Excel/CSV</a>
-                <a href={`/api/school/terms/${active.id}/export?category=finance&format=csv`}>Finance · Excel/CSV</a>
+                {summary.capabilities.canExportAcademic ? <a href={`/api/school/terms/${active.id}/export?category=academic&format=pdf`}>Academic PDF</a> : null}
+                {summary.capabilities.canExportLessonPlans ? <a href={`/api/school/terms/${active.id}/export?category=lesson_plans&format=csv`}>Lesson plans · Excel/CSV</a> : null}
+                {summary.capabilities.canExportAttendance ? <a href={`/api/school/terms/${active.id}/export?category=attendance&format=csv`}>Attendance · Excel/CSV</a> : null}
+                {summary.capabilities.canExportFinance ? <a href={`/api/school/terms/${active.id}/export?category=finance&format=csv`}>Finance · Excel/CSV</a> : null}
               </div>
             </>}
           </>}
