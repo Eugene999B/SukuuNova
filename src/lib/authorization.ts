@@ -17,6 +17,7 @@ export const SYSTEM_ROLE_KEYS = {
   Teacher: "teacher",
   "Front Desk/Gate Security": "front_desk_security",
   "Transport Officer": "transport_officer",
+  "School Nurse": "school_nurse",
   Parent: "parent",
   Guardian: "guardian",
   Student: "student",
@@ -38,6 +39,8 @@ export const SCHOOL_WORKSPACE_ROLE_KEYS = new Set<string>([
   "transport_officer",
 ]);
 
+export const CLINIC_WORKSPACE_ROLE_KEYS = new Set<string>(["school_nurse"]);
+
 export const TEACHER_WORKSPACE_ROLE_KEYS = new Set<string>([
   "teacher",
   "class_teacher",
@@ -56,7 +59,7 @@ export const FAMILY_PORTAL_ROLE_KEYS = new Set<string>([
   "student",
 ]);
 
-export type SchoolWorkspace = "school" | "teacher";
+export type SchoolWorkspace = "school" | "teacher" | "clinic";
 
 type AccountRole = { key?: string | null; name: string };
 type TargetAccount = {
@@ -84,22 +87,11 @@ export function isSchoolStaffRoleKey(roleKey: string): boolean {
   return Boolean(normalized) && !isFamilyPortalRoleKey(normalized);
 }
 
-/**
- * Staff account boundary shared by Staff & Teachers, staff profiles and People & Access.
- * Custom school roles count as staff roles. A role-less school account is also retained so
- * pending/legacy staff can be repaired instead of becoming unreachable. Accounts whose
- * roles are exclusively Parent/Guardian/Student stay in their dedicated family workspaces.
- */
 export function isSchoolStaffAccount(roles: readonly AccountRole[]): boolean {
   if (roles.length === 0) return true;
   return roles.some((role) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name)));
 }
 
-/**
- * Stronger boundary for operational staff-only foreign keys such as payroll, devices,
- * visitor hosts, custodians and attendance. Role-less repair accounts are intentionally
- * excluded here until a real staff role is assigned.
- */
 export function isOperationalStaffAccount(roles: readonly AccountRole[]): boolean {
   return roles.some((role) => isSchoolStaffRoleKey(role.key?.trim() || roleKeyForName(role.name)));
 }
@@ -139,6 +131,7 @@ export async function requireActiveTeachingTarget(tx: TenantDb, schoolId: string
 
 export function resolveSchoolWorkspace(roleKeys: string[]): SchoolWorkspace {
   const normalized = roleKeys.map((key) => key.trim()).filter(Boolean);
+  if (normalized.some((key) => CLINIC_WORKSPACE_ROLE_KEYS.has(key))) return "clinic";
   if (normalized.some((key) => SCHOOL_WORKSPACE_ROLE_KEYS.has(key))) return "school";
   if (normalized.some((key) => TEACHER_WORKSPACE_ROLE_KEYS.has(key))) return "teacher";
   return "school";
@@ -187,6 +180,7 @@ export async function getSchoolAuthorization(tx: TenantDb, userId: string) {
     isElevated: roles.some((role) => ["owner", "administrator", "principal", "vice_principal"].includes(role.key)),
     isTeacher: roles.some((role) => isTeachingRoleKey(role.key)),
     isPureTeacher: !roles.some((role) => SCHOOL_WORKSPACE_ROLE_KEYS.has(role.key)) && roles.some((role) => TEACHER_WORKSPACE_ROLE_KEYS.has(role.key)),
+    isClinicNurse: roles.some((role) => CLINIC_WORKSPACE_ROLE_KEYS.has(role.key)),
     can: (permissionKey: string) => hasPermission(tx, userId, permissionKey)
   };
 }
