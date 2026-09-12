@@ -7,6 +7,7 @@ import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { requireSchoolFeatureInTransaction } from "@/lib/feature-flags";
 import { enrollFace } from "@/lib/face-service";
+import { verifyPortraitImage } from "@/lib/portrait-verification";
 
 const schema = z.object({
   action: z.literal("enrollFaceFromProfile"),
@@ -43,7 +44,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!student) throw new AppError("Active learner not found in this school.", 404, "NOT_FOUND");
       if (!student.guardians.length) throw new AppError("The selected guardian is not linked to this learner.", 400, "FACE_CONSENT_REQUIRED");
       if (!supportedProfilePortrait(student.photoUrl)) {
-        throw new AppError("Capture a new professional learner portrait before face enrollment. Imported or missing profile images cannot be used as the biometric source.", 409, "PROFILE_PORTRAIT_REQUIRED");
+        throw new AppError("Capture a new verified learner portrait before face enrollment. Imported or missing profile images cannot be used as the biometric source.", 409, "PROFILE_PORTRAIT_REQUIRED");
+      }
+
+      const verification = await verifyPortraitImage(student.photoUrl!);
+      if (!verification.ok || !verification.biometricReady) {
+        throw new AppError(`The stored learner portrait is not verification-ready: ${verification.message} Retry the profile portrait before biometric enrollment.`, 409, "PROFILE_PORTRAIT_NOT_VERIFICATION_READY");
       }
 
       const enrollment = await enrollFace(tx, {
@@ -52,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         target: { studentId: student.id, consentByGuardianId: input.guardianId },
         image: student.photoUrl!,
       });
-      return { enrollment, source: "student_profile_portrait", studentName: student.name };
+      return { enrollment, source: "verified_student_profile_portrait", studentName: student.name, portraitVerification: "passed" };
     });
 
     return NextResponse.json({ ok: true, result });
