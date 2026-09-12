@@ -28,7 +28,7 @@ describe("Arcade V5 session remix", () => {
   });
 
   it("exposes a combinatorial floor above one million before content variation", () => {
-    expect(arcadeSessionVarietySpace()).toBe(1_228_800);
+    expect(arcadeSessionVarietySpace()).toBe(1_305_600);
   });
 });
 
