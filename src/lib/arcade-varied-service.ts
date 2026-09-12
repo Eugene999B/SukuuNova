@@ -5,6 +5,7 @@ import { canGenerateArcadeInteractionContent, createArcadeInteractionQuestions, 
 import { canGenerateArcadeResponseContent, createArcadeResponseQuestions, type ArcadeResponseQuestion } from "./arcade-response-content";
 import { canGenerateArcadeWorldContent, createArcadeWorldQuestions, type ArcadeWorldQuestion } from "./arcade-world-content";
 import { arcadeQuestionHistorySignatures, buildVariedArcadeQuestionSet, presentArcadeQuestionForAge, type ArcadeVariationAgeBand } from "./arcade-variation";
+import { polishArcadeQuestionCopy } from "./arcade-copy-quality";
 import { buildAdaptiveLearningPlan, publicAdaptiveLearningPlan, type AdaptiveHistoryRound } from "./adaptive-learning-director";
 import { createTurboTypeQuestions, turboTypeWeakKeysFromSnapshots } from "./turbo-type-content";
 import { createReadingQuestQuestions } from "./reading-quest-content";
@@ -128,10 +129,11 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
 
   const varied = buildVariedArcadeQuestionSet(generator, round.roundLength, recentSignatures, 12);
   const presented = varied.questions.map((question, index) => {
-    const agePresented = presentArcadeQuestionForAge(question, ageBand, `${round.id}:${sessionRemix.mutationKey}`, index);
-    if (round.game === "number-pop") return { ...agePresented, prompt: question.prompt, presentationVariant: "Number Bloom picture garden" };
-    if (round.game === "logic") return { ...agePresented, prompt: question.prompt, presentationVariant: "Nova Millionaire live reasoning stage" };
-    if (round.game === "sentence-scramble") return { ...agePresented, prompt: question.prompt, presentationVariant: "Animation Story Lab storyboard" };
+    const polished = polishArcadeQuestionCopy(question);
+    const agePresented = presentArcadeQuestionForAge(polished, ageBand, `${round.id}:${sessionRemix.mutationKey}`, index);
+    if (round.game === "number-pop") return { ...agePresented, prompt: polished.prompt, presentationVariant: "Number Bloom picture garden" };
+    if (round.game === "logic") return { ...agePresented, prompt: polished.prompt, presentationVariant: "Nova Millionaire live reasoning stage" };
+    if (round.game === "sentence-scramble") return { ...agePresented, prompt: polished.prompt, presentationVariant: "Animation Story Lab storyboard" };
     return agePresented;
   });
   const nextSnapshot = {
