@@ -3,7 +3,7 @@ import { z } from "zod";
 import { routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { issueSchoolPasswordReset } from "@/lib/password-reset";
-import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
+import { recordLoginAttempt } from "@/lib/rate-limit";
 import { deliverResetToken } from "@/lib/reset-delivery";
 
 const schema = z.object({
@@ -15,10 +15,10 @@ const schema = z.object({
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, schema);
+    const schoolCode = input.uniqueCode.toLowerCase();
     await recordLoginAttempt(
-      "school-password-reset:" + input.uniqueCode.toLowerCase(),
-      input.identifier,
-      requestIp(request.headers)
+      "school-password-reset:" + schoolCode,
+      input.identifier
     );
     const envelope = await issueSchoolPasswordReset(input);
     if (envelope) await deliverResetToken(envelope);
