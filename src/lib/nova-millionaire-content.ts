@@ -35,9 +35,17 @@ type FixedRow = {
   chips?: string[];
 };
 
-const PEOPLE = ["Ama", "Kojo", "Esi", "Yaw", "Abena", "Kofi", "Sena", "Adwoa", "Nana", "Akosua"] as const;
-const OBJECTS = ["drum", "book", "ball", "kite", "torch", "shell", "badge", "map", "puzzle", "flag"] as const;
-const COLOURS = ["red", "blue", "green", "gold", "purple", "orange"] as const;
+type DeductionVariant = {
+  prompt: string;
+  answer: string;
+  distractors: string[];
+  explanation: string;
+  key: string;
+  clues: string[];
+};
+
+const PEOPLE: readonly string[] = ["Ama", "Kojo", "Esi", "Yaw", "Abena", "Kofi", "Sena", "Adwoa", "Nana", "Akosua"];
+const OBJECTS: readonly string[] = ["drum", "book", "ball", "kite", "torch", "shell", "badge", "map", "puzzle", "flag"];
 
 function clampLevel(value: number) { return Math.max(1, Math.min(5, Math.trunc(value))); }
 function shuffle<T>(values: readonly T[]) {
@@ -49,7 +57,7 @@ function shuffle<T>(values: readonly T[]) {
   return result;
 }
 function pick<T>(values: readonly T[]) { return values[randomInt(values.length)]; }
-function distinct<T>(values: readonly T[], count: number) { return shuffle(values).slice(0, count); }
+function distinct(values: readonly string[], count: number) { return shuffle(values).slice(0, count); }
 function options(answer: string, distractors: readonly string[]) {
   const unique = Array.from(new Set([answer, ...distractors].map((value) => value.trim()).filter(Boolean)));
   let fallback = 1;
@@ -130,10 +138,11 @@ function deductionQuestion(index: number, level: number, length: number): Row {
   const [a, b, c] = distinct(PEOPLE, 3);
   const [x, y, z] = distinct(OBJECTS, 3);
   if (level <= 2) {
-    const variants = [
+    const variants: DeductionVariant[] = [
       {
         prompt: `${a}, ${b}, and ${c} chose exactly one item each from: ${x}, ${y}, and ${z}. No two chose the same item. ${b} chose the ${y}. ${c} chose the ${z}. What did ${a} choose?`,
         answer: x,
+        distractors: [y, z, "There is not enough information"],
         explanation: `${b} already has the ${y} and ${c} has the ${z}. Because the three listed items are all used once, ${a} must have the ${x}.`,
         key: "three-items",
         clues: [`Available: ${x}, ${y}, ${z}`, `${b} → ${y}`, `${c} → ${z}`, `${a} → ?`],
@@ -141,19 +150,20 @@ function deductionQuestion(index: number, level: number, length: number): Row {
       {
         prompt: `${a}, ${b}, and ${c} stand in a line. ${a} is not last. ${b} is behind ${a}. ${c} is behind ${b}. Who must be first?`,
         answer: a,
+        distractors: [b, c, "There is no first person"],
         explanation: `${b} is behind ${a}, and ${c} is behind ${b}. The only order that fits both clues begins with ${a}.`,
         key: "three-person-chain",
         clues: [`${a} before ${b}`, `${b} before ${c}`],
       },
-    ] as const;
+    ];
     const chosen = pick(variants);
     return {
       prompt: chosen.prompt,
       answer: chosen.answer,
-      distractors: chosen.key === "three-items" ? [y, z, "There is not enough information"] : [b, c, "There is no first person"],
+      distractors: chosen.distractors,
       explanation: chosen.explanation,
       concept: `millionaire:deduction:${chosen.key}:${a}:${b}:${c}:${x}:${y}:${z}`,
-      scene: scene("case-file", "Case File", "Use every clue together. The answer must fit all of them.", index, length, [...chosen.clues]),
+      scene: scene("case-file", "Case File", "Use every clue together. The answer must fit all of them.", index, length, chosen.clues),
     };
   }
   const [d] = distinct(PEOPLE.filter((person) => ![a,b,c].includes(person)), 1);
@@ -222,14 +232,14 @@ const SIMPLE_ANALOGIES: readonly FixedRow[] = [
   { prompt:"Book is to reading as song is to…", answer:"listening", distractors:["painting","measuring","planting"], explanation:"We read a book and listen to a song; the relationship is object to its usual action.", key:"object-action" },
   { prompt:"Pencil is to writing as brush is to…", answer:"painting", distractors:["jumping","measuring","singing"], explanation:"A pencil is a tool for writing; a brush is a tool for painting.", key:"tool-action" },
   { prompt:"Morning is to sunrise as evening is to…", answer:"sunset", distractors:["rainfall","lunchtime","breakfast"], explanation:"Sunrise is associated with morning; sunset is associated with evening.", key:"time-event" },
-] as const;
+];
 const ADVANCED_ANALOGIES: readonly FixedRow[] = [
   { prompt:"Compass is to direction as thermometer is to…", answer:"temperature", distractors:["distance","mass","speed"], explanation:"A compass indicates direction; a thermometer measures temperature.", key:"instrument-measure" },
   { prompt:"Evidence is to conclusion as clue is to…", answer:"solution", distractors:["decoration","weather","volume"], explanation:"Evidence supports a conclusion; a clue supports a solution.", key:"support-result" },
   { prompt:"Blueprint is to building as recipe is to…", answer:"meal", distractors:["library","journey","instrument"], explanation:"A blueprint guides construction of a building; a recipe guides preparation of a meal.", key:"plan-product" },
   { prompt:"Cause is to effect as question is to…", answer:"answer", distractors:["colour","distance","weather"], explanation:"An effect follows a cause; an answer responds to a question.", key:"relation-response" },
   { prompt:"Editor is to manuscript as mechanic is to…", answer:"machine", distractors:["poem","timetable","cloud"], explanation:"An editor examines and improves a manuscript; a mechanic examines and repairs a machine.", key:"worker-object" },
-] as const;
+];
 function analogyQuestion(index: number, level: number, length: number): Row {
   const chosen = pick(level <= 2 ? SIMPLE_ANALOGIES : ADVANCED_ANALOGIES);
   return {
@@ -247,13 +257,13 @@ const SIMPLE_EVIDENCE: readonly FixedRow[] = [
   { prompt:"Two equal ice cubes were placed at the same time. One was left in sunlight and one in shade. The cube in sunlight melted first. What does this observation support?", answer:"The warmer sunny place made the ice melt faster.", distractors:["Shade always melts ice faster.","The ice cubes were different sizes.","Sunlight makes water freeze immediately."], explanation:"The cubes were equal and started together; the one in sunlight melted sooner. That supports the conclusion that the warmer sunny condition increased melting speed.", key:"ice-sun", clues:["Equal ice cubes","Same start time","Sun vs shade","Sun cube melted first"] },
   { prompt:"Three identical toy cars rolled down the same ramp. Car A travelled 120 cm, Car B 118 cm, and Car C 121 cm. Which statement is best supported?", answer:"The cars travelled about 120 cm in these trials.", distractors:["Every future car will travel exactly 120 cm.","Car C will always travel farthest.","The ramp makes every object travel 200 cm."], explanation:"The three measurements are close to 120 cm. They support an approximate result for these trials, not an absolute claim about every future trial.", key:"car-trials", clues:["120 cm","118 cm","121 cm"] },
   { prompt:"A towel test used the same amount of water on three cloths. Cloth X absorbed the most water each time the test was repeated. Which claim is supported?", answer:"Cloth X was the most absorbent in these tests.", distractors:["Cloth X can absorb unlimited water.","Every cloth in the world behaves the same way.","The test proves water has no mass."], explanation:"Repeated tests under the stated conditions showed Cloth X absorbing the most. That supports a limited claim about these tests.", key:"absorbency", clues:["Same water amount","Test repeated","Cloth X absorbed most"] },
-] as const;
+];
 const ADVANCED_EVIDENCE: readonly FixedRow[] = [
   { prompt:"Three buses used the same route on similar school mornings. Their journey times were 32, 31, and 33 minutes. Which claim is justified by these observations?", answer:"The route took about 32 minutes in these three trips.", distractors:["The route will always take exactly 32 minutes.","The 31-minute bus is always the fastest bus.","Traffic can never affect this route."], explanation:"The recorded times cluster around 32 minutes. Three observations support an approximate description of those trips, not an 'always' claim.", key:"bus-times", clues:["32 min","31 min","33 min","Same route"] },
   { prompt:"A class tested seed germination. Ten seeds were kept moist and ten matching seeds were kept dry; all other conditions were kept similar. Nine moist seeds germinated and one dry seed germinated. Which conclusion is best supported?", answer:"Moisture increased germination in this test.", distractors:["Every moist seed must germinate.","Dry seeds can never germinate.","Light was definitely the only cause."], explanation:"Moisture was the planned difference between the groups, and far more moist seeds germinated. The evidence supports an effect of moisture in this test.", key:"germination", clues:["10 moist → 9 germinated","10 dry → 1 germinated","Other conditions similar"] },
   { prompt:"A survey asked 20 learners in one class which lunch they preferred. Fourteen chose rice. Which conclusion is justified?", answer:"Most learners surveyed in that class preferred rice.", distractors:["Most learners in Ghana prefer rice.","Every learner in the school prefers rice.","Rice is scientifically the healthiest lunch."], explanation:"The evidence describes only the 20 surveyed learners in one class. It does not justify claims about a whole school, country, or health outcome.", key:"survey-scope", clues:["20 learners","One class","14 chose rice"] },
   { prompt:"A sensor recorded classroom temperature every hour: 27°C, 28°C, 29°C, 29°C, 30°C. What is the strongest evidence-based statement?", answer:"The recorded temperature generally increased over the measured hours.", distractors:["The room will keep heating forever.","The sensor proves tomorrow will be hotter.","The temperature increased by exactly 1°C every hour."], explanation:"The readings show a general rise across the measured period, including one hour with no increase. Claims about forever or tomorrow go beyond the evidence.", key:"temperature-trend", clues:["27°C","28°C","29°C","29°C","30°C"] },
-] as const;
+];
 function evidenceQuestion(index: number, level: number, length: number): Row {
   const chosen = pick(level <= 2 ? SIMPLE_EVIDENCE : ADVANCED_EVIDENCE);
   return {
@@ -271,13 +281,13 @@ const SIMPLE_RULES: readonly FixedRow[] = [
   { prompt:"Adventure Gate: a team item must be wearable AND protect the head. Which item passes both rules?", answer:"A helmet", distractors:["A backpack","A raincoat","A football"], explanation:"A helmet is worn and is designed to protect the head, so it satisfies both conditions.", key:"wear-head", chips:["WEARABLE","PROTECTS HEAD"] },
   { prompt:"Library Gate: an item may go into the reading kit only if it contains pages AND can be read without electricity. Which item passes?", answer:"A printed storybook", distractors:["A calculator","A torch","A football"], explanation:"A printed storybook has pages and can be read without electricity, satisfying both rules.", key:"pages-no-power", chips:["HAS PAGES","NO ELECTRICITY NEEDED"] },
   { prompt:"Shape Gate: a figure passes only if it has exactly four sides AND all four sides are equal. Which figure passes?", answer:"A square", distractors:["A triangle","A rectangle with unequal side lengths","A circle"], explanation:"A square has four sides and all four sides are equal, so it satisfies both conditions.", key:"square-rule", chips:["4 SIDES","ALL SIDES EQUAL"] },
-] as const;
+];
 const ADVANCED_RULES: readonly FixedRow[] = [
   { prompt:"Research Gate: a power source is accepted only if it is renewable, produces electricity, and does not burn fuel while operating. Which option fits all three conditions?", answer:"A solar panel", distractors:["A diesel generator","A charcoal stove","A petrol motor"], explanation:"A solar panel uses renewable sunlight to generate electricity without burning fuel during operation.", key:"renewable-electricity", chips:["RENEWABLE","MAKES ELECTRICITY","NO FUEL BURNED IN USE"] },
   { prompt:"Data Gate: a record is accepted only if it has a learner ID, a valid date, and a score from 0 to 100. Which record passes?", answer:"ID 42 · 12 Sep · score 78", distractors:["No ID · 12 Sep · score 78","ID 42 · no date · score 78","ID 42 · 12 Sep · score 118"], explanation:"The accepted record includes an ID, a date, and a score within 0–100. Each other option fails at least one rule.", key:"record-validation", chips:["HAS ID","HAS DATE","SCORE 0–100"] },
   { prompt:"Eco Gate: a transport choice passes only if it carries at least 20 people, uses no petrol or diesel while moving, and follows a fixed public route. Which option passes?", answer:"An electric city bus on its scheduled route", distractors:["A petrol taxi","A private electric bicycle","A diesel school bus"], explanation:"The electric city bus meets all three conditions: capacity, no petrol/diesel in operation, and a fixed public route.", key:"transport-rules", chips:["20+ PEOPLE","NO PETROL/DIESEL IN USE","FIXED PUBLIC ROUTE"] },
   { prompt:"Source Gate: a claim may pass only if the source names its author, gives evidence, and states when the information was published. Which source passes?", answer:"An article with a named author, cited data, and publication date", distractors:["An anonymous post with no evidence","A dated advert with no author or evidence","A named opinion with no evidence or date"], explanation:"Only the article satisfies all three source-quality conditions at the same time.", key:"source-quality", chips:["NAMED AUTHOR","EVIDENCE","PUBLICATION DATE"] },
-] as const;
+];
 function ruleQuestion(index: number, level: number, length: number): Row {
   const chosen = pick(level <= 2 ? SIMPLE_RULES : ADVANCED_RULES);
   return {
@@ -339,13 +349,13 @@ const SIMPLE_LOGIC: readonly FixedRow[] = [
   { prompt:"Every team captain wears a gold badge. Ama is a team captain. What must be true?", answer:"Ama wears a gold badge.", distractors:["Everyone with a badge is a captain.","Ama is the only captain.","All gold things are badges."], explanation:"The rule says every captain wears a gold badge. Ama is a captain, so the rule guarantees that she wears one.", key:"captain-badge", clues:["CAPTAIN → GOLD BADGE","AMA → CAPTAIN"] },
   { prompt:"If a card is marked with a star, it goes into Box A. This card has a star. Where must it go?", answer:"Box A", distractors:["Box B","Either box with no rule","Outside every box"], explanation:"The card has the stated star mark, so the if-then rule sends it to Box A.", key:"star-card", clues:["STAR → BOX A","THIS CARD → STAR"] },
   { prompt:"All books on the blue shelf are science books. This book is on the blue shelf. What can we conclude?", answer:"This is a science book.", distractors:["Every science book is on the blue shelf.","This is the only science book.","The book must be blue."], explanation:"The rule covers every book on the blue shelf. Because this book is there, it must be a science book.", key:"blue-shelf", clues:["BLUE SHELF → SCIENCE BOOK","THIS BOOK → BLUE SHELF"] },
-] as const;
+];
 const ADVANCED_LOGIC: readonly FixedRow[] = [
   { prompt:"If the alarm is armed, the blue light is on. The blue light is off. Which conclusion is logically valid?", answer:"The alarm is not armed.", distractors:["The alarm is definitely broken.","The blue light is always off.","The building has no electricity."], explanation:"An armed alarm guarantees a blue light. Since the light is off, the alarm cannot be armed under the stated rule.", key:"contrapositive-alarm", clues:["ARMED → BLUE LIGHT ON","BLUE LIGHT OFF"] },
   { prompt:"If a file is approved, it carries a green stamp. File X has no green stamp. What follows from the rule?", answer:"File X is not approved.", distractors:["File X was deleted.","Every stamped file is approved.","The stamp printer is broken."], explanation:"Approval would guarantee a green stamp. Because File X has no green stamp, it cannot be approved under the stated rule.", key:"contrapositive-file", clues:["APPROVED → GREEN STAMP","FILE X → NO GREEN STAMP"] },
   { prompt:"Only registered teams may enter the final. Team Nova entered the final. What must be true?", answer:"Team Nova was registered.", distractors:["Team Nova won the final.","Every registered team entered the final.","No other team was registered."], explanation:"‘Only registered teams may enter’ means entry requires registration. Because Team Nova entered, it must have been registered.", key:"only-registered", clues:["ENTER FINAL → REGISTERED","NOVA → ENTERED FINAL"] },
   { prompt:"A sensor sends an alert whenever temperature exceeds 40°C. No alert was sent, and the sensor is known to be working correctly. What follows?", answer:"The temperature did not exceed 40°C.", distractors:["The temperature was exactly 0°C.","The sensor had no power.","The temperature must have been 40°C exactly."], explanation:"With a correctly working sensor, exceeding 40°C would guarantee an alert. No alert therefore rules out a temperature above 40°C.", key:"sensor-alert", clues:[">40°C → ALERT","NO ALERT","SENSOR WORKING"] },
-] as const;
+];
 function conditionalQuestion(index: number, level: number, length: number): Row {
   const chosen = pick(level <= 2 ? SIMPLE_LOGIC : ADVANCED_LOGIC);
   return {
