@@ -12,7 +12,7 @@ type MatchInput = {
   externalId: string;
   confidence?: number;
   type: "in" | "out";
-  kind: "fingerprint" | "card";
+  kind: "face" | "fingerprint" | "card";
   periodId?: string;
   timestamp?: Date;
 };
@@ -74,6 +74,13 @@ export async function matchDeviceIdentityAttendance(input: MatchInput) {
   });
 
   return { status: "recorded" as const, event };
+}
+
+export async function matchFaceDeviceIdentityAttendance(
+  tx: Transaction,
+  input: Omit<MatchInput, "tx" | "kind">
+) {
+  return matchDeviceIdentityAttendance({ ...input, tx, kind: "face" });
 }
 
 export async function matchFingerprintAttendance(
