@@ -13,6 +13,7 @@ import TeacherQuickMarkSheet from "@/components/TeacherQuickMarkSheet";
 import "@/app/school/module-workspace.css";
 import "@/app/school/academic-workspace.css";
 import "@/app/school/gradebook/studio/gradebook-entry.css";
+import "../teacher-gradebook.css";
 
 export default async function TeacherGradebookContextPage({ params, searchParams }: {
   params: Promise<{ context: string }>; searchParams: Promise<{ term?: string }>;
