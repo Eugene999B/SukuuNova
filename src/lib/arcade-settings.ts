@@ -52,8 +52,18 @@ export async function effectiveArcadeCatalog(tx: TenantDb, schoolId: string): Pr
       : definition.gameKey === "logic"
         ? ["age_6_8", "age_9_11", "age_12_14", "age_15_18"]
         : definition.ageBands;
+    const flagshipDefinition = definition.gameKey === "logic"
+      ? {
+          ...definition,
+          name: "Nova Millionaire",
+          category: "Logic & Reasoning",
+          description: "Climb an untimed knowledge-show ladder through patterns, sequences, classification and deduction.",
+          symbol: "♛",
+          curriculumTags: ["patterns", "sequences", "classification", "deduction", "reasoning"] as const,
+        }
+      : definition;
     return {
-      ...definition,
+      ...flagshipDefinition,
       live: contentReady,
       enabled: contentReady && (row?.enabled ?? true),
       effectiveAgeBands: intersect(flagshipAgeBands, stringArray(row?.allowedAgeBands)) as ArcadeAgeBand[],
