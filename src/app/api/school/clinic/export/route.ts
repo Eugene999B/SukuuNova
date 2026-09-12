@@ -1,10 +1,11 @@
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { AppError, routeError } from "@/lib/errors";
 import { getClinicPatientRecord, type ClinicPatientType } from "@/lib/clinic";
 import { assertClinicClinicalActor } from "@/lib/clinic-clinical-access";
+import { CLINIC_PDF_COLORS } from "@/lib/clinic-pdf-colors";
 import { requirePermission } from "@/lib/rbac";
 
 const typeSchema = z.enum(["student", "staff"]);
@@ -41,7 +42,7 @@ async function createWriter(title: string, schoolName: string): Promise<Writer> 
   function newPage() {
     page = pdf.addPage([width, height]);
     y = height - margin;
-    page.drawText(`${schoolName} · SukuuNova Clinic`, { x: margin, y, size: 9, font: bold, color: rgb(0.05, 0.35, 0.24) });
+    page.drawText(`${schoolName} · SukuuNova Clinic`, { x: margin, y, size: 9, font: bold, color: CLINIC_PDF_COLORS.brand });
     y -= 22;
   }
 
@@ -69,7 +70,7 @@ async function createWriter(title: string, schoolName: string): Promise<Writer> 
     addHeading(text, size = 15) {
       const lines = wrap(text, size, true);
       ensure(lines.length, size, 10);
-      for (const line of lines) { page.drawText(line, { x: margin, y, size, font: bold, color: rgb(0.06, 0.1, 0.16) }); y -= size + 5; }
+      for (const line of lines) { page.drawText(line, { x: margin, y, size, font: bold, color: CLINIC_PDF_COLORS.heading }); y -= size + 5; }
       y -= 5;
     },
     addText(text, options = {}) {
@@ -77,18 +78,18 @@ async function createWriter(title: string, schoolName: string): Promise<Writer> 
       const gap = options.gap ?? 7;
       const lines = wrap(text || "—", size, Boolean(options.bold));
       ensure(lines.length, size, gap);
-      for (const line of lines) { page.drawText(line, { x: margin, y, size, font: options.bold ? bold : regular, color: rgb(0.19, 0.24, 0.31) }); y -= size + 4; }
+      for (const line of lines) { page.drawText(line, { x: margin, y, size, font: options.bold ? bold : regular, color: CLINIC_PDF_COLORS.text }); y -= size + 4; }
       y -= gap;
     },
     addRule() {
       ensure(1, 2, 12);
-      page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.7, color: rgb(0.85, 0.88, 0.91) });
+      page.drawLine({ start: { x: margin, y }, end: { x: width - margin, y }, thickness: 0.7, color: CLINIC_PDF_COLORS.rule });
       y -= 14;
     },
     bytes: () => pdf.save(),
   };
 
-  page.drawText(schoolName, { x: margin, y, size: 11, font: bold, color: rgb(0.05, 0.35, 0.24) });
+  page.drawText(schoolName, { x: margin, y, size: 11, font: bold, color: CLINIC_PDF_COLORS.brand });
   y -= 24;
   writer.addHeading(title, 22);
   return writer;
