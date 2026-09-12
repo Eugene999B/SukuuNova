@@ -13,7 +13,8 @@ const schema = z.object({
   academicYearEnd: z.coerce.date(),
   name: z.string().trim().min(2).max(80),
   startDate: z.coerce.date(),
-  endDate: z.coerce.date()
+  endDate: z.coerce.date(),
+  teachingWeeks: z.coerce.number().int().min(1).max(30).default(13),
 });
 
 function status(start: Date, end: Date, isLocked = false, now = new Date()) {
@@ -24,14 +25,18 @@ function status(start: Date, end: Date, isLocked = false, now = new Date()) {
 export async function GET() {
   try {
     const session = await requireSchoolSession();
-    const terms = await withTenant(session.schoolId, (tx) => tx.term.findMany({ where: { schoolId: session.schoolId }, include: { academicYear: true }, orderBy: [{ startDate: "desc" }, { name: "asc" }] }));
-    return NextResponse.json({
-      terms: terms.map((term) => ({
+    const result = await withTenant(session.schoolId, async (tx) => {
+      const terms = await tx.term.findMany({ where: { schoolId: session.schoolId }, include: { academicYear: true }, orderBy: [{ startDate: "desc" }, { name: "asc" }] });
+      const weeks = await tx.$queryRawUnsafe<Array<{ id: string; teachingWeeks: number }>>(`SELECT "id","teachingWeeks" FROM "Term" WHERE "schoolId"=$1`, session.schoolId);
+      const weekMap = new Map(weeks.map((row) => [row.id, row.teachingWeeks]));
+      return terms.map((term) => ({
         ...term,
+        teachingWeeks: weekMap.get(term.id) ?? 13,
         status: status(term.startDate, term.endDate, term.isLocked),
         needsFinalization: !term.isLocked && new Date() > term.endDate,
-      }))
+      }));
     });
+    return NextResponse.json({ terms: result });
   } catch (error) { return routeError(error); }
 }
 
@@ -53,8 +58,9 @@ export async function POST(request: Request) {
       const overlap = await tx.term.findFirst({ where: { schoolId: session.schoolId, academicYearId: year.id, startDate: { lt: input.endDate }, endDate: { gt: input.startDate } } });
       if (overlap) throw new AppError(`Term dates overlap ${overlap.name}.`, 409, "TERM_OVERLAP");
       const term = await tx.term.create({ data: { schoolId: session.schoolId, academicYearId: year.id, name: input.name, startDate: input.startDate, endDate: input.endDate } });
-      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "academic.term_created", entityType: "Term", entityId: term.id, before: null, after: { term, academicYear: year } });
-      return { year, term };
+      await tx.$executeRawUnsafe(`UPDATE "Term" SET "teachingWeeks"=$1 WHERE "id"=$2 AND "schoolId"=$3`, input.teachingWeeks, term.id, session.schoolId);
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "academic.term_created", entityType: "Term", entityId: term.id, before: null, after: { term, academicYear: year, teachingWeeks: input.teachingWeeks } });
+      return { year, term: { ...term, teachingWeeks: input.teachingWeeks } };
     });
     return NextResponse.json({ ok: true, ...result, status: status(result.term.startDate, result.term.endDate, result.term.isLocked) });
   } catch (error) { return routeError(error); }
