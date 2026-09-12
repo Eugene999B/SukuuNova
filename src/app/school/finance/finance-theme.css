@@ -1,0 +1,18 @@
+/*
+ * Finance V2 participates in the application theme.
+ *
+ * The legacy Finance stylesheet borrowed --identity-paper, which is deliberately
+ * fixed white for printable credentials. Keep that print contract untouched and
+ * remap it only inside Finance to the active application surface.
+ */
+.fv2-theme-scope {
+  --identity-paper: var(--color-surface);
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+
+.fv2-theme-scope :where(input, select, textarea, button) {
+  color-scheme: inherit;
+}

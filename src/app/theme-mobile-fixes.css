@@ -1,0 +1,54 @@
+/*
+ * Mobile theme chooser hardening.
+ *
+ * iOS Safari can establish a containing block for fixed descendants when an
+ * ancestor uses backdrop-filter. The theme chooser lives inside the sticky
+ * AppShell topbar, so on phones we remove that containing-block trigger and
+ * keep the chooser pinned to the actual viewport with safe-area insets.
+ */
+@media (max-width: 768px) {
+  .app-topbar {
+    background: var(--color-surface) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .sn-theme-popover {
+    position: fixed !important;
+    left: max(12px, env(safe-area-inset-left, 0px)) !important;
+    right: max(12px, env(safe-area-inset-right, 0px)) !important;
+    top: auto !important;
+    bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+  }
+
+  .sn-theme-grid,
+  .sn-theme-grid > button,
+  .sn-theme-copy {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .sn-theme-grid > button {
+    grid-template-columns: 48px minmax(0, 1fr) 24px !important;
+  }
+
+  .sn-theme-swatch {
+    width: 48px;
+    max-width: 48px;
+  }
+
+  .sn-theme-copy strong,
+  .sn-theme-copy small {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
