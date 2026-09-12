@@ -1,6 +1,6 @@
-import { Activity, Atom, BookMarked, BookOpen, Bot, Compass, Cpu, Crown, Heart, Hourglass, Keyboard, Landmark, Leaf, Lock, MapPin, Orbit, Receipt, Recycle, Rocket, Search, Shield, Sparkles, Store, Zap } from "lucide-react";
+import { Activity, Atom, BatteryCharging, BookMarked, BookOpen, Bot, CircuitBoard, Compass, Cpu, Crown, Heart, Hourglass, Keyboard, Landmark, Leaf, Lock, MapPin, Orbit, Receipt, Recycle, Rocket, Search, Shield, Sparkles, Store, Zap } from "lucide-react";
 
-export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market" | "cyber-safety" | "environment-guardian" | "body-explorer" | "history-timeline";
+export type ArcadeLogoGame = "math" | "keyboard-ninja" | "force-motion-lab" | "word" | "comprehension-quest" | "coding-sequence" | "ghana-map-master" | "money-math-market" | "cyber-safety" | "environment-guardian" | "body-explorer" | "history-timeline" | "circuit-logic";
 
 type Props = { game: ArcadeLogoGame; size?: "hero" | "card" | "small" };
 
@@ -16,5 +16,6 @@ export default function ArcadeGameLogo({ game, size = "card" }: Props) {
   if (game === "environment-guardian") return <div className={`arcade-mark arcade-mark-${size} arcade-mark-eco`} aria-label="EcoGrid Ghana logo"><Leaf className="arcade-mark-main" aria-hidden="true"/><Recycle className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span></div>;
   if (game === "body-explorer") return <div className={`arcade-mark arcade-mark-${size} arcade-mark-bio`} aria-label="BioQuest Human Systems logo"><Heart className="arcade-mark-main" aria-hidden="true"/><Activity className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={13}/></span></div>;
   if (game === "history-timeline") return <div className={`arcade-mark arcade-mark-${size} arcade-mark-word`} aria-label="Chronicle Vault logo"><Hourglass className="arcade-mark-main" aria-hidden="true"/><Landmark className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><BookMarked size={13}/></span></div>;
+  if (game === "circuit-logic") return <div className={`arcade-mark arcade-mark-${size} arcade-mark-astrolab`} aria-label="Circuit Forge logo"><CircuitBoard className="arcade-mark-main" aria-hidden="true"/><BatteryCharging className="arcade-mark-core" aria-hidden="true"/><span className="arcade-mark-star" aria-hidden="true"><Zap size={13}/></span></div>;
   return <div className={`arcade-mark arcade-mark-${size} arcade-mark-runner`} aria-label="Nova Runner logo"><span className="arcade-mark-star" aria-hidden="true"><Sparkles size={14}/></span><Rocket className="arcade-mark-main" aria-hidden="true"/><span className="arcade-mark-trail" aria-hidden="true"/></div>;
 }
