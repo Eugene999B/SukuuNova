@@ -43,6 +43,17 @@ describe("portrait verification", () => {
     expect(result.checks.every((check) => check.passed)).toBe(true);
   });
 
+  it("accepts practical head-and-shoulders framing without a narrow oval requirement", () => {
+    expect(assessPortraitFaces([goodFace({ BoundingBox: { Left: 0.18, Top: 0.14, Width: 0.3, Height: 0.38 } })]).ok).toBe(true);
+    expect(assessPortraitFaces([goodFace({ BoundingBox: { Left: 0.51, Top: 0.2, Width: 0.3, Height: 0.39 } })]).ok).toBe(true);
+  });
+
+  it("still rejects tiny faces and faces that are cut off by the frame", () => {
+    expect(assessPortraitFaces([goodFace({ BoundingBox: { Left: 0.42, Top: 0.3, Width: 0.1, Height: 0.14 } })]).ok).toBe(false);
+    expect(assessPortraitFaces([goodFace({ BoundingBox: { Left: -0.02, Top: 0.08, Width: 0.34, Height: 0.44 } })]).ok).toBe(false);
+    expect(assessPortraitFaces([goodFace({ BoundingBox: { Left: 0.32, Top: 0.7, Width: 0.34, Height: 0.34 } })]).ok).toBe(false);
+  });
+
   it("rejects frames with no face or more than one face", () => {
     expect(assessPortraitFaces([]).ok).toBe(false);
     expect(assessPortraitFaces([goodFace(), goodFace()]).ok).toBe(false);
