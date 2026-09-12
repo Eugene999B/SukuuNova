@@ -1,7 +1,15 @@
 import type { z } from "zod";
+import { AppError } from "../errors";
 import type { ArcadeFeedback, ArcadeSkillEvidence } from "./contracts";
 
 export type Awaitable<T> = T | Promise<T>;
+
+export class ArcadeActionRejectedError extends AppError {
+  constructor(message = "The game action was rejected.") {
+    super(message, 400, "ARCADE_ACTION_INVALID");
+    this.name = "ArcadeActionRejectedError";
+  }
+}
 
 export type ArcadeAdapterContext = {
   schoolId: string;
@@ -33,6 +41,8 @@ export type ArcadeGradeResult = {
 /**
  * Runtime boundary between the Arcade platform and a mechanically unique game.
  * The platform deliberately knows nothing about question cards, answers or HUDs.
+ * State-dependent client mistakes should throw ArcadeActionRejectedError so they
+ * fail as safe 400 responses without masking unexpected adapter defects.
  */
 export interface ArcadeGameAdapter {
   readonly game: string;
