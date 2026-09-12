@@ -1,4 +1,5 @@
-import type { ArcadeGameAdapter } from "../../adapter";
+import { AppError } from "../../../errors";
+import { ArcadeActionRejectedError, type ArcadeGameAdapter } from "../../adapter";
 import {
   applyNumberBloomAction,
   evaluateNumberBloomState,
@@ -7,6 +8,7 @@ import {
   numberBloomStateSchema,
   parseNumberBloomAction,
   selectNumberBloomMission,
+  type NumberBloomAction,
   type NumberBloomMechanic,
 } from "./domain";
 import { validateNumberBloomMission } from "./validation";
@@ -19,6 +21,15 @@ function skillFor(mechanic: NumberBloomMechanic) {
   if (mechanic === "make_bed") return "number_bloom.composition";
   if (mechanic === "compare_patches") return "number_bloom.comparison";
   return "number_bloom.free_play";
+}
+
+function assertActionFitsMechanic(mechanic: NumberBloomMechanic, action: NumberBloomAction) {
+  if (mechanic === "compare_patches" && ["place", "move", "remove", "water"].includes(action.kind)) {
+    throw new ArcadeActionRejectedError("The comparison flowers stay in their patches. Pair them instead.");
+  }
+  if (mechanic !== "free_grow" && action.kind === "water") {
+    throw new ArcadeActionRejectedError("Watering belongs in Free Grow.");
+  }
 }
 
 export const numberBloomArcadeAdapter: ArcadeGameAdapter = {
@@ -44,16 +55,29 @@ export const numberBloomArcadeAdapter: ArcadeGameAdapter = {
   },
 
   parseArtifact() {
-    throw new Error("Number Bloom v1 does not accept graded artifacts; evidence comes from garden state and structured actions.");
+    throw new AppError(
+      "Number Bloom v1 does not accept graded artifacts.",
+      400,
+      "ARCADE_ARTIFACT_INVALID",
+    );
   },
 
   applyAction({ publicMission, privateMission, state, action }) {
     const validated = validateNumberBloomMission(publicMission, privateMission, state);
-    const next = applyNumberBloomAction(
-      validated.publicMission,
-      validated.state,
-      action as ReturnType<typeof parseNumberBloomAction>,
-    );
+    const parsedAction = action as NumberBloomAction;
+    assertActionFitsMechanic(validated.publicMission.mechanic, parsedAction);
+
+    let next;
+    try {
+      next = applyNumberBloomAction(validated.publicMission, validated.state, parsedAction);
+    } catch (error) {
+      if (error instanceof ArcadeActionRejectedError || error instanceof AppError) throw error;
+      if (error instanceof Error) {
+        throw new ArcadeActionRejectedError("That move does not fit this garden. Try another place.");
+      }
+      throw error;
+    }
+
     validateNumberBloomMission(validated.publicMission, validated.privateMission, next);
     const evaluation = evaluateNumberBloomState(validated.privateMission, next);
     const skillKey = skillFor(validated.publicMission.mechanic);
