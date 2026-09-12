@@ -12,10 +12,39 @@ async function createClassAndSubject(schoolId: string) {
   });
 }
 
+async function createTeachingAccount(schoolId: string) {
+  return withTenant(schoolId, async (tx) => {
+    const teacherId = createId();
+    const roleId = createId();
+    await tx.user.create({
+      data: {
+        id: teacherId,
+        schoolId,
+        name: "Fixture Teacher",
+        email: `${teacherId}@test.invalid`,
+        passwordHash: "fixture-password-hash",
+        status: "active",
+      },
+    });
+    await tx.role.create({
+      data: {
+        id: roleId,
+        schoolId,
+        name: `Teacher ${roleId}`,
+        key: "teacher",
+        isSystem: true,
+      },
+    });
+    await tx.userRole.create({ data: { schoolId, userId: teacherId, roleId } });
+    return teacherId;
+  });
+}
+
 describe("class-first subject offerings", () => {
   it("keeps a subject in the class curriculum after its teacher is removed", async () => {
     const fixture = await createTenantFixture();
     const { classroom, subject } = await createClassAndSubject(fixture.schoolId);
+    const teacherId = await createTeachingAccount(fixture.schoolId);
 
     await withTenant(fixture.schoolId, async (tx) => {
       await tx.classSubjectTeacher.create({
@@ -23,20 +52,20 @@ describe("class-first subject offerings", () => {
           schoolId: fixture.schoolId,
           classId: classroom.id,
           subjectId: subject.id,
-          teacherId: fixture.ownerId,
+          teacherId,
         },
       });
       const before = await listClassSubjectOfferings(tx, fixture.schoolId, classroom.id);
       expect(before).toHaveLength(1);
       expect(before[0].subjectId).toBe(subject.id);
-      expect(before[0].teachers.map((teacher) => teacher.id)).toEqual([fixture.ownerId]);
+      expect(before[0].teachers.map((teacher) => teacher.id)).toEqual([teacherId]);
 
       await tx.classSubjectTeacher.delete({
         where: {
           classId_subjectId_teacherId: {
             classId: classroom.id,
             subjectId: subject.id,
-            teacherId: fixture.ownerId,
+            teacherId,
           },
         },
       });
