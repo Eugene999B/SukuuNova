@@ -153,7 +153,7 @@ export function AcademicTermsHub() {
   async function setLocked(lock: boolean) {
     if (!active) return;
     const prompt = lock
-      ? `Close and lock ${active.name}? Approved report cards will be released to the parent portal and current-term academic writing will become read-only.`
+      ? `Close and lock ${active.name}? Current-term academic writing will become read-only. Approved report cards keep their release status and must still be released from Report Cards.`
       : `Reopen ${active.name}? This is only allowed where finalized report cards do not already protect the term.`;
     if (!window.confirm(prompt)) return;
     setBusy(true);
@@ -167,7 +167,12 @@ export function AcademicTermsHub() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body?.message || body?.error || "Could not update the term.");
-      setNotice(lock ? `${active.name} is locked. ${body.releasedReportCards || 0} approved report card(s) were released to the parent portal.` : `${active.name} was reopened for authorised correction.`);
+      const awaitingRelease = Number(body.approvedReportCardsAwaitingRelease || 0);
+      setNotice(lock
+        ? awaitingRelease > 0
+          ? `${active.name} is locked. ${awaitingRelease} approved report card(s) remain ready for release from Report Cards.`
+          : `${active.name} is locked. Academic records are now read-only.`
+        : `${active.name} was reopened for authorised correction.`);
       await loadTerms(active.id);
     } catch (value) {
       setError(value instanceof Error ? value.message : "Could not update the term.");
@@ -228,10 +233,10 @@ export function AcademicTermsHub() {
               <div className={styles.readiness}>
                 <div className={styles.readinessCard}><span>Academic results</span><strong>{summary.scores} scores · {summary.scorePct == null ? "—" : `${summary.scorePct.toFixed(1)}% avg`}</strong><small>{summary.assessments} assessments are connected to this term.</small></div>
                 <div className={styles.readinessCard}><span>Lesson plans</span><strong>{summary.lessonPlans.approved} accepted / {summary.lessonPlans.expected} expected</strong><small>{summary.lessonPlans.submitted} awaiting review · {summary.lessonPlans.changesRequested} returned for correction.</small><div className={styles.progress}><i style={{ width: `${lessonProgress}%` }}/></div></div>
-                <div className={styles.readinessCard}><span>Report cards</span><strong>{summary.reportCardReadiness.generated} generated / {summary.reportCardReadiness.expected} students</strong><small>{summary.reportCardReadiness.approved} approved · {summary.reportCardReadiness.released} already released.</small><div className={styles.progress}><i style={{ width: `${reportProgress}%` }}/></div></div>
+                <div className={styles.readinessCard}><span>Report cards</span><strong>{summary.reportCardReadiness.generated} generated / {summary.reportCardReadiness.expected} students</strong><small>{summary.reportCardReadiness.approved} approved · {summary.reportCardReadiness.released} already released. Release remains controlled from Report Cards.</small><div className={styles.progress}><i style={{ width: `${reportProgress}%` }}/></div></div>
                 <div className={styles.readinessCard}><span>Attendance</span><strong>{summary.attendance.records} records</strong><small>{summary.attendance.present} present events · {summary.attendance.late} late · {summary.attendance.absent} absent.</small></div>
                 <div className={styles.readinessCard}><span>Finance</span><strong>₵{summary.finance.collected.toFixed(2)} collected</strong><small>₵{summary.finance.outstanding.toFixed(2)} outstanding across {summary.finance.invoiceCount} invoices.</small></div>
-                <div className={styles.readinessCard}><span>Term state</span><strong>{active.status === "active" ? "System working term" : active.status === "locked" ? "Read-only history" : active.status === "ended" ? "Ready for finalisation" : "Upcoming"}</strong><small>{active.status === "active" ? "Teachers do not choose this term manually; SukuuNova attaches it automatically." : active.status === "locked" ? "Historical marks, plans and reports remain preserved." : active.status === "ended" ? "Review unfinished work before closing and locking." : "This term will become the working term automatically on its start date."}</small></div>
+                <div className={styles.readinessCard}><span>Term state</span><strong>{active.status === "active" ? "System working term" : active.status === "locked" ? "Read-only history" : active.status === "ended" ? "Ready for finalisation" : "Upcoming"}</strong><small>{active.status === "active" ? "Teachers do not choose this term manually; SukuuNova attaches it automatically." : active.status === "locked" ? "Historical marks, plans and reports remain preserved; report delivery keeps its own audited release status." : active.status === "ended" ? "Review unfinished work before closing and locking." : "This term will become the working term automatically on its start date."}</small></div>
               </div>
 
               <div className={styles.links}>
