@@ -22,20 +22,13 @@ type Props = {
 };
 
 const steps = [
-  { key: "identity", title: "Identity", hint: "Name and essential personal details" },
-  { key: "placement", title: "Placement", hint: "Intake history and proposed term placement" },
-  { key: "family", title: "Family", hint: "Parent or guardian contact" },
-  { key: "photo", title: "Face & review", hint: "Live portrait capture and final review" },
+  { key: "student", title: "Student & class", hint: "Essential details and immediate class placement" },
+  { key: "family", title: "Guardian", hint: "Primary parent or guardian contact" },
+  { key: "photo", title: "Photo & save", hint: "Verified portrait and registration" },
 ] as const;
 
 function Field({ label, required, children, hint }: { label: string; required?: boolean; children: ReactNode; hint?: string }) {
-  return (
-    <label className="student-dialog-field">
-      <span>{label}{required ? <em> *</em> : null}</span>
-      {children}
-      {hint ? <small>{hint}</small> : null}
-    </label>
-  );
+  return <label className="student-dialog-field"><span>{label}{required ? <em> *</em> : null}</span>{children}{hint ? <small>{hint}</small> : null}</label>;
 }
 
 export function AddStudentDialog({ classes, academicYears, terms, action, triggerLabel = "+ Add student", initialOpen = false }: Props) {
@@ -43,30 +36,21 @@ export function AddStudentDialog({ classes, academicYears, terms, action, trigge
   const [step, setStep] = useState(0);
   const [actionError, setActionError] = useState("");
   const [actionState, formAction] = useActionState(action, { message: null });
-  const defaultAcademicYearId = academicYears.find((year) => year.isCurrent)?.id ?? academicYears[0]?.id ?? "";
-  const defaultPlacementTermId = terms.find((term) => term.isCurrent && !term.isLocked)?.id ?? "";
+  const currentAcademicYear = academicYears.find((year) => year.isCurrent) ?? academicYears[0] ?? null;
+  const currentTerm = terms.find((term) => term.isCurrent && !term.isLocked) ?? terms.find((term) => !term.isLocked) ?? null;
+  const setupReady = Boolean(currentAcademicYear && currentTerm && classes.length);
+  const today = new Date().toISOString().slice(0, 10);
 
-  useEffect(() => {
-    setOpen(initialOpen);
-  }, [initialOpen]);
-
+  useEffect(() => { setOpen(initialOpen); }, [initialOpen]);
   useEffect(() => {
     if (!open) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
     window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previous;
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => { document.body.style.overflow = previous; window.removeEventListener("keydown", onKey); };
   }, [open]);
-
-  useEffect(() => {
-    if (actionState.message) setActionError(actionState.message);
-  }, [actionState.message]);
+  useEffect(() => { if (actionState.message) setActionError(actionState.message); }, [actionState.message]);
 
   function openDialog() {
     setStep(0);
@@ -82,119 +66,116 @@ export function AddStudentDialog({ classes, academicYears, terms, action, trigge
     window.history.replaceState(null, "", "/school/students");
   }
 
+  function nextStep(form: HTMLFormElement | null) {
+    if (step === 0 && form) {
+      const formData = new FormData(form);
+      if (!String(formData.get("name") ?? "").trim()) return setActionError("Enter the student's full name.");
+      if (!String(formData.get("classId") ?? "").trim()) return setActionError("Choose the student's class. Registration will place the student there immediately.");
+    }
+    setActionError("");
+    setStep((value) => Math.min(steps.length - 1, value + 1));
+  }
+
   function prepareSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
-    const form = event.currentTarget;
-    const formData = new FormData(form);
+    const formData = new FormData(event.currentTarget);
     const photoData = String(formData.get("photoData") ?? "");
-    const placementTermId = String(formData.get("placementTermId") ?? "");
-    const classId = String(formData.get("classId") ?? "");
-    if (!String(formData.get("intakeAcademicYearId") ?? "")) {
+    const guardianName = String(formData.get("guardianName") ?? "").trim();
+    const guardianPhone = String(formData.get("guardianPhone") ?? "").trim();
+    if (!setupReady || !String(formData.get("intakeAcademicYearId") ?? "") || !String(formData.get("placementTermId") ?? "")) {
       event.preventDefault();
-      setActionError("Choose the academic year in which the learner joined the school.");
-      setStep(1);
+      setActionError("Set up a current academic year, an open term and at least one class before registering students.");
+      setStep(0);
       return;
     }
-    if ((placementTermId && !classId) || (classId && !placementTermId)) {
+    if (!String(formData.get("classId") ?? "")) {
       event.preventDefault();
-      setActionError("Choose both a placement term and intended class, or leave both unassigned.");
+      setActionError("Choose the student's class.");
+      setStep(0);
+      return;
+    }
+    if ((guardianName && !guardianPhone) || (guardianPhone && !guardianName)) {
+      event.preventDefault();
+      setActionError("Enter both guardian name and phone number, or leave both blank.");
       setStep(1);
       return;
     }
     if (photoData.length > 800_000) {
       event.preventDefault();
-      setActionError("The captured student portrait is too large. Please capture it again.");
-      setStep(3);
+      setActionError("The captured student portrait is too large. Capture it again.");
+      setStep(2);
       return;
     }
     setActionError("");
   }
 
-  return (
-    <>
-      <button type="button" className="button primary" onClick={openDialog}>{triggerLabel}</button>
-      <noscript>
-        <Link href="/school/students/create" className="button primary">{triggerLabel}</Link>
-      </noscript>
-      {open ? (
-        <div className="student-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}>
-          <section className="student-dialog" role="dialog" aria-modal="true" aria-labelledby="add-student-title">
-            <header className="student-dialog-header">
-              <div>
-                <div className="eyebrow">Student admission</div>
-                <h2 id="add-student-title">Create a learner record</h2>
-                <p>Record when the learner joined, propose a term placement and capture a live portrait. The class becomes live only after enrolment confirmation.</p>
-              </div>
-              <Tooltip label="Close student admission dialog">
-                <button type="button" className="dialog-close" onClick={closeDialog} aria-label="Close">×</button>
-              </Tooltip>
-            </header>
+  return <>
+    <button type="button" className="button primary" onClick={openDialog}>{triggerLabel}</button>
+    <noscript><Link href="/school/students/create" className="button primary">{triggerLabel}</Link></noscript>
+    {open ? <div className="student-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}>
+      <section className="student-dialog" role="dialog" aria-modal="true" aria-labelledby="add-student-title">
+        <header className="student-dialog-header">
+          <div><div className="eyebrow">Student registration</div><h2 id="add-student-title">Register a student once</h2><p>Choose the student&apos;s class, add the family contact and capture the portrait. Saving completes registration and class placement immediately—there is no second enrolment step.</p></div>
+          <Tooltip label="Close student registration"><button type="button" className="dialog-close" onClick={closeDialog} aria-label="Close">×</button></Tooltip>
+        </header>
 
-            <div className="student-dialog-progress" aria-label="Student creation steps">
-              {steps.map((item, index) => (
-                <div key={item.key} className={`dialog-step ${index === step ? "active" : ""} ${index < step ? "complete" : ""}`}>
-                  <span>{index < step ? "✓" : index + 1}</span>
-                  <div><strong>{item.title}</strong><small>{item.hint}</small></div>
-                </div>
-              ))}
+        <div className="student-dialog-progress" aria-label="Student registration steps">{steps.map((item, index) => <div key={item.key} className={`dialog-step ${index === step ? "active" : ""} ${index < step ? "complete" : ""}`}><span>{index < step ? "✓" : index + 1}</span><div><strong>{item.title}</strong><small>{item.hint}</small></div></div>)}</div>
+
+        {!setupReady ? <div className="dialog-callout" role="alert"><span className="callout-icon">!</span><div><strong>Academic setup is incomplete</strong><p>You need a current academic year, an open term and at least one class. Once those exist, routine student registration will use them automatically.</p><Link href="/school/academics/setup" className="text-link">Open Academic Setup</Link></div></div> : null}
+        {actionError ? <div className="dialog-callout" role="alert"><span className="callout-icon">!</span><div><strong>Check this registration</strong><p>{actionError}</p><button type="button" className="text-link" onClick={() => setActionError("")}>Dismiss</button></div></div> : null}
+
+        <form action={formAction} onSubmit={prepareSubmit} className="student-dialog-form">
+          <input type="hidden" name="intakeAcademicYearId" value={currentAcademicYear?.id ?? ""} />
+          <input type="hidden" name="placementTermId" value={currentTerm?.id ?? ""} />
+          <input type="hidden" name="admissionDate" value={today} />
+          <input type="hidden" name="entryType" value="New enrollment" />
+
+          <div className="student-dialog-body">
+            <div className="dialog-panel" hidden={step !== 0} aria-hidden={step !== 0}>
+              <div className="dialog-panel-heading"><div><span className="eyebrow">Step 1</span><h3>Who is the student and which class?</h3><p>These are the only academic choices needed during normal registration.</p></div><span className="panel-badge">Required</span></div>
+              <div className="dialog-grid two">
+                <Field label="Full name" required><input name="name" required autoFocus={step === 0} placeholder="e.g. Ama Mensah" /></Field>
+                <Field label="Date of birth"><input name="dob" type="date" /></Field>
+                <Field label="Class" required hint="The student becomes a live member of this class immediately after saving."><select name="classId" defaultValue="" required><option value="" disabled>Choose class</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name} · {schoolClass._count.students} students</option>)}</select></Field>
+              </div>
+              <div className="dialog-info-card"><strong>Everything else is automatic</strong><span>Index number, current academic year, current term, admission date and enrolment record are created automatically.</span><b>{currentAcademicYear?.name ?? "Academic year needed"}{currentTerm ? ` · ${currentTerm.name}` : ""}</b></div>
             </div>
 
-            {actionError ? <div className="dialog-callout" role="alert"><span className="callout-icon">!</span><div><strong>Student was not created</strong><p>{actionError}</p><button type="button" className="text-link" onClick={() => setActionError("")}>Dismiss</button></div></div> : null}
+            <div className="dialog-panel" hidden={step !== 1} aria-hidden={step !== 1}>
+              <div className="dialog-panel-heading"><div><span className="eyebrow">Step 2</span><h3>Parent or guardian</h3><p>Add the main family contact. You can leave this blank and update the student later.</p></div><span className="panel-badge">Optional</span></div>
+              <div className="dialog-grid two">
+                <Field label="Primary parent / guardian"><input name="guardianName" placeholder="e.g. Akosua Mensah" /></Field>
+                <Field label="Phone / WhatsApp"><input name="guardianPhone" inputMode="tel" placeholder="024 000 0000" /></Field>
+                <Field label="Relationship"><select name="guardianRelationship" defaultValue="Parent"><option>Parent</option><option>Mother</option><option>Father</option><option>Guardian</option><option>Other</option></select></Field>
+              </div>
+              <div className="dialog-callout"><span className="callout-icon">◎</span><div><strong>Sibling-friendly family records</strong><p>If the same phone number already belongs to a guardian, SukuuNova reuses that family record instead of creating a duplicate.</p></div></div>
+            </div>
 
-            <form action={formAction} onSubmit={prepareSubmit} className="student-dialog-form">
-              <div className="student-dialog-body">
-                <div className="dialog-panel" hidden={step !== 0} aria-hidden={step !== 0}>
-                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 1</span><h3>Start with the learner</h3><p>Enter the essentials that identify this student throughout SukuuNova.</p></div><span className="panel-badge">Required</span></div>
-                  <div className="dialog-grid two"><Field label="Full name" required><input name="name" required autoFocus={step === 0} placeholder="e.g. Ama Mensah" /></Field><Field label="Date of birth"><input name="dob" type="date" /></Field></div>
-                  <div className="dialog-info-card"><strong>Automatic Index Number</strong><span>The system creates the unique learner identifier after saving. Staff never type or edit it.</span><b>SN-{new Date().getFullYear()}-••••••</b></div>
-                </div>
-
-                <div className="dialog-panel" hidden={step !== 1} aria-hidden={step !== 1}>
-                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 2</span><h3>Record intake and proposed placement</h3><p>Intake records when the learner joined the school. Placement is a draft enrolment until admission checks are confirmed.</p></div><span className="panel-badge">Academic</span></div>
-                  <div className="dialog-grid two">
-                    <Field label="Academic year joined" required hint="Previous configured years are available for learners who joined before SukuuNova."><select name="intakeAcademicYearId" defaultValue={defaultAcademicYearId} required><option value="" disabled>Choose academic year</option>{academicYears.map((year) => <option key={year.id} value={year.id}>{year.name}{year.isCurrent ? " · current" : ""}</option>)}</select></Field>
-                    <Field label="Admission date" hint="The actual date the learner entered this school."><input name="admissionDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} /></Field>
-                    <Field label="Placement term" hint="Choose the term this intended class belongs to. Locked terms cannot accept new placements."><select name="placementTermId" defaultValue={defaultPlacementTermId}><option value="">Leave placement pending</option>{terms.map((term) => <option key={term.id} value={term.id} disabled={term.isLocked}>{term.academicYearName} · {term.name}{term.isCurrent ? " · current" : ""}{term.isLocked ? " · locked" : ""}</option>)}</select></Field>
-                    <Field label="Intended class group" hint="This creates a draft enrolment; it does not change the live class yet."><select name="classId" defaultValue=""><option value="">Leave unassigned</option>{classes.map((schoolClass) => <option key={schoolClass.id} value={schoolClass.id}>{schoolClass.level ? `${schoolClass.level} · ` : ""}{schoolClass.name} · {schoolClass._count.students} live learners</option>)}</select></Field>
-                    <Field label="Entry type"><select name="entryType" defaultValue="New enrollment"><option>New enrollment</option><option>Transfer in</option><option>Re-enrollment</option><option>Returning learner</option></select></Field>
-                  </div>
-                  <div className="dialog-info-card subtle"><strong>History stays truthful</strong><span>Draft placement is reviewed in Admissions. Only a confirmed enrolment for the active term changes the learner&apos;s operational class.</span></div>
-                </div>
-
-                <div className="dialog-panel" hidden={step !== 2} aria-hidden={step !== 2}>
-                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 3</span><h3>Connect the family</h3><p>Add the primary contact that should receive school communication and be connected to the learner.</p></div><span className="panel-badge">Recommended</span></div>
-                  <div className="dialog-grid two"><Field label="Primary parent / guardian"><input name="guardianName" placeholder="e.g. Akosua Mensah" /></Field><Field label="Phone / WhatsApp"><input name="guardianPhone" inputMode="tel" placeholder="024 000 0000" /></Field><Field label="Relationship"><select name="guardianRelationship" defaultValue="Parent"><option>Parent</option><option>Mother</option><option>Father</option><option>Guardian</option><option>Other</option></select></Field></div>
-                  <div className="dialog-callout"><span className="callout-icon">◎</span><div><strong>One family record can serve more than one learner</strong><p>Once the guardian exists, it can later be linked to siblings and used for attendance alerts, receipts, messages and parent access.</p></div></div>
-                </div>
-
-                <div className="dialog-panel" hidden={step !== 3} aria-hidden={step !== 3}>
-                  <div className="dialog-panel-heading"><div><span className="eyebrow">Step 4</span><h3>Capture the learner&apos;s face</h3><p>Use the live camera. SukuuNova will guide the face into position and capture a clear portrait for the learner record.</p></div><span className="panel-badge">Live camera</span></div>
-                  <div className="photo-review-layout">
-                    <StudentPhotoCapture />
-                    <div className="review-summary">
-                      <div className="review-title">Creation summary</div>
-                      <div className="review-row"><span>Learner</span><b>Identity information</b></div>
-                      <div className="review-row"><span>Index</span><b>Generated automatically</b></div>
-                      <div className="review-row"><span>Intake</span><b>Academic year + admission date</b></div>
-                      <div className="review-row"><span>Class</span><b>Draft term enrolment until confirmed</b></div>
-                      <div className="review-row"><span>Family</span><b>Primary guardian</b></div>
-                      <div className="review-row"><span>Portrait</span><b>Live camera capture</b></div>
-                      <div className="review-security"><strong>Biometric safety</strong><span>The registration portrait can support later device enrollment, but biometric face templates still require the existing consent and device-enrollment controls.</span></div>
-                    </div>
-                  </div>
+            <div className="dialog-panel" hidden={step !== 2} aria-hidden={step !== 2}>
+              <div className="dialog-panel-heading"><div><span className="eyebrow">Step 3</span><h3>Capture photo and save</h3><p>The camera verifies continuously and captures automatically when a frame passes the server checks.</p></div><span className="panel-badge">Final</span></div>
+              <div className="photo-review-layout">
+                <StudentPhotoCapture />
+                <div className="review-summary">
+                  <div className="review-title">What happens when you save</div>
+                  <div className="review-row"><span>Student</span><b>Created once</b></div>
+                  <div className="review-row"><span>Index</span><b>Generated automatically</b></div>
+                  <div className="review-row"><span>Class</span><b>Active immediately</b></div>
+                  <div className="review-row"><span>Term</span><b>{currentTerm?.name ?? "Current term"}</b></div>
+                  <div className="review-row"><span>Enrolment</span><b>Completed automatically</b></div>
+                  <div className="review-security"><strong>No duplicate workflow</strong><span>After this form saves, you do not need to visit Admissions/Enrolment to activate the student.</span></div>
                 </div>
               </div>
+            </div>
+          </div>
 
-              <footer className="student-dialog-footer">
-                <div className="dialog-footer-note"><span className="secure-dot" />Secure school record</div>
-                <div className="dialog-footer-actions">
-                  <button type="button" className="button secondary" onClick={() => step === 0 ? closeDialog() : setStep((value) => value - 1)}>{step === 0 ? "Cancel" : "Back"}</button>
-                  {step < steps.length - 1 ? <button type="button" className="button primary" onClick={() => { setActionError(""); setStep((value) => value + 1); }}>Continue <span>→</span></button> : <OptimisticSubmitButton className="button primary" pendingLabel="Creating student…">Create student &amp; generate index <span>→</span></OptimisticSubmitButton>}
-                </div>
-              </footer>
-            </form>
-          </section>
-        </div>
-      ) : null}
-    </>
-  );
+          <footer className="student-dialog-footer">
+            <div className="dialog-footer-note"><span className="secure-dot" />Fast registration</div>
+            <div className="dialog-footer-actions">
+              <button type="button" className="button secondary" onClick={() => step === 0 ? closeDialog() : setStep((value) => value - 1)}>{step === 0 ? "Cancel" : "Back"}</button>
+              {step < steps.length - 1 ? <button type="button" className="button primary" disabled={!setupReady} onClick={(event) => nextStep(event.currentTarget.form)}>{step === 0 ? "Continue" : "Continue to photo"} <span>→</span></button> : <OptimisticSubmitButton className="button primary" pendingLabel="Registering student…" disabled={!setupReady}>Register student <span>→</span></OptimisticSubmitButton>}
+            </div>
+          </footer>
+        </form>
+      </section>
+    </div> : null}
+  </>;
 }
