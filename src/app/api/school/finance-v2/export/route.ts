@@ -49,7 +49,29 @@ export async function GET(request:Request){
       await requirePermission(tx,session.userId,"finance:export");
       const school=await tx.school.findUnique({where:{id:session.schoolId},select:{name:true}});
       const payments=await tx.$queryRawUnsafe<RawRow[]>(
-        `SELECT 'Payment' AS type,p."createdAt" AS date,s."name" AS party,COALESCE(string_agg(DISTINCT fc."name",', '),'Fees') AS category,p."method" AS method,COALESCE(p."reference",p."id") AS reference,CASE WHEN COALESCE(SUM(pr."amount"),0)>=p."amount" THEN 'reversed' WHEN COALESCE(SUM(pr."amount"),0)>0 THEN 'partially reversed' ELSE 'posted' END AS status,p."amount"-COALESCE(SUM(pr."amount"),0) AS amount FROM "Payment" p JOIN "Invoice" i ON i."id"=p."invoiceId" AND i."schoolId"=p."schoolId" JOIN "Student" s ON s."id"=i."studentId" AND s."schoolId"=i."schoolId" LEFT JOIN "FinancePaymentAllocation" a ON a."paymentId"=p."id" AND a."schoolId"=p."schoolId" LEFT JOIN "FinanceStudentCharge" ch ON ch."id"=a."chargeId" AND ch."schoolId"=a."schoolId" LEFT JOIN "FinanceFeeCategory" fc ON fc."id"=ch."categoryId" AND fc."schoolId"=ch."schoolId" LEFT JOIN "PaymentReversal" pr ON pr."paymentId"=p."id" AND pr."schoolId"=p."schoolId" WHERE p."schoolId"=$1 AND ($2::timestamp IS NULL OR p."createdAt">=$2) AND ($3::timestamp IS NULL OR p."createdAt"<=$3) GROUP BY p."id",s."name" ORDER BY p."createdAt"`,
+        `WITH payment_categories AS (
+           SELECT a."schoolId",a."paymentId",string_agg(DISTINCT fc."name",', ') AS category
+             FROM "FinancePaymentAllocation" a
+             JOIN "FinanceStudentCharge" ch ON ch."id"=a."chargeId" AND ch."schoolId"=a."schoolId"
+             JOIN "FinanceFeeCategory" fc ON fc."id"=ch."categoryId" AND fc."schoolId"=ch."schoolId"
+            WHERE a."schoolId"=$1
+            GROUP BY a."schoolId",a."paymentId"
+         ), reversal_totals AS (
+           SELECT "schoolId","paymentId",SUM("amount") AS reversed
+             FROM "PaymentReversal"
+            WHERE "schoolId"=$1
+            GROUP BY "schoolId","paymentId"
+         )
+         SELECT 'Payment' AS type,p."createdAt" AS date,s."name" AS party,COALESCE(pc.category,'Fees') AS category,p."method" AS method,COALESCE(p."reference",p."id") AS reference,
+                CASE WHEN COALESCE(rt.reversed,0)>=p."amount" THEN 'reversed' WHEN COALESCE(rt.reversed,0)>0 THEN 'partially reversed' ELSE 'posted' END AS status,
+                GREATEST(0,p."amount"-COALESCE(rt.reversed,0)) AS amount
+           FROM "Payment" p
+           JOIN "Invoice" i ON i."id"=p."invoiceId" AND i."schoolId"=p."schoolId"
+           JOIN "Student" s ON s."id"=i."studentId" AND s."schoolId"=i."schoolId"
+           LEFT JOIN payment_categories pc ON pc."paymentId"=p."id" AND pc."schoolId"=p."schoolId"
+           LEFT JOIN reversal_totals rt ON rt."paymentId"=p."id" AND rt."schoolId"=p."schoolId"
+          WHERE p."schoolId"=$1 AND ($2::timestamp IS NULL OR p."createdAt">=$2) AND ($3::timestamp IS NULL OR p."createdAt"<=$3)
+          ORDER BY p."createdAt"`,
         session.schoolId,from,to,
       );
       const expenses=await tx.$queryRawUnsafe<RawRow[]>(
