@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ArcadeGameAdapter } from "../adapter";
+import { ArcadeActionRejectedError, type ArcadeGameAdapter } from "../adapter";
 
 export const FIXTURE_GAME = "fixture-balance-lab";
 export const FIXTURE_SCHEMA = "fixture.balance.v1";
@@ -81,8 +81,14 @@ export const fixtureArcadeAdapter: ArcadeGameAdapter = {
     const current = stateSchema.parse(state);
     const parsed = action as FixtureAction;
     const values = [...current.values];
-    if (parsed.kind === "place") values[parsed.slot] = parsed.value;
-    else values[parsed.slot] = null;
+    if (parsed.kind === "place") {
+      if (values[parsed.slot] !== null) {
+        throw new ArcadeActionRejectedError("That tray slot is already filled.");
+      }
+      values[parsed.slot] = parsed.value;
+    } else {
+      values[parsed.slot] = null;
+    }
     const next = stateSchema.parse({ values, attempts: current.attempts + 1 });
     const filled = values.filter((value): value is number => value !== null).length;
     const sum = values.reduce<number>((total, value) => total + (value ?? 0), 0);
