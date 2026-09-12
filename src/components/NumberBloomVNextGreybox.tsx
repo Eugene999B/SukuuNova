@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Droplets, RotateCcw, Volume2 } from "lucide-react";
+import { CircleHelp, Droplets, RotateCcw, Volume2 } from "lucide-react";
 import type {
   NumberBloomContainer,
   NumberBloomItemState,
@@ -54,6 +54,12 @@ function slotAddress(element: HTMLElement | null) {
   const slot = Number(element.dataset.slot);
   if (!containerId || !Number.isInteger(slot)) return null;
   return { containerId, slot };
+}
+
+function speak(text: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
 }
 
 export default function NumberBloomVNextGreybox({
@@ -123,10 +129,24 @@ export default function NumberBloomVNextGreybox({
     if (selectedItem) await sendPlacement(selectedItem, containerId, targetSlot);
   };
 
-  const replayInstruction = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(mission.instruction.spoken));
+  const replayInstruction = async () => {
+    speak(mission.instruction.spoken);
+    await send("support", { kind: "replay" });
+  };
+
+  const strategyHelp = async () => {
+    if (mission.mechanic === "compare_patches") {
+      speak("Touch one flower on the left, then one flower on the right. Keep making pairs to see what is left over.");
+      await send("support", { kind: "pair_helper" });
+      return;
+    }
+
+    const placed = state.items.filter((item) => item.containerId !== null).length;
+    const countWords = placed > 0
+      ? Array.from({ length: placed }, (_, index) => index + 1).join(", ")
+      : "Touch each object once as you count.";
+    speak(placed > 0 ? `${countWords}. There are ${placed} here now.` : countWords);
+    await send("support", { kind: "count_along" });
   };
 
   const startPointerDrag = (event: ReactPointerEvent<HTMLElement>, itemId: string) => {
@@ -240,10 +260,18 @@ export default function NumberBloomVNextGreybox({
           <span className="bloom-kicker">NUMBER BLOOM · GREYBOX</span>
           <h1>{mission.title}</h1>
         </div>
-        <button type="button" className="bloom-vnext-replay" onClick={replayInstruction} aria-label="Replay instruction">
-          <Volume2 size={24} aria-hidden="true" />
-          <span aria-hidden="true">▶</span>
-        </button>
+        <div className="bloom-vnext-header-tools">
+          {mission.mechanic !== "free_grow" ? (
+            <button type="button" className="bloom-vnext-support" disabled={disabled || busy} onClick={() => void strategyHelp()} aria-label="Show a counting or pairing strategy">
+              <CircleHelp size={25} aria-hidden="true" />
+              <span aria-hidden="true">☝️</span>
+            </button>
+          ) : null}
+          <button type="button" className="bloom-vnext-replay" disabled={disabled || busy} onClick={() => void replayInstruction()} aria-label="Replay instruction">
+            <Volume2 size={24} aria-hidden="true" />
+            <span aria-hidden="true">▶</span>
+          </button>
+        </div>
       </header>
 
       <main className="bloom-vnext-play">
