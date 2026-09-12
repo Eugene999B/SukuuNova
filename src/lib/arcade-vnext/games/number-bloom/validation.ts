@@ -30,13 +30,36 @@ export function validateNumberBloomMission(
   if (containers.size !== publicMission.containers.length) {
     throw new Error("Number Bloom mission contains duplicate container ids.");
   }
+  if (state.items.length !== publicMission.inventoryCount) {
+    throw new Error("Number Bloom inventory count does not match the constructed garden state.");
+  }
 
   for (const item of state.items) {
+    if (item.kind !== publicMission.objectKind) {
+      throw new Error(`Number Bloom item ${item.id} does not match the mission object family.`);
+    }
     if (item.containerId === null) continue;
     const container = containers.get(item.containerId);
     if (!container) throw new Error(`Number Bloom item ${item.id} references an unknown container.`);
     if (item.slot === null || item.slot >= container.capacity) {
       throw new Error(`Number Bloom item ${item.id} occupies an impossible slot.`);
+    }
+  }
+
+  const watered = new Set<string>();
+  for (const containerId of state.wateredContainers) {
+    if (!containers.has(containerId)) {
+      throw new Error("Number Bloom watering state references an unknown container.");
+    }
+    if (watered.has(containerId)) {
+      throw new Error("Number Bloom watering state contains a duplicate container.");
+    }
+    watered.add(containerId);
+  }
+
+  if (publicMission.mechanic !== "compare_patches") {
+    if (state.pairs.length > 0 || state.relationship !== null) {
+      throw new Error("Number Bloom comparison state is only valid in Compare Patches.");
     }
   }
 
@@ -73,6 +96,10 @@ export function validateNumberBloomMission(
     if (!left || !right || left.id === right.id) {
       throw new Error("Compare Patches requires two distinct authoritative patches.");
     }
+    if (left.side !== "left" || right.side !== "right") {
+      throw new Error("Compare Patches authoritative patches do not match their visible sides.");
+    }
+
     const leftCount = state.items.filter((item) => item.containerId === left.id).length;
     const rightCount = state.items.filter((item) => item.containerId === right.id).length;
     if (leftCount !== publicMission.startingCounts.left || rightCount !== publicMission.startingCounts.right) {
@@ -81,6 +108,18 @@ export function validateNumberBloomMission(
     const expectedRelation = leftCount === rightCount ? "same" : leftCount > rightCount ? "left_more" : "right_more";
     if (privateMission.criterion.relation !== expectedRelation) {
       throw new Error("Compare Patches authoritative relationship contradicts the visible quantities.");
+    }
+
+    const items = new Map(state.items.map((item) => [item.id, item]));
+    for (const pair of state.pairs) {
+      const leftItem = items.get(pair.leftItemId);
+      const rightItem = items.get(pair.rightItemId);
+      if (!leftItem || !rightItem) {
+        throw new Error("Compare Patches pair references an unknown garden object.");
+      }
+      if (leftItem.containerId !== left.id || rightItem.containerId !== right.id) {
+        throw new Error("Compare Patches pair must connect the left patch to the right patch.");
+      }
     }
   }
 
