@@ -179,7 +179,7 @@ END;
 $$;
 CREATE TRIGGER "ClinicStockMovement_append_only" BEFORE UPDATE OR DELETE ON "ClinicStockMovement" FOR EACH ROW EXECUTE FUNCTION sukuunova_reject_clinic_stock_mutation();
 
--- Install the global clinic permission catalogue without granting clinical access to management roles.
+-- Install the global clinic permission catalogue. Role grants are handled by the dedicated RLS-aware backfill migration.
 INSERT INTO "Permission" ("id","key","description") VALUES
   ('perm_clinic_overview_v1','clinic:overview','View high-level school clinic intelligence without clinical notes.'),
   ('perm_clinic_nurses_v1','clinic:nurses_manage','Create and manage school nurse accounts.'),
@@ -188,10 +188,3 @@ INSERT INTO "Permission" ("id","key","description") VALUES
   ('perm_clinic_inventory_v1','clinic:inventory','Manage clinic medication inventory and dispensing.'),
   ('perm_clinic_export_v1','clinic:export','Generate authorised patient clinic documents.')
 ON CONFLICT ("key") DO NOTHING;
-
-INSERT INTO "RolePermission" ("schoolId","roleId","permissionId")
-SELECT r."schoolId", r."id", p."id"
-FROM "Role" r
-JOIN "Permission" p ON p."key" IN ('clinic:overview','clinic:nurses_manage')
-WHERE COALESCE(r."key", '') IN ('owner','administrator','principal') OR r."name" IN ('Owner','Administrator','Principal')
-ON CONFLICT DO NOTHING;
