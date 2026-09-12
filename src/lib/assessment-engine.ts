@@ -35,6 +35,7 @@ const TYPE_ALIASES: Record<string, string> = {
   quiz: "quizzes",
   quizzes: "quizzes",
   project: "project",
+  participation: "participation",
   exam: "exam",
   examination: "exam"
 };
@@ -106,6 +107,13 @@ export function validateAssessmentRules(rules: AssessmentRules) {
   if (!rules.categories.length) {
     throw new AppError("At least one assessment category is required.", 400, "NO_ASSESSMENT_CATEGORIES");
   }
+  if (rules.categories.some((category) => !category.name.trim())) {
+    throw new AppError("Every assessment category must have a name.", 400, "INVALID_ASSESSMENT_CATEGORY");
+  }
+  const normalizedCategories = rules.categories.map((category) => normalizeAssessmentType(category.name));
+  if (new Set(normalizedCategories).size !== normalizedCategories.length) {
+    throw new AppError("Assessment category names must be unique.", 400, "DUPLICATE_ASSESSMENT_CATEGORY");
+  }
   if (rules.categories.some((category) => !Number.isFinite(category.weight) || category.weight < 0 || category.weight > 100)) {
     throw new AppError("Assessment category weights must be between 0% and 100%.", 400, "INVALID_WEIGHT_RANGE");
   }
@@ -116,10 +124,17 @@ export function validateAssessmentRules(rules: AssessmentRules) {
   if (rules.gradingScale?.length) validateGradeScale(rules.gradingScale);
 }
 
-export function categoryWeight(type: string, assessmentWeight: number, rules: AssessmentRules) {
+export function categoryWeight(type: string, _assessmentWeight: number, rules: AssessmentRules) {
   const normalized = normalizeAssessmentType(type);
   const configured = rules.categories.find((category) => normalizeAssessmentType(category.name) === normalized);
-  return configured?.weight ?? assessmentWeight;
+  if (!configured) {
+    throw new AppError(
+      `Assessment category "${type}" is not configured in the school grading policy. Add it in Academic Setup before calculating results.`,
+      409,
+      "ASSESSMENT_CATEGORY_NOT_CONFIGURED"
+    );
+  }
+  return configured.weight;
 }
 
 export function calculateSubjectResult(assessments: AssessmentLike[], rules: AssessmentRules) {
@@ -144,8 +159,7 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
       maxScore,
       rawScore,
       status,
-      percentage: rawScore == null ? null : rawScore / maxScore * 100,
-      fallbackWeight: Number(assessment.weight)
+      percentage: rawScore == null ? null : rawScore / maxScore * 100
     };
   });
 
@@ -166,13 +180,12 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
     rawScore: row.rawScore,
     status: row.status,
     percentage: row.percentage,
-    weight: categoryWeight(row.type, row.fallbackWeight, rules),
+    weight: categoryWeight(row.type, 0, rules),
     contribution: 0
   }));
 
   for (const [type, rows] of buckets) {
-    const configuredWeight = rules.categories.find((category) => normalizeAssessmentType(category.name) === type)?.weight;
-    const weight = configuredWeight ?? rows.reduce((sum, row) => sum + row.fallbackWeight, 0);
+    const weight = categoryWeight(type, 0, rules);
     const scoredPercentages = rows.map((row) => row.percentage);
     const effectivePercentages = rules.missingScorePolicy === "zero"
       ? scoredPercentages.map((percentage) => percentage ?? 0)

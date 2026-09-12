@@ -21,6 +21,7 @@ const TYPE_ALIASES: Record<string, string> = {
   quiz: "quizzes",
   quizzes: "quizzes",
   project: "project",
+  participation: "participation",
   exam: "exam",
   examination: "exam",
 };
@@ -59,7 +60,11 @@ export function previewSubjectTotal(items: PreviewAssessment[], rules: PreviewRu
   let appliedWeight = 0;
   for (const [type, rows] of buckets) {
     const configured = rules.categories.find((c) => normalizeType(c.name) === type)?.weight;
-    const weight = configured ?? rows.reduce((sum, row) => sum + row.weight, 0);
+    // The server rejects categories that are not part of the school's grading
+    // policy. The optimistic client preview must fail closed too rather than
+    // display a plausible-but-wrong total using stale per-assessment weights.
+    if (configured == null) return null;
+    const weight = configured;
     const scored = rows.map((row) => row.percentage);
     const effective =
       rules.missingScorePolicy === "zero"

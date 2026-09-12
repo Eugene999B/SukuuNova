@@ -16,15 +16,69 @@ const rules = {
 };
 
 describe("assessment engine", () => {
-  it("normalizes legacy assessment names", () => {
+  it("normalizes legacy and teacher-work assessment names without collapsing real categories", () => {
     expect(normalizeAssessmentType("CA")).toBe("classwork");
     expect(normalizeAssessmentType("Continuous Assessment")).toBe("classwork");
+    expect(normalizeAssessmentType("Homework")).toBe("homework");
+    expect(normalizeAssessmentType("Exercise")).toBe("exercises");
+    expect(normalizeAssessmentType("Quiz")).toBe("quizzes");
+    expect(normalizeAssessmentType("Project")).toBe("project");
+    expect(normalizeAssessmentType("Participation")).toBe("participation");
     expect(normalizeAssessmentType("Exam")).toBe("exam");
   });
 
   it("uses configured category weights instead of legacy assessment weights", () => {
     expect(categoryWeight("ca", 99, rules)).toBe(20);
+    expect(categoryWeight("homework", 99, rules)).toBe(10);
     expect(categoryWeight("exam", 99, rules)).toBe(40);
+  });
+
+  it("keeps teacher work categories in separate policy buckets instead of collapsing them into CA", () => {
+    const result = calculateSubjectResult([
+      { id: "hw", name: "Homework 1", type: "homework", maxScore: 10, weight: 100, score: 10 },
+      { id: "ex", name: "Exercise 1", type: "exercise", maxScore: 20, weight: 100, score: 20 },
+      { id: "quiz", name: "Quiz 1", type: "quiz", maxScore: 15, weight: 100, score: 15 },
+      { id: "project", name: "Project 1", type: "project", maxScore: 50, weight: 100, score: 50 },
+      { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 100, score: 100 }
+    ], rules);
+    expect(result.complete).toBe(true);
+    expect(result.total).toBe(80);
+    expect(result.includedWeight).toBe(80);
+    expect(result.details.map((row) => [row.type, row.weight])).toEqual([
+      ["homework", 10],
+      ["exercises", 10],
+      ["quizzes", 10],
+      ["project", 10],
+      ["exam", 40]
+    ]);
+  });
+
+  it("refuses an unconfigured category instead of silently trusting the assessment row weight", () => {
+    expect(() => calculateSubjectResult([
+      { id: "p", name: "Participation", type: "participation", maxScore: 10, weight: 100, score: 10 }
+    ], rules)).toThrow(/not configured/i);
+  });
+
+  it("supports participation when the school explicitly includes it in the grading policy", () => {
+    const participationRules = {
+      ...rules,
+      categories: [{ name: "Participation", weight: 100 }]
+    };
+    const result = calculateSubjectResult([
+      { id: "p", name: "Participation", type: "participation", maxScore: 10, weight: 1, score: 9 }
+    ], participationRules);
+    expect(result.total).toBe(90);
+    expect(result.includedWeight).toBe(100);
+  });
+
+  it("rejects duplicate category aliases so one policy cannot contain CA and Classwork twice", () => {
+    expect(() => validateAssessmentRules({
+      ...rules,
+      categories: [
+        { name: "CA", weight: 50 },
+        { name: "Classwork", weight: 50 }
+      ]
+    })).toThrow(/unique/i);
   });
 
   it("applies each configured category weight once after averaging multiple assessments", () => {

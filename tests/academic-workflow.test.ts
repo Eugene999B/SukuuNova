@@ -58,7 +58,7 @@ describe("connected teacher academic workflow", () => {
     const again = await withTenant(f.schoolId, tx => saveTeacherWorkMarks(tx, { schoolId: f.schoolId, teacherId: f.ownerId, workId: first.id, marks }));
     expect(again.assessmentId).toBe(saved[0].assessmentId);
     const assessments = await withTenant(f.schoolId, tx => tx.assessment.findMany({ where: { id: { in: saved.map(item => item.assessmentId) } } }));
-    expect(assessments.map(item => item.type)).toEqual(["ca", "ca"]);
+    expect(assessments.map(item => item.type)).toEqual(["homework", "homework"]);
   });
 
   it("publishes, receives a child answer and records a complete teacher review without pre-saving marks", async () => {

@@ -77,6 +77,17 @@ describe("homework academic delivery bridge", () => {
     expect(hidden.works).toHaveLength(0);
 
     await withTenant(fixture.schoolId, (tx) => publishHomeworkAcademicDelivery(tx, fixture.schoolId, fixture.ownerId, workId!));
+    const linked = await withTenant(fixture.schoolId, (tx) => tx.$queryRaw<Array<{ type: string; weight: unknown }>>`
+      SELECT a."type",a."weight"
+      FROM "TeacherAcademicWork" w
+      JOIN "Assessment" a ON a."id"=w."assessmentId" AND a."schoolId"=w."schoolId"
+      WHERE w."schoolId"=${fixture.schoolId} AND w."id"=${workId}
+      LIMIT 1
+    `);
+    expect(linked).toHaveLength(1);
+    expect(linked[0].type).toBe("homework");
+    expect(Number(linked[0].weight)).toBe(10);
+
     const visible = await withTenant(fixture.schoolId, (tx) => getGuardianAcademicOverview(tx, {
       schoolId: fixture.schoolId,
       guardianId: fixture.guardianId,
