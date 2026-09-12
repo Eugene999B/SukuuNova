@@ -8,6 +8,7 @@ import {
   type FaceProvider
 } from "./face-provider";
 import { recordAttendance } from "./attendance-service";
+import { matchFaceDeviceIdentityAttendance } from "./device-identity-service";
 
 type FaceTarget =
   | { studentId: string; staffId?: never; consentByGuardianId: string }
@@ -91,9 +92,40 @@ export async function verifyExpectedStaffFace(
 
 export async function matchFaceAttendance(
   tx: TenantDb,
-  input: { schoolId: string; actorId?: string; image: string; deviceId?: string; type: "in" | "out"; deviceAuthenticated?: boolean; periodId?: string; timestamp?: Date },
+  input: {
+    schoolId: string;
+    actorId?: string;
+    image?: string;
+    externalId?: string;
+    confidence?: number;
+    deviceId?: string;
+    type: "in" | "out";
+    deviceAuthenticated?: boolean;
+    periodId?: string;
+    timestamp?: Date;
+  },
   provider: FaceProvider = awsFaceProvider
 ) {
+  const externalId = input.externalId?.trim();
+  if (externalId) {
+    if (!input.deviceAuthenticated || !input.deviceId) {
+      throw new AppError("A device-matched face requires authenticated device context.", 401, "DEVICE_CONTEXT_REQUIRED");
+    }
+    return matchFaceDeviceIdentityAttendance(tx, {
+      schoolId: input.schoolId,
+      deviceId: input.deviceId,
+      externalId,
+      confidence: input.confidence,
+      type: input.type,
+      periodId: input.periodId,
+      timestamp: input.timestamp,
+    });
+  }
+
+  if (!input.image?.trim()) {
+    throw new AppError("Face attendance requires either image data or a device-matched externalId.", 400, "INVALID_INPUT");
+  }
+
   if (!input.deviceAuthenticated) {
     if (!input.actorId) throw new AppError("A staff actor is required for face attendance.", 401, "ACTOR_REQUIRED");
     await requirePermission(tx, input.actorId, "attendance:record");

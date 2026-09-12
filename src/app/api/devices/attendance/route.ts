@@ -155,10 +155,14 @@ export async function POST(request: Request) {
 
       let recorded: Awaited<ReturnType<typeof matchFaceAttendance>>;
       if (input.kind === "face") {
-        if (!input.image) throw new AppError("Face device events require image data.", 400, "INVALID_INPUT");
+        if (!input.image && !input.externalId) {
+          throw new AppError("Face device events require either image data or externalId.", 400, "INVALID_INPUT");
+        }
         recorded = await matchFaceAttendance(tx, {
           schoolId: directory.schoolId,
           image: input.image,
+          externalId: input.externalId,
+          confidence: input.confidence,
           deviceId: device.id,
           type: input.type,
           deviceAuthenticated: true,
