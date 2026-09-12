@@ -46,7 +46,7 @@ describe("mobile responsive layout contract", () => {
 
   it("uses mobile family cards instead of forcing guardians through a wide table", () => {
     expect(guardianDirectory).toContain('className="guardian-directory-cards"');
-    expect(guardianDirectory).toContain('className="guardian-directory-table"');
+    expect(guardianDirectory).toContain('className="product-table-wrap guardian-directory-table"');
     expect(hardening).toContain(".guardian-directory-table {\n    display: none !important;");
     expect(hardening).toContain(".guardian-directory-cards {\n    display: grid;");
   });
