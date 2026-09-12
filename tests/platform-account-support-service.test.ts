@@ -56,15 +56,16 @@ describe("platform account support service", () => {
     mocks.deliverResetToken.mockResolvedValue(undefined);
   });
 
-  it("checks both school and guardian account lock scopes without a shared school bucket", async () => {
+  it("checks both school and guardian lock scopes against one canonical account bucket", async () => {
     await getSchoolUserSupportState("school-1", "user-1");
-    expect(mocks.accountLoginLockState).toHaveBeenCalledWith("school-login:eug123", ["ama@gmail.com", "0244000000"]);
-    expect(mocks.accountLoginLockState).toHaveBeenCalledWith("guardian-login:eug123", ["ama@gmail.com", "0244000000"]);
+    expect(mocks.accountLoginLockState).toHaveBeenCalledWith("school-login:eug123", ["user:user-1"]);
+    expect(mocks.accountLoginLockState).toHaveBeenCalledWith("guardian-login:eug123", ["user:user-1"]);
   });
 
-  it("lets an authorized support action clear only the selected user's login identities", async () => {
+  it("lets an authorized support action clear only the selected user's canonical login bucket", async () => {
     await clearSchoolUserLoginLock("school-1", "user-1", { adminId: "admin-1", adminName: "Platform Admin" }, "Verified user identity");
-    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledTimes(2);
+    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("school-login:eug123", ["user:user-1"]);
+    expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("guardian-login:eug123", ["user:user-1"]);
     expect(mocks.appendPlatformAudit).toHaveBeenCalled();
   });
 
