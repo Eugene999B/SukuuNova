@@ -14,6 +14,14 @@ export type ResetDeliveryEnvelope = {
   schoolCode?: string;
 };
 
+export type SchoolPasswordResetResult = {
+  schoolCode: string;
+  userId: string;
+  email: string | null;
+  phone: string | null;
+  universe: "school" | "guardian";
+};
+
 function tokenHash(token: string): string { return createHash("sha256").update(token).digest("hex"); }
 function newToken(): string { return randomBytes(32).toString("base64url"); }
 function normalizeIdentifier(value: string): string { const trimmed = value.trim(); return trimmed.includes("@") ? trimmed.toLowerCase() : trimmed; }
@@ -51,12 +59,13 @@ export async function issueSchoolPasswordReset(input: { uniqueCode: string; iden
   });
 }
 
-export async function confirmSchoolPasswordReset(input: { uniqueCode: string; token: string; newPassword: string; universe?: "school" | "guardian" }): Promise<void> {
+export async function confirmSchoolPasswordReset(input: { uniqueCode: string; token: string; newPassword: string; universe?: "school" | "guardian" }): Promise<SchoolPasswordResetResult> {
   validateNewPassword(input.newPassword);
   const universe = input.universe ?? "school";
-  const directory = await db.schoolLoginDirectory.findUnique({ where: { uniqueCode: input.uniqueCode.trim().toLowerCase() } });
+  const schoolCode = input.uniqueCode.trim().toLowerCase();
+  const directory = await db.schoolLoginDirectory.findUnique({ where: { uniqueCode: schoolCode } });
   if (!directory || directory.status !== "active") throw new UnauthorizedError("Invalid or expired reset token.");
-  await withTenant(directory.schoolId, async (tx) => {
+  return withTenant(directory.schoolId, async (tx) => {
     const now = new Date();
     const claimed = await tx.$queryRaw<Array<{ id: string; userId: string }>>`
       UPDATE "SchoolPasswordResetToken"
@@ -81,9 +90,22 @@ export async function confirmSchoolPasswordReset(input: { uniqueCode: string; to
     const reset = claimed[0];
     if (!reset) throw new UnauthorizedError("Invalid or expired reset token.");
     const passwordHash = await hash(input.newPassword, 12);
-    await tx.user.update({ where: { id: reset.userId }, data: { passwordHash } });
+    const user = await tx.user.update({
+      where: { id: reset.userId },
+      data: { passwordHash, needsPasswordChange: false },
+      select: { id: true, email: true, phone: true },
+    });
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "SchoolUserSessionEpoch" ("schoolId","userId","version","updatedAt")
+       VALUES ($1,$2,1,CURRENT_TIMESTAMP)
+       ON CONFLICT ("schoolId","userId") DO UPDATE
+       SET "version"="SchoolUserSessionEpoch"."version"+1,"updatedAt"=CURRENT_TIMESTAMP`,
+      directory.schoolId,
+      reset.userId,
+    );
     await tx.schoolPasswordResetToken.updateMany({ where: { schoolId: directory.schoolId, userId: reset.userId, usedAt: null }, data: { usedAt: now } });
-    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: reset.userId, action: "password_reset.completed", entityType: "User", entityId: reset.userId, after: { completedAt: now.toISOString(), universe } } });
+    await tx.auditLogSchool.create({ data: { schoolId: directory.schoolId, actorId: reset.userId, action: "password_reset.completed", entityType: "User", entityId: reset.userId, after: { completedAt: now.toISOString(), universe, sessionsRevoked: true } } });
+    return { schoolCode, userId: user.id, email: user.email, phone: user.phone, universe };
   });
 }
 
