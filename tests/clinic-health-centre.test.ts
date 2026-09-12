@@ -1,8 +1,12 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveSchoolWorkspace } from "../src/lib/authorization";
 import { clinicProfileAllowsCare } from "../src/lib/clinic-clinical-access";
 import { DEFAULT_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } from "../src/lib/default-rbac";
 import { permissionRisk } from "../src/lib/permission-catalog";
+
+const root = path.resolve(process.cwd());
 
 describe("Clinic health centre access model", () => {
   it("routes a pure School Nurse account into the clinic workspace", () => {
@@ -43,5 +47,16 @@ describe("Clinic health centre access model", () => {
     expect(permissionRisk("clinic:overview")).toBe("standard");
     expect(permissionRisk("clinic:records")).toBe("sensitive");
     expect(permissionRisk("clinic:export")).toBe("sensitive");
+  });
+
+  it("keeps nurse portrait capture mount-safe and cross-device friendly", () => {
+    const source = fs.readFileSync(path.join(root, "src/components/ClinicManagementWorkspace.tsx"), "utf8");
+    expect(source).toContain("autoPlay muted playsInline");
+    expect(source).toContain('video.addEventListener("loadedmetadata"');
+    expect(source).toContain('video.addEventListener("canplay"');
+    expect(source).toContain("video.videoWidth <= 0");
+    expect(source).toContain("getUserMedia({ video: true, audio: false })");
+    expect(source).toContain("disabled={!cameraReady}");
+    expect(source).not.toContain("requestAnimationFrame");
   });
 });

@@ -189,38 +189,122 @@ function AddNurseModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [photoUrl, setPhotoUrl] = useState("");
   const [verificationToken, setVerificationToken] = useState("");
   const [photoMessage, setPhotoMessage] = useState("");
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  function releaseStream() {
+    const video = videoRef.current;
+    if (video) {
+      video.pause();
+      video.srcObject = null;
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }
+
   async function startCamera() {
     setPhotoMessage("");
+    setCameraReady(false);
+    releaseStream();
+
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.getUserMedia) {
+      setPhotoMessage("Camera access is not available in this browser. Open SukuuNova in an up-to-date browser over HTTPS and try again.");
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 640 } }, audio: false });
+      let stream: MediaStream;
+      try {
+        stream = await mediaDevices.getUserMedia({ video: { facingMode: { ideal: "user" }, width: { ideal: 640 }, height: { ideal: 640 } }, audio: false });
+      } catch (preferredError) {
+        const errorName = preferredError instanceof DOMException ? preferredError.name : "";
+        if (errorName === "NotAllowedError" || errorName === "SecurityError") throw preferredError;
+        stream = await mediaDevices.getUserMedia({ video: true, audio: false });
+      }
       streamRef.current = stream;
       setCameraOpen(true);
-      requestAnimationFrame(() => { if (videoRef.current) { videoRef.current.srcObject = stream; void videoRef.current.play(); } });
-    } catch { setPhotoMessage("Camera could not be opened. You can create the nurse now and add a photo later."); }
+      setPhotoMessage("Starting camera preview…");
+    } catch (cameraError) {
+      const errorName = cameraError instanceof DOMException ? cameraError.name : "";
+      if (errorName === "NotAllowedError" || errorName === "SecurityError") {
+        setPhotoMessage("Camera permission is blocked. Allow camera access for this site in your browser settings, then try again.");
+      } else {
+        setPhotoMessage("Camera could not be opened. Check that another app is not using it, then try again.");
+      }
+    }
   }
 
   function stopCamera() {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+    releaseStream();
+    setCameraReady(false);
     setCameraOpen(false);
   }
 
+  useEffect(() => {
+    if (!cameraOpen) return;
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+
+    let cancelled = false;
+    const markReady = () => {
+      if (cancelled) return;
+      if (video.videoWidth > 0 && video.videoHeight > 0 && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        setCameraReady(true);
+        setPhotoMessage("");
+      }
+    };
+    const startPlayback = async () => {
+      try {
+        await video.play();
+        markReady();
+      } catch {
+        if (!cancelled) setPhotoMessage("The camera opened but the preview could not start. Close the camera and try again.");
+      }
+    };
+
+    video.muted = true;
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("webkit-playsinline", "true");
+    video.srcObject = stream;
+    video.addEventListener("loadedmetadata", markReady);
+    video.addEventListener("canplay", markReady);
+    void startPlayback();
+
+    return () => {
+      cancelled = true;
+      video.removeEventListener("loadedmetadata", markReady);
+      video.removeEventListener("canplay", markReady);
+      if (video.srcObject === stream) {
+        video.pause();
+        video.srcObject = null;
+      }
+    };
+  }, [cameraOpen]);
+
   async function capturePhoto() {
-    if (!videoRef.current) return;
+    const video = videoRef.current;
+    if (!video || !cameraReady || video.videoWidth <= 0 || video.videoHeight <= 0 || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      setPhotoMessage("Camera is still starting. Wait until the live preview appears, then capture again.");
+      return;
+    }
     const canvas = document.createElement("canvas");
     const size = 480;
     canvas.width = size; canvas.height = size;
-    const video = videoRef.current;
     const sourceSize = Math.min(video.videoWidth, video.videoHeight);
     const sx = Math.max(0, (video.videoWidth - sourceSize) / 2);
     const sy = Math.max(0, (video.videoHeight - sourceSize) / 2);
-    canvas.getContext("2d")?.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setPhotoMessage("This browser could not prepare the camera image. Try another browser or device.");
+      return;
+    }
+    context.drawImage(video, sx, sy, sourceSize, sourceSize, 0, 0, size, size);
     const image = canvas.toDataURL("image/jpeg", 0.76);
     setPhotoMessage("Checking the portrait…");
     try {
@@ -234,7 +318,10 @@ function AddNurseModal({ onClose, onCreated }: { onClose: () => void; onCreated:
     } catch (captureError) { setPhotoMessage(captureError instanceof Error ? captureError.message : "Portrait could not be verified."); }
   }
 
-  useEffect(() => () => streamRef.current?.getTracks().forEach((track) => track.stop()), []);
+  useEffect(() => () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -263,9 +350,9 @@ function AddNurseModal({ onClose, onCreated }: { onClose: () => void; onCreated:
         <div className="grid gap-5 md:grid-cols-[190px_1fr]">
           <div>
             <div className="aspect-square overflow-hidden rounded-3xl border-2 border-dashed border-emerald-200 bg-emerald-50">
-              {photoUrl ? <img src={photoUrl} alt="Captured nurse portrait" className="h-full w-full object-cover" /> : cameraOpen ? <video ref={videoRef} muted playsInline className="h-full w-full object-cover" /> : <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-emerald-800"><Camera size={30} /><span className="text-xs font-bold">Nurse portrait</span></div>}
+              {photoUrl ? <img src={photoUrl} alt="Captured nurse portrait" className="h-full w-full object-cover" /> : cameraOpen ? <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" /> : <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-emerald-800"><Camera size={30} /><span className="text-xs font-bold">Nurse portrait</span></div>}
             </div>
-            <div className="mt-2 flex gap-2">{cameraOpen ? <><button type="button" onClick={() => void capturePhoto()} className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white">Capture</button><button type="button" onClick={stopCamera} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold">Cancel</button></> : <button type="button" onClick={() => void startCamera()} className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{photoUrl ? "Retake photo" : "Open camera"}</button>}</div>
+            <div className="mt-2 flex gap-2">{cameraOpen ? <><button type="button" disabled={!cameraReady} onClick={() => void capturePhoto()} className="flex-1 rounded-xl bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{cameraReady ? "Capture" : "Starting…"}</button><button type="button" onClick={stopCamera} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold">Cancel</button></> : <button type="button" onClick={() => void startCamera()} className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800">{photoUrl ? "Retake photo" : "Open camera"}</button>}</div>
             {photoMessage ? <p className="mt-2 text-[11px] leading-4 text-slate-500">{photoMessage}</p> : null}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
