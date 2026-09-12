@@ -15,6 +15,7 @@ import { createSignalShieldQuestions } from "./signal-shield-content";
 import { createEcoGridQuestions } from "./ecogrid-content";
 import { createBioQuestQuestions } from "./bioquest-content";
 import { createChronicleVaultQuestions } from "./chronicle-vault-content";
+import { createCircuitForgeQuestions } from "./circuit-forge-content";
 import type { ArcadeAgeBand } from "./arcade-catalog";
 
 type Context = { schoolId: string; guardianId: string; userId: string };
@@ -37,6 +38,7 @@ function generate(game: string, difficulty: number, length: number, weakKeys: re
   if (game === "environment-guardian") return createEcoGridQuestions(difficulty, length);
   if (game === "body-explorer") return createBioQuestQuestions(difficulty, length);
   if (game === "history-timeline") return createChronicleVaultQuestions(difficulty, length);
+  if (game === "circuit-logic") return createCircuitForgeQuestions(difficulty, length);
   if (canGenerateArcadeContent(game)) return createArcadeGameQuestions(game, difficulty, length);
   if (canGenerateArcadeInteractionContent(game)) return createArcadeInteractionQuestions(game, difficulty, length);
   if (canGenerateArcadeResponseContent(game)) return createArcadeResponseQuestions(game, difficulty, length);
@@ -100,7 +102,7 @@ export async function startVariedArcadeRound(tx: TenantDb, context: Context, inp
     uniqueConceptCount: varied.uniqueConceptCount,
     originalSuggestedDifficulty: round.difficulty,
     ageAdjustedDifficulty: learningPlan.targetDifficulty,
-    presentation: round.game === "keyboard-ninja" ? "turbotype_v1" : round.game === "comprehension-quest" ? "reading_quest_v1" : round.game === "coding-sequence" ? "codebots_v1" : round.game === "ghana-map-master" ? "geoquest_v1" : round.game === "money-math-market" ? "cedi_city_market_v1" : round.game === "cyber-safety" ? "signal_shield_v1" : round.game === "environment-guardian" ? "ecogrid_ghana_v1" : round.game === "body-explorer" ? "bioquest_human_systems_v1" : round.game === "history-timeline" ? "chronicle_vault_v1" : "adaptive_director_v1",
+    presentation: round.game === "keyboard-ninja" ? "turbotype_v1" : round.game === "comprehension-quest" ? "reading_quest_v1" : round.game === "coding-sequence" ? "codebots_v1" : round.game === "ghana-map-master" ? "geoquest_v1" : round.game === "money-math-market" ? "cedi_city_market_v1" : round.game === "cyber-safety" ? "signal_shield_v1" : round.game === "environment-guardian" ? "ecogrid_ghana_v1" : round.game === "body-explorer" ? "bioquest_human_systems_v1" : round.game === "history-timeline" ? "chronicle_vault_v1" : round.game === "circuit-logic" ? "circuit_forge_v1" : "adaptive_director_v1",
   };
 
   await tx.$executeRaw`
