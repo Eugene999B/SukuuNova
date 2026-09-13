@@ -177,7 +177,7 @@ export function buildLearnerRisk(rows: RiskScoreRow[], limit = 8): LearnerRisk[]
     else if (average != null && average < 75) { riskScore += 18; reasons.push(`average is ${average}%`); }
     if (item.absent > 0) { riskScore += Math.min(30, item.absent * 8); reasons.push(`${item.absent} missed assessment${item.absent === 1 ? "" : "s"}`); }
     riskScore = clamp(riskScore);
-    const severity = riskScore >= 70 ? "high" : riskScore >= 40 ? "medium" : "low";
+    const severity: LearnerRisk["severity"] = riskScore >= 70 ? "high" : riskScore >= 40 ? "medium" : "low";
     return {
       studentId,
       studentName: item.name,
