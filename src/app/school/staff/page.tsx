@@ -9,11 +9,14 @@ import { isSchoolStaffAccount, isTeachingRoleKey, roleKeyForName } from "@/lib/a
 import { StaffCreateDialog } from "./StaffCreateDialog";
 import "./staff-workspace.css";
 import "./staff-simple.css";
+import "./staff-teaching-builder.css";
+
+type OfferingRow = { classId: string; subjectId: string };
 
 export default async function StaffPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
-    const [school, allUsers, classes, subjects, canManageCards] = await Promise.all([
+    const [school, allUsers, classes, subjects, offeringRows, canManageCards] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.user.findMany({
         where: { status: { in: ["active", "pending", "suspended"] } },
@@ -27,10 +30,24 @@ export default async function StaffPage() {
       }),
       tx.class.findMany({ orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true } }),
       tx.subject.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      tx.$queryRaw<OfferingRow[]>`
+        SELECT "classId", "subjectId"
+        FROM "ClassSubjectOffering"
+        WHERE "schoolId" = ${session.schoolId}
+        ORDER BY "classId", "subjectId"
+      `,
       hasPermission(tx, session.userId, "identity_cards:manage").catch(() => false),
     ]);
     const users = allUsers.filter((user) => isSchoolStaffAccount(user.userRoles.map(({ role }) => role)));
-    return { school, users, classes, subjects, canManageCards };
+    const subjectById = new Map(subjects.map((subject) => [subject.id, subject]));
+    const classOptions = classes.map((schoolClass) => ({
+      ...schoolClass,
+      subjects: offeringRows
+        .filter((offering) => offering.classId === schoolClass.id)
+        .map((offering) => subjectById.get(offering.subjectId))
+        .filter((subject): subject is { id: string; name: string } => Boolean(subject)),
+    }));
+    return { school, users, classes: classOptions, subjects, canManageCards };
   });
 
   const teachers = data.users.filter((user) => user.userRoles.some(({ role }) => isTeachingRoleKey(role.key?.trim() || roleKeyForName(role.name))));

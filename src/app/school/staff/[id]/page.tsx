@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { IdentityCardPreview } from "@/components/IdentityCardPreview";
 import { DossierExportActions } from "@/components/product/DossierExportActions";
 import { StaffPortraitEditor } from "@/components/staff/StaffPortraitEditor";
+import { StaffTeachingManagement } from "@/components/staff/StaffTeachingManagement";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/rbac";
@@ -13,6 +14,8 @@ import { isSchoolStaffAccount } from "@/lib/authorization";
 import { listIdentityCards } from "@/lib/identity-card-service";
 import { identityCardCompactVerificationPath } from "@/lib/identity-card-compact-verification";
 import "./staff-profile.css";
+
+type OfferingRow = { classId: string; subjectId: string; subjectName: string };
 
 function displayDate(value: Date) {
   return new Intl.DateTimeFormat("en-GH", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Accra" }).format(value);
@@ -27,7 +30,7 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
   const { id: staffId } = await params;
   const data = await withTenant(session.schoolId, async (tx) => {
     await requirePermission(tx, session.userId, "users:read");
-    const [school, staff, portrait, canManageCards, canEditStaff, canExportStaff, canGenerateReports] = await Promise.all([
+    const [school, staff, portrait, canManageCards, canEditStaff, canExportStaff, canGenerateReports, classes, offeringRows] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } }),
       tx.user.findFirst({
         where: { id: staffId, schoolId: session.schoolId },
@@ -35,7 +38,7 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
           id: true, name: true, email: true, phone: true, status: true, createdAt: true,
           userRoles: { select: { role: { select: { name: true, key: true } } } },
           classTeacherFor: { select: { id: true, name: true, level: true } },
-          subjectAssignments: { select: { subject: { select: { name: true } }, class: { select: { name: true, level: true } } } },
+          subjectAssignments: { select: { subject: { select: { id: true, name: true } }, class: { select: { id: true, name: true, level: true } } } },
           staffAttendance: { orderBy: { timestamp: "desc" }, take: 8, select: { type: true, attendanceDate: true, timestamp: true, method: true, isLate: true } },
         },
       }),
@@ -44,6 +47,14 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
       hasPermission(tx, session.userId, "users:write").catch(() => false),
       hasPermission(tx, session.userId, "exports:staff").catch(() => false),
       hasPermission(tx, session.userId, "reports:generate").catch(() => false),
+      tx.class.findMany({ where: { schoolId: session.schoolId }, orderBy: [{ level: "asc" }, { name: "asc" }], select: { id: true, name: true, level: true } }),
+      tx.$queryRaw<OfferingRow[]>`
+        SELECT o."classId", o."subjectId", s."name" AS "subjectName"
+        FROM "ClassSubjectOffering" o
+        INNER JOIN "Subject" s ON s."id" = o."subjectId" AND s."schoolId" = o."schoolId"
+        WHERE o."schoolId" = ${session.schoolId}
+        ORDER BY o."classId", s."name"
+      `,
     ]);
     if (!school || !staff) return null;
     if (!isSchoolStaffAccount(staff.userRoles.map(({ role }) => role))) return null;
@@ -54,26 +65,17 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
       tx.attendanceEvent.count({ where: { schoolId: session.schoolId, staffId, type: "in" } }),
     ]);
     const currentCard = cards.find((card) => card.personType === "staff" && card.staffId === staff.id && card.status === "active" && !card.isExpired) ?? null;
-    return {
-      school,
-      staff,
-      photoUrl: portrait[0]?.photoUrl ?? null,
-      currentCard,
-      canManageCards,
-      canEditStaff,
-      canExportDossier: canExportStaff && canGenerateReports,
-      attendanceTotal,
-      attendanceLate,
-      attendanceIn,
-    };
+    const classOptions = classes.map((schoolClass) => ({
+      ...schoolClass,
+      subjects: offeringRows.filter((row) => row.classId === schoolClass.id).map((row) => ({ id: row.subjectId, name: row.subjectName })),
+    }));
+    return { school, staff, photoUrl: portrait[0]?.photoUrl ?? null, currentCard, canManageCards, canEditStaff, canExportDossier: canExportStaff && canGenerateReports, attendanceTotal, attendanceLate, attendanceIn, classOptions };
   });
   if (!data) notFound();
 
   const roles = data.staff.userRoles.map((item) => item.role.name);
   const distinctTeachingClasses = new Set(data.staff.subjectAssignments.map((item) => item.class.name)).size;
-  const verifyHref = data.currentCard
-    ? identityCardCompactVerificationPath(data.school.uniqueCode, data.currentCard)
-    : null;
+  const verifyHref = data.currentCard ? identityCardCompactVerificationPath(data.school.uniqueCode, data.currentCard) : null;
 
   return <AppShell universe="school" title={data.staff.name} subtitle="Staff profile, teaching scope, attendance intelligence and school identity." active="Staff & Teachers" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
     <div className="staff-profile-page">
@@ -107,8 +109,21 @@ export default async function StaffProfilePage({ params }: { params: Promise<{ i
       </div>
 
       <section className="app-card app-panel staff-profile-intelligence">
-        <div className="app-card-head"><div><span className="app-eyebrow">WORKLOAD</span><h2>Teaching responsibility</h2><p>Configured class and subject responsibility. SukuuNova does not rank staff from learner marks.</p></div></div>
-        {data.staff.subjectAssignments.length ? <div className="staff-profile-table-wrap"><table><thead><tr><th>Class</th><th>Level</th><th>Subject</th></tr></thead><tbody>{data.staff.subjectAssignments.map((item, index)=><tr key={`${item.class.name}-${item.subject.name}-${index}`}><td>{item.class.name}</td><td>{item.class.level ?? "-"}</td><td>{item.subject.name}</td></tr>)}</tbody></table></div> : <div className="staff-profile-empty compact"><UsersRound size={18}/><strong>No teaching assignments.</strong><span>This may be expected for non-teaching staff.</span></div>}
+        <div className="app-card-head"><div><span className="app-eyebrow">WORKLOAD & ACCESS</span><h2>Teaching responsibility and roles</h2><p>Change class-subject responsibility and permitted account roles without recreating this staff member.</p></div></div>
+        <StaffTeachingManagement
+          staffId={data.staff.id}
+          staffName={data.staff.name}
+          status={data.staff.status}
+          classes={data.classOptions}
+          initialAssignments={data.staff.subjectAssignments.map((item) => ({ classId: item.class.id, subjectId: item.subject.id }))}
+          initialRoles={roles}
+          canEditAssignments={data.canEditStaff}
+        />
+      </section>
+
+      <section className="app-card app-panel staff-profile-intelligence">
+        <div className="app-card-head"><div><span className="app-eyebrow">CURRENT LOAD</span><h2>Teaching responsibility summary</h2><p>Configured class and subject responsibility. SukuuNova does not rank staff from learner marks.</p></div></div>
+        {data.staff.subjectAssignments.length ? <div className="staff-profile-table-wrap"><table><thead><tr><th>Class</th><th>Level</th><th>Subject</th></tr></thead><tbody>{data.staff.subjectAssignments.map((item, index)=><tr key={`${item.class.id}-${item.subject.id}-${index}`}><td>{item.class.name}</td><td>{item.class.level ?? "-"}</td><td>{item.subject.name}</td></tr>)}</tbody></table></div> : <div className="staff-profile-empty compact"><UsersRound size={18}/><strong>No teaching assignments.</strong><span>This may be expected for non-teaching staff.</span></div>}
       </section>
 
       <section className="app-card app-panel staff-profile-intelligence">
