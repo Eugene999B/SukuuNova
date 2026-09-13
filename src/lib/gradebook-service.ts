@@ -19,18 +19,13 @@ async function assertScoreMutable(tx: TenantDb, schoolId: string, studentId: str
   if (report && (report.status === "approved" || report.status === "sent")) throw new AppError("This report card is finalized. Scores cannot be changed without reopening it.", 409, "REPORT_FINALIZED");
 }
 
-function canTeach(assignment: { teacherId: string } | null, classTeacher: { id: string } | null): boolean { return !!assignment || !!classTeacher; }
-
 export async function createAssessment(tx: TenantDb, input: { schoolId: string; actorId: string; termId: string; classId: string; subjectId: string; name: string; type: string; weight: number; maxScore: number; }) {
   const canWriteAll = await hasPermission(tx, input.actorId, "scores:write:all");
   if (!canWriteAll && !(await hasPermission(tx, input.actorId, "scores:write:assigned"))) throw new ForbiddenError("Assessment creation is not permitted.");
   await lockTerm(tx, input.schoolId, input.termId);
   if (!canWriteAll) {
-    const [assignment, classTeacher] = await Promise.all([
-      tx.classSubjectTeacher.findFirst({ where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId }, select: { teacherId: true } }),
-      tx.class.findFirst({ where: { id: input.classId, schoolId: input.schoolId, classTeacherId: input.actorId }, select: { id: true } })
-    ]);
-    if (!canTeach(assignment, classTeacher)) throw new ForbiddenError("Teachers may create assessments only for classes and subjects they teach (including form classes).");
+    const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId: input.schoolId, classId: input.classId, subjectId: input.subjectId, teacherId: input.actorId }, select: { teacherId: true } });
+    if (!assignment) throw new ForbiddenError("Teachers may create assessments only for classes and subjects they are assigned to teach.");
   }
   if (!input.name.trim()) throw new AppError("Assessment name is required.", 400, "INVALID_ASSESSMENT");
   if (!Number.isFinite(input.weight) || input.weight <= 0 || input.weight > 100 || !Number.isFinite(input.maxScore) || input.maxScore <= 0) throw new AppError("Assessment weight and maximum score must be valid positive values.", 400, "INVALID_ASSESSMENT");
@@ -58,8 +53,7 @@ export async function enterScore(tx: TenantDb, input: { schoolId: string; actorI
   if (!canWriteAll && !canWriteAssigned) throw new ForbiddenError("Score entry is not permitted.");
   if (!canWriteAll) {
     const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId: input.schoolId, classId: assessment.classId, subjectId: assessment.subjectId, teacherId: input.actorId }, select: { teacherId: true } });
-    const classTeacher = await tx.class.findFirst({ where: { id: assessment.classId, schoolId: input.schoolId, classTeacherId: input.actorId }, select: { id: true } });
-    if (!assignment && !classTeacher) throw new ForbiddenError("Teachers may enter scores only for assigned classes and subjects.");
+    if (!assignment) throw new ForbiddenError("Teachers may enter scores only for classes and subjects they are assigned to teach.");
   }
   await lockTerm(tx, input.schoolId, assessment.termId);
   await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
@@ -83,8 +77,7 @@ export async function clearScore(tx: TenantDb, input: { schoolId: string; actorI
     const canWriteAssigned = await hasPermission(tx, input.actorId, "scores:write:assigned");
     if (!canWriteAssigned) throw new ForbiddenError("Score entry is not permitted.");
     const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId: input.schoolId, classId: assessment.classId, subjectId: assessment.subjectId, teacherId: input.actorId }, select: { teacherId: true } });
-    const classTeacher = await tx.class.findFirst({ where: { id: assessment.classId, schoolId: input.schoolId, classTeacherId: input.actorId }, select: { id: true } });
-    if (!assignment && !classTeacher) throw new ForbiddenError("Teachers may clear scores only for assigned classes and subjects.");
+    if (!assignment) throw new ForbiddenError("Teachers may clear scores only for classes and subjects they are assigned to teach.");
   }
   await lockTerm(tx, input.schoolId, assessment.termId);
   await assertScoreMutable(tx, input.schoolId, input.studentId, assessment.termId);
