@@ -102,6 +102,17 @@ export async function getTermWeeks(tx: TenantDb, schoolId: string, termId: strin
   );
 }
 
+export async function getTeachingWeekForDate(tx: TenantDb, schoolId: string, termId: string, workDate: string) {
+  const rows = await tx.$queryRawUnsafe<TermWeek[]>(
+    `SELECT "schoolId","termId","weekNumber","startDate","endDate","isTeaching" FROM "TermWeek" WHERE "schoolId"=$1 AND "termId"=$2 AND "isTeaching" IS TRUE AND $3::date BETWEEN "startDate"::date AND "endDate"::date ORDER BY "weekNumber" ASC LIMIT 1`,
+    schoolId,
+    termId,
+    workDate.slice(0, 10),
+  );
+  if (!rows[0]) throw new AppError("The selected date is not inside a configured teaching week for this term.", 400, "DATE_OUTSIDE_TEACHING_WEEK");
+  return rows[0];
+}
+
 export async function assertTeachingWeekDate(tx: TenantDb, schoolId: string, termId: string, weekNumber: number, workDate: string) {
   const weeks = await getTermWeeks(tx, schoolId, termId);
   const week = weeks.find((row) => row.weekNumber === weekNumber && row.isTeaching);

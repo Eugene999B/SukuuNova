@@ -6,6 +6,7 @@ const migration = readFileSync(new URL("../prisma/migrations/20260913081500_term
 const termsRoute = readFileSync(new URL("../src/app/api/school/terms/route.ts", import.meta.url), "utf8");
 const termDetailRoute = readFileSync(new URL("../src/app/api/school/terms/[id]/route.ts", import.meta.url), "utf8");
 const teacherRoute = readFileSync(new URL("../src/app/api/school/teacher-academic-workspace/route.ts", import.meta.url), "utf8");
+const homeworkBridge = readFileSync(new URL("../src/lib/homework-academic-bridge.ts", import.meta.url), "utf8");
 
 describe("first-class teaching weeks", () => {
   it("materializes contiguous week ranges and gives the final week the remaining term days", () => {
@@ -47,5 +48,11 @@ describe("first-class teaching weeks", () => {
     expect(teacherRoute).toContain("assertTeachingWeekDate");
     expect(teacherRoute.match(/await assertTeachingWeekDate\(/g)?.length).toBe(2);
     expect(teacherRoute).toContain("getTermWeeks(tx, session.schoolId, termId)");
+  });
+
+  it("routes compatibility homework through the same authoritative week calendar", () => {
+    expect(homeworkBridge).toContain('import { getTeachingWeekForDate } from "./term-teaching-weeks"');
+    expect(homeworkBridge).toContain("await getTeachingWeekForDate(tx, input.schoolId, input.termId, workDate)");
+    expect(homeworkBridge).not.toContain("Math.floor((Date.parse(`${workDate}");
   });
 });
