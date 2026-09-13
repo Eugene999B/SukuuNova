@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { appendSchoolAudit } from "@/lib/audit";
 import { getSchoolAuthorization } from "@/lib/authorization";
-import { getAttendanceCalendarState, resolveAttendanceRoster } from "@/lib/attendance-service";
+import { getAttendanceCalendarState, resolveAttendanceClassScope, resolveAttendanceRoster } from "@/lib/attendance-service";
 import { withTenant, type TenantDb } from "@/lib/db";
 import { AppError, ForbiddenError, routeError } from "@/lib/errors";
 import { requireSchoolSession } from "@/lib/school-auth";
@@ -26,14 +26,6 @@ function dateValue(key: string) {
   const value = new Date(`${key}T00:00:00.000Z`);
   if (Number.isNaN(value.getTime()) || value.toISOString().slice(0, 10) !== key) throw new AppError("Choose a valid attendance date.", 400, "INVALID_ATTENDANCE_DATE");
   return value;
-}
-
-async function teacherClasses(tx: TenantDb, schoolId: string, teacherId: string, canRecordAll: boolean) {
-  return tx.class.findMany({
-    where: { schoolId, ...(canRecordAll ? {} : { classTeacherId: teacherId }) },
-    select: { id: true, name: true, level: true },
-    orderBy: [{ level: "asc" }, { name: "asc" }],
-  });
 }
 
 async function commonContext(tx: TenantDb, schoolId: string, userId: string) {
@@ -61,13 +53,18 @@ export async function GET(request: Request) {
       const context = await commonContext(tx, session.schoolId, session.userId);
       const requestedDate = url.searchParams.get("date") || schoolLocalDateKey(new Date(), context.timezone);
       const day = dateValue(requestedDate);
-      const classScope = await teacherClasses(tx, session.schoolId, session.userId, context.canAll);
+      const classScope = await resolveAttendanceClassScope(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        day,
+        canRecordAll: context.canAll,
+      });
       const requestedClassId = url.searchParams.get("classId") || classScope[0]?.id || "";
-      if (requestedClassId && !classScope.some((item) => item.id === requestedClassId)) throw new ForbiddenError("That class is outside your attendance scope.");
+      if (requestedClassId && !classScope.some((item) => item.id === requestedClassId)) throw new ForbiddenError("That class is outside your attendance scope for the selected academic year.");
 
       const [calendar, roster] = await Promise.all([
         getAttendanceCalendarState(tx, session.schoolId, day, context.schoolDays),
-        classScope.length ? resolveAttendanceRoster(tx, session.schoolId, day, classScope.map((item) => item.id)) : Promise.resolve({ termId: null, source: "student" as const, rows: [] }),
+        resolveAttendanceRoster(tx, session.schoolId, day, classScope.map((item) => item.id)),
       ]);
       const countByClass = new Map<string, number>();
       for (const row of roster.rows) {
@@ -107,6 +104,7 @@ export async function GET(request: Request) {
         calendarSource: calendar.source,
         rosterSource: roster.source,
         termId: roster.termId,
+        academicYearId: roster.academicYearId,
         rows,
       });
     });
@@ -123,8 +121,13 @@ export async function POST(request: Request) {
       const calendar = await getAttendanceCalendarState(tx, session.schoolId, day, context.schoolDays);
       if (calendar.calendarBlocked) throw new AppError("Attendance is closed for this holiday or school-calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
       if (!calendar.schoolDay) throw new AppError("This date is not configured as a school day.", 409, "NOT_A_SCHOOL_DAY");
-      const classes = await teacherClasses(tx, session.schoolId, session.userId, context.canAll);
-      if (!classes.some((item) => item.id === input.classId)) throw new ForbiddenError("That class is outside your attendance scope.");
+      const classes = await resolveAttendanceClassScope(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        day,
+        canRecordAll: context.canAll,
+      });
+      if (!classes.some((item) => item.id === input.classId)) throw new ForbiddenError("That class is outside your attendance scope for the selected academic year.");
 
       const rosterContext = await resolveAttendanceRoster(tx, session.schoolId, day, [input.classId]);
       const roster = new Set(rosterContext.rows.map((row) => row.studentId));
@@ -176,6 +179,7 @@ export async function POST(request: Request) {
           total: input.entries.length,
           rosterSource: rosterContext.source,
           termId: rosterContext.termId,
+          academicYearId: rosterContext.academicYearId,
           calendarSource: calendar.source,
           calendarDayType: calendar.dayType,
         },
