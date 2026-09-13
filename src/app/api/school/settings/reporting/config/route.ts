@@ -10,6 +10,7 @@ import { parseJson } from "@/lib/http";
 import { readGradeScale } from "@/lib/report-card-intelligence";
 import { REPORT_CARD_THEMES, reportCardThemeById } from "@/lib/report-card-themes";
 import { mergeReportWorkflowConfig, readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+import { createReportingPolicyVersion } from "@/lib/report-card-v2";
 
 const gradeBand = z.object({
   min: z.number().min(0).max(100),
@@ -196,6 +197,15 @@ export async function PATCH(request: Request) {
           showSubjectPosition: input.showSubjectPosition,
         },
       });
+      const policyVersion = await createReportingPolicyVersion(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        assessmentConfig: assessmentConfig as Prisma.JsonValue,
+        reportCardConfig: reportCardConfig as unknown as Prisma.JsonValue,
+        gradingScale: gradingScale as Prisma.JsonValue,
+        gradeCaWeight: input.classAssessmentWeight,
+        gradeExamWeight: input.examWeight,
+      });
       await appendSchoolAudit(tx, {
         schoolId: session.schoolId,
         actorId: session.userId,
@@ -203,9 +213,9 @@ export async function PATCH(request: Request) {
         entityType: "SchoolSettings",
         entityId: session.schoolId,
         before: { reportCardTemplateId: current.reportCardTemplateId, reportCardConfig: current.reportCardConfig, assessmentConfig: current.assessmentConfig, gradingScale: current.gradingScale },
-        after: { reportCardTemplateId: input.themeId, reportCardConfig, assessmentConfig, gradingScale },
+        after: { reportCardTemplateId: input.themeId, reportCardConfig, assessmentConfig, gradingScale, reportingPolicyVersion: policyVersion.version },
       });
-      return NextResponse.json({ ok: true, reportCardTemplateId: input.themeId, reportCardConfig, assessmentConfig, gradingScale });
+      return NextResponse.json({ ok: true, reportCardTemplateId: input.themeId, reportCardConfig, assessmentConfig, gradingScale, reportingPolicy: policyVersion });
     });
   } catch (error) { return routeError(error); }
 }

@@ -1,12 +1,14 @@
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { appendSchoolAudit } from "@/lib/audit";
-import { AppError, ForbiddenError } from "@/lib/errors";
+import { AppError } from "@/lib/errors";
 import { reportAttendanceForTerm } from "@/lib/report-card-attendance";
 import { requirePermission } from "@/lib/rbac";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
 import { resolveStudentTermClass } from "@/lib/student-term-context";
 import { recordPromotionDecision, resolveTermGradeContext } from "@/lib/academic-structure-service";
+import { resolveYearEndAuthority } from "@/lib/academic-session-authority";
+import { assertClassTeacherScope } from "@/lib/class-teacher-scope";
 
 export type PromotionDecision = "promoted" | "not_promoted";
 
@@ -24,19 +26,19 @@ export function readManualPromotionDecision(value: Prisma.JsonValue | null | und
 }
 
 async function finalTermContext(tx: TenantDb, schoolId: string, termId: string) {
-  const [settings, term] = await Promise.all([
-    tx.schoolSettings.findUnique({ where: { schoolId }, select: { reportCardConfig: true, reportCardTemplateId: true } }),
-    tx.term.findFirst({ where: { id: termId, schoolId }, select: { id: true, academicYearId: true, name: true } }),
-  ]);
-  if (!settings || !term) throw new AppError("Academic progression settings are incomplete.", 409, "PROMOTION_CONTEXT_INCOMPLETE");
-  const config = readReportWorkflowConfig(settings.reportCardConfig, settings.reportCardTemplateId);
-  const terms = await tx.term.findMany({
-    where: { schoolId, academicYearId: term.academicYearId },
-    orderBy: [{ startDate: "asc" }, { endDate: "asc" }],
-    select: { id: true, name: true },
+  const settings = await tx.schoolSettings.findUnique({
+    where: { schoolId },
+    select: { reportCardConfig: true, reportCardTemplateId: true },
   });
-  const final = terms[config.finalTermNumber - 1] ?? null;
-  return { config, term, final, terms };
+  if (!settings) throw new AppError("Academic progression settings are incomplete.", 409, "PROMOTION_CONTEXT_INCOMPLETE");
+  const config = readReportWorkflowConfig(settings.reportCardConfig, settings.reportCardTemplateId);
+  const authority = await resolveYearEndAuthority(tx, { schoolId, termId, legacyFinalTermNumber: config.finalTermNumber });
+  return {
+    config,
+    authority,
+    term: { id: authority.termId, academicYearId: authority.academicYearId, name: authority.termName },
+    final: authority.isYearEnd ? { id: authority.termId, name: authority.termName } : null,
+  };
 }
 
 async function freezeApprovedPresentation(tx: TenantDb, input: {
@@ -154,13 +156,17 @@ export async function setReportPromotionDecision(tx: TenantDb, input: {
   if (!report) throw new AppError("Report card not found.", 404, "NOT_FOUND");
   if (report.status !== "draft") throw new AppError("Promotion can only be decided before the report is submitted.", 409, "REPORT_LOCKED");
   const termClass = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.student.id, termId: report.termId });
-  const historicalClass = await tx.class.findFirst({ where: { id: termClass.classId, schoolId: input.schoolId }, select: { id: true, classTeacherId: true, name: true } });
-  if (!historicalClass || historicalClass.classTeacherId !== input.actorId) {
-    throw new ForbiddenError("Only the learner's class teacher for this term can decide promotion.");
-  }
+  const historicalClass = await tx.class.findFirst({ where: { id: termClass.classId, schoolId: input.schoolId }, select: { id: true, name: true } });
+  if (!historicalClass) throw new AppError("The learner's historical class is unavailable.", 409, "TERM_CLASS_NOT_FOUND");
+  await assertClassTeacherScope(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    academicYearId: termClass.academicYearId,
+    classId: historicalClass.id,
+  });
   const context = await finalTermContext(tx, input.schoolId, report.termId);
-  if (!context.final || context.final.id !== report.termId) {
-    throw new AppError(`Promotion decisions are only available in configured final term ${context.config.finalTermNumber}.`, 409, "NOT_FINAL_TERM");
+  if (!context.final) {
+    throw new AppError("Promotion decisions are only available in the configured year-end academic session.", 409, "NOT_FINAL_TERM");
   }
   const beforeDecision = readManualPromotionDecision(report.calculationSnapshot);
   const snapshot = object(report.calculationSnapshot);
@@ -194,7 +200,7 @@ export async function setReportPromotionDecision(tx: TenantDb, input: {
     entityType: "ReportCard",
     entityId: report.id,
     before: { decision: beforeDecision },
-    after: { decision: input.decision, classId: historicalClass.id, termId: report.termId, progressionMode: managedByYearRollover ? "academic_year_rollover" : "legacy_class_progression" },
+    after: { decision: input.decision, classId: historicalClass.id, termId: report.termId, progressionMode: managedByYearRollover ? "academic_year_rollover" : "legacy_class_progression", yearEndSource: context.authority.source },
   });
   return { reportCardId: report.id, decision: input.decision, finalTerm: context.final.name, progressionMode: managedByYearRollover ? "academic_year_rollover" as const : "legacy_class_progression" as const };
 }
@@ -228,7 +234,7 @@ export async function applyApprovedPromotion(tx: TenantDb, input: {
   if (!decision) return { applied: false, reason: "no_manual_decision" as const };
 
   const context = await finalTermContext(tx, input.schoolId, report.termId);
-  if (!context.final || context.final.id !== report.termId) return { applied: false, reason: "not_final_term" as const };
+  if (!context.final) return { applied: false, reason: "not_final_term" as const };
 
   const managedByYearRollover = await recordStructuredPromotionIfMapped(tx, {
     schoolId: input.schoolId,

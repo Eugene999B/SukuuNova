@@ -1,9 +1,12 @@
 import { createId } from "@paralleldrive/cuid2";
+import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { appendSchoolAudit } from "@/lib/audit";
 import { AppError } from "@/lib/errors";
 import { selectAcademicTerm } from "@/lib/term-date";
 import { recordPromotionDecision } from "@/lib/academic-structure-service";
+import { assertClassTeacherScope, listClassTeacherClasses } from "@/lib/class-teacher-scope";
+import { replaceReportCardTraits, type ReportTraitValue } from "@/lib/report-card-v2";
 
 export type ClassTeacherRecommendationOutcome = "promoted" | "retained" | "graduated" | "transferred" | "withdrawn" | "deferred";
 
@@ -11,13 +14,15 @@ type Policy = { termId: string; academicYearId: string; isYearEnd: boolean; clos
 type YearEnrollment = { id: string; studentId: string; frameworkId: string; gradeLevelId: string; pathwayId: string | null; status: string; gradeName: string; isTerminal: boolean; pathwayRequired: boolean };
 type Progression = { outcome: "advance" | "complete" | "exit"; toGradeLevelId: string | null; targetPathwayId: string | null; targetGradeName: string | null };
 type Decision = { id: string; studentId: string; outcome: ClassTeacherRecommendationOutcome; status: string; reason: string | null; targetGradeLevelId: string | null; targetPathwayId: string | null; targetGradeName: string | null; targetPathwayName: string | null };
+type TraitRow = ReportTraitValue & { reportCardId: string };
 
 function day(value: Date) { return value.toISOString().slice(0, 10); }
-
-async function assertClassTeacher(tx: TenantDb, schoolId: string, actorId: string, classId: string) {
-  const schoolClass = await tx.class.findFirst({ where: { id: classId, schoolId, classTeacherId: actorId }, select: { id: true, name: true, level: true } });
-  if (!schoolClass) throw new AppError("You are not the assigned class teacher for this class.", 403, "CLASS_TEACHER_SCOPE_REQUIRED");
-  return schoolClass;
+function object(value: Prisma.JsonValue | null | undefined): Record<string, Prisma.JsonValue> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, Prisma.JsonValue> : {};
+}
+function traitFields(value: Prisma.JsonValue | null | undefined) {
+  if (!Array.isArray(value)) return [] as string[];
+  return value.flatMap((field) => typeof field === "string" && field.trim() ? [field.trim()] : []);
 }
 
 async function sessionPolicy(tx: TenantDb, schoolId: string, termId: string) {
@@ -32,22 +37,26 @@ export async function getClassTeacherDesk(tx: TenantDb, input: {
   termId?: string | null;
   now?: Date;
 }) {
-  const [classes, terms, policies] = await Promise.all([
-    tx.class.findMany({ where: { schoolId: input.schoolId, classTeacherId: input.actorId }, select: { id: true, name: true, level: true }, orderBy: { name: "asc" } }),
+  const [terms, policies, settings] = await Promise.all([
     tx.term.findMany({ where: { schoolId: input.schoolId }, include: { academicYear: true }, orderBy: { startDate: "desc" }, take: 16 }),
     tx.$queryRawUnsafe<Policy[]>(`SELECT "termId","academicYearId","isYearEnd","closingStatus","classTeacherReviewCloseAt" FROM "AcademicSessionPolicy" WHERE "schoolId"=$1`, input.schoolId),
+    tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { timezone: true, behaviorRatingFields: true } }),
   ]);
-  if (!classes.length) return { classes: [], terms: [], selectedClass: null, selectedTerm: null, learners: [], summary: null };
-  const selectedClass = classes.find((item) => item.id === input.classId) ?? classes[0];
-  await assertClassTeacher(tx, input.schoolId, input.actorId, selectedClass.id);
   const policyByTerm = new Map(policies.map((item) => [item.termId, item]));
   const now = input.now ?? new Date();
-  const automatic = selectAcademicTerm(terms, input.termId || undefined, now, "Africa/Accra");
+  const automatic = selectAcademicTerm(terms, input.termId || undefined, now, settings?.timezone ?? "Africa/Accra");
   const selectedTerm = automatic ?? terms.find((term) => term.id === input.termId) ?? terms[0] ?? null;
-  if (!selectedTerm) return { classes, terms: [], selectedClass, selectedTerm: null, learners: [], summary: null };
+  if (!selectedTerm) return { classes: [], terms: [], selectedClass: null, selectedTerm: null, learners: [], summary: null, traitFields: traitFields(settings?.behaviorRatingFields) };
+
+  const classes = await listClassTeacherClasses(tx, { schoolId: input.schoolId, actorId: input.actorId, academicYearId: selectedTerm.academicYearId });
+  const termOptions = terms.map((term) => ({ id: term.id, name: term.name, academicYearId: term.academicYearId, academicYearName: term.academicYear.name, startDate: term.startDate, endDate: term.endDate, isLocked: term.isLocked, policy: policyByTerm.get(term.id) ?? null }));
+  if (!classes.length) return { classes: [], terms: termOptions, selectedClass: null, selectedTerm: { id: selectedTerm.id, name: selectedTerm.name, academicYearId: selectedTerm.academicYearId, academicYearName: selectedTerm.academicYear.name, startDate: selectedTerm.startDate, endDate: selectedTerm.endDate, isLocked: selectedTerm.isLocked, policy: policyByTerm.get(selectedTerm.id) ?? null }, learners: [], summary: null, traitFields: traitFields(settings?.behaviorRatingFields) };
+
+  const selectedClass = classes.find((item) => item.id === input.classId) ?? classes[0];
+  await assertClassTeacherScope(tx, { schoolId: input.schoolId, actorId: input.actorId, academicYearId: selectedTerm.academicYearId, classId: selectedClass.id });
   const policy = policyByTerm.get(selectedTerm.id) ?? null;
 
-  const [roster, assessmentRows, scoreRows, attendanceRows, reports, yearEnrollments, progressionRows, decisions, pathways] = await Promise.all([
+  const [roster, assessmentRows, scoreRows, attendanceRows, reports, yearEnrollments, progressionRows, decisions, pathways, traitRows] = await Promise.all([
     tx.$queryRawUnsafe<Array<{ studentId: string; name: string; admissionNo: string; guardianName: string | null; guardianPhone: string | null }>>(
       `SELECT DISTINCT s."id" AS "studentId",s."name",s."admissionNo",g."name" AS "guardianName",g."phone" AS "guardianPhone"
          FROM "Enrollment" e
@@ -64,7 +73,7 @@ export async function getClassTeacherDesk(tx: TenantDb, input: {
     tx.$queryRawUnsafe<Array<{ studentId: string; present: bigint; absent: bigint; late: bigint }>>(
       `SELECT "studentId",COUNT(*) FILTER (WHERE "type"='in')::bigint AS "present",COUNT(*) FILTER (WHERE "type" IN ('absence','absent'))::bigint AS "absent",COUNT(*) FILTER (WHERE "isLate" IS TRUE)::bigint AS "late"
          FROM "AttendanceEvent" WHERE "schoolId"=$1 AND "studentId" IS NOT NULL AND "attendanceDate" >= $2::date AND "attendanceDate" <= $3::date GROUP BY "studentId"`, input.schoolId, day(selectedTerm.startDate), day(selectedTerm.endDate)),
-    tx.reportCard.findMany({ where: { schoolId: input.schoolId, termId: selectedTerm.id }, select: { studentId: true, status: true, remarks: true, headRemark: true } }),
+    tx.reportCard.findMany({ where: { schoolId: input.schoolId, termId: selectedTerm.id }, select: { id: true, studentId: true, status: true, remarks: true, headRemark: true } }),
     tx.$queryRawUnsafe<YearEnrollment[]>(
       `SELECT ye."id",ye."studentId",ye."frameworkId",ye."gradeLevelId",ye."pathwayId",ye."status",gl."name" AS "gradeName",gl."isTerminal",gl."pathwayRequired"
          FROM "StudentYearEnrollment" ye JOIN "GradeLevel" gl ON gl."id"=ye."gradeLevelId" AND gl."schoolId"=ye."schoolId"
@@ -80,12 +89,18 @@ export async function getClassTeacherDesk(tx: TenantDb, input: {
          LEFT JOIN "AcademicPathway" p ON p."id"=d."targetPathwayId" AND p."schoolId"=d."schoolId"
         WHERE d."schoolId"=$1 AND d."sourceAcademicYearId"=$2`, input.schoolId, selectedTerm.academicYearId),
     tx.$queryRawUnsafe<Array<{ id: string; frameworkId: string; name: string; code: string }>>(`SELECT "id","frameworkId","name","code" FROM "AcademicPathway" WHERE "schoolId"=$1 AND "isActive"=true ORDER BY "name"`, input.schoolId),
+    tx.$queryRawUnsafe<TraitRow[]>(
+      `SELECT v."reportCardId",v."fieldKey",v."label",v."value",v."displayOrder"
+         FROM "ReportCardTraitValue" v JOIN "ReportCard" r ON r."id"=v."reportCardId" AND r."schoolId"=v."schoolId"
+        WHERE v."schoolId"=$1 AND r."termId"=$2 ORDER BY v."displayOrder",v."label"`, input.schoolId, selectedTerm.id),
   ]);
 
   const assessments = Number(assessmentRows[0]?.count ?? 0);
   const scoreByStudent = new Map(scoreRows.map((item) => [item.studentId, item]));
   const attendanceByStudent = new Map(attendanceRows.map((item) => [item.studentId, item]));
   const reportByStudent = new Map(reports.map((item) => [item.studentId, item]));
+  const traitsByReport = new Map<string, ReportTraitValue[]>();
+  for (const trait of traitRows) traitsByReport.set(trait.reportCardId, [...(traitsByReport.get(trait.reportCardId) ?? []), trait]);
   const yearByStudent = new Map(yearEnrollments.map((item) => [item.studentId, item]));
   const progressionByGrade = new Map(progressionRows.map((item) => [item.fromGradeLevelId, item as Progression]));
   const decisionByStudent = new Map(decisions.map((item) => [item.studentId, item]));
@@ -100,7 +115,7 @@ export async function getClassTeacherDesk(tx: TenantDb, input: {
       ...student,
       academic: { assessmentCount: assessments, scoreCount: Number(score?.scoreCount ?? 0), average: score?.average == null ? null : Number(score.average), missingScores: Math.max(0, assessments - Number(score?.scoreCount ?? 0)) },
       attendance: { present: Number(attendance?.present ?? 0), absent: Number(attendance?.absent ?? 0), late: Number(attendance?.late ?? 0) },
-      reportCard: report ?? null,
+      reportCard: report ? { ...report, traits: traitsByReport.get(report.id) ?? [] } : null,
       yearEnrollment: year ?? null,
       progression,
       decision,
@@ -112,12 +127,59 @@ export async function getClassTeacherDesk(tx: TenantDb, input: {
   const confirmed = learners.filter((item) => ["confirmed", "applied"].includes(item.decision?.status ?? "")).length;
   return {
     classes,
-    terms: terms.map((term) => ({ id: term.id, name: term.name, academicYearId: term.academicYearId, academicYearName: term.academicYear.name, startDate: term.startDate, endDate: term.endDate, isLocked: term.isLocked, policy: policyByTerm.get(term.id) ?? null })),
+    terms: termOptions,
     selectedClass,
     selectedTerm: { id: selectedTerm.id, name: selectedTerm.name, academicYearId: selectedTerm.academicYearId, academicYearName: selectedTerm.academicYear.name, startDate: selectedTerm.startDate, endDate: selectedTerm.endDate, isLocked: selectedTerm.isLocked, policy },
     learners,
+    traitFields: traitFields(settings?.behaviorRatingFields),
     summary: { learners: learners.length, assessments, pendingDecisions: pending, draftDecisions: drafts, confirmedDecisions: confirmed, yearEnd: Boolean(policy?.isYearEnd) },
   };
+}
+
+export async function saveClassTeacherReportPreparation(tx: TenantDb, input: {
+  schoolId: string;
+  actorId: string;
+  classId: string;
+  termId: string;
+  studentId: string;
+  remarks: string;
+  traits: ReportTraitValue[];
+}) {
+  const term = await tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, academicYearId: true, isLocked: true } });
+  if (!term) throw new AppError("Academic term not found.", 404, "TERM_NOT_FOUND");
+  if (term.isLocked) throw new AppError("This term is locked.", 409, "TERM_LOCKED");
+  await assertClassTeacherScope(tx, { schoolId: input.schoolId, actorId: input.actorId, academicYearId: term.academicYearId, classId: input.classId });
+  const enrollment = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+    `SELECT "id" FROM "Enrollment" WHERE "schoolId"=$1 AND "termId"=$2 AND "classId"=$3 AND "studentId"=$4 AND "status" IN ('draft','ready','confirmed') LIMIT 1`,
+    input.schoolId, input.termId, input.classId, input.studentId,
+  );
+  if (!enrollment[0]) throw new AppError("This learner is not enrolled in your class for the selected term.", 409, "CLASS_TEACHER_LEARNER_SCOPE");
+  const report = await tx.reportCard.findFirst({ where: { schoolId: input.schoolId, termId: input.termId, studentId: input.studentId }, select: { id: true, status: true, remarks: true } });
+  if (!report) throw new AppError("Generate this learner's report card before preparing the class-teacher section.", 409, "REPORT_CARD_REQUIRED");
+  if (report.status !== "draft") throw new AppError("This report has already entered approval and can no longer be edited by the class teacher.", 409, "REPORT_LOCKED");
+
+  const settings = await tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { behaviorRatingFields: true } });
+  const allowed = new Set(traitFields(settings?.behaviorRatingFields));
+  const normalizedTraits = input.traits.flatMap((item, index) => {
+    const label = item.label.trim();
+    const value = item.value.trim();
+    if (!label || !value || (allowed.size && !allowed.has(label))) return [];
+    return [{ fieldKey: item.fieldKey || label, label, value, displayOrder: index }];
+  });
+  const remarks = input.remarks.trim();
+  if (remarks.length > 800) throw new AppError("Class-teacher remarks must be 800 characters or fewer.", 400, "REMARK_TOO_LONG");
+  await tx.reportCard.update({ where: { id_schoolId: { id: report.id, schoolId: input.schoolId } }, data: { remarks: remarks || null } });
+  await replaceReportCardTraits(tx, { schoolId: input.schoolId, actorId: input.actorId, reportCardId: report.id, values: normalizedTraits });
+  await appendSchoolAudit(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    action: "class_teacher.report_preparation_updated",
+    entityType: "ReportCard",
+    entityId: report.id,
+    before: { remarks: report.remarks },
+    after: { remarks: remarks || null, traits: normalizedTraits },
+  });
+  return { reportCardId: report.id, remarks: remarks || null, traits: normalizedTraits };
 }
 
 export async function submitClassTeacherPromotionDraft(tx: TenantDb, input: {
@@ -130,10 +192,10 @@ export async function submitClassTeacherPromotionDraft(tx: TenantDb, input: {
   targetPathwayId?: string | null;
   reason?: string | null;
 }) {
-  const schoolClass = await assertClassTeacher(tx, input.schoolId, input.actorId, input.classId);
   const term = await tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { id: true, academicYearId: true, isLocked: true } });
   if (!term) throw new AppError("Academic term not found.", 404, "TERM_NOT_FOUND");
   if (term.isLocked) throw new AppError("This term is locked.", 409, "TERM_LOCKED");
+  const schoolClass = await assertClassTeacherScope(tx, { schoolId: input.schoolId, actorId: input.actorId, academicYearId: term.academicYearId, classId: input.classId });
   const policy = await sessionPolicy(tx, input.schoolId, input.termId);
   if (!policy?.isYearEnd) throw new AppError("Promotion recommendations are only available in the configured year-end session.", 409, "YEAR_END_SESSION_REQUIRED");
   if (policy.classTeacherReviewCloseAt && new Date() > policy.classTeacherReviewCloseAt) throw new AppError("The class-teacher year-end review window has closed.", 409, "CLASS_TEACHER_REVIEW_CLOSED");
