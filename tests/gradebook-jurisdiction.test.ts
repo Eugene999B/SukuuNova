@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createId } from "@paralleldrive/cuid2";
 import { withTenant } from "../src/lib/db";
 import { clearScore, createAssessment, enterScore } from "../src/lib/gradebook-service";
+import { createTeacherAcademicWork, getTeacherAcademicContexts } from "../src/lib/teacher-academic-workspace-service";
 import { createTenantFixture } from "./helpers";
 
 async function setupGradebookJurisdiction() {
@@ -81,9 +82,31 @@ async function setupGradebookJurisdiction() {
   return { ...fixture, ...ids };
 }
 
+function academicWorkInput(f: Awaited<ReturnType<typeof setupGradebookJurisdiction>>) {
+  return {
+    schoolId: f.schoolId,
+    teacherId: f.memberId,
+    termId: f.termId,
+    classId: f.classId,
+    subjectId: f.subjectId,
+    kind: "Classwork" as const,
+    title: "Jurisdiction classwork",
+    workDate: "2026-09-09",
+    weekNumber: 1,
+    workNumber: 1,
+    maxScore: 10,
+    markingMode: "manual" as const,
+    questionList: [],
+  };
+}
+
 describe("gradebook subject jurisdiction", () => {
-  it("does not treat class-teacher status as permission to author or change another subject teacher's marks", async () => {
+  it("does not treat class-teacher status as permission to author or change another subject teacher's work", async () => {
     const f = await setupGradebookJurisdiction();
+
+    const contexts = await withTenant(f.schoolId, (tx) => getTeacherAcademicContexts(tx, f.schoolId, f.memberId));
+    expect(contexts.assignments.some((assignment) => assignment.classId === f.classId && assignment.subjectId === f.subjectId)).toBe(false);
+    await expect(withTenant(f.schoolId, (tx) => createTeacherAcademicWork(tx, academicWorkInput(f)))).rejects.toMatchObject({ status: 403 });
 
     await expect(withTenant(f.schoolId, (tx) => createAssessment(tx, {
       schoolId: f.schoolId,
@@ -127,7 +150,7 @@ describe("gradebook subject jurisdiction", () => {
     }))).rejects.toMatchObject({ status: 403 });
   });
 
-  it("allows an assigned subject teacher to create assessments, enter marks and clear marks", async () => {
+  it("allows an exact assigned subject teacher to author work, create assessments, enter marks and clear marks", async () => {
     const f = await setupGradebookJurisdiction();
     await withTenant(f.schoolId, (tx) => tx.classSubjectTeacher.create({
       data: {
@@ -137,6 +160,10 @@ describe("gradebook subject jurisdiction", () => {
         teacherId: f.memberId,
       },
     }));
+
+    const contexts = await withTenant(f.schoolId, (tx) => getTeacherAcademicContexts(tx, f.schoolId, f.memberId));
+    expect(contexts.assignments.some((assignment) => assignment.classId === f.classId && assignment.subjectId === f.subjectId)).toBe(true);
+    await expect(withTenant(f.schoolId, (tx) => createTeacherAcademicWork(tx, academicWorkInput(f)))).resolves.toMatchObject({ id: expect.any(String) });
 
     const created = await withTenant(f.schoolId, (tx) => createAssessment(tx, {
       schoolId: f.schoolId,

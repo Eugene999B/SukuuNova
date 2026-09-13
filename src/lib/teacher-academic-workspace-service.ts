@@ -18,11 +18,8 @@ async function assertTeacherCanUseContext(tx: TenantDb, schoolId: string, teache
   const canAll = await hasPermission(tx, teacherId, "scores:write:all");
   if (canAll) return;
   if (!(await hasPermission(tx, teacherId, "scores:write:assigned"))) throw new ForbiddenError("Teacher academic access is not permitted.");
-  const [assignment, classTeacher] = await Promise.all([
-    tx.classSubjectTeacher.findFirst({ where: { schoolId, teacherId, classId, subjectId }, select: { teacherId: true } }),
-    tx.class.findFirst({ where: { schoolId, id: classId, classTeacherId: teacherId }, select: { id: true } }),
-  ]);
-  if (!assignment && !classTeacher) throw new ForbiddenError("You can only work with classes and subjects assigned to you.");
+  const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId, teacherId, classId, subjectId }, select: { teacherId: true } });
+  if (!assignment) throw new ForbiddenError("You can only work with classes and subjects assigned to you.");
 }
 
 async function assertTermOpen(tx: TenantDb, schoolId: string, termId: string) {
@@ -38,7 +35,7 @@ export async function getTeacherAcademicContexts(tx: TenantDb, schoolId: string,
   if (!canAll && !(await hasPermission(tx, teacherId, "scores:write:assigned"))) throw new ForbiddenError("Teacher academic access is not permitted.");
   const [assignments, terms] = await Promise.all([
     tx.classSubjectTeacher.findMany({
-      where: { schoolId, ...(canAll ? {} : { OR: [{ teacherId }, { class: { classTeacherId: teacherId } }] }) },
+      where: { schoolId, ...(canAll ? {} : { teacherId }) },
       include: { class: { select: { id: true, name: true, level: true } }, subject: { select: { id: true, name: true } } },
       orderBy: [{ classId: "asc" }, { subjectId: "asc" }],
     }),
