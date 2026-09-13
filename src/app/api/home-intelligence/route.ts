@@ -59,7 +59,15 @@ export async function GET() {
 
     const roleKeys = access.roleKeys;
     const isTeacher = access.workspace === "teacher";
-    const isFinance = roleKeys.some((role) => FINANCE_ROLES.has(role));
+    const [canFinance, canStudents, canUsers, canAttendance, canAnalytics] = await Promise.all([
+      access.can("finance:read"),
+      access.can("students:read"),
+      access.can("users:read"),
+      access.can("attendance:review"),
+      access.can("analytics:view"),
+    ]);
+    const isFinance = roleKeys.some((role) => FINANCE_ROLES.has(role)) && canFinance;
+    const isLeadership = access.isElevated && canFinance;
 
     if (isTeacher) {
       const [ledClasses, assignments, timetable, messages] = await Promise.all([
@@ -213,6 +221,10 @@ export async function GET() {
       .map((item) => ({ label: item.name, value: item._count.students }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 10);
+    const staffRoleDistribution = [...roleCounts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
 
     if (isFinance) {
       const [paymentMethods, unpaidInvoices] = await Promise.all([
@@ -250,9 +262,36 @@ export async function GET() {
       };
     }
 
-    const roleMode = roleKeys.some((key) => ["owner", "administrator", "principal", "vice_principal"].includes(key)) ? "leadership" : "staff";
+    if (!isLeadership) {
+      const canSeeLearners = canStudents || canAnalytics;
+      const canSeePeople = canUsers || canAnalytics;
+      const canSeeAttendance = canAttendance || canAnalytics;
+      return {
+        mode: "staff" as const,
+        school,
+        visibility: {
+          learners: canSeeLearners,
+          people: canSeePeople,
+          attendance: canSeeAttendance,
+          academics: canAnalytics,
+        },
+        summary: {
+          students: canSeeLearners ? students : null,
+          staff: canSeePeople ? staff : null,
+          teachers: canSeePeople ? teachers : null,
+          classes: canSeeLearners ? classes.length : null,
+          assessments: canAnalytics ? assessments : null,
+          attendanceToday: canSeeAttendance ? todayPresent : null,
+          attendanceRate: canSeeAttendance ? percent(todayPresent, students) : null,
+        },
+        classPopulation: canSeeLearners ? classPopulation : [],
+        attendanceTrend: canSeeAttendance ? attendanceTrend : [],
+        staffRoles: canSeePeople ? staffRoleDistribution : [],
+      };
+    }
+
     return {
-      mode: roleMode,
+      mode: "leadership" as const,
       school,
       summary: {
         students,
@@ -270,7 +309,7 @@ export async function GET() {
       },
       classPopulation,
       attendanceTrend,
-      staffRoles: [...roleCounts.entries()].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 8),
+      staffRoles: staffRoleDistribution,
       gender: { available: false, male: null, female: null, notRecorded: students },
     };
   });
