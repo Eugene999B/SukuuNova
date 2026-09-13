@@ -5,8 +5,10 @@ import { StaffDirectory } from "@/components/staff/StaffDirectory";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
+import { genderLabel } from "@/lib/demographics";
+import { listStaffProfiles } from "@/lib/staff-profile-service";
 import { isSchoolStaffAccount, isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
-import { StaffCreateDialog } from "./StaffCreateDialog";
+import { StaffCreateDialogV2 } from "./StaffCreateDialogV2";
 import "./staff-workspace.css";
 import "./staff-simple.css";
 import "./staff-teaching-builder.css";
@@ -16,7 +18,7 @@ type OfferingRow = { classId: string; subjectId: string };
 export default async function StaffPage() {
   const session = await requireSchoolSession();
   const data = await withTenant(session.schoolId, async (tx) => {
-    const [school, allUsers, classes, subjects, offeringRows, canManageCards] = await Promise.all([
+    const [school, allUsers, classes, subjects, offeringRows, profiles, canManageCards] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.user.findMany({
         where: { status: { in: ["active", "pending", "suspended"] } },
@@ -36,6 +38,7 @@ export default async function StaffPage() {
         WHERE "schoolId" = ${session.schoolId}
         ORDER BY "classId", "subjectId"
       `,
+      listStaffProfiles(tx, session.schoolId),
       hasPermission(tx, session.userId, "identity_cards:manage").catch(() => false),
     ]);
     const users = allUsers.filter((user) => isSchoolStaffAccount(user.userRoles.map(({ role }) => role)));
@@ -47,46 +50,60 @@ export default async function StaffPage() {
         .map((offering) => subjectById.get(offering.subjectId))
         .filter((subject): subject is { id: string; name: string } => Boolean(subject)),
     }));
-    return { school, users, classes: classOptions, subjects, canManageCards };
+    return { school, users, profiles, classes: classOptions, subjects, canManageCards };
   });
 
+  const profileByUser = new Map(data.profiles.map((profile) => [profile.userId, profile]));
   const teachers = data.users.filter((user) => user.userRoles.some(({ role }) => isTeachingRoleKey(role.key?.trim() || roleKeyForName(role.name))));
   const pending = data.users.filter((user) => user.status === "pending");
   const active = data.users.filter((user) => user.status === "active");
-  const people = data.users.map((user) => ({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    phone: user.phone,
-    status: user.status,
-    roles: user.userRoles.map((role) => role.role.name),
-    classLead: user.classTeacherFor.map((schoolClass) => `${schoolClass.level ?? ""} ${schoolClass.name}`.trim()),
-    assignments: user.subjectAssignments.map((assignment) => `${assignment.class.level ?? ""} ${assignment.class.name} · ${assignment.subject.name}`.trim()),
-  }));
+  const female = data.users.filter((user) => profileByUser.get(user.id)?.gender === "female").length;
+  const male = data.users.filter((user) => profileByUser.get(user.id)?.gender === "male").length;
+  const genderMissing = data.users.filter((user) => !profileByUser.get(user.id)?.gender).length;
+  const people = data.users.map((user) => {
+    const profile = profileByUser.get(user.id);
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      status: user.status,
+      staffNumber: profile?.staffNumber ?? null,
+      gender: genderLabel(profile?.gender),
+      department: profile?.department ?? null,
+      jobTitle: profile?.jobTitle ?? null,
+      roles: user.userRoles.map((role) => role.role.name),
+      classLead: user.classTeacherFor.map((schoolClass) => `${schoolClass.level ?? ""} ${schoolClass.name}`.trim()),
+      assignments: user.subjectAssignments.map((assignment) => `${assignment.class.level ?? ""} ${assignment.class.name} · ${assignment.subject.name}`.trim()),
+    };
+  });
 
   return (
-    <AppShell universe="school" title="Staff & Teachers" subtitle="Find staff, review teaching scope and manage access." active="Staff & Teachers" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+    <AppShell universe="school" title="Staff & Teachers" subtitle="People, personnel records, teaching scope and workforce intelligence." active="Staff & Teachers" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
       <div className="staff-simple">
         <section className="staff-simple-head">
-          <div><h2>Staff directory</h2><p>Search people first. Open a profile for portrait, school ID, roles, contact and teaching scope.</p></div>
+          <div><h2>Staff directory</h2><p>Search people, open their operational profile or maintain the separate personnel record used for workforce reporting.</p></div>
           <div className="staff-simple-head-actions">
             {data.canManageCards ? <Link href="/school/id-cards" className="button secondary">ID cards</Link> : null}
-            <StaffCreateDialog classes={data.classes} subjects={data.subjects} />
+            <StaffCreateDialogV2 classes={data.classes} subjects={data.subjects} />
           </div>
         </section>
 
         {data.canManageCards ? <section className="staff-form-note wide"><strong>Staff identity cards</strong><span>Generate school-branded, QR-verifiable cards for the full staff team.</span><IdentityCardBatchActions mode="staff"/></section> : null}
         {pending.length ? <section className="staff-form-note wide"><strong>{pending.length} staff profile{pending.length === 1 ? " needs" : "s need"} login activation.</strong><span>Open the person and choose Activate login, or use <Link href="/school/settings/access">People & Access</Link>.</span></section> : null}
+        {genderMissing ? <section className="staff-form-note wide"><strong>{genderMissing} staff record{genderMissing === 1 ? " is" : "s are"} missing gender.</strong><span>Use Personnel from the staff directory to complete demographic data and improve workforce statistics.</span></section> : null}
 
         <section className="staff-simple-metrics" aria-label="Staff summary">
           <div><span>Total staff</span><strong>{data.users.length}</strong></div>
           <div><span>Teachers</span><strong>{teachers.length}</strong></div>
+          <div><span>Female</span><strong>{female}</strong></div>
+          <div><span>Male</span><strong>{male}</strong></div>
           <div><span>Active login</span><strong>{active.length}</strong></div>
-          <div><span>Needs login</span><strong>{pending.length}</strong></div>
+          <div><span>Gender not recorded</span><strong>{genderMissing}</strong></div>
         </section>
 
         <section className="staff-simple-panel">
-          <div className="staff-simple-panel-head"><div><h3>People at this school</h3><p>Staff accounts only. Student and guardian portal identities are managed in their own workspaces.</p></div></div>
+          <div className="staff-simple-panel-head"><div><h3>People at this school</h3><p>Staff accounts only. Personnel data is kept apart from authentication, roles and family portal identities.</p></div></div>
           <StaffDirectory people={people} />
         </section>
 

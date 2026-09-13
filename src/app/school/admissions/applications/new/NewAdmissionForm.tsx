@@ -41,7 +41,7 @@ export function NewAdmissionForm({ classes, academicYears, terms, prefill, actio
         <div className="admission-grid">
           <label className="wide">Full name<input name="studentName" defaultValue={prefill.studentName ?? ""} required maxLength={180} autoComplete="name" /></label>
           <label>Date of birth<input type="date" name="dob" /></label>
-          <label>Gender<select name="gender" defaultValue=""><option value="">Not specified</option><option value="Female">Female</option><option value="Male">Male</option><option value="Other">Other / prefer not to say</option></select></label>
+          <label>Gender<select name="gender" defaultValue="" required><option value="" disabled>Choose gender…</option><option value="female">Female</option><option value="male">Male</option><option value="other">Other</option><option value="prefer_not_to_say">Prefer not to say</option></select></label>
           <label className="wide">Previous school<input name="previousSchool" maxLength={240} placeholder="Optional" /></label>
         </div>
       </section>
@@ -85,7 +85,7 @@ export function NewAdmissionForm({ classes, academicYears, terms, prefill, actio
       {state.message ? <div className="app-alert error" role="alert">{state.message}</div> : null}
       <div className="admission-form-actions">
         <Link className="button secondary" href="/school/admissions/applications">Cancel</Link>
-        <button className="button secondary" type="submit" name="intent" value="draft" disabled={pending}>Save draft</button>
+        <button className="button secondary" type="submit" name="intent" value="draft" disabled={pending} formNoValidate>Save draft</button>
         <button className="button primary" type="submit" name="intent" value="submit" disabled={pending}>{pending ? "Saving…" : "Submit application"}</button>
       </div>
     </form>

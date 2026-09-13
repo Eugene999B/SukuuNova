@@ -20,9 +20,9 @@ describe("Admissions V2 lifecycle", () => {
       await tx.class.create({ data: { id: classId, schoolId: fixture.schoolId, name: "Admissions Class", level: "JHS 1" } });
       await tx.$executeRaw`
         INSERT INTO "AdmissionApplication"
-          ("id","schoolId","reference","studentName","guardianName","guardianPhone","intendedClassId","intendedClassName","academicYearId","termId","admissionDate","status","createdBy")
+          ("id","schoolId","reference","studentName","gender","guardianName","guardianPhone","intendedClassId","intendedClassName","academicYearId","termId","admissionDate","status","createdBy")
         VALUES
-          (${applicationId},${fixture.schoolId},${`APP-TEST-${applicationId.slice(0, 6)}`},'Admissions Learner','Admissions Guardian','0240000000',${classId},'JHS 1 · Admissions Class',${yearId},${termId},${new Date("2026-02-02T00:00:00.000Z")},'submitted',${fixture.ownerId})
+          (${applicationId},${fixture.schoolId},${`APP-TEST-${applicationId.slice(0, 6)}`},'Admissions Learner','female','Admissions Guardian','0240000000',${classId},'JHS 1 · Admissions Class',${yearId},${termId},${new Date("2026-02-02T00:00:00.000Z")},'submitted',${fixture.ownerId})
       `;
     });
   });
