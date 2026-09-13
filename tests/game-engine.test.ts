@@ -41,6 +41,20 @@ describe("Sukuunova game engine foundation", () => {
     expect(scoreGameDnaSimilarity(runner, archive).score).toBeLessThan(0.6);
   });
 
+  it("keeps every seeded catalog experience below the anti-reskin threshold", () => {
+    for (let left = 0; left < SUKUUNOVA_GAME_CATALOG.length; left += 1) {
+      for (let right = left + 1; right < SUKUUNOVA_GAME_CATALOG.length; right += 1) {
+        const first = SUKUUNOVA_GAME_CATALOG[left].dna;
+        const second = SUKUUNOVA_GAME_CATALOG[right].dna;
+        const similarity = scoreGameDnaSimilarity(first, second);
+        expect(
+          similarity.score,
+          `${first.title} and ${second.title} share ${similarity.matchedDimensions.join(", ")}`,
+        ).toBeLessThan(0.6);
+      }
+    }
+  });
+
   it("rotates mechanics when recent gameplay is repetitive", () => {
     const action = directNextBeat({
       telemetry: {
