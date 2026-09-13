@@ -114,6 +114,16 @@ export default async function SchoolSettingsPage() {
         <section className="app-card app-panel">
           <div className="app-card-head">
             <div>
+              <span className="app-eyebrow">OFFICIAL DOCUMENTS</span>
+              <h2>School identity & report-card letterhead</h2>
+              <p>Add the motto, address, email, telephone, location and learner-ID label that must appear on official school documents.</p>
+            </div>
+            <Link href="/school/settings/identity" className="app-action"><strong>Open identity setup</strong></Link>
+          </div>
+        </section>
+        <section className="app-card app-panel">
+          <div className="app-card-head">
+            <div>
               <span className="app-eyebrow">GO-LIVE CHECK</span>
               <h2>Is this school ready for wider rollout?</h2>
               <p>Use live school data to find setup blockers across academics, people, families, fees and communications.</p>
