@@ -4,6 +4,8 @@ export * from "./fixed-step";
 export * from "./collision";
 export * from "./platformer-simulation";
 export * from "./runner-simulation";
+export * from "./runner-chunks";
+export * from "./open-world-simulation";
 export * from "./difficulty-envelope";
 export * from "./game-dna";
 export * from "./director";
