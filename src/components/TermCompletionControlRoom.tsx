@@ -97,7 +97,7 @@ export function TermCompletionControlRoom({
 
   const term = terms.find((item) => item.id === selected) ?? null;
   const ended = term ? new Date(term.endDate).getTime() < new Date(nowIso).getTime() : false;
-  const reportHref = selected ? `/school/report-cards?term=${encodeURIComponent(selected)}` : "/school/report-cards";
+  const reportHref = selected ? `/school/report-cards/operations?term=${encodeURIComponent(selected)}` : "/school/report-cards/operations";
 
   if (!terms.length) {
     return <div className={styles.workspace}>
@@ -202,7 +202,7 @@ export function TermCompletionControlRoom({
             <span>Approved, not released<strong>{data.blockers.approvedAwaitingRelease}</strong></span>
             <span>Released<strong>{data.blockers.releasedReports}</strong></span>
           </div>
-          <Link className={styles.cardLink} href={reportHref}>Open Report Cards →</Link>
+          <Link className={styles.cardLink} href={reportHref}>Open Report Operations →</Link>
         </article>
 
         <article className={styles.card}>
