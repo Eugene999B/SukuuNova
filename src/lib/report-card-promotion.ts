@@ -6,6 +6,7 @@ import { reportAttendanceForTerm } from "@/lib/report-card-attendance";
 import { requirePermission } from "@/lib/rbac";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
 import { resolveStudentTermClass } from "@/lib/student-term-context";
+import { recordPromotionDecision, resolveTermGradeContext } from "@/lib/academic-structure-service";
 
 export type PromotionDecision = "promoted" | "not_promoted";
 
@@ -107,6 +108,32 @@ async function freezeApprovedPresentation(tx: TenantDb, input: {
   return nextSnapshot as unknown as Prisma.JsonValue;
 }
 
+async function recordStructuredPromotionIfMapped(tx: TenantDb, input: {
+  schoolId: string;
+  actorId: string;
+  studentId: string;
+  termId: string;
+  academicYearId: string;
+  classId: string;
+  decision: PromotionDecision;
+}) {
+  const gradeContext = await resolveTermGradeContext(tx, {
+    schoolId: input.schoolId,
+    studentId: input.studentId,
+    termId: input.termId,
+    classId: input.classId,
+  });
+  if (!gradeContext) return false;
+  await recordPromotionDecision(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    studentId: input.studentId,
+    sourceAcademicYearId: input.academicYearId,
+    outcome: input.decision === "promoted" ? "promoted" : "retained",
+  });
+  return true;
+}
+
 export async function setReportPromotionDecision(tx: TenantDb, input: {
   schoolId: string;
   actorId: string;
@@ -151,6 +178,15 @@ export async function setReportPromotionDecision(tx: TenantDb, input: {
     data: { calculationSnapshot: nextSnapshot },
   });
   if (changed.count !== 1) throw new AppError("The report changed state before promotion could be saved.", 409, "REPORT_LOCKED");
+  const managedByYearRollover = await recordStructuredPromotionIfMapped(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    studentId: report.student.id,
+    termId: report.termId,
+    academicYearId: termClass.academicYearId,
+    classId: historicalClass.id,
+    decision: input.decision,
+  });
   await appendSchoolAudit(tx, {
     schoolId: input.schoolId,
     actorId: input.actorId,
@@ -158,9 +194,9 @@ export async function setReportPromotionDecision(tx: TenantDb, input: {
     entityType: "ReportCard",
     entityId: report.id,
     before: { decision: beforeDecision },
-    after: { decision: input.decision, classId: historicalClass.id, termId: report.termId },
+    after: { decision: input.decision, classId: historicalClass.id, termId: report.termId, progressionMode: managedByYearRollover ? "academic_year_rollover" : "legacy_class_progression" },
   });
-  return { reportCardId: report.id, decision: input.decision, finalTerm: context.final.name };
+  return { reportCardId: report.id, decision: input.decision, finalTerm: context.final.name, progressionMode: managedByYearRollover ? "academic_year_rollover" as const : "legacy_class_progression" as const };
 }
 
 export async function applyApprovedPromotion(tx: TenantDb, input: {
@@ -189,10 +225,25 @@ export async function applyApprovedPromotion(tx: TenantDb, input: {
     calculationSnapshot: report.calculationSnapshot,
   });
   const decision = readManualPromotionDecision(frozenSnapshot);
-  if (decision !== "promoted") return { applied: false, reason: decision === "not_promoted" ? "not_promoted" as const : "no_manual_decision" as const };
+  if (!decision) return { applied: false, reason: "no_manual_decision" as const };
 
   const context = await finalTermContext(tx, input.schoolId, report.termId);
   if (!context.final || context.final.id !== report.termId) return { applied: false, reason: "not_final_term" as const };
+
+  const managedByYearRollover = await recordStructuredPromotionIfMapped(tx, {
+    schoolId: input.schoolId,
+    actorId: input.actorId,
+    studentId: report.student.id,
+    termId: report.termId,
+    academicYearId: termClass.academicYearId,
+    classId: termClass.classId,
+    decision,
+  });
+  if (managedByYearRollover) {
+    return { applied: false, reason: "managed_by_year_rollover" as const };
+  }
+
+  if (decision !== "promoted") return { applied: false, reason: "not_promoted" as const };
   if (!context.config.autoApplyPromotion) return { applied: false, reason: "automatic_progression_disabled" as const };
   const targetClassId = context.config.classProgression[termClass.classId];
   if (!targetClassId) return { applied: false, reason: "next_class_not_configured" as const };

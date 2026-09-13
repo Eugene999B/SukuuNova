@@ -1,0 +1,86 @@
+import { AppShell } from "@/components/AppShell";
+import { AcademicStructureWorkspace } from "@/components/AcademicStructureWorkspace";
+import { listAcademicStructureTemplates } from "@/lib/academic-structure-templates";
+import { getAcademicStructureState } from "@/lib/academic-structure-service";
+import { requireSchoolSession } from "@/lib/school-auth";
+import { withTenant } from "@/lib/db";
+import { requirePermission } from "@/lib/rbac";
+import "./academic-structure.css";
+
+export default async function AcademicStructurePage() {
+  const session = await requireSchoolSession();
+  const data = await withTenant(session.schoolId, async (tx) => {
+    await requirePermission(tx, session.userId, "classes:manage");
+    const [school, academicYears, classes, state, rollovers] = await Promise.all([
+      tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
+      tx.academicYear.findMany({
+        where: { schoolId: session.schoolId },
+        select: { id: true, name: true, startDate: true, endDate: true, isLocked: true },
+        orderBy: { startDate: "desc" },
+      }),
+      tx.class.findMany({
+        where: { schoolId: session.schoolId },
+        select: { id: true, name: true, level: true },
+        orderBy: [{ level: "asc" }, { name: "asc" }],
+      }),
+      getAcademicStructureState(tx, session.schoolId),
+      tx.$queryRawUnsafe<Array<{
+        id: string;
+        sourceAcademicYearId: string;
+        targetAcademicYearId: string;
+        frameworkId: string;
+        status: string;
+        createdAt: Date;
+        validatedAt: Date | null;
+        committedAt: Date | null;
+        totalItems: number;
+        blockedItems: number;
+        appliedItems: number;
+      }>>(
+        `SELECT r."id",r."sourceAcademicYearId",r."targetAcademicYearId",r."frameworkId",r."status",r."createdAt",r."validatedAt",r."committedAt",
+                COUNT(i."id")::int AS "totalItems",
+                COUNT(i."id") FILTER (WHERE i."status"='blocked')::int AS "blockedItems",
+                COUNT(i."id") FILTER (WHERE i."status"='applied')::int AS "appliedItems"
+           FROM "AcademicYearRollover" r
+           LEFT JOIN "AcademicYearRolloverItem" i ON i."schoolId"=r."schoolId" AND i."rolloverId"=r."id"
+          WHERE r."schoolId"=$1
+          GROUP BY r."id"
+          ORDER BY r."createdAt" DESC
+          LIMIT 12`,
+        session.schoolId,
+      ),
+    ]);
+    return { school, academicYears, classes, state, rollovers };
+  });
+
+  if (!data.school) return null;
+  return <AppShell
+    universe="school"
+    title="School Structure"
+    subtitle="Define grades, sections, pathways and year-to-year progression."
+    active="Academic Settings"
+    schoolName={data.school.name}
+    schoolCode={data.school.uniqueCode}
+    userName={session.name}
+    role="Academic leadership"
+  >
+    <AcademicStructureWorkspace
+      templates={listAcademicStructureTemplates()}
+      initialState={data.state}
+      initialRollovers={data.rollovers.map((item) => ({
+        ...item,
+        createdAt: item.createdAt.toISOString(),
+        validatedAt: item.validatedAt?.toISOString() ?? null,
+        committedAt: item.committedAt?.toISOString() ?? null,
+      }))}
+      academicYears={data.academicYears.map((year) => ({
+        id: year.id,
+        name: year.name,
+        startDate: year.startDate.toISOString(),
+        endDate: year.endDate.toISOString(),
+        isLocked: year.isLocked,
+      }))}
+      classes={data.classes}
+    />
+  </AppShell>;
+}
