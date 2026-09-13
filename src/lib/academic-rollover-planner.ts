@@ -115,10 +115,10 @@ export function planAcademicYearRollover(input: {
     let targetPathwayId = learner.decision?.targetPathwayId ?? learner.sourcePathwayId;
 
     if (learner.targetYearAlreadyEnrolled) blockers.push("TARGET_YEAR_ALREADY_ENROLLED");
-
     if (outcome === "deferred") blockers.push("DECISION_DEFERRED");
 
-    if (!learner.decision) {
+    const shouldResolveDefaultProgression = !learner.decision || (outcome === "promoted" && !targetGradeLevelId);
+    if (shouldResolveDefaultProgression) {
       const rule = chooseDefaultRule(input.rules, learner.sourceGradeLevelId);
       if (!rule) {
         blockers.push("NO_PROGRESSION_RULE");
@@ -133,11 +133,11 @@ export function planAcademicYearRollover(input: {
       } else {
         outcome = "promoted";
         targetGradeLevelId = rule.toGradeLevelId;
-        targetPathwayId = rule.targetPathwayId ?? targetPathwayId;
+        targetPathwayId = learner.decision?.targetPathwayId ?? rule.targetPathwayId ?? learner.sourcePathwayId;
       }
     } else if (outcome === "retained") {
       targetGradeLevelId = learner.sourceGradeLevelId;
-      targetPathwayId = learner.decision.targetPathwayId ?? learner.sourcePathwayId;
+      targetPathwayId = learner.decision?.targetPathwayId ?? learner.sourcePathwayId;
     }
 
     if (["graduated", "transferred", "withdrawn"].includes(outcome)) {
