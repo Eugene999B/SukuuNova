@@ -48,9 +48,19 @@ export async function POST(request: Request) {
   try {
     const session = await requireSchoolSession();
     const input = await parseJson(request, schema);
-    const result = await withTenant(session.schoolId, (tx) => input.action === "reportPreparation"
-      ? saveClassTeacherReportPreparation(tx, { schoolId: session.schoolId, actorId: session.userId, ...input })
-      : submitClassTeacherPromotionDraft(tx, { schoolId: session.schoolId, actorId: session.userId, ...input }));
+    if (input.action === "reportPreparation") {
+      const result = await withTenant(session.schoolId, (tx) => saveClassTeacherReportPreparation(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        ...input,
+      }));
+      return NextResponse.json({ ok: true, result });
+    }
+    const result = await withTenant(session.schoolId, (tx) => submitClassTeacherPromotionDraft(tx, {
+      schoolId: session.schoolId,
+      actorId: session.userId,
+      ...input,
+    }));
     return NextResponse.json({ ok: true, result });
   } catch (error) { return routeError(error); }
 }

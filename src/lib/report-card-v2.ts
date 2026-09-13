@@ -2,6 +2,8 @@ import { createId } from "@paralleldrive/cuid2";
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { AppError } from "@/lib/errors";
+import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
+import { resolveYearEndAuthority } from "@/lib/academic-session-authority";
 
 export type SchoolDocumentIdentity = {
   name: string;
@@ -196,20 +198,27 @@ export async function liveReportDocumentContext(tx: TenantDb, input: {
   termId: string;
   classId: string;
 }) {
-  const [identity, termRows, classRollRows, traits] = await Promise.all([
+  const [identity, termRows, classRollRows, traits, settings] = await Promise.all([
     readSchoolDocumentIdentity(tx, input.schoolId),
-    tx.$queryRawUnsafe<Array<{ academicYearId: string; endDate: Date; isYearEnd: boolean }>>(
-      `SELECT t."academicYearId",t."endDate",COALESCE(p."isYearEnd",false) AS "isYearEnd"
-         FROM "Term" t LEFT JOIN "AcademicSessionPolicy" p ON p."schoolId"=t."schoolId" AND p."termId"=t."id"
+    tx.$queryRawUnsafe<Array<{ academicYearId: string; endDate: Date }>>(
+      `SELECT t."academicYearId",t."endDate" FROM "Term" t
         WHERE t."schoolId"=$1 AND t."id"=$2 LIMIT 1`, input.schoolId, input.termId),
     tx.$queryRawUnsafe<Array<{ count: bigint }>>(
       `SELECT COUNT(DISTINCT "studentId")::bigint AS "count" FROM "Enrollment"
         WHERE "schoolId"=$1 AND "termId"=$2 AND "classId"=$3 AND "status" IN ('draft','ready','confirmed')`,
       input.schoolId, input.termId, input.classId),
     reportCardTraits(tx, input.schoolId, input.reportId),
+    tx.schoolSettings.findUnique({ where: { schoolId: input.schoolId }, select: { reportCardConfig: true, reportCardTemplateId: true } }),
   ]);
   const term = termRows[0];
-  const policy = term ? await readActiveReportingPolicy(tx, input.schoolId, term.academicYearId) : null;
+  const reportingPolicy = term ? await readActiveReportingPolicy(tx, input.schoolId, term.academicYearId) : null;
+  const workflow = readReportWorkflowConfig(settings?.reportCardConfig, settings?.reportCardTemplateId);
+  const yearEndAuthority = term ? await resolveYearEndAuthority(tx, {
+    schoolId: input.schoolId,
+    termId: input.termId,
+    legacyFinalTermNumber: workflow.finalTermNumber,
+  }) : null;
+
   let reopeningDate: Date | null = null;
   if (term) {
     const next = await tx.$queryRawUnsafe<Array<{ calendarDate: Date }>>(
@@ -225,8 +234,9 @@ export async function liveReportDocumentContext(tx: TenantDb, input: {
       reopeningDate = fallback?.startDate ?? null;
     }
   }
+
   let promotion: StructuredPromotion | null = null;
-  if (term?.isYearEnd) {
+  if (term && yearEndAuthority?.isYearEnd) {
     const rows = await tx.$queryRawUnsafe<StructuredPromotion[]>(
       `SELECT d."outcome",d."status",d."reason",d."targetGradeLevelId",g."name" AS "targetGradeName",
               d."targetPathwayId",p."name" AS "targetPathwayName"
@@ -249,10 +259,10 @@ export async function liveReportDocumentContext(tx: TenantDb, input: {
   ) : [];
   return {
     schoolIdentity: identity,
-    reportingPolicy: policy ? { id: policy.id, version: policy.version, name: policy.name } : null,
-    gradingScale: policy?.gradingScale ?? null,
+    reportingPolicy: reportingPolicy ? { id: reportingPolicy.id, version: reportingPolicy.version, name: reportingPolicy.name } : null,
+    gradingScale: reportingPolicy?.gradingScale ?? null,
     classRoll: Number(classRollRows[0]?.count ?? 0),
-    yearEndSession: Boolean(term?.isYearEnd),
+    yearEndSession: Boolean(yearEndAuthority?.isYearEnd),
     calendar: { vacationDate: term?.endDate ?? null, reopeningDate },
     structuredPromotion: promotion,
     reportTraits: traits,
