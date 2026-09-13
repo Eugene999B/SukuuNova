@@ -23,12 +23,17 @@ export function applyRadialDeadzone(x: number, y: number, deadzone = 0.16) {
   const safeDeadzone = Math.max(0, Math.min(0.8, deadzone));
   const rawX = clampAxis(x);
   const rawY = clampAxis(y);
-  const magnitude = Math.min(1, Math.hypot(rawX, rawY));
-  if (magnitude <= safeDeadzone || magnitude <= 1e-8) return { x: 0, y: 0 };
+  const rawMagnitude = Math.hypot(rawX, rawY);
+  if (rawMagnitude <= safeDeadzone || rawMagnitude <= 1e-8) return { x: 0, y: 0 };
+
+  // Keep the direction from the unclamped vector, then cap only its length.
+  // Using the capped magnitude as the divisor would turn (1, 1) into a vector
+  // with length sqrt(2), making diagonal movement faster than cardinal movement.
+  const magnitude = Math.min(1, rawMagnitude);
   const scaledMagnitude = (magnitude - safeDeadzone) / (1 - safeDeadzone);
   return {
-    x: (rawX / magnitude) * scaledMagnitude,
-    y: (rawY / magnitude) * scaledMagnitude,
+    x: (rawX / rawMagnitude) * scaledMagnitude,
+    y: (rawY / rawMagnitude) * scaledMagnitude,
   };
 }
 
