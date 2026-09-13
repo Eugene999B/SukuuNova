@@ -4,6 +4,19 @@ SukuuNova is a secure, multi-tenant school operations platform built for real da
 
 > **Repository rule:** this repository is for **SukuuNova only**. Do not copy assumptions, code, styles or workflows from another product unless they are deliberately adapted to SukuuNova's data model, security rules and school workflows.
 
+> [!IMPORTANT]
+> ## Deployment policy — Railway only
+> **SukuuNova uses Railway for production. Railway is the only production deployment platform that should be referenced, configured, monitored or used to judge release success unless the repository owner explicitly changes this policy.**
+>
+> - **Production host:** Railway
+> - **Canonical production URL:** `https://sukuunova-production.up.railway.app`
+> - **Production database:** Railway PostgreSQL
+> - **Release verification:** Railway deployment status + Railway migration/pre-deploy result + `/api/health` + Railway runtime logs + real production browser workflow
+> - **Vercel is not SukuuNova production infrastructure.** A Vercel bot comment, preview, failed Vercel deployment, Vercel quota warning or Vercel status on a pull request must be treated as incidental and must **not** be used as SukuuNova's deployment status or release gate.
+> - **Coding agents and AI chats:** do not recommend Vercel, troubleshoot SukuuNova as a Vercel deployment, use Vercel URLs as application origins, or report Vercel checks as production evidence. For deployment work, use Railway and `docs/RAILWAY_PRODUCTION.md`.
+>
+> When this README and an external provider notification disagree about where SukuuNova is deployed, **this Railway policy is authoritative**.
+
 ## Product identity
 
 | Area | Current choice |
@@ -843,6 +856,9 @@ AI agents must:
 - avoid major dependency upgrades without a deliberate plan;
 - treat migration names as historical technical identifiers;
 - report uncertainty instead of inventing behavior;
+- use Railway for SukuuNova deployment, logs, environment, health and production verification;
+- never recommend or treat Vercel as SukuuNova production infrastructure unless the repository owner explicitly changes the deployment policy;
+- ignore Vercel preview/bot status when determining whether a SukuuNova release succeeded;
 - never claim production success without Railway deployment/health/browser evidence.
 
 SukuuNova is one evolving system. The goal is continuous improvement in reliability, usefulness, security and product coherence.
