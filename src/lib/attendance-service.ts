@@ -4,6 +4,7 @@ import type { TenantDb } from "./db";
 import { appendSchoolAudit } from "./audit";
 import { hasPermission, requirePermission } from "./rbac";
 import { enqueueSms } from "./sms-outbox";
+import { assertClassTeacherScope, listClassTeacherClasses } from "./class-teacher-scope";
 import {
   assertAutomatedAttendanceWindow,
   attendanceLateCutoffMinutes,
@@ -24,8 +25,16 @@ export type AttendanceCalendarState = {
 
 export type AttendanceRoster = {
   termId: string | null;
+  academicYearId: string | null;
   source: "enrollment" | "student";
   rows: Array<{ studentId: string; classId: string | null }>;
+};
+
+export type AttendanceClassScope = {
+  id: string;
+  name: string;
+  level: string | null;
+  scopeSource: "all" | "annual_class_section" | "legacy_class";
 };
 
 function localParts(value: Date, timezone: string) {
@@ -43,10 +52,10 @@ function validSchoolDays(value?: number[]) {
   return days.length ? [...new Set(days)] : [1, 2, 3, 4, 5];
 }
 
-async function attendanceTermId(tx: TenantDb, schoolId: string, day: Date) {
+export async function resolveAttendanceTermContext(tx: TenantDb, schoolId: string, day: Date) {
   const targetDate = day.toISOString().slice(0, 10);
-  const rows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-    SELECT "id"
+  const rows = await tx.$queryRaw<Array<{ id: string; academicYearId: string }>>(Prisma.sql`
+    SELECT "id", "academicYearId"
     FROM "Term"
     WHERE "schoolId" = ${schoolId}
       AND "startDate"::date <= ${targetDate}::date
@@ -54,7 +63,7 @@ async function attendanceTermId(tx: TenantDb, schoolId: string, day: Date) {
     ORDER BY "startDate" DESC, "id" ASC
     LIMIT 1
   `);
-  return rows[0]?.id ?? null;
+  return { termId: rows[0]?.id ?? null, academicYearId: rows[0]?.academicYearId ?? null };
 }
 
 async function termHasStructuredRoster(tx: TenantDb, schoolId: string, termId: string) {
@@ -68,6 +77,36 @@ async function termHasStructuredRoster(tx: TenantDb, schoolId: string, termId: s
     ) AS "exists"
   `);
   return Boolean(rows[0]?.exists);
+}
+
+export async function resolveAttendanceClassScope(
+  tx: TenantDb,
+  input: { schoolId: string; actorId: string; day: Date; canRecordAll: boolean },
+): Promise<AttendanceClassScope[]> {
+  if (input.canRecordAll) {
+    const classes = await tx.class.findMany({
+      where: { schoolId: input.schoolId },
+      select: { id: true, name: true, level: true },
+      orderBy: [{ level: "asc" }, { name: "asc" }],
+    });
+    return classes.map((item) => ({ ...item, scopeSource: "all" as const }));
+  }
+
+  const term = await resolveAttendanceTermContext(tx, input.schoolId, input.day);
+  if (term.academicYearId) {
+    return listClassTeacherClasses(tx, {
+      schoolId: input.schoolId,
+      actorId: input.actorId,
+      academicYearId: term.academicYearId,
+    });
+  }
+
+  const classes = await tx.class.findMany({
+    where: { schoolId: input.schoolId, classTeacherId: input.actorId },
+    select: { id: true, name: true, level: true },
+    orderBy: [{ level: "asc" }, { name: "asc" }],
+  });
+  return classes.map((item) => ({ ...item, scopeSource: "legacy_class" as const }));
 }
 
 export async function getAttendanceCalendarState(tx: TenantDb, schoolId: string, day: Date, schoolDays?: number[]): Promise<AttendanceCalendarState> {
@@ -129,20 +168,20 @@ export async function isAttendanceBlocked(tx: TenantDb, schoolId: string, day: D
 }
 
 export async function resolveAttendanceRoster(tx: TenantDb, schoolId: string, day: Date, classIds?: string[] | null): Promise<AttendanceRoster> {
-  if (classIds && classIds.length === 0) return { termId: await attendanceTermId(tx, schoolId, day), source: "student", rows: [] };
-  const termId = await attendanceTermId(tx, schoolId, day);
-  if (termId && await termHasStructuredRoster(tx, schoolId, termId)) {
+  const term = await resolveAttendanceTermContext(tx, schoolId, day);
+  if (classIds && classIds.length === 0) return { ...term, source: "student", rows: [] };
+  if (term.termId && await termHasStructuredRoster(tx, schoolId, term.termId)) {
     const classClause = classIds ? Prisma.sql`AND e."classId" IN (${Prisma.join(classIds)})` : Prisma.empty;
     const rows = await tx.$queryRaw<Array<{ studentId: string; classId: string }>>(Prisma.sql`
       SELECT DISTINCT e."studentId", e."classId"
       FROM "Enrollment" e
       WHERE e."schoolId" = ${schoolId}
-        AND e."termId" = ${termId}
+        AND e."termId" = ${term.termId}
         AND e."status" IN ('ready','confirmed')
         ${classClause}
       ORDER BY e."classId" ASC, e."studentId" ASC
     `);
-    return { termId, source: "enrollment", rows };
+    return { ...term, source: "enrollment", rows };
   }
 
   const students = await tx.student.findMany({
@@ -155,7 +194,7 @@ export async function resolveAttendanceRoster(tx: TenantDb, schoolId: string, da
     orderBy: { id: "asc" },
   });
   return {
-    termId,
+    ...term,
     source: "student",
     rows: students.map((student) => ({ studentId: student.id, classId: student.classId })),
   };
@@ -167,37 +206,49 @@ export async function resolveAttendanceRosterStudentIds(tx: TenantDb, schoolId: 
 }
 
 export async function resolveStudentAttendanceClassId(tx: TenantDb, schoolId: string, studentId: string, day: Date) {
-  const termId = await attendanceTermId(tx, schoolId, day);
-  if (termId) {
+  const term = await resolveAttendanceTermContext(tx, schoolId, day);
+  if (term.termId) {
     const rows = await tx.$queryRaw<Array<{ classId: string }>>(Prisma.sql`
       SELECT "classId"
       FROM "Enrollment"
       WHERE "schoolId" = ${schoolId}
-        AND "termId" = ${termId}
+        AND "termId" = ${term.termId}
         AND "studentId" = ${studentId}
         AND "status" IN ('ready','confirmed')
       ORDER BY CASE WHEN "status"='confirmed' THEN 0 ELSE 1 END, "createdAt" DESC
       LIMIT 1
     `);
-    if (rows[0]?.classId) return { classId: rows[0].classId, termId, source: "enrollment" as const };
-    if (await termHasStructuredRoster(tx, schoolId, termId)) return { classId: null, termId, source: "enrollment" as const };
+    if (rows[0]?.classId) return { classId: rows[0].classId, ...term, source: "enrollment" as const };
+    if (await termHasStructuredRoster(tx, schoolId, term.termId)) return { classId: null, ...term, source: "enrollment" as const };
   }
   const student = await tx.student.findFirst({ where: { id: studentId, schoolId }, select: { classId: true } });
-  return { classId: student?.classId ?? null, termId, source: "student" as const };
+  return { classId: student?.classId ?? null, ...term, source: "student" as const };
 }
 
 export async function authorizeStudentAttendance(tx: TenantDb, actorId: string, studentId: string, context?: { schoolId: string; day: Date }) {
   if (await hasPermission(tx, actorId, "attendance:record_all")) return;
   if (!(await hasPermission(tx, actorId, "attendance:record_assigned"))) throw new ForbiddenError("You are not permitted to record this student's attendance.");
 
-  let classId: string | null = null;
   if (context) {
-    classId = (await resolveStudentAttendanceClassId(tx, context.schoolId, studentId, context.day)).classId;
-  } else {
-    classId = (await tx.student.findFirst({ where: { id: studentId }, select: { classId: true } }))?.classId ?? null;
+    const resolved = await resolveStudentAttendanceClassId(tx, context.schoolId, studentId, context.day);
+    if (!resolved.classId) throw new ForbiddenError("This learner is not on an attendance roster for the selected date.");
+    if (resolved.academicYearId) {
+      await assertClassTeacherScope(tx, {
+        schoolId: context.schoolId,
+        actorId,
+        academicYearId: resolved.academicYearId,
+        classId: resolved.classId,
+      });
+      return;
+    }
+    const assigned = await tx.class.findFirst({ where: { id: resolved.classId, schoolId: context.schoolId, classTeacherId: actorId }, select: { id: true } });
+    if (!assigned) throw new ForbiddenError("Teachers may record attendance only for their assigned class.");
+    return;
   }
-  if (!classId) throw new ForbiddenError("This learner is not on an attendance roster for the selected date.");
-  const assigned = await tx.class.findFirst({ where: { id: classId, ...(context ? { schoolId: context.schoolId } : {}), classTeacherId: actorId }, select: { id: true } });
+
+  const student = await tx.student.findFirst({ where: { id: studentId }, select: { classId: true } });
+  if (!student?.classId) throw new ForbiddenError("This learner is not on an attendance roster.");
+  const assigned = await tx.class.findFirst({ where: { id: student.classId, classTeacherId: actorId }, select: { id: true } });
   if (!assigned) throw new ForbiddenError("Teachers may record attendance only for their assigned class.");
 }
 
@@ -255,13 +306,14 @@ export async function recordStaffSelfAttendance(tx: TenantDb, input: { schoolId:
   return event;
 }
 
-async function authorizedSummaryClassIds(tx: TenantDb, schoolId: string, actorId: string, requestedClassId?: string): Promise<string[] | null> {
+async function authorizedSummaryClassIds(tx: TenantDb, schoolId: string, actorId: string, day: Date, requestedClassId?: string): Promise<string[] | null> {
   if (await hasPermission(tx, actorId, "attendance:review") || await hasPermission(tx, actorId, "attendance:record_all")) return requestedClassId ? [requestedClassId] : null;
   if (!(await hasPermission(tx, actorId, "attendance:record_assigned"))) throw new ForbiddenError("You are not permitted to view attendance summaries.");
-  const assignedClasses = await tx.class.findMany({ where: { schoolId, classTeacherId: actorId }, select: { id: true } });
-  const assignedIds = assignedClasses.map((row) => row.id);
+
+  const scope = await resolveAttendanceClassScope(tx, { schoolId, actorId, day, canRecordAll: false });
+  const assignedIds = scope.map((row) => row.id);
   if (requestedClassId && !assignedIds.includes(requestedClassId)) throw new ForbiddenError("You may view attendance only for your assigned class.");
-  if (!assignedIds.length) throw new ForbiddenError("No class is assigned to this teacher.");
+  if (!assignedIds.length) throw new ForbiddenError("No class is assigned to this teacher for the selected academic year.");
   return requestedClassId ? [requestedClassId] : assignedIds;
 }
 
@@ -289,7 +341,7 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   ]);
   const timestamp = input.timestamp ?? new Date();
   if (Number.isNaN(timestamp.getTime())) throw new AppError("Invalid attendance timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
-  if (timestamp.getTime() > Date.now() + 5 * 60 * 1000) throw new AppError("Attendance timestamp cannot be more than 5 minutes in the future.", 400, "ATTENDANCE_TIMESTAMP_IN_FUTURE");
+  if (timestamp.getTime() > Date.now() + 5 * 60 * 1000) throw new AppError("Attendance timestamp cannot be more than 5 minutes in the future.", 400, "INVALID_ATTENDANCE_TIMESTAMP_IN_FUTURE");
   const day = attendanceDate(timestamp, policy.timezone);
   if (!input.deviceAuthenticated && input.actorId && input.target.studentId) {
     await authorizeStudentAttendance(tx, input.actorId, input.target.studentId, { schoolId: input.schoolId, day });
@@ -334,7 +386,7 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
 
 export async function attendanceSummary(tx: TenantDb, input: { actorId: string; day: Date; classId?: string; periodId?: string; schoolId: string }) {
   await requirePermission(tx, input.actorId, "attendance:record");
-  const classIds = await authorizedSummaryClassIds(tx, input.schoolId, input.actorId, input.classId);
+  const classIds = await authorizedSummaryClassIds(tx, input.schoolId, input.actorId, input.day, input.classId);
   if (await isAttendanceBlocked(tx, input.schoolId, input.day)) return { calendarBlocked: true, present: 0, late: 0, absent: 0 };
   const { studentIds } = await resolveAttendanceRosterStudentIds(tx, input.schoolId, input.day, classIds);
   if (!studentIds.length) return { calendarBlocked: false, present: 0, late: 0, absent: 0 };
@@ -356,7 +408,7 @@ export async function attendanceSummary(tx: TenantDb, input: { actorId: string; 
 
 export async function finalizeStudentAttendance(tx: TenantDb, input: { schoolId: string; actorId: string; day: Date; classId?: string }) {
   await requirePermission(tx, input.actorId, "attendance:record", input.schoolId);
-  const classIds = await authorizedSummaryClassIds(tx, input.schoolId, input.actorId, input.classId);
+  const classIds = await authorizedSummaryClassIds(tx, input.schoolId, input.actorId, input.day, input.classId);
   if (await isAttendanceBlocked(tx, input.schoolId, input.day)) return { queued: 0, calendarBlocked: true };
   const { studentIds } = await resolveAttendanceRosterStudentIds(tx, input.schoolId, input.day, classIds);
   if (!studentIds.length) return { queued: 0, calendarBlocked: false };
