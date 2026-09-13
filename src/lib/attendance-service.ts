@@ -128,10 +128,18 @@ export async function getAttendanceCalendarState(tx: TenantDb, schoolId: string,
   // Once the day-level calendar exists, it is the canonical interpretation of holidays,
   // vacations, exams, make-up days and manual overrides for that date.
   if (calendarDay) {
+    if (calendarDay.isInstructional) {
+      return {
+        calendarBlocked: false,
+        schoolDay: true,
+        source: calendarDay.source,
+        dayType: calendarDay.dayType,
+      };
+    }
     if (calendarDay.affectsAttendance) {
       return {
-        calendarBlocked: !calendarDay.isInstructional,
-        schoolDay: calendarDay.isInstructional,
+        calendarBlocked: true,
+        schoolDay: false,
         source: calendarDay.source,
         dayType: calendarDay.dayType,
       };
@@ -341,7 +349,7 @@ export async function recordAttendance(tx: TenantDb, input: { schoolId: string; 
   ]);
   const timestamp = input.timestamp ?? new Date();
   if (Number.isNaN(timestamp.getTime())) throw new AppError("Invalid attendance timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
-  if (timestamp.getTime() > Date.now() + 5 * 60 * 1000) throw new AppError("Attendance timestamp cannot be more than 5 minutes in the future.", 400, "INVALID_ATTENDANCE_TIMESTAMP_IN_FUTURE");
+  if (timestamp.getTime() > Date.now() + 5 * 60 * 1000) throw new AppError("Attendance timestamp cannot be more than 5 minutes in the future.", 400, "ATTENDANCE_TIMESTAMP_IN_FUTURE");
   const day = attendanceDate(timestamp, policy.timezone);
   if (!input.deviceAuthenticated && input.actorId && input.target.studentId) {
     await authorizeStudentAttendance(tx, input.actorId, input.target.studentId, { schoolId: input.schoolId, day });
