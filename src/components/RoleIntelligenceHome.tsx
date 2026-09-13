@@ -9,6 +9,7 @@ import {
   Sparkles,
   Target,
 } from "lucide-react";
+import { DashboardAnalyticsClient } from "@/components/DashboardAnalyticsClient";
 import "./role-intelligence-home.css";
 
 export type IntelligenceTone = "default" | "good" | "warn" | "critical";
@@ -119,6 +120,8 @@ export function RoleIntelligenceHome({
           return metric.href ? <Link key={metric.label} href={metric.href} className={className}>{card}</Link> : <article key={metric.label} className={className}>{card}</article>;
         })}
       </section>
+
+      <DashboardAnalyticsClient />
 
       {(insights.length > 0 || focus.length > 0) ? <section className="role-intelligence-main-grid">
         <article className="role-intelligence-panel role-intelligence-insights">
