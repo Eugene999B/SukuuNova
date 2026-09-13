@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bus, Clock, CloudRain, Droplets, Leaf, LogOut, MapPin, Recycle, ScanLine, Sprout, Trash2, TreePine, Zap } from "lucide-react";
+import { Bus, ClipboardCheck, Clock, CloudRain, Droplets, Leaf, Link2, LogOut, MapPin, Recycle, RotateCcw, ScanLine, Sprout, Trash2, TreePine, Zap } from "lucide-react";
 import { ecoChainGain, ecoEventDurationMs, ecoResourceGain, ecoResilienceReward, ecoSeedReward, ecoStressDamage, ecoSurveyRecovery } from "@/lib/ecogrid";
 import type { EcoGridMission, EcoGridScene } from "@/lib/ecogrid-content";
 import "./ecogrid-ghana.css";
@@ -44,6 +44,8 @@ const missionIcons: Record<EcoGridMission, typeof Leaf> = {
   circularity: Sprout,
 };
 
+const evidenceKeys = ["A", "B", "C"] as const;
+
 function initialCheckpoint(answers: string[], length: number) {
   const first = answers.findIndex((answer) => !answer.trim());
   return first < 0 ? length : first;
@@ -55,11 +57,15 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
   const exitRef = useRef(onExit);
   const commitRef = useRef<() => void>(() => undefined);
   const surveyRef = useRef<() => void>(() => undefined);
+  const stageRef = useRef<(index: number) => void>(() => undefined);
+  const linkRef = useRef<(index: number) => void>(() => undefined);
+  const resetRef = useRef<() => void>(() => undefined);
   const completedRef = useRef(false);
   const startedRef = useRef(Date.now());
   const firstCheckpoint = initialCheckpoint(round.answers, round.questions.length);
   const [checkpoint, setCheckpoint] = useState(firstCheckpoint);
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [linkedSignals, setLinkedSignals] = useState<number[]>([]);
   const [ecoStress, setEcoStress] = useState(0);
   const [resilience, setResilience] = useState(78);
   const [water, setWater] = useState(68);
@@ -70,7 +76,7 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
   const [chain, setChain] = useState(0);
   const [surveyActive, setSurveyActive] = useState(false);
   const [pulse, setPulse] = useState(false);
-  const [message, setMessage] = useState("EcoGrid is online. Restore the community one project at a time while keeping water, power and habitats resilient.");
+  const [message, setMessage] = useState("EcoGrid is online. Stage a community project, connect the field evidence, then deploy the blueprint.");
   completeRef.current = onComplete;
   exitRef.current = onExit;
 
@@ -88,14 +94,17 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
   );
   const progress = Math.round((Math.min(checkpoint, round.questions.length) / Math.max(1, round.questions.length)) * 100);
   const cue = scene.cue || "Trace the environmental cause, who or what is affected, and which action prevents the problem at its source.";
+  const requiredLinks = signals.length;
+  const blueprintReady = selected !== null && linkedSignals.length >= requiredLinks;
 
   useEffect(() => {
     startedRef.current = Date.now();
     setEcoStress(0);
-    setSelected(0);
+    setSelected(null);
+    setLinkedSignals([]);
     setSurveyActive(false);
     if (checkpoint < round.questions.length) {
-      setMessage(boss ? "FINAL RESTORATION SUMMIT: balance the whole EcoGrid before the last project closes." : `Project ${checkpoint + 1} is live in ${scene.zone || "the community"}. Read the event and commit the strongest environmental action.`);
+      setMessage(boss ? "FINAL RESTORATION SUMMIT: stage the final proposal and connect every field signal before deployment." : `Project ${checkpoint + 1} is live in ${scene.zone || "the community"}. Choose a proposal, then build an evidence-backed blueprint.`);
     }
   }, [boss, checkpoint, round.questions.length, scene.zone]);
 
@@ -118,7 +127,7 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
         setChain(0);
         startedRef.current = Date.now() - Math.round(duration * 0.5);
         setEcoStress(50);
-        setMessage(`Environmental stress rose. Community resilience absorbed ${damage}% impact — inspect the project and stabilise the grid.`);
+        setMessage(`Environmental stress rose. Community resilience absorbed ${damage}% impact — complete the evidence blueprint before deploying.`);
       } else {
         setEcoStress(Math.min(100, (elapsed / duration) * 100));
       }
@@ -136,12 +145,42 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
     });
     setSurveyActive(true);
     const evidence = signals.length ? signals.join(" · ") : cue;
-    setMessage(`Field survey: ${evidence}. The survey reveals environmental evidence but never reveals which action is graded correct.`);
+    setMessage(`Field survey: ${evidence}. Use those observations to judge the proposal you stage; the survey never identifies the graded action.`);
   };
   surveyRef.current = fieldSurvey;
 
+  const stageProposal = (index: number) => {
+    if (!question || pulse || index < 0 || index >= question.options.length) return;
+    setSelected(index);
+    setLinkedSignals([]);
+    setMessage(`Proposal ${index + 1} staged on the planning table. Link ${requiredLinks || "the available"} field evidence signal${requiredLinks === 1 ? "" : "s"} before deployment.`);
+  };
+  stageRef.current = stageProposal;
+
+  const linkEvidence = (index: number) => {
+    if (!question || pulse || index < 0 || index >= signals.length) return;
+    if (selected === null) {
+      setMessage("Stage a community proposal first. Evidence must be connected to a specific project blueprint.");
+      return;
+    }
+    setLinkedSignals((current) => current.includes(index) ? current : [...current, index]);
+    setMessage(`Field signal ${index + 1} linked: ${signals[index]}. ${Math.min(requiredLinks, linkedSignals.length + (linkedSignals.includes(index) ? 0 : 1))}/${requiredLinks} evidence links secured.`);
+  };
+  linkRef.current = linkEvidence;
+
+  const resetBlueprint = () => {
+    if (pulse) return;
+    setSelected(null);
+    setLinkedSignals([]);
+    setMessage("Blueprint cleared. Review the environmental event and stage a new proposal.");
+  };
+  resetRef.current = resetBlueprint;
+
   const commitProject = () => {
-    if (!question || pulse || completedRef.current) return;
+    if (!question || selected === null || !blueprintReady || pulse || completedRef.current) {
+      if (question && !pulse && !blueprintReady) setMessage("The blueprint is incomplete. Stage one proposal and link every field signal before deployment.");
+      return;
+    }
     const answer = question.options[selected];
     if (!answer) return;
     answersRef.current[checkpoint] = answer;
@@ -157,7 +196,7 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
     if (mission === "habitat" || mission === "climate" || mission === "circularity") setHabitat((value) => Math.min(100, value + resourceGain));
     if (ecoStress <= 42) setSurveys((value) => Math.min(5, value + 1));
     setPulse(true);
-    setMessage(`Project choice sealed for secure review. +${seedGain} Eco Seeds · resilience +${resilienceGain} · ${chainGain ? `restoration chain +${chainGain}` : "district stabilised"}.`);
+    setMessage(`Evidence-backed project sealed for secure review. +${seedGain} Eco Seeds · resilience +${resilienceGain} · ${chainGain ? `restoration chain +${chainGain}` : "district stabilised"}.`);
     window.setTimeout(() => {
       setPulse(false);
       setCheckpoint((value) => value + 1);
@@ -170,8 +209,12 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
       const key = event.key.toLowerCase();
       if (event.key >= "1" && event.key <= "4") {
         const index = Number(event.key) - 1;
-        if (index < (question?.options.length ?? 0)) setSelected(index);
-      } else if (key === "f") surveyRef.current();
+        if (index < (question?.options.length ?? 0)) stageRef.current(index);
+      } else if (key === "a") linkRef.current(0);
+      else if (key === "b") linkRef.current(1);
+      else if (key === "c") linkRef.current(2);
+      else if (key === "f") surveyRef.current();
+      else if (key === "r") resetRef.current();
       else if (event.key === "Enter") {
         event.preventDefault();
         commitRef.current();
@@ -185,7 +228,7 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
 
   return <section className="ecogrid-shell" aria-label={`EcoGrid Ghana for ${learnerName}`}>
     <header className="ecogrid-bar">
-      <div className="ecogrid-brand"><span><Leaf size={22}/></span><div><strong>ECOGRID GHANA</strong><small>adaptive environmental strategy · community restoration · systems thinking</small></div></div>
+      <div className="ecogrid-brand"><span><Leaf size={22}/></span><div><strong>ECOGRID GHANA</strong><small>adaptive environmental strategy · community planning · systems thinking</small></div></div>
       <button type="button" className="ecogrid-exit" onClick={() => exitRef.current([...answersRef.current])}><LogOut size={15}/>Save & exit</button>
     </header>
 
@@ -205,6 +248,7 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
         <div className="eco-zone eco-market"><Recycle size={23}/><strong>MARKET LOOP</strong><span>materials + waste</span></div>
         <div className="eco-zone eco-school"><Zap size={23}/><strong>SCHOOL QUARTER</strong><span>energy + habits</span></div>
         <div className="eco-zone eco-green"><TreePine size={23}/><strong>GREEN BELT</strong><span>habitat + shade</span></div>
+        <div className={`eco-blueprint-beacon ${blueprintReady ? "ready" : ""}`}><ClipboardCheck size={22}/><div><small>PLANNING TABLE</small><strong>{selected === null ? "NO PROJECT STAGED" : `PROPOSAL ${selected + 1}`}</strong><span>{linkedSignals.length}/{requiredLinks} evidence links</span></div></div>
         <div className="eco-ranger"><div>{learnerName.trim()?.[0]?.toUpperCase() || "E"}</div><strong>ECO PLANNER</strong></div>
         <div className="eco-project-id"><small>RESTORATION PROJECT</small><strong>{scene.projectId || `ECO-${checkpoint + 1}`}</strong><span>{scene.event || "Community event"}</span></div>
       </div>
@@ -213,10 +257,19 @@ export default function EcoGridGhana({ learnerName, round, onComplete, onExit }:
         <div className="eco-console-head"><div><span>{boss ? "FINAL PROJECT · RESTORATION SUMMIT" : `${missionLabels[mission]} · PROJECT ${checkpoint + 1}/${round.questions.length}`}</span><strong>{cue}</strong></div><MissionIcon size={25}/></div>
         <h2>{question.prompt}</h2>
         <div className="eco-casefile"><div><span>Zone</span><strong>{scene.zone || "Community"}</strong></div><div><span>Resource</span><strong>{scene.resource || "Resilience"}</strong></div><div><span>Risk</span><strong>{riskLevel}/5</strong></div></div>
-        <div className="eco-options">{question.options.slice(0, 4).map((option, index) => <button type="button" key={`${index}-${option}`} className={selected === index ? "selected" : ""} onClick={() => setSelected(index)} disabled={pulse}><b>{index + 1}</b><span>{option}</span></button>)}</div>
+
+        <div className="eco-planner">
+          <div className="eco-planner-title"><div><span>PROJECT BLUEPRINTS</span><strong>Stage one proposal</strong></div><b>{selected === null ? "0/1" : "1/1"}</b></div>
+          <div className="eco-proposals">{question.options.slice(0, 4).map((option, index) => <button type="button" key={`${index}-${option}`} className={selected === index ? "staged" : ""} onClick={() => stageProposal(index)} disabled={pulse}><b>{index + 1}</b><span>{option}</span><small>{selected === index ? "STAGED" : "PROPOSAL"}</small></button>)}</div>
+          <div className={`eco-evidence-board ${selected !== null ? "active" : ""}`}>
+            <div className="eco-evidence-head"><Link2 size={15}/><div><span>FIELD EVIDENCE LINKS</span><strong>{selected === null ? "Stage a proposal to begin" : `Connect observations to proposal ${selected + 1}`}</strong></div><b>{linkedSignals.length}/{requiredLinks}</b></div>
+            <div className="eco-signals">{signals.length ? signals.map((signal, index) => <button type="button" key={`${signal}-${index}`} className={linkedSignals.includes(index) ? "linked" : ""} onClick={() => linkEvidence(index)} disabled={pulse || selected === null} aria-pressed={linkedSignals.includes(index)}><b>{evidenceKeys[index] ?? index + 1}</b><span>{signal}</span><small>{linkedSignals.includes(index) ? "LINKED" : "CONNECT"}</small></button>) : <div className="eco-no-signals"><Leaf size={15}/><span>No extra field signals are required for this project.</span></div>}</div>
+          </div>
+        </div>
+
         {surveyActive ? <div className="eco-survey"><ScanLine size={15}/><span>Field evidence: {signals.length ? signals.join(" · ") : cue}</span></div> : null}
-        <div className="eco-actions"><button type="button" className="eco-commit" onClick={commitProject} disabled={pulse}><Leaf size={16}/>{pulse ? "Sealing project…" : "Commit project"}</button><button type="button" className="eco-survey-button" onClick={fieldSurvey} disabled={surveys < 1 || pulse}><ScanLine size={16}/>Field survey · {surveys}</button></div>
-        <div className="eco-status" aria-live="polite"><span>{message}</span><small>1–4 action · F survey · Enter commit</small></div>
+        <div className="eco-actions"><button type="button" className="eco-commit" onClick={commitProject} disabled={pulse || !blueprintReady}><Leaf size={16}/>{pulse ? "Deploying project…" : blueprintReady ? "Deploy blueprint" : "Complete blueprint"}</button><button type="button" className="eco-reset-button" onClick={resetBlueprint} disabled={pulse || (selected === null && linkedSignals.length === 0)}><RotateCcw size={16}/>Clear</button><button type="button" className="eco-survey-button" onClick={fieldSurvey} disabled={surveys < 1 || pulse}><ScanLine size={16}/>Survey · {surveys}</button></div>
+        <div className="eco-status" aria-live="polite"><span>{message}</span><small>1–4 stage · A/B/C link evidence · F survey · R reset · Enter deploy</small></div>
       </div> : <div className="ecogrid-console eco-finished"><Sprout size={48}/><strong>COMMUNITY RESTORED · REVIEW READY</strong><span>Uploading sealed project choices for authoritative environmental-learning grading…</span></div>}
 
       <div className="eco-stress"><span><Clock size={13}/> Eco stress</span><i><b style={{ width: `${ecoStress}%` }}/></i><strong>{Math.round(ecoStress)}%</strong></div>
