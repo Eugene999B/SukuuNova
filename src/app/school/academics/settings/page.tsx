@@ -95,18 +95,18 @@ export default async function AcademicSettingsPage() {
           <div className="academic-empty-actions"><Link href="/school/subjects">Subject library</Link><Link href="/school/settings/reporting">Reporting settings</Link></div>
         </div>
         <div className="academic-work-card">
-          <div className="academic-section-head"><div><span className="academic-page-overline">04 · YEAR, TERMS & WEEKS</span><h2>Academic calendar</h2><p>Create academic years and terms, set their dates and teaching-week count, and manage the lock/reopen lifecycle from one authoritative timeline.</p></div><Link className="academic-btn-secondary" href="/school/terms">Open academic terms</Link></div>
-          <p>{currentTerm ? `${currentTerm.name} currently drives teacher work and mark entry automatically.` : "No term is active right now. Create or review the academic calendar before teachers record work."}</p>
+          <div className="academic-section-head"><div><span className="academic-page-overline">04 · YEAR, SESSIONS & VACATIONS</span><h2>Academic year planner</h2><p>Plan the entire year as three terms, two semesters, trimesters, quarters or a custom calendar. Actual dates generate vacations and instructional days; the final session controls year-end promotion.</p></div><Link className="academic-btn-secondary" href="/school/academics/calendar">Open year planner</Link></div>
+          <div className="academic-empty-actions"><Link href="/school/academics/calendar">Plan academic year</Link><Link href="/school/terms">Term operations & history</Link></div>
         </div>
         <div className="academic-work-card">
-          <div className="academic-section-head"><div><span className="academic-page-overline">05 · FINALISE</span><h2>Term completion</h2><p>Before closing a term, verify staffing, assessments, explicit score dispositions, grading policy and report-card finalisation.</p></div><Link className="academic-btn-secondary" href="/school/academics/term-completion">Open completion control room</Link></div>
+          <div className="academic-section-head"><div><span className="academic-page-overline">05 · FINALISE</span><h2>Term completion</h2><p>Before closing a term, verify staffing, assessments, explicit score dispositions, grading policy, class-teacher year-end decisions and report-card finalisation.</p></div><Link className="academic-btn-secondary" href="/school/academics/calendar">Open closing control</Link></div>
           <div className="academic-empty-actions"><Link href="/school/report-cards/operations">Report operations</Link><Link href="/school/gradebook?view=overview">Leadership Gradebook</Link></div>
         </div>
       </section>
 
       <section className="academic-empty">
         <strong>Secondary libraries stay available without crowding the main academic menu.</strong>
-        <p>Subjects remain a reusable school catalogue and historical routes remain compatible, but structure now defines progression, Classes define the teaching groups, and Gradebook handles daily marks.</p>
+        <p>Subjects remain a reusable school catalogue and historical routes remain compatible, but structure now defines progression, the Year Planner defines time, Classes define teaching groups, and Gradebook handles daily marks.</p>
         <div className="academic-empty-actions"><Link href="/school/subjects">Open subject library</Link><Link href="/school/library">Library & resources</Link></div>
       </section>
     </div>
