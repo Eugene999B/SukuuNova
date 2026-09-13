@@ -191,8 +191,15 @@ BEGIN
     RAISE EXCEPTION 'Choose a valid gender value.' USING ERRCODE='23514';
   END IF;
 
+  -- New applications must have gender before they leave draft. Historical
+  -- applications that were already submitted before this migration remain
+  -- operable instead of being wedged by previously missing demographic data.
   IF NEW."status" <> 'draft' AND NEW."gender" IS NULL THEN
-    RAISE EXCEPTION 'Gender is required before an admission application can be submitted.' USING ERRCODE='23514';
+    IF TG_OP = 'INSERT' THEN
+      RAISE EXCEPTION 'Gender is required before an admission application can be submitted.' USING ERRCODE='23514';
+    ELSIF OLD."status" = 'draft' THEN
+      RAISE EXCEPTION 'Gender is required before an admission application can be submitted.' USING ERRCODE='23514';
+    END IF;
   END IF;
   RETURN NEW;
 END; $$;
