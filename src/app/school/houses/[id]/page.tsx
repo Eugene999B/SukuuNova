@@ -25,23 +25,23 @@ export default async function HouseDetailPage({ params }: { params: Promise<{ id
   if (!data.school) notFound();
   if (!data.house) {
     return (
-      <AppShell universe="school" title="House not found" subtitle="Houses workspace." active="Classes & Houses" schoolName="School Workspace" schoolCode="" userName={session.name}>
+      <AppShell universe="school" title="House not found" subtitle="Houses workspace." active="Houses" schoolName="School Workspace" schoolCode="" userName={session.name}>
         <div className="product-workspace">
-          <ProductPageHeader eyebrow="Houses" title="House not found" description="This house does not exist in your school." backHref="/school/classes" backLabel="Classes & Houses" />
+          <ProductPageHeader eyebrow="Houses" title="House not found" description="This house does not exist in your school." backHref="/school/houses" backLabel="Houses" />
         </div>
       </AppShell>
     );
   }
   const h = data.house;
   return (
-    <AppShell universe="school" title={h.name} subtitle="House workspace — membership across classes." active="Classes & Houses" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+    <AppShell universe="school" title={h.name} subtitle="House workspace — membership across classes." active="Houses" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
       <div className="product-workspace">
         <ProductPageHeader
           eyebrow={`House · ${h.code}`}
           title={h.name}
           description={h.description || "Pastoral community connecting learners across class groups."}
-          backHref="/school/classes"
-          backLabel="Classes & Houses"
+          backHref="/school/houses"
+          backLabel="Houses"
           stats={[{ label: "Active members", value: String(data.count) }]}
           actions={<StatusBadge tone={h.isActive ? "success" : "neutral"}>{h.isActive ? "Active" : "Inactive"}</StatusBadge>}
         />
@@ -49,29 +49,14 @@ export default async function HouseDetailPage({ params }: { params: Promise<{ id
           <DetailGrid items={[{ label: "Name", value: h.name }, { label: "Code", value: h.code }, { label: "Colour", value: h.color ?? "—" }, { label: "Status", value: h.isActive ? "Active" : "Inactive" }]} />
           {h.description ? <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>{h.description}</p> : null}
         </ProductSection>
-        <ProductSection eyebrow="Membership" title={`Students (${data.count})`} description="First 50 active members alphabetically. Assign houses from Classes & Houses.">
+        <ProductSection eyebrow="Membership" title={`Students (${data.count})`} description="First 50 active members alphabetically. Manage house assignments from the Houses workspace.">
           {h.students.length === 0 ? (
             <p style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>No active members yet. Assign learners to this house to build the community.</p>
           ) : (
             <div className="product-table-wrap">
               <table className="product-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Learner</th>
-                    <th scope="col">Class</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {h.students.map((s) => (
-                    <tr key={s.id}>
-                      <td>
-                        <Link href={`/school/students/${s.id}`}>{s.name}</Link>
-                        <small style={{ display: "block", color: "var(--color-text-muted)" }}>{s.admissionNo}</small>
-                      </td>
-                      <td>{s.class?.name ?? "Unassigned"}</td>
-                    </tr>
-                  ))}
-                </tbody>
+                <thead><tr><th scope="col">Learner</th><th scope="col">Class</th></tr></thead>
+                <tbody>{h.students.map((student) => <tr key={student.id}><td><Link href={`/school/students/${student.id}`}>{student.name}</Link><small style={{ display: "block", color: "var(--color-text-muted)" }}>{student.admissionNo}</small></td><td>{student.class?.name ?? "Unassigned"}</td></tr>)}</tbody>
               </table>
             </div>
           )}
