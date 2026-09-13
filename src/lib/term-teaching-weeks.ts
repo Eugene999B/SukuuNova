@@ -16,6 +16,14 @@ export type TermWeek = {
 
 export type TeachingWeekRange = Omit<TermWeek, "schoolId" | "termId" | "isTeaching">;
 
+type LegacyTermWeekSource = {
+  id: string;
+  schoolId: string;
+  startDate: Date;
+  endDate: Date;
+  teachingWeeks: number;
+};
+
 export function normalizeTeachingWeeks(value: unknown): number {
   const numeric = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(numeric) || numeric < 1 || numeric > MAX_TEACHING_WEEKS) return DEFAULT_TEACHING_WEEKS;
@@ -94,7 +102,7 @@ export async function syncTermWeeks(tx: TenantDb, input: { schoolId: string; ter
   return ranges;
 }
 
-export async function getTermWeeks(tx: TenantDb, schoolId: string, termId: string): Promise<TermWeek[]> {
+async function queryTermWeeks(tx: TenantDb, schoolId: string, termId: string): Promise<TermWeek[]> {
   return tx.$queryRawUnsafe<TermWeek[]>(
     `SELECT "schoolId","termId","weekNumber","startDate","endDate","isTeaching" FROM "TermWeek" WHERE "schoolId"=$1 AND "termId"=$2 ORDER BY "weekNumber" ASC`,
     schoolId,
@@ -102,15 +110,45 @@ export async function getTermWeeks(tx: TenantDb, schoolId: string, termId: strin
   );
 }
 
-export async function getTeachingWeekForDate(tx: TenantDb, schoolId: string, termId: string, workDate: string) {
-  const rows = await tx.$queryRawUnsafe<TermWeek[]>(
-    `SELECT "schoolId","termId","weekNumber","startDate","endDate","isTeaching" FROM "TermWeek" WHERE "schoolId"=$1 AND "termId"=$2 AND "isTeaching" IS TRUE AND $3::date BETWEEN "startDate"::date AND "endDate"::date ORDER BY "weekNumber" ASC LIMIT 1`,
+/**
+ * Direct/legacy writers historically created Term rows without a corresponding
+ * durable week calendar. Normal term APIs now materialize TermWeek in the same
+ * transaction, but this repair path keeps old data, imports and test fixtures
+ * usable without weakening week/date validation. Once repaired, all reads use
+ * the same first-class TermWeek rows as newly created terms.
+ */
+async function repairMissingTermWeeks(tx: TenantDb, schoolId: string, termId: string) {
+  const terms = await tx.$queryRawUnsafe<LegacyTermWeekSource[]>(
+    `SELECT "id","schoolId","startDate","endDate","teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`,
     schoolId,
     termId,
-    workDate.slice(0, 10),
   );
-  if (!rows[0]) throw new AppError("The selected date is not inside a configured teaching week for this term.", 400, "DATE_OUTSIDE_TEACHING_WEEK");
-  return rows[0];
+  const term = terms[0];
+  if (!term) throw new AppError("Selected term was not found in this school.", 404, "TERM_NOT_FOUND");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-week-repair:${schoolId}:${termId}`}))`;
+  const existing = await queryTermWeeks(tx, schoolId, termId);
+  if (existing.length) return existing;
+  await syncTermWeeks(tx, {
+    schoolId,
+    termId,
+    startDate: term.startDate,
+    endDate: term.endDate,
+    teachingWeeks: normalizeTeachingWeeks(term.teachingWeeks),
+  });
+  return queryTermWeeks(tx, schoolId, termId);
+}
+
+export async function getTermWeeks(tx: TenantDb, schoolId: string, termId: string): Promise<TermWeek[]> {
+  const rows = await queryTermWeeks(tx, schoolId, termId);
+  return rows.length ? rows : repairMissingTermWeeks(tx, schoolId, termId);
+}
+
+export async function getTeachingWeekForDate(tx: TenantDb, schoolId: string, termId: string, workDate: string) {
+  const selected = workDate.slice(0, 10);
+  const weeks = await getTermWeeks(tx, schoolId, termId);
+  const week = weeks.find((row) => row.isTeaching && selected >= dateLabel(row.startDate) && selected <= dateLabel(row.endDate));
+  if (!week) throw new AppError("The selected date is not inside a configured teaching week for this term.", 400, "DATE_OUTSIDE_TEACHING_WEEK");
+  return week;
 }
 
 export async function assertTeachingWeekDate(tx: TenantDb, schoolId: string, termId: string, weekNumber: number, workDate: string) {
