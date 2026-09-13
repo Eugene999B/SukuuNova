@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { BarChart3, CalendarDays, ClipboardList, FileText, LayoutGrid, Settings2, Table2 } from "lucide-react";
+import { CalendarDays, FileText, LayoutGrid, Settings2, Table2 } from "lucide-react";
 import "./academic-workspace-nav.css";
 
 type Item = { key: string; label: string; href: string; icon: typeof LayoutGrid };
@@ -12,9 +12,7 @@ const items: Item[] = [
   { key: "setup", label: "Academic setup", href: "/school/academics/setup", icon: Settings2 },
   { key: "calendar", label: "Terms & calendar", href: "/school/terms", icon: CalendarDays },
   { key: "timetable", label: "Timetable", href: "/school/timetable", icon: CalendarDays },
-  { key: "assessments", label: "Assessments", href: "/school/exams", icon: ClipboardList },
-  { key: "gradebook", label: "Gradebook", href: "/school/gradebook/studio", icon: Table2 },
-  { key: "performance", label: "Performance", href: "/school/academics/performance", icon: BarChart3 },
+  { key: "gradebook", label: "Gradebook", href: "/school/gradebook", icon: Table2 },
   { key: "reports", label: "Report cards", href: "/school/report-cards", icon: FileText },
 ];
 
@@ -24,7 +22,7 @@ function contextHref(item: Item, params: URLSearchParams): string {
   const subjectId = params.get("subject") ?? params.get("subjectId");
   const query = new URLSearchParams();
 
-  if (item.key === "gradebook" || item.key === "performance") {
+  if (item.key === "gradebook") {
     if (classId) query.set("class", classId);
     if (subjectId) query.set("subject", subjectId);
     if (term) query.set("term", term);
