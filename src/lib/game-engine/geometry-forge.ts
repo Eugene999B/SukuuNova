@@ -73,9 +73,9 @@ export const FORGE_CHALLENGES: Record<ForgeChallengeId, ForgeChallenge> = {
 };
 
 const STARTING_POINTS: Record<ForgeChallengeId, ForgePoint[]> = {
-  courtyard: [{ x: 4, y: 4 }, { x: 12, y: 4 }, { x: 12, y: 10 }, { x: 4, y: 10 }],
-  stage: [{ x: 3, y: 3 }, { x: 13, y: 3 }, { x: 13, y: 9 }, { x: 3, y: 9 }],
-  "tank-pad": [{ x: 5, y: 4 }, { x: 11, y: 4 }, { x: 11, y: 10 }, { x: 5, y: 10 }],
+  courtyard: [{ x: 4, y: 4 }, { x: 11, y: 4 }, { x: 11, y: 9 }, { x: 4, y: 9 }],
+  stage: [{ x: 4, y: 4 }, { x: 12, y: 4 }, { x: 12, y: 9 }, { x: 4, y: 9 }],
+  "tank-pad": [{ x: 6, y: 5 }, { x: 11, y: 5 }, { x: 11, y: 10 }, { x: 6, y: 10 }],
 };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
