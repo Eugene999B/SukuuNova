@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/school-auth";
-import { withTenant } from "@/lib/db";
+import { withTenant, type TenantDb } from "@/lib/db";
 import { routeError } from "@/lib/errors";
 import { requirePermission } from "@/lib/rbac";
 import { listAcademicStructureTemplates } from "@/lib/academic-structure-templates";
@@ -76,14 +76,58 @@ const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("cancelRollover"), rolloverId: z.string().min(1).max(120) }),
 ]);
 
+async function enrichRolloverPlan(tx: TenantDb, plan: Awaited<ReturnType<typeof previewAcademicYearRollover>>) {
+  const studentIds = [...new Set(plan.items.map((item) => item.studentId))];
+  const students = studentIds.length
+    ? await tx.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, name: true, admissionNo: true } })
+    : [];
+  const byId = new Map(students.map((student) => [student.id, student]));
+  return {
+    ...plan,
+    items: plan.items.map((item) => ({
+      ...item,
+      studentName: byId.get(item.studentId)?.name ?? "Learner",
+      admissionNo: byId.get(item.studentId)?.admissionNo ?? "",
+    })),
+  };
+}
+
 export async function GET() {
   try {
     const session = await requireSchoolSession();
-    const state = await withTenant(session.schoolId, async (tx) => {
+    const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "classes:manage");
-      return getAcademicStructureState(tx, session.schoolId);
+      const [state, rollovers] = await Promise.all([
+        getAcademicStructureState(tx, session.schoolId),
+        tx.$queryRawUnsafe<Array<{
+          id: string;
+          sourceAcademicYearId: string;
+          targetAcademicYearId: string;
+          frameworkId: string;
+          status: string;
+          createdAt: Date;
+          validatedAt: Date | null;
+          committedAt: Date | null;
+          totalItems: number;
+          blockedItems: number;
+          appliedItems: number;
+        }>>(
+          `SELECT r."id",r."sourceAcademicYearId",r."targetAcademicYearId",r."frameworkId",r."status",r."createdAt",r."validatedAt",r."committedAt",
+                  COUNT(i."id")::int AS "totalItems",
+                  COUNT(i."id") FILTER (WHERE i."status"='blocked')::int AS "blockedItems",
+                  COUNT(i."id") FILTER (WHERE i."status"='applied')::int AS "appliedItems"
+             FROM "AcademicYearRollover" r
+             LEFT JOIN "AcademicYearRolloverItem" i ON i."schoolId"=r."schoolId" AND i."rolloverId"=r."id"
+            WHERE r."schoolId"=$1
+            GROUP BY r."id"
+            ORDER BY r."createdAt" DESC
+            LIMIT 12`,
+          session.schoolId,
+        ),
+      ]);
+      return { state, rollovers };
     });
-    return NextResponse.json({ templates: listAcademicStructureTemplates(), state }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json({ templates: listAcademicStructureTemplates(), ...result }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return routeError(error);
   }
@@ -110,8 +154,10 @@ export async function POST(request: Request) {
           return mapClassSection(tx, { schoolId: session.schoolId, actorId: session.userId, academicYearId: input.academicYearId, gradeLevelId: input.gradeLevelId, classId: input.classId, pathwayId: input.pathwayId, sectionCode: input.sectionCode, displayName: input.displayName, capacity: input.capacity });
         case "recordPromotionDecision":
           return recordPromotionDecision(tx, { schoolId: session.schoolId, actorId: session.userId, studentId: input.studentId, sourceAcademicYearId: input.sourceAcademicYearId, targetAcademicYearId: input.targetAcademicYearId, outcome: input.outcome, targetGradeLevelId: input.targetGradeLevelId, targetPathwayId: input.targetPathwayId, reason: input.reason });
-        case "previewRollover":
-          return previewAcademicYearRollover(tx, { schoolId: session.schoolId, sourceAcademicYearId: input.sourceAcademicYearId, targetAcademicYearId: input.targetAcademicYearId, frameworkId: input.frameworkId });
+        case "previewRollover": {
+          const plan = await previewAcademicYearRollover(tx, { schoolId: session.schoolId, sourceAcademicYearId: input.sourceAcademicYearId, targetAcademicYearId: input.targetAcademicYearId, frameworkId: input.frameworkId });
+          return enrichRolloverPlan(tx, plan);
+        }
         case "prepareRollover":
           return prepareAcademicYearRollover(tx, { schoolId: session.schoolId, actorId: session.userId, sourceAcademicYearId: input.sourceAcademicYearId, targetAcademicYearId: input.targetAcademicYearId, frameworkId: input.frameworkId });
         case "commitRollover":
