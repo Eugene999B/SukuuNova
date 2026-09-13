@@ -59,6 +59,8 @@ export function keyboardInputIntent(
   const up = pressedCodes.has("ArrowUp") || pressedCodes.has("KeyW") ? 1 : 0;
   const down = pressedCodes.has("ArrowDown") || pressedCodes.has("KeyS") ? 1 : 0;
   const jumpHeld = pressedCodes.has("Space") || up > 0;
+  const keyboardSprint = pressedCodes.has("ShiftLeft") || pressedCodes.has("ShiftRight");
+  const keyboardCrouch = pressedCodes.has("ControlLeft") || pressedCodes.has("ControlRight");
   return {
     moveX: right - left,
     moveY: up - down,
@@ -66,8 +68,8 @@ export function keyboardInputIntent(
     lookY: 0,
     jumpPressed: Boolean(edge.jumpPressed),
     jumpHeld: edge.jumpHeld ?? jumpHeld,
-    sprint: edge.sprint ?? pressedCodes.has("ShiftLeft") || pressedCodes.has("ShiftRight"),
-    crouch: edge.crouch ?? pressedCodes.has("ControlLeft") || pressedCodes.has("ControlRight"),
+    sprint: edge.sprint ?? keyboardSprint,
+    crouch: edge.crouch ?? keyboardCrouch,
     interact: Boolean(edge.interact),
     primaryAction: Boolean(edge.primaryAction),
     secondaryAction: Boolean(edge.secondaryAction),
