@@ -78,15 +78,17 @@ describe("responsive platformer", () => {
 
 describe("responsive runner", () => {
   it("accepts a second lane command before the first visual transition completes", () => {
-    let state = createRunnerState();
+    let state = createRunnerState({ logicalLane: 2, renderedLane: 2, laneStart: 2, laneTarget: 2 });
     state = applyRunnerAction(state, "left");
     state = stepRunner(state, 0.03);
+    expect(state.logicalLane).toBe(1);
     expect(state.renderedLane).not.toBe(state.logicalLane);
 
+    const renderedBeforeRetarget = state.renderedLane;
     const retargeted = applyRunnerAction(state, "left");
     expect(retargeted.logicalLane).toBe(0);
     expect(retargeted.laneTarget).toBe(0);
-    expect(retargeted.laneStart).toBeCloseTo(state.renderedLane, 8);
+    expect(retargeted.laneStart).toBeCloseTo(renderedBeforeRetarget, 8);
   });
 
   it("changes world pace without changing lane timing", () => {
