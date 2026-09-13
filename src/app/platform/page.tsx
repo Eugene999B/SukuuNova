@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import PlatformControlCenterClient from "@/components/PlatformControlCenterClient";
+import PlatformIntelligenceDashboard from "@/components/PlatformIntelligenceDashboard";
 import { requirePlatformSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ForbiddenError } from "@/lib/errors";
@@ -68,7 +68,7 @@ export default async function PlatformPage() {
     };
   }
 
-  return <PlatformControlCenterClient
+  return <PlatformIntelligenceDashboard
     overview={overview}
     health={health}
     audit={audit}
