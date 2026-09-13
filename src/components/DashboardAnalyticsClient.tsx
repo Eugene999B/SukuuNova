@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   Banknote,
   BarChart3,
@@ -20,10 +20,11 @@ import {
 import "./dashboard-analytics.css";
 
 type Point = { label: string; value: number };
+type SchoolIdentity = { name: string; uniqueCode: string } | null;
 
 type LeadershipPayload = {
-  mode: "leadership" | "staff";
-  school?: { name: string; uniqueCode: string } | null;
+  mode: "leadership";
+  school?: SchoolIdentity;
   summary: {
     students: number;
     staff: number;
@@ -44,9 +45,32 @@ type LeadershipPayload = {
   gender: { available: boolean; male: number | null; female: number | null; notRecorded: number };
 };
 
+type StaffPayload = {
+  mode: "staff";
+  school?: SchoolIdentity;
+  visibility: {
+    learners: boolean;
+    people: boolean;
+    attendance: boolean;
+    academics: boolean;
+  };
+  summary: {
+    students: number | null;
+    staff: number | null;
+    teachers: number | null;
+    classes: number | null;
+    assessments: number | null;
+    attendanceToday: number | null;
+    attendanceRate: number | null;
+  };
+  classPopulation: Point[];
+  attendanceTrend: Point[];
+  staffRoles: Point[];
+};
+
 type FinancePayload = {
   mode: "finance";
-  school?: { name: string; uniqueCode: string } | null;
+  school?: SchoolIdentity;
   summary: {
     expected: number;
     collected: number;
@@ -64,7 +88,7 @@ type FinancePayload = {
 
 type TeacherPayload = {
   mode: "teacher";
-  school?: { name: string; uniqueCode: string } | null;
+  school?: SchoolIdentity;
   summary: {
     classes: number;
     subjects: number;
@@ -79,8 +103,7 @@ type TeacherPayload = {
   lessonsByDay: Point[];
 };
 
-type Payload = LeadershipPayload | FinancePayload | TeacherPayload;
-
+type Payload = LeadershipPayload | StaffPayload | FinancePayload | TeacherPayload;
 type IconType = typeof Users;
 
 function formatNumber(value: number) {
@@ -117,7 +140,7 @@ function HorizontalBars({ points, suffix = "", empty = "No data yet." }: { point
 function Ring({ percentValue, center, label }: { percentValue: number; center: string; label: string }) {
   const value = clamp(percentValue);
   return <div className="dash-ring-wrap">
-    <div className="dash-ring" style={{ "--ring-value": `${value * 3.6}deg` } as React.CSSProperties}>
+    <div className="dash-ring" style={{ "--ring-value": `${value * 3.6}deg` } as CSSProperties}>
       <div><strong>{center}</strong><span>{label}</span></div>
     </div>
   </div>;
@@ -145,7 +168,7 @@ function Trend({ points, total }: { points: Point[]; total?: number }) {
   </div>;
 }
 
-function Panel({ eyebrow, title, children, href, linkLabel = "Open" }: { eyebrow: string; title: string; children: React.ReactNode; href?: string; linkLabel?: string }) {
+function Panel({ eyebrow, title, children, href, linkLabel = "Open" }: { eyebrow: string; title: string; children: ReactNode; href?: string; linkLabel?: string }) {
   return <section className="dash-analytics-panel">
     <div className="dash-analytics-panel-head"><div><span>{eyebrow}</span><h3>{title}</h3></div>{href ? <Link href={href}>{linkLabel}</Link> : null}</div>
     {children}
@@ -155,7 +178,7 @@ function Panel({ eyebrow, title, children, href, linkLabel = "Open" }: { eyebrow
 function LeadershipView({ data }: { data: LeadershipPayload }) {
   const s = data.summary;
   return <div className="dash-analytics-block">
-    <div className="dash-analytics-title"><div><span><BarChart3 size={15}/> Live school analysis</span><h2>{data.mode === "leadership" ? "Your school in numbers" : "Operational picture"}</h2><p>Live evidence from learners, people, finance, attendance and academics.</p></div><small>Updates from SukuuNova records</small></div>
+    <div className="dash-analytics-title"><div><span><BarChart3 size={15}/> Live school analysis</span><h2>Your school in numbers</h2><p>Live evidence from learners, people, finance, attendance and academics.</p></div><small>Updates from SukuuNova records</small></div>
     <div className="dash-analytics-stats">
       <Stat icon={GraduationCap} label="Students" value={formatNumber(s.students)} detail={`${s.classes} active classes`} href="/school/students" />
       <Stat icon={Users} label="Teachers" value={formatNumber(s.teachers)} detail={`${s.staff} total staff accounts`} href="/school/staff" />
@@ -178,6 +201,33 @@ function LeadershipView({ data }: { data: LeadershipPayload }) {
   </div>;
 }
 
+function StaffView({ data }: { data: StaffPayload }) {
+  const s = data.summary;
+  const statCards: ReactNode[] = [];
+  if (data.visibility.learners && s.students !== null) {
+    statCards.push(<Stat key="students" icon={GraduationCap} label="Students" value={formatNumber(s.students)} detail={`${s.classes ?? 0} classes in the school`} href="/school/students" />);
+  }
+  if (data.visibility.people && s.staff !== null) {
+    statCards.push(<Stat key="staff" icon={Users} label="Staff" value={formatNumber(s.staff)} detail={`${s.teachers ?? 0} teacher accounts`} href="/school/staff" />);
+  }
+  if (data.visibility.attendance && s.attendanceRate !== null) {
+    statCards.push(<Stat key="attendance" icon={ClipboardCheck} label="Attendance today" value={`${s.attendanceRate}%`} detail={`${s.attendanceToday ?? 0} learners checked in`} href="/school/attendance" />);
+  }
+  if (data.visibility.academics && s.assessments !== null) {
+    statCards.push(<Stat key="assessments" icon={BookOpenCheck} label="Assessments" value={formatNumber(s.assessments)} detail="Assessment records currently available" href="/school/gradebook" />);
+  }
+
+  return <div className="dash-analytics-block">
+    <div className="dash-analytics-title"><div><span><BarChart3 size={15}/> Role intelligence</span><h2>Your operational picture</h2><p>Only school statistics allowed by your assigned role and permissions are shown here.</p></div><small>Permission-aware live data</small></div>
+    {statCards.length ? <div className="dash-analytics-stats">{statCards}</div> : <div className="dash-analytics-empty">No additional analytics are assigned to this role.</div>}
+    {(data.visibility.learners || data.visibility.attendance || data.visibility.people) ? <div className="dash-analytics-grid dash-analytics-grid-3">
+      {data.visibility.learners ? <Panel eyebrow="Learners" title="Students by class" href="/school/classes"><HorizontalBars points={data.classPopulation} empty="Class population becomes available as learner records are assigned." /></Panel> : null}
+      {data.visibility.attendance ? <Panel eyebrow="Daily presence" title="7-day attendance" href="/school/attendance"><Trend points={data.attendanceTrend} total={s.students ?? undefined} /></Panel> : null}
+      {data.visibility.people ? <Panel eyebrow="People" title="Staff structure" href="/school/staff"><HorizontalBars points={data.staffRoles} empty="Staff-role distribution will appear as accounts are assigned." /></Panel> : null}
+    </div> : null}
+  </div>;
+}
+
 function FinanceView({ data }: { data: FinancePayload }) {
   const s = data.summary;
   return <div className="dash-analytics-block">
@@ -193,7 +243,7 @@ function FinanceView({ data }: { data: FinancePayload }) {
     <div className="dash-analytics-grid dash-analytics-grid-3">
       <Panel eyebrow="Collection health" title="Collected vs outstanding" href="/school/fees/reports"><Ring percentValue={s.collectionRate} center={`${s.collectionRate}%`} label="of billed fees" /><div className="dash-money-split"><span><small>Collected</small><b>{formatMoney(s.collected)}</b></span><span><small>Balance</small><b>{formatMoney(s.outstanding)}</b></span></div></Panel>
       <Panel eyebrow="Payment channels" title="How families are paying"><HorizontalBars points={data.paymentMethods} empty="Payment methods will appear after collections are recorded." /></Panel>
-      <Panel eyebrow="Arrears ageing" title="How long balances have been open" href="/school/fees/invoices"><HorizontalBars points={data.arrears} suffix="" empty="No unpaid invoices." /></Panel>
+      <Panel eyebrow="Arrears ageing" title="How long balances have been open" href="/school/fees/invoices"><HorizontalBars points={data.arrears} empty="No unpaid invoices." /></Panel>
     </div>
   </div>;
 }
@@ -242,6 +292,7 @@ export function DashboardAnalyticsClient() {
     if (!data) return <div className="dash-analytics-loading" aria-label="Loading live statistics"><span/><span/><span/></div>;
     if (data.mode === "teacher") return <TeacherView data={data} />;
     if (data.mode === "finance") return <FinanceView data={data} />;
+    if (data.mode === "staff") return <StaffView data={data} />;
     return <LeadershipView data={data} />;
   }, [data, failed]);
 
