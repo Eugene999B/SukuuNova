@@ -14,6 +14,7 @@ export * from "./structural-simulation";
 export * from "./branching-story";
 export * from "./archive-case";
 export * from "./blackout-protocol";
+export * from "./last-harvest";
 export * from "./difficulty-envelope";
 export * from "./game-dna";
 export * from "./director";
