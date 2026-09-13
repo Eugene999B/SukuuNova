@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, BookMarked, Clock3, Hourglass, Landmark, LogOut, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUp, BookMarked, Clock3, Hourglass, Landmark, LogOut, Pin, Search, ShieldCheck, Sparkles, X } from "lucide-react";
 import {
   chronicleCaseDurationMs,
   chronicleChainGain,
@@ -27,6 +27,7 @@ type Plan = {
 };
 type Round = { id: string; difficulty: number; answers: string[]; questions: Question[]; learningPlan?: Plan | null };
 type Props = { learnerName: string; round: Round; onComplete: (answers: string[]) => void; onExit: (answers: string[]) => void };
+type ClaimState = "supported" | "rejected" | null;
 
 function firstOpen(answers: string[], length: number) {
   const index = answers.findIndex((answer) => !answer.trim());
@@ -39,11 +40,13 @@ export default function ChronicleVault({ learnerName, round, onComplete, onExit 
   const exitRef = useRef(onExit);
   const commitRef = useRef<() => void>(() => undefined);
   const lensRef = useRef<() => void>(() => undefined);
+  const markRef = useRef<(index: number, state: Exclude<ClaimState, null>) => void>(() => undefined);
   const completedRef = useRef(false);
   const startedRef = useRef(Date.now());
   const [checkpoint, setCheckpoint] = useState(firstOpen(round.answers, round.questions.length));
-  const [selected, setSelected] = useState(0);
   const [order, setOrder] = useState<string[]>([]);
+  const [claimStates, setClaimStates] = useState<ClaimState[]>([]);
+  const [activeClaim, setActiveClaim] = useState(0);
   const [pressure, setPressure] = useState(0);
   const [integrity, setIntegrity] = useState(84);
   const [insight, setInsight] = useState(5);
@@ -68,19 +71,25 @@ export default function ChronicleVault({ learnerName, round, onComplete, onExit 
     [round.difficulty, plan?.speedScale, plan?.supportMode],
   );
   const progress = Math.round((Math.min(checkpoint, round.questions.length) / Math.max(1, round.questions.length)) * 100);
+  const classifiedCount = claimStates.filter((state) => state !== null).length;
+  const supportedIndex = claimStates.findIndex((state) => state === "supported");
+  const claimsReady = !isSort && Boolean(question) && claimStates.length === question.options.length && claimStates.every((state) => state !== null) && claimStates.filter((state) => state === "supported").length === 1;
 
   useEffect(() => {
     startedRef.current = Date.now();
     setPressure(0);
-    setSelected(0);
     setLensOpen(false);
+    setActiveClaim(0);
     setOrder(question ? chronicleRestoreOrder(answersRef.current[checkpoint] ?? "", question.options) : []);
+    setClaimStates(question ? question.options.map(() => null) : []);
     if (question) {
       setMessage(boss
-        ? "FINAL PARADOX: seal the master record before archive integrity collapses."
-        : `Record ${checkpoint + 1} opened in ${scene.archiveWing ?? "Chronicle Vault"}.`);
+        ? "FINAL PARADOX: rebuild the master timeline or classify every historical claim before archive integrity collapses."
+        : isSort
+          ? `Record ${checkpoint + 1} opened. Reconstruct the chronology in ${scene.archiveWing ?? "Chronicle Vault"}.`
+          : `Evidence case ${checkpoint + 1} opened. Classify every claim, pin one as supported, and reject the weaker interpretations.`);
     }
-  }, [boss, checkpoint, question, scene.archiveWing]);
+  }, [boss, checkpoint, isSort, question, scene.archiveWing]);
 
   useEffect(() => {
     if (checkpoint >= round.questions.length) {
@@ -98,7 +107,7 @@ export default function ChronicleVault({ learnerName, round, onComplete, onExit 
         setChain(0);
         startedRef.current = Date.now() - Math.round(duration * 0.48);
         setPressure(48);
-        setMessage(`Paradox surge: archive integrity -${damage}. Re-check chronology and provenance.`);
+        setMessage(`Paradox surge: archive integrity -${damage}. Re-check chronology, provenance and the claims you have classified.`);
       } else {
         setPressure(Math.min(100, (elapsed / duration) * 100));
       }
@@ -127,10 +136,27 @@ export default function ChronicleVault({ learnerName, round, onComplete, onExit 
     return next;
   });
 
+  const markClaim = (index: number, state: Exclude<ClaimState, null>) => {
+    if (!question || isSort || sealing || index < 0 || index >= question.options.length) return;
+    setActiveClaim(index);
+    setClaimStates((current) => current.map((value, claimIndex) => {
+      if (claimIndex === index) return state;
+      if (state === "supported" && value === "supported") return "rejected";
+      return value;
+    }));
+    setMessage(state === "supported"
+      ? `Claim ${index + 1} pinned as the strongest interpretation. Classify every remaining claim before sealing the record.`
+      : `Claim ${index + 1} moved to the rejected tray. Continue weighing the other interpretations against the evidence.`);
+  };
+  markRef.current = markClaim;
+
   const commit = () => {
     if (!question || sealing || completedRef.current) return;
-    const answer = isSort ? JSON.stringify(order) : question.options[selected];
-    if (!answer) return;
+    const answer = isSort ? JSON.stringify(order) : supportedIndex >= 0 && claimsReady ? question.options[supportedIndex] : undefined;
+    if (!answer) {
+      if (!isSort) setMessage("The evidence board is incomplete. Every claim needs a decision and exactly one claim must be pinned as supported.");
+      return;
+    }
     answersRef.current[checkpoint] = answer;
     const integrityGain = chronicleIntegrityReward(pressure, round.difficulty);
     const insightGain = chronicleInsightReward(paradoxLevel, pressure);
@@ -152,7 +178,14 @@ export default function ChronicleVault({ learnerName, round, onComplete, onExit 
     const handleKey = (event: KeyboardEvent) => {
       if (event.key >= "1" && event.key <= "4" && !isSort) {
         const index = Number(event.key) - 1;
-        if (index < (question?.options.length ?? 0)) setSelected(index);
+        if (index < (question?.options.length ?? 0)) {
+          setActiveClaim(index);
+          setMessage(`Claim ${index + 1} selected. Press P to pin it as supported or X to reject it.`);
+        }
+      } else if (event.key.toLowerCase() === "p" && !isSort) {
+        markRef.current(activeClaim, "supported");
+      } else if (event.key.toLowerCase() === "x" && !isSort) {
+        markRef.current(activeClaim, "rejected");
       } else if (event.key.toLowerCase() === "l") {
         lensRef.current();
       } else if (event.key === "Enter") {
@@ -185,10 +218,21 @@ export default function ChronicleVault({ learnerName, round, onComplete, onExit 
         <div className="chronicle-heading"><div><span>{boss ? "MASTER RECORD · FINAL PARADOX" : `${String(scene.mission ?? "history").toUpperCase()} · RECORD ${checkpoint + 1}/${round.questions.length}`}</span><strong>{scene.cue ?? "Use evidence and chronology."}</strong></div><Landmark size={26}/></div>
         <h2>{question.prompt}</h2>
         {isSort ? <div className="chronicle-order">{order.map((item, index) => <div key={item}><b>{index + 1}</b><span>{item}</span><span className="chronicle-moves"><button type="button" onClick={() => move(index, -1)} disabled={index === 0 || sealing} aria-label={`Move ${item} earlier`}><ArrowUp size={15}/></button><button type="button" onClick={() => move(index, 1)} disabled={index === order.length - 1 || sealing} aria-label={`Move ${item} later`}><ArrowDown size={15}/></button></span></div>)}</div>
-          : <div className="chronicle-options">{question.options.slice(0, 4).map((option, index) => <button type="button" key={option} className={selected === index ? "selected" : ""} onClick={() => setSelected(index)} disabled={sealing}><b>{index + 1}</b><span>{option}</span></button>)}</div>}
-        {lensOpen ? <div className="chronicle-lens"><Search size={15}/><span>{clues.join(" · ")}</span></div> : null}
-        <div className="chronicle-actions"><button type="button" className="chronicle-seal" onClick={commit} disabled={sealing}><BookMarked size={16}/>{sealing ? "Sealing record…" : "Seal archive record"}</button><button type="button" onClick={lens} disabled={lenses < 1 || sealing}><Search size={16}/>ChronoLens · {lenses}</button></div>
-        <div className="chronicle-status" aria-live="polite"><span>{message}</span><small>{isSort ? "Use ↑ ↓ to rebuild the time rail" : "1–4 choose"} · L lens · Enter seal</small></div>
+          : <div className="chronicle-evidence-board">
+            <div className="chronicle-board-head"><div><span>EVIDENCE BOARD</span><strong>Classify every historical claim</strong></div><b>{classifiedCount}/{question.options.length}</b></div>
+            <div className="chronicle-claims">{question.options.slice(0, 4).map((option, index) => {
+              const state = claimStates[index] ?? null;
+              return <article key={`${index}-${option}`} className={`${state ?? "unclassified"} ${activeClaim === index ? "active" : ""}`.trim()} onClick={() => setActiveClaim(index)}>
+                <div className="chronicle-claim-number"><b>{index + 1}</b><span>{state === "supported" ? "SUPPORTED" : state === "rejected" ? "REJECTED" : "UNCLASSIFIED"}</span></div>
+                <p>{option}</p>
+                <div className="chronicle-claim-actions"><button type="button" className="support" onClick={(event) => { event.stopPropagation(); markClaim(index, "supported"); }} disabled={sealing} aria-pressed={state === "supported"}><Pin size={13}/>Pin supported</button><button type="button" className="reject" onClick={(event) => { event.stopPropagation(); markClaim(index, "rejected"); }} disabled={sealing} aria-pressed={state === "rejected"}><X size={13}/>Reject</button></div>
+              </article>;
+            })}</div>
+            <div className="chronicle-board-rule"><Search size={14}/><span>Historical method: compare chronology, provenance and evidence. The strongest claim is pinned; weaker or anachronistic claims belong in the rejected tray.</span></div>
+          </div>}
+        {lensOpen ? <div className="chronicle-lens"><Search size={15}/><span>{clues.length ? clues.join(" · ") : scene.cue ?? "Check era, provenance and cause."}</span></div> : null}
+        <div className="chronicle-actions"><button type="button" className="chronicle-seal" onClick={commit} disabled={sealing || (!isSort && !claimsReady)}><BookMarked size={16}/>{sealing ? "Sealing record…" : !isSort && !claimsReady ? `Classify claims · ${classifiedCount}/${question.options.length}` : "Seal archive record"}</button><button type="button" onClick={lens} disabled={lenses < 1 || sealing}><Search size={16}/>ChronoLens · {lenses}</button></div>
+        <div className="chronicle-status" aria-live="polite"><span>{message}</span><small>{isSort ? "Use ↑ ↓ to rebuild the time rail" : "1–4 focus · P pin · X reject"} · L lens · Enter seal</small></div>
       </main> : <main className="chronicle-console chronicle-finished"><Hourglass size={52}/><strong>ARCHIVE STABLE · REVIEW READY</strong><span>Uploading sealed records for authoritative history grading…</span></main>}
       <div className="chronicle-pressure"><span><Clock3 size={13}/> Paradox pressure</span><i><b style={{ width: `${pressure}%` }}/></i><strong>{Math.round(pressure)}%</strong></div>
     </div>
