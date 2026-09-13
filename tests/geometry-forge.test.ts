@@ -20,8 +20,12 @@ describe("Geometry Forge", () => {
     expect(countRightAngles(rectangle)).toBe(4);
   });
 
-  it("recognises a valid courtyard design from geometry rather than an answer key", () => {
-    const state = createGeometryForgeState("courtyard");
+  it("starts outside the target and recognises a valid courtyard after direct construction", () => {
+    let state = createGeometryForgeState("courtyard");
+    expect(evaluateGeometryForge(state).complete).toBe(false);
+    state = moveForgeVertex(state, 1, 12, 4);
+    state = moveForgeVertex(state, 2, 12, 10);
+    state = moveForgeVertex(state, 3, 4, 10);
     const evaluation = evaluateGeometryForge(state);
     expect(evaluation.area).toBe(48);
     expect(evaluation.perimeter).toBe(28);
@@ -51,6 +55,9 @@ describe("Geometry Forge", () => {
 
   it("keeps the best score across repeated design submissions", () => {
     let state = createGeometryForgeState("courtyard");
+    state = moveForgeVertex(state, 1, 12, 4);
+    state = moveForgeVertex(state, 2, 12, 10);
+    state = moveForgeVertex(state, 3, 4, 10);
     state = submitGeometryForge(state);
     const firstBest = state.bestScore;
     state = moveForgeVertex(state, 0, 0, 0);
