@@ -5,6 +5,7 @@ import { AppError } from "./errors";
 import { appendSchoolAudit } from "./audit";
 import { ensureWorkAssessment } from "./academic-work-gradebook";
 import { validateAcademicQuestions } from "./academic-work-validation";
+import { getTeachingWeekForDate } from "./term-teaching-weeks";
 
 type HomeworkDeliveryInput = {
   schoolId: string;
@@ -84,7 +85,8 @@ export async function ensureHomeworkAcademicDelivery(tx: TenantDb, input: Homewo
   const start = dateKey(term.startDate);
   const due = dateKey(input.dueDate);
   const workDate = today < start ? start : today > due ? due : today;
-  const weekNumber = Math.floor((Date.parse(`${workDate}T00:00:00.000Z`) - Date.parse(`${start}T00:00:00.000Z`)) / 604800000) + 1;
+  const teachingWeek = await getTeachingWeekForDate(tx, input.schoolId, input.termId, workDate);
+  const weekNumber = teachingWeek.weekNumber;
 
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`homework-academic-sequence:${input.schoolId}:${input.classId}:${input.subjectId}:${input.termId}:${weekNumber}`}))`;
   const sequence = await tx.$queryRaw<Array<{ maximum: number }>>`
@@ -121,7 +123,7 @@ export async function ensureHomeworkAcademicDelivery(tx: TenantDb, input: Homewo
     action: "homework.academic_delivery_linked",
     entityType: "TeacherAcademicWork",
     entityId: workId,
-    after: { classId: input.classId, subjectId: input.subjectId, termId: input.termId, title: input.title, maxScore: input.points },
+    after: { classId: input.classId, subjectId: input.subjectId, termId: input.termId, title: input.title, maxScore: input.points, weekNumber },
   });
   return workId;
 }

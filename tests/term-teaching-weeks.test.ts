@@ -1,23 +1,58 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { assertTeachingWeekNumber, DEFAULT_TEACHING_WEEKS, MAX_TEACHING_WEEKS, normalizeTeachingWeeks } from "../src/lib/term-teaching-weeks";
+import { buildTeachingWeekRanges, maxTeachingWeeksForRange } from "../src/lib/term-teaching-weeks";
 
-describe("authoritative teaching weeks", () => {
-  it("keeps valid configured teaching-week counts", () => {
-    expect(normalizeTeachingWeeks(1)).toBe(1);
-    expect(normalizeTeachingWeeks(12)).toBe(12);
-    expect(normalizeTeachingWeeks(MAX_TEACHING_WEEKS)).toBe(MAX_TEACHING_WEEKS);
+const migration = readFileSync(new URL("../prisma/migrations/20260913081500_term_weeks/migration.sql", import.meta.url), "utf8");
+const termsRoute = readFileSync(new URL("../src/app/api/school/terms/route.ts", import.meta.url), "utf8");
+const termDetailRoute = readFileSync(new URL("../src/app/api/school/terms/[id]/route.ts", import.meta.url), "utf8");
+const teacherRoute = readFileSync(new URL("../src/app/api/school/teacher-academic-workspace/route.ts", import.meta.url), "utf8");
+const homeworkBridge = readFileSync(new URL("../src/lib/homework-academic-bridge.ts", import.meta.url), "utf8");
+
+describe("first-class teaching weeks", () => {
+  it("materializes contiguous week ranges and gives the final week the remaining term days", () => {
+    const start = new Date("2026-01-01T00:00:00.000Z");
+    const end = new Date("2026-03-31T00:00:00.000Z");
+    const weeks = buildTeachingWeekRanges(start, end, 13);
+
+    expect(weeks).toHaveLength(13);
+    expect(weeks[0]).toMatchObject({ weekNumber: 1, startDate: new Date("2026-01-01T00:00:00.000Z"), endDate: new Date("2026-01-07T00:00:00.000Z") });
+    expect(weeks[1]).toMatchObject({ weekNumber: 2, startDate: new Date("2026-01-08T00:00:00.000Z"), endDate: new Date("2026-01-14T00:00:00.000Z") });
+    expect(weeks[12]).toMatchObject({ weekNumber: 13, startDate: new Date("2026-03-26T00:00:00.000Z"), endDate: end });
   });
 
-  it("falls back safely when legacy term data is missing or invalid", () => {
-    expect(normalizeTeachingWeeks(undefined)).toBe(DEFAULT_TEACHING_WEEKS);
-    expect(normalizeTeachingWeeks(0)).toBe(DEFAULT_TEACHING_WEEKS);
-    expect(normalizeTeachingWeeks(MAX_TEACHING_WEEKS + 1)).toBe(DEFAULT_TEACHING_WEEKS);
+  it("rejects a teaching-week count that cannot physically start inside the term", () => {
+    const start = new Date("2026-01-01T00:00:00.000Z");
+    const end = new Date("2026-01-14T00:00:00.000Z");
+    expect(maxTeachingWeeksForRange(start, end)).toBe(2);
+    expect(() => buildTeachingWeekRanges(start, end, 3)).toThrow(/at most 2 teaching weeks/i);
   });
 
-  it("rejects teacher work outside the configured term week range", () => {
-    expect(() => assertTeachingWeekNumber(1, 12)).not.toThrow();
-    expect(() => assertTeachingWeekNumber(12, 12)).not.toThrow();
-    expect(() => assertTeachingWeekNumber(13, 12)).toThrow("Choose a teaching week between 1 and 12.");
-    expect(() => assertTeachingWeekNumber(0, 12)).toThrow("Choose a teaching week between 1 and 12.");
+  it("creates a tenant-scoped calendar table and backfills existing terms", () => {
+    expect(migration).toContain('CREATE TABLE "TermWeek"');
+    expect(migration).toContain('PRIMARY KEY ("termId", "weekNumber")');
+    expect(migration).toContain('REFERENCES "Term"("id", "schoolId")');
+    expect(migration).toContain('ALTER TABLE "TermWeek" ENABLE ROW LEVEL SECURITY');
+    expect(migration).toContain('CREATE POLICY "term_week_tenant"');
+    expect(migration).toContain('generate_series(1, n."effectiveWeeks")');
+  });
+
+  it("keeps term counts and durable week rows in the same transaction", () => {
+    expect(termsRoute).toContain("assertTeachingWeeksFitTerm(input.startDate, input.endDate, input.teachingWeeks)");
+    expect(termsRoute).toContain("await syncTermWeeks(tx");
+    expect(termDetailRoute).toContain("assertTeachingWeeksFitTerm(input.startDate, input.endDate, nextWeeks)");
+    expect(termDetailRoute).toContain("await syncTermWeeks(tx");
+    expect(termDetailRoute).toContain("weeks: termWeeks");
+  });
+
+  it("rejects teacher work whose date does not belong to its selected week", () => {
+    expect(teacherRoute).toContain("assertTeachingWeekDate");
+    expect(teacherRoute.match(/await assertTeachingWeekDate\(/g)?.length).toBe(2);
+    expect(teacherRoute).toContain("getTermWeeks(tx, session.schoolId, termId)");
+  });
+
+  it("routes compatibility homework through the same authoritative week calendar", () => {
+    expect(homeworkBridge).toContain('import { getTeachingWeekForDate } from "./term-teaching-weeks"');
+    expect(homeworkBridge).toContain("await getTeachingWeekForDate(tx, input.schoolId, input.termId, workDate)");
+    expect(homeworkBridge).not.toContain("Math.floor((Date.parse(`${workDate}");
   });
 });

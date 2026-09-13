@@ -7,6 +7,7 @@ import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 import { termLifecycle } from "@/lib/term-date";
+import { assertTeachingWeeksFitTerm, getTeachingWeekMap, syncTermWeeks } from "@/lib/term-teaching-weeks";
 
 const schema = z.object({
   academicYearName: z.string().trim().min(3).max(80),
@@ -22,12 +23,11 @@ export async function GET() {
   try {
     const session = await requireSchoolSession();
     const result = await withTenant(session.schoolId, async (tx) => {
-      const [terms, settings] = await Promise.all([
+      const [terms, settings, weekMap] = await Promise.all([
         tx.term.findMany({ where: { schoolId: session.schoolId }, include: { academicYear: true }, orderBy: [{ startDate: "desc" }, { name: "asc" }] }),
         tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
+        getTeachingWeekMap(tx, session.schoolId),
       ]);
-      const weeks = await tx.$queryRawUnsafe<Array<{ id: string; teachingWeeks: number }>>(`SELECT "id","teachingWeeks" FROM "Term" WHERE "schoolId"=$1`, session.schoolId);
-      const weekMap = new Map(weeks.map((row) => [row.id, row.teachingWeeks]));
       const timezone = settings?.timezone || "Africa/Accra";
       return terms.map((term) => {
         const lifecycle = termLifecycle(term, new Date(), timezone);
@@ -50,6 +50,7 @@ export async function POST(request: Request) {
     if (input.academicYearEnd <= input.academicYearStart) throw new AppError("Academic year end must be after its start.", 400, "INVALID_YEAR_RANGE");
     if (input.endDate <= input.startDate) throw new AppError("Term end date must be after its start.", 400, "INVALID_TERM_RANGE");
     if (input.startDate < input.academicYearStart || input.endDate > input.academicYearEnd) throw new AppError("Term dates must sit inside the academic year.", 400, "TERM_OUTSIDE_YEAR");
+    assertTeachingWeeksFitTerm(input.startDate, input.endDate, input.teachingWeeks);
 
     const result = await withTenant(session.schoolId, async (tx) => {
       await requirePermission(tx, session.userId, "settings:manage_school");
@@ -66,11 +67,12 @@ export async function POST(request: Request) {
       if (overlap) throw new AppError(`Term dates overlap ${overlap.name}.`, 409, "TERM_OVERLAP");
       const term = await tx.term.create({ data: { schoolId: session.schoolId, academicYearId: year.id, name: input.name, startDate: input.startDate, endDate: input.endDate } });
       await tx.$executeRawUnsafe(`UPDATE "Term" SET "teachingWeeks"=$1 WHERE "id"=$2 AND "schoolId"=$3`, input.teachingWeeks, term.id, session.schoolId);
+      const weeks = await syncTermWeeks(tx, { schoolId: session.schoolId, termId: term.id, startDate: input.startDate, endDate: input.endDate, teachingWeeks: input.teachingWeeks });
       const settings = await tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } });
       const lifecycle = termLifecycle(term, new Date(), settings?.timezone || "Africa/Accra");
-      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "academic.term_created", entityType: "Term", entityId: term.id, before: null, after: { term, academicYear: year, teachingWeeks: input.teachingWeeks } });
-      return { year, term: { ...term, teachingWeeks: input.teachingWeeks }, lifecycle };
+      await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "academic.term_created", entityType: "Term", entityId: term.id, before: null, after: { term, academicYear: year, teachingWeeks: input.teachingWeeks, termWeeks: weeks.map((week) => ({ weekNumber: week.weekNumber, startDate: week.startDate, endDate: week.endDate })) } });
+      return { year, term: { ...term, teachingWeeks: input.teachingWeeks }, weeks, lifecycle };
     });
-    return NextResponse.json({ ok: true, year: result.year, term: result.term, status: result.lifecycle.state });
+    return NextResponse.json({ ok: true, year: result.year, term: result.term, weeks: result.weeks, status: result.lifecycle.state });
   } catch (error) { return routeError(error); }
 }

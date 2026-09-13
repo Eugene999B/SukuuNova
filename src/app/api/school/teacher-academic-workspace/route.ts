@@ -7,7 +7,7 @@ import { parseJson } from "@/lib/http";
 import { termLifecycle, selectAcademicTerm } from "@/lib/term-date";
 import { createTeacherAcademicNote, createTeacherAcademicWork, getTeacherAcademicContexts, getTeacherAcademicRoster, publishTeacherAcademicNote, publishTeacherAcademicWork, saveTeacherWorkMarks } from "@/lib/teacher-academic-workspace-service";
 import { ensureWorkAssessment } from "@/lib/academic-work-gradebook";
-import { assertTeachingWeekNumber, DEFAULT_TEACHING_WEEKS, getTeachingWeekMap } from "@/lib/term-teaching-weeks";
+import { assertTeachingWeekDate, assertTeachingWeekNumber, DEFAULT_TEACHING_WEEKS, getTeachingWeekMap, getTermWeeks } from "@/lib/term-teaching-weeks";
 
 const workKind = z.enum(["Classwork","Homework","Exercise","Participation","Quiz","Exam"]);
 const questionSchema = z.object({ type: z.string().trim().min(1).max(40), prompt: z.string().trim().min(1).max(4000), points: z.number().finite().positive().max(1000), options: z.array(z.string().trim().max(500)).max(20).optional(), acceptedAnswers: z.array(z.string().trim().max(500)).max(20).optional() });
@@ -79,7 +79,12 @@ export async function GET(request: Request) {
         });
       }
       const term = await assertWritableTerm(tx, session.schoolId, termId);
-      return NextResponse.json({ ...(await getTeacherAcademicRoster(tx, { schoolId: session.schoolId, teacherId: session.userId, classId, subjectId, termId })), term: { ...term, lifecycle: termLifecycle(term, new Date(), await timezone(tx, session.schoolId)) } });
+      const [roster, weeks, zone] = await Promise.all([
+        getTeacherAcademicRoster(tx, { schoolId: session.schoolId, teacherId: session.userId, classId, subjectId, termId }),
+        getTermWeeks(tx, session.schoolId, termId),
+        timezone(tx, session.schoolId),
+      ]);
+      return NextResponse.json({ ...roster, weeks, term: { ...term, lifecycle: termLifecycle(term, new Date(), zone) } });
     });
   } catch (error) { return routeError(error); }
 }
@@ -93,6 +98,7 @@ export async function POST(request: Request) {
       if (input.action === "createMarkSheet") {
         const term = await assertWritableTerm(tx, session.schoolId, input.termId);
         assertTeachingWeekNumber(input.weekNumber, term.teachingWeeks);
+        await assertTeachingWeekDate(tx, session.schoolId, input.termId, input.weekNumber, input.workDate);
         const sequence = await tx.$queryRawUnsafe<Array<{ next: number }>>(
           `SELECT (COALESCE(MAX("workNumber"),0)+1)::int AS "next" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "termId"=$2 AND "classId"=$3 AND "subjectId"=$4 AND "kind"=$5 AND "weekNumber"=$6`,
           session.schoolId, input.termId, input.classId, input.subjectId, input.kind, input.weekNumber,
@@ -122,6 +128,7 @@ export async function POST(request: Request) {
       if (input.action === "createWork") {
         const term = await assertWritableTerm(tx, session.schoolId, input.termId);
         assertTeachingWeekNumber(input.weekNumber, term.teachingWeeks);
+        await assertTeachingWeekDate(tx, session.schoolId, input.termId, input.weekNumber, input.workDate);
         if (input.opensAt && input.dueAt && Date.parse(input.opensAt) >= Date.parse(input.dueAt)) throw new AppError("The closing time must be later than the opening time.", 400, "INVALID_WORK_WINDOW");
         const result = await createTeacherAcademicWork(tx, { ...common, ...input });
         if (input.opensAt) await tx.$executeRawUnsafe(`UPDATE "TeacherAcademicWork" SET "opensAt"=$3::timestamptz,"updatedAt"=NOW() WHERE "schoolId"=$1 AND "id"=$2`, session.schoolId, result.id, input.opensAt);
