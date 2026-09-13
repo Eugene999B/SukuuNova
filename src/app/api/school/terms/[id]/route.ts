@@ -7,6 +7,7 @@ import { parseJson } from "@/lib/http";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
 import { termLifecycle } from "@/lib/term-date";
+import { assertTeachingWeeksFitTerm, getTermWeeks, syncTermWeeks } from "@/lib/term-teaching-weeks";
 
 const patchSchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -32,13 +33,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`term-mutation:${session.schoolId}:${id}`}))`;
       const current = await tx.term.findUnique({ where: { id }, include: { academicYear: true } });
       if (!current) throw new AppError("Term not found.", 404, "NOT_FOUND");
-      const [weekRows, settings] = await Promise.all([
+      const [legacyWeekRows, configuredWeeks, settings] = await Promise.all([
         tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id),
+        getTermWeeks(tx, session.schoolId, id),
         tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
       ]);
-      const currentWeeks = weekRows[0]?.teachingWeeks ?? 13;
+      const materializedCount = configuredWeeks.filter((week) => week.isTeaching).length;
+      const currentWeeks = materializedCount || legacyWeekRows[0]?.teachingWeeks || 13;
       const nextWeeks = input.teachingWeeks ?? currentWeeks;
       const nextLocked = input.isLocked ?? current.isLocked;
+      assertTeachingWeeksFitTerm(input.startDate, input.endDate, nextWeeks);
 
       if (current.isLocked && !nextLocked) {
         await requirePermission(tx, session.userId, "calendar:manage");
@@ -52,7 +56,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       if (overlap) throw new AppError(`Term dates overlap ${overlap.name}.`, 409, "TERM_OVERLAP");
 
       const updated = await tx.term.update({ where: { id }, data: { name: input.name, startDate: input.startDate, endDate: input.endDate, isLocked: nextLocked } });
-      if (nextWeeks !== currentWeeks) await tx.$executeRawUnsafe(`UPDATE "Term" SET "teachingWeeks"=$1 WHERE "id"=$2 AND "schoolId"=$3`, nextWeeks, id, session.schoolId);
+      await tx.$executeRawUnsafe(`UPDATE "Term" SET "teachingWeeks"=$1 WHERE "id"=$2 AND "schoolId"=$3`, nextWeeks, id, session.schoolId);
+      const weeks = await syncTermWeeks(tx, { schoolId: session.schoolId, termId: id, startDate: input.startDate, endDate: input.endDate, teachingWeeks: nextWeeks });
 
       const approvedReportCardsAwaitingRelease = !current.isLocked && nextLocked
         ? await tx.reportCard.count({ where: { schoolId: session.schoolId, termId: id, status: "approved" } })
@@ -65,13 +70,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         action: nextLocked !== current.isLocked ? (nextLocked ? "academic.term_locked" : "academic.term_reopened") : "academic.term_updated",
         entityType: "Term",
         entityId: id,
-        before: { ...current, teachingWeeks: currentWeeks },
-        after: { ...updated, teachingWeeks: nextWeeks, approvedReportCardsAwaitingRelease, reportReleaseStatusPreserved: true },
+        before: { ...current, teachingWeeks: currentWeeks, termWeeks: configuredWeeks.map((week) => ({ weekNumber: week.weekNumber, startDate: week.startDate, endDate: week.endDate })) },
+        after: { ...updated, teachingWeeks: nextWeeks, termWeeks: weeks.map((week) => ({ weekNumber: week.weekNumber, startDate: week.startDate, endDate: week.endDate })), approvedReportCardsAwaitingRelease, reportReleaseStatusPreserved: true },
       });
-      return { term: { ...updated, teachingWeeks: nextWeeks }, approvedReportCardsAwaitingRelease, lifecycle };
+      return { term: { ...updated, teachingWeeks: nextWeeks }, weeks, approvedReportCardsAwaitingRelease, lifecycle };
     });
 
-    return NextResponse.json({ ok: true, term: result.term, approvedReportCardsAwaitingRelease: result.approvedReportCardsAwaitingRelease, status: result.lifecycle.state, needsFinalization: result.lifecycle.shouldPromptLock });
+    return NextResponse.json({ ok: true, term: result.term, weeks: result.weeks, approvedReportCardsAwaitingRelease: result.approvedReportCardsAwaitingRelease, status: result.lifecycle.state, needsFinalization: result.lifecycle.shouldPromptLock });
   } catch (error) {
     return routeError(error);
   }
@@ -90,13 +95,14 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
         hasPermission(tx, session.userId, "lesson_plans:review"),
         hasPermission(tx, session.userId, "reports:generate"),
       ]);
-      const [term, settings] = await Promise.all([
+      const [term, settings, termWeeks, legacyWeekRows] = await Promise.all([
         tx.term.findUnique({ where: { id }, include: { academicYear: true } }),
         tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
+        getTermWeeks(tx, session.schoolId, id),
+        tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id),
       ]);
       if (!term) throw new AppError("Term not found.", 404, "NOT_FOUND");
-      const weekRows = await tx.$queryRawUnsafe<Array<{ teachingWeeks: number }>>(`SELECT "teachingWeeks" FROM "Term" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, id);
-      const teachingWeeks = weekRows[0]?.teachingWeeks ?? 13;
+      const teachingWeeks = termWeeks.filter((week) => week.isTeaching).length || legacyWeekRows[0]?.teachingWeeks || 13;
       const lifecycle = termLifecycle(term, new Date(), settings?.timezone || "Africa/Accra");
 
       const [students, assessments, scoreAgg, reportCards, approvedReports, sentReports, attendanceAgg, lessonAgg, teachingAssignments] = await Promise.all([
@@ -133,6 +139,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
       return {
         term: { ...term, teachingWeeks },
+        weeks: termWeeks,
         status: lifecycle.state,
         needsFinalization: lifecycle.shouldPromptLock,
         students,
