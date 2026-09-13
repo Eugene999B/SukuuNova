@@ -217,11 +217,11 @@ export function stepLastHarvest(previous: LastHarvestState): HarvestWeekReport {
   const pestPressure = PEST_PRESSURE[weekIndex] ?? 0;
   const notes: HarvestWeekReport["fieldNotes"] = [];
 
-  let fields = previous.fields.map((field) => {
+  const fields = previous.fields.map((field) => {
     const crop = HARVEST_CROPS[field.cropId as HarvestCropId];
     const healthBefore = field.health;
     let moisture = clamp(field.moisture + rainfall * 46);
-    let fertility = clamp(field.soilFertility - crop.nutrientUse / 8 + crop.fertilityRecovery / 8);
+    const fertility = clamp(field.soilFertility - crop.nutrientUse / 8 + crop.fertilityRecovery / 8);
     let health = field.health;
 
     const targetMoisture = crop.waterNeed * 100;
