@@ -15,7 +15,6 @@ import {
   CircleCheckBig,
   CircleHelp,
   ClipboardList,
-  ClipboardPenLine,
   Download,
   FileText,
   Gamepad2,
@@ -89,20 +88,17 @@ const schoolGroups: Group[] = [
     { icon: UsersRound, label: "Students", href: "/school/students", primary: true },
     { icon: UsersRound, label: "Guardians", href: "/school/guardians" },
     { icon: UserCog, label: "Staff & Teachers", href: "/school/staff", primary: true },
-    { icon: Building2, label: "Classes & Houses", href: "/school/classes" },
+    { icon: Building2, label: "Houses", href: "/school/houses" },
     { icon: MessageSquarePlus, label: "Admissions & Enrolment", href: "/school/admissions/enquiries" },
   ] },
   { label: "Academics", items: [
-    { icon: BookOpen, label: "Subjects", href: "/school/subjects" },
+    { icon: Building2, label: "Classes", href: "/school/classes", primary: true },
     { icon: CalendarClock, label: "Timetable", href: "/school/timetable", primary: true },
-    { icon: NotebookPen, label: "Lessons & Planning", href: "/school/lessons" },
-    { icon: ClipboardPenLine, label: "Homework & Exercises", href: "/school/homework" },
+    { icon: NotebookPen, label: "Lesson Plan Review", href: "/school/lessons" },
     { icon: Table2, label: "Gradebook", href: "/school/gradebook", primary: true },
-    { icon: GraduationCap, label: "Exams & Assessments", href: "/school/exams" },
     { icon: FileText, label: "Report Cards", href: "/school/report-cards" },
     { icon: BookOpen, label: "Library & Resources", href: "/school/library" },
-    { icon: Settings2, label: "Academic Setup", href: "/school/academics/setup" },
-    { icon: CalendarDays, label: "Terms & Calendar", href: "/school/terms" },
+    { icon: Settings2, label: "Academic Settings", href: "/school/academics/settings" },
   ] },
   { label: "Attendance", items: [
     { icon: CircleCheckBig, label: "Student Attendance", href: "/school/attendance" },
@@ -151,13 +147,12 @@ const teacherGroups: Group[] = [
     { icon: LayoutDashboard, label: "Teacher Home", href: "/teacher", primary: true },
     { icon: CircleCheckBig, label: "My Attendance", href: "/teacher/attendance", primary: true },
     { icon: Table2, label: "My Gradebook", href: "/teacher/gradebook", primary: true },
-    { icon: ClipboardPenLine, label: "My Homework", href: "/teacher/homework", primary: true },
   ] },
   { label: "Teaching", items: [
     { icon: Users, label: "My Students", href: "/teacher/students" },
     { icon: CalendarClock, label: "My Timetable", href: "/teacher/timetable" },
-    { icon: NotebookPen, label: "My Lessons & Planning", href: "/teacher/module?view=My%20Lessons%20%26%20Planning" },
-    { icon: GraduationCap, label: "My Assessments", href: "/teacher/module?view=My%20Assessments" },
+    { icon: NotebookPen, label: "My Lessons & Planning", href: "/teacher/lessons" },
+    { icon: GraduationCap, label: "Online Assessments", href: "/teacher/studio#activities" },
   ] },
   { label: "Communication", items: [
     { icon: Mail, label: "My Messages", href: "/teacher/module?view=My%20Messages" },
@@ -275,7 +270,7 @@ export function AppShell({ universe, title, subtitle, active = "Overview", schoo
         { label: "Home", href: "/teacher", icon: LayoutDashboard },
         { label: "Attendance", href: "/teacher/attendance", icon: CircleCheckBig },
         { label: "Gradebook", href: "/teacher/gradebook", icon: Table2 },
-        { label: "Homework", href: "/teacher/homework", icon: ClipboardPenLine },
+        { label: "Lessons", href: "/teacher/lessons", icon: NotebookPen },
       ];
     }
     if (universe === "guardian") {
