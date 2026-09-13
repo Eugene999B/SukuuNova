@@ -11,9 +11,11 @@ export type NovaRunTimelineRow = {
   pickupLane?: RunnerLane;
 };
 
+export type NovaRunFailureReason = "blocked-lane" | "missed-jump" | "missed-slide";
+
 export type NovaRunEvent =
   | { type: "row-cleared"; rowId: string; scoreDelta: number; combo: number }
-  | { type: "collision"; rowId: string; reason: "blocked-lane" | "missed-jump" | "missed-slide"; comboLost: number }
+  | { type: "collision"; rowId: string; reason: NovaRunFailureReason; comboLost: number }
   | { type: "pickup"; rowId: string; scoreDelta: number };
 
 export type NovaRunSession = {
@@ -80,7 +82,7 @@ export function applyNovaRunAction(
   return { ...previous, movement: applyRunnerAction(previous.movement, action, profile) };
 }
 
-function failureReason(row: NovaRunTimelineRow, movement: RunnerState): NovaRunEvent["reason"] | null {
+function failureReason(row: NovaRunTimelineRow, movement: RunnerState): NovaRunFailureReason | null {
   if (row.blockedLanes.includes(movement.logicalLane as RunnerLane)) return "blocked-lane";
   if (row.actionCue === "jump" && movement.height < 0.38) return "missed-jump";
   if (row.actionCue === "slide" && movement.slideRemainingMs <= 0) return "missed-slide";
