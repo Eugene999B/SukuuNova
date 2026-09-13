@@ -45,11 +45,25 @@ const PLAYABLES = [
     mechanics: ["Build", "Load", "Simulate", "Inspect forces"],
   },
   {
+    href: "/labs/geometry-forge",
+    title: "Geometry Forge",
+    category: "Spatial construction",
+    summary: "Drag vertices on a snapped grid and satisfy live area, perimeter, angle and material constraints with multiple valid designs.",
+    mechanics: ["Direct manipulation", "Area", "Perimeter", "Constraint optimisation"],
+  },
+  {
     href: "/labs/the-archive",
     title: "The Archive",
     category: "Branching investigation",
     summary: "Collect conflicting sources in any order, build an interpretation, reach multiple endings and resume later.",
     mechanics: ["Evidence", "Source criticism", "Branching story", "Checkpoint resume"],
+  },
+  {
+    href: "/labs/argument-arena",
+    title: "Argument Arena",
+    category: "Competitive persuasion",
+    summary: "Construct evidence-reasoning-rebuttal chains while the opponent changes objections and the audience changes persuasion value.",
+    mechanics: ["Evidence choice", "Reasoning", "Rebuttal", "Audience adaptation"],
   },
   {
     href: "/labs/last-harvest",
@@ -70,7 +84,7 @@ export default function GamesLabPage() {
           <p className={styles.eyebrow}>Sukuunova Games V2 · development only</p>
           <h1>Games Lab</h1>
           <p>
-            Seven playable slices deliberately exercise different game DNA. Use this page to compare whether movement, pacing, interaction and learning actually feel different—not whether the cards have different school-subject labels.
+            Nine playable slices deliberately exercise different game DNA. Use this page to compare whether movement, pacing, interaction and learning actually feel different—not whether the cards have different school-subject labels.
           </p>
         </header>
 
