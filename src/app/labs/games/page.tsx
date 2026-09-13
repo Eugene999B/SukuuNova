@@ -10,6 +10,13 @@ export const metadata: Metadata = {
 
 const PLAYABLES = [
   {
+    href: "/labs/blackout-protocol",
+    title: "Blackout Protocol",
+    category: "Systems crisis",
+    summary: "Balance damaged-grid capacity, critical services, repair crews and a spreading cyber incident.",
+    mechanics: ["Load shedding", "Cascades", "Cyber isolation", "Resource triage"],
+  },
+  {
     href: "/labs/game-feel",
     title: "Movement Lab",
     category: "Core feel",
@@ -56,7 +63,7 @@ export default function GamesLabPage() {
           <p className={styles.eyebrow}>Sukuunova Games V2 · development only</p>
           <h1>Games Lab</h1>
           <p>
-            Five playable slices deliberately exercise different game DNA. Use this page to compare whether movement, pacing, interaction and learning actually feel different—not whether the cards have different school-subject labels.
+            Six playable slices deliberately exercise different game DNA. Use this page to compare whether movement, pacing, interaction and learning actually feel different—not whether the cards have different school-subject labels.
           </p>
         </header>
 
