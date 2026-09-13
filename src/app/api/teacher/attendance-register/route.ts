@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { appendSchoolAudit } from "@/lib/audit";
 import { getSchoolAuthorization } from "@/lib/authorization";
-import { isAttendanceBlocked } from "@/lib/attendance-service";
+import { getAttendanceCalendarState, resolveAttendanceClassScope, resolveAttendanceRoster } from "@/lib/attendance-service";
 import { withTenant, type TenantDb } from "@/lib/db";
 import { AppError, ForbiddenError, routeError } from "@/lib/errors";
 import { requireSchoolSession } from "@/lib/school-auth";
@@ -26,14 +26,6 @@ function dateValue(key: string) {
   const value = new Date(`${key}T00:00:00.000Z`);
   if (Number.isNaN(value.getTime()) || value.toISOString().slice(0, 10) !== key) throw new AppError("Choose a valid attendance date.", 400, "INVALID_ATTENDANCE_DATE");
   return value;
-}
-
-async function teacherClasses(tx: TenantDb, schoolId: string, teacherId: string, canRecordAll: boolean) {
-  return tx.class.findMany({
-    where: { schoolId, ...(canRecordAll ? {} : { classTeacherId: teacherId }) },
-    select: { id: true, name: true, level: true, _count: { select: { students: true } } },
-    orderBy: [{ level: "asc" }, { name: "asc" }],
-  });
 }
 
 async function commonContext(tx: TenantDb, schoolId: string, userId: string) {
@@ -61,18 +53,31 @@ export async function GET(request: Request) {
       const context = await commonContext(tx, session.schoolId, session.userId);
       const requestedDate = url.searchParams.get("date") || schoolLocalDateKey(new Date(), context.timezone);
       const day = dateValue(requestedDate);
-      const classes = await teacherClasses(tx, session.schoolId, session.userId, context.canAll);
-      const requestedClassId = url.searchParams.get("classId") || classes[0]?.id || "";
-      if (requestedClassId && !classes.some((item) => item.id === requestedClassId)) throw new ForbiddenError("That class is outside your attendance scope.");
-      const weekday = day.getUTCDay();
-      const schoolDay = context.schoolDays.includes(weekday);
-      const calendarBlocked = requestedClassId ? await isAttendanceBlocked(tx, session.schoolId, day) : false;
-      const students = requestedClassId ? await tx.student.findMany({
-        where: { schoolId: session.schoolId, classId: requestedClassId, status: "active" },
+      const classScope = await resolveAttendanceClassScope(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        day,
+        canRecordAll: context.canAll,
+      });
+      const requestedClassId = url.searchParams.get("classId") || classScope[0]?.id || "";
+      if (requestedClassId && !classScope.some((item) => item.id === requestedClassId)) throw new ForbiddenError("That class is outside your attendance scope for the selected academic year.");
+
+      const [calendar, roster] = await Promise.all([
+        getAttendanceCalendarState(tx, session.schoolId, day, context.schoolDays),
+        resolveAttendanceRoster(tx, session.schoolId, day, classScope.map((item) => item.id)),
+      ]);
+      const countByClass = new Map<string, number>();
+      for (const row of roster.rows) {
+        if (!row.classId) continue;
+        countByClass.set(row.classId, (countByClass.get(row.classId) ?? 0) + 1);
+      }
+      const classes = classScope.map((item) => ({ ...item, _count: { students: countByClass.get(item.id) ?? 0 } }));
+      const studentIds = requestedClassId ? roster.rows.filter((row) => row.classId === requestedClassId).map((row) => row.studentId) : [];
+      const students = studentIds.length ? await tx.student.findMany({
+        where: { schoolId: session.schoolId, id: { in: studentIds } },
         select: { id: true, name: true, admissionNo: true, photoUrl: true },
         orderBy: { name: "asc" },
       }) : [];
-      const studentIds = students.map((student) => student.id);
       const events = studentIds.length ? await tx.attendanceEvent.findMany({
         where: { schoolId: session.schoolId, attendanceDate: day, studentId: { in: studentIds }, type: { in: ["in", "absent", "absence"] } },
         select: { id: true, studentId: true, type: true, method: true, periodId: true, timestamp: true, recordedBy: true, isLate: true },
@@ -87,7 +92,21 @@ export async function GET(request: Request) {
         const status = automatedPresent || otherPresent && !register ? "present" : register?.type === "in" ? "present" : register && ["absent", "absence"].includes(register.type) ? "absent" : null;
         return { ...student, status, source, lockedPresent: Boolean(automatedPresent), isLate: Boolean((automatedPresent || register || otherPresent)?.isLate) };
       });
-      return NextResponse.json({ classes, classId: requestedClassId, date: requestedDate, timezone: context.timezone, schoolDays: context.schoolDays, schoolDay, calendarBlocked, rows });
+      return NextResponse.json({
+        classes,
+        classId: requestedClassId,
+        date: requestedDate,
+        timezone: context.timezone,
+        schoolDays: context.schoolDays,
+        schoolDay: calendar.schoolDay,
+        calendarBlocked: calendar.calendarBlocked,
+        calendarDayType: calendar.dayType,
+        calendarSource: calendar.source,
+        rosterSource: roster.source,
+        termId: roster.termId,
+        academicYearId: roster.academicYearId,
+        rows,
+      });
     });
   } catch (error) { return routeError(error); }
 }
@@ -99,14 +118,21 @@ export async function POST(request: Request) {
     return await withTenant(session.schoolId, async (tx) => {
       const context = await commonContext(tx, session.schoolId, session.userId);
       const day = dateValue(input.date);
-      if (!context.schoolDays.includes(day.getUTCDay())) throw new AppError("This date is not configured as a school day.", 409, "NOT_A_SCHOOL_DAY");
-      if (await isAttendanceBlocked(tx, session.schoolId, day)) throw new AppError("Attendance is closed for this holiday or school-calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
-      const classes = await teacherClasses(tx, session.schoolId, session.userId, context.canAll);
-      if (!classes.some((item) => item.id === input.classId)) throw new ForbiddenError("That class is outside your attendance scope.");
-      const students = await tx.student.findMany({ where: { schoolId: session.schoolId, classId: input.classId, status: "active" }, select: { id: true } });
-      const roster = new Set(students.map((student) => student.id));
+      const calendar = await getAttendanceCalendarState(tx, session.schoolId, day, context.schoolDays);
+      if (calendar.calendarBlocked) throw new AppError("Attendance is closed for this holiday or school-calendar date.", 409, "CALENDAR_BLOCKS_ATTENDANCE");
+      if (!calendar.schoolDay) throw new AppError("This date is not configured as a school day.", 409, "NOT_A_SCHOOL_DAY");
+      const classes = await resolveAttendanceClassScope(tx, {
+        schoolId: session.schoolId,
+        actorId: session.userId,
+        day,
+        canRecordAll: context.canAll,
+      });
+      if (!classes.some((item) => item.id === input.classId)) throw new ForbiddenError("That class is outside your attendance scope for the selected academic year.");
+
+      const rosterContext = await resolveAttendanceRoster(tx, session.schoolId, day, [input.classId]);
+      const roster = new Set(rosterContext.rows.map((row) => row.studentId));
       const supplied = new Set(input.entries.map((entry) => entry.studentId));
-      if (supplied.size !== input.entries.length || input.entries.some((entry) => !roster.has(entry.studentId))) throw new ForbiddenError("The register contains a learner outside this class.");
+      if (supplied.size !== input.entries.length || input.entries.some((entry) => !roster.has(entry.studentId))) throw new ForbiddenError("The register contains a learner outside this class for the selected date.");
       if (supplied.size !== roster.size) throw new AppError("Complete the full class register before saving.", 400, "INCOMPLETE_REGISTER");
 
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`teacher-register:${session.schoolId}:${input.classId}:${input.date}`}))`;
@@ -145,7 +171,18 @@ export async function POST(request: Request) {
         entityType: "Class",
         entityId: input.classId,
         before: { registerEvents: before },
-        after: { date: input.date, present, absent, verifiedPresent: automaticallyPresent.size, total: input.entries.length },
+        after: {
+          date: input.date,
+          present,
+          absent,
+          verifiedPresent: automaticallyPresent.size,
+          total: input.entries.length,
+          rosterSource: rosterContext.source,
+          termId: rosterContext.termId,
+          academicYearId: rosterContext.academicYearId,
+          calendarSource: calendar.source,
+          calendarDayType: calendar.dayType,
+        },
       });
       return NextResponse.json({ ok: true, message: `Register saved: ${present} present, ${absent} absent.`, present, absent, verifiedPresent: automaticallyPresent.size });
     });
