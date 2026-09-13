@@ -20,6 +20,22 @@ async function setupGradebookJurisdiction() {
       },
     });
 
+    // Keep the actor a legitimate active teacher while testing that teacher status alone is
+    // not enough to author or change marks for an unassigned subject.
+    const teacherRole = await tx.role.create({
+      data: {
+        schoolId: fixture.schoolId,
+        name: "Teacher",
+      },
+    });
+    await tx.userRole.create({
+      data: {
+        schoolId: fixture.schoolId,
+        userId: fixture.memberId,
+        roleId: teacherRole.id,
+      },
+    });
+
     const year = await tx.academicYear.create({
       data: {
         schoolId: fixture.schoolId,
