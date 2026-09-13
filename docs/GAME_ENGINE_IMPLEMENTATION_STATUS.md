@@ -8,7 +8,7 @@ The guiding rule is simple: changing a school subject, background image or story
 
 ## Development-only Games Lab
 
-`/labs/games` is the development hub for the playable slices below. Every route intentionally returns `404` outside development builds.
+`/labs/games` is the development hub for the nine playable slices below. Every route intentionally returns `404` outside development builds.
 
 ### `/labs/game-feel` — Movement Lab
 
@@ -55,6 +55,21 @@ The current prototype is finite. Endless paging, object pooling and streaming sh
 
 This is an educational linear-truss model, not professional structural-design software.
 
+### `/labs/geometry-forge` — spatial construction
+
+- direct polygon manipulation through mouse/touch vertex dragging
+- one-metre snapped design grid
+- live area and perimeter calculation from the learner's actual shape
+- right-angle detection
+- self-intersection detection
+- minimum/maximum vertex rules
+- material/perimeter constraints
+- multiple valid solutions rather than one hidden answer shape
+- add/remove-corner tools and best-submitted score tracking
+- three briefs: courtyard, community stage and water-tank foundation
+
+Every brief starts outside its target constraints so the learner must actually construct a solution.
+
 ### `/labs/the-archive` — branching historical investigation
 
 - fictional case so invented story details are never presented as real Ghanaian history
@@ -64,6 +79,19 @@ This is an educational linear-truss model, not professional structural-design so
 - evidence-gated interpretations
 - multiple endings, including a legitimate "not enough evidence" conclusion
 - versioned local checkpoint that resumes the exact investigation instead of replaying an opening sequence
+
+### `/labs/argument-arena` — competitive persuasion
+
+- one debatable school motion that can be played from either side
+- evidence cards with side-specific relevance and source credibility
+- explicit reasoning links: cause/effect, comparison, trade-off and principle/example
+- changing opponent objections around causation, practicality, representativeness and opportunity cost
+- rebuttal styles whose effectiveness depends on the actual objection
+- audience adaptation for students, teachers and community members
+- repeated-source penalty to prevent one-card spam
+- four-round scored match with round-by-round feedback and multiple outcome bands
+
+The scoring model separates evidence relevance, credibility, reasoning fit, rebuttal fit, audience fit and novelty. It therefore evaluates the structure of the argument rather than a single predetermined answer.
 
 ### `/labs/blackout-protocol` — systems crisis
 
@@ -108,16 +136,18 @@ Electricity/networking are expressed through operating the system under pressure
 - `open-world-simulation.ts` — camera-relative traversal, sprint, facing, contextual targets and orbit-camera bounds
 - `field-expedition-session.ts` — contextual tool/action mission layer for open-world fieldwork
 
-### Simulation and strategy games
+### Simulation, strategy and construction
 
 - `structural-simulation.ts` — educational 2D truss solver for Failure Point
+- `geometry-forge.ts` — polygon construction, geometric measurement, constraint evaluation and direct-edit state
 - `blackout-protocol.ts` — deterministic power/cyber crisis system with cascading service consequences
 - `last-harvest.ts` — seasonal crop/soil/weather/resource strategy simulation
 
-### Story and investigation
+### Story, investigation and reasoning
 
 - `branching-story.ts` — reusable branching narrative graph with conditions, effects, evidence grants, multiple endings and versioned checkpoint serialization/restoration
 - `archive-case.ts` — first complete evidence mystery built on that runtime
+- `argument-arena.ts` — evidence/reasoning/rebuttal match engine with audience and objection-sensitive scoring
 
 ### Variety enforcement
 
@@ -144,7 +174,9 @@ Dedicated tests now cover:
 - adaptive challenge isolation from movement profiles
 - frame-pacing quality recommendation
 - analytical truss displacement/stress, yield failure and unstable model handling
+- Geometry Forge area/perimeter/right-angle calculation, snapping/clamping, self-intersection, vertex editing and score persistence
 - branching-story graph validation, nonlinear collection, evidence-gated endings and checkpoint restore/fallback
+- Argument Arena side-specific relevance, evidence reuse penalties, objection-specific rebuttal scoring and full-match outcomes
 - Blackout Protocol overload, load shedding, delayed repair, cyber spread/isolation and containment
 - Last Harvest planning gate, budget actions, crop/soil consequences, pest protection and full-season completion
 
@@ -172,15 +204,16 @@ Failure Point uses a valid linear truss method but does not model buckling, larg
 
 ## Next highest-value work
 
-1. Hands-on playtest all seven routes from `/labs/games` and tune feel before production exposure.
-2. Add account-backed checkpoint/progress contracts for persistent games while keeping local checkpoints as an offline fallback.
+1. Hands-on playtest all nine routes from `/labs/games` and record friction, boredom, confusion, restart frequency and replay motivation.
+2. Add a shared game-session persistence contract so persistent games resume from the exact scene/state instead of reopening.
 3. Make Field Expedition save/resume position, completed sites and selected tool.
-4. Make Nova Run course paging effectively endless with pooling/streaming after performance measurement.
-5. Add one genuine academic route mechanic to Nova Run without stopping movement.
-6. Add direct member/node editing to Failure Point rather than only load/material sliders.
-7. Prototype Argument Arena so language learning is represented by construction/rebuttal rather than quiz cards.
-8. Add controller/gamepad browser adapter plus remapping, reduced-motion and accessibility controls.
-9. Connect frame-pacing monitor to measured automatic quality budgets.
-10. Define privacy-minimal structured gameplay telemetry for the adaptive director.
-11. Establish game-specific release performance gates and regression journeys.
-12. Migrate legacy quiz-style missions selectively; do not mass-reskin existing question templates.
+4. Add accessibility/remapping/reduced-motion controls shared across action prototypes.
+5. Make Nova Run course paging effectively endless with pooling/streaming after performance measurement.
+6. Add one genuine academic route mechanic to Nova Run without stopping movement.
+7. Add direct member/node editing to Failure Point rather than only load/material sliders.
+8. Expand Argument Arena with multiple motions, opponent personalities and teacher-authored evidence packs after the core match is play-tested.
+9. Expand Geometry Forge with rotate/cut/measure tools and challenge authoring after drag manipulation is validated on touch devices.
+10. Connect frame-pacing monitor to measured automatic quality budgets.
+11. Define privacy-minimal structured gameplay telemetry for the adaptive director.
+12. Establish game-specific release performance gates and regression journeys.
+13. Migrate legacy quiz-style missions selectively; do not mass-reskin existing question templates.
