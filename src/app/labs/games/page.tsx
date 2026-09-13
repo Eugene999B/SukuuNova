@@ -51,6 +51,13 @@ const PLAYABLES = [
     summary: "Collect conflicting sources in any order, build an interpretation, reach multiple endings and resume later.",
     mechanics: ["Evidence", "Source criticism", "Branching story", "Checkpoint resume"],
   },
+  {
+    href: "/labs/last-harvest",
+    title: "The Last Harvest",
+    category: "Seasonal strategy",
+    summary: "Plan crops across three fields while rainfall, soil, pests, budget and long-term fertility interact.",
+    mechanics: ["Crop planning", "Resource budget", "Weather response", "Soil consequences"],
+  },
 ] as const;
 
 export default function GamesLabPage() {
@@ -63,7 +70,7 @@ export default function GamesLabPage() {
           <p className={styles.eyebrow}>Sukuunova Games V2 · development only</p>
           <h1>Games Lab</h1>
           <p>
-            Six playable slices deliberately exercise different game DNA. Use this page to compare whether movement, pacing, interaction and learning actually feel different—not whether the cards have different school-subject labels.
+            Seven playable slices deliberately exercise different game DNA. Use this page to compare whether movement, pacing, interaction and learning actually feel different—not whether the cards have different school-subject labels.
           </p>
         </header>
 
