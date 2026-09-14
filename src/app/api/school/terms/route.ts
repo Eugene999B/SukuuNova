@@ -59,11 +59,20 @@ export async function POST(request: Request) {
       if (existingYear && (existingYear.startDate.getTime() !== input.academicYearStart.getTime() || existingYear.endDate.getTime() !== input.academicYearEnd.getTime())) {
         throw new AppError(`${existingYear.name} already exists with different dates. Keep the existing year dates or create a new academic year.`, 409, "ACADEMIC_YEAR_DATES_MISMATCH");
       }
+      const overlappingYear = await tx.academicYear.findFirst({
+        where: {
+          schoolId: session.schoolId,
+          ...(existingYear ? { id: { not: existingYear.id } } : {}),
+          startDate: { lte: input.academicYearEnd },
+          endDate: { gte: input.academicYearStart },
+        },
+      });
+      if (overlappingYear) throw new AppError(`Academic year dates overlap ${overlappingYear.name}.`, 409, "ACADEMIC_YEAR_OVERLAP");
       const year = existingYear ?? await tx.academicYear.create({
         data: { schoolId: session.schoolId, name: input.academicYearName, startDate: input.academicYearStart, endDate: input.academicYearEnd }
       });
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-year-terms:${session.schoolId}:${year.id}`}))`;
-      const overlap = await tx.term.findFirst({ where: { schoolId: session.schoolId, academicYearId: year.id, startDate: { lt: input.endDate }, endDate: { gt: input.startDate } } });
+      const overlap = await tx.term.findFirst({ where: { schoolId: session.schoolId, academicYearId: year.id, startDate: { lte: input.endDate }, endDate: { gte: input.startDate } } });
       if (overlap) throw new AppError(`Term dates overlap ${overlap.name}.`, 409, "TERM_OVERLAP");
       const term = await tx.term.create({ data: { schoolId: session.schoolId, academicYearId: year.id, name: input.name, startDate: input.startDate, endDate: input.endDate } });
       await tx.$executeRawUnsafe(`UPDATE "Term" SET "teachingWeeks"=$1 WHERE "id"=$2 AND "schoolId"=$3`, input.teachingWeeks, term.id, session.schoolId);

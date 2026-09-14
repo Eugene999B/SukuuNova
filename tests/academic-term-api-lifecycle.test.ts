@@ -19,4 +19,18 @@ describe("academic term API lifecycle", () => {
     expect(termsRoute).toContain("existingYear ?? await tx.academicYear.create");
     expect(termsRoute).not.toContain("academicYear.upsert");
   });
+
+  it("treats academic years and terms as inclusive date ranges at the API boundary", () => {
+    expect(termsRoute).toContain("ACADEMIC_YEAR_OVERLAP");
+    expect(termsRoute).toContain("startDate: { lte: input.academicYearEnd }");
+    expect(termsRoute).toContain("endDate: { gte: input.academicYearStart }");
+    expect(termsRoute).toContain("startDate: { lte: input.endDate }");
+    expect(termsRoute).toContain("endDate: { gte: input.startDate }");
+    expect(termDetailRoute).toContain("startDate: { lte: input.endDate }");
+    expect(termDetailRoute).toContain("endDate: { gte: input.startDate }");
+    expect(termsRoute).not.toContain("startDate: { lt: input.endDate }");
+    expect(termsRoute).not.toContain("endDate: { gt: input.startDate }");
+    expect(termDetailRoute).not.toContain("startDate: { lt: input.endDate }");
+    expect(termDetailRoute).not.toContain("endDate: { gt: input.startDate }");
+  });
 });

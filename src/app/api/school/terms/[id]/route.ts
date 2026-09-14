@@ -52,7 +52,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       const changingLockedTerm = input.name !== current.name || input.startDate.getTime() !== current.startDate.getTime() || input.endDate.getTime() !== current.endDate.getTime() || nextWeeks !== currentWeeks;
       if (current.isLocked && changingLockedTerm) throw new AppError("A locked term cannot be edited. Reopen it first.", 409, "TERM_LOCKED");
       if (input.startDate < current.academicYear.startDate || input.endDate > current.academicYear.endDate) throw new AppError("Term dates must sit inside the academic year.", 400, "TERM_OUTSIDE_YEAR");
-      const overlap = await tx.term.findFirst({ where: { schoolId: session.schoolId, academicYearId: current.academicYearId, id: { not: id }, startDate: { lt: input.endDate }, endDate: { gt: input.startDate } } });
+      const overlap = await tx.term.findFirst({ where: { schoolId: session.schoolId, academicYearId: current.academicYearId, id: { not: id }, startDate: { lte: input.endDate }, endDate: { gte: input.startDate } } });
       if (overlap) throw new AppError(`Term dates overlap ${overlap.name}.`, 409, "TERM_OVERLAP");
 
       const updated = await tx.term.update({ where: { id }, data: { name: input.name, startDate: input.startDate, endDate: input.endDate, isLocked: nextLocked } });
