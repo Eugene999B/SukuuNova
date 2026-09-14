@@ -97,15 +97,24 @@ async function setupJurisdiction() {
 }
 
 async function assignSubjectToMember(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
-  await withTenant(f.schoolId, (tx) => tx.classSubjectTeacher.updateMany({
-    where: {
-      schoolId: f.schoolId,
-      classId: f.classId,
-      subjectId: f.subjectId,
-      teacherId: f.ownerId,
-    },
-    data: { teacherId: f.memberId },
-  }));
+  await withTenant(f.schoolId, async (tx) => {
+    await tx.classSubjectTeacher.deleteMany({
+      where: {
+        schoolId: f.schoolId,
+        classId: f.classId,
+        subjectId: f.subjectId,
+        teacherId: f.ownerId,
+      },
+    });
+    await tx.classSubjectTeacher.create({
+      data: {
+        schoolId: f.schoolId,
+        classId: f.classId,
+        subjectId: f.subjectId,
+        teacherId: f.memberId,
+      },
+    });
+  });
 }
 
 function lessonInput(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
