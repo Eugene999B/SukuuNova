@@ -73,7 +73,7 @@ async function teacherContext(tx: TenantDb, schoolId: string, userId: string) {
       select: { id: true, name: true, startDate: true, endDate: true, isLocked: true, academicYear: { select: { name: true } } },
     }),
     tx.classSubjectTeacher.findMany({
-      where: { schoolId, OR: [{ teacherId: userId }, { class: { classTeacherId: userId } }] },
+      where: { schoolId, teacherId: userId },
       select: {
         classId: true,
         subjectId: true,
