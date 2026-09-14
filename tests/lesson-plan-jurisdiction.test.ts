@@ -54,7 +54,7 @@ async function setupJurisdiction() {
     const subject = await tx.subject.create({
       data: { schoolId: fixture.schoolId, name: `Jurisdiction subject ${createId()}` },
     });
-    const assignment = await tx.classSubjectTeacher.create({
+    await tx.classSubjectTeacher.create({
       data: {
         schoolId: fixture.schoolId,
         classId: classroom.id,
@@ -82,7 +82,6 @@ async function setupJurisdiction() {
     `;
 
     return {
-      assignmentId: assignment.id,
       classId: classroom.id,
       subjectId: subject.id,
       lessonId,
@@ -95,6 +94,18 @@ async function setupJurisdiction() {
   session.schoolId = fixture.schoolId;
   session.userId = fixture.memberId;
   return { ...fixture, ...result };
+}
+
+async function assignSubjectToMember(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
+  await withTenant(f.schoolId, (tx) => tx.classSubjectTeacher.updateMany({
+    where: {
+      schoolId: f.schoolId,
+      classId: f.classId,
+      subjectId: f.subjectId,
+      teacherId: f.ownerId,
+    },
+    data: { teacherId: f.memberId },
+  }));
 }
 
 function lessonInput(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
@@ -136,10 +147,7 @@ describe("lesson-plan subject jurisdiction", () => {
     const filesBeforeBody = await filesBefore.json();
     expect(filesBeforeBody.assignments).toHaveLength(0);
 
-    await withTenant(f.schoolId, (tx) => tx.classSubjectTeacher.update({
-      where: { id: f.assignmentId },
-      data: { teacherId: f.memberId },
-    }));
+    await assignSubjectToMember(f);
 
     const studioAfter = await getLessonStudio();
     const studioAfterBody = await studioAfter.json();
@@ -171,10 +179,7 @@ describe("lesson-plan subject jurisdiction", () => {
     })))
       .rejects.toMatchObject({ status: 403 });
 
-    await withTenant(f.schoolId, (tx) => tx.classSubjectTeacher.update({
-      where: { id: f.assignmentId },
-      data: { teacherId: f.memberId },
-    }));
+    await assignSubjectToMember(f);
 
     await expect(withTenant(f.schoolId, (tx) => editLessonPlan(tx, actor, lessonInput(f))))
       .resolves.toEqual({ ok: true });
