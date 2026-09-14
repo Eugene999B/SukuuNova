@@ -67,12 +67,12 @@ async function setupJurisdiction() {
     const homeworkId = createId();
     const workDate = new Date("2026-09-15T00:00:00.000Z");
     await tx.$executeRaw`
-      INSERT INTO "LessonPlan" ("id","schoolId","teacherId","classId","subjectId","termId","title","content","plannedDate","status")
-      VALUES (${lessonId},${fixture.schoolId},${fixture.memberId},${classroom.id},${subject.id},${term.id},'Jurisdiction lesson','Original lesson notes',${workDate},'draft')
+      INSERT INTO "LessonPlan" ("id","schoolId","teacherId","classId","subjectId","termId","title","content","plannedDate","status","updatedAt")
+      VALUES (${lessonId},${fixture.schoolId},${fixture.memberId},${classroom.id},${subject.id},${term.id},'Jurisdiction lesson','Original lesson notes',${workDate},'draft',${workDate})
     `;
     await tx.$executeRaw`
-      INSERT INTO "Homework" ("id","schoolId","teacherId","classId","subjectId","termId","title","instructions","dueDate","assignmentStatus")
-      VALUES (${homeworkId},${fixture.schoolId},${fixture.memberId},${classroom.id},${subject.id},${term.id},'Jurisdiction homework','Original homework instructions',${workDate},'draft')
+      INSERT INTO "Homework" ("id","schoolId","teacherId","classId","subjectId","termId","title","instructions","dueDate","assignmentStatus","updatedAt")
+      VALUES (${homeworkId},${fixture.schoolId},${fixture.memberId},${classroom.id},${subject.id},${term.id},'Jurisdiction homework','Original homework instructions',${workDate},'draft',${workDate})
     `;
     const lessonVersion = await tx.$queryRaw<Array<{ updatedAt: Date }>>`
       SELECT "updatedAt" FROM "LessonPlan" WHERE "schoolId"=${fixture.schoolId} AND "id"=${lessonId}
