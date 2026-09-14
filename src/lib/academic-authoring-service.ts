@@ -75,8 +75,7 @@ async function editableWork(tx: TenantDb, actor: Actor, kind: "lesson" | "homewo
   const editable = kind === "lesson" ? ["draft", "changes_requested"] : ["draft"];
   if (!editable.includes(current.status)) throw new AppError("Only drafts or lesson plans returned for revision can be edited.", 409, "WORK_NOT_EDITABLE");
   const assignment = await tx.classSubjectTeacher.findFirst({ where: { schoolId: actor.schoolId, teacherId: actor.actorId, classId: current.classId, subjectId: current.subjectId } });
-  const formClass = await tx.class.findFirst({ where: { schoolId: actor.schoolId, id: current.classId, classTeacherId: actor.actorId }, select: { id: true } });
-  if (!assignment && !formClass) throw new ForbiddenError("You are no longer assigned to teach this class and subject.");
+  if (!assignment) throw new ForbiddenError("You are no longer assigned to teach this class and subject.");
   if (current.termId) {
     const term = await tx.term.findFirst({ where: { schoolId: actor.schoolId, id: current.termId } });
     if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
