@@ -131,7 +131,7 @@ async function context(tx: TenantDb, schoolId: string, userId: string) {
   const [settings, terms, assignments] = await Promise.all([
     tx.schoolSettings.findUnique({ where: { schoolId }, select: { timezone: true } }),
     tx.term.findMany({ where: { schoolId }, orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true, academicYear: { select: { name: true } } } }),
-    tx.classSubjectTeacher.findMany({ where: { schoolId, OR: [{ teacherId: userId }, { class: { classTeacherId: userId } }] }, select: { classId: true, subjectId: true, class: { select: { name: true, level: true, _count: { select: { students: true } } } }, subject: { select: { name: true } } }, orderBy: [{ class: { name: "asc" } }, { subject: { name: "asc" } }] }),
+    tx.classSubjectTeacher.findMany({ where: { schoolId, teacherId: userId }, select: { classId: true, subjectId: true, class: { select: { name: true, level: true, _count: { select: { students: true } } } }, subject: { select: { name: true } } }, orderBy: [{ class: { name: "asc" } }, { subject: { name: "asc" } }] }),
   ]);
   const timezone = settings?.timezone || "Africa/Accra";
   const activeTerm = selectAcademicTerm(terms, undefined, new Date(), timezone);
