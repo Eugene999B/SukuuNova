@@ -11,10 +11,17 @@ async function setup(kind: "lesson" | "homework", status = "draft") {
   const fixture = await createTenantFixture();
   const id = createId();
   const result = await withTenant(fixture.schoolId, async (tx) => {
+    const teacherRole = await tx.role.create({
+      data: { schoolId: fixture.schoolId, name: `Authoring Teacher ${createId()}`, key: "teacher" },
+    });
+    await tx.userRole.create({
+      data: { schoolId: fixture.schoolId, userId: fixture.ownerId, roleId: teacherRole.id },
+    });
     const year = await tx.academicYear.create({ data: { schoolId: fixture.schoolId, name: "Authoring year", startDate: new Date("2026-01-01"), endDate: new Date("2026-12-31") } });
     const term = await tx.term.create({ data: { schoolId: fixture.schoolId, academicYearId: year.id, name: "Authoring term", startDate: new Date("2026-01-01"), endDate: new Date("2026-12-31") } });
     const classroom = await tx.class.create({ data: { schoolId: fixture.schoolId, name: "Authoring class", classTeacherId: fixture.ownerId } });
     const subject = await tx.subject.create({ data: { schoolId: fixture.schoolId, name: "Authoring subject" } });
+    await tx.classSubjectTeacher.create({ data: { schoolId: fixture.schoolId, classId: classroom.id, subjectId: subject.id, teacherId: fixture.ownerId } });
     const date = new Date("2026-09-15");
     if (kind === "lesson") {
       await tx.$executeRaw`INSERT INTO "LessonPlan" ("id","schoolId","teacherId","classId","subjectId","termId","title","content","plannedDate","status") VALUES (${id},${fixture.schoolId},${fixture.ownerId},${classroom.id},${subject.id},${term.id},'Original lesson','Original teaching notes',${date},${status})`;

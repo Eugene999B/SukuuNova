@@ -131,7 +131,22 @@ async function context(tx: TenantDb, schoolId: string, userId: string) {
   const [settings, terms, assignments] = await Promise.all([
     tx.schoolSettings.findUnique({ where: { schoolId }, select: { timezone: true } }),
     tx.term.findMany({ where: { schoolId }, orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true, academicYear: { select: { name: true } } } }),
-    tx.classSubjectTeacher.findMany({ where: { schoolId, OR: [{ teacherId: userId }, { class: { classTeacherId: userId } }] }, select: { classId: true, subjectId: true, class: { select: { name: true, level: true, _count: { select: { students: true } } } }, subject: { select: { name: true } } }, orderBy: [{ class: { name: "asc" } }, { subject: { name: "asc" } }] }),
+    tx.classSubjectTeacher.findMany({
+      where: { schoolId, teacherId: userId },
+      select: {
+        classId: true,
+        subjectId: true,
+        class: {
+          select: {
+            name: true,
+            level: true,
+            _count: { select: { students: true } },
+          },
+        },
+        subject: { select: { name: true } },
+      },
+      orderBy: [{ class: { name: "asc" } }, { subject: { name: "asc" } }],
+    }),
   ]);
   const timezone = settings?.timezone || "Africa/Accra";
   const activeTerm = selectAcademicTerm(terms, undefined, new Date(), timezone);
@@ -166,6 +181,14 @@ export async function GET() {
         LEFT JOIN "Term" t ON t."id"=lp."termId" AND t."schoolId"=lp."schoolId"
         LEFT JOIN "User" reviewer ON reviewer."id"=lp."reviewerId" AND reviewer."schoolId"=lp."schoolId"
         WHERE lp."schoolId"=$1 AND lp."teacherId"=$2
+          AND EXISTS (
+            SELECT 1
+            FROM "ClassSubjectTeacher" cst
+            WHERE cst."schoolId"=lp."schoolId"
+              AND cst."teacherId"=lp."teacherId"
+              AND cst."classId"=lp."classId"
+              AND cst."subjectId"=lp."subjectId"
+          )
         ORDER BY lp."plannedDate" DESC,lp."updatedAt" DESC LIMIT 300`, session.schoolId, session.userId);
       return NextResponse.json({ assignments: ctx.assignments, terms: ctx.terms.map((term) => ({ ...term, lifecycle: termLifecycle(term, new Date(), ctx.timezone) })), activeTermId: ctx.activeTerm?.id ?? null, timezone: ctx.timezone, rows });
     });
@@ -179,9 +202,10 @@ export async function POST(request: Request) {
     return await withTenant(session.schoolId, async (tx) => {
       if (input.action === "transition") {
         const ctx = await context(tx, session.schoolId, session.userId);
-        const rows = await tx.$queryRawUnsafe<Array<{ id: string; teacherId: string; status: string; termId: string | null }>>(`SELECT "id","teacherId","status","termId" FROM "LessonPlan" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, input.id);
+        const rows = await tx.$queryRawUnsafe<Array<{ id: string; teacherId: string; classId: string; subjectId: string; status: string; termId: string | null }>>(`SELECT "id","teacherId","classId","subjectId","status","termId" FROM "LessonPlan" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, input.id);
         const current = rows[0];
         if (!current || current.teacherId !== session.userId) throw new ForbiddenError("You can only update your own lesson plan.");
+        if (!ctx.assignments.some((item) => item.classId === current.classId && item.subjectId === current.subjectId)) throw new ForbiddenError("That class and subject are outside your teaching scope.");
         if (input.status === "completed") {
           if (current.status !== "approved") throw new AppError("Only an approved lesson can be marked taught/completed.", 409, "INVALID_TRANSITION");
           if (!input.reflection || input.reflection.length < 10) throw new AppError("Add a short teaching reflection before completing the lesson.", 400, "REFLECTION_REQUIRED");
@@ -212,9 +236,19 @@ export async function POST(request: Request) {
       }
 
       if (!input.expectedUpdatedAt) throw new AppError("Refresh the lesson plan before editing it again.", 409, "EXPECTED_VERSION_REQUIRED");
-      const currentRows = await tx.$queryRawUnsafe<Array<{ id: string; teacherId: string; status: string; updatedAt: Date }>>(`SELECT "id","teacherId","status","updatedAt" FROM "LessonPlan" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, input.id);
+      const currentRows = await tx.$queryRawUnsafe<Array<{ id: string; teacherId: string; classId: string; subjectId: string; status: string; updatedAt: Date }>>(`SELECT "id","teacherId","classId","subjectId","status","updatedAt" FROM "LessonPlan" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, session.schoolId, input.id);
       const current = currentRows[0];
       if (!current || current.teacherId !== session.userId) throw new ForbiddenError("You can only edit lesson plans you created.");
+      const persistedAssignment = await tx.classSubjectTeacher.findFirst({
+        where: {
+          schoolId: session.schoolId,
+          teacherId: session.userId,
+          classId: current.classId,
+          subjectId: current.subjectId,
+        },
+        select: { classId: true },
+      });
+      if (!persistedAssignment) throw new ForbiddenError("That lesson plan is outside your current teaching scope.");
       if (!["draft", "changes_requested"].includes(current.status)) throw new AppError("Only drafts or plans returned for changes can be edited.", 409, "WORK_NOT_EDITABLE");
       if (current.updatedAt.getTime() !== new Date(input.expectedUpdatedAt).getTime()) throw new AppError("This lesson plan changed. Refresh before saving.", 409, "CONCURRENT_UPDATE");
       const changed = await tx.$executeRawUnsafe(`UPDATE "LessonPlan" SET "classId"=$3,"subjectId"=$4,"termId"=$5,"title"=$6,"objective"=$7,"content"=$8,"topic"=$9,"subTopic"=$10,"curriculumObjective"=$11,"learningOutcomes"=$12,"priorKnowledge"=$13,"materials"=$14,"introduction"=$15,"development"=$16,"differentiatedActivities"=$17,"assessment"=$18,"conclusion"=$19,"homework"=$20,"resources"=$21::jsonb,"documentContent"=$22::jsonb,"plannedDate"=$23::date,"status"=$24,"submittedAt"=CASE WHEN $24='submitted' THEN NOW() ELSE "submittedAt" END,"reviewerId"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewerId" END,"reviewNote"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewNote" END,"reviewedAt"=CASE WHEN $24='submitted' THEN NULL ELSE "reviewedAt" END,"updatedAt"=GREATEST(NOW(),"updatedAt"+INTERVAL '1 millisecond') WHERE "schoolId"=$1 AND "id"=$2 AND "updatedAt"=$25::timestamptz`, session.schoolId, input.id, input.classId, input.subjectId, input.termId, input.title, input.objective || null, summary, input.topic || null, input.subTopic || null, input.curriculumObjective || null, input.learningOutcomes || null, input.priorKnowledge || null, input.materials || null, input.introduction || null, input.development || null, input.differentiatedActivities || null, input.assessment || null, input.conclusion || null, input.homework || null, JSON.stringify(input.resources), documentContent, input.plannedDate, input.status, input.expectedUpdatedAt);
