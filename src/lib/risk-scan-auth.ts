@@ -10,7 +10,10 @@ export function isRiskScanWorkflow(payload: JWTPayload) {
     && payload.ref === "refs/heads/main"
     && payload.workflow_ref === "Eugene999B/SukuuNova/.github/workflows/risk-scan.yml@refs/heads/main"
     && ["schedule", "workflow_dispatch", "workflow_run"].includes(String(payload.event_name))
-    && payload.sub === "repo:Eugene999B/SukuuNova:ref:refs/heads/main";
+    && [
+      "repo:Eugene999B/SukuuNova:ref:refs/heads/main",
+      "repo:Eugene999B@194670606/SukuuNova@1334027943:ref:refs/heads/main",
+    ].includes(String(payload.sub));
 }
 export async function authorizeRiskScan(header: string | null) {
   const token = header?.match(/^Bearer\s+(\S+)$/i)?.[1];
