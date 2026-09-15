@@ -17,6 +17,7 @@ import { requirePermission } from "@/lib/rbac";
 import { getAcademicEngineConfig } from "@/lib/academic-engine";
 import { isTermActive } from "@/lib/term-date";
 import "../../academic-workspace.css";
+import "./academic-settings.css";
 
 export default async function AcademicSettingsPage() {
   const session = await requireSchoolSession();
