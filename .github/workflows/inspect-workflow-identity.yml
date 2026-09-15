@@ -1,0 +1,21 @@
+name: Inspect workflow identity
+on:
+  push:
+    branches: [diagnostic/risk-scan-identity]
+permissions:
+  id-token: write
+jobs:
+  identity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect nonsecret identity claims
+        run: |
+          node --input-type=module <<'NODE'
+          const url=new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+          url.searchParams.set("audience","sukuunova:risk-scan");
+          const issued=await fetch(url,{headers:{authorization:"Bearer "+process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}});
+          if(!issued.ok)throw new Error("Identity issuance failed");
+          const {value}=await issued.json();
+          const claims=JSON.parse(Buffer.from(value.split(".")[1],"base64url").toString());
+          for(const key of ["repository_id","repository","ref","workflow_ref","event_name","sub","iss","aud"])console.log(key+": "+claims[key]);
+          NODE
