@@ -165,12 +165,12 @@ export function ensureDatabaseRoleSafe(): Promise<void> {
   return roleSafetyCheck;
 }
 
-export async function withTenant<T>(schoolIdInput: string, work: (tx: TenantDb) => Promise<T>): Promise<T> {
+export async function withTenant<T>(schoolIdInput: string, work: (tx: TenantDb) => Promise<T>, options?: { timeout?: number }): Promise<T> {
   const schoolId = validateSchoolId(schoolIdInput);
   await ensureDatabaseRoleSafe();
   return tenantContext.run({ schoolId }, async () => db.$transaction(async (extendedTx) => {
     const tx = extendedTx as unknown as TenantDb;
     await tx.$queryRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", schoolId);
     return work(tx);
-  }));
+  }, options));
 }

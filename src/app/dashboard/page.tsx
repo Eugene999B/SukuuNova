@@ -108,6 +108,7 @@ function SchoolRoleDashboard({ name, school, code, role, profile, stats }: { nam
   const setupChecks = [stats.hasBranding, stats.academicYears > 0 && stats.terms > 0, stats.classes > 0 && stats.subjects > 0, stats.students > 0, stats.activatedNonOwnerStaff > 0, stats.reportTemplates > 0];
   const readiness = Math.round((setupChecks.filter(Boolean).length / setupChecks.length) * 100);
   const commonInsights: IntelligenceInsight[] = [];
+  if (stats.pendingFeeAdjustments > 0) commonInsights.push({ title: "Finance adjustments await review", detail: `${stats.pendingFeeAdjustments} adjustments need a decision.`, href: "/school/fees", severity: "warning", actionLabel: "Review" });
 
   if (stats.pendingReportCards > 0) commonInsights.push({ title: "Report cards are waiting for approval", detail: `${stats.pendingReportCards} submitted report${stats.pendingReportCards === 1 ? "" : "s"} still need review.`, href: "/school/report-cards", severity: "warning", actionLabel: "Review" });
   if (stats.pendingStaff > 0) commonInsights.push({ title: "Staff accounts are waiting for activation", detail: `${stats.pendingStaff} account${stats.pendingStaff === 1 ? "" : "s"} still need access setup.`, href: "/school/settings/access", severity: "warning", actionLabel: "Open access" });
@@ -175,7 +176,7 @@ function SchoolRoleDashboard({ name, school, code, role, profile, stats }: { nam
       primaryAction={copy.primary}
       secondaryAction={copy.secondary}
       metrics={[
-        { label: "Readiness", value: `${readiness}%`, detail: "Core school setup currently configured.", href: "/school/settings", tone: readiness >= 80 ? "good" : readiness >= 50 ? "warn" : "critical" },
+        { label: "Setup completion", value: `${readiness}%`, detail: "Basic configuration only; launch certification is separate.", href: "/school/settings", tone: readiness >= 80 ? "good" : readiness >= 50 ? "warn" : "critical" },
         { label: "Learners", value: stats.students, detail: `${stats.classes} class${stats.classes === 1 ? "" : "es"} · ${stats.guardians} guardian records.`, href: "/school/students" },
         { label: "Staff", value: stats.staff, detail: `${stats.pendingStaff} pending activation${stats.pendingStaff === 1 ? "" : "s"}.`, href: "/school/staff", tone: stats.pendingStaff > 0 ? "warn" : "good" },
         { label: "Today’s attendance", value: stats.todayAttendance, detail: "Entry, exit and register events recorded today.", href: "/school/attendance", tone: stats.todayAttendance > 0 ? "good" : "default" },

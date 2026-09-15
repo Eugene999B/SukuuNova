@@ -1,5 +1,5 @@
 import { createId } from "@paralleldrive/cuid2";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PILOT_CERTIFICATION_CHECKS,
   getPilotCertificationOverview,
@@ -7,6 +7,11 @@ import {
   recordPilotCertificationEvidence,
 } from "../src/lib/pilot-certification-service";
 import { createTenantFixture, rawDb } from "./helpers";
+
+const testedSha = "a".repeat(40);
+beforeEach(() => vi.stubEnv("RAILWAY_GIT_COMMIT_SHA", testedSha));
+afterEach(() => vi.unstubAllEnvs());
+const evidence = () => ({ commitSha: testedSha, ciRun: "test-run", evidenceRef: "https://example.test/evidence", expiresAt: new Date(Date.now() + 86_400_000) });
 
 async function setup() {
   const fixture = await createTenantFixture();
@@ -25,16 +30,26 @@ async function setup() {
 }
 
 describe("pilot certification ledger", () => {
+  it("rejects undocumented passes and waivers for enabled hardware", async () => {
+    const f = await setup();
+    await expect(recordPilotCertificationEvidence({ adminId: f.adminId, schoolId: f.schoolId, checkKey: "backup.restore", status: "passed", environment: "production", evidenceSummary: "No linked proof." })).rejects.toMatchObject({ code: "CERTIFICATION_EVIDENCE_REQUIRED" });
+    const { withTenant } = await import("../src/lib/db");
+    await withTenant(f.schoolId, (tx) => tx.device.create({ data: { schoolId: f.schoolId, deviceSerial: createId(), kind: "card", label: "Test", apiKeyHash: "test-only", status: "active" } }));
+    const overview = await getPilotCertificationOverview(f.schoolId);
+    expect(overview.checks.find((check) => check.key === "controlled.biometrics")?.requiredForPilot).toBe(true);
+    await expect(recordPilotCertificationEvidence({ adminId: f.adminId, schoolId: f.schoolId, checkKey: "controlled.biometrics", status: "waived", environment: "production", evidenceSummary: "Hardware still enabled." })).rejects.toMatchObject({ code: "CERTIFICATION_WAIVER_FORBIDDEN" });
+  });
+
   it("keeps mixed checks partial until both CI and production evidence pass", async () => {
     const f = await setup();
     await recordPilotCertificationEvidence({
       adminId: f.adminId,
       schoolId: f.schoolId,
       checkKey: "journey.teacher",
+      ...evidence(),
       status: "passed",
       environment: "ci",
       evidenceSummary: "Assignment-scoped teacher integration journey passed in CI.",
-      commitSha: "abc123",
       ciRun: "2684",
     });
     let overview = await getPilotCertificationOverview(f.schoolId);
@@ -45,6 +60,7 @@ describe("pilot certification ledger", () => {
       adminId: f.adminId,
       schoolId: f.schoolId,
       checkKey: "journey.teacher",
+      ...evidence(),
       status: "passed",
       environment: "production",
       evidenceSummary: "Teacher completed lesson, assignment and grade workflow in the pilot deployment.",
@@ -59,6 +75,7 @@ describe("pilot certification ledger", () => {
       adminId: f.adminId,
       schoolId: f.schoolId,
       checkKey: "communications.sms",
+      ...evidence(),
       status: "passed",
       environment: "ci",
       evidenceSummary: "A mocked SMS provider returned success.",
@@ -115,6 +132,7 @@ describe("pilot certification ledger", () => {
       adminId: f.adminId,
       schoolId: f.schoolId,
       checkKey: "backup.restore",
+      ...evidence(),
       status: "passed",
       environment: "production",
       evidenceSummary: "Retest restored the encrypted archive successfully into an isolated database.",
@@ -135,7 +153,8 @@ describe("pilot certification ledger", () => {
           adminId: f.adminId,
           schoolId: f.schoolId,
           checkKey: check.key,
-          status: "passed",
+          ...evidence(),
+      status: "passed",
           environment,
           evidenceSummary: `${check.title} passed the ${environment} certification gate.`,
         });
@@ -145,5 +164,9 @@ describe("pilot certification ledger", () => {
     expect(overview.summary.passedRequired).toBe(overview.summary.required);
     expect(overview.summary.progressPercent).toBe(100);
     expect(overview.summary.pilotReady).toBe(true);
+    vi.stubEnv("RAILWAY_GIT_COMMIT_SHA", "b".repeat(40));
+    const afterDeployment = await getPilotCertificationOverview(f.schoolId);
+    expect(afterDeployment.summary.pilotReady).toBe(false);
+    expect(afterDeployment.checks.some((check) => check.state === "stale_evidence")).toBe(true);
   });
 });

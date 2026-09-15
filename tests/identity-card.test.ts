@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
+import { upsertStaffProfile } from "../src/lib/staff-profile-service";
 import { withTenant } from "../src/lib/db";
 import {
   ensureIdentityCardsForSchool,
@@ -65,7 +66,18 @@ describe("school identity cards", () => {
       expect(cards.filter((card) => card.studentId === secondStudentId && card.status === "active")).toHaveLength(1);
       expect(cards.filter((card) => card.staffId === staffId && card.status === "active")).toHaveLength(1);
       expect(cards.find((card) => card.studentId === studentId)?.personNumber).toBe(`IC-${fixture.schoolId}`);
-      expect(cards.find((card) => card.staffId === staffId)?.personNumber).toMatch(/^STF-[A-Z0-9]{8}$/);
+      const personnel = await tx.$queryRawUnsafe<Array<{ staffNumber: string }>>('SELECT "staffNumber" FROM "StaffProfile" WHERE "schoolId"=$1 AND "userId"=$2', fixture.schoolId, staffId);
+      expect(cards.find((card) => card.staffId === staffId)?.personNumber).toBe(personnel[0].staffNumber);
+    });
+  });
+
+  it("uses the personnel staff number in both directory and print scopes", async () => {
+    await withTenant(fixture.schoolId, async (tx) => {
+      await upsertStaffProfile(tx, { schoolId: fixture.schoolId, userId: staffId, actorId: fixture.ownerId, staffNumber: "STF-2026-0099" });
+      const cards = await listIdentityCards(tx, fixture.schoolId, fixture.uniqueCode, fixture.ownerId);
+      expect(cards.find((card) => card.staffId === staffId)?.personNumber).toBe("STF-2026-0099");
+      const printable = await getIdentityCardsByScope(tx, fixture.schoolId, fixture.uniqueCode, "all", [], fixture.ownerId);
+      expect(printable.find((card) => card.staffId === staffId)?.personNumber).toBe("STF-2026-0099");
     });
   });
 

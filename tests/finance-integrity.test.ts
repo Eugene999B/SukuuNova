@@ -91,6 +91,10 @@ describe("finance payment integrity", () => {
       });
 
       expect(retry.id).toBe(first.id);
+      const nextClass = await tx.class.create({ data: { schoolId: fixture.schoolId, name: "Promoted class" } });
+      await tx.student.update({ where: { id: student.id }, data: { classId: nextClass.id, name: "Updated learner name" } });
+      const frozen = await tx.$queryRawUnsafe<Array<{ snapshot: { studentName: string; className: string } }>>('SELECT "snapshot" FROM "PaymentReceiptSnapshot" WHERE "paymentId"=$1 AND "schoolId"=$2', first.id, fixture.schoolId);
+      expect(frozen[0].snapshot).toMatchObject({ studentName: "Finance Test Student ONE", className: "Finance Class ONE" });
       expect(await tx.payment.count({ where: { reference: "MOMO-FIN-001" } })).toBe(1);
 
       await expect(recordPayment(tx, {

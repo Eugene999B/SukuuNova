@@ -1,7 +1,7 @@
-import { randomInt } from "node:crypto";
 import type { TenantDb } from "@/lib/db";
 import { appendSchoolAudit } from "@/lib/audit";
 import { AppError } from "@/lib/errors";
+import { onboardStudentInTransaction } from "@/lib/student-onboarding-service";
 import { isTeachingRoleKey, roleKeyForName } from "@/lib/authorization";
 import type { ColumnMapping, ImportKind } from "./contracts";
 import { getSchoolImportBatch, validateSchoolImportBatch } from "./staging-service";
@@ -49,20 +49,6 @@ async function findActiveTeachingUserByEmail(tx: TenantDb, email: string) {
   return teaching ? user : null;
 }
 
-async function nextAdmissionNumber(tx: TenantDb, used: Set<string>) {
-  const year = new Date().getFullYear();
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const candidate = `SN-${year}-${String(randomInt(0, 1_000_000)).padStart(6, "0")}`;
-    if (used.has(candidate.toLowerCase())) continue;
-    const exists = await tx.student.findFirst({ where: { admissionNo: candidate }, select: { id: true } });
-    if (!exists) {
-      used.add(candidate.toLowerCase());
-      return candidate;
-    }
-  }
-  throw new AppError("Could not generate a unique learner admission number for this batch.", 409, "IMPORT_ADMISSION_EXHAUSTED");
-}
-
 async function applyClasses(tx: TenantDb, schoolId: string, rows: ApplyRow[]): Promise<AppliedResult[]> {
   const results: AppliedResult[] = [];
   for (const source of rows) {
@@ -99,65 +85,38 @@ async function applySubjects(tx: TenantDb, schoolId: string, rows: ApplyRow[]): 
   return results;
 }
 
-async function applyStudents(tx: TenantDb, schoolId: string, rows: ApplyRow[]): Promise<AppliedResult[]> {
+async function applyStudents(
+  tx: TenantDb, schoolId: string, actorId: string, rows: ApplyRow[],
+  intakeAcademicYearId?: string, placementTermId?: string,
+): Promise<AppliedResult[]> {
+  if (!intakeAcademicYearId) throw new AppError("Choose an intake academic year before importing learners.", 400, "INTAKE_YEAR_REQUIRED");
   const results: AppliedResult[] = [];
-  const existingAdmissions = await tx.student.findMany({ select: { admissionNo: true } });
-  const usedAdmissions = new Set(existingAdmissions.map((item) => item.admissionNo.toLowerCase()));
-  const houses = await tx.house.findMany({ where: { isActive: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
-  const grouped = houses.length ? await tx.student.groupBy({ by: ["houseId"], where: { status: "active", houseId: { not: null } }, _count: { _all: true } }) : [];
-  const houseCounts = new Map(houses.map((house) => [house.id, grouped.find((item) => item.houseId === house.id)?._count._all ?? 0]));
-
   for (const source of rows) {
     const row = data(source.normalizedData);
     const name = text(row, "name");
-    if (!name) throw new AppError(`Row ${source.rowNumber}: learner name is missing after validation.`, 409, "IMPORT_STALE_VALIDATION");
-    let admissionNo = text(row, "admissionNo");
-    if (admissionNo) {
-      if (usedAdmissions.has(admissionNo.toLowerCase())) throw new AppError(`Row ${source.rowNumber}: admission number ${admissionNo} now exists. Revalidate the batch.`, 409, "IMPORT_RACE_DUPLICATE");
-      usedAdmissions.add(admissionNo.toLowerCase());
-    } else {
-      admissionNo = await nextAdmissionNumber(tx, usedAdmissions);
-    }
-
+    if (!name) throw new AppError(`Row ${source.rowNumber}: learner name is missing.`, 409, "IMPORT_STALE_VALIDATION");
     const className = text(row, "className");
     let classId: string | null = null;
     if (className) {
+      if (!placementTermId) throw new AppError("Choose a placement term for learners with a class.", 400, "PLACEMENT_INCOMPLETE");
       const matches = await findClassByName(tx, className);
       if (matches.length !== 1) throw new AppError(`Row ${source.rowNumber}: class ${className} must resolve to exactly one class.`, 409, "IMPORT_CLASS_INVALID");
       classId = matches[0].id;
     }
-    const house = houses.length
-      ? [...houses].sort((a, b) => (houseCounts.get(a.id)! - houseCounts.get(b.id)!) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))[0]
-      : null;
     const dob = text(row, "dob");
-    const student = await tx.student.create({ data: {
-      schoolId,
-      name,
-      admissionNo,
-      dob: dob ? new Date(`${dob}T00:00:00.000Z`) : null,
-      classId,
-      houseId: house?.id ?? null,
-      status: "active",
-    }, select: { id: true } });
-    if (house) houseCounts.set(house.id, (houseCounts.get(house.id) ?? 0) + 1);
-
     const guardianName = text(row, "guardianName");
     const guardianPhone = text(row, "guardianPhone");
-    if (guardianName && guardianPhone) {
-      const guardian = await tx.guardian.upsert({
-        where: { schoolId_phone: { schoolId, phone: guardianPhone } },
-        update: { name: guardianName },
-        create: { schoolId, name: guardianName, phone: guardianPhone },
-        select: { id: true },
-      });
-      await tx.studentGuardian.create({ data: {
-        schoolId,
-        studentId: student.id,
-        guardianId: guardian.id,
-        relationship: text(row, "guardianRelationship") ?? "Parent",
-        isPrimary: true,
-      } });
-    }
+    const { student } = await onboardStudentInTransaction(tx, {
+      schoolId, actorId, name,
+      admissionNo: text(row, "admissionNo"),
+      dob: dob ? new Date(`${dob}T00:00:00.000Z`) : null,
+      intakeAcademicYearId,
+      placement: classId && placementTermId ? { classId, termId: placementTermId } : null,
+      guardian: guardianName && guardianPhone ? {
+        name: guardianName, phone: guardianPhone, relationship: text(row, "guardianRelationship") ?? "Parent",
+      } : null,
+      auditSource: "csv_import",
+    });
     results.push({ rowId: source.id, rowNumber: source.rowNumber, entityType: "Student", entityId: student.id });
   }
   return results;
@@ -210,7 +169,8 @@ async function persistAppliedRows(tx: TenantDb, schoolId: string, batchId: strin
   }
 }
 
-export async function applySchoolImportBatch(tx: TenantDb, input: { schoolId: string; actorId: string; batchId: string }) {
+export async function applySchoolImportBatch(tx: TenantDb, input: { schoolId: string; actorId: string; batchId: string; intakeAcademicYearId?: string; placementTermId?: string }) {
+  await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, `school-import:${input.schoolId}:${input.batchId}`);
   const initial = await getSchoolImportBatch(tx, input.schoolId, input.batchId);
   if (initial.batch.status === "applied") {
     return { batch: initial.batch, alreadyApplied: true, appliedRows: initial.rows.filter((row) => row.status === "applied").length };
@@ -249,7 +209,7 @@ export async function applySchoolImportBatch(tx: TenantDb, input: { schoolId: st
   let results: AppliedResult[];
   if (revalidated.batch.kind === "classes") results = await applyClasses(tx, input.schoolId, rows);
   else if (revalidated.batch.kind === "subjects") results = await applySubjects(tx, input.schoolId, rows);
-  else if (revalidated.batch.kind === "students") results = await applyStudents(tx, input.schoolId, rows);
+  else if (revalidated.batch.kind === "students") results = await applyStudents(tx, input.schoolId, input.actorId, rows, input.intakeAcademicYearId, input.placementTermId);
   else results = await applyGuardians(tx, input.schoolId, rows);
 
   await persistAppliedRows(tx, input.schoolId, input.batchId, results);

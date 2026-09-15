@@ -108,6 +108,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<"all" | "student" | "staff">("all");
   const [classId, setClassId] = useState("all");
@@ -150,13 +151,17 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
     return haystack.includes(query.trim().toLowerCase());
   }), [cards, classId, kind, query, statusFilter]);
 
+  const pageSize = 50;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleCards = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const currentFiltered = filtered.filter(isCurrent);
   const currentStudents = cards.filter((card) => card.personType === "student" && isCurrent(card));
   const currentStaff = cards.filter((card) => card.personType === "staff" && isCurrent(card));
   const currentCards = cards.filter(isCurrent);
   const selectedCurrent = cards.filter((card) => selected.has(card.id) && isCurrent(card));
   const selectedClassCards = classId === "all" ? [] : currentStudents.filter((card) => card.classId === classId);
-  const selectableIds = currentFiltered.map((card) => card.id);
+  const selectableIds = visibleCards.filter(isCurrent).map((card) => card.id);
   const allFilteredSelected = selectableIds.length > 0 && selectableIds.every((id) => selected.has(id));
   const portraitMissing = currentCards.filter((card) => !card.photoReady).length;
 
@@ -377,7 +382,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
 
   return <div className="identity-manager">
     <section className="identity-manager-command">
-      <div><span className="app-eyebrow">SCHOOL IDENTITY</span><h2>Professional student & staff ID cards</h2><p>Two-sided CR80 school credentials with a resilient large-school print engine. Long jobs are divided into safe server packs, streamed into one browser-side PDF, retried on temporary server errors, and kept outside database transactions.</p></div>
+      <div><span className="app-eyebrow">SCHOOL IDENTITY</span><h2>Professional student & staff ID cards</h2><p>Find a student or staff member, check their details and portrait, then print an individual card or a complete school pack.</p></div>
       <button type="button" className="app-pill" onClick={() => void load()} disabled={loading || Boolean(busy)}><RefreshCw size={14}/> Refresh</button>
     </section>
 
@@ -403,12 +408,12 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
     <section className="app-card app-panel identity-manager-panel">
       <div className="identity-manager-toolbar">
         <div className="identity-kind-tabs">{(["all", "student", "staff"] as const).map((value) => <button key={value} type="button" className={kind === value ? "is-active" : ""} onClick={() => { setKind(value); if (value === "staff") setClassId("all"); }}>{value === "all" ? "All people" : value === "student" ? "Students" : "Staff"}</button>)}</div>
-        <label className="identity-search"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name, student/staff ID, class, role or card number"/></label>
+        <label className="identity-search"><Search size={15}/><input value={query} aria-label="Search identity cards" onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Name, student/staff ID, class, role or card number"/></label>
         <label className="identity-class-filter"><span>Class</span><select value={classId} onChange={(event) => { const value = event.target.value; setClassId(value); if (value !== "all") setKind("student"); }} disabled={!classes.length || kind === "staff"}><option value="all">All classes</option>{classes.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
         <label className="identity-class-filter"><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}><option value="current">Current only</option><option value="all">All records</option><option value="revoked">Revoked</option><option value="expired">Expired</option></select></label>
       </div>
 
-      <div className="identity-filter-summary"><strong>{filtered.length}</strong> record{filtered.length === 1 ? "" : "s"} shown · <strong>{currentFiltered.length}</strong> printable.</div>
+      <div className="identity-filter-summary"><strong>{filtered.length}</strong> record{filtered.length === 1 ? "" : "s"} matched · <strong>{currentFiltered.length}</strong> printable.</div>
 
       <div className="identity-manager-actions">
         <button type="button" className="button primary" disabled={Boolean(busy) || currentFiltered.length === 0} onClick={() => void downloadBulk("filtered", currentFiltered)}><Download size={14}/> Print filtered ({currentFiltered.length})</button>
@@ -432,7 +437,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
       {message ? <div className="identity-manager-alert is-success" role="status"><CheckCircle2 size={15}/>{message}</div> : null}
 
       {loading ? <div className="identity-manager-empty"><LoaderCircle className="identity-spin" size={19}/><strong>Preparing school identity cards…</strong></div> : filtered.length === 0 ? <div className="identity-manager-empty"><strong>No identity cards match these filters.</strong><span>Clear the search, class, person type or status filter.</span></div> : <div className="identity-manager-table-wrap">
-        <table className="identity-manager-table"><thead><tr><th><input type="checkbox" checked={allFilteredSelected} onChange={toggleAll} aria-label="Select visible current identity cards"/></th><th>Person</th><th>School ID</th><th>Portrait</th><th>Card number</th><th>Valid until</th><th>Status</th><th>Actions</th></tr></thead><tbody>{filtered.map((card) => {
+        <table className="identity-manager-table"><thead><tr><th><input type="checkbox" checked={allFilteredSelected} onChange={toggleAll} aria-label="Select visible current identity cards"/></th><th>Person</th><th>School ID</th><th>Portrait</th><th>Card number</th><th>Valid until</th><th>Status</th><th>Actions</th></tr></thead><tbody>{visibleCards.map((card) => {
           const current = isCurrent(card);
           const profileHref = card.personType === "student" ? `/school/students/${encodeURIComponent(card.studentId ?? "")}` : `/school/staff/${encodeURIComponent(card.staffId ?? "")}`;
           const printingThis = busy === `single-${card.id}`;
@@ -449,7 +454,12 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
         })}</tbody></table>
       </div>}
 
-      <div className="identity-print-engine-note"><FileDown size={15}/><span><strong>Large-school print engine:</strong> jobs are rendered in safe packs of up to {Math.min(CLIENT_PRINT_PACK, serverPackLimit)} cards, each pack is released after its pages are copied, and one final PDF is downloaded. Temporary 5xx errors are retried automatically.</span></div>
+      {filtered.length > pageSize ? <nav className="identity-manager-actions" aria-label="Identity card pages">
+        <button type="button" className="button secondary" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Previous</button>
+        <span role="status">Page {currentPage} of {pageCount} · {visibleCards.length} shown</span>
+        <button type="button" className="button secondary" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>Next</button>
+      </nav> : null}
+      <div className="identity-print-engine-note"><FileDown size={15}/><span><strong>Printing a large batch?</strong> Keep this page open until your PDF is ready. Temporary connection problems are retried automatically.</span></div>
     </section>
   </div>;
 }

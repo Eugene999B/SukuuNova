@@ -31,8 +31,8 @@ export default async function SchoolIdentityCardsPage() {
     >
       {data.canManageCards ? (
         <>
-          <IdentityCardThemeStudio initialTheme={identityCardThemeKeyFromBrandColors(data.school.brandColors)} />
           <IdentityCardManager schoolName={data.school.name} />
+          <details className="sn-progressive"><summary>Card design & school theme</summary><div className="sn-progressive-body"><IdentityCardThemeStudio initialTheme={identityCardThemeKeyFromBrandColors(data.school.brandColors)} /></div></details>
         </>
       ) : (
         <section className="app-card app-panel">

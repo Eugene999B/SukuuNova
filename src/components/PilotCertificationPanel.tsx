@@ -14,6 +14,7 @@ type Check = {
   requiredEnvironments: string[]; description: string; state: string; evidence: Evidence | null; environmentEvidence: EnvironmentEvidence[];
 };
 type Overview = {
+  deployedCommit?: string | null;
   school: { id: string; name: string; uniqueCode: string; status: string };
   checks: Check[];
   summary: { required: number; passedRequired: number; failedRequired: number; pendingRequired: number; progressPercent: number; pilotReady: boolean; controlledPassed: number; controlledWaived: number; controlledAttention: number };
@@ -37,7 +38,7 @@ function when(value: string) {
 }
 
 function stateRank(value: string) {
-  if (["failed", "expired", "wrong_environment"].includes(value)) return 0;
+  if (["failed", "expired", "wrong_environment", "stale_evidence"].includes(value)) return 0;
   if (["partial", "in_review", "not_tested"].includes(value)) return 1;
   if (value === "waived") return 2;
   return 3;
@@ -215,9 +216,10 @@ export default function PilotCertificationPanel({ canReview }: Props) {
         {selectedCheck ? <>
           <div className="cert-current"><small>Current state</small><strong>{stateLabel(selectedCheck.state)}</strong><span>Required evidence: {selectedCheck.requiredEnvironments.join(" + ") || "Controlled evidence"}</span></div>
           {canReview ? <div className="cert-form">
-            <div className="cert-form-grid"><label><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="in_review">In review</option><option value="passed">Passed</option><option value="failed">Failed</option>{selectedCheck.allowWaiver ? <option value="waived">Waived / disabled</option> : null}</select></label><label><span>Environment</span><select value={environment} onChange={(event) => setEnvironment(event.target.value)}><option value="ci">CI</option><option value="staging">Staging</option><option value="production">Production</option><option value="hardware_lab">Hardware lab</option></select></label><label><span>Expires</span><input type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)}/></label></div>
+            <div className="cert-form-grid"><label><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)}><option value="in_review">In review</option><option value="passed">Passed</option><option value="failed">Failed</option>{selectedCheck.allowWaiver ? <option value="waived">Waived / disabled</option> : null}</select></label><label><span>Environment</span><select value={environment} onChange={(event) => setEnvironment(event.target.value)}><option value="ci">CI</option><option value="staging">Staging</option><option value="production">Production</option><option value="hardware_lab">Hardware lab</option></select></label><label><span>Expires (within 30 days)</span><input type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)}/></label></div>
             <label><span>Evidence summary</span><textarea rows={5} maxLength={2000} value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="What was tested, what result was observed, and what remains? Do not paste credentials or secrets."/></label>
-            <div className="cert-form-grid"><label><span>Evidence reference</span><input maxLength={1000} value={evidenceRef} onChange={(event) => setEvidenceRef(event.target.value)} placeholder="Runbook, drill, ticket or provider receipt reference"/></label><label><span>Commit SHA</span><input maxLength={80} value={commitSha} onChange={(event) => setCommitSha(event.target.value)}/></label><label><span>CI run</span><input maxLength={160} value={ciRun} onChange={(event) => setCiRun(event.target.value)}/></label></div>
+            <div className="cert-form-grid"><label><span>Evidence reference</span><input maxLength={1000} value={evidenceRef} onChange={(event) => setEvidenceRef(event.target.value)} placeholder="Runbook, drill, ticket or provider receipt reference"/></label><label><span>Deployed commit SHA</span><input maxLength={80} value={commitSha} onChange={(event) => setCommitSha(event.target.value)}/></label><label><span>CI run</span><input maxLength={160} value={ciRun} onChange={(event) => setCiRun(event.target.value)}/></label></div>
+            <p>A passed check requires an evidence reference, the deployed commit, an expiry within 30 days, and a CI run for CI evidence. Current deployment: <code>{overview?.deployedCommit || "Unavailable — passes are blocked"}</code>.</p>
             <div className="cert-secret-warning"><ShieldCheck size={15}/><span>Never store API keys, access tokens, passwords, database URLs or device secrets in certification evidence.</span></div>
             <button type="button" className="app-action" onClick={() => void recordEvidence()} disabled={busy || !summary.trim()}><strong>Append review evidence</strong></button>
           </div> : <div className="platform-empty"><ShieldCheck size={20}/><strong>Read-only certification access.</strong><span>Platform settings permission is required to append review evidence.</span></div>}

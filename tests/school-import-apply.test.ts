@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createId } from "@paralleldrive/cuid2";
+import { resolveStudentTermClass } from "../src/lib/student-term-context";
 import { withTenant } from "../src/lib/db";
 import { createCsvImportBatch, validateSchoolImportBatch } from "../src/lib/import/staging-service";
 import { applySchoolImportBatch } from "../src/lib/import/apply-service";
@@ -176,6 +177,8 @@ describe("school import transactional apply", () => {
     const suffix = createId().slice(0, 7);
     const className = `Learner Class ${suffix}`;
     await withTenant(fixture.schoolId, (tx) => tx.class.create({ data: { schoolId: fixture.schoolId, name: className, level: "Basic 3" } }));
+    const year = await withTenant(fixture.schoolId, (tx) => tx.academicYear.create({ data: { schoolId: fixture.schoolId, name: "2026/27", startDate: new Date("2026-09-01"), endDate: new Date("2027-08-31") } }));
+    const term = await withTenant(fixture.schoolId, (tx) => tx.term.create({ data: { schoolId: fixture.schoolId, academicYearId: year.id, name: "Term 1", startDate: new Date("2026-09-01"), endDate: new Date("2026-12-31") } }));
     const admissionNo = `IMP-${suffix}`;
     const guardianPhone = `024${String(randomIntForTest(suffix)).padStart(7, "0").slice(0, 7)}`;
     const batch = await stageAndValidate({
@@ -191,11 +194,17 @@ describe("school import transactional apply", () => {
       schoolId: fixture.schoolId,
       actorId: fixture.ownerId,
       batchId: batch.id,
+      intakeAcademicYearId: year.id,
+      placementTermId: term.id,
     }));
     const result = await withTenant(fixture.schoolId, async (tx) => {
       const student = await tx.student.findFirst({ where: { admissionNo }, select: { id: true, class: { select: { name: true } }, guardians: { select: { isPrimary: true, relationship: true, guardian: { select: { name: true, phone: true } } } } } });
       return student;
     });
+    const official = await withTenant(fixture.schoolId, (tx) => resolveStudentTermClass(tx, { schoolId: fixture.schoolId, studentId: result!.id, termId: term.id }));
+    expect(official).toMatchObject({ source: "enrollment", enrollmentStatus: "confirmed", termId: term.id });
+    const intake = await withTenant(fixture.schoolId, (tx) => tx.$queryRawUnsafe<Array<{ academicYearId: string }>>('SELECT "academicYearId" FROM "StudentAcademicIntake" WHERE "schoolId"=$1 AND "studentId"=$2', fixture.schoolId, result!.id));
+    expect(intake).toEqual([{ academicYearId: year.id }]);
     expect(result?.class?.name).toBe(className);
     expect(result?.guardians).toHaveLength(1);
     expect(result?.guardians[0]).toMatchObject({ isPrimary: true, relationship: "Parent", guardian: { phone: guardianPhone } });

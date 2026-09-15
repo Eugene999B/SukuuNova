@@ -192,7 +192,7 @@ export default function DevicesDesk({ schoolName, schoolCode }: { schoolName:str
       <div className="attendance-control-school"><small>School</small><strong>{schoolName}</strong><span>{schoolCode}</span></div>
     </section>
 
-    <nav className="attendance-control-nav" aria-label="Attendance control sections">{views.map((item)=>{const Icon=item.icon;return <button key={item.id} type="button" onClick={()=>setView(item.id)} className={view===item.id?"active":""}><Icon size={16}/><span>{item.label}</span></button>;})}</nav>
+    <nav className="attendance-control-nav" aria-label="Attendance control sections">{views.map((item)=>{const Icon=item.icon;return <button key={item.id} type="button" aria-label={item.label} aria-pressed={view===item.id} title={item.label} onClick={()=>setView(item.id)} className={view===item.id?"active":""}><Icon size={16}/><span>{item.label}</span></button>;})}</nav>
     {message?<div className="attendance-control-message success" role="status"><CheckCircle2 size={16}/><span>{message}</span></div>:null}
     {error?<div className="attendance-control-message error" role="alert"><ShieldCheck size={16}/><span>{error}</span></div>:null}
 

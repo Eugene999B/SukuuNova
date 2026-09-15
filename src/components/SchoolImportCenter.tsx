@@ -19,6 +19,8 @@ type Row = {
   issues?: Array<{ field: string | null; code: string; message: string }>;
 };
 type OverviewPayload = {
+  academicYears: Array<{ id: string; name: string }>;
+  terms: Array<{ id: string; name: string; academicYearId: string }>;
   batches: Batch[];
   access: Record<ImportKind, boolean>;
   contracts: Partial<Record<ImportKind, Contract>>;
@@ -44,6 +46,8 @@ export default function SchoolImportCenter() {
   const [overview, setOverview] = useState<OverviewPayload | null>(null);
   const [batchView, setBatchView] = useState<BatchPayload | null>(null);
   const [kind, setKind] = useState<ImportKind>("students");
+  const [intakeAcademicYearId, setIntakeAcademicYearId] = useState("");
+  const [placementTermId, setPlacementTermId] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [mapping, setMapping] = useState<Record<string, string | null>>({});
   const [applyConfirmed, setApplyConfirmed] = useState(false);
@@ -134,7 +138,7 @@ export default function SchoolImportCenter() {
       const response = await fetch("/api/school/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "apply", batchId: selectedBatch.id, confirmation: "APPLY" }),
+        body: JSON.stringify({ action: "apply", batchId: selectedBatch.id, confirmation: "APPLY", ...(selectedBatch.kind === "students" ? { intakeAcademicYearId, ...(placementTermId ? { placementTermId } : {}) } : {}) }),
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(responseMessage(payload, "Import apply failed and was rolled back."));
@@ -150,7 +154,7 @@ export default function SchoolImportCenter() {
 
   return <div className="school-import-center">
     <section className="import-command">
-      <div><span className="app-eyebrow">DATA MIGRATION</span><h2>Bring school data into SukuuNova safely</h2><p>Upload into staging, map columns, validate every row, review exceptions, then apply only through SukuuNova&apos;s certified all-or-nothing writer.</p></div>
+      <div><span className="app-eyebrow">DATA MIGRATION</span><h2>Bring school data into SukuuNova safely</h2><p>Upload a CSV, match its columns, correct any errors, then confirm the import. If any row fails, no records are saved.</p></div>
       <span className="import-safety"><ShieldCheck size={16}/> Transactional import</span>
     </section>
 
@@ -159,10 +163,11 @@ export default function SchoolImportCenter() {
 
     <div className="import-layout">
       <section className="app-card app-panel import-upload-panel">
-        <div className="app-card-head"><div><span className="app-eyebrow">1 · UPLOAD</span><h2>Start an import batch</h2><p>CSV is supported in this certified foundation. Excel will use the same staging contract after its parser dependency is verified.</p></div></div>
+        <div className="app-card-head"><div><span className="app-eyebrow">1 · UPLOAD</span><h2>Start an import batch</h2><p>Use a CSV file. Export Excel workbooks as CSV before uploading.</p></div></div>
         <label className="import-field"><span>Data type</span><select value={kind} onChange={(event) => { setKind(event.target.value as ImportKind); setBatchView(null); setApplyConfirmed(false); }} disabled={busy}>
-          {(Object.entries(overview?.contracts ?? {}) as Array<[ImportKind, Contract]>).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}
+          {(Object.entries(overview?.contracts ?? {}) as Array<[ImportKind, Contract]>).map(([key, item]) => <option key={key} value={key}>{item.label}{!applyEnabledKinds.includes(key) ? " — preview only" : ""}</option>)}
         </select></label>
+        {!applyEnabledKinds.includes(kind) ? <p role="status">Preview only: this data type cannot be imported yet. Use the staff or finance workspace to add records.</p> : null}
         {contract ? <p className="import-contract-copy">{contract.description}</p> : null}
         <label className="import-file-drop"><FileSpreadsheet size={22}/><strong>{file?.name ?? "Choose CSV file"}</strong><small>Maximum 5 MB · up to 5,000 data rows</small><input type="file" accept=".csv,text/csv" onChange={(event) => setFile(event.target.files?.[0] ?? null)} disabled={busy}/></label>
         <button type="button" className="app-action" onClick={() => void upload()} disabled={busy || !file || !contract}><Upload size={14}/><strong>Upload to staging</strong></button>
@@ -219,8 +224,12 @@ export default function SchoolImportCenter() {
         : selectedBatch.status !== "ready" ? <div className="import-apply-lock"><ShieldCheck size={16}/><div><strong>Apply is waiting for a clean validation</strong><p>Every source row must be valid and non-duplicate. Correct the CSV or mapping, then validate again.</p></div></div>
         : <div className="import-apply-ready">
           <div><ShieldCheck size={17}/><div><strong>Ready for atomic apply</strong><p>SukuuNova will revalidate inside the same transaction before writing. If any row fails, the entire batch rolls back.</p></div></div>
+          {selectedBatch.kind === "students" ? <div className="import-mapping-grid">
+            <label className="import-field"><span>Intake academic year *</span><select value={intakeAcademicYearId} onChange={(event) => { setIntakeAcademicYearId(event.target.value); setApplyConfirmed(false); }}><option value="">Choose the year learners joined</option>{overview?.academicYears.map((year) => <option key={year.id} value={year.id}>{year.name}</option>)}</select></label>
+            <label className="import-field"><span>Placement term (required when a class is supplied)</span><select value={placementTermId} onChange={(event) => { setPlacementTermId(event.target.value); setApplyConfirmed(false); }}><option value="">No term placement</option>{overview?.terms.map((term) => <option key={term.id} value={term.id}>{overview.academicYears.find((year) => year.id === term.academicYearId)?.name} · {term.name}</option>)}</select></label>
+          </div> : null}
           <label className="import-confirm"><input type="checkbox" checked={applyConfirmed} onChange={(event) => setApplyConfirmed(event.target.checked)} disabled={busy}/><span>I confirm that I reviewed this batch and want to write all {selectedBatch.rowCount} rows to the school.</span></label>
-          <button type="button" className="app-action" disabled={busy || !applyConfirmed} onClick={() => void applyBatch()}><ShieldCheck size={14}/><strong>Apply {selectedBatch.rowCount} rows</strong></button>
+          <button type="button" className="app-action" disabled={busy || !applyConfirmed || (selectedBatch.kind === "students" && !intakeAcademicYearId)} onClick={() => void applyBatch()}><ShieldCheck size={14}/><strong>Apply {selectedBatch.rowCount} rows</strong></button>
         </div>}
     </section> : null}
   </div>;
