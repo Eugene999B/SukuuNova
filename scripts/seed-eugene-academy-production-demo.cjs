@@ -94,6 +94,18 @@ process.on("SIGTERM", () => { restoreBaseFixture(); process.exit(143); });
 
 async function main() {
   const preflight = await productionPreflight();
+
+  // Existing production demo schools must preserve their core academic calendar
+  // and relational fixture. The outer production-showcase pipeline performs the
+  // current role/data/workspace refreshes after this guard returns successfully.
+  // Re-running the empty-database base fixture here can conflict with legitimate
+  // production academic-year overlap constraints and is unnecessary.
+  if (preflight.existing) {
+    console.log(`[eugene-demo] verified existing permanent production demo tenant ${SCHOOL_CODE}; preserving its core school fixture and academic calendar.`);
+    console.log("[eugene-demo] current-system showcase refresh layers will run next; external SMS/WhatsApp delivery is not invoked.");
+    return;
+  }
+
   patchBaseFixtureForProductionDemo();
 
   const childEnv = {
@@ -107,7 +119,7 @@ async function main() {
     EUGENE_ACADEMY_PRODUCTION_DEMO_MODE: "YES",
   };
 
-  console.log(`[eugene-demo] ${preflight.existing ? "refreshing" : "creating"} permanent production demo tenant ${SCHOOL_CODE}.`);
+  console.log(`[eugene-demo] creating permanent production demo tenant ${SCHOOL_CODE}.`);
   console.log("[eugene-demo] external SMS/WhatsApp delivery is not invoked by this fixture; synthetic communication rows remain internal test data.");
 
   let child;
