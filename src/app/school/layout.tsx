@@ -4,6 +4,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { schoolWorkspaceRedirect } from "@/lib/workspace-boundary";
+import "./workspace-ui-compat.css";
 
 /**
  * Hard boundary between the school administration universe and pure teacher accounts.
