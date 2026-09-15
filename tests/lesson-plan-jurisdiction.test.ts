@@ -27,6 +27,16 @@ async function setupJurisdiction() {
       });
     }
 
+    const teacherRole = await tx.role.create({
+      data: { schoolId: fixture.schoolId, name: `Jurisdiction Teacher ${createId()}`, key: "teacher" },
+    });
+    await tx.userRole.createMany({
+      data: [
+        { schoolId: fixture.schoolId, userId: fixture.ownerId, roleId: teacherRole.id },
+        { schoolId: fixture.schoolId, userId: fixture.memberId, roleId: teacherRole.id },
+      ],
+    });
+
     const year = await tx.academicYear.create({
       data: {
         schoolId: fixture.schoolId,
