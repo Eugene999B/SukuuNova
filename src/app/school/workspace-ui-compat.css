@@ -1,0 +1,254 @@
+/*
+ * Compatibility layer for school workspaces that still use the older --ui-* and
+ * --identity-paper tokens. Keep this scoped to the school shell so legacy module
+ * styles inherit the current SukuuNova theme in both light and dark mode.
+ */
+.app-shell-school {
+  --ui-border: var(--sn-line);
+  --ui-border-strong: var(--color-border-strong, var(--sn-line));
+  --ui-surface: var(--sn-surface);
+  --ui-surface-soft: var(--sn-surface-2);
+  --ui-surface-hover: var(--sn-surface-3);
+  --ui-surface-raised: var(--sn-surface-2);
+  --ui-primary: var(--sn-primary);
+  --ui-primary-soft: var(--sn-primary-soft);
+  --ui-primary-border: var(--color-brand-border, var(--sn-line));
+  --ui-text: var(--sn-ink);
+  --ui-text-secondary: var(--sn-ink-2);
+  --ui-text-muted: var(--sn-muted);
+  --ui-success: var(--sn-success);
+  --ui-success-soft: var(--color-success-soft, var(--sn-surface-2));
+  --ui-danger: var(--sn-danger);
+  --ui-danger-soft: var(--color-danger-soft, var(--sn-surface-2));
+  --ui-warning: var(--color-warning, var(--sn-primary-deep));
+  --ui-warning-soft: var(--color-warning-soft, var(--sn-surface-2));
+  --ui-info: var(--color-info, var(--sn-primary));
+  --ui-info-soft: var(--color-info-soft, var(--sn-surface-2));
+  --ui-focus: var(--sn-focus, 0 0 0 3px var(--sn-shadow-sm));
+  --ui-shadow-sm: 0 8px 24px var(--sn-shadow-sm);
+}
+
+/* Finance/payroll V2 used a paper token that stayed white in dark mode. */
+.app-shell-school .fv2-page {
+  --identity-paper: var(--sn-surface);
+  color: var(--sn-ink);
+}
+
+.app-shell-school .fv2-nav,
+.app-shell-school .fv2-hero,
+.app-shell-school .fv2-kpis article,
+.app-shell-school .fv2-card,
+.app-shell-school .fv2-filterbar,
+.app-shell-school .fv2-alert {
+  box-shadow: 0 8px 24px var(--sn-shadow-sm);
+}
+
+.app-shell-school .fv2-field input,
+.app-shell-school .fv2-field select,
+.app-shell-school .fv2-field textarea,
+.app-shell-school .fv2-category-builder input,
+.app-shell-school .fv2-charge-list input {
+  background: var(--sn-surface-2);
+  color: var(--sn-ink);
+}
+
+.app-shell-school .payv2-component,
+.app-shell-school .payv2-staff-select,
+.app-shell-school .fv2-total {
+  background: var(--sn-surface-2);
+}
+
+.app-shell-school .payv2-staff-select > label:hover {
+  background: var(--sn-surface-3);
+}
+
+/* Give older generic settings panels the same visual hierarchy as the new shell. */
+.app-shell-school .app-card.app-panel:has(> .app-card-head) {
+  width: 100%;
+  padding: 20px 22px;
+  border: 1px solid var(--sn-line);
+  border-radius: var(--sn-radius-lg);
+  background: var(--sn-surface);
+  box-shadow: 0 8px 24px var(--sn-shadow-sm);
+}
+
+.app-shell-school .app-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.app-shell-school .app-card-head > div {
+  min-width: 0;
+}
+
+.app-shell-school .app-card-head h2 {
+  margin: 5px 0 6px;
+  color: var(--sn-ink);
+  font-size: clamp(18px, 1.7vw, 24px);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.app-shell-school .app-card-head p {
+  margin: 0;
+  max-width: 720px;
+  color: var(--sn-muted-strong, var(--sn-muted));
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.app-shell-school .app-eyebrow {
+  color: var(--sn-primary-deep);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.app-shell-school .app-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 14px;
+  border: 1px solid var(--sn-line);
+  border-radius: var(--sn-radius-md);
+  background: var(--sn-primary-soft);
+  color: var(--sn-primary-deep);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-shell-school .app-action:hover {
+  border-color: var(--sn-primary);
+  background: var(--sn-surface-3);
+}
+
+/* The School Settings landing actions read better as two equal quick-action cards. */
+.app-shell-school .sn-page-body > div:has(> .app-card.app-panel + .app-card.app-panel + .school-settings-simple) {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px !important;
+}
+
+.app-shell-school .sn-page-body > div:has(> .app-card.app-panel + .app-card.app-panel + .school-settings-simple) > .school-settings-simple {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+/* Academic Settings: keep the dense information readable once legacy tokens resolve. */
+.app-shell-school .academic-settings-page {
+  gap: 18px;
+}
+
+.app-shell-school .academic-settings-hero,
+.app-shell-school .academic-settings-alert,
+.app-shell-school .academic-settings-card,
+.app-shell-school .academic-settings-secondary,
+.app-shell-school .academic-settings-stats .academic-stat {
+  box-shadow: 0 8px 24px var(--sn-shadow-sm);
+}
+
+.app-shell-school .academic-settings-grid {
+  gap: 16px;
+}
+
+.app-shell-school .academic-settings-card {
+  min-height: 210px;
+  padding: 20px;
+}
+
+.app-shell-school .academic-settings-hero-copy p {
+  font-size: 13px;
+}
+
+.app-shell-school .academic-settings-primary,
+.app-shell-school .academic-settings-secondary-button {
+  font-size: 12px;
+}
+
+.app-shell-school .academic-settings-context-label,
+.app-shell-school .academic-settings-stats .academic-stat span {
+  font-size: 10px;
+}
+
+.app-shell-school .academic-settings-context-item span,
+.app-shell-school .academic-settings-stats .academic-stat small {
+  font-size: 11px;
+}
+
+.app-shell-school .academic-settings-context-item strong {
+  font-size: 12px;
+}
+
+.app-shell-school .academic-settings-alert strong {
+  font-size: 13px;
+}
+
+.app-shell-school .academic-settings-alert p,
+.app-shell-school .academic-settings-alert > a {
+  font-size: 11.5px;
+}
+
+.app-shell-school .academic-settings-card-heading h2 {
+  font-size: 18px;
+}
+
+.app-shell-school .academic-settings-card > p {
+  font-size: 12px;
+}
+
+.app-shell-school .academic-settings-card-status strong {
+  font-size: 11px;
+}
+
+.app-shell-school .academic-settings-card-status span,
+.app-shell-school .academic-settings-finalise-row small {
+  font-size: 10px;
+}
+
+.app-shell-school .academic-settings-card-actions a,
+.app-shell-school .academic-settings-secondary-actions a {
+  font-size: 11px;
+}
+
+.app-shell-school .academic-settings-finalise-row strong {
+  font-size: 11.5px;
+}
+
+.app-shell-school .academic-settings-secondary h3 {
+  font-size: 15px;
+}
+
+.app-shell-school .academic-settings-secondary p {
+  font-size: 11.5px;
+}
+
+@media (max-width: 900px) {
+  .app-shell-school .sn-page-body > div:has(> .app-card.app-panel + .app-card.app-panel + .school-settings-simple) {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell-school .sn-page-body > div:has(> .app-card.app-panel + .app-card.app-panel + .school-settings-simple) > .school-settings-simple {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .app-shell-school .app-card-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .app-shell-school .app-action {
+    width: 100%;
+  }
+
+  .app-shell-school .academic-settings-card {
+    min-height: 0;
+  }
+}
