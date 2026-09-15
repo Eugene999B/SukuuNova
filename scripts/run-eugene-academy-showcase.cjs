@@ -18,7 +18,9 @@ try {
   run("current role and workspace access refresh", "refresh-eugene-academy-access.cjs", { EUGENE_ACADEMY_ACCESS_TARGET: "trial" });
   run("rich learner and guardian showcase", "seed-eugene-academy-learning-showcase.cjs", { EUGENE_ACADEMY_SHOWCASE_TARGET: "trial" });
   run("school store and property showcase", "seed-eugene-academy-store-properties.cjs", { EUGENE_ACADEMY_OPERATIONS_TARGET: "trial" });
-  console.log("[eugene-academy] full showcase fixture completed successfully.");
+  run("current system contract refresh", "refresh-eugene-academy-current-system.cjs", { EUGENE_ACADEMY_SYSTEM_TARGET: "trial" });
+  run("school nurse and clinic showcase", "seed-eugene-academy-clinic-showcase.cjs", { EUGENE_ACADEMY_CLINIC_TARGET: "trial" });
+  console.log("[eugene-academy] full showcase fixture completed successfully across the current SukuuNova system contracts and workspaces.");
 } catch (error) {
   console.error("[eugene-academy] showcase pipeline failed:", error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
