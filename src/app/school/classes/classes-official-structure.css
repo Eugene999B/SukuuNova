@@ -1,0 +1,5 @@
+.classroom-simple .control-bar > .primary{display:none!important}
+.classroom-simple .empty-panel > .primary{display:none!important}
+.classroom-simple .class-simple-row .class-simple-name small{color:var(--color-text-secondary)}
+.classroom-simple .class-simple-actions a{font-weight:800}
+.classroom-simple .class-tools-dialog .class-tools-links::before{content:"Open the class workspace to split this level into A/B/C categories.";display:block;padding:8px 10px;border:1px solid var(--color-border);border-radius:9px;background:var(--color-bg);color:var(--color-text-secondary);font-size:12px;line-height:1.45}

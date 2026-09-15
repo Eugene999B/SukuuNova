@@ -9,7 +9,17 @@ import { isTeachingAccount } from "@/lib/authorization";
 import { listClassSubjectOfferings } from "@/lib/class-subject-offerings";
 import { DetailGrid, ProductEmpty, ProductPageHeader, ProductSection, StatusBadge } from "@/components/product/ProductWorkspace";
 import { ClassCurriculumManager } from "./ClassCurriculumManager";
+import { ClassCategoryManager } from "./ClassCategoryManager";
 import "@/components/product/product-workspace.css";
+
+type CurrentSectionRow = {
+  gradeLevelId: string;
+  sectionCode: string;
+  displayName: string;
+  gradeName: string;
+};
+
+type CategoryRow = { classId: string; sectionCode: string; displayName: string };
 
 export default async function ClassDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireSchoolSession();
@@ -38,16 +48,60 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
       }),
       hasPermission(tx, session.userId, "classes:manage", session.schoolId),
     ]);
-    if (!klass) return { school, klass: null, attendance: [] as Array<{ type: string; count: number }>, subjects, teachers: [], offerings: [], canManage };
+    if (!klass) return { school, klass: null, attendance: [] as Array<{ type: string; count: number }>, subjects, teachers: [], offerings: [], canManage, categoryContext: null };
 
-    const [offerings, attendance] = await Promise.all([
+    const [offerings, attendance, currentYear] = await Promise.all([
       listClassSubjectOfferings(tx, session.schoolId, klass.id),
       tx.attendanceEvent.groupBy({ by: ["type"], where: { schoolId: session.schoolId, student: { classId: klass.id } }, _count: { _all: true } }),
+      tx.academicYear.findFirst({ where: { schoolId: session.schoolId, isLocked: false }, orderBy: { startDate: "desc" }, select: { id: true, name: true } }),
     ]);
+
+    let categoryContext: {
+      academicYearName: string | null;
+      displayName: string;
+      levelName: string;
+      categories: Array<{ classId: string; code: string; displayName: string }>;
+    } = {
+      academicYearName: currentYear?.name ?? null,
+      displayName: klass.name,
+      levelName: klass.level ?? klass.name,
+      categories: [],
+    };
+
+    if (currentYear) {
+      const currentSections = await tx.$queryRawUnsafe<CurrentSectionRow[]>(
+        `SELECT cs."gradeLevelId",cs."sectionCode",cs."displayName",g."name" AS "gradeName"
+           FROM "ClassSection" cs
+           JOIN "GradeLevel" g ON g."id"=cs."gradeLevelId" AND g."schoolId"=cs."schoolId"
+          WHERE cs."schoolId"=$1 AND cs."academicYearId"=$2 AND cs."classId"=$3 AND cs."isActive"=true
+          LIMIT 1`,
+        session.schoolId,
+        currentYear.id,
+        klass.id,
+      );
+      const currentSection = currentSections[0];
+      if (currentSection) {
+        const categories = await tx.$queryRawUnsafe<CategoryRow[]>(
+          `SELECT "classId","sectionCode","displayName" FROM "ClassSection"
+            WHERE "schoolId"=$1 AND "academicYearId"=$2 AND "gradeLevelId"=$3 AND "isActive"=true
+            ORDER BY "displayName"`,
+          session.schoolId,
+          currentYear.id,
+          currentSection.gradeLevelId,
+        );
+        categoryContext = {
+          academicYearName: currentYear.name,
+          displayName: currentSection.displayName,
+          levelName: currentSection.gradeName,
+          categories: categories.map((item) => ({ classId: item.classId, code: item.sectionCode, displayName: item.displayName })),
+        };
+      }
+    }
+
     const teachers = teacherCandidates
       .filter((user) => isTeachingAccount(user.userRoles.map(({ role }) => role)))
       .map(({ userRoles: _roles, ...user }) => user);
-    return { school, klass, attendance: attendance.map((r) => ({ type: r.type, count: r._count._all })), subjects, teachers, offerings, canManage };
+    return { school, klass, attendance: attendance.map((r) => ({ type: r.type, count: r._count._all })), subjects, teachers, offerings, canManage, categoryContext };
   });
   if (!data.school) notFound();
   if (!data.klass) {
@@ -60,12 +114,14 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
     );
   }
   const k = data.klass;
+  const displayName = data.categoryContext?.displayName ?? k.name;
+  const levelName = data.categoryContext?.levelName ?? k.level ?? k.name;
   return (
-    <AppShell universe="school" title={`${k.level ? `${k.level} · ` : ""}${k.name}`} subtitle="Class workspace — roster, subjects, teachers, timetable and attendance." active="Classes & Houses" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+    <AppShell universe="school" title={displayName} subtitle="Class workspace — roster, subjects, teachers, timetable and attendance." active="Classes & Houses" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
       <div className="product-workspace">
         <ProductPageHeader
-          eyebrow={`Class · ${k.level ?? "Ungraded"}`}
-          title={k.name}
+          eyebrow={`Class · ${levelName}`}
+          title={displayName}
           description={k.classTeacher ? `Led by ${k.classTeacher.name} · ${k._count.students} learners · ${data.offerings.length} subjects` : `No class teacher yet · ${k._count.students} learners · ${data.offerings.length} subjects`}
           backHref="/school/classes"
           backLabel="Classes"
@@ -94,13 +150,22 @@ export default async function ClassDetailPage({ params }: { params: Promise<{ id
             { label: "Timetable", href: "/school/timetable" },
           ]}
         />
-        <ProductSection eyebrow="Identity" title="Class identity" description="How this group is referenced across the school.">
+        <ProductSection eyebrow="Identity" title="Class identity" description="The installed academic template supplies this official class level.">
           <DetailGrid
             items={[
-              { label: "Name", value: k.name },
-              { label: "Level", value: k.level ?? "—" },
+              { label: "Class", value: displayName },
+              { label: "Official level", value: levelName },
               { label: "Form teacher", value: k.classTeacher?.name ?? "Unassigned", hint: k.classTeacher ? undefined : "Assign from Classes workspace" },
             ]}
+          />
+        </ProductSection>
+        <ProductSection eyebrow="Categories" title="Split this class only when needed" description={`Keep ${levelName} as one class, or split it into categories such as A and B. Categories are managed here, not in Academic Settings.`}>
+          <ClassCategoryManager
+            classId={k.id}
+            levelName={levelName}
+            academicYearName={data.categoryContext?.academicYearName ?? null}
+            categories={data.categoryContext?.categories ?? []}
+            canManage={data.canManage}
           />
         </ProductSection>
         <div id="subjects">
