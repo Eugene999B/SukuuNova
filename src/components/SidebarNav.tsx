@@ -19,6 +19,7 @@ const teacherDestinations: Record<string, string> = {
 export function SidebarNav({ groups, active, storageScope = "default" }: { groups: NavGroup[]; active: string; storageScope?: string }) {
   const pathname = usePathname();
   const navRef = useRef<HTMLElement | null>(null);
+  const restoredRouteRef = useRef<string | null>(null);
   const storageKey = `sukuunova-sidebar-groups:v2:${storageScope}`;
   const scrollStorageKey = `sukuunova-sidebar-scroll:v1:${storageScope}`;
   const isTeacherScope = storageScope.startsWith("teacher:");
@@ -51,6 +52,7 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
   );
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(defaultCollapsed);
+  const [hydratedStorageKey, setHydratedStorageKey] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -64,6 +66,7 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
     } catch {
       setCollapsed(defaultCollapsed);
     }
+    setHydratedStorageKey(storageKey);
   }, [activeGroupLabel, defaultCollapsed, storageKey]);
 
   useEffect(() => {
@@ -77,25 +80,40 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
   }, [activeGroupLabel, collapsed, storageKey]);
 
   useEffect(() => {
-    const nav = navRef.current;
-    const sidebar = nav?.closest<HTMLElement>(".app-sidebar");
+    const sidebar = navRef.current?.closest<HTMLElement>(".app-sidebar");
     if (!sidebar) return;
-    let savedPosition = 0;
-    try {
-      savedPosition = Number(sessionStorage.getItem(scrollStorageKey) ?? "0");
-    } catch {}
-    const frame = window.requestAnimationFrame(() => {
-      if (Number.isFinite(savedPosition) && savedPosition > 0) sidebar.scrollTop = savedPosition;
-    });
     const save = () => {
       try { sessionStorage.setItem(scrollStorageKey, String(sidebar.scrollTop)); } catch {}
     };
     sidebar.addEventListener("scroll", save, { passive: true });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      sidebar.removeEventListener("scroll", save);
-    };
+    return () => sidebar.removeEventListener("scroll", save);
   }, [scrollStorageKey]);
+
+  useEffect(() => {
+    if (hydratedStorageKey !== storageKey) return;
+    const sidebar = navRef.current?.closest<HTMLElement>(".app-sidebar");
+    if (!sidebar) return;
+    const restoreKey = `${scrollStorageKey}:${pathname}`;
+    if (restoredRouteRef.current === restoreKey) return;
+
+    let savedPosition = 0;
+    try {
+      savedPosition = Number(sessionStorage.getItem(scrollStorageKey) ?? "0");
+    } catch {}
+
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        if (Number.isFinite(savedPosition) && savedPosition > 0) sidebar.scrollTop = savedPosition;
+        restoredRouteRef.current = restoreKey;
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, [collapsed, hydratedStorageKey, pathname, scrollStorageKey, storageKey]);
 
   const rememberPosition = () => {
     const sidebar = navRef.current?.closest<HTMLElement>(".app-sidebar");
