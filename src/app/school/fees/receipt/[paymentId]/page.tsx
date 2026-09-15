@@ -56,11 +56,11 @@ export default async function SchoolFinanceReceiptPage({ params }: Props) {
     await requirePermission(tx, session.userId, "finance:read");
 
     const rows = await tx.$queryRawUnsafe<ReceiptRow[]>(
-      `SELECT p."id",p."invoiceId",i."studentId",s."name" AS "studentName",s."admissionNo",c."name" AS "className",t."name" AS "termName",i."totalAmount" AS "invoiceTotal",i."status" AS "invoiceStatus",p."amount",p."method",p."reference",p."createdAt"
+      `SELECT p."id",p."invoiceId",i."studentId",COALESCE(rs."snapshot"->>'studentName',s."name") AS "studentName",COALESCE(rs."snapshot"->>'admissionNo',s."admissionNo") AS "admissionNo",CASE WHEN rs."paymentId" IS NOT NULL THEN rs."snapshot"->>'className' ELSE c."name" END AS "className",COALESCE(rs."snapshot"->>'termName',t."name") AS "termName",i."totalAmount" AS "invoiceTotal",i."status" AS "invoiceStatus",p."amount",p."method",p."reference",p."createdAt"
        FROM "Payment" p
        INNER JOIN "Invoice" i ON i."id"=p."invoiceId" AND i."schoolId"=p."schoolId"
        INNER JOIN "Student" s ON s."id"=i."studentId" AND s."schoolId"=i."schoolId"
-       LEFT JOIN "Class" c ON c."id"=s."classId" AND c."schoolId"=s."schoolId"
+       LEFT JOIN "PaymentReceiptSnapshot" rs ON rs."paymentId"=p."id" AND rs."schoolId"=p."schoolId" LEFT JOIN "Enrollment" en ON en."studentId"=i."studentId" AND en."termId"=i."termId" AND en."schoolId"=i."schoolId" LEFT JOIN "Class" c ON c."id"=en."classId" AND c."schoolId"=i."schoolId"
        INNER JOIN "Term" t ON t."id"=i."termId" AND t."schoolId"=i."schoolId"
        WHERE p."schoolId"=$1 AND p."id"=$2 LIMIT 1`,
       session.schoolId,
@@ -192,7 +192,7 @@ export default async function SchoolFinanceReceiptPage({ params }: Props) {
             <div><span>This payment</span><strong>{money(data.receipt.amount)}</strong></div>
             <div><span>Reversed</span><strong>{money(reversed)}</strong></div>
             <div><span>Net receipt value</span><strong>{money(netTransaction)}</strong></div>
-            <div className={fullyPaid ? "settled" : "balance-due"}><span>Invoice balance</span><strong>{money(remaining)}</strong></div>
+            <div className={fullyPaid ? "settled" : "balance-due"}><span>Current invoice balance</span><strong>{money(remaining)}</strong></div>
           </section>
 
           <section className="gfr-fees">
@@ -200,8 +200,8 @@ export default async function SchoolFinanceReceiptPage({ params }: Props) {
             <div className="gfr-fee-head"><span>Description</span><span>Amount</span></div>
             {data.lines.map((line) => <div className="gfr-fee-row" key={line.feeItemId}><span>{line.name}</span><strong>{money(line.amount)}</strong></div>)}
             <div className="gfr-fee-row total"><span>Invoice total</span><strong>{money(data.receipt.invoiceTotal)}</strong></div>
-            <div className="gfr-fee-row paid"><span>Total net payments received</span><strong>{money(invoiceNetPaid)}</strong></div>
-            <div className="gfr-fee-row balance"><span>Outstanding balance</span><strong>{money(remaining)}</strong></div>
+            <div className="gfr-fee-row paid"><span>Net payments to date</span><strong>{money(invoiceNetPaid)}</strong></div>
+            <div className="gfr-fee-row balance"><span>Current outstanding balance</span><strong>{money(remaining)}</strong></div>
           </section>
 
           <section className={`gfr-settlement ${fullyPaid ? "paid" : "open"}`}>

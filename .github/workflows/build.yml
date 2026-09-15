@@ -100,3 +100,23 @@ jobs:
         env:
           NODE_ENV: production
         run: npm run build
+
+      - name: Install Chromium for browser smoke
+        run: npx playwright install --with-deps chromium
+      - name: Browser smoke against the production build
+        env:
+          NODE_ENV: production
+          APP_URL: http://localhost:3000
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+        run: |
+          npm run start > /tmp/sukuunova-browser-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:3000/api/health > /dev/null; then break; fi
+            sleep 1
+          done
+          npx tsx scripts/browser-smoke.ts
+      - name: Browser server diagnostics
+        if: failure()
+        run: test ! -f /tmp/sukuunova-browser-server.log || tail -n 100 /tmp/sukuunova-browser-server.log

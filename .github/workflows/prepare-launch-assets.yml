@@ -18,6 +18,7 @@ jobs:
       - name: Lock Unicode PDF dependencies and vendor fonts
         run: |
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact @pdf-lib/fontkit@1.1.1
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-dev --save-exact playwright@1.55.1
           mkdir -p public/fonts
           curl --fail --silent --show-error --location https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSans/NotoSans-Regular.ttf -o public/fonts/NotoSans-Regular.ttf
           curl --fail --silent --show-error --location https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/LICENSE -o public/fonts/OFL.txt
