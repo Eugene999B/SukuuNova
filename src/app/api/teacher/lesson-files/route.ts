@@ -118,6 +118,14 @@ export async function GET() {
             JOIN "Subject" s ON s."id"=lp."subjectId" AND s."schoolId"=lp."schoolId"
             LEFT JOIN "LessonPlanAttachment" a ON a."lessonPlanId"=lp."id" AND a."schoolId"=lp."schoolId"
             WHERE lp."schoolId"=$1 AND lp."teacherId"=$2 AND lp."termId"=$3
+              AND EXISTS (
+                SELECT 1
+                FROM "ClassSubjectTeacher" cst
+                WHERE cst."schoolId"=lp."schoolId"
+                  AND cst."teacherId"=lp."teacherId"
+                  AND cst."classId"=lp."classId"
+                  AND cst."subjectId"=lp."subjectId"
+              )
             ORDER BY lp."weekNumber" DESC,c."name" ASC,s."name" ASC,lp."updatedAt" DESC`,
             session.schoolId,
             session.userId,
