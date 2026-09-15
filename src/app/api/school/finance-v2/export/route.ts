@@ -1,41 +1,36 @@
 import { NextResponse } from "next/server";
-import { PDFDocument, StandardFonts } from "pdf-lib";
+import { buildReceiptPdf, receiptCsvCell } from "@/lib/receipt-pdf";
 import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission } from "@/lib/rbac";
-import { routeError } from "@/lib/errors";
+import { AppError, routeError } from "@/lib/errors";
 
 type Row={type:string;date:Date;party:string;category:string;method:string;reference:string;status:string;amount:unknown};
 type RawRow=Omit<Row,"date">&{date:Date|string};
 const esc=(value:unknown)=>String(value??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
-const csv=(value:unknown)=>`"${String(value??"").replaceAll('"','""')}"`;
+const csv=receiptCsvCell;
 const date=(value:Date)=>value.toISOString().slice(0,10);
 const money=(value:unknown)=>Number(value||0).toFixed(2);
 function range(url:URL){
-  const fromValue=url.searchParams.get("from")||null;
-  const toValue=url.searchParams.get("to")||null;
-  return{
-    from:fromValue?new Date(`${fromValue}T00:00:00.000Z`):null,
-    to:toValue?new Date(`${toValue}T23:59:59.999Z`):null,
+  const parse=(key:string,end:boolean)=>{
+    const value=url.searchParams.get(key);
+    if(!value)return null;
+    const parsed=new Date(value+"T00:00:00.000Z");
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==value)throw new AppError("Choose a valid report date.",400,"INVALID_REPORT_DATE");
+    if(end)parsed.setUTCHours(23,59,59,999);
+    return parsed;
   };
+  const from=parse("from",false),to=parse("to",true);
+  if(from&&to&&from>to)throw new AppError("The start date must be before the end date.",400,"INVALID_REPORT_RANGE");
+  return{from,to};
 }
 async function pdfBytes(schoolName:string,rows:Row[],from:Date|null,to:Date|null){
-  const pdf=await PDFDocument.create();
-  const font=await pdf.embedFont(StandardFonts.Helvetica);
-  const bold=await pdf.embedFont(StandardFonts.HelveticaBold);
-  let page=pdf.addPage([595,842]);
-  let y=800;
-  const line=(text:string,size=9,isBold=false)=>{
-    if(y<55){page=pdf.addPage([595,842]);y=800;}
-    page.drawText(text.slice(0,105),{x:42,y,size,font:isBold?bold:font});
-    y-=size+6;
-  };
-  line(schoolName,16,true);
-  line("Finance Transaction Register",13,true);
-  line(`Period: ${from?date(from):"Beginning"} to ${to?date(to):"Latest"}`,9);
-  y-=8;
-  for(const row of rows)line(`${date(row.date)} | ${row.type} | ${row.party} | ${row.category} | GHS ${money(row.amount)} | ${row.status}`,8);
-  return pdf.save();
+  return buildReceiptPdf([
+    {text:schoolName,size:16},
+    {text:"Finance Transaction Register",size:13},
+    {text:`Period: ${from?date(from):"Beginning"} to ${to?date(to):"Latest"}`,size:9},
+    ...rows.map(row=>({text:`${date(row.date)} | ${row.type} | ${row.party} | ${row.category} | GHS ${money(row.amount)} | ${row.status}\nMethod: ${row.method} | Reference: ${row.reference}`,size:8})),
+  ]);
 }
 
 export async function GET(request:Request){
@@ -84,18 +79,18 @@ export async function GET(request:Request){
       return{schoolName:school?.name||"School",rows};
     });
     const filename=`finance-${new Date().toISOString().slice(0,10)}`;
-    if(format==="json")return new NextResponse(JSON.stringify({school:result.schoolName,from,to,transactions:result.rows},null,2),{headers:{"content-type":"application/json; charset=utf-8","content-disposition":`attachment; filename="${filename}.json"`}});
+    if(format==="json")return new NextResponse(JSON.stringify({school:result.schoolName,from,to,transactions:result.rows},null,2),{headers:{"cache-control":"private, no-store","content-type":"application/json; charset=utf-8","content-disposition":`attachment; filename="${filename}.json"`}});
     if(format==="csv"){
       const body=["Date,Type,Party,Category,Method,Reference,Status,Amount (GHS)",...result.rows.map(row=>[date(row.date),row.type,row.party,row.category,row.method,row.reference,row.status,money(row.amount)].map(csv).join(","))].join("\n");
-      return new NextResponse(body,{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":`attachment; filename="${filename}.csv"`}});
+      return new NextResponse(body,{headers:{"cache-control":"private, no-store","content-type":"text/csv; charset=utf-8","content-disposition":`attachment; filename="${filename}.csv"`}});
     }
     if(format==="pdf"){
       const bytes=await pdfBytes(result.schoolName,result.rows,from,to);
-      return new NextResponse(Buffer.from(bytes),{headers:{"content-type":"application/pdf","content-disposition":`attachment; filename="${filename}.pdf"`}});
+      return new NextResponse(Buffer.from(bytes),{headers:{"cache-control":"private, no-store","content-type":"application/pdf","content-disposition":`attachment; filename="${filename}.pdf"`}});
     }
     const html=`<!doctype html><html><head><meta charset="utf-8"><title>Finance report</title><style>body{font-family:Arial,sans-serif}h1{margin-bottom:4px}table{border-collapse:collapse;width:100%}th,td{border:1px solid;padding:7px;text-align:left}th{font-weight:bold}</style></head><body><h1>${esc(result.schoolName)}</h1><p>Finance transaction register</p><table><thead><tr><th>Date</th><th>Type</th><th>Party</th><th>Category</th><th>Method</th><th>Reference</th><th>Status</th><th>Amount (GHS)</th></tr></thead><tbody>${result.rows.map(row=>`<tr><td>${date(row.date)}</td><td>${esc(row.type)}</td><td>${esc(row.party)}</td><td>${esc(row.category)}</td><td>${esc(row.method)}</td><td>${esc(row.reference)}</td><td>${esc(row.status)}</td><td>${money(row.amount)}</td></tr>`).join("")}</tbody></table></body></html>`;
     const ext=format==="xls"?"xls":"doc";
     const type=format==="xls"?"application/vnd.ms-excel":"application/msword";
-    return new NextResponse(html,{headers:{"content-type":`${type}; charset=utf-8`,"content-disposition":`attachment; filename="${filename}.${ext}"`}});
+    return new NextResponse(html,{headers:{"cache-control":"private, no-store","content-type":`${type}; charset=utf-8`,"content-disposition":`attachment; filename="${filename}.${ext}"`}});
   }catch(error){return routeError(error);}
 }

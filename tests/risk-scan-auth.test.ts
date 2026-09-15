@@ -9,6 +9,8 @@ const claims = {
 describe("risk scan authorization", () => {
   it("accepts only the exact repository, main branch and scheduled/manual workflow", () => {
     expect(isRiskScanWorkflow(claims)).toBe(true);
+    expect(isRiskScanWorkflow({ ...claims, sub: "repo:Eugene999B@194670606/SukuuNova@1334027943:ref:refs/heads/main" })).toBe(true);
+    expect(isRiskScanWorkflow({ ...claims, sub: "repo:Eugene999B@999/SukuuNova@1334027943:ref:refs/heads/main" })).toBe(false);
     expect(isRiskScanWorkflow({ ...claims, event_name: "workflow_run" })).toBe(true);
     for (const change of [{ repository_id: "other" }, { event_name: "pull_request" }, { ref: "refs/heads/other" }, { workflow_ref: "another.yml" }, { sub: "repo:Eugene999B/SukuuNova:pull_request" }]) expect(isRiskScanWorkflow({ ...claims, ...change })).toBe(false);
   });
