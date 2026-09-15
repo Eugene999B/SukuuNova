@@ -106,13 +106,13 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     const result = await withTenant<unknown>(session.schoolId, async (tx) => {
       const common = { schoolId: session.schoolId, actorId: session.userId };
+      await requirePermission(tx, session.userId, "calendar:manage");
 
       if (manualActions.has(input.action) || input.action === "setPublished") {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`timetable-generation:${session.schoolId}`}))`;
       }
 
       if (input.action === "setPublished") {
-        await requirePermission(tx, session.userId, "calendar:manage");
         if (input.published) {
           const count = await tx.timetableSlot.count({ where: { schoolId: session.schoolId } });
           if (!count) throw new AppError("Add or generate at least one lesson before publishing the timetable.", 409, "EMPTY_TIMETABLE");

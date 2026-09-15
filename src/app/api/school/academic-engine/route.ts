@@ -3,7 +3,9 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
-import { routeError } from "@/lib/errors";
+import { AppError, routeError } from "@/lib/errors";
+import { appendSchoolAudit } from "@/lib/audit";
+import { hasPermission, requirePermission } from "@/lib/rbac";
 import { readTimetableExtensions } from "@/lib/timetable-generation-policy";
 import { validateTimetableBellSchedule } from "@/lib/timetable-bell-schedule";
 import { getAcademicEngineConfig, saveAcademicEngineConfig } from "@/lib/academic-engine";
@@ -89,6 +91,12 @@ export async function GET() {
   try {
     const session = await requireSchoolSession();
     return NextResponse.json(await withTenant(session.schoolId, async (tx) => {
+      const canReadAcademicSetup = await hasPermission(tx, session.userId, "settings:manage_school");
+      const canManageTimetable = await hasPermission(tx, session.userId, "calendar:manage");
+      if (!canReadAcademicSetup && !canManageTimetable) {
+        throw new AppError("You do not have permission to view academic or timetable setup.", 403, "FORBIDDEN");
+      }
+
       const [config, settings, classes, assignments] = await Promise.all([
         getAcademicEngineConfig(tx),
         tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timetableConfig: true } }),
@@ -139,6 +147,40 @@ export async function POST(request: Request) {
         })() : undefined;
         if (canonicalTimetable) validateTimetableBellSchedule(canonicalTimetable);
 
+        const timetableOnly = Boolean(incomingTimetable) && input.assessment === undefined && input.reportCard === undefined;
+        if (timetableOnly && incomingTimetable && canonicalTimetable) {
+          await requirePermission(tx, session.userId, "calendar:manage");
+          const roomIds = incomingTimetable.rooms?.map((item) => item.id) ?? [];
+          if (new Set(roomIds).size !== roomIds.length) throw new AppError("Room ids must be unique.", 400, "DUPLICATE_ROOM");
+          const knownRooms = new Set(roomIds);
+          for (const requirement of Object.values(incomingTimetable.roomRequirements ?? {})) {
+            if (requirement.room && !knownRooms.has(requirement.room)) {
+              throw new AppError(`Room rule names unknown room "${requirement.room}".`, 400, "ROOM_NOT_FOUND");
+            }
+          }
+
+          const extensions = {
+            maxDailyPeriods: incomingTimetable.maxDailyPeriods ?? currentExtensions.maxDailyPeriods,
+            printTheme: incomingTimetable.printTheme ?? currentExtensions.printTheme,
+          };
+          const extendedTimetable = { ...canonicalTimetable, ...extensions };
+          await tx.schoolSettings.upsert({
+            where: { schoolId: session.schoolId },
+            update: { timetableConfig: extendedTimetable as unknown as Prisma.InputJsonValue },
+            create: { schoolId: session.schoolId, timetableConfig: extendedTimetable as unknown as Prisma.InputJsonValue },
+          });
+          await appendSchoolAudit(tx, {
+            schoolId: session.schoolId,
+            actorId: session.userId,
+            action: "timetable.configuration_updated",
+            entityType: "SchoolSettings",
+            entityId: session.schoolId,
+            after: { timetable: extendedTimetable },
+          });
+          const current = await getAcademicEngineConfig(tx);
+          return NextResponse.json({ ...current, timetable: extendedTimetable, reportCard: legacyReportView(current.reportCard) });
+        }
+
         const result = await saveAcademicEngineConfig(tx, {
           schoolId: session.schoolId,
           actorId: session.userId,
@@ -167,6 +209,7 @@ export async function POST(request: Request) {
       }
 
       if (input.action === "novacorePreview") {
+        await requirePermission(tx, session.userId, "calendar:manage");
         return NextResponse.json(await previewNovaCoreTimetableWithShadow(tx, {
           schoolId: session.schoolId,
           actorId: session.userId,
@@ -177,6 +220,7 @@ export async function POST(request: Request) {
         }), { headers: { "Cache-Control": "private, no-store" } });
       }
 
+      await requirePermission(tx, session.userId, "calendar:manage");
       const result = await applyNovaCoreTimetable(tx, {
         schoolId: session.schoolId,
         actorId: session.userId,
