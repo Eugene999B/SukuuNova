@@ -84,8 +84,8 @@ export function RoleIntelligenceHome({
 }: Props) {
   const critical = insights.filter((item) => item.severity === "critical").length;
   const warning = insights.filter((item) => item.severity === "warning").length;
-  const statusLabel = critical > 0 ? `${critical} critical` : warning > 0 ? `${warning} to review` : "All clear";
-  const statusTone = critical > 0 ? "critical" : warning > 0 ? "warn" : "good";
+  const statusLabel = critical > 0 ? `${critical} critical` : warning > 0 ? `${warning} to review` : "Review operational signals";
+  const statusTone = critical > 0 ? "critical" : warning > 0 ? "warn" : "default";
 
   return (
     <div className="role-intelligence-home role-intelligence-home-simple">
@@ -99,7 +99,7 @@ export function RoleIntelligenceHome({
         <div className="role-intelligence-hero-side">
           <div className={`role-intelligence-status tone-${statusTone}`}>
             {critical || warning ? <AlertTriangle size={18} aria-hidden="true" /> : <CheckCircle2 size={18} aria-hidden="true" />}
-            <div><span>Current status</span><strong>{statusLabel}</strong></div>
+            <div><span>Setup & approvals</span><strong>{statusLabel}</strong></div>
           </div>
           {(primaryAction || secondaryAction) ? <div className="role-intelligence-hero-actions">
             {primaryAction ? <Link href={primaryAction.href} className="role-intelligence-primary">{primaryAction.label} <ArrowRight size={14} aria-hidden="true" /></Link> : null}
@@ -121,12 +121,10 @@ export function RoleIntelligenceHome({
         })}
       </section>
 
-      <DashboardAnalyticsClient />
-
       {(insights.length > 0 || focus.length > 0) ? <section className="role-intelligence-main-grid">
         <article className="role-intelligence-panel role-intelligence-insights">
           <div className="role-intelligence-panel-head">
-            <div><span className="role-intelligence-eyebrow"><BrainCircuit size={13} aria-hidden="true" /> Needs attention</span><h2>{insights.length ? "What should I look at?" : "Nothing urgent"}</h2></div>
+            <div><span className="role-intelligence-eyebrow"><BrainCircuit size={13} aria-hidden="true" /> Needs attention</span><h2>{insights.length ? "What should I look at?" : "Setup checks"}</h2></div>
           </div>
           <div className="role-intelligence-insight-list">
             {insights.length ? insights.map((insight, index) => {
@@ -137,7 +135,7 @@ export function RoleIntelligenceHome({
                 {insight.href ? <b>{insight.actionLabel ?? "Open"} <ArrowRight size={12} aria-hidden="true" /></b> : null}
               </>;
               return insight.href ? <Link href={insight.href} className={`role-intelligence-insight tone-${severity}`} key={`${insight.title}-${index}`}>{content}</Link> : <div className={`role-intelligence-insight tone-${severity}`} key={`${insight.title}-${index}`}>{content}</div>;
-            }) : <div className="role-intelligence-clear"><CheckCircle2 size={18} aria-hidden="true" /><div><strong>All clear.</strong><small>There is no exception waiting for action right now.</small></div></div>}
+            }) : <div className="role-intelligence-clear"><CheckCircle2 size={18} aria-hidden="true" /><div><strong>No setup exception in this list.</strong><small>Review the operational analysis below for attendance, balances and academic concerns.</small></div></div>}
           </div>
         </article>
 
@@ -154,14 +152,16 @@ export function RoleIntelligenceHome({
         </article> : null}
       </section> : null}
 
-      {actions.length ? <details className="sn-progressive role-intelligence-more">
-        <summary>More actions</summary>
+      {actions.length ? <details open className="sn-progressive role-intelligence-more">
+        <summary>Quick actions</summary>
         <div className="sn-progressive-body">
           <div className="role-intelligence-action-grid">
             {actions.map((action) => <Link href={action.href} key={action.label}><div><strong>{action.label}</strong><span>{action.detail}</span></div><ArrowRight size={15} aria-hidden="true" /></Link>)}
           </div>
         </div>
       </details> : null}
+
+      <DashboardAnalyticsClient />
 
       {children ? <details className="sn-progressive role-intelligence-more">
         <summary>More details</summary>

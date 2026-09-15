@@ -24,7 +24,7 @@ export const PILOT_CERTIFICATION_CHECKS = [
 export type PilotCertificationCheckKey = (typeof PILOT_CERTIFICATION_CHECKS)[number]["key"];
 export type PilotCertificationEvidenceStatus = "in_review" | "passed" | "failed" | "waived";
 export type PilotCertificationEnvironment = "ci" | "staging" | "production" | "hardware_lab";
-export type PilotCertificationCheckState = "not_tested" | "partial" | "in_review" | "passed" | "failed" | "waived" | "expired" | "wrong_environment";
+export type PilotCertificationCheckState = "not_tested" | "partial" | "in_review" | "passed" | "failed" | "waived" | "expired" | "wrong_environment" | "stale_evidence";
 
 export type PilotCertificationEvidenceRow = {
   id: string;
@@ -42,7 +42,7 @@ export type PilotCertificationEvidenceRow = {
   reviewedAt: Date;
 };
 
-type CertificationSchoolRow = { id: string; name: string; uniqueCode: string; status: string };
+type CertificationSchoolRow = { id: string; name: string; uniqueCode: string; status: string; featureFlags: unknown; notificationChannels: unknown; hasActiveDevices: boolean };
 
 const CHECK_BY_KEY = new Map(PILOT_CERTIFICATION_CHECKS.map((check) => [check.key, check]));
 const SECRET_PATTERN = /(authorization\s*:\s*bearer|password\s*[=:]|api[_-]?key\s*[=:]|access[_-]?token\s*[=:]|secret\s*[=:])/i;
@@ -65,16 +65,35 @@ function cleanSummary(value: string) {
 async function readSchoolThroughRls(schoolId: string): Promise<CertificationSchoolRow | null> {
   return withTenant(schoolId, async (tx) => {
     const rows = await tx.$queryRawUnsafe<CertificationSchoolRow[]>(
-      `SELECT "id","name","uniqueCode","status" FROM "School" WHERE "id"=$1 LIMIT 1`,
+      `SELECT s."id",s."name",s."uniqueCode",s."status",p."featureFlags",ss."notificationChannels",
+        EXISTS(SELECT 1 FROM "Device" d WHERE d."schoolId"=s."id" AND d."status"='active') AS "hasActiveDevices"
+       FROM "School" s LEFT JOIN "SubscriptionPlan" p ON p."id"=s."subscriptionPlanId"
+       LEFT JOIN "SchoolSettings" ss ON ss."schoolId"=s."id" WHERE s."id"=$1 LIMIT 1`,
       schoolId,
     );
     return rows[0] ?? null;
   });
 }
 
+export function currentCertificationCommit() {
+  return process.env.RAILWAY_GIT_COMMIT_SHA?.trim() || process.env.GITHUB_SHA?.trim() || "";
+}
+
+function controlledCheckEnabled(key: string, school: CertificationSchoolRow) {
+  const flags = Array.isArray(school.featureFlags) ? school.featureFlags : [];
+  if (key === "controlled.transport") return flags.includes("transport");
+  if (key === "controlled.biometrics") return flags.includes("face_recognition") || school.hasActiveDevices;
+  if (key === "controlled.whatsapp") {
+    const channels = school.notificationChannels;
+    return Array.isArray(channels) ? channels.includes("whatsapp") : Boolean(channels && typeof channels === "object" && (channels as Record<string, unknown>).whatsapp === true);
+  }
+  return false;
+}
+
 function rowState(evidence: PilotCertificationEvidenceRow | null, now: Date): PilotCertificationCheckState {
   if (!evidence) return "not_tested";
   if (evidence.expiresAt && evidence.expiresAt <= now) return "expired";
+  if (evidence.status === "passed" && (!evidence.evidenceRef || !evidence.expiresAt || !currentCertificationCommit() || evidence.commitSha !== currentCertificationCommit() || (evidence.environment === "ci" && !evidence.ciRun))) return "stale_evidence";
   return evidence.status;
 }
 
@@ -94,6 +113,7 @@ function evaluateCheckState(
   if (requiredStates.every((item) => item.state === "passed")) return "passed";
   if (requiredStates.some((item) => item.state === "failed")) return "failed";
   if (requiredStates.some((item) => item.state === "expired")) return "expired";
+  if (requiredStates.some((item) => item.state === "stale_evidence")) return "stale_evidence";
   if (requiredStates.some((item) => item.state === "in_review")) return "in_review";
   if (requiredStates.some((item) => item.state === "passed")) return "partial";
   if (evidenceRows.some((row) => row.status === "passed" && !check.requiredEnvironments.includes(row.environment as never))) return "wrong_environment";
@@ -123,6 +143,8 @@ export async function getPilotCertificationOverview(schoolId: string) {
     const latestEvidence = [...environmentEvidence].sort((a, b) => b.reviewedAt.getTime() - a.reviewedAt.getTime())[0] ?? null;
     return {
       ...check,
+      requiredForPilot: check.requiredForPilot || controlledCheckEnabled(check.key, school),
+      allowWaiver: check.allowWaiver && !controlledCheckEnabled(check.key, school),
       state: evaluateCheckState(check, environmentEvidence, now),
       evidence: latestEvidence,
       environmentEvidence: check.requiredEnvironments.map((environment) => ({
@@ -139,6 +161,7 @@ export async function getPilotCertificationOverview(schoolId: string) {
   const controlled = checks.filter((check) => !check.requiredForPilot);
   return {
     school,
+    deployedCommit: currentCertificationCommit() || null,
     checks,
     summary: {
       required: required.length,
@@ -146,7 +169,7 @@ export async function getPilotCertificationOverview(schoolId: string) {
       failedRequired,
       pendingRequired,
       progressPercent: required.length ? Math.round((passedRequired / required.length) * 100) : 0,
-      pilotReady: required.length > 0 && passedRequired === required.length,
+      pilotReady: school.status === "active" && Boolean(currentCertificationCommit()) && required.length > 0 && passedRequired === required.length,
       controlledPassed: controlled.filter((check) => check.state === "passed").length,
       controlledWaived: controlled.filter((check) => check.state === "waived").length,
       controlledAttention: controlled.filter((check) => !["passed", "waived"].includes(check.state)).length,
@@ -179,6 +202,14 @@ export async function recordPilotCertificationEvidence(input: {
   const ciRun = cleanOptional(input.ciRun, 160);
   const school = await readSchoolThroughRls(input.schoolId);
   if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
+  if (input.status === "waived" && controlledCheckEnabled(input.checkKey, school)) throw new AppError("Disable this capability before waiving its certification.", 409, "CERTIFICATION_WAIVER_FORBIDDEN");
+  if (input.status === "passed") {
+    if (!evidenceRef || !input.expiresAt || !commitSha || !/^[a-f0-9]{40}$/i.test(commitSha) || (input.environment === "ci" && !ciRun)) {
+      throw new AppError("A pass requires an evidence link, full commit SHA, expiry and a CI run for CI evidence.", 400, "CERTIFICATION_EVIDENCE_REQUIRED");
+    }
+    if (!currentCertificationCommit() || commitSha !== currentCertificationCommit()) throw new AppError("Evidence must match the currently deployed commit.", 409, "CERTIFICATION_COMMIT_MISMATCH");
+    if (input.expiresAt.getTime() > Date.now() + 30 * 24 * 60 * 60 * 1000) throw new AppError("Certification evidence must expire within 30 days.", 400, "CERTIFICATION_EXPIRY_INVALID");
+  }
   const id = createId();
   await db.$executeRawUnsafe(
     `INSERT INTO "PilotCertificationEvidence" ("id","schoolId","checkKey","status","environment","evidenceSummary","evidenceRef","commitSha","ciRun","expiresAt","reviewedByAdminId")

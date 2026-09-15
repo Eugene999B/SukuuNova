@@ -37,7 +37,7 @@ function when(value: string) {
 }
 
 function stateRank(value: string) {
-  if (["failed", "expired", "wrong_environment"].includes(value)) return 0;
+  if (["failed", "expired", "wrong_environment", "stale_evidence"].includes(value)) return 0;
   if (["partial", "in_review", "not_tested"].includes(value)) return 1;
   if (value === "waived") return 2;
   return 3;

@@ -297,7 +297,7 @@ export async function listIdentityCards(tx: TenantDb, schoolId: string, schoolCo
     `SELECT c."id",c."schoolId",c."personType",c."studentId",c."staffId",c."serial",c."issuedAt",c."expiresAt",c."status",c."version",
             COALESCE(s."name",u."name") AS "personName",
             CASE WHEN c."personType"='student' THEN COALESCE(s."admissionNo",c."serial")
-                 ELSE 'STF-' || UPPER(RIGHT(REPLACE(COALESCE(u."id",c."staffId",c."serial"),'-',''),8)) END AS "personNumber",
+                 ELSE COALESCE((SELECT sp."staffNumber" FROM "StaffProfile" sp WHERE sp."schoolId"=c."schoolId" AND sp."userId"=u."id"), 'STF-' || UPPER(RIGHT(REPLACE(COALESCE(u."id",c."staffId",c."serial"),'-',''),8))) END AS "personNumber",
             s."admissionNo",s."classId",cl."name" AS "className",h."name" AS "houseName",
             CASE WHEN c."personType"='staff' THEN (
               SELECT r."name" FROM "UserRole" ur
@@ -823,7 +823,7 @@ export async function publicIdentityCardBySerial(schoolId: string, serialValue: 
       `SELECT c."id",c."schoolId",c."personType",c."studentId",c."staffId",c."serial",c."issuedAt",c."expiresAt",c."status",c."version",
               COALESCE(s."name",u."name") AS "personName",
               CASE WHEN c."personType"='student' THEN COALESCE(s."admissionNo",c."serial")
-                   ELSE 'STF-' || UPPER(RIGHT(REPLACE(COALESCE(u."id",c."staffId",c."serial"),'-',''),8)) END AS "personNumber",
+                   ELSE COALESCE((SELECT sp."staffNumber" FROM "StaffProfile" sp WHERE sp."schoolId"=c."schoolId" AND sp."userId"=u."id"), 'STF-' || UPPER(RIGHT(REPLACE(COALESCE(u."id",c."staffId",c."serial"),'-',''),8))) END AS "personNumber",
               s."admissionNo",s."classId",cl."name" AS "className",h."name" AS "houseName",
               CASE WHEN c."personType"='staff' THEN (
                 SELECT r."name" FROM "UserRole" ur

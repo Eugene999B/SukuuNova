@@ -25,6 +25,8 @@ const actionSchema = z.discriminatedUnion("action", [
     action: z.literal("apply"),
     batchId: z.string().min(1).max(100),
     confirmation: z.literal("APPLY"),
+    intakeAcademicYearId: z.string().min(1).max(100).optional(),
+    placementTermId: z.string().min(1).max(100).optional(),
   }),
 ]);
 
@@ -56,7 +58,10 @@ export async function GET(request: Request) {
         return { ...result, access, applyEnabledKinds: APPLY_ENABLED_IMPORT_KINDS };
       }
       const batches = await listSchoolImportBatches(tx, session.schoolId, 50);
+      const academicYears = await tx.academicYear.findMany({ where: { isLocked: false }, select: { id: true, name: true }, orderBy: { startDate: "desc" } });
+      const terms = await tx.term.findMany({ where: { isLocked: false, academicYear: { isLocked: false } }, select: { id: true, name: true, academicYearId: true }, orderBy: { startDate: "desc" } });
       return {
+        academicYears, terms,
         batches: batches.filter((batch) => access[batch.kind]),
         access,
         contracts: Object.fromEntries((Object.entries(IMPORT_CONTRACTS) as Array<[ImportKind, (typeof IMPORT_CONTRACTS)[ImportKind]]>).filter(([kind]) => access[kind])),
@@ -105,6 +110,8 @@ export async function POST(request: Request) {
           schoolId: session.schoolId,
           actorId: session.userId,
           batchId: input.batchId,
+          intakeAcademicYearId: input.intakeAcademicYearId,
+          placementTermId: input.placementTermId,
         });
       }
       return validateSchoolImportBatch(tx, {
@@ -113,7 +120,7 @@ export async function POST(request: Request) {
         batchId: input.batchId,
         columnMapping: input.columnMapping as ColumnMapping,
       });
-    });
+    }, { timeout: 120_000 });
     return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return routeError(error);

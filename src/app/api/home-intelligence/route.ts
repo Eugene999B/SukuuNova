@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSchoolSession } from "@/lib/auth";
-import { getSchoolAuthorization } from "@/lib/authorization";
+import { TEACHING_ROLE_KEYS, getSchoolAuthorization } from "@/lib/authorization";
 import { withTenant } from "@/lib/db";
 import {
   attendanceWindowRate,
@@ -241,7 +241,7 @@ export async function GET() {
       tx.student.count({ where: { status: "active" } }),
       tx.class.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, level: true, _count: { select: { students: true } } } }),
       tx.user.count({ where: { status: "active", userRoles: { some: { role: { key: { notIn: ["guardian", "parent", "student"] } } } } } }),
-      tx.user.count({ where: { status: "active", userRoles: { some: { role: { key: "teacher" } } } } }),
+      tx.user.count({ where: { status: "active", userRoles: { some: { role: { key: { in: [...TEACHING_ROLE_KEYS] } } } } } }),
       tx.attendanceEvent.findMany({ where: { attendanceDate: today, type: "in", studentId: { not: null } }, select: { studentId: true } }),
       tx.attendanceEvent.findMany({ where: { attendanceDate: { gte: previous30Start, lte: today }, type: "in", studentId: { not: null } }, select: { attendanceDate: true, studentId: true } }),
       tx.invoice.aggregate({ _sum: { totalAmount: true }, _count: { _all: true } }),
@@ -256,6 +256,11 @@ export async function GET() {
       tx.term.findFirst({ where: { startDate: { lte: today }, endDate: { gte: today } }, orderBy: { startDate: "desc" }, select: { id: true, name: true } }),
     ]);
 
+    const genderRows = await tx.$queryRawUnsafe<Array<{ gender: string | null; count: number }>>(
+      'SELECT "gender", COUNT(*)::int AS count FROM "Student" WHERE "schoolId"=$1 AND "status"=\'active\' GROUP BY "gender"', session.schoolId,
+    );
+    const male = genderRows.find((row) => row.gender === "male")?.count ?? 0;
+    const female = genderRows.find((row) => row.gender === "female")?.count ?? 0;
     const todayPresent = new Set(attendanceRows.map((row) => row.studentId).filter(Boolean)).size;
     const attendanceByDate = new Map<string, Set<string>>();
     for (const row of attendance60.filter((row) => row.attendanceDate >= sevenDaysAgo)) {
@@ -423,7 +428,7 @@ export async function GET() {
       classPopulation,
       attendanceTrend,
       staffRoles: staffRoleDistribution,
-      gender: { available: false, male: null, female: null, notRecorded: students },
+      gender: { available: true, male, female, notRecorded: Math.max(0, students - male - female) },
       academicRisk,
       trendComparisons: { attendance: { current: currentAttendance.rate, previous: previousAttendance.rate, deltaPoints: attendanceDelta, recordedDays: currentAttendance.recordedDays }, collections: { current30: current30Collections, previous30: previous30Collections, changePercent: collectionMomentum }, academics: { currentTerm: currentTerm?.name || null, average: academicAverage, markingCompletion } },
       intelligence: leadershipIntelligence,
