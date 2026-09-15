@@ -4,6 +4,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { teacherWorkspaceRedirect } from "@/lib/workspace-boundary";
+import "./teacher-workspace.css";
 
 /**
  * Teacher pages form a separate operating universe from school administration.
