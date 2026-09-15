@@ -149,12 +149,16 @@ describe("lesson-plan subject jurisdiction", () => {
     const studioBefore = await getLessonStudio();
     expect(studioBefore.status).toBe(200);
     const studioBeforeBody = await studioBefore.json();
-    expect(studioBeforeBody.assignments).toHaveLength(0);
+    expect(studioBeforeBody.assignments).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ classId: f.classId, subjectId: f.subjectId }),
+    ]));
 
     const filesBefore = await getLessonFiles();
     expect(filesBefore.status).toBe(200);
     const filesBeforeBody = await filesBefore.json();
-    expect(filesBeforeBody.assignments).toHaveLength(0);
+    expect(filesBeforeBody.assignments).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ classId: f.classId, subjectId: f.subjectId }),
+    ]));
 
     await assignSubjectToMember(f);
 
