@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
+import { requirePermission } from "./rbac";
 import { AppError } from "./errors";
 import { recordAllocatedPaymentV2 } from "./finance-v2-service";
 
@@ -43,6 +44,7 @@ function matchesRetry(existing:Awaited<ReturnType<typeof existingPaymentForRefer
 }
 
 export async function recordAllocatedPaymentV2Safe(tx:TenantDb,input:Input){
+  await requirePermission(tx,input.actorId,"payments:record");
   const reference=input.reference.trim();
   if(!reference)throw new AppError("A payment reference or receipt number is required so connection retries cannot create duplicate payments.",400,"REFERENCE_REQUIRED");
   if(new Set(input.allocations.map(row=>row.chargeId)).size!==input.allocations.length){

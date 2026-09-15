@@ -75,6 +75,11 @@ async function main() {
     assert.equal(Number(balance.totalAmount) - Number(balance.paidAmount), 375);
     assert.equal(balance.hasCategoryCharges, false);
     assert.equal(await withTenant(f.schoolId, tx => tx.payment.count({ where: { reference: "BROWSER-LEGACY-001" } })), 1);
+    const report = await context.request.get("/api/school/finance-v2/export?format=pdf");
+    assert.equal(report.status(), 200, await report.text());
+    assert.equal(report.headers()["content-type"], "application/pdf");
+    assert.ok((await report.body()).subarray(0,5).toString()==="%PDF-", "Unicode finance PDF must render");
+    assert.equal((await context.request.get("/api/school/finance-v2/export?from=2026-02-30")).status(),400);
     await page.goto("/school/finance");
     await page.getByText("GH₵375.00", { exact: true }).waitFor();
     assert.deepEqual(pageErrors, [], "Browser emitted JavaScript errors");

@@ -61,6 +61,7 @@ describe("Finance V2 accounting integrity",()=>{
 
       const paymentInput={schoolId:fixture.schoolId,actorId:fixture.ownerId,studentId:context.student.id,invoiceId:tuitionCharge.invoiceId,method:"cash",reference:"FV2-CASH-0001",allocations:[{chargeId:tuitionCharge.id,amount:300}]};
       const first=await recordAllocatedPaymentV2Safe(tx,paymentInput);
+      await expect(recordAllocatedPaymentV2Safe(tx,{...paymentInput,actorId:fixture.memberId})).rejects.toThrow();
       const retry=await recordAllocatedPaymentV2Safe(tx,paymentInput);
       expect(retry.id).toBe(first.id);
       expect(await tx.payment.count({where:{schoolId:fixture.schoolId,reference:"FV2-CASH-0001"}})).toBe(1);
