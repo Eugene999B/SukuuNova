@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { CircleAlert, CircleCheckBig, Clock3, Fingerprint, QrCode, RadioTower, UsersRound, UserRoundCheck } from "lucide-react";
+import {
+  ArrowRight,
+  CircleAlert,
+  CircleCheckBig,
+  Clock3,
+  Fingerprint,
+  QrCode,
+  RadioTower,
+  UsersRound,
+  UserRoundCheck,
+} from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { DataCard } from "@/components/ui/DataCard";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -7,6 +17,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { requirePermission, hasPermission } from "@/lib/rbac";
 import "../module-workspace.css";
+import "./attendance-dashboard.css";
 
 function localDateInTimeZone(value: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(value);
@@ -76,14 +87,59 @@ export default async function AttendancePage() {
     const classDecided = new Set(data.todayEvents.filter(event => event.student?.classId === c.id && isAttendanceDecision(event)).map(event => event.studentId).filter(Boolean)).size;
     return classDecided < activeClassSize;
   });
+  const todayLabel = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${data.today}T00:00:00.000Z`));
 
-  return <AppShell universe="school" title="Student Attendance" subtitle="One attendance history across class registers, QR and biometric devices." active="Student Attendance" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
-    <div className="module-workspace">
-      <section className="module-setup-card module-card"><div><span className="module-overline">Daily attendance</span><h3>One source of truth, however attendance is captured.</h3><p>Class registers and connected devices feed the same daily record. Use Attendance Control to configure QR, fingerprint, face, card and verification times.</p></div><div className="module-setup-list"><Link href="/school/devices"><span><RadioTower size={14}/></span>Attendance Control <b>Rules · QR · devices</b></Link>{data.canRecord&&firstIncompleteClass?<Link href={`/school/attendance/register?classId=${encodeURIComponent(firstIncompleteClass.id)}&date=${encodeURIComponent(data.today)}`}><span><UserRoundCheck size={14}/></span>Continue register <b>{firstIncompleteClass.name}</b></Link>:null}<Link href="/school/attendance/display" target="_blank"><span><QrCode size={14}/></span>Live QR station <b>Open full screen</b></Link><Link href="/school/attendance/exceptions"><span><CircleAlert size={14}/></span>Resolve exceptions <b>Corrections & review</b></Link></div></section>
-      <div className="module-metrics"><DataCard label="Active learners" value={data.students.length} meta="Students expected today" icon={UsersRound} /><DataCard label="Present" value={present} meta="Manual or automated check-in" icon={CircleCheckBig} tone="success" /><DataCard label="Late" value={late} meta="Present arrivals after the configured cutoff" icon={Clock3} tone={late ? "warning" : "success"} /><DataCard label="Absent" value={absentIds.size} meta={`${excusedIds.size} excused today`} icon={CircleAlert} tone={absentIds.size ? "warning" : "success"} /><DataCard label="Pending decisions" value={pending} meta={pending ? "Complete the remaining class registers" : "All active learners have a decision"} icon={UserRoundCheck} tone={pending ? "warning" : "success"} /></div>
-      <section className="module-card" id="today"><div className="module-section-title"><div><span>Today · {data.today}</span><h3>Class coverage</h3></div><div className="modal-actions"><Link className="button secondary" href="/school/devices">Attendance Control</Link>{data.canRecord&&firstIncompleteClass?<Link className="button primary" href={`/school/attendance/register?classId=${encodeURIComponent(firstIncompleteClass.id)}&date=${encodeURIComponent(data.today)}`}>Continue register →</Link>:null}</div></div><div className="module-workflow">{data.classes.map(c=>{const activeClassSize=data.students.filter(student=>student.classId===c.id).length;const classPresent=new Set(data.todayEvents.filter(event=>event.student?.classId===c.id&&isPresentEvent(event)).map(event=>event.studentId).filter(Boolean)).size;const classDecided=new Set(data.todayEvents.filter(event=>event.student?.classId===c.id&&isAttendanceDecision(event)).map(event=>event.studentId).filter(Boolean)).size;const classPending=Math.max(0,activeClassSize-classDecided);return <Link className="module-workflow-step" key={c.id} href={`/school/attendance/register?classId=${encodeURIComponent(c.id)}&date=${encodeURIComponent(data.today)}`}><span>{classPending}</span><div><strong>{c.level?`${c.level} · `:""}{c.name}</strong><small>{classPresent} present · {classDecided}/{activeClassSize} decided · {classPending?`${classPending} still need a decision`:"Register complete · open to review"}</small></div><span>→</span></Link>;})}{!data.classes.length?<EmptyState title="No class groups" description="Create classes and assign class teachers before relying on class-based attendance workflows." action={<Link href="/school/classes?action=create" className="ui-button ui-button-primary">Create class</Link>}/>:null}</div></section>
-      <section className="module-card"><div className="module-section-title"><div><span>Recorded today</span><h3>Attendance activity</h3></div><Fingerprint size={18}/></div><div className="module-table-wrap"><table><thead><tr><th>Student</th><th>Class</th><th>State</th><th>Method</th><th>Time</th></tr></thead><tbody>{data.todayEvents.length?data.todayEvents.map(event=><tr key={event.id}><td style={{padding:12}}><strong>{event.student?.name??"Unknown"}</strong><div style={{color:"var(--sn-muted)",fontSize:8}}>{event.student?.admissionNo}</div></td><td style={{padding:12}}>{event.student?.class?`${event.student.class.level??""}${event.student.class.level?" · ":""}${event.student.class.name}`:"Unassigned"}</td><td style={{padding:12}}>{attendanceState(event)}</td><td style={{padding:12,textTransform:"capitalize"}}>{event.method.replaceAll("_"," ")}</td><td style={{padding:12}}>{event.timestamp.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</td></tr>):<tr><td colSpan={5}><EmptyState icon={UserRoundCheck} title="No attendance recorded today" description={data.canRecord?"Open a class register or Attendance Control to begin today's attendance.":"No attendance decisions have been recorded yet."} action={data.canRecord&&firstIncompleteClass?<Link href={`/school/attendance/register?classId=${encodeURIComponent(firstIncompleteClass.id)}&date=${encodeURIComponent(data.today)}`} className="ui-button ui-button-primary">Open class register</Link>:undefined}/></td></tr>}</tbody></table></div></section>
-      <section className="module-card"><div className="module-section-title"><div><span>Recent history</span><h3>Latest attendance activity</h3></div></div><div className="module-workflow">{data.recentEvents.map(event=><div className="module-workflow-step" key={event.id}><span>{isPresentEvent(event)?"P":event.type.slice(0,1).toUpperCase()}</span><div><strong>{event.student?.name??"Unknown student"}</strong><small>{event.student?.admissionNo} · {event.attendanceDate.toISOString().slice(0,10)} · {attendanceState(event)} · {event.method.replaceAll("_"," ")}</small></div></div>)}{!data.recentEvents.length?<EmptyState title="No attendance history" description="Recorded events will appear here."/>:null}</div></section>
+  return <AppShell universe="school" title="Student Attendance" subtitle="Monitor today's attendance and manage every check-in method from one place." active="Student Attendance" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name}>
+    <div className="module-workspace attendance-dashboard">
+      <section className="attendance-command module-card">
+        <div className="attendance-command-copy">
+          <span className="module-overline">Daily attendance · {todayLabel}</span>
+          <h2>Start attendance from the action you need.</h2>
+          <p>Class registers, QR and biometric devices all feed the same daily attendance history. Use the shortcuts here instead of hunting through the system.</p>
+          <div className="attendance-command-status"><span>{pending ? `${pending} learners still need a decision` : "All active learners have a decision"}</span><strong>{present} present today</strong></div>
+        </div>
+        <div className="attendance-action-grid">
+          <Link className="attendance-action" href="/school/devices"><span className="attendance-action-icon"><RadioTower size={18}/></span><span><strong>Attendance Control</strong><small>Rules, QR and connected devices</small></span><ArrowRight size={15}/></Link>
+          {data.canRecord && firstIncompleteClass ? <Link className="attendance-action is-primary" href={`/school/attendance/register?classId=${encodeURIComponent(firstIncompleteClass.id)}&date=${encodeURIComponent(data.today)}`}><span className="attendance-action-icon"><UserRoundCheck size={18}/></span><span><strong>Continue register</strong><small>{firstIncompleteClass.name}</small></span><ArrowRight size={15}/></Link> : null}
+          <Link className="attendance-action" href="/school/attendance/display" target="_blank"><span className="attendance-action-icon"><QrCode size={18}/></span><span><strong>Live QR station</strong><small>Open the full-screen check-in view</small></span><ArrowRight size={15}/></Link>
+          <Link className="attendance-action" href="/school/attendance/exceptions"><span className="attendance-action-icon"><CircleAlert size={18}/></span><span><strong>Review exceptions</strong><small>Corrections, absences and verification</small></span><ArrowRight size={15}/></Link>
+        </div>
+      </section>
+
+      <div className="module-metrics attendance-metrics"><DataCard label="Active learners" value={data.students.length} meta="Students expected today" icon={UsersRound} /><DataCard label="Present" value={present} meta="Manual or automated check-in" icon={CircleCheckBig} tone="success" /><DataCard label="Late" value={late} meta="Arrivals after the configured cutoff" icon={Clock3} tone={late ? "warning" : "success"} /><DataCard label="Absent" value={absentIds.size} meta={`${excusedIds.size} excused today`} icon={CircleAlert} tone={absentIds.size ? "warning" : "success"} /><DataCard label="Pending decisions" value={pending} meta={pending ? "Complete the remaining class registers" : "All active learners have a decision"} icon={UserRoundCheck} tone={pending ? "warning" : "success"} /></div>
+
+      <section className="module-card" id="today">
+        <div className="module-section-title attendance-section-title"><div><span className="module-overline">Today · {todayLabel}</span><h3>Class coverage</h3><p>See which class registers are complete and jump straight into any class that still needs attention.</p></div><div className="module-actions attendance-section-actions"><Link className="module-button secondary" href="/school/devices">Attendance Control</Link>{data.canRecord && firstIncompleteClass ? <Link className="module-button primary" href={`/school/attendance/register?classId=${encodeURIComponent(firstIncompleteClass.id)}&date=${encodeURIComponent(data.today)}`}>Continue register <ArrowRight size={14}/></Link> : null}</div></div>
+        {data.classes.length ? <div className="attendance-class-list">
+          <div className="attendance-class-head"><span>Class</span><span>Present</span><span>Absent</span><span>Pending</span><span>Status</span><span></span></div>
+          {data.classes.map(c => {
+            const activeClassSize = data.students.filter(student => student.classId === c.id).length;
+            const classPresent = new Set(data.todayEvents.filter(event => event.student?.classId === c.id && isPresentEvent(event)).map(event => event.studentId).filter(Boolean)).size;
+            const classAbsent = new Set(data.todayEvents.filter(event => event.student?.classId === c.id && event.type === "absent").map(event => event.studentId).filter(Boolean)).size;
+            const classDecided = new Set(data.todayEvents.filter(event => event.student?.classId === c.id && isAttendanceDecision(event)).map(event => event.studentId).filter(Boolean)).size;
+            const classPending = Math.max(0, activeClassSize - classDecided);
+            const status = classDecided === 0 ? "Not started" : classPending ? "In progress" : "Complete";
+            return <Link className="attendance-class-row" key={c.id} href={`/school/attendance/register?classId=${encodeURIComponent(c.id)}&date=${encodeURIComponent(data.today)}`}>
+              <span className="attendance-class-name"><strong>{c.level ? `${c.level} · ` : ""}{c.name}</strong><small>{activeClassSize} active learners</small></span>
+              <span className="attendance-class-number" data-label="Present">{classPresent}</span>
+              <span className="attendance-class-number" data-label="Absent">{classAbsent}</span>
+              <span className="attendance-class-number" data-label="Pending">{classPending}</span>
+              <span className={`attendance-class-status ${classPending ? "is-pending" : "is-complete"}`}>{status}</span>
+              <ArrowRight className="attendance-class-arrow" size={15}/>
+            </Link>;
+          })}
+        </div> : <EmptyState title="No class groups" description="Create classes and assign class teachers before relying on class-based attendance workflows." action={<Link href="/school/classes?action=create" className="ui-button ui-button-primary">Create class</Link>}/>} 
+      </section>
+
+      <section className="module-card">
+        <div className="module-section-title attendance-section-title"><div><span className="module-overline">Recorded today</span><h3>Attendance activity</h3><p>Every manual, QR and device event recorded today appears here.</p></div><Fingerprint size={19}/></div>
+        <div className="module-table-wrap"><table className="module-table"><thead><tr><th>Student</th><th>Class</th><th>State</th><th>Method</th><th>Time</th></tr></thead><tbody>{data.todayEvents.length ? data.todayEvents.map(event => <tr key={event.id}><td><strong>{event.student?.name ?? "Unknown"}</strong><div className="attendance-student-meta">{event.student?.admissionNo}</div></td><td>{event.student?.class ? `${event.student.class.level ?? ""}${event.student.class.level ? " · " : ""}${event.student.class.name}` : "Unassigned"}</td><td>{attendanceState(event)}</td><td className="attendance-method">{event.method.replaceAll("_", " ")}</td><td>{event.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</td></tr>) : <tr><td colSpan={5}><EmptyState icon={UserRoundCheck} title="No attendance recorded today" description={data.canRecord ? "Open a class register or Attendance Control to begin today's attendance." : "No attendance decisions have been recorded yet."} action={data.canRecord && firstIncompleteClass ? <Link href={`/school/attendance/register?classId=${encodeURIComponent(firstIncompleteClass.id)}&date=${encodeURIComponent(data.today)}`} className="ui-button ui-button-primary">Open class register</Link> : undefined}/></td></tr>}</tbody></table></div>
+      </section>
+
+      <section className="module-card">
+        <div className="module-section-title attendance-section-title"><div><span className="module-overline">Recent history</span><h3>Latest attendance activity</h3><p>A quick trail of the most recent attendance events across your visible learners.</p></div></div>
+        {data.recentEvents.length ? <div className="attendance-history-list">{data.recentEvents.map(event => <div className="attendance-history-row" key={event.id}><span className="attendance-history-state">{isPresentEvent(event) ? "P" : event.type.slice(0, 1).toUpperCase()}</span><div><strong>{event.student?.name ?? "Unknown student"}</strong><small>{event.student?.admissionNo} · {event.attendanceDate.toISOString().slice(0, 10)} · {attendanceState(event)} · {event.method.replaceAll("_", " ")}</small></div></div>)}</div> : <EmptyState title="No attendance history" description="Recorded events will appear here."/>}
+      </section>
     </div>
   </AppShell>;
 }
