@@ -61,6 +61,14 @@ const schema = z.discriminatedUnion("action", [
     capacity: z.number().int().positive().max(5000).nullable().optional(),
   }),
   z.object({
+    action: z.literal("addLevelCategories"),
+    academicYearId: z.string().min(1).max(120),
+    gradeLevelId: z.string().min(1).max(120),
+    categories: z.array(z.string().trim().min(1).max(40)).min(1).max(20),
+    pathwayId: z.string().min(1).max(120).nullable().optional(),
+    capacity: z.number().int().positive().max(5000).nullable().optional(),
+  }),
+  z.object({
     action: z.literal("recordPromotionDecision"),
     studentId: z.string().min(1).max(120),
     sourceAcademicYearId: z.string().min(1).max(120),
@@ -90,6 +98,13 @@ async function enrichRolloverPlan(tx: TenantDb, plan: Awaited<ReturnType<typeof 
       admissionNo: byId.get(item.studentId)?.admissionNo ?? "",
     })),
   };
+}
+
+function categoryDisplayName(levelName: string, rawCategory: string) {
+  const category = rawCategory.trim();
+  if (/^(main|single|none)$/i.test(category)) return levelName;
+  if (/^[a-z0-9]$/i.test(category)) return `${levelName}${category.toUpperCase()}`;
+  return `${levelName} ${category}`;
 }
 
 export async function GET() {
@@ -152,6 +167,45 @@ export async function POST(request: Request) {
           return setGradeProgressionRule(tx, { schoolId: session.schoolId, actorId: session.userId, frameworkId: input.frameworkId, fromGradeLevelId: input.fromGradeLevelId, toGradeLevelId: input.toGradeLevelId, targetPathwayId: input.targetPathwayId, outcome: input.outcome, priority: input.priority, isDefault: input.isDefault });
         case "mapClassSection":
           return mapClassSection(tx, { schoolId: session.schoolId, actorId: session.userId, academicYearId: input.academicYearId, gradeLevelId: input.gradeLevelId, classId: input.classId, pathwayId: input.pathwayId, sectionCode: input.sectionCode, displayName: input.displayName, capacity: input.capacity });
+        case "addLevelCategories": {
+          const [year, gradeRows] = await Promise.all([
+            tx.academicYear.findFirst({ where: { id: input.academicYearId, schoolId: session.schoolId }, select: { id: true, isLocked: true } }),
+            tx.$queryRawUnsafe<Array<{ id: string; name: string; isActive: boolean }>>(
+              `SELECT "id","name","isActive" FROM "GradeLevel" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`,
+              session.schoolId,
+              input.gradeLevelId,
+            ),
+          ]);
+          const grade = gradeRows[0];
+          if (!year) throw new Error("Academic year not found.");
+          if (year.isLocked) throw new Error("Class structure cannot be changed inside a locked academic year.");
+          if (!grade || !grade.isActive) throw new Error("Academic grade/level not found or inactive.");
+
+          const categories = [...new Set(input.categories.map((item) => item.trim()).filter(Boolean))];
+          const created = [];
+          for (const rawCategory of categories) {
+            const isMain = /^(main|single|none)$/i.test(rawCategory);
+            const sectionCode = isMain ? "MAIN" : rawCategory.toUpperCase();
+            const displayName = categoryDisplayName(grade.name, rawCategory);
+            let schoolClass = await tx.class.findFirst({ where: { schoolId: session.schoolId, name: displayName }, select: { id: true } });
+            if (!schoolClass) {
+              schoolClass = await tx.class.create({ data: { schoolId: session.schoolId, name: displayName, level: grade.name }, select: { id: true } });
+            }
+            await mapClassSection(tx, {
+              schoolId: session.schoolId,
+              actorId: session.userId,
+              academicYearId: input.academicYearId,
+              gradeLevelId: input.gradeLevelId,
+              classId: schoolClass.id,
+              pathwayId: input.pathwayId,
+              sectionCode,
+              displayName,
+              capacity: input.capacity,
+            });
+            created.push({ classId: schoolClass.id, sectionCode, displayName });
+          }
+          return { count: created.length, categories: created };
+        }
         case "recordPromotionDecision":
           return recordPromotionDecision(tx, { schoolId: session.schoolId, actorId: session.userId, studentId: input.studentId, sourceAcademicYearId: input.sourceAcademicYearId, targetAcademicYearId: input.targetAcademicYearId, outcome: input.outcome, targetGradeLevelId: input.targetGradeLevelId, targetPathwayId: input.targetPathwayId, reason: input.reason });
         case "previewRollover": {
