@@ -10,7 +10,7 @@ vi.mock("@/lib/authorization", () => ({
   getSchoolAuthorization: vi.fn(async () => ({ workspace: "teacher", isTeacher: true })),
 }));
 
-import { GET as getLessonStudio } from "../src/app/api/teacher/lesson-studio/route";
+import { GET as getLessonStudio, POST as postLessonStudio } from "../src/app/api/teacher/lesson-studio/route";
 import { GET as getLessonFiles } from "../src/app/api/teacher/lesson-files/route";
 
 async function setupJurisdiction() {
@@ -84,6 +84,7 @@ async function setupJurisdiction() {
     return {
       classId: classroom.id,
       subjectId: subject.id,
+      termId: term.id,
       lessonId,
       lessonUpdatedAt: lessonVersion[0].updatedAt.toISOString(),
       homeworkId,
@@ -117,6 +118,36 @@ async function assignSubjectToMember(f: Awaited<ReturnType<typeof setupJurisdict
   });
 }
 
+async function revokeSubjectFromMember(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
+  await withTenant(f.schoolId, async (tx) => {
+    await tx.classSubjectTeacher.deleteMany({
+      where: {
+        schoolId: f.schoolId,
+        classId: f.classId,
+        subjectId: f.subjectId,
+        teacherId: f.memberId,
+      },
+    });
+  });
+}
+
+async function createReplacementAssignment(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
+  return withTenant(f.schoolId, async (tx) => {
+    const subject = await tx.subject.create({
+      data: { schoolId: f.schoolId, name: `Replacement subject ${createId()}` },
+    });
+    await tx.classSubjectTeacher.create({
+      data: {
+        schoolId: f.schoolId,
+        classId: f.classId,
+        subjectId: subject.id,
+        teacherId: f.memberId,
+      },
+    });
+    return subject.id;
+  });
+}
+
 function lessonInput(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
   return {
     id: f.lessonId,
@@ -143,7 +174,7 @@ function lessonInput(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
 }
 
 describe("lesson-plan subject jurisdiction", () => {
-  it("does not expose another teacher's subject merely because the actor is the class teacher", async () => {
+  it("hides lesson rows until the exact assignment exists and hides them again after revocation", async () => {
     const f = await setupJurisdiction();
 
     const studioBefore = await getLessonStudio();
@@ -152,12 +183,18 @@ describe("lesson-plan subject jurisdiction", () => {
     expect(studioBeforeBody.assignments).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ classId: f.classId, subjectId: f.subjectId }),
     ]));
+    expect(studioBeforeBody.rows).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: f.lessonId }),
+    ]));
 
     const filesBefore = await getLessonFiles();
     expect(filesBefore.status).toBe(200);
     const filesBeforeBody = await filesBefore.json();
     expect(filesBeforeBody.assignments).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ classId: f.classId, subjectId: f.subjectId }),
+    ]));
+    expect(filesBeforeBody.rows).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: f.lessonId }),
     ]));
 
     await assignSubjectToMember(f);
@@ -167,11 +204,31 @@ describe("lesson-plan subject jurisdiction", () => {
     expect(studioAfterBody.assignments).toEqual(expect.arrayContaining([
       expect.objectContaining({ classId: f.classId, subjectId: f.subjectId }),
     ]));
+    expect(studioAfterBody.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: f.lessonId }),
+    ]));
 
     const filesAfter = await getLessonFiles();
     const filesAfterBody = await filesAfter.json();
     expect(filesAfterBody.assignments).toEqual(expect.arrayContaining([
       expect.objectContaining({ classId: f.classId, subjectId: f.subjectId }),
+    ]));
+    expect(filesAfterBody.rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: f.lessonId }),
+    ]));
+
+    await revokeSubjectFromMember(f);
+
+    const studioRevoked = await getLessonStudio();
+    const studioRevokedBody = await studioRevoked.json();
+    expect(studioRevokedBody.rows).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: f.lessonId }),
+    ]));
+
+    const filesRevoked = await getLessonFiles();
+    const filesRevokedBody = await filesRevoked.json();
+    expect(filesRevokedBody.rows).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: f.lessonId }),
     ]));
   });
 
@@ -206,5 +263,30 @@ describe("lesson-plan subject jurisdiction", () => {
       assignmentStatus: "draft",
     })))
       .resolves.toMatchObject({ ok: true });
+  });
+
+  it("does not allow a revoked legacy plan to be moved into a currently assigned subject", async () => {
+    const f = await setupJurisdiction();
+    const replacementSubjectId = await createReplacementAssignment(f);
+
+    const response = await postLessonStudio(new Request("http://localhost/api/teacher/lesson-studio", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "save",
+        id: f.lessonId,
+        expectedUpdatedAt: f.lessonUpdatedAt,
+        classId: f.classId,
+        subjectId: replacementSubjectId,
+        termId: f.termId,
+        plannedDate: "2026-09-15",
+        weekNumber: 1,
+        status: "draft",
+        title: "Attempted reassignment",
+        blocks: [{ id: "body", type: "paragraph", text: "Attempted legacy lesson reassignment." }],
+      }),
+    }));
+
+    expect(response.status).toBe(403);
   });
 });
