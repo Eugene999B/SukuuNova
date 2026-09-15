@@ -4,6 +4,7 @@ import { hash } from "bcryptjs";
 import { chromium } from "playwright";
 import { createTenantFixture, rawDb } from "../tests/helpers";
 import { withTenant } from "../src/lib/db";
+import { createFeeItem, generateInvoice } from "../src/lib/finance-service";
 import { resolveStudentTermClass } from "../src/lib/student-term-context";
 
 async function main() {
@@ -50,8 +51,34 @@ async function main() {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/school/students");
     await page.getByText("Ɛsi Ɔpoku", { exact: true }).first().waitFor();
+    const legacyInvoice = await withTenant(f.schoolId, async tx => {
+      await createFeeItem(tx, { schoolId: f.schoolId, actorId: f.ownerId, termId: setup.term.id, name: "Existing tuition", amount: 500 });
+      return generateInvoice(tx, { schoolId: f.schoolId, actorId: f.ownerId, studentId: student.id, termId: setup.term.id });
+    });
+    assert.ok(legacyInvoice);
+    await page.goto("/school/finance/payments");
+    await page.getByLabel("Amount received", { exact: true }).waitFor();
+    await page.getByLabel("Amount received", { exact: true }).fill("125");
+    assert.equal(await page.getByRole("button", { name: "Post payment", exact: true }).isDisabled(), true, "Reference must be required");
+    await page.getByLabel("Reference", { exact: true }).fill("BROWSER-LEGACY-001");
+    await page.getByRole("button", { name: "Post payment", exact: true }).click();
+    await page.getByText("Payment posted and learner balance updated.", { exact: true }).waitFor();
+    const paymentInput = { action: "payment.legacy", studentId: student.id, invoiceId: legacyInvoice.id, amount: 125, method: "cash", reference: "BROWSER-LEGACY-001" };
+    const retry = await context.request.post("/api/school/finance-v2", { data: paymentInput });
+    assert.equal(retry.status(), 200, await retry.text());
+    const overpayment = await context.request.post("/api/school/finance-v2", { data: { ...paymentInput, reference: "BROWSER-OVERPAY", amount: 501 } });
+    assert.equal(overpayment.status(), 409, "Overpayment must be rejected");
+    const wrongLearner = await context.request.post("/api/school/finance-v2", { data: { ...paymentInput, studentId: "wrong-learner" } });
+    assert.equal(wrongLearner.status(), 404, "Invoice must belong to the selected learner");
+    const snapshot = await (await context.request.get("/api/school/finance-v2")).json();
+    const balance = snapshot.invoiceBalances.find((i: { id: string }) => i.id === legacyInvoice.id);
+    assert.equal(Number(balance.totalAmount) - Number(balance.paidAmount), 375);
+    assert.equal(balance.hasCategoryCharges, false);
+    assert.equal(await withTenant(f.schoolId, tx => tx.payment.count({ where: { reference: "BROWSER-LEGACY-001" } })), 1);
+    await page.goto("/school/finance");
+    await page.getByText("GH₵375.00", { exact: true }).waitFor();
     assert.deepEqual(pageErrors, [], "Browser emitted JavaScript errors");
-    console.log("Browser smoke passed: login, mobile dashboard, labeled device tabs, Unicode learner import, confirmed enrollment, payroll plan denial and desktop learner directory.");
+    console.log("Browser smoke passed: login, mobile dashboard, labeled device tabs, Unicode learner import, confirmed enrollment, payroll plan denial desktop learner directory, legacy invoice collection, retry protection, overpayment denial and complete finance totals.");
   } finally { await browser.close(); await rawDb.$disconnect(); }
 }
 main().catch((error) => { console.error(error); process.exit(1); });

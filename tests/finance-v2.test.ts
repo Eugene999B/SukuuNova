@@ -1,3 +1,4 @@
+import { recordLegacyInvoicePayment } from "../src/lib/finance-legacy-payment";
 import { describe, expect, it } from "vitest";
 import { Prisma } from "@prisma/client";
 import { withTenant } from "../src/lib/db";
@@ -50,6 +51,7 @@ describe("Finance V2 accounting integrity",()=>{
 
       const charges=await tx.$queryRawUnsafe<ChargeRow[]>(`SELECT "id","categoryId","invoiceId","originalAmount","scholarshipAmount","netAmount","status" FROM "FinanceStudentCharge" WHERE "schoolId"=$1 AND "studentId"=$2 ORDER BY "originalAmount" DESC`,fixture.schoolId,context.student.id);
       expect(charges).toHaveLength(2);
+      await expect(recordLegacyInvoicePayment(tx,{schoolId:fixture.schoolId,actorId:fixture.ownerId,studentId:context.student.id,invoiceId:charges[0].invoiceId,amount:10,method:"cash",reference:"NO-ALLOCATION-BYPASS"})).rejects.toMatchObject({code:"CATEGORY_ALLOCATION_REQUIRED"});
       const tuitionCharge=charges.find(row=>row.categoryId===tuition!.id)!;
       const canteenCharge=charges.find(row=>row.categoryId===canteen!.id)!;
       expect(tuitionCharge.originalAmount.toFixed(2)).toBe("1000.00");

@@ -36,7 +36,7 @@ export async function ensureDefaultFinanceCategories(tx: TenantDb, schoolId: str
 export async function financeV2Snapshot(tx: TenantDb, schoolId: string, actorId: string) {
   await requirePermission(tx, actorId, "finance:read");
   await ensureDefaultFinanceCategories(tx, schoolId);
-  const [categories, structures, structureLines, students, terms, classes, charges, expenses, programs, awards, recentPayments] = await Promise.all([
+  const [categories, structures, structureLines, students, terms, classes, charges, expenses, programs, awards, recentPayments, invoiceBalances] = await Promise.all([
     tx.$queryRawUnsafe<any[]>(`SELECT * FROM "FinanceFeeCategory" WHERE "schoolId"=$1 ORDER BY "sortOrder","name"`, schoolId),
     tx.$queryRawUnsafe<any[]>(`SELECT fs.*,c."name" AS "className",t."name" AS "termName",ay."name" AS "academicYearName" FROM "FinanceFeeStructure" fs JOIN "Class" c ON c."id"=fs."classId" AND c."schoolId"=fs."schoolId" JOIN "Term" t ON t."id"=fs."termId" AND t."schoolId"=fs."schoolId" JOIN "AcademicYear" ay ON ay."id"=t."academicYearId" AND ay."schoolId"=t."schoolId" WHERE fs."schoolId"=$1 ORDER BY fs."createdAt" DESC`, schoolId),
     tx.$queryRawUnsafe<any[]>(`SELECT l.*,fc."name" AS "categoryName",fc."code" AS "categoryCode" FROM "FinanceFeeStructureLine" l JOIN "FinanceFeeCategory" fc ON fc."id"=l."categoryId" AND fc."schoolId"=l."schoolId" WHERE l."schoolId"=$1 ORDER BY l."sortOrder",fc."name"`, schoolId),
@@ -48,6 +48,13 @@ export async function financeV2Snapshot(tx: TenantDb, schoolId: string, actorId:
     tx.$queryRawUnsafe<any[]>(`SELECT * FROM "FinanceScholarshipProgram" WHERE "schoolId"=$1 ORDER BY "createdAt" DESC`, schoolId),
     tx.$queryRawUnsafe<any[]>(`SELECT a.*,p."name" AS "programName",s."name" AS "studentName",fc."name" AS "categoryName" FROM "FinanceScholarshipAward" a JOIN "FinanceScholarshipProgram" p ON p."id"=a."programId" AND p."schoolId"=a."schoolId" JOIN "Student" s ON s."id"=a."studentId" AND s."schoolId"=a."schoolId" LEFT JOIN "FinanceFeeCategory" fc ON fc."id"=a."categoryId" AND fc."schoolId"=a."schoolId" WHERE a."schoolId"=$1 ORDER BY a."createdAt" DESC`, schoolId),
     tx.$queryRawUnsafe<any[]>(`SELECT p."id",p."invoiceId",p."amount",p."method",p."reference",p."createdAt",i."studentId",s."name" AS "studentName",COALESCE((SELECT SUM(r."amount") FROM "PaymentReversal" r WHERE r."schoolId"=p."schoolId" AND r."paymentId"=p."id"),0) AS "reversedAmount" FROM "Payment" p JOIN "Invoice" i ON i."id"=p."invoiceId" AND i."schoolId"=p."schoolId" JOIN "Student" s ON s."id"=i."studentId" AND s."schoolId"=i."schoolId" WHERE p."schoolId"=$1 ORDER BY p."createdAt" DESC LIMIT 500`, schoolId),
+    tx.$queryRawUnsafe<any[]>(`SELECT i."id",i."studentId",i."termId",i."totalAmount",i."adjustmentAmount",s."name" AS "studentName",s."admissionNo",t."name" AS "termName",ay."name" AS "academicYearName",
+      COALESCE((SELECT SUM(p."amount"-COALESCE((SELECT SUM(r."amount") FROM "PaymentReversal" r WHERE r."schoolId"=p."schoolId" AND r."paymentId"=p."id"),0)) FROM "Payment" p WHERE p."schoolId"=i."schoolId" AND p."invoiceId"=i."id"),0) AS "paidAmount",
+      EXISTS(SELECT 1 FROM "FinanceStudentCharge" ch WHERE ch."schoolId"=i."schoolId" AND ch."invoiceId"=i."id") AS "hasCategoryCharges"
+      FROM "Invoice" i JOIN "Student" s ON s."id"=i."studentId" AND s."schoolId"=i."schoolId"
+      JOIN "Term" t ON t."id"=i."termId" AND t."schoolId"=i."schoolId"
+      JOIN "AcademicYear" ay ON ay."id"=t."academicYearId" AND ay."schoolId"=t."schoolId"
+      WHERE i."schoolId"=$1 ORDER BY ay."startDate" DESC,t."startDate" DESC,s."name"`,schoolId),
   ]);
   const capabilities = {
     canManageFees: await hasPermission(tx, actorId, "finance:fee_structures_manage"),
@@ -58,7 +65,7 @@ export async function financeV2Snapshot(tx: TenantDb, schoolId: string, actorId:
     canApproveExpense: await hasPermission(tx, actorId, "finance:expenses_approve"),
     canExport: await hasPermission(tx, actorId, "finance:export"),
   };
-  return { categories, structures, structureLines, students, terms, classes, charges, expenses, programs, awards, recentPayments, capabilities };
+  return { categories, structures, structureLines, students, terms, classes, charges, expenses, programs, awards, recentPayments, invoiceBalances, capabilities };
 }
 
 export async function createFinanceCategory(tx: TenantDb, input: {schoolId:string;actorId:string;name:string;code:string;kind:string;required:boolean}) {
