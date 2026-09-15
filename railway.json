@@ -1,10 +1,13 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "builder": "RAILPACK"
+    "builder": "RAILPACK",
+    "buildCommand": "node scripts/verify-release-checks.cjs && npm run build"
   },
   "deploy": {
-    "preDeployCommand": ["node scripts/predeploy-production.cjs"],
+    "preDeployCommand": [
+      "node scripts/predeploy-production.cjs"
+    ],
     "startCommand": "node scripts/start-production.cjs",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 300,

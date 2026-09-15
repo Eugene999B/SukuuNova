@@ -23,7 +23,7 @@ BEGIN
   JOIN "Student" s ON s."id"=i."studentId" AND s."schoolId"=i."schoolId"
   JOIN "Term" t ON t."id"=i."termId" AND t."schoolId"=i."schoolId"
   LEFT JOIN "Enrollment" en ON en."schoolId"=i."schoolId" AND en."studentId"=i."studentId" AND en."termId"=i."termId"
-  LEFT JOIN "Class" c ON c."id"=en."classId" AND c."schoolId"=i."schoolId"
+  LEFT JOIN "Class" c ON c."id"=COALESCE(i."classId",en."classId") AND c."schoolId"=i."schoolId"
   WHERE i."id"=NEW."invoiceId" AND i."schoolId"=NEW."schoolId";
   RETURN NEW;
 END $$;

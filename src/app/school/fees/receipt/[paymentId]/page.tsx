@@ -60,7 +60,7 @@ export default async function SchoolFinanceReceiptPage({ params }: Props) {
        FROM "Payment" p
        INNER JOIN "Invoice" i ON i."id"=p."invoiceId" AND i."schoolId"=p."schoolId"
        INNER JOIN "Student" s ON s."id"=i."studentId" AND s."schoolId"=i."schoolId"
-       LEFT JOIN "PaymentReceiptSnapshot" rs ON rs."paymentId"=p."id" AND rs."schoolId"=p."schoolId" LEFT JOIN "Enrollment" en ON en."studentId"=i."studentId" AND en."termId"=i."termId" AND en."schoolId"=i."schoolId" LEFT JOIN "Class" c ON c."id"=en."classId" AND c."schoolId"=i."schoolId"
+       LEFT JOIN "PaymentReceiptSnapshot" rs ON rs."paymentId"=p."id" AND rs."schoolId"=p."schoolId" LEFT JOIN "Enrollment" en ON en."studentId"=i."studentId" AND en."termId"=i."termId" AND en."schoolId"=i."schoolId" LEFT JOIN "Class" c ON c."id"=COALESCE(i."classId",en."classId") AND c."schoolId"=i."schoolId"
        INNER JOIN "Term" t ON t."id"=i."termId" AND t."schoolId"=i."schoolId"
        WHERE p."schoolId"=$1 AND p."id"=$2 LIMIT 1`,
       session.schoolId,

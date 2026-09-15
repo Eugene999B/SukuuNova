@@ -66,7 +66,8 @@ describe("school identity cards", () => {
       expect(cards.filter((card) => card.studentId === secondStudentId && card.status === "active")).toHaveLength(1);
       expect(cards.filter((card) => card.staffId === staffId && card.status === "active")).toHaveLength(1);
       expect(cards.find((card) => card.studentId === studentId)?.personNumber).toBe(`IC-${fixture.schoolId}`);
-      expect(cards.find((card) => card.staffId === staffId)?.personNumber).toMatch(/^STF-[A-Z0-9]{8}$/);
+      const personnel = await tx.$queryRawUnsafe<Array<{ staffNumber: string }>>('SELECT "staffNumber" FROM "StaffProfile" WHERE "schoolId"=$1 AND "userId"=$2', fixture.schoolId, staffId);
+      expect(cards.find((card) => card.staffId === staffId)?.personNumber).toBe(personnel[0].staffNumber);
     });
   });
 
