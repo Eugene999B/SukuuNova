@@ -19,7 +19,8 @@ try {
   run("rich learner and guardian showcase", "seed-eugene-academy-learning-showcase.cjs", { EUGENE_ACADEMY_SHOWCASE_TARGET: "production" });
   run("school store and property showcase", "seed-eugene-academy-store-properties.cjs", { EUGENE_ACADEMY_OPERATIONS_TARGET: "production" });
   run("current system contract refresh", "refresh-eugene-academy-current-system.cjs", { EUGENE_ACADEMY_SYSTEM_TARGET: "production" });
-  console.log("[eugene-academy] permanent production demonstration school and rich showcase data are verified on the current SukuuNova system contracts.");
+  run("school nurse and clinic showcase", "seed-eugene-academy-clinic-showcase.cjs", { EUGENE_ACADEMY_CLINIC_TARGET: "production" });
+  console.log("[eugene-academy] permanent production demonstration school is verified across the current SukuuNova system contracts and workspaces.");
 } catch (error) {
   console.error("[eugene-academy] production showcase pipeline failed:", error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
