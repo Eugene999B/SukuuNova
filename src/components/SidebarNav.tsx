@@ -93,10 +93,15 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
     sidebar.addEventListener("scroll", save, { passive: true });
     return () => {
       window.cancelAnimationFrame(frame);
-      save();
       sidebar.removeEventListener("scroll", save);
     };
-  }, [scrollStorageKey, pathname]);
+  }, [scrollStorageKey]);
+
+  const rememberPosition = () => {
+    const sidebar = navRef.current?.closest<HTMLElement>(".app-sidebar");
+    if (!sidebar) return;
+    try { sessionStorage.setItem(scrollStorageKey, String(sidebar.scrollTop)); } catch {}
+  };
 
   const toggleGroup = (label: string) => {
     setCollapsed((current) => {
@@ -120,7 +125,7 @@ export function SidebarNav({ groups, active, storageScope = "default" }: { group
               const Icon = item.icon;
               const isActive = activeLabel === item.label;
               return (
-                <Link key={`${group.label}-${item.href}`} href={item.href} aria-current={isActive ? "page" : undefined} className={`app-nav-item ${isActive ? "is-active" : ""} ${item.primary ? "is-primary" : ""}`} title={item.label}>
+                <Link key={`${group.label}-${item.href}`} href={item.href} onClick={rememberPosition} aria-current={isActive ? "page" : undefined} className={`app-nav-item ${isActive ? "is-active" : ""} ${item.primary ? "is-primary" : ""}`} title={item.label}>
                   <Icon className="app-nav-icon" size={17} strokeWidth={1.9} aria-hidden="true" />
                   <span className="app-nav-text">{item.label}</span>
                   {isActive ? <span className="app-nav-active-dot" /> : null}
