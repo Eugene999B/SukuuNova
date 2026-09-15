@@ -18,6 +18,7 @@ try {
   run("current role and workspace access refresh", "refresh-eugene-academy-access.cjs", { EUGENE_ACADEMY_ACCESS_TARGET: "production" });
   run("rich learner and guardian showcase", "seed-eugene-academy-learning-showcase.cjs", { EUGENE_ACADEMY_SHOWCASE_TARGET: "production" });
   run("school store and property showcase", "seed-eugene-academy-store-properties.cjs", { EUGENE_ACADEMY_OPERATIONS_TARGET: "production" });
+  run("collision-free timetable repair", "repair-eugene-academy-production-timetable.cjs");
   run("current system contract refresh", "refresh-eugene-academy-current-system.cjs", { EUGENE_ACADEMY_SYSTEM_TARGET: "production" });
   run("school nurse and clinic showcase", "seed-eugene-academy-clinic-showcase.cjs", { EUGENE_ACADEMY_CLINIC_TARGET: "production" });
   console.log("[eugene-academy] permanent production demonstration school is verified across the current SukuuNova system contracts and workspaces.");
