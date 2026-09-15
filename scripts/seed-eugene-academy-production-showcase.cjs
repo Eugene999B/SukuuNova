@@ -13,6 +13,18 @@ function run(label, filename, extraEnv = {}) {
   console.log(`[eugene-academy] ${label} complete.`);
 }
 
+function runTsx(label, filename, extraEnv = {}) {
+  console.log(`[eugene-academy] starting ${label}…`);
+  const tsxBin = path.join(__dirname, "..", "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
+  const child = spawnSync(tsxBin, [path.join(__dirname, filename)], {
+    stdio: "inherit",
+    env: { ...process.env, ...extraEnv },
+  });
+  if (child.error) throw child.error;
+  if (child.status !== 0) throw new Error(`${label} failed with exit code ${child.status || 1}.`);
+  console.log(`[eugene-academy] ${label} complete.`);
+}
+
 try {
   run("guarded permanent production demo seed", "seed-eugene-academy-production-demo.cjs");
   run("current role and workspace access refresh", "refresh-eugene-academy-access.cjs", { EUGENE_ACADEMY_ACCESS_TARGET: "production" });
@@ -20,6 +32,7 @@ try {
   run("school store and property showcase", "seed-eugene-academy-store-properties.cjs", { EUGENE_ACADEMY_OPERATIONS_TARGET: "production" });
   run("collision-free timetable repair", "repair-eugene-academy-production-timetable.cjs");
   run("current system contract refresh", "refresh-eugene-academy-current-system.cjs", { EUGENE_ACADEMY_SYSTEM_TARGET: "production" });
+  runTsx("Ghana Standard academic structure repair", "repair-eugene-academy-academic-structure.ts");
   run("school nurse and clinic showcase", "seed-eugene-academy-clinic-showcase.cjs", { EUGENE_ACADEMY_CLINIC_TARGET: "production" });
   console.log("[eugene-academy] permanent production demonstration school is verified across the current SukuuNova system contracts and workspaces.");
 } catch (error) {
