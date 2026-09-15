@@ -1,0 +1,237 @@
+.shell {
+  min-height: 100vh;
+  background: var(--arcade-canvas);
+  color: var(--arcade-text);
+  padding: var(--space-6);
+  font-family: var(--sn-font-family);
+}
+
+.frame {
+  width: min(1240px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: var(--space-5);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--arcade-accent);
+  font-size: var(--sn-font-xs);
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+}
+
+.subtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--arcade-muted);
+  max-width: 790px;
+  line-height: 1.6;
+}
+
+.toolbar,
+.metrics,
+.actions,
+.statuses {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.button,
+.primaryButton {
+  border: 1px solid var(--arcade-line);
+  border-radius: var(--radius-md);
+  background: var(--arcade-surface-raised);
+  color: var(--arcade-text-soft);
+  padding: var(--space-2) var(--space-3);
+  min-height: 40px;
+  font: inherit;
+  font-weight: 780;
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled),
+.primaryButton:hover:not(:disabled) {
+  border-color: var(--arcade-accent);
+  background: var(--arcade-surface-soft);
+}
+
+.button:disabled,
+.primaryButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.primaryButton,
+.active {
+  border-color: var(--arcade-accent);
+  color: var(--arcade-accent);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-4);
+}
+
+.stage,
+.panel,
+.metric,
+.brief,
+.result {
+  border: 1px solid var(--arcade-line);
+  border-radius: var(--radius-xl);
+  background: var(--arcade-surface);
+}
+
+.stage {
+  overflow: hidden;
+  padding: var(--space-3);
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 20 / 14;
+  max-height: 68vh;
+  border-radius: var(--radius-lg);
+  background: var(--arcade-surface-raised);
+  touch-action: none;
+  user-select: none;
+}
+
+.gridLine {
+  stroke: var(--arcade-line);
+  stroke-width: 0.035;
+}
+
+.shape {
+  fill: var(--arcade-option-bg);
+  stroke: var(--arcade-accent);
+  stroke-width: 0.12;
+}
+
+.vertex {
+  fill: var(--arcade-warning);
+  stroke: var(--arcade-canvas);
+  stroke-width: 0.09;
+  cursor: grab;
+}
+
+.vertexSelected {
+  fill: var(--arcade-accent);
+}
+
+.vertexLabel {
+  fill: var(--arcade-text);
+  font-size: 0.5px;
+  font-weight: 850;
+  pointer-events: none;
+}
+
+.panel {
+  padding: var(--space-4);
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.panel h2,
+.brief h2,
+.result h2 {
+  margin: 0;
+}
+
+.brief,
+.result {
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.brief p,
+.result p {
+  margin: 0;
+  color: var(--arcade-text-soft);
+  line-height: 1.55;
+}
+
+.metrics {
+  align-items: stretch;
+}
+
+.metric {
+  flex: 1 1 130px;
+  min-width: 130px;
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.metric span {
+  color: var(--arcade-muted);
+  font-size: var(--sn-font-xs);
+}
+
+.metric strong {
+  font-family: var(--sn-font-mono);
+}
+
+.constraintList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.constraintList li {
+  border-bottom: 1px solid var(--arcade-line);
+  padding-bottom: var(--space-2);
+  color: var(--arcade-muted);
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.pass {
+  color: var(--arcade-accent);
+}
+
+.fail {
+  color: var(--arcade-warning);
+}
+
+.badge {
+  border: 1px solid var(--arcade-line);
+  border-radius: var(--radius-pill);
+  background: var(--arcade-option-bg);
+  color: var(--arcade-muted);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--sn-font-xs);
+  font-weight: 800;
+}
+
+@media (max-width: 920px) {
+  .shell {
+    padding: var(--space-3);
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
