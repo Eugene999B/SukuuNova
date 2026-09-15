@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TimeAwareGreeting } from "./TimeAwareGreeting";
 import type { ReactNode } from "react";
 import {
   AlertTriangle,
@@ -92,7 +93,7 @@ export function RoleIntelligenceHome({
       <section className="role-intelligence-hero">
         <div className="role-intelligence-hero-copy">
           <span className="role-intelligence-eyebrow"><Sparkles size={13} aria-hidden="true" /> {eyebrow}</span>
-          <h1>{title}</h1>
+          <h1><TimeAwareGreeting text={title} /></h1>
           <p>{description}</p>
           {identity ? <small>{identity}</small> : null}
         </div>

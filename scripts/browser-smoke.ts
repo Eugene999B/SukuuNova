@@ -25,7 +25,7 @@ async function main() {
     assert.equal(login.status(), 200, "Owner login failed: " + await login.text());
     const page = await context.newPage();
     const pageErrors: string[] = [];
-    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("pageerror", (error) => pageErrors.push(`${page.url()}: ${error.message}`));
     await page.goto("/dashboard");
     await page.getByText("Setup completion", { exact: true }).waitFor();
     assert.ok(await page.locator("body").evaluate((body) => body.scrollWidth <= window.innerWidth + 1), "Mobile dashboard overflows horizontally");

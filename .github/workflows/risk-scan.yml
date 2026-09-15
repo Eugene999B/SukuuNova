@@ -3,6 +3,10 @@ on:
   schedule:
     - cron: "0 */6 * * *"
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Build verification"]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 concurrency:
@@ -10,12 +14,31 @@ concurrency:
   cancel-in-progress: false
 jobs:
   risk-scan:
+    if: github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
     permissions:
       contents: read
       id-token: write
     steps:
+      - name: Wait for the verified deployment
+        if: github.event_name == 'workflow_run'
+        env:
+          EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          APP_URL: https://sukuunova-production.up.railway.app
+        run: |
+          node --input-type=module <<'NODE'
+          let ready = false;
+          for (let attempt = 0; attempt < 60; attempt++) {
+            try {
+              const response = await fetch(process.env.APP_URL + "/api/health", { signal: AbortSignal.timeout(10000) });
+              if (response.ok && (await response.json()).commit === process.env.EXPECTED_COMMIT) { ready = true; break; }
+            } catch {}
+            await new Promise(resolve => setTimeout(resolve, 20000));
+          }
+          if (!ready) throw new Error("The verified commit did not become healthy on Railway.");
+          console.log("Verified commit is serving traffic on Railway.");
+          NODE
       - name: Trigger authenticated risk scan
         env:
           APP_URL: https://sukuunova-production.up.railway.app

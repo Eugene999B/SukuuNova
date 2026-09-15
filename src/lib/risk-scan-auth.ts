@@ -9,7 +9,7 @@ export function isRiskScanWorkflow(payload: JWTPayload) {
     && payload.repository === "Eugene999B/SukuuNova"
     && payload.ref === "refs/heads/main"
     && payload.workflow_ref === "Eugene999B/SukuuNova/.github/workflows/risk-scan.yml@refs/heads/main"
-    && ["schedule", "workflow_dispatch"].includes(String(payload.event_name))
+    && ["schedule", "workflow_dispatch", "workflow_run"].includes(String(payload.event_name))
     && payload.sub === "repo:Eugene999B/SukuuNova:ref:refs/heads/main";
 }
 export async function authorizeRiskScan(header: string | null) {

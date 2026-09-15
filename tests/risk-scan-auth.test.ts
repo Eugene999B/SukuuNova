@@ -9,6 +9,7 @@ const claims = {
 describe("risk scan authorization", () => {
   it("accepts only the exact repository, main branch and scheduled/manual workflow", () => {
     expect(isRiskScanWorkflow(claims)).toBe(true);
+    expect(isRiskScanWorkflow({ ...claims, event_name: "workflow_run" })).toBe(true);
     for (const change of [{ repository_id: "other" }, { event_name: "pull_request" }, { ref: "refs/heads/other" }, { workflow_ref: "another.yml" }, { sub: "repo:Eugene999B/SukuuNova:pull_request" }]) expect(isRiskScanWorkflow({ ...claims, ...change })).toBe(false);
   });
   it("rejects missing and forged tokens and retains the existing secret integration", async () => {
