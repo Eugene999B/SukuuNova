@@ -138,7 +138,7 @@ function lessonInput(f: Awaited<ReturnType<typeof setupJurisdiction>>) {
     homework: "Complete a short reinforcement task.",
     resources: [],
     plannedDate: new Date("2026-09-15T00:00:00.000Z"),
-    status: "submitted" as const,
+    status: "draft" as const,
   };
 }
 
