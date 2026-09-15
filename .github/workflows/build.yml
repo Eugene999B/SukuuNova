@@ -75,16 +75,7 @@ jobs:
       - name: Lint
         run: npm run lint
       - name: Tests
-        run: |
-          set -o pipefail
-          npm run test 2>&1 | tee vitest-output.log
-      - name: Upload Vitest failure output
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vitest-failure-output
-          path: vitest-output.log
-          if-no-files-found: error
+        run: npm run test
       - name: Pilot smoke journeys
         run: npm run test:pilot-smoke
       - name: Eugene Academy full-system fixture
