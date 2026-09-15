@@ -63,7 +63,7 @@
   border: 1px solid color-mix(in srgb, var(--sn-primary) 38%, var(--sn-line));
   border-radius: var(--sn-radius-md, 12px);
   background: var(--sn-primary);
-  color: var(--color-text-on-brand, #fff);
+  color: var(--color-text-on-brand);
   text-decoration: none;
   font-size: 12px;
   font-weight: 800;
