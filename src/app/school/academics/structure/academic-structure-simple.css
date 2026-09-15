@@ -1,0 +1,16 @@
+.structure-hero{display:none!important}
+.structure-stat-grid{display:none!important}
+.structure-card:has(.section-map-form){display:none!important}
+.level-copy small{display:none!important}
+.template-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:14px!important}
+.template-card{min-height:250px!important;padding:18px!important;background:var(--color-surface)!important}
+.template-card.selected{border-color:var(--color-brand)!important;outline:2px solid color-mix(in srgb,var(--color-brand) 45%,transparent)!important}
+.template-card button{width:100%!important;min-height:42px!important;border:1px solid var(--color-brand)!important;background:var(--color-brand)!important;color:var(--color-text-on-brand)!important;box-shadow:none!important;opacity:1!important}
+.template-card button:hover{filter:brightness(.96)}
+.template-card button:disabled{opacity:.68!important;color:var(--color-text-on-brand)!important}
+.template-card strong{color:var(--color-text)!important}
+.template-card p,.template-card small{color:var(--color-text-secondary)!important}
+.structure-section-head p{max-width:760px}
+.phase-list{margin-top:2px}
+@media(max-width:1050px){.template-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:650px){.template-grid{grid-template-columns:1fr!important}}
