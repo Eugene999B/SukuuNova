@@ -11,7 +11,7 @@ export default async function PlatformSmsPage() {
   return <AppShell
     universe="platform"
     title="SMS Control Center"
-    subtitle="Control SukuuNova SMS inventory, school allocations, audiences and direct sends from one audited workspace."
+    subtitle="Manage school SMS allocations separately from Super Admin direct SMS, which uses the live provider balance."
     active="SMS Center"
     userName={session.name}
     role={session.role}
