@@ -8,7 +8,7 @@ import { adjustMessagingBalance } from "./platform-control-plane-safe-service";
 import { adjustMessagingInventory, getMessagingInventory } from "./platform-messaging-inventory-service";
 import { requirePlatformPermission } from "./platform-permissions";
 import { estimateSmsSegments } from "./sms-segments";
-import { getActiveSmsProviderKey, getArkeselBalanceDetails, getSmsProviderReadiness, isActiveSmsProviderConfigured, sendSmsThroughActiveProvider, type SmsSendResult } from "./sms-provider";
+import { getActiveSmsProviderKey, getArkeselBalanceDetails, isActiveSmsProviderConfigured, sendSmsThroughActiveProvider, type SmsSendResult } from "./sms-provider";
 
 export type SmsAudience = "guardians" | "teachers" | "staff" | "all";
 export type DirectSmsSender = (input: { phone: string; body: string }) => Promise<SmsSendResult | void>;
@@ -105,38 +105,42 @@ async function schoolWalletBalance(schoolId: string) {
   });
 }
 
-export async function getSmsCenterOverview(session: PlatformSession) {
-  await requireSmsAdmin(session);
-  const [schools, inventory, readiness, activeProvider, audits] = await Promise.all([
-    db.school.findMany({ select: { id: true, name: true, uniqueCode: true, status: true }, orderBy: { name: "asc" } }),
-    getMessagingInventory(session),
-    getSmsProviderReadiness(),
-    getActiveSmsProviderKey(),
-    db.auditLogPlatform.findMany({ where: { action: { startsWith: "platform.sms." } }, orderBy: { createdAt: "desc" }, take: 50, select: { id: true, action: true, targetSchoolId: true, targetEntity: true, meta: true, createdAt: true } }),
-  ]);
-  const schoolRows = [] as Array<{ id: string; name: string; uniqueCode: string; status: string; smsBalance: number }>;
-  for (const school of schools) schoolRows.push({ ...school, smsBalance: await schoolWalletBalance(school.id) });
-  const allocationHistory = await db.$queryRawUnsafe<Array<{ id: string; schoolId: string; schoolName: string; quantity: number; balanceAfter: number; reference: string | null; notes: string | null; actorId: string; createdAt: Date }>>(
-    `SELECT l."id",l."schoolId",s."name" AS "schoolName",l."quantity",l."balanceAfter",l."reference",l."notes",l."actorId",l."createdAt" FROM "PlatformMessagingLedger" l JOIN "School" s ON s."id"=l."schoolId" WHERE l."channel"='sms' AND l."entryType"='allocation' ORDER BY l."createdAt" DESC LIMIT 50`,
-  );
-  const providerBalance = activeProvider === "arkesel" ? await getArkeselBalanceDetails() : { providerKey: activeProvider, configured: readiness.providers.find((p) => p.key === activeProvider)?.configured ?? false, available: false, error: "Live balance lookup is currently available for Arkesel only." };
-  const smsInventory = inventory.inventory.find((row) => row.channel === "sms");
-  return {
-    senderId: readiness.senderId,
-    activeProvider,
-    providerBalance,
-    platformBalance: smsInventory?.balance ?? 0,
-    platformPurchased: smsInventory?.totalPurchased ?? 0,
-    schools: schoolRows,
-    allocatedToSchools: schoolRows.reduce((sum, school) => sum + school.smsBalance, 0),
-    allocationHistory,
-    sendHistory: audits,
-  };
+async function totalAllocatedSchoolSms() {
+  const directories = await db.schoolLoginDirectory.findMany({ select: { schoolId: true } });
+  let total = 0;
+  for (const directory of directories) total += await schoolWalletBalance(directory.schoolId);
+  return total;
+}
+
+async function getProviderBackedInventory(session: PlatformSession) {
+  const inventory = await getMessagingInventory(session);
+  let currentBalance = inventory.inventory.find((row) => row.channel === "sms")?.balance ?? 0;
+  const activeProvider = await getActiveSmsProviderKey();
+  if (activeProvider !== "arkesel") return { balance: currentBalance, source: "platform" as const };
+
+  const provider = await getArkeselBalanceDetails();
+  if (!provider.available || provider.balance === undefined) return { balance: currentBalance, source: "platform" as const };
+
+  const allocated = await totalAllocatedSchoolSms();
+  const providerFree = Math.max(0, Math.floor(provider.balance) - allocated);
+  if (providerFree > currentBalance) {
+    await adjustMessagingInventory(session, {
+      channel: "sms",
+      quantity: providerFree - currentBalance,
+      providerKey: "arkesel",
+      reference: `arkesel-auto-reconcile:${new Date().toISOString()}`,
+      notes: "Auto-reconciled unallocated SMS to live Arkesel balance minus school wallet commitments.",
+    });
+    currentBalance = providerFree;
+  }
+  return { balance: Math.min(currentBalance, providerFree), source: "arkesel" as const, providerBalance: provider.balance, allocated };
 }
 
 export async function topUpSchoolSms(session: PlatformSession, input: { schoolId: string; quantity: number; reference?: string; notes?: string }) {
   await requireSmsAdmin(session);
   if (!Number.isInteger(input.quantity) || input.quantity <= 0) throw new AppError("Enter a positive whole number of SMS credits to assign.", 400, "INVALID_QUANTITY");
+  const backed = await getProviderBackedInventory(session);
+  if (backed.balance < input.quantity) throw new AppError(`Only ${backed.balance} unallocated SMS credits are currently available.`, 409, "INSUFFICIENT_INVENTORY");
   const result = await adjustMessagingBalance(session, { schoolId: input.schoolId, channel: "sms", quantity: input.quantity, reference: input.reference || `sms-center:${randomUUID()}`, notes: input.notes || "SMS Control Center top-up" });
   await appendPlatformAudit({ actorId: session.adminId, action: "platform.sms.school_topped_up", targetSchoolId: input.schoolId, targetEntity: "PlatformMessagingWallet:sms", meta: { quantity: input.quantity, balanceAfter: result.wallet.smsBalance, reference: input.reference ?? null } });
   return result;
@@ -144,7 +148,7 @@ export async function topUpSchoolSms(session: PlatformSession, input: { schoolId
 
 export async function previewSchoolSms(session: PlatformSession, input: { schoolId: string; audience: SmsAudience; body: string }) {
   await requireSmsAdmin(session);
-  const school = await db.school.findUnique({ where: { id: input.schoolId }, select: { id: true, name: true, uniqueCode: true } });
+  const school = await withTenant(input.schoolId, (tx) => tx.school.findUnique({ where: { id: input.schoolId }, select: { id: true, name: true, uniqueCode: true } }));
   if (!school) throw new AppError("School not found.", 404, "NOT_FOUND");
   const [recipients, balance] = await Promise.all([listSchoolRecipients(input.schoolId, input.audience), schoolWalletBalance(input.schoolId)]);
   const billedBody = schoolSmsBody(school.name, input.body.trim());
@@ -165,7 +169,7 @@ export async function sendSchoolSms(session: PlatformSession, input: { schoolId:
       await enqueueNotification(tx, { schoolId: input.schoolId, recipientType: recipient.recipientType, recipientId: recipient.id, recipientPhone: recipient.phone, body: input.body.trim(), channels: "sms", idempotencyKey: `platform-sms:${batchId}` });
     }
   });
-  await appendPlatformAudit({ actorId: session.adminId, action: "platform.sms.school_queued", targetSchoolId: input.schoolId, targetEntity: `SmsBatch:${batchId}`, meta: { batchId, audience: input.audience, recipientCount: recipients.length, segmentsPerRecipient: preview.segments, totalCredits: preview.totalCredits, bodyPreview: input.body.trim().slice(0, 160) } });
+  await appendPlatformAudit({ actorId: session.adminId, action: "platform.sms.school_queued", targetSchoolId: input.schoolId, targetEntity: `SmsBatch:${batchId}`, meta: { batchId, audience: input.audience, recipientCount: recipients.length, segmentsPerRecipient: preview.segments, totalCredits: preview.totalCredits, messageBody: input.body.trim(), bodyPreview: input.body.trim().slice(0, 160) } });
   return { ok: true, batchId, queued: recipients.length, ...preview };
 }
 
@@ -173,10 +177,9 @@ export async function previewDirectSms(session: PlatformSession, input: { number
   await requireSmsAdmin(session);
   const numbers = normalizeSmsPhoneList(input.numbers);
   if (numbers.length > DIRECT_RECIPIENT_LIMIT) throw new AppError(`Direct sends are limited to ${DIRECT_RECIPIENT_LIMIT} unique phone numbers per batch.`, 413, "TOO_MANY_RECIPIENTS");
-  const inventory = await getMessagingInventory(session);
-  const balance = inventory.inventory.find((row) => row.channel === "sms")?.balance ?? 0;
+  const backed = await getProviderBackedInventory(session);
   const estimate = calculateSmsCredits(input.body.trim(), numbers.length);
-  return { numbers, recipientCount: numbers.length, balance, ...estimate, enoughCredits: balance >= estimate.totalCredits, balanceAfter: balance - estimate.totalCredits };
+  return { numbers, recipientCount: numbers.length, balance: backed.balance, balanceSource: backed.source, ...estimate, enoughCredits: backed.balance >= estimate.totalCredits, balanceAfter: backed.balance - estimate.totalCredits };
 }
 
 export async function sendDirectSms(session: PlatformSession, input: { numbers: string | string[]; body: string }, sender: DirectSmsSender = sendSmsThroughActiveProvider) {
@@ -184,14 +187,39 @@ export async function sendDirectSms(session: PlatformSession, input: { numbers: 
   if (!(await isActiveSmsProviderConfigured())) throw new AppError("The active SMS provider is not configured.", 503, "SMS_PROVIDER_UNAVAILABLE");
   const preview = await previewDirectSms(session, input);
   if (preview.recipientCount === 0) throw new AppError("Enter at least one valid phone number.", 400, "NO_RECIPIENTS");
-  if (!preview.enoughCredits) throw new AppError(`SukuuNova needs ${preview.totalCredits} unallocated SMS credits but only has ${preview.balance}.`, 409, "INSUFFICIENT_INVENTORY");
+  if (!preview.enoughCredits) throw new AppError(`SukuuNova needs ${preview.totalCredits} SMS credits but only ${preview.balance} are currently unallocated.`, 409, "INSUFFICIENT_INVENTORY");
   const batchId = randomUUID();
   await adjustMessagingInventory(session, { channel: "sms", quantity: -preview.totalCredits, reference: `direct-sms:${batchId}`, notes: `Reserved for ${preview.recipientCount} direct SMS recipient(s).` });
-  const results = await dispatchSmsBatch(preview.numbers, input.body.trim(), sender);
+  const messageBody = input.body.trim();
+  const results = await dispatchSmsBatch(preview.numbers, messageBody, sender);
   const failed = results.filter((result) => !result.ok);
   const refundedCredits = failed.length * preview.segments;
   if (refundedCredits > 0) await adjustMessagingInventory(session, { channel: "sms", quantity: refundedCredits, reference: `direct-sms-refund:${batchId}`, notes: `Refund for ${failed.length} failed direct SMS recipient(s).` });
   const sent = results.length - failed.length;
-  await appendPlatformAudit({ actorId: session.adminId, action: "platform.sms.direct_sent", targetEntity: `SmsBatch:${batchId}`, meta: { batchId, recipientCount: results.length, sent, failed: failed.length, segmentsPerRecipient: preview.segments, reservedCredits: preview.totalCredits, refundedCredits, bodyPreview: input.body.trim().slice(0, 160), recipients: results.map((result) => ({ phone: `${result.phone.slice(0, 5)}***${result.phone.slice(-3)}`, ok: result.ok, providerKey: result.providerKey, error: result.error })) } });
+  await appendPlatformAudit({
+    actorId: session.adminId,
+    action: "platform.sms.direct_sent",
+    targetEntity: `SmsBatch:${batchId}`,
+    meta: {
+      batchId,
+      recipientCount: results.length,
+      sent,
+      failed: failed.length,
+      segmentsPerRecipient: preview.segments,
+      reservedCredits: preview.totalCredits,
+      refundedCredits,
+      messageBody,
+      bodyPreview: messageBody.slice(0, 160),
+      recipients: results.map((result) => ({
+        phone: result.phone,
+        ok: result.ok,
+        status: result.ok ? "sent" : "failed",
+        providerKey: result.providerKey,
+        providerMessageId: result.providerMessageId,
+        creditsUsed: result.creditsUsed,
+        error: result.error,
+      })),
+    },
+  });
   return { ok: failed.length === 0, batchId, sent, failed: failed.length, refundedCredits, results };
 }
