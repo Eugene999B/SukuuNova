@@ -76,7 +76,7 @@ export default function TeacherQuickMarkSheet({
   const pathname = usePathname();
   const initialDate = boundedToday(termStart, termEnd);
   const availableKinds = allowedKinds.length ? allowedKinds : (["Classwork", "Homework", "Exercise", "Quiz", "Exam"] as QuickMarkKind[]);
-  const kinds = availableKinds.filter((item) => item !== "Participation");
+  const kinds: QuickMarkKind[] = availableKinds.filter((item) => item !== "Participation");
   const defaultWeek = initialWeek && initialWeek >= 1 && initialWeek <= teachingWeeks ? initialWeek : suggestedWeek(initialDate, termStart, teachingWeeks);
   const defaultKind = initialKind && kinds.includes(initialKind) ? initialKind : (kinds[0] ?? "Classwork");
   const [kind, setKind] = useState<QuickMarkKind>(defaultKind);
