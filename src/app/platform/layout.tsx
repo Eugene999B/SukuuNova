@@ -12,6 +12,7 @@ const PLATFORM_NAV_PERMISSIONS = [
   "schools.manage",
   "plans.manage",
   "billing.view",
+  "billing.manage",
   "support.view",
   "admins.view",
   "audit.view",
