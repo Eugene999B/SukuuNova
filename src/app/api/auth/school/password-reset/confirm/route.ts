@@ -10,7 +10,7 @@ const schema = z.object({
   uniqueCode: z.string().trim().min(2).max(80),
   identifier: z.string().trim().min(3).max(254),
   token: z.string().regex(/^\d{6}$/),
-  newPassword: z.string().min(12).max(256),
+  newPassword: z.string().min(6).max(256),
   universe: z.enum(["school", "guardian"]).default("school")
 });
 
