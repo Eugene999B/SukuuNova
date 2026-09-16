@@ -47,7 +47,13 @@ const TYPE_ALIASES: Record<string, string> = {
   project: "project",
   participation: "participation",
   exam: "exam",
-  examination: "exam"
+  exams: "exam",
+  examination: "exam",
+  finalexam: "exam",
+  terminalexam: "exam",
+  endoftermexam: "exam",
+  termexam: "exam",
+  midtermexam: "exam"
 };
 
 const DEFAULT_GRADE_SCALE: GradeBand[] = [
@@ -68,7 +74,8 @@ export function normalizeAssessmentType(value: string) {
 }
 
 export function assessmentBucket(type: string): AssessmentBucket {
-  return normalizeAssessmentType(type) === "exam" ? "exam" : "ca";
+  const normalized = normalizeAssessmentType(type);
+  return normalized === "exam" || normalized.endsWith("exam") ? "exam" : "ca";
 }
 
 function round(value: number, mode: AssessmentRules["rounding"]) {
@@ -120,8 +127,6 @@ function validateGradeScale(scale: GradeBand[]) {
 export function validateAssessmentRules(rules: AssessmentRules) {
   if (!rules.categories.length) throw new AppError("At least one assessment category is required.", 400, "NO_ASSESSMENT_CATEGORIES");
   if (rules.categories.some((category) => !category.name.trim())) throw new AppError("Every assessment category must have a name.", 400, "INVALID_ASSESSMENT_CATEGORY");
-  // Keep raw type labels unique, but allow useful aliases such as Exam and Examination.
-  // They intentionally resolve into the same top-level Exam bucket.
   const categoryKeys = rules.categories.map((category) => key(category.name));
   if (new Set(categoryKeys).size !== categoryKeys.length) throw new AppError("Assessment category names must be unique.", 400, "DUPLICATE_ASSESSMENT_CATEGORY");
   if (rules.categories.some((category) => !Number.isFinite(category.weight) || category.weight < 0 || category.weight > 100)) throw new AppError("Assessment category weights must be between 0% and 100%.", 400, "INVALID_WEIGHT_RANGE");
@@ -141,15 +146,10 @@ export function validateAssessmentRules(rules: AssessmentRules) {
   if (rules.gradingScale?.length) validateGradeScale(rules.gradingScale);
 }
 
-/** Use the school/reporting policy's explicit CA and Exam weights whenever they
- * exist. The legacy category-derived fallback keeps old/imported configuration
- * readable until it has canonical SchoolSettings weights. */
 export function assessmentBucketWeights(rules: AssessmentRules) {
   validateAssessmentRules(rules);
   if (rules.caWeight != null && rules.examWeight != null) return { ca: Number(rules.caWeight), exam: Number(rules.examWeight) };
-  const exam = rules.categories
-    .filter((category) => assessmentBucket(category.name) === "exam")
-    .reduce((sum, category) => sum + category.weight, 0);
+  const exam = rules.categories.filter((category) => assessmentBucket(category.name) === "exam").reduce((sum, category) => sum + category.weight, 0);
   return { ca: 100 - exam, exam };
 }
 
@@ -187,10 +187,6 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
     breakdown[bucketName] = { earned, possible, percentage, weight, contribution: percentage == null ? 0 : percentage * weight / 100 };
   }
 
-  // Keep detail.contribution compatible with the report-card component view:
-  // one normalized type contribution is repeated for rows of that type, while
-  // callers de-duplicate by type. Multiple Homeworks therefore contribute their
-  // combined earned points, not merely the last Homework in the term.
   const typeContributions = new Map<string, number>();
   for (const type of new Set(normalizedRows.map((row) => row.type))) {
     const rows = normalizedRows.filter((row) => row.type === type && row.status !== "excused");
@@ -226,7 +222,6 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
 
   let effectiveTotal: number | null = null;
   if (normalizedRows.length && hasCaEvidence && hasExamEvidence && (rules.missingScorePolicy !== "blank" || complete)) {
-    // Keep full precision through both buckets. Only the final report value is rounded.
     effectiveTotal = breakdown.ca.contribution + breakdown.exam.contribution;
   }
 
