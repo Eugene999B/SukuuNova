@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { calculateProviderDirectAvailability } from "../src/lib/platform-direct-sms-service";
 import { calculateSmsCredits, dispatchSmsBatch, normalizeSmsPhone, normalizeSmsPhoneList, schoolSmsBody } from "../src/lib/platform-sms-center-service";
 
 describe("Platform SMS Control Center helpers", () => {
@@ -21,6 +22,22 @@ describe("Platform SMS Control Center helpers", () => {
     expect(schoolSmsBody("Eugene Academy", "PTA meeting tomorrow")).toBe("Eugene Academy: PTA meeting tomorrow");
     expect(schoolSmsBody("Eugene Academy", "Eugene Academy: PTA meeting tomorrow")).toBe("Eugene Academy: PTA meeting tomorrow");
     expect(calculateSmsCredits("A".repeat(161), 4)).toMatchObject({ segments: 2, recipients: 4, totalCredits: 8 });
+  });
+
+  it("uses the provider balance for platform direct SMS rather than a school allocation wallet", () => {
+    expect(calculateProviderDirectAvailability(10, "Hi Eugene", 1)).toMatchObject({
+      balance: 10,
+      balanceKnown: true,
+      totalCredits: 1,
+      enoughCredits: true,
+      balanceAfter: 9,
+    });
+    expect(calculateProviderDirectAvailability(0, "Hi Eugene", 1)).toMatchObject({
+      balance: 0,
+      balanceKnown: true,
+      totalCredits: 1,
+      enoughCredits: false,
+    });
   });
 
   it("dispatches through an injected mock sender and never needs a live SMS provider", async () => {
