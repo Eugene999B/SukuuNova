@@ -7,7 +7,7 @@ import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 
 const schema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("request"), email: z.string().trim().email() }),
-  z.object({ mode: z.literal("confirm"), email: z.string().trim().email(), token: z.string().regex(/^\d{6}$/), newPassword: z.string().min(12).max(256) })
+  z.object({ mode: z.literal("confirm"), email: z.string().trim().email(), token: z.string().regex(/^\d{6}$/), newPassword: z.string().min(6).max(256) })
 ]);
 
 export async function POST(request: Request) {
