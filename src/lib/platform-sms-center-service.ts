@@ -112,6 +112,28 @@ async function totalAllocatedSchoolSms() {
   return total;
 }
 
+async function raiseSmsInventoryFloor(session: PlatformSession, targetBalance: number) {
+  return db.$transaction(async (tx) => {
+    const rows = await tx.$queryRawUnsafe<Array<{ balance: number }>>(`SELECT "balance" FROM "PlatformMessagingInventory" WHERE "channel"='sms' FOR UPDATE`);
+    const current = rows[0]?.balance ?? 0;
+    if (targetBalance <= current) return current;
+    const quantity = targetBalance - current;
+    await tx.$executeRawUnsafe(`UPDATE "PlatformMessagingInventory" SET "balance"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "channel"='sms'`, targetBalance);
+    const reference = `arkesel-auto-reconcile:${new Date().toISOString()}`;
+    await tx.$executeRawUnsafe(
+      `INSERT INTO "PlatformMessagingInventoryLedger" ("id","channel","entryType","quantity","balanceAfter","unitCost","providerKey","reference","notes","actorId") VALUES ($1,'sms','adjustment',$2,$3,NULL,'arkesel',$4,$5,$6)`,
+      randomUUID(), quantity, targetBalance, reference, "Auto-reconciled unallocated SMS to live Arkesel balance minus school wallet commitments.", session.adminId,
+    );
+    await appendPlatformAudit({
+      actorId: session.adminId,
+      action: "messaging.inventory.adjusted",
+      targetEntity: "MessagingInventory:sms",
+      meta: { channel: "sms", providerKey: "arkesel", quantity, balanceBefore: current, balanceAfter: targetBalance, reference, source: "automatic_provider_reconciliation" },
+    }, tx);
+    return targetBalance;
+  });
+}
+
 async function getProviderBackedInventory(session: PlatformSession) {
   const inventory = await getMessagingInventory(session);
   let currentBalance = inventory.inventory.find((row) => row.channel === "sms")?.balance ?? 0;
@@ -123,16 +145,7 @@ async function getProviderBackedInventory(session: PlatformSession) {
 
   const allocated = await totalAllocatedSchoolSms();
   const providerFree = Math.max(0, Math.floor(provider.balance) - allocated);
-  if (providerFree > currentBalance) {
-    await adjustMessagingInventory(session, {
-      channel: "sms",
-      quantity: providerFree - currentBalance,
-      providerKey: "arkesel",
-      reference: `arkesel-auto-reconcile:${new Date().toISOString()}`,
-      notes: "Auto-reconciled unallocated SMS to live Arkesel balance minus school wallet commitments.",
-    });
-    currentBalance = providerFree;
-  }
+  if (providerFree > currentBalance) currentBalance = await raiseSmsInventoryFloor(session, providerFree);
   return { balance: Math.min(currentBalance, providerFree), source: "arkesel" as const, providerBalance: provider.balance, allocated };
 }
 
