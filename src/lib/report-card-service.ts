@@ -4,7 +4,7 @@ import type { TenantDb } from "@/lib/db";
 import { appendSchoolAudit } from "@/lib/audit";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import { hasPermission, requirePermission } from "@/lib/rbac";
-import { calculateSubjectResult, gradeForPercentage } from "@/lib/assessment-engine";
+import { calculateAvailableSubjectResult, gradeForPercentage } from "@/lib/assessment-engine";
 import { overallTotalsForScope, passMarkForScale, promotionForRule, rankTotals, remarkForLine, rulesFor } from "@/lib/report-card-ranking";
 import { getClassSubjectIntelligence } from "@/lib/performance-intelligence";
 import { approveAndQueuePublicReportCard, readHeadRemark, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
@@ -16,6 +16,7 @@ function object(value: Prisma.JsonValue | null | undefined): Record<string, Pris
 function text(value: Prisma.JsonValue | undefined, fallback: string) { return typeof value === "string" ? value : fallback; }
 function hex(value: string) { const match = /^#?([0-9a-f]{6})$/i.exec(value); if (!match) return rgb(0.11, 0.3, 0.72); return rgb(parseInt(match[1].slice(0, 2), 16) / 255, parseInt(match[1].slice(2, 4), 16) / 255, parseInt(match[1].slice(4, 6), 16) / 255); }
 function appOrigin() { return (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/+$/g, ""); }
+function displayPercentage(value: number | null) { return value == null ? null : Math.round(value * 10) / 10; }
 
 async function reportData(tx: TenantDb, studentId: string, termId: string) {
   const school = await tx.school.findFirst({ select: { id: true, name: true, logoUrl: true, brandColors: true } });
@@ -33,9 +34,10 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
   const template = await tx.reportCardTemplate.findUnique({ where: { id: settings.reportCardTemplateId ?? "preset-classic-blue" } });
   if (!template) throw new AppError("Select a valid report-card template.", 409, "TEMPLATE_REQUIRED");
   const assessments = await tx.assessment.findMany({ where: { termId, classId: historicalClass.id }, include: { subject: true, scores: { where: { studentId } } }, orderBy: [{ subject: { name: "asc" } }, { type: "asc" }] });
-  if (!assessments.length) throw new AppError("No assessments exist for this report card.", 409, "NO_ASSESSMENTS");
-  const missing = assessments.filter((assessment) => assessment.scores.length === 0);
-  if (missing.length > 0 && !settings.allowPartialReportCards) throw new AppError("Missing scores block report-card generation. Enable partial reports to override.", 409, "MISSING_SCORES");
+  const missingScoreCount = assessments.filter((assessment) => {
+    const score = assessment.scores[0] as { value?: unknown; status?: string } | undefined;
+    return !score || (score.value == null && score.status !== "excused");
+  }).length;
   const grouped = new Map<string, typeof assessments>();
   for (const assessment of assessments) grouped.set(assessment.subject.name, [...(grouped.get(assessment.subject.name) ?? []), assessment]);
   const caWeight = Number(settings.gradeCaWeight); const examWeight = Number(settings.gradeExamWeight);
@@ -43,19 +45,14 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
   const results: SubjectResult[] = [];
   const rules = rulesFor(settings);
   for (const [subject, rows] of grouped) {
-    const result = calculateSubjectResult(
+    const result = calculateAvailableSubjectResult(
       rows.map((row) => ({ id: row.id, name: row.name, type: row.type, maxScore: row.maxScore, weight: row.weight, score: row.scores[0]?.value ?? null, status: (row.scores[0] as { status?: string } | undefined)?.status ?? null })),
       rules
     );
-    const bucketAvg = (normalized: string): number | null => {
-      const parts = result.details.filter((d) => d.type === normalized && d.percentage != null).map((d) => d.percentage as number);
-      if (!parts.length) return null;
-      return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10;
-    };
-    results.push({ subject, ca: bucketAvg("classwork"), exam: bucketAvg("exam"), total: result.total });
+    results.push({ subject, ca: displayPercentage(result.breakdown.ca.percentage), exam: displayPercentage(result.breakdown.exam.percentage), total: result.total });
   }
   const attendance = await tx.attendanceEvent.findMany({ where: { studentId, type: "in", attendanceDate: { gte: term.startDate, lte: term.endDate } }, select: { attendanceDate: true, isLate: true } });
-  return { student: reportStudent, term, termClass, settings, school, template, results, attendance, caWeight, examWeight };
+  return { student: reportStudent, term, termClass, settings, school, template, results, attendance, caWeight, examWeight, missingScoreCount };
 }
 
 async function makePdf(data: Awaited<ReturnType<typeof reportData>>, remarks?: string) {
@@ -84,12 +81,17 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
   const rules = rulesFor(data.settings);
   const scale = rules.gradingScale?.length ? rules.gradingScale : undefined;
   const calculationSnapshot = {
-    calculationVersion: 4, calculatedAt: new Date().toISOString(),
+    calculationVersion: 5, calculatedAt: new Date().toISOString(),
     classId: data.student.class.id,
     className: data.student.class.name,
     classSource: data.termClass.source,
     gradingWeights: { ca: data.caWeight, exam: data.examWeight },
-    assessmentCategories: rules.categories, rounding: rules.rounding, missingScorePolicy: rules.missingScorePolicy,
+    assessmentCategories: rules.categories, rounding: rules.rounding,
+    missingScorePolicy: "blank" as const,
+    sourceMissingScorePolicy: rules.missingScorePolicy,
+    generationPolicy: "available_scores_only" as const,
+    generationAllowsIncompleteMarks: true,
+    missingScoreCount: data.missingScoreCount,
     partialReportsAllowed: data.settings.allowPartialReportCards,
     assessments: data.results.map((row) => ({ subject: row.subject, ca: row.ca, exam: row.exam, total: row.total, grade: gradeForPercentage(row.total, scale) })),
     average, attendance: { presentDays, lateDays },
@@ -97,9 +99,9 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
     subjectPositions: [] as Array<{ subject: string; position: number | null; total: number | null; grade: string | null; remark: string | null }>,
     promotionRule: null as string | null, promotionDecision: "decision_required" as const,
   };
-  const report = await tx.reportCard.upsert({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } }, update: { pdfData, remarks: input.remarks, templateId: data.template.id, calculationSnapshot, calculationVersion: 4 }, create: { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, templateId: data.template.id, pdfData, remarks: input.remarks, calculationSnapshot, calculationVersion: 4, generatedPdfUrl: "/api/mvp/report-cards/pending/pdf" } });
+  const report = await tx.reportCard.upsert({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } }, update: { pdfData, remarks: input.remarks, templateId: data.template.id, calculationSnapshot, calculationVersion: 5 }, create: { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, templateId: data.template.id, pdfData, remarks: input.remarks, calculationSnapshot, calculationVersion: 5, generatedPdfUrl: "/api/mvp/report-cards/pending/pdf" } });
   const generatedPdfUrl = "/api/mvp/report-cards/" + report.id + "/pdf"; await tx.reportCard.update({ where: { id: report.id }, data: { generatedPdfUrl } });
-  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.generated", entityType: "ReportCard", entityId: report.id, after: { studentId: input.studentId, termId: input.termId, classId: data.student.class.id, classSource: data.termClass.source, templateId: data.template.id, calculationVersion: 4 } });
+  await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.generated", entityType: "ReportCard", entityId: report.id, after: { studentId: input.studentId, termId: input.termId, classId: data.student.class.id, classSource: data.termClass.source, templateId: data.template.id, calculationVersion: 5, generationPolicy: "available_scores_only", missingScoreCount: data.missingScoreCount } });
   return { ...report, generatedPdfUrl };
 }
 
@@ -126,7 +128,7 @@ export async function sendReportCard(tx: TenantDb, input: { schoolId: string; ac
 }
 
 export async function getVisibleReportPdf(tx: TenantDb, input: { actorId: string; reportCardId: string }) {
-  const report = await tx.reportCard.findUnique({ where: { id: input.reportCardId }, include: { student: { include: { guardians: { include: { guardian: true } } } } } });
+  const report = await tx.reportCard.findUnique({ where: { id: input.reportCardId }, include: { student: { include: { guardians: { include: { guardian: true } } } } });
   const pdfData = report?.pdfData; if (!report || !pdfData) throw new AppError("Report PDF not found.", 404, "NOT_FOUND");
   if (await hasPermission(tx, input.actorId, "report_cards:view")) {
     const isParent = await hasPermission(tx, input.actorId, "parents:read_linked");
@@ -184,13 +186,8 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   for (const a of assessments) grouped.set(a.subject.name, [...(grouped.get(a.subject.name) ?? []), a]);
   const liveLines: ReportSubjectLine[] = [];
   for (const [subject, rows] of grouped) {
-    const result = calculateSubjectResult(rows.map((r) => ({ id: r.id, name: r.name, type: r.type, maxScore: r.maxScore, weight: r.weight, score: r.scores[0]?.value ?? null, status: (r.scores[0] as { status?: string } | undefined)?.status ?? null })), rules);
-    const bucketAvg = (normalized: string): number | null => {
-      const parts = result.details.filter((d) => d.type === normalized && d.percentage != null).map((d) => d.percentage as number);
-      if (!parts.length) return null;
-      return Math.round((parts.reduce((a, b) => a + b, 0) / parts.length) * 10) / 10;
-    };
-    liveLines.push({ subject, subjectId: rows[0].subjectId, ca: bucketAvg("classwork"), exam: bucketAvg("exam"), total: result.total, grade: gradeForPercentage(result.total, scale.length ? scale : undefined), position: null, remark: null });
+    const result = calculateAvailableSubjectResult(rows.map((r) => ({ id: r.id, name: r.name, type: r.type, maxScore: r.maxScore, weight: r.weight, score: r.scores[0]?.value ?? null, status: (r.scores[0] as { status?: string } | undefined)?.status ?? null })), rules);
+    liveLines.push({ subject, subjectId: rows[0].subjectId, ca: displayPercentage(result.breakdown.ca.percentage), exam: displayPercentage(result.breakdown.exam.percentage), total: result.total, grade: gradeForPercentage(result.total, scale.length ? scale : undefined), position: null, remark: null });
   }
   const scopeClassIds = policy.positionScope === "year_group" && historicalClass.level
     ? (await tx.class.findMany({ where: { schoolId: input.schoolId, level: historicalClass.level }, select: { id: true } })).map((r) => r.id)
@@ -257,12 +254,17 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     await tx.reportCard.update({
       where: { id: report.id },
       data: {
+        calculationVersion: 5,
         calculationSnapshot: {
-          calculationVersion: 4, calculatedAt: new Date().toISOString(),
+          calculationVersion: 5, calculatedAt: new Date().toISOString(),
           classId: historicalClass.id,
           className: historicalClass.name,
           classSource: termClass.source,
           gradingWeights: weights,
+          missingScorePolicy: "blank",
+          sourceMissingScorePolicy: rules.missingScorePolicy,
+          generationPolicy: "available_scores_only",
+          generationAllowsIncompleteMarks: true,
           partialReportsAllowed: settings.allowPartialReportCards,
           assessments: results.map((r) => ({ subject: r.subject, ca: r.ca, exam: r.exam, total: r.total, grade: r.grade })),
           average: frozenAverage,
