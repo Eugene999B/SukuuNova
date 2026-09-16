@@ -9,6 +9,8 @@ export type PreviewRules = {
   categories: Array<{ name: string; weight: number }>;
   rounding: "nearest" | "down" | "up";
   missingScorePolicy: "blank" | "zero";
+  caWeight?: number;
+  examWeight?: number;
 };
 
 const TYPE_ALIASES: Record<string, string> = {
@@ -53,11 +55,19 @@ export type PreviewAssessment = {
   status?: "present" | "absent" | "excused" | string | null;
 };
 
+function bucketWeights(rules: PreviewRules) {
+  if (rules.caWeight != null && rules.examWeight != null && Number.isFinite(rules.caWeight) && Number.isFinite(rules.examWeight) && Math.abs(rules.caWeight + rules.examWeight - 100) <= .01) {
+    return { ca: rules.caWeight, exam: rules.examWeight };
+  }
+  const exam = rules.categories.filter((category) => bucket(category.name) === "exam").reduce((sum, category) => sum + category.weight, 0);
+  if (exam <= 0 && !rules.categories.some((category) => bucket(category.name) === "exam")) return null;
+  return { ca: 100 - exam, exam };
+}
+
 export function previewSubjectTotal(items: PreviewAssessment[], rules: PreviewRules): number | null {
   if (!items.length) return null;
-  const examCategory = rules.categories.find((category) => bucket(category.name) === "exam");
-  if (!examCategory) return null;
-  const weights = { ca: 100 - examCategory.weight, exam: examCategory.weight };
+  const weights = bucketWeights(rules);
+  if (!weights) return null;
   const normalized = items.map((item) => ({ ...item, bucket: bucket(item.type) }));
   const hasCaEvidence = weights.ca <= 0 || normalized.some((row) => row.bucket === "ca" && row.status !== "excused");
   const hasExamEvidence = weights.exam <= 0 || normalized.some((row) => row.bucket === "exam" && row.status !== "excused");
