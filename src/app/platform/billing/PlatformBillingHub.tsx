@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { ArrowRight, Boxes, CreditCard, FileCog, FilePlus2, LayoutList, MessageSquare, ReceiptText, ServerCog, WalletCards } from "lucide-react";
+import { ArrowRight, Boxes, CreditCard, FileCog, FilePlus2, LayoutList, MessageSquare, ReceiptText, ServerCog, Smartphone, WalletCards } from "lucide-react";
 import PlatformAdvancedBillingRules from "@/components/PlatformAdvancedBillingRules";
 import PlatformBillingStudio from "@/components/PlatformBillingStudio";
 import PlatformInvoiceActions from "@/components/PlatformInvoiceActions";
@@ -38,7 +39,7 @@ export default function PlatformBillingHub({ schools }: { schools: School[] }) {
   return <div className="platform-billing-v3 platform-billing-hub">
     <section className="platform-page-header platform-billing-hero">
       <div><span className="platform-eyebrow">Commercial operations</span><h2>Run billing as a workflow, not a collection of forms.</h2><p>Configure each school’s commercial basis, issue invoices from saved rules, reconcile collections, and manage messaging inventory as a separate prepaid business.</p></div>
-      <div className="platform-header-actions"><span className="app-pill"><LayoutList size={14}/> 6 guided workflows</span></div>
+      <div className="platform-header-actions"><Link href="/platform/sms" className="app-btn app-btn-primary"><Smartphone size={15}/> SMS Center</Link><span className="app-pill"><LayoutList size={14}/> 6 guided workflows</span></div>
     </section>
 
     <section className="platform-workflow-grid" aria-label="Billing workflows">
@@ -65,7 +66,7 @@ export default function PlatformBillingHub({ schools }: { schools: School[] }) {
     <section className="platform-billing-note app-card app-panel">
       <span className="platform-billing-note-title">Keep subscription revenue and messaging inventory separate</span>
       <span><WalletCards size={18}/></span><div><strong>Platform subscription</strong><p>Recurring charges for the SukuuNova service belong to invoices, collections and school commercial rules.</p></div>
-      <span><MessageSquare size={18}/></span><div><strong>Messaging capacity</strong><p>SMS and WhatsApp credits are prepaid provider-backed inventory. Purchasing and allocation must remain traceable separately.</p></div>
+      <span><MessageSquare size={18}/></span><div><strong>Messaging capacity</strong><p>SMS and WhatsApp credits are prepaid provider-backed inventory. Purchasing and allocation must remain traceable separately. Use the dedicated SMS Center for allocations and operational sends.</p></div>
     </section>
   </div>;
 }
