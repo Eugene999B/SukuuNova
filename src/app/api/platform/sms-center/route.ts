@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError } from "@/lib/errors";
+import { getSmsCenterOverviewSafe } from "@/lib/platform-sms-center-overview";
 import {
-  getSmsCenterOverview,
   previewDirectSms,
   previewSchoolSms,
   sendDirectSms,
@@ -24,7 +24,7 @@ const actionSchema = z.discriminatedUnion("action", [
 export async function GET() {
   try {
     const session = await requirePlatformSession();
-    return NextResponse.json(await getSmsCenterOverview(session));
+    return NextResponse.json(await getSmsCenterOverviewSafe(session));
   } catch (error) {
     return routeError(error);
   }
