@@ -16,7 +16,7 @@ const rules = {
 };
 
 describe("assessment engine", () => {
-  it("normalizes legacy and teacher-work assessment names without collapsing real categories", () => {
+  it("normalizes legacy and teacher-work assessment names", () => {
     expect(normalizeAssessmentType("CA")).toBe("classwork");
     expect(normalizeAssessmentType("Continuous Assessment")).toBe("classwork");
     expect(normalizeAssessmentType("Homework")).toBe("homework");
@@ -27,13 +27,14 @@ describe("assessment engine", () => {
     expect(normalizeAssessmentType("Exam")).toBe("exam");
   });
 
-  it("uses configured category weights instead of legacy assessment weights", () => {
-    expect(categoryWeight("ca", 99, rules)).toBe(20);
-    expect(categoryWeight("homework", 99, rules)).toBe(10);
+  it("uses the top-level CA and Exam weights instead of legacy per-assessment weights", () => {
+    expect(categoryWeight("ca", 99, rules)).toBe(60);
+    expect(categoryWeight("homework", 99, rules)).toBe(60);
+    expect(categoryWeight("participation", 99, rules)).toBe(60);
     expect(categoryWeight("exam", 99, rules)).toBe(40);
   });
 
-  it("keeps teacher work categories in separate policy buckets instead of collapsing them into CA", () => {
+  it("combines every non-exam activity into the CA bucket", () => {
     const result = calculateSubjectResult([
       { id: "hw", name: "Homework 1", type: "homework", maxScore: 10, weight: 100, score: 10 },
       { id: "ex", name: "Exercise 1", type: "exercise", maxScore: 20, weight: 100, score: 20 },
@@ -42,56 +43,67 @@ describe("assessment engine", () => {
       { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 100, score: 100 }
     ], rules);
     expect(result.complete).toBe(true);
-    expect(result.total).toBe(80);
-    expect(result.includedWeight).toBe(80);
+    expect(result.total).toBe(100);
+    expect(result.includedWeight).toBe(100);
+    expect(result.breakdown.ca.earned).toBe(95);
+    expect(result.breakdown.ca.possible).toBe(95);
     expect(result.details.map((row) => [row.type, row.weight])).toEqual([
-      ["homework", 10],
-      ["exercises", 10],
-      ["quizzes", 10],
-      ["project", 10],
+      ["homework", 60],
+      ["exercises", 60],
+      ["quizzes", 60],
+      ["project", 60],
       ["exam", 40]
     ]);
   });
 
-  it("refuses an unconfigured category instead of silently trusting the assessment row weight", () => {
-    expect(() => calculateSubjectResult([
-      { id: "p", name: "Participation", type: "participation", maxScore: 10, weight: 100, score: 10 }
-    ], rules)).toThrow(/not configured/i);
+  it("treats an unconfigured non-exam activity as CA instead of trusting its row weight", () => {
+    const result = calculateSubjectResult([
+      { id: "p", name: "Participation", type: "participation", maxScore: 10, weight: 100, score: 10 },
+      { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 1, score: 80 }
+    ], rules);
+    expect(result.total).toBe(92);
+    expect(result.breakdown.ca.weight).toBe(60);
+    expect(result.breakdown.exam.weight).toBe(40);
   });
 
-  it("supports participation when the school explicitly includes it in the grading policy", () => {
+  it("supports participation as ordinary CA evidence", () => {
     const participationRules = {
       ...rules,
-      categories: [{ name: "Participation", weight: 100 }]
+      categories: [{ name: "Participation", weight: 60 }, { name: "Exam", weight: 40 }]
     };
     const result = calculateSubjectResult([
-      { id: "p", name: "Participation", type: "participation", maxScore: 10, weight: 1, score: 9 }
+      { id: "p", name: "Participation", type: "participation", maxScore: 10, weight: 1, score: 9 },
+      { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 1, score: 100 }
     ], participationRules);
-    expect(result.total).toBe(90);
+    expect(result.total).toBe(94);
     expect(result.includedWeight).toBe(100);
   });
 
-  it("rejects duplicate category aliases so one policy cannot contain CA and Classwork twice", () => {
+  it("rejects duplicate raw category names", () => {
     expect(() => validateAssessmentRules({
       ...rules,
       categories: [
-        { name: "CA", weight: 50 },
-        { name: "Classwork", weight: 50 }
+        { name: "Classwork", weight: 30 },
+        { name: "Classwork", weight: 30 },
+        { name: "Exam", weight: 40 }
       ]
     })).toThrow(/unique/i);
   });
 
-  it("applies each configured category weight once after averaging multiple assessments", () => {
+  it("combines CA by total earned points before applying the CA weight", () => {
     const result = calculateSubjectResult([
       { id: "cw1", name: "Classwork 1", type: "classwork", maxScore: 20, weight: 20, score: 15 },
       { id: "cw2", name: "Classwork 2", type: "classwork", maxScore: 20, weight: 20, score: 10 },
       { id: "hw", name: "Homework 1", type: "homework", maxScore: 10, weight: 10, score: 8 },
       { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 40, score: 70 }
     ], rules);
-    // Classwork average 62.5% x 20% = 12.5; Homework 80% x 10% = 8; Exam 70% x 40% = 28.
+    // CA is 33/50 = 66%; 66% x 60 = 39.6. Exam is 70%; 70% x 40 = 28.
     expect(result.complete).toBe(true);
-    expect(result.total).toBe(48.5);
-    expect(result.includedWeight).toBe(70);
+    expect(result.breakdown.ca.earned).toBe(33);
+    expect(result.breakdown.ca.possible).toBe(50);
+    expect(result.breakdown.ca.percentage).toBe(66);
+    expect(result.total).toBe(67.6);
+    expect(result.includedWeight).toBe(100);
   });
 
   it("keeps a missing mark incomplete under the blank policy", () => {
@@ -109,10 +121,10 @@ describe("assessment engine", () => {
       { id: "hw2", name: "Homework 2", type: "homework", maxScore: 10, weight: 10, score: null },
       { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 40, score: 70 }
     ], { ...rules, missingScorePolicy: "zero" });
-    // Homework average is (80% + 0%) / 2 = 40%; contribution = 4. Exam contributes 28.
+    // CA is 8/20 = 40%; contribution = 24. Exam contributes 28.
     expect(result.complete).toBe(false);
-    expect(result.total).toBe(32);
-    expect(result.includedWeight).toBe(50);
+    expect(result.total).toBe(52);
+    expect(result.includedWeight).toBe(100);
   });
 
   it("uses school-defined grading bands", () => {
