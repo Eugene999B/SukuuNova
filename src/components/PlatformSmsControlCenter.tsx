@@ -158,7 +158,7 @@ export default function PlatformSmsControlCenter({ initialData }: { initialData:
     </section>
 
     <section className="sms-card composer">
-      <div className="sms-card-title"><div><h3><Send size={18}/> Send SMS</h3><p>Preview recipients and exact segment cost before a send can proceed.</p></div></div>
+      <div className="sms-card-title"><div><h3><Send size={18}/> Send SMS</h3><p>Preview recipients and exact segment cost before sending, or send direct numbers immediately with server-side validation.</p></div></div>
       <div className="sms-tabs"><button className={mode === "school" ? "active" : ""} onClick={() => setMode("school")}><UsersRound size={16}/> School audience</button><button className={mode === "direct" ? "active" : ""} onClick={() => setMode("direct")}><Smartphone size={16}/> Direct numbers</button></div>
 
       {mode === "school" ? <div className="sms-compose-grid">
@@ -173,7 +173,7 @@ export default function PlatformSmsControlCenter({ initialData }: { initialData:
         <div>
           <label>Phone numbers<textarea rows={5} value={numbers} onChange={(e) => { setNumbers(e.target.value); setDirectPreview(null); }} placeholder={"0240000000\n+233240000000\nOne number per line, comma or semicolon"} /></label>
           <label>Message<textarea rows={7} maxLength={1600} value={directBody} onChange={(e) => { setDirectBody(e.target.value); setDirectPreview(null); }} placeholder="Type the direct SMS message…" /></label>
-          <div className="sms-actions"><button className="sms-button secondary" onClick={previewDirect} disabled={busy === "direct-preview"}>{busy === "direct-preview" ? "Checking…" : "Preview cost"}</button><button className="sms-button" onClick={sendDirect} disabled={!directPreview?.enoughCredits || directPreview.recipientCount === 0 || busy === "direct-send"}>{busy === "direct-send" ? "Sending…" : "Send now"}</button></div>
+          <div className="sms-actions"><button className="sms-button secondary" onClick={previewDirect} disabled={busy === "direct-preview"}>{busy === "direct-preview" ? "Checking…" : "Preview cost"}</button><button className="sms-button" onClick={sendDirect} disabled={!numbers.trim() || !directBody.trim() || busy === "direct-send"}>{busy === "direct-send" ? "Sending…" : "Send now"}</button></div>
         </div>
         <PreviewCard preview={directPreview} title="Direct SMS" />
       </div>}
