@@ -82,15 +82,19 @@ export async function getSmsCenterOverviewSafe(session: PlatformSession) {
         error: "Live balance lookup is currently available for Arkesel only.",
       };
   const smsInventory = inventory.inventory.find((row) => row.channel === "sms");
+  const allocatedToSchools = schoolRows.reduce((sum, school) => sum + school.smsBalance, 0);
+  const platformBalance = activeProvider === "arkesel" && providerBalance.available && "balance" in providerBalance && typeof providerBalance.balance === "number"
+    ? Math.max(0, Math.floor(providerBalance.balance) - allocatedToSchools)
+    : smsInventory?.balance ?? 0;
 
   return {
     senderId: readiness.senderId,
     activeProvider,
     providerBalance,
-    platformBalance: smsInventory?.balance ?? 0,
+    platformBalance,
     platformPurchased: smsInventory?.totalPurchased ?? 0,
     schools: schoolRows,
-    allocatedToSchools: schoolRows.reduce((sum, school) => sum + school.smsBalance, 0),
+    allocatedToSchools,
     allocationHistory,
     sendHistory: audits,
   };
