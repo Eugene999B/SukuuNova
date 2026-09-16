@@ -8,6 +8,7 @@ import { generateBillingRulesInvoice } from "@/lib/platform-billing-rules-servic
 import { performSchoolLifecycle } from "@/lib/platform-school-lifecycle-service";
 import { listScopedPlatformSchools } from "@/lib/platform-scoped-schools";
 import { listPlatformSchools } from "@/lib/phase4-service";
+import { getArkeselBalanceDetails } from "@/lib/sms-provider";
 
 const schoolSelectorSchema = z.object({ id: z.unknown(), name: z.unknown(), uniqueCode: z.unknown(), status: z.unknown(), studentCount: z.unknown().optional(), subscriptionPlan: z.unknown().optional() });
 const schema = z.discriminatedUnion("action", [
@@ -29,7 +30,10 @@ function normalizeSchoolRow(row: SchoolSelectorRow) {
 export async function GET(request: Request) {
   try {
     const session = await requirePlatformSession(); const url = new URL(request.url); const view = url.searchParams.get("view") || "settings"; const schoolId = url.searchParams.get("schoolId") || "";
-    if (view === "settings") return NextResponse.json(await getPlatformControlSettings(session));
+    if (view === "settings") {
+      const [settings, smsProviderBalance] = await Promise.all([getPlatformControlSettings(session), getArkeselBalanceDetails()]);
+      return NextResponse.json({ ...settings, smsProviderBalance });
+    }
     if (view === "schools") { await requirePlatformPermission(session, "billing.view"); const scope = await getPlatformSchoolScope(session); const rows = (scope === null ? await listPlatformSchools() : await listScopedPlatformSchools(session)) as SchoolSelectorRow[]; return NextResponse.json({ schools: rows.map(normalizeSchoolRow) }); }
     if (view === "billing") { if (!schoolId) throw new UnauthorizedError("schoolId is required"); return NextResponse.json(await getSchoolBillingConfig(session, schoolId)); }
     if (view === "messaging") { if (!schoolId) throw new UnauthorizedError("schoolId is required"); return NextResponse.json(await getMessagingWallet(session, schoolId)); }
