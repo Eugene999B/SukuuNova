@@ -98,6 +98,7 @@ export default async function TeacherGradebookContextPage({ params, searchParams
   const view = query.view === "overview" || query.view === "results" ? query.view : "assessments";
   const termParam = data.selectedTerm?.id ?? "";
   const hrefFor = (nextView: "assessments" | "overview" | "results") => `${contextPath}?term=${encodeURIComponent(termParam)}&view=${nextView}`;
+  const addWorkFragment = "#" + "add-work";
   const workByAssessment = new Map(data.workRows.map((row) => [row.assessmentId, row]));
   const selectedAssessment = data.performance?.assessments.find((assessment) => assessment.id === query.assessment) ?? null;
   const selectedWork = selectedAssessment ? workByAssessment.get(selectedAssessment.id) : undefined;
@@ -156,7 +157,7 @@ export default async function TeacherGradebookContextPage({ params, searchParams
                 <h2>{selectedWork ? `${selectedWork.kind} ${selectedWork.workNumber}` : cleanAssessmentName(selectedAssessment.name)}</h2>
                 <p>{selectedWork ? `${dateLabel(selectedWork.workDate)} · ` : ""}Out of {selectedAssessment.maxScore}</p>
               </div>
-              {!data.readOnly && selectedWork ? <Link className="button secondary" href={`${hrefFor("assessments")}&week=${selectedWork.weekNumber}&kind=${encodeURIComponent(selectedWork.kind)}#add-work`}>+ Add another {selectedWork.kind}</Link> : null}
+              {!data.readOnly && selectedWork ? <Link className="button secondary" href={`${hrefFor("assessments")}&week=${selectedWork.weekNumber}&kind=${encodeURIComponent(selectedWork.kind)}${addWorkFragment}`}>+ Add another {selectedWork.kind}</Link> : null}
             </div>
             <TeacherAssessmentMarkSheet key={selectedAssessment.id} assessment={{ id: selectedAssessment.id, name: selectedWork ? `${selectedWork.kind} ${selectedWork.workNumber}` : cleanAssessmentName(selectedAssessment.name), type: selectedAssessment.type, maxScore: selectedAssessment.maxScore }} rows={selectedScoreRows} locked={data.readOnly || data.selectedTerm.isLocked} />
           </> : <>
@@ -169,7 +170,7 @@ export default async function TeacherGradebookContextPage({ params, searchParams
                 return dateCompare || b.work!.workNumber - a.work!.workNumber;
               });
               return <section className="gradebook-week-group" key={weekNumber}>
-                <div className="gradebook-week-heading"><div><span>Week</span><h3>Week {weekNumber}</h3></div>{!data.readOnly ? <Link href={`${hrefFor("assessments")}&week=${weekNumber}#add-work`}>+ Add work in Week {weekNumber}</Link> : null}</div>
+                <div className="gradebook-week-heading"><div><span>Week</span><h3>Week {weekNumber}</h3></div>{!data.readOnly ? <Link href={`${hrefFor("assessments")}&week=${weekNumber}${addWorkFragment}`}>+ Add work in Week {weekNumber}</Link> : null}</div>
                 <div className="gradebook-assessment-list">{weekWork.map((assessment) => <article className="gradebook-assessment-row" key={assessment.id}>
                   <div className="gradebook-assessment-main"><span>{dateLabel(assessment.work?.workDate)}</span><strong>{assessment.title}</strong><small>Out of {assessment.maxScore}</small></div>
                   <div className="gradebook-assessment-progress"><span>Marks entered</span><strong>{assessment.recorded}/{learnerCount}</strong><small>{assessment.recorded === learnerCount && learnerCount > 0 ? "All learners done" : `${Math.max(0, learnerCount - assessment.recorded)} remaining`}</small></div>
