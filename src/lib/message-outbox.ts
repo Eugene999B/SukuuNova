@@ -45,6 +45,12 @@ function mediaVariableKey(value:Prisma.JsonValue|null|undefined,key:string){
   }
   return "mediaUrl";
 }
+function withSchoolIdentity(schoolName:string|undefined,body:string){
+  const name=schoolName?.trim();
+  if(!name)return body;
+  if(body.trimStart().toLocaleLowerCase().startsWith(name.toLocaleLowerCase()))return body;
+  return `${name}: ${body}`;
+}
 
 export type SmsSender=(input:{phone:string;body:string;senderId?:string})=>Promise<SmsSendResult|void>;
 export type WhatsAppSender=(input:{phone:string;contentSid:string;variables:Record<string,string>;mediaUrl?:string})=>Promise<void>;
@@ -54,7 +60,7 @@ export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,var
   const accountSid=process.env.TWILIO_ACCOUNT_SID,authToken=process.env.TWILIO_AUTH_TOKEN,from=process.env.TWILIO_WHATSAPP_FROM;
   if(!accountSid||!authToken||!from)throw new Error("Twilio WhatsApp is not configured.");
   const form=new URLSearchParams({To:phone.startsWith("whatsapp:")?phone:"whatsapp:"+phone,From:from.startsWith("whatsapp:")?from:"whatsapp:"+from,ContentSid:sid,ContentVariables:JSON.stringify(variables)});
-  const response=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+encodeURIComponent(accountSid)+"/Messages.json",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded",authorization:"Basic "+Buffer.from(accountSid+":"+authToken).toString("base64")},body:form});
+  const response=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+encodeURIComponent(accountSid)+"/Messages.json",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded",authorization:"Basic "+Buffer.from(accountSid+":"+authToken).toString("base64"),},body:form});
   if(!response.ok)throw new Error(`Twilio WhatsApp HTTP ${response.status}`);
 };
 function variables(value:Prisma.JsonValue|null){ if(!value||Array.isArray(value)||typeof value!=="object")return{}; return Object.fromEntries(Object.entries(value).filter((entry):entry is [string,string]=>typeof entry[1]==="string")); }
@@ -69,7 +75,7 @@ async function sendExternalNotification(
 ): Promise<SmsSendResult|void> {
   if (message.channel === "sms") {
     if (!senders.sms) throw new Error("SMS sender is unavailable.");
-    return senders.sms({ phone: message.recipientPhone, body: message.body, senderId: settings?.smsSenderId || undefined });
+    return senders.sms({ phone: message.recipientPhone, body: message.body });
   }
   if (message.channel === "whatsapp") {
     if (!senders.whatsapp) throw new Error("WhatsApp sender is unavailable.");
@@ -116,8 +122,28 @@ export async function deliverCreatedMessage(
 }
 
 export async function enqueueNotification(tx:Prisma.TransactionClient,input:NotificationInput){
-  const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}}); const channels=configuredChannels(settings?.notificationChannels,input.channels); const messages=[]; const nextAttemptAt=input.scheduledAt && input.scheduledAt.getTime()>Date.now()?input.scheduledAt:new Date();
-  for(const channel of channels){ if(channel==="whatsapp"&&!input.templateKey)continue; const idempotencyKey=deterministicIdempotencyKey(input,channel); const existing=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(existing){messages.push(existing);continue;} try{ const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body:input.body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt,idempotencyKey}}); messages.push(message);}catch(error){ if((error as {code?:string}).code!=="P2002")throw error; const existingAfterRace=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}}); if(!existingAfterRace)throw error; messages.push(existingAfterRace); } }
+  const settings=await tx.schoolSettings.findUnique({where:{schoolId:input.schoolId}});
+  const channels=configuredChannels(settings?.notificationChannels,input.channels);
+  const school=channels.includes("sms")?await tx.school.findUnique({where:{id:input.schoolId},select:{name:true}}):null;
+  const smsBody=withSchoolIdentity(school?.name,input.body);
+  const messages=[];
+  const nextAttemptAt=input.scheduledAt && input.scheduledAt.getTime()>Date.now()?input.scheduledAt:new Date();
+  for(const channel of channels){
+    if(channel==="whatsapp"&&!input.templateKey)continue;
+    const idempotencyKey=deterministicIdempotencyKey(input,channel);
+    const existing=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}});
+    if(existing){messages.push(existing);continue;}
+    try{
+      const body=channel==="sms"?smsBody:input.body;
+      const message=await tx.message.create({data:{schoolId:input.schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,recipientPhone:input.recipientPhone,body,templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,status:"queued",attempts:0,nextAttemptAt,idempotencyKey}});
+      messages.push(message);
+    }catch(error){
+      if((error as {code?:string}).code!=="P2002")throw error;
+      const existingAfterRace=await tx.message.findFirst({where:{idempotencyKey},orderBy:{createdAt:"asc"}});
+      if(!existingAfterRace)throw error;
+      messages.push(existingAfterRace);
+    }
+  }
   return messages;
 }
 export const enqueueSms=enqueueNotification;
