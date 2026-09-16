@@ -8,28 +8,29 @@ import {
 } from "../src/lib/password-policy";
 
 describe("password policy", () => {
-  it("allows six-character minimums for guardians, teachers, and ordinary school staff", () => {
-    expect(passwordMinimumForAccount("guardian")).toBe(ACCESSIBLE_PASSWORD_MIN_LENGTH);
-    expect(passwordMinimumForAccount("teacher")).toBe(ACCESSIBLE_PASSWORD_MIN_LENGTH);
-    expect(passwordMinimumForAccount("school", false)).toBe(ACCESSIBLE_PASSWORD_MIN_LENGTH);
-    expect(passwordLengthError("123456", ACCESSIBLE_PASSWORD_MIN_LENGTH)).toBeNull();
-    expect(passwordLengthError("12345", ACCESSIBLE_PASSWORD_MIN_LENGTH)).toBe(
-      `New password must contain ${ACCESSIBLE_PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters.`,
+  it("uses a six-character minimum for every account type", () => {
+    expect(ACCESSIBLE_PASSWORD_MIN_LENGTH).toBe(6);
+    expect(PRIVILEGED_PASSWORD_MIN_LENGTH).toBe(6);
+    expect(passwordMinimumForAccount("guardian")).toBe(6);
+    expect(passwordMinimumForAccount("teacher")).toBe(6);
+    expect(passwordMinimumForAccount("school", false)).toBe(6);
+    expect(passwordMinimumForAccount("school", true)).toBe(6);
+    expect(passwordMinimumForAccount("platform")).toBe(6);
+    expect(passwordLengthError("123456", 6)).toBeNull();
+    expect(passwordLengthError("12345", 6)).toBe(
+      `New password must contain 6–${PASSWORD_MAX_LENGTH} characters.`,
     );
   });
 
-  it("keeps privileged school and platform accounts at twelve characters", () => {
-    expect(passwordMinimumForAccount("school", true)).toBe(PRIVILEGED_PASSWORD_MIN_LENGTH);
-    expect(passwordMinimumForAccount("platform")).toBe(PRIVILEGED_PASSWORD_MIN_LENGTH);
-    expect(passwordLengthError("123456789012", PRIVILEGED_PASSWORD_MIN_LENGTH)).toBeNull();
-    expect(passwordLengthError("12345678901", PRIVILEGED_PASSWORD_MIN_LENGTH)).toBe(
-      `New password must contain ${PRIVILEGED_PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters.`,
-    );
+  it("does not impose character-type complexity rules", () => {
+    expect(passwordLengthError("aaaaaa", 6)).toBeNull();
+    expect(passwordLengthError("123456", 6)).toBeNull();
+    expect(passwordLengthError("!!!!!!", 6)).toBeNull();
   });
 
   it("rejects passwords longer than the existing maximum", () => {
-    expect(passwordLengthError("x".repeat(PASSWORD_MAX_LENGTH + 1), ACCESSIBLE_PASSWORD_MIN_LENGTH)).toBe(
-      `New password must contain ${ACCESSIBLE_PASSWORD_MIN_LENGTH}–${PASSWORD_MAX_LENGTH} characters.`,
+    expect(passwordLengthError("x".repeat(PASSWORD_MAX_LENGTH + 1), 6)).toBe(
+      `New password must contain 6–${PASSWORD_MAX_LENGTH} characters.`,
     );
   });
 });
