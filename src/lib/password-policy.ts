@@ -1,15 +1,13 @@
 export type PasswordPolicyUniverse = "platform" | "school" | "teacher" | "guardian";
 
 export const ACCESSIBLE_PASSWORD_MIN_LENGTH = 6;
-export const PRIVILEGED_PASSWORD_MIN_LENGTH = 12;
+export const PRIVILEGED_PASSWORD_MIN_LENGTH = ACCESSIBLE_PASSWORD_MIN_LENGTH;
 export const PASSWORD_MAX_LENGTH = 256;
 
 export function passwordMinimumForAccount(
-  universe: PasswordPolicyUniverse,
-  isElevatedSchoolAccount = false,
+  _universe: PasswordPolicyUniverse,
+  _isElevatedSchoolAccount = false,
 ): number {
-  if (universe === "platform") return PRIVILEGED_PASSWORD_MIN_LENGTH;
-  if (universe === "school" && isElevatedSchoolAccount) return PRIVILEGED_PASSWORD_MIN_LENGTH;
   return ACCESSIBLE_PASSWORD_MIN_LENGTH;
 }
 

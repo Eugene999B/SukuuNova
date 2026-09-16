@@ -18,6 +18,12 @@ function runNode(label, filename) {
 try {
   runNode("database migrations", "deploy-migrations.cjs");
 
+  if (String(process.env.RUN_ONE_TIME_PLATFORM_ADMIN_RECOVERY || "").trim() === "YES") {
+    runNode("one-time Platform admin recovery", "one-time-platform-admin-recovery.cjs");
+  } else {
+    console.log("[predeploy] one-time Platform admin recovery not requested.");
+  }
+
   if (String(process.env.RUN_EUGENE_ACADEMY_PRODUCTION_REFRESH || "").trim() === "YES") {
     runNode("Eugene Academy production refresh", "seed-eugene-academy-production-showcase.cjs");
   } else {

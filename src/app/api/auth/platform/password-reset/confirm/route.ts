@@ -6,8 +6,9 @@ import { confirmPlatformPasswordReset } from "@/lib/password-reset";
 import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 
 const schema = z.object({
-  token: z.string().min(32).max(256),
-  newPassword: z.string().min(12).max(256)
+  email: z.string().trim().email(),
+  token: z.string().regex(/^\d{6}$/),
+  newPassword: z.string().min(6).max(256)
 });
 
 export async function POST(request: Request) {
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
     const input = await parseJson(request, schema);
     await recordLoginAttempt(
       "platform-password-reset-confirm",
-      input.token.slice(0, 16),
+      input.email.toLowerCase(),
       requestIp(request.headers)
     );
     await confirmPlatformPasswordReset(input);

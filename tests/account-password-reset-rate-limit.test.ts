@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   resolveAccountLoginRateIdentity: vi.fn(),
   recordLoginAttempt: vi.fn(),
   clearAccountLoginAttempts: vi.fn(),
+  requestIp: vi.fn(),
 }));
 
 vi.mock("@/lib/password-reset", () => ({
@@ -22,6 +23,7 @@ vi.mock("@/lib/reset-delivery", () => ({ deliverResetToken: mocks.deliverResetTo
 vi.mock("@/lib/rate-limit", () => ({
   recordLoginAttempt: mocks.recordLoginAttempt,
   clearAccountLoginAttempts: mocks.clearAccountLoginAttempts,
+  requestIp: mocks.requestIp,
 }));
 
 import { POST as requestReset } from "../src/app/api/auth/school/password-reset/request/route";
@@ -41,6 +43,7 @@ describe("school password recovery throttling", () => {
     mocks.resolveAccountLoginRateIdentity.mockResolvedValue("user:user-1");
     mocks.recordLoginAttempt.mockResolvedValue("rate-key");
     mocks.clearAccountLoginAttempts.mockResolvedValue(undefined);
+    mocks.requestIp.mockReturnValue("10.0.0.9");
     mocks.issueSchoolPasswordReset.mockResolvedValue(null);
     mocks.deliverResetToken.mockResolvedValue(undefined);
     mocks.confirmSchoolPasswordReset.mockResolvedValue({
@@ -64,14 +67,17 @@ describe("school password recovery throttling", () => {
     expect(mocks.recordLoginAttempt).toHaveBeenCalledWith("school-password-reset:eug123", "user:user-1");
   });
 
-  it("clears staff and guardian failed-login locks after a successful password reset", async () => {
+  it("rate-limits code confirmation and clears staff and guardian failed-login locks after a successful password reset", async () => {
     const response = await confirmReset(jsonRequest("https://example.test/api/reset/confirm", {
       uniqueCode: "EUG123",
-      token: "abcdefghijklmnopqrstuvwxyz0123456789TOKEN",
-      newPassword: "A-new-secure-password-2026",
+      identifier: "teacher@gmail.com",
+      token: "123456",
+      newPassword: "Test-reset-passphrase-2026",
       universe: "school",
     }));
     expect(response.status).toBe(200);
+    expect(mocks.recordLoginAttempt).toHaveBeenCalledWith("school-password-reset-confirm:eug123", "teacher@gmail.com", "10.0.0.9");
+    expect(mocks.confirmSchoolPasswordReset).toHaveBeenCalledWith(expect.objectContaining({ identifier: "teacher@gmail.com", token: "123456" }));
     expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("school-login:eug123", ["user:user-1"]);
     expect(mocks.clearAccountLoginAttempts).toHaveBeenCalledWith("guardian-login:eug123", ["user:user-1"]);
   });
