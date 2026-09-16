@@ -94,7 +94,7 @@ async function recordSmsProviderDelivery(tx: Prisma.TransactionClient, message: 
   if (!result) return;
   const estimatedCredits=estimateSmsSegments(message.body).segments;
   await tx.$executeRawUnsafe(
-    `INSERT INTO "SmsProviderDelivery" ("id","schoolId","messageId","providerKey","providerMessageId","estimatedCredits","providerCreditsUsed","status","createdAt") VALUES ($1,$2,$3,$4,$5,$6,$7,'sent',CURRENT_TIMESTAMP) ON CONFLICT ("schoolId","messageId") DO UPDATE SET "providerKey"=EXCLUDED."providerKey","providerMessageId"=COALESCE(EXCLUDED."providerMessageId","SmsProviderDelivery"."providerMessageId"),"providerCreditsUsed"=COALESCE(EXCLUDED."providerCreditsUsed","SmsProviderDelivery"."providerCreditsUsed"),"status"='sent'`,
+    `INSERT INTO "SmsProviderDelivery" ("id","schoolId","messageId","providerKey","providerMessageId","estimatedCredits","providerCreditsUsed","status","acceptedAt","createdAt","updatedAt") VALUES ($1,$2,$3,$4,$5,$6,$7,'SUBMITTED',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) ON CONFLICT ("schoolId","messageId") DO UPDATE SET "providerKey"=EXCLUDED."providerKey","providerMessageId"=COALESCE(EXCLUDED."providerMessageId","SmsProviderDelivery"."providerMessageId"),"providerCreditsUsed"=COALESCE(EXCLUDED."providerCreditsUsed","SmsProviderDelivery"."providerCreditsUsed"),"status"='SUBMITTED',"acceptedAt"=COALESCE("SmsProviderDelivery"."acceptedAt",CURRENT_TIMESTAMP),"updatedAt"=CURRENT_TIMESTAMP`,
     `sms_${message.id}`,message.schoolId,message.id,result.providerKey,result.providerMessageId??null,estimatedCredits,result.creditsUsed??null,
   );
 }
