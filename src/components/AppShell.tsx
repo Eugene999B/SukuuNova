@@ -34,6 +34,7 @@ import {
   Settings,
   Settings2,
   ShieldCheck,
+  Smartphone,
   Table2,
   TriangleAlert,
   UserCog,
@@ -196,6 +197,7 @@ const platformGroups: Group[] = [
     { icon: ChartNoAxesCombined, label: "Network Analytics", href: "/platform/analytics", primary: true, permission: "analytics.view" },
     { icon: Workflow, label: "Plans & Entitlements", href: "/platform/plans", permission: "plans.manage" },
     { icon: WalletCards, label: "Platform Billing", href: "/platform/billing", permission: "billing.view" },
+    { icon: Smartphone, label: "SMS Center", href: "/platform/sms", primary: true, permission: "billing.manage" },
   ] },
   { label: "Operations", items: [
     { icon: Headset, label: "Support", href: "/platform/support", primary: true, permission: "support.view" },
