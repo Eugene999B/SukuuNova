@@ -54,6 +54,11 @@ export default function PlatformControlSettingsStudio() {
 
   if (!settings) return <div className="settings-hub-note"><strong>Loading platform policy…</strong><p>Reading the current governed defaults.</p></div>;
   const current = settings[`platform.${section}`] ?? {};
+  const smsProviderBalance = settings.smsProviderBalance ?? {};
+  const providerBalanceAvailable = bool(smsProviderBalance.available) && typeof smsProviderBalance.balance === "number";
+  const providerBalanceLabel = providerBalanceAvailable
+    ? `${Number(smsProviderBalance.balance).toLocaleString()}${typeof smsProviderBalance.currency === "string" && smsProviderBalance.currency ? ` ${smsProviderBalance.currency}` : ""}`
+    : String(smsProviderBalance.error ?? "Provider balance is unavailable.");
 
   return (
     <div>
@@ -110,6 +115,11 @@ export default function PlatformControlSettingsStudio() {
 
         {section === "messaging" ? (
           <PolicySection icon={SlidersHorizontal} eyebrow="Messaging service" title="Network defaults for paid messaging channels" description="These settings control availability and starting thresholds for the platform messaging service. Individual school audiences and automations remain inside that school's communication workspace.">
+            <div className="settings-hub-note" style={{ marginBottom: 16 }}>
+              <strong>Arkesel provider balance</strong>
+              <p>{providerBalanceLabel}</p>
+              <small>This is the live provider balance and is kept separate from SMS credits allocated to individual schools.</small>
+            </div>
             <div className="settings-toggle-list">
               <Toggle checked={bool(current.enableSms)} onChange={(value) => setSettings({ ...settings, "platform.messaging": { ...current, enableSms: value } })} title="Enable SMS service" detail="Allow schools to use allocated SMS capacity when their wallet and provider configuration permit it." />
               <Toggle checked={bool(current.enableWhatsapp)} onChange={(value) => setSettings({ ...settings, "platform.messaging": { ...current, enableWhatsapp: value } })} title="Enable WhatsApp service" detail="Allow schools to use allocated WhatsApp capacity when configured." />
