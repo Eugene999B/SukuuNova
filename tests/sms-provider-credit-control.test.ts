@@ -87,7 +87,7 @@ describe("SMS provider adapters",()=>{
     const [url,init]=fetchMock.mock.calls[0] as [string,RequestInit];
     expect(url).toBe("https://api.sailup.io/v1/sms/");
     expect((init.headers as Record<string,string>).authorization).toBe("Bearer sailup-secret-test");
-    expect(JSON.parse(String(init.body))).toEqual({from:"School",to:["233240000004"],body:"Hello"});
+    expect(JSON.parse(String(init.body))).toEqual({from:"SukuuNova",to:["233240000004"],body:"Hello"});
   });
 
   it("supports Hubtel without misclassifying monetary rate as SMS credit quantity",async()=>{
@@ -100,7 +100,7 @@ describe("SMS provider adapters",()=>{
     const [url,init]=fetchMock.mock.calls[0] as [string,RequestInit];
     expect(url).toBe("https://smsc.hubtel.com/v1/messages/send");
     expect((init.headers as Record<string,string>).authorization).toBe(`Basic ${Buffer.from("hubtel-client:hubtel-secret").toString("base64")}`);
-    expect(JSON.parse(String(init.body))).toEqual({from:"School",to:"233240000005",content:"Hello"});
+    expect(JSON.parse(String(init.body))).toEqual({from:"SukuuNova",to:"233240000005",content:"Hello"});
   });
 });
 
