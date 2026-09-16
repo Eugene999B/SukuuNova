@@ -34,6 +34,10 @@ function normalizeType(value: string) {
   return TYPE_ALIASES[key(value)] ?? key(value);
 }
 
+function bucket(value: string): "ca" | "exam" {
+  return normalizeType(value) === "exam" ? "exam" : "ca";
+}
+
 function roundPreview(value: number, mode: PreviewRules["rounding"]) {
   if (mode === "down") return Math.floor(value * 100) / 100;
   if (mode === "up") return Math.ceil(value * 100) / 100;
@@ -46,41 +50,28 @@ export type PreviewAssessment = {
   maxScore: number;
   weight: number;
   percentage: number | null;
+  status?: "present" | "absent" | "excused" | string | null;
 };
 
 export function previewSubjectTotal(items: PreviewAssessment[], rules: PreviewRules): number | null {
-  const normalized = items.map((item) => ({ ...item, normalized: normalizeType(item.type) }));
-  const buckets = new Map<string, typeof normalized>();
-  for (const row of normalized) {
-    const bucket = buckets.get(row.normalized) ?? [];
-    bucket.push(row);
-    buckets.set(row.normalized, bucket);
-  }
+  if (!items.length) return null;
+  const examCategory = rules.categories.find((category) => bucket(category.name) === "exam");
+  if (!examCategory) return null;
+  const weights = { ca: 100 - examCategory.weight, exam: examCategory.weight };
+  const normalized = items.map((item) => ({ ...item, bucket: bucket(item.type) }));
+  const hasCaEvidence = weights.ca <= 0 || normalized.some((row) => row.bucket === "ca" && row.status !== "excused");
+  const hasExamEvidence = weights.exam <= 0 || normalized.some((row) => row.bucket === "exam" && row.status !== "excused");
+  const complete = normalized.every((row) => row.status === "excused" || row.percentage != null);
+  if (!hasCaEvidence || !hasExamEvidence || (rules.missingScorePolicy === "blank" && !complete)) return null;
+
   let total = 0;
-  let appliedWeight = 0;
-  for (const [type, rows] of buckets) {
-    const configured = rules.categories.find((c) => normalizeType(c.name) === type)?.weight;
-    // The server rejects categories that are not part of the school's grading
-    // policy. The optimistic client preview must fail closed too rather than
-    // display a plausible-but-wrong total using stale per-assessment weights.
-    if (configured == null) return null;
-    const weight = configured;
-    const scored = rows.map((row) => row.percentage);
-    const effective =
-      rules.missingScorePolicy === "zero"
-        ? scored.map((p) => p ?? 0)
-        : scored.filter((p): p is number => p != null);
-    if (!effective.length) {
-      if (rules.missingScorePolicy === "zero") appliedWeight += weight;
-      continue;
-    }
-    const average = effective.reduce((a, b) => a + b, 0) / effective.length;
-    total += (average * weight) / 100;
-    appliedWeight += weight;
+  for (const bucketName of ["ca", "exam"] as const) {
+    const rows = normalized.filter((row) => row.bucket === bucketName && row.status !== "excused");
+    const effective = rules.missingScorePolicy === "zero" ? rows : rows.filter((row) => row.percentage != null);
+    const possible = effective.reduce((sum, row) => sum + row.maxScore, 0);
+    if (possible <= 0) continue;
+    const earned = effective.reduce((sum, row) => sum + ((row.percentage ?? 0) / 100) * row.maxScore, 0);
+    total += (earned / possible) * weights[bucketName];
   }
-  void appliedWeight;
-  const complete = normalized.length > 0 && normalized.every((row) => row.percentage != null);
-  if (!normalized.length) return null;
-  if (rules.missingScorePolicy === "blank" && !complete) return null;
   return roundPreview(total, rules.rounding);
 }
