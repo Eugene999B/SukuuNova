@@ -237,6 +237,23 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
   };
 }
 
+/** Report-card preview/generation rule: use every valid mark recorded so far,
+ * never turn a missing mark into zero, and keep the school's CA/Exam weights.
+ * A missing bucket contributes nothing until it has evidence; a completely
+ * unmarked subject remains blank. The ordinary gradebook calculation above
+ * keeps its stricter completion semantics. */
+export function calculateAvailableSubjectResult(assessments: AssessmentLike[], rules: AssessmentRules) {
+  const availableRules: AssessmentRules = { ...rules, missingScorePolicy: "blank" };
+  const result = calculateSubjectResult(assessments, availableRules);
+  if (result.total != null) return result;
+  const hasAvailableMark = result.breakdown.ca.percentage != null || result.breakdown.exam.percentage != null;
+  if (!hasAvailableMark) return result;
+  return {
+    ...result,
+    total: round(result.breakdown.ca.contribution + result.breakdown.exam.contribution, availableRules.rounding),
+  };
+}
+
 export function gradeForPercentage(percentage: number | null, scale: GradeBand[] = DEFAULT_GRADE_SCALE) {
   if (percentage == null) return null;
   validateGradeScale(scale);
