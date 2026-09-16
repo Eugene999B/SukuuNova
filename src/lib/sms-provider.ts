@@ -31,6 +31,9 @@ const PROVIDERS: Array<{ key: SmsProviderKey; label: string; detail: string }> =
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
+function firstRecord(value: unknown) {
+  return Array.isArray(value) ? asRecord(value[0]) : asRecord(value);
+}
 function parseProvider(value: unknown): SmsProviderKey | null {
   return value === "arkesel" || value === "sailup" || value === "hubtel" || value === "generic" ? value : null;
 }
@@ -98,6 +101,18 @@ function arkeselBalanceUrl() {
   }
 }
 
+export function getArkeselSmsDeliveryCallbackUrl() {
+  const explicitBase = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL;
+  const railwayBase = process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : undefined;
+  const base = explicitBase || railwayBase;
+  if (!base) return undefined;
+  try {
+    return new URL("/api/webhooks/arkesel/sms-delivery", base).toString();
+  } catch {
+    return undefined;
+  }
+}
+
 export async function getArkeselBalanceDetails(): Promise<ArkeselBalanceDetails> {
   const apiKey = process.env.ARKESEL_API_KEY;
   if (!apiKey) return { providerKey: "arkesel", configured: false, available: false, error: "Arkesel API key is not configured." };
@@ -105,7 +120,7 @@ export async function getArkeselBalanceDetails(): Promise<ArkeselBalanceDetails>
     const response = await fetch(arkeselBalanceUrl(), { method: "GET", headers: { "api-key": apiKey } });
     const body = await jsonResponse(response);
     if (!response.ok) return { providerKey: "arkesel", configured: true, available: false, error: `Arkesel balance HTTP ${response.status}` };
-    const data = asRecord(body.data);
+    const data = firstRecord(body.data);
     const balanceDetails = asRecord(data.balance_details ?? body.balance_details);
     const balance = firstNumber(
       data.balance,
@@ -135,15 +150,20 @@ export async function sendSmsThroughProvider(providerKey: SmsProviderKey, input:
   if (providerKey === "arkesel") {
     const apiKey = process.env.ARKESEL_API_KEY;
     if (!apiKey) throw new Error("Arkesel SMS is not configured.");
+    const callbackUrl = getArkeselSmsDeliveryCallbackUrl();
     const response = await fetch(process.env.ARKESEL_SMS_URL || "https://sms.arkesel.com/api/v2/sms/send", {
       method: "POST",
       headers: { "content-type": "application/json", "api-key": apiKey },
-      body: JSON.stringify({ sender, message: input.body, recipients: [input.phone] }),
+      body: JSON.stringify({ sender, message: input.body, recipients: [input.phone], ...(callbackUrl ? { callback_url: callbackUrl } : {}) }),
     });
     const body = await jsonResponse(response);
     if (!response.ok || (typeof body.status === "string" && body.status.toLowerCase() === "error")) throw new Error(`Arkesel SMS HTTP ${response.status}`);
-    const data = asRecord(body.data);
-    return { providerKey, providerMessageId: firstString(data.id, data.message_id, body.id), creditsUsed: positiveInt(data.credits_used ?? body.credits_used) };
+    const data = firstRecord(body.data);
+    return {
+      providerKey,
+      providerMessageId: firstString(data.id, data.message_id, data.sms_id, body.id, body.message_id, body.sms_id),
+      creditsUsed: positiveInt(data.credits_used ?? body.credits_used),
+    };
   }
 
   if (providerKey === "sailup") {
@@ -169,7 +189,7 @@ export async function sendSmsThroughProvider(providerKey: SmsProviderKey, input:
     });
     const body = await jsonResponse(response);
     if (!response.ok) throw new Error(`Hubtel SMS HTTP ${response.status}`);
-    const data = asRecord(body.data);
+    const data = firstRecord(body.data);
     // Hubtel's rate fields represent monetary routing price, not an SMS-segment quantity.
     // Keep provider credit usage unset unless Hubtel exposes a documented segment count.
     return { providerKey, providerMessageId: firstString(data.messageId, data.message_id, body.messageId, body.message_id) };
