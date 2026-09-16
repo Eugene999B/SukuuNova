@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { History } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import PlatformSmsControlCenter from "@/components/PlatformSmsControlCenter";
 import { requirePlatformSession } from "@/lib/auth";
@@ -14,6 +16,9 @@ export default async function PlatformSmsPage() {
     userName={session.name}
     role={session.role}
   >
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+      <Link href="/platform/sms/history" className="app-action"><History size={15}/><strong>SMS History</strong></Link>
+    </div>
     <PlatformSmsControlCenter initialData={JSON.parse(JSON.stringify(initialData))} />
   </AppShell>;
 }
