@@ -128,7 +128,7 @@ export async function sendReportCard(tx: TenantDb, input: { schoolId: string; ac
 }
 
 export async function getVisibleReportPdf(tx: TenantDb, input: { actorId: string; reportCardId: string }) {
-  const report = await tx.reportCard.findUnique({ where: { id: input.reportCardId }, include: { student: { include: { guardians: { include: { guardian: true } } } } });
+  const report = await tx.reportCard.findUnique({ where: { id: input.reportCardId }, include: { student: { include: { guardians: { include: { guardian: true } } } } } });
   const pdfData = report?.pdfData; if (!report || !pdfData) throw new AppError("Report PDF not found.", 404, "NOT_FOUND");
   if (await hasPermission(tx, input.actorId, "report_cards:view")) {
     const isParent = await hasPermission(tx, input.actorId, "parents:read_linked");
