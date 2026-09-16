@@ -84,9 +84,14 @@ describe("homework academic delivery bridge", () => {
       WHERE w."schoolId"=${fixture.schoolId} AND w."id"=${workId}
       LIMIT 1
     `);
+    const grading = await withTenant(fixture.schoolId, (tx) => tx.schoolSettings.findUnique({
+      where: { schoolId: fixture.schoolId },
+      select: { gradeCaWeight: true },
+    }));
     expect(linked).toHaveLength(1);
     expect(linked[0].type).toBe("homework");
-    expect(Number(linked[0].weight)).toBe(10);
+    expect(grading).not.toBeNull();
+    expect(Number(linked[0].weight)).toBe(Number(grading!.gradeCaWeight));
 
     const visible = await withTenant(fixture.schoolId, (tx) => getGuardianAcademicOverview(tx, {
       schoolId: fixture.schoolId,

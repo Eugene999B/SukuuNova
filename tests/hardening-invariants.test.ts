@@ -125,6 +125,8 @@ describe("Hardening Invariants", () => {
         timetableConfig: { periodMinutes: 45 },
         assessmentConfig: { categories: [{ name: "exam", weight: 100 }] },
         reportCardConfig: {},
+        gradeCaWeight: 40,
+        gradeExamWeight: 60,
       });
 
       const tx = {
@@ -141,6 +143,8 @@ describe("Hardening Invariants", () => {
           timetableConfig: true,
           assessmentConfig: true,
           reportCardConfig: true,
+          gradeCaWeight: true,
+          gradeExamWeight: true,
         },
       });
       expect(config.timetable).toBeDefined();
