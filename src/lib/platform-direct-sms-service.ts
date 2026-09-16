@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { PlatformSession } from "./auth";
 import { appendPlatformAudit } from "./audit";
 import { AppError } from "./errors";
@@ -8,13 +9,13 @@ import {
   type DirectSmsSender,
 } from "./platform-sms-center-service";
 import { requirePlatformPermission } from "./platform-permissions";
+import { recordPlatformDirectSmsDeliveries } from "./sms-delivery-receipts";
 import {
   getActiveSmsProviderKey,
   getArkeselBalanceDetails,
   isActiveSmsProviderConfigured,
   sendSmsThroughActiveProvider,
 } from "./sms-provider";
-import { randomUUID } from "node:crypto";
 
 const DIRECT_RECIPIENT_LIMIT = 100;
 
@@ -121,11 +122,20 @@ export async function sendPlatformDirectSms(
   const messageBody = input.body.trim();
   const results = await dispatchSmsBatch(preview.numbers, messageBody, sender);
   const failed = results.filter((result) => !result.ok);
-  const sent = results.length - failed.length;
+  const submitted = results.length - failed.length;
   const chargedCredits = results.reduce(
     (total, result) => total + (result.ok ? result.creditsUsed ?? preview.segments : 0),
     0,
   );
+
+  await recordPlatformDirectSmsDeliveries({
+    batchId,
+    actorId: session.adminId,
+    body: messageBody,
+    estimatedCreditsPerRecipient: preview.segments,
+    providerKey: preview.providerKey,
+    results,
+  });
 
   await appendPlatformAudit({
     actorId: session.adminId,
@@ -137,7 +147,8 @@ export async function sendPlatformDirectSms(
       balanceSource: "provider",
       providerBalanceBefore: preview.balanceKnown ? preview.balance : null,
       recipientCount: results.length,
-      sent,
+      submitted,
+      sent: submitted,
       failed: failed.length,
       segmentsPerRecipient: preview.segments,
       estimatedCredits: preview.totalCredits,
@@ -147,7 +158,7 @@ export async function sendPlatformDirectSms(
       recipients: results.map((result) => ({
         phone: result.phone,
         ok: result.ok,
-        status: result.ok ? "sent" : "failed",
+        status: result.ok ? "submitted" : "send_failed",
         providerKey: result.providerKey,
         providerMessageId: result.providerMessageId,
         creditsUsed: result.creditsUsed,
@@ -159,7 +170,8 @@ export async function sendPlatformDirectSms(
   return {
     ok: failed.length === 0,
     batchId,
-    sent,
+    submitted,
+    sent: submitted,
     failed: failed.length,
     refundedCredits: 0,
     chargedCredits,
