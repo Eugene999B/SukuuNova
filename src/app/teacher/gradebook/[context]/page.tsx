@@ -116,11 +116,12 @@ export default async function TeacherGradebookContextPage({ params, searchParams
       bucket: assessmentBucket(assessment.type),
     };
   }) ?? [];
+  const learnerCount = data.performance?.rows.length ?? 0;
 
   return <AppShell universe="teacher" title="My gradebook" subtitle="Create one piece of work, enter its marks, and let SukuuNova calculate the term result." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role="Teacher">
     <div className="module-workspace teacher-gradebook-redesign">
       <section className="module-card module-setup-card gradebook-context-card">
-        <div><span className="module-overline">Teacher gradebook</span><h3>{data.assignment.class.name} · {data.assignment.subject.name}</h3><p>{data.selectedTerm ? `${data.selectedTerm.name} · ${data.readOnly ? "Historical / read-only" : "Active term"}` : "No active academic term"} · {data.performance?.rows.length ?? 0} active learners</p></div>
+        <div><span className="module-overline">Teacher gradebook</span><h3>{data.assignment.class.name} · {data.assignment.subject.name}</h3><p>{data.selectedTerm ? `${data.selectedTerm.name} · ${data.readOnly ? "Historical / read-only" : "Active term"}` : "No active academic term"} · {learnerCount} active learners</p></div>
         <Link className="button secondary" href="/teacher/gradebook">← My gradebooks</Link>
       </section>
 
@@ -129,7 +130,7 @@ export default async function TeacherGradebookContextPage({ params, searchParams
       {!data.selectedTerm || !data.performance ? <section className="module-card module-empty"><strong>No academic term is available.</strong><p>School leadership controls the academic calendar. Your current gradebook appears automatically when a live term is configured.</p></section> : <>
         <section className="gradebook-policy-strip" aria-label="Current grading policy">
           <div><span>Continuous assessment</span><strong>{data.weights.ca}%</strong><small>Homework, classwork, exercises, quizzes, projects and participation combine by total points.</small></div>
-          <div><span>End-of-term exam</span><strong>{data.weights.exam}%</strong><small>The exam contribution is applied only after the learner's exam percentage is calculated.</small></div>
+          <div><span>End-of-term exam</span><strong>{data.weights.exam}%</strong><small>The exam contribution is applied only after the learner&apos;s exam percentage is calculated.</small></div>
           <div><span>Calculation safety</span><strong>Full precision</strong><small>Intermediate values are not rounded. The final report result is rounded once.</small></div>
         </section>
 
@@ -153,15 +154,15 @@ export default async function TeacherGradebookContextPage({ params, searchParams
               <div className={`gradebook-assessment-icon is-${assessment.bucket}`}>{assessment.bucket === "exam" ? "EX" : "CA"}</div>
               <div className="gradebook-assessment-main"><span>{assessment.work?.kind || assessment.type}</span><strong>{assessment.title}</strong><small>{assessment.work ? `Week ${assessment.work.weekNumber} · ${dateLabel(assessment.work.workDate)}` : "Imported assessment"}</small></div>
               <div className="gradebook-assessment-max"><span>Out of</span><strong>{assessment.maxScore}</strong></div>
-              <div className="gradebook-assessment-progress"><span>Marked</span><strong>{assessment.recorded}/{data.performance.rows.length}</strong><small>{assessment.recorded === data.performance.rows.length ? "Complete" : `${data.performance.rows.length - assessment.recorded} remaining`}</small></div>
+              <div className="gradebook-assessment-progress"><span>Marked</span><strong>{assessment.recorded}/{learnerCount}</strong><small>{assessment.recorded === learnerCount ? "Complete" : `${learnerCount - assessment.recorded} remaining`}</small></div>
               <Link className="gradebook-enter-marks" href={`${hrefFor("assessments")}&assessment=${encodeURIComponent(assessment.id)}`}>{data.readOnly ? "Review marks" : assessment.recorded ? "Continue marking" : "Enter marks"} →</Link>
-            </article>)}</div> : <div className="module-empty gradebook-empty-assessments"><strong>No assessments yet.</strong><span>Create the first homework, classwork, exercise, quiz or exam above. You will enter only that work's marks on the next screen.</span></div>}
+            </article>)}</div> : <div className="module-empty gradebook-empty-assessments"><strong>No assessments yet.</strong><span>Create the first homework, classwork, exercise, quiz or exam above. You will enter only that work&apos;s marks on the next screen.</span></div>}
           </>}
         </section> : null}
 
         {view === "overview" ? <section className="module-card gradebook-overview-panel">
           <div className="gradebook-section-heading"><div><span>Term overview</span><h2>All work in one place</h2><p>This spreadsheet view is for review and comparison. For normal mark entry, use the Assessments tab.</p></div></div>
-          {data.performance.assessments.length ? <GradebookEntryGrid key={`${context}:${data.selectedTerm.id}:${data.performance.assessments.length}`} locked={data.readOnly || data.selectedTerm.isLocked} assessments={data.performance.assessments} gradeScale={data.gradeScale} rules={{ categories: data.performance.config.categories, rounding: data.performance.config.rounding, missingScorePolicy: data.performance.config.missingScorePolicy }} rows={data.performance.rows.map((row) => ({ student: row.student, total: row.total, scores: row.scores.map((score) => ({ assessmentId: score.assessmentId, expected: score.expected, rawScore: score.rawScore, maxScore: score.maxScore, status: score.status })) }))} /> : <div className="module-empty"><strong>No assessments yet.</strong><span>Create work from the Assessments tab first.</span></div>}
+          {data.performance.assessments.length ? <GradebookEntryGrid key={`${context}:${data.selectedTerm.id}:${data.performance.assessments.length}`} locked={data.readOnly || data.selectedTerm.isLocked} assessments={data.performance.assessments} gradeScale={data.gradeScale} rules={{ categories: data.performance.config.categories, rounding: data.performance.config.rounding, missingScorePolicy: data.performance.config.missingScorePolicy, caWeight: data.performance.config.caWeight, examWeight: data.performance.config.examWeight }} rows={data.performance.rows.map((row) => ({ student: row.student, total: row.total, scores: row.scores.map((score) => ({ assessmentId: score.assessmentId, expected: score.expected, rawScore: score.rawScore, maxScore: score.maxScore, status: score.status })) }))} /> : <div className="module-empty"><strong>No assessments yet.</strong><span>Create work from the Assessments tab first.</span></div>}
         </section> : null}
 
         {view === "results" ? <section className="module-card gradebook-results-panel">
