@@ -9,6 +9,10 @@ export type AssessmentRules = {
   missingScorePolicy: "blank" | "zero";
   allowTeacherOverride: boolean;
   gradingScale?: GradeBand[];
+  /** Canonical top-level reporting weights. When present these win over legacy
+   * per-category weights so Gradebook and Report Cards use the same policy. */
+  caWeight?: number;
+  examWeight?: number;
 };
 
 export type ScoreStatus = "present" | "absent" | "excused";
@@ -116,22 +120,36 @@ function validateGradeScale(scale: GradeBand[]) {
 export function validateAssessmentRules(rules: AssessmentRules) {
   if (!rules.categories.length) throw new AppError("At least one assessment category is required.", 400, "NO_ASSESSMENT_CATEGORIES");
   if (rules.categories.some((category) => !category.name.trim())) throw new AppError("Every assessment category must have a name.", 400, "INVALID_ASSESSMENT_CATEGORY");
-  const normalizedCategories = rules.categories.map((category) => normalizeAssessmentType(category.name));
-  if (new Set(normalizedCategories).size !== normalizedCategories.length) throw new AppError("Assessment category names must be unique.", 400, "DUPLICATE_ASSESSMENT_CATEGORY");
+  // Keep raw type labels unique, but allow useful aliases such as Exam and Examination.
+  // They intentionally resolve into the same top-level Exam bucket.
+  const categoryKeys = rules.categories.map((category) => key(category.name));
+  if (new Set(categoryKeys).size !== categoryKeys.length) throw new AppError("Assessment category names must be unique.", 400, "DUPLICATE_ASSESSMENT_CATEGORY");
   if (rules.categories.some((category) => !Number.isFinite(category.weight) || category.weight < 0 || category.weight > 100)) throw new AppError("Assessment category weights must be between 0% and 100%.", 400, "INVALID_WEIGHT_RANGE");
-  const total = rules.categories.reduce((sum, category) => sum + category.weight, 0);
-  if (Math.abs(total - 100) > 0.01) throw new AppError("Assessment category weights must add up to 100%.", 400, "INVALID_WEIGHTS");
+  const categoryTotal = rules.categories.reduce((sum, category) => sum + category.weight, 0);
+  if (Math.abs(categoryTotal - 100) > 0.01) throw new AppError("Assessment category weights must add up to 100%.", 400, "INVALID_WEIGHTS");
   if (!rules.categories.some((category) => assessmentBucket(category.name) === "exam")) throw new AppError("The grading policy must include an Exam category so the CA/Exam split is explicit.", 400, "EXAM_WEIGHT_REQUIRED");
+
+  const hasExplicitCa = rules.caWeight != null;
+  const hasExplicitExam = rules.examWeight != null;
+  if (hasExplicitCa !== hasExplicitExam) throw new AppError("CA and Exam weights must be configured together.", 400, "INCOMPLETE_BUCKET_WEIGHTS");
+  if (hasExplicitCa && hasExplicitExam) {
+    const ca = Number(rules.caWeight);
+    const exam = Number(rules.examWeight);
+    if (!Number.isFinite(ca) || !Number.isFinite(exam) || ca < 0 || ca > 100 || exam < 0 || exam > 100) throw new AppError("CA and Exam weights must each be between 0% and 100%.", 400, "INVALID_BUCKET_WEIGHTS");
+    if (Math.abs(ca + exam - 100) > 0.01) throw new AppError("CA and Exam weights must add up to 100%.", 400, "INVALID_BUCKET_WEIGHTS");
+  }
   if (rules.gradingScale?.length) validateGradeScale(rules.gradingScale);
 }
 
-/** The configured Exam weight is authoritative. Every non-exam activity is
- * Continuous Assessment and shares the remaining percentage. This preserves
- * existing schools' exam percentage while removing accidental per-activity
- * weighting differences. */
+/** Use the school/reporting policy's explicit CA and Exam weights whenever they
+ * exist. The legacy category-derived fallback keeps old/imported configuration
+ * readable until it has canonical SchoolSettings weights. */
 export function assessmentBucketWeights(rules: AssessmentRules) {
   validateAssessmentRules(rules);
-  const exam = rules.categories.find((category) => assessmentBucket(category.name) === "exam")?.weight ?? 0;
+  if (rules.caWeight != null && rules.examWeight != null) return { ca: Number(rules.caWeight), exam: Number(rules.examWeight) };
+  const exam = rules.categories
+    .filter((category) => assessmentBucket(category.name) === "exam")
+    .reduce((sum, category) => sum + category.weight, 0);
   return { ca: 100 - exam, exam };
 }
 
