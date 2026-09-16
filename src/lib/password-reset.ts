@@ -1,7 +1,7 @@
 import { createHash, randomInt } from "node:crypto";
 import { hash } from "bcryptjs";
 import { getSchoolAuthorization } from "./authorization";
-import { db, withTenant } from "./db";
+import { db, withTenant, type TenantDb } from "./db";
 import { AppError, UnauthorizedError } from "./errors";
 import { passwordLengthError, passwordMinimumForAccount } from "./password-policy";
 
@@ -34,7 +34,7 @@ function validateNewPassword(password: string, minimum: number) {
 }
 
 async function findSchoolResetUser(
-  tx: Parameters<Parameters<typeof withTenant>[1]>[0],
+  tx: TenantDb,
   schoolId: string,
   identifierInput: string,
   universe: "school" | "guardian",
