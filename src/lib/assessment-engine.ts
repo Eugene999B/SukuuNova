@@ -12,6 +12,14 @@ export type AssessmentRules = {
 };
 
 export type ScoreStatus = "present" | "absent" | "excused";
+export type AssessmentBucket = "ca" | "exam";
+export type ResultBucket = {
+  earned: number;
+  possible: number;
+  percentage: number | null;
+  weight: number;
+  contribution: number;
+};
 
 type AssessmentLike = {
   id: string;
@@ -20,8 +28,6 @@ type AssessmentLike = {
   maxScore: Prisma.Decimal | number;
   weight: Prisma.Decimal | number;
   score?: Prisma.Decimal | number | null;
-  // excused: approved absence, excluded from averages (as if missing).
-  // absent: unexcused no-show, counts at face value (typically 0).
   status?: ScoreStatus | string | null;
 };
 
@@ -55,6 +61,10 @@ function key(value: string) {
 
 export function normalizeAssessmentType(value: string) {
   return TYPE_ALIASES[key(value)] ?? key(value);
+}
+
+export function assessmentBucket(type: string): AssessmentBucket {
+  return normalizeAssessmentType(type) === "exam" ? "exam" : "ca";
 }
 
 function round(value: number, mode: AssessmentRules["rounding"]) {
@@ -104,119 +114,97 @@ function validateGradeScale(scale: GradeBand[]) {
 }
 
 export function validateAssessmentRules(rules: AssessmentRules) {
-  if (!rules.categories.length) {
-    throw new AppError("At least one assessment category is required.", 400, "NO_ASSESSMENT_CATEGORIES");
-  }
-  if (rules.categories.some((category) => !category.name.trim())) {
-    throw new AppError("Every assessment category must have a name.", 400, "INVALID_ASSESSMENT_CATEGORY");
-  }
+  if (!rules.categories.length) throw new AppError("At least one assessment category is required.", 400, "NO_ASSESSMENT_CATEGORIES");
+  if (rules.categories.some((category) => !category.name.trim())) throw new AppError("Every assessment category must have a name.", 400, "INVALID_ASSESSMENT_CATEGORY");
   const normalizedCategories = rules.categories.map((category) => normalizeAssessmentType(category.name));
-  if (new Set(normalizedCategories).size !== normalizedCategories.length) {
-    throw new AppError("Assessment category names must be unique.", 400, "DUPLICATE_ASSESSMENT_CATEGORY");
-  }
-  if (rules.categories.some((category) => !Number.isFinite(category.weight) || category.weight < 0 || category.weight > 100)) {
-    throw new AppError("Assessment category weights must be between 0% and 100%.", 400, "INVALID_WEIGHT_RANGE");
-  }
+  if (new Set(normalizedCategories).size !== normalizedCategories.length) throw new AppError("Assessment category names must be unique.", 400, "DUPLICATE_ASSESSMENT_CATEGORY");
+  if (rules.categories.some((category) => !Number.isFinite(category.weight) || category.weight < 0 || category.weight > 100)) throw new AppError("Assessment category weights must be between 0% and 100%.", 400, "INVALID_WEIGHT_RANGE");
   const total = rules.categories.reduce((sum, category) => sum + category.weight, 0);
-  if (Math.abs(total - 100) > 0.01) {
-    throw new AppError("Assessment category weights must add up to 100%.", 400, "INVALID_WEIGHTS");
-  }
+  if (Math.abs(total - 100) > 0.01) throw new AppError("Assessment category weights must add up to 100%.", 400, "INVALID_WEIGHTS");
+  if (!rules.categories.some((category) => assessmentBucket(category.name) === "exam")) throw new AppError("The grading policy must include an Exam category so the CA/Exam split is explicit.", 400, "EXAM_WEIGHT_REQUIRED");
   if (rules.gradingScale?.length) validateGradeScale(rules.gradingScale);
 }
 
+/** The configured Exam weight is authoritative. Every non-exam activity is
+ * Continuous Assessment and shares the remaining percentage. This preserves
+ * existing schools' exam percentage while removing accidental per-activity
+ * weighting differences. */
+export function assessmentBucketWeights(rules: AssessmentRules) {
+  validateAssessmentRules(rules);
+  const exam = rules.categories.find((category) => assessmentBucket(category.name) === "exam")?.weight ?? 0;
+  return { ca: 100 - exam, exam };
+}
+
 export function categoryWeight(type: string, _assessmentWeight: number, rules: AssessmentRules) {
-  const normalized = normalizeAssessmentType(type);
-  const configured = rules.categories.find((category) => normalizeAssessmentType(category.name) === normalized);
-  if (!configured) {
-    throw new AppError(
-      `Assessment category "${type}" is not configured in the school grading policy. Add it in Academic Setup before calculating results.`,
-      409,
-      "ASSESSMENT_CATEGORY_NOT_CONFIGURED"
-    );
-  }
-  return configured.weight;
+  const weights = assessmentBucketWeights(rules);
+  return assessmentBucket(type) === "exam" ? weights.exam : weights.ca;
+}
+
+function emptyBucket(weight: number): ResultBucket {
+  return { earned: 0, possible: 0, percentage: null, weight, contribution: 0 };
 }
 
 export function calculateSubjectResult(assessments: AssessmentLike[], rules: AssessmentRules) {
   validateAssessmentRules(rules);
-
+  const weights = assessmentBucketWeights(rules);
   const normalizedRows = assessments.map((assessment) => {
     const maxScore = Number(assessment.maxScore);
     const status: ScoreStatus = assessment.status === "excused" || assessment.status === "absent" ? assessment.status : "present";
     const excused = status === "excused";
     const rawScore = excused || assessment.score == null ? null : Number(assessment.score);
-    if (!Number.isFinite(maxScore) || maxScore <= 0) {
-      throw new AppError(`Assessment ${assessment.name} has an invalid maximum score.`, 409, "INVALID_MAX_SCORE");
-    }
-    if (rawScore != null && (!Number.isFinite(rawScore) || rawScore < 0 || rawScore > maxScore)) {
-      throw new AppError(`Score for ${assessment.name} is outside the valid range.`, 409, "INVALID_SCORE");
-    }
+    if (!Number.isFinite(maxScore) || maxScore <= 0) throw new AppError(`Assessment ${assessment.name} has an invalid maximum score.`, 409, "INVALID_MAX_SCORE");
+    if (rawScore != null && (!Number.isFinite(rawScore) || rawScore < 0 || rawScore > maxScore)) throw new AppError(`Score for ${assessment.name} is outside the valid range.`, 409, "INVALID_SCORE");
     const type = normalizeAssessmentType(assessment.type);
+    return { assessmentId: assessment.id, name: assessment.name, type, bucket: assessmentBucket(type), maxScore, rawScore, status, percentage: rawScore == null ? null : rawScore / maxScore * 100 };
+  });
+
+  const breakdown: { ca: ResultBucket; exam: ResultBucket } = { ca: emptyBucket(weights.ca), exam: emptyBucket(weights.exam) };
+  for (const bucketName of ["ca", "exam"] as const) {
+    const rows = normalizedRows.filter((row) => row.bucket === bucketName && row.status !== "excused");
+    const effective = rules.missingScorePolicy === "zero" ? rows : rows.filter((row) => row.rawScore != null);
+    const earned = effective.reduce((sum, row) => sum + (row.rawScore ?? 0), 0);
+    const possible = effective.reduce((sum, row) => sum + row.maxScore, 0);
+    const percentage = possible > 0 ? earned / possible * 100 : null;
+    const weight = breakdown[bucketName].weight;
+    breakdown[bucketName] = { earned, possible, percentage, weight, contribution: percentage == null ? 0 : percentage * weight / 100 };
+  }
+
+  const details = normalizedRows.map((row) => {
+    const bucket = breakdown[row.bucket];
     return {
-      assessmentId: assessment.id,
-      name: assessment.name,
-      type,
-      maxScore,
-      rawScore,
-      status,
-      percentage: rawScore == null ? null : rawScore / maxScore * 100
+      assessmentId: row.assessmentId,
+      name: row.name,
+      type: row.type,
+      bucket: row.bucket,
+      maxScore: row.maxScore,
+      rawScore: row.rawScore,
+      status: row.status,
+      percentage: row.percentage,
+      weight: bucket.weight,
+      contribution: row.status === "excused" || row.rawScore == null || bucket.possible <= 0 ? 0 : row.rawScore / bucket.possible * bucket.weight,
     };
   });
 
-  const buckets = new Map<string, typeof normalizedRows>();
-  for (const row of normalizedRows) {
-    const bucket = buckets.get(row.type) ?? [];
-    bucket.push(row);
-    buckets.set(row.type, bucket);
-  }
+  const allRecordedOrExcused = normalizedRows.length > 0 && normalizedRows.every((row) => row.status === "excused" || row.rawScore != null);
+  const hasCaEvidence = weights.ca <= 0 || normalizedRows.some((row) => row.bucket === "ca" && row.status !== "excused");
+  const hasExamEvidence = weights.exam <= 0 || normalizedRows.some((row) => row.bucket === "exam" && row.status !== "excused");
+  const complete = allRecordedOrExcused && hasCaEvidence && hasExamEvidence;
 
-  let total = 0;
-  let appliedWeight = 0;
-  const details = normalizedRows.map((row) => ({
-    assessmentId: row.assessmentId,
-    name: row.name,
-    type: row.type,
-    maxScore: row.maxScore,
-    rawScore: row.rawScore,
-    status: row.status,
-    percentage: row.percentage,
-    weight: categoryWeight(row.type, 0, rules),
-    contribution: 0
-  }));
-
-  for (const [type, rows] of buckets) {
-    const weight = categoryWeight(type, 0, rules);
-    const scoredPercentages = rows.map((row) => row.percentage);
-    const effectivePercentages = rules.missingScorePolicy === "zero"
-      ? scoredPercentages.map((percentage) => percentage ?? 0)
-      : scoredPercentages.filter((percentage): percentage is number => percentage != null);
-    if (effectivePercentages.length === 0) {
-      if (rules.missingScorePolicy === "zero") appliedWeight += weight;
-      continue;
-    }
-    const average = effectivePercentages.reduce((sum, percentage) => sum + percentage, 0) / effectivePercentages.length;
-    total += average * weight / 100;
-    appliedWeight += weight;
-    for (const detail of details) {
-      if (detail.type === type) detail.contribution = average * weight / 100;
-    }
-  }
-
-  const complete = normalizedRows.length > 0 && normalizedRows.every((row) => row.rawScore != null);
-  let effectiveTotal: number | null;
-  if (!normalizedRows.length) {
-    effectiveTotal = null;
-  } else if (rules.missingScorePolicy === "blank" && !complete) {
-    effectiveTotal = null;
-  } else {
-    effectiveTotal = total;
+  let effectiveTotal: number | null = null;
+  if (normalizedRows.length && hasCaEvidence && hasExamEvidence && (rules.missingScorePolicy !== "blank" || complete)) {
+    // Keep full precision through both buckets. Only the final report value is rounded.
+    effectiveTotal = breakdown.ca.contribution + breakdown.exam.contribution;
   }
 
   return {
     total: effectiveTotal == null ? null : round(effectiveTotal, rules.rounding),
     complete,
-    includedWeight: round(appliedWeight, rules.rounding),
-    details
+    includedWeight: round((breakdown.ca.percentage == null ? 0 : weights.ca) + (breakdown.exam.percentage == null ? 0 : weights.exam), rules.rounding),
+    breakdown: {
+      ca: { ...breakdown.ca, contribution: round(breakdown.ca.contribution, rules.rounding) },
+      exam: { ...breakdown.exam, contribution: round(breakdown.exam.contribution, rules.rounding) },
+    },
+    details,
   };
 }
 
