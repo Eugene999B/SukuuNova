@@ -22,14 +22,24 @@ export function gradeScale(value: Prisma.JsonValue | null | undefined): GradeBan
 
 export function rulesFor(settings: { gradeCaWeight: Prisma.Decimal | number; gradeExamWeight: Prisma.Decimal | number; gradingScale: Prisma.JsonValue | null; assessmentConfig: Prisma.JsonValue | null }): AssessmentRules {
   const configured = asObject(settings.assessmentConfig);
+  const caWeight = Number(settings.gradeCaWeight);
+  const examWeight = Number(settings.gradeExamWeight);
   const categories = Array.isArray(configured.categories)
     ? configured.categories.filter((entry): entry is { name: string; weight: number } => Boolean(entry) && typeof entry === "object" && typeof (entry as Record<string, Prisma.JsonValue>).name === "string" && Number.isFinite(Number((entry as Record<string, Prisma.JsonValue>).weight))).map((entry) => ({ name: entry.name, weight: Number(entry.weight) }))
-    : [{ name: "ca", weight: Number(settings.gradeCaWeight) }, { name: "exam", weight: Number(settings.gradeExamWeight) }];
+    : [{ name: "ca", weight: caWeight }, { name: "exam", weight: examWeight }];
   const total = categories.reduce((sum, category) => sum + category.weight, 0);
-  const normalized = Math.abs(total - 100) < 0.01 ? categories : [{ name: "ca", weight: Number(settings.gradeCaWeight) }, { name: "exam", weight: Number(settings.gradeExamWeight) }];
+  const normalized = Math.abs(total - 100) < 0.01 ? categories : [{ name: "ca", weight: caWeight }, { name: "exam", weight: examWeight }];
   const rounding = configured.rounding === "down" || configured.rounding === "up" ? configured.rounding : "nearest";
   const missingScorePolicy = configured.missingScorePolicy === "zero" ? "zero" : "blank";
-  return { categories: normalized, rounding, missingScorePolicy, allowTeacherOverride: configured.allowTeacherOverride === true, gradingScale: gradeScale(settings.gradingScale) };
+  return {
+    categories: normalized,
+    rounding,
+    missingScorePolicy,
+    allowTeacherOverride: configured.allowTeacherOverride === true,
+    gradingScale: gradeScale(settings.gradingScale),
+    caWeight,
+    examWeight,
+  };
 }
 
 export type PromotionDecision = "promoted" | "not_promoted" | "decision_required";
@@ -70,7 +80,7 @@ export function promotionForRule(
   input: { overallPosition: number | null; rankedCount: number; cutoffPercent: number; lines: Array<{ total: number | null }>; passMark: number }
 ): PromotionDecision {
   if (rule === "manual") return "decision_required";
-  if (rule === "pass_mark") return input.lines.length > 0 && input.lines.every((l) => (l.total ?? -1) >= input.passMark) ? "promoted" : "not_promoted";
+  if (rule === "pass_mark") return input.lines.length > 0 && input.lines.every((line) => (line.total ?? -1) >= input.passMark) ? "promoted" : "not_promoted";
   const cutoff = Math.min(100, Math.max(1, Math.round(input.cutoffPercent)));
   return input.overallPosition != null && input.overallPosition <= Math.ceil((input.rankedCount * cutoff) / 100) ? "promoted" : "not_promoted";
 }
@@ -78,8 +88,8 @@ export function promotionForRule(
 /** Pass threshold independent of stored band order: labelled pass band first, else lowest band at/above 40. */
 export function passMarkForScale(scale: Array<{ min: number; max: number; grade: string; remark?: string; label?: string }>): number {
   const sorted = [...scale].sort((a, b) => a.min - b.min);
-  return sorted.find((b) => typeof b.label === "string" && /pass/i.test(b.label))?.min
-    ?? sorted.find((b) => b.min >= 40)?.min
+  return sorted.find((band) => typeof band.label === "string" && /pass/i.test(band.label))?.min
+    ?? sorted.find((band) => band.min >= 40)?.min
     ?? 50;
 }
 
@@ -107,7 +117,10 @@ export async function overallTotalsForScope(
     }
     const subjectTotals: number[] = [];
     for (const rows of subjects.values()) {
-      const result = calculateSubjectResult(rows.map((assessment) => { const hit = assessment.scores.find((score) => score.studentId === student.id); return { id: assessment.id, name: assessment.subject.name, type: assessment.type, maxScore: assessment.maxScore, weight: assessment.weight, score: hit?.value ?? null, status: hit?.status ?? null }; }), input.rules);
+      const result = calculateSubjectResult(rows.map((assessment) => {
+        const hit = assessment.scores.find((score) => score.studentId === student.id);
+        return { id: assessment.id, name: assessment.subject.name, type: assessment.type, maxScore: assessment.maxScore, weight: assessment.weight, score: hit?.value ?? null, status: hit?.status ?? null };
+      }), input.rules);
       if (result.total != null) subjectTotals.push(result.total);
     }
     if (subjectTotals.length) totals.set(student.id, subjectTotals.reduce((sum, value) => sum + value, 0) / subjectTotals.length);
@@ -175,7 +188,7 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
     overallPosition,
     rankedCount,
     cutoffPercent,
-    lines: subjectPositions.map((s) => ({ total: s.total })),
+    lines: subjectPositions.map((subject) => ({ total: subject.total })),
     passMark: passMarkForScale(scale ?? []),
   });
   const existing = asObject(report.calculationSnapshot);

@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ClipboardCheck, Loader2, Plus } from "lucide-react";
+import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { CalendarDays, Loader2, Plus } from "lucide-react";
 
 export type QuickMarkKind = "Classwork" | "Homework" | "Exercise" | "Participation" | "Quiz" | "Exam";
 
@@ -32,31 +32,32 @@ function suggestedWeek(date: string, start: string, teachingWeeks: number) {
 
 export default function TeacherQuickMarkSheet({ classId, subjectId, termId, teachingWeeks, termStart, termEnd, allowedKinds }: Props) {
   const router = useRouter();
+  const pathname = usePathname();
   const initialDate = boundedToday(termStart, termEnd);
-  const kinds = allowedKinds.length ? allowedKinds : (["Classwork"] as QuickMarkKind[]);
+  const kinds = allowedKinds.length ? allowedKinds : (["Classwork", "Homework", "Exercise", "Participation", "Quiz", "Exam"] as QuickMarkKind[]);
   const [kind, setKind] = useState<QuickMarkKind>(kinds[0]);
-  const [weekNumber, setWeekNumber] = useState(() => suggestedWeek(initialDate, termStart, teachingWeeks));
+  const [title, setTitle] = useState("");
   const [workDate, setWorkDate] = useState(initialDate);
   const [maxScore, setMaxScore] = useState(10);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const weekOptions = useMemo(() => Array.from({ length: teachingWeeks }, (_, index) => index + 1), [teachingWeeks]);
+  const weekNumber = suggestedWeek(workDate, termStart, teachingWeeks);
 
   async function createSheet() {
     if (busy) return;
     setBusy(true);
-    setMessage("");
     setError("");
     try {
       const response = await fetch("/api/school/teacher-academic-workspace", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "createMarkSheet", termId, classId, subjectId, kind, weekNumber, workDate, maxScore }),
+        body: JSON.stringify({ action: "createMarkSheet", termId, classId, subjectId, kind, title: title.trim() || undefined, workDate, maxScore }),
       });
       const data = await response.json().catch(() => ({})) as { message?: string; error?: string; result?: { assessmentId?: string } };
       if (!response.ok) throw new Error(data.message || data.error || "The mark sheet could not be created.");
-      setMessage(`${kind} mark sheet created. Enter marks in the grid below.`);
+      if (!data.result?.assessmentId) throw new Error("The mark sheet was created but SukuuNova could not open it safely. Refresh the page before entering marks.");
+      const query = new URLSearchParams({ term: termId, view: "assessments", assessment: data.result.assessmentId });
+      router.push(`${pathname}?${query.toString()}`);
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The mark sheet could not be created.");
@@ -66,20 +67,26 @@ export default function TeacherQuickMarkSheet({ classId, subjectId, termId, teac
   }
 
   return (
-    <div className="gradebook-quick-sheet">
-      <div className="gradebook-quick-sheet-head">
-        <div><span>Record marks</span><strong>Open a fresh mark sheet in seconds</strong><small>No question builder, percentage setup or publishing step is required.</small></div>
-        <ClipboardCheck size={19} />
+    <div className="gradebook-create-work">
+      <div className="gradebook-create-work-heading">
+        <div>
+          <span>New assessment</span>
+          <strong>Create the work, then enter only these marks</strong>
+          <small>Choose what you gave the class. SukuuNova handles the teaching week and final weighting automatically.</small>
+        </div>
+        <CalendarDays size={20} aria-hidden="true" />
       </div>
-      <div className="gradebook-quick-sheet-fields">
-        <label><span>Type</span><select value={kind} disabled={busy} onChange={(event) => setKind(event.target.value as QuickMarkKind)}>{kinds.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
-        <label><span>Week</span><select value={weekNumber} disabled={busy} onChange={(event) => setWeekNumber(Number(event.target.value))}>{weekOptions.map((week) => <option key={week} value={week}>Week {week}</option>)}</select></label>
-        <label><span>Date</span><input type="date" min={termStart} max={termEnd} value={workDate} disabled={busy} onChange={(event) => setWorkDate(event.target.value)} /></label>
+      <div className="gradebook-create-work-fields">
+        <label><span>Work type</span><select value={kind} disabled={busy} onChange={(event) => setKind(event.target.value as QuickMarkKind)}>{kinds.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label className="is-wide"><span>Work name <small>optional</small></span><input value={title} maxLength={160} disabled={busy} onChange={(event) => setTitle(event.target.value)} placeholder={`e.g. ${kind} on fractions`} /></label>
+        <label><span>Date given</span><input type="date" min={termStart} max={termEnd} value={workDate} disabled={busy} onChange={(event) => setWorkDate(event.target.value)} /></label>
         <label><span>Out of</span><input type="number" min={1} max={100000} inputMode="decimal" value={maxScore} disabled={busy} onChange={(event) => setMaxScore(Number(event.target.value))} /></label>
-        <button type="button" className="academic-btn-primary gradebook-quick-sheet-button" disabled={busy || !Number.isFinite(maxScore) || maxScore <= 0} onClick={() => void createSheet()}>{busy ? <><Loader2 size={15} className="spin" /> Creating…</> : <><Plus size={15} /> Create mark sheet</>}</button>
       </div>
-      <p className="gradebook-quick-sheet-note">This term has {teachingWeeks} teaching week{teachingWeeks === 1 ? "" : "s"}. Work number and gradebook category are handled automatically by SukuuNova.</p>
-      {(error || message) ? <div role={error ? "alert" : "status"} className={`gradebook-entry-status ${error ? "is-error" : "is-success"}`}>{error || message}</div> : null}
+      <div className="gradebook-create-work-footer">
+        <p>Falls in <strong>Week {weekNumber}</strong>. You can create another {kind.toLowerCase()} in the same week at any time.</p>
+        <button type="button" className="gradebook-primary-action" disabled={busy || !Number.isFinite(maxScore) || maxScore <= 0 || !workDate} onClick={() => void createSheet()}>{busy ? <><Loader2 size={16} className="spin" /> Creating…</> : <><Plus size={16} /> Create & enter marks</>}</button>
+      </div>
+      {error ? <div role="alert" className="gradebook-entry-status is-error">{error}</div> : null}
     </div>
   );
 }
