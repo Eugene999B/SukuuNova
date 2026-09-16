@@ -2,11 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requirePlatformSession } from "@/lib/auth";
 import { routeError } from "@/lib/errors";
+import { previewPlatformDirectSms, sendPlatformDirectSms } from "@/lib/platform-direct-sms-service";
 import { getSmsCenterOverviewSafe } from "@/lib/platform-sms-center-overview";
 import {
-  previewDirectSms,
   previewSchoolSms,
-  sendDirectSms,
   sendSchoolSms,
   topUpSchoolSms,
 } from "@/lib/platform-sms-center-service";
@@ -37,8 +36,8 @@ export async function POST(request: Request) {
     if (input.action === "topUp") return NextResponse.json(await topUpSchoolSms(session, input));
     if (input.action === "previewSchool") return NextResponse.json(await previewSchoolSms(session, input));
     if (input.action === "sendSchool") return NextResponse.json(await sendSchoolSms(session, input));
-    if (input.action === "previewDirect") return NextResponse.json(await previewDirectSms(session, input));
-    return NextResponse.json(await sendDirectSms(session, input));
+    if (input.action === "previewDirect") return NextResponse.json(await previewPlatformDirectSms(session, input));
+    return NextResponse.json(await sendPlatformDirectSms(session, input));
   } catch (error) {
     if (error instanceof z.ZodError) return NextResponse.json({ error: "INVALID_INPUT", message: "Check the SMS recipients, message, audience and credit amount." }, { status: 400 });
     return routeError(error);
