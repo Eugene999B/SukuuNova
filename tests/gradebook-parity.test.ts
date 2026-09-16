@@ -68,6 +68,50 @@ describe("gradebook preview parity with the canonical CA/Exam engine", () => {
     expect(previewSubjectTotal(items, rules)).toBe(71.43);
   });
 
+  it("uses the official SchoolSettings CA/Exam weights even when legacy category weights differ", () => {
+    const rules: PreviewRules = {
+      categories: [
+        { name: "Homework", weight: 30 },
+        { name: "Classwork", weight: 30 },
+        { name: "Exam", weight: 40 },
+      ],
+      caWeight: 30,
+      examWeight: 70,
+      rounding: "nearest",
+      missingScorePolicy: "blank",
+    };
+    const items: Item[] = [
+      { id: "ca", type: "Homework", maxScore: 20, weight: 30, percentage: 80 },
+      { id: "exam", type: "Exam", maxScore: 100, weight: 40, percentage: 60 },
+    ];
+
+    const engine = engineTotal(items, rules);
+    expect(engine.breakdown.ca.weight).toBe(30);
+    expect(engine.breakdown.exam.weight).toBe(70);
+    expect(engine.total).toBe(66);
+    expect(previewSubjectTotal(items, rules)).toBe(66);
+  });
+
+  it("allows Exam and Examination labels to share the same official exam bucket", () => {
+    const rules: PreviewRules = {
+      categories: [
+        { name: "Homework", weight: 30 },
+        { name: "Exam", weight: 35 },
+        { name: "Examination", weight: 35 },
+      ],
+      caWeight: 30,
+      examWeight: 70,
+      rounding: "nearest",
+      missingScorePolicy: "blank",
+    };
+    const items: Item[] = [
+      { id: "ca", type: "Homework", maxScore: 10, weight: 30, percentage: 100 },
+      { id: "exam", type: "Examination", maxScore: 100, weight: 35, percentage: 50 },
+    ];
+    expect(engineTotal(items, rules).total).toBe(65);
+    expect(previewSubjectTotal(items, rules)).toBe(65);
+  });
+
   it("treats every non-exam activity as CA even when it has no separate configured weight", () => {
     const rules: PreviewRules = {
       categories: [{ name: "Classwork", weight: 40 }, { name: "Exam", weight: 60 }],
