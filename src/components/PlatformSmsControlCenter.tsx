@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { RefreshCw, Send, Smartphone, WalletCards, Building2, Radio, PlusCircle, UsersRound, ShieldCheck } from "lucide-react";
+import { Building2, ChevronRight, History, PlusCircle, Radio, RefreshCw, Send, ShieldCheck, Smartphone, UsersRound, WalletCards } from "lucide-react";
 import "./platform-sms-center.css";
 
 type School = { id: string; name: string; uniqueCode: string; status: string; smsBalance: number };
@@ -29,14 +30,6 @@ async function request<T>(payload?: Record<string, unknown>): Promise<T> {
 }
 function number(value: number | undefined) { return new Intl.NumberFormat().format(value ?? 0); }
 function date(value: string) { return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
-function metaText(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
-  const meta = value as Record<string, unknown>;
-  if (typeof meta.sent === "number" || typeof meta.failed === "number") return `${meta.sent ?? 0} sent · ${meta.failed ?? 0} failed`;
-  if (typeof meta.recipientCount === "number") return `${meta.recipientCount} recipients · ${meta.totalCredits ?? meta.reservedCredits ?? 0} credits`;
-  if (typeof meta.quantity === "number") return `${meta.quantity} credits`;
-  return "Audited platform SMS action";
-}
 
 export default function PlatformSmsControlCenter({ initialData }: { initialData: Overview }) {
   const [data, setData] = useState(initialData);
@@ -108,10 +101,11 @@ export default function PlatformSmsControlCenter({ initialData }: { initialData:
   async function sendDirect() {
     try {
       setBusy("direct-send"); setNotice(null);
-      const result = await request<{ sent: number; failed: number; refundedCredits: number }>({ action: "sendDirect", numbers, body: directBody });
+      const result = await request<{ submitted?: number; sent: number; failed: number; refundedCredits: number }>({ action: "sendDirect", numbers, body: directBody });
       setDirectPreview(null); setNumbers(""); setDirectBody("");
       await refresh(true);
-      setNotice({ kind: result.failed ? "error" : "ok", text: `${number(result.sent)} SMS sent${result.failed ? `, ${number(result.failed)} failed and ${number(result.refundedCredits)} credits were refunded.` : "."}` });
+      const submitted = result.submitted ?? result.sent;
+      setNotice({ kind: result.failed ? "error" : "ok", text: `${number(submitted)} SMS submitted to the provider${result.failed ? `, ${number(result.failed)} failed during submission.` : ". Delivery confirmation will appear in SMS History."}` });
     } catch (error) { setNotice({ kind: "error", text: error instanceof Error ? error.message : "Direct SMS send failed." }); }
     finally { setBusy(""); }
   }
@@ -130,7 +124,7 @@ export default function PlatformSmsControlCenter({ initialData }: { initialData:
 
     <section className="sms-stats">
       <article><span><Radio size={18}/> Provider balance</span><strong>{data.providerBalance.available ? number(data.providerBalance.balance) : "Unavailable"}</strong><small>{data.activeProvider.toUpperCase()} {data.providerBalance.currency || ""}</small></article>
-      <article><span><WalletCards size={18}/> Unallocated SMS</span><strong>{number(data.platformBalance)}</strong><small>Available for allocation/direct sends</small></article>
+      <article><span><WalletCards size={18}/> Unallocated SMS</span><strong>{number(data.platformBalance)}</strong><small>Available for school allocation</small></article>
       <article><span><Building2 size={18}/> School wallets</span><strong>{number(data.allocatedToSchools)}</strong><small>Credits currently held by schools</small></article>
       <article><span><Smartphone size={18}/> Sender ID</span><strong>{data.senderId}</strong><small>Locked platform-wide</small></article>
     </section>
@@ -144,7 +138,7 @@ export default function PlatformSmsControlCenter({ initialData }: { initialData:
       </article>
 
       <article className="sms-card">
-        <div className="sms-card-title"><div><h3><Radio size={18}/> Provider status</h3><p>Live provider health and platform inventory are intentionally shown separately.</p></div></div>
+        <div className="sms-card-title"><div><h3><Radio size={18}/> Provider status</h3><p>Live provider health and school-allocation inventory are intentionally shown separately.</p></div></div>
         <div className="sms-provider-row"><span>Active provider</span><strong>{data.activeProvider.toUpperCase()}</strong></div>
         <div className="sms-provider-row"><span>Configured</span><strong>{data.providerBalance.configured ? "Yes" : "No"}</strong></div>
         <div className="sms-provider-row"><span>Live balance</span><strong>{data.providerBalance.available ? number(data.providerBalance.balance) : "Not available"}</strong></div>
@@ -185,8 +179,9 @@ export default function PlatformSmsControlCenter({ initialData }: { initialData:
         <div className="sms-feed">{data.allocationHistory.length ? data.allocationHistory.slice(0, 12).map((item) => <div key={item.id}><div><strong>{item.schoolName}</strong><span>+{number(item.quantity)} SMS</span></div><small>{date(item.createdAt)} · balance {number(item.balanceAfter)}</small></div>) : <p className="sms-muted">No SMS allocations yet.</p>}</div>
       </article>
       <article className="sms-card">
-        <div className="sms-card-title"><div><h3>Send & action history</h3><p>Audited actions from this control center.</p></div></div>
-        <div className="sms-feed">{data.sendHistory.length ? data.sendHistory.slice(0, 12).map((item) => <div key={item.id}><div><strong>{item.action.replace("platform.sms.", "").replaceAll("_", " ")}</strong><span>{metaText(item.meta)}</span></div><small>{date(item.createdAt)}</small></div>) : <p className="sms-muted">No SMS Center actions yet.</p>}</div>
+        <div className="sms-card-title"><div><h3><History size={18}/> SMS delivery history</h3><p>Delivery status belongs in the dedicated history view, where each SMS can be opened for provider and receipt details.</p></div></div>
+        <p className="sms-muted">Submitted or accepted does not mean delivered. Open the history to distinguish queued, accepted, delivered, rejected, expired and failed messages.</p>
+        <Link href="/platform/sms/history" className="sms-button secondary">Open SMS History <ChevronRight size={16}/></Link>
       </article>
     </section>
   </div>;
