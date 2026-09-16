@@ -6,6 +6,12 @@ import { CalendarDays, Loader2, Plus } from "lucide-react";
 
 export type QuickMarkKind = "Classwork" | "Homework" | "Exercise" | "Participation" | "Quiz" | "Exam";
 
+type ExistingWork = {
+  kind: string;
+  weekNumber: number;
+  workNumber: number;
+};
+
 type Props = {
   classId: string;
   subjectId: string;
@@ -14,6 +20,9 @@ type Props = {
   termStart: string;
   termEnd: string;
   allowedKinds: QuickMarkKind[];
+  existingWork?: ExistingWork[];
+  initialWeek?: number;
+  initialKind?: QuickMarkKind;
 };
 
 const DAY_MS = 86400000;
@@ -32,35 +41,64 @@ function suggestedWeek(date: string, start: string, teachingWeeks: number) {
   return Math.max(1, Math.min(teachingWeeks, Math.floor((dateMs - startMs) / (7 * DAY_MS)) + 1));
 }
 
-function workDateForWeek(weekNumber: number, start: string, end: string) {
+function weekBounds(weekNumber: number, start: string, end: string) {
   const startMs = Date.parse(start + "T00:00:00.000Z");
   const endMs = Date.parse(end + "T00:00:00.000Z");
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return start;
-  const weekStartMs = startMs + (weekNumber - 1) * 7 * DAY_MS;
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return { min: start, max: end };
+  const weekStartMs = Math.min(endMs, startMs + (weekNumber - 1) * 7 * DAY_MS);
   const weekEndMs = Math.min(endMs, weekStartMs + 6 * DAY_MS);
-  const today = new Date().toISOString().slice(0, 10);
-  const todayMs = Date.parse(today + "T00:00:00.000Z");
-  if (todayMs >= weekStartMs && todayMs <= weekEndMs) return today;
-  return new Date(Math.min(weekStartMs, endMs)).toISOString().slice(0, 10);
+  return {
+    min: new Date(weekStartMs).toISOString().slice(0, 10),
+    max: new Date(weekEndMs).toISOString().slice(0, 10),
+  };
 }
 
-export default function TeacherQuickMarkSheet({ classId, subjectId, termId, teachingWeeks, termStart, termEnd, allowedKinds }: Props) {
+function workDateForWeek(weekNumber: number, start: string, end: string) {
+  const bounds = weekBounds(weekNumber, start, end);
+  const today = new Date().toISOString().slice(0, 10);
+  if (today >= bounds.min && today <= bounds.max) return today;
+  return bounds.min;
+}
+
+export default function TeacherQuickMarkSheet({
+  classId,
+  subjectId,
+  termId,
+  teachingWeeks,
+  termStart,
+  termEnd,
+  allowedKinds,
+  existingWork = [],
+  initialWeek,
+  initialKind,
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const initialDate = boundedToday(termStart, termEnd);
   const availableKinds = allowedKinds.length ? allowedKinds : (["Classwork", "Homework", "Exercise", "Quiz", "Exam"] as QuickMarkKind[]);
   const kinds = availableKinds.filter((item) => item !== "Participation");
-  const [kind, setKind] = useState<QuickMarkKind>(kinds[0] ?? "Classwork");
-  const [weekNumber, setWeekNumber] = useState(() => suggestedWeek(initialDate, termStart, teachingWeeks));
-  const [workDate, setWorkDate] = useState(() => workDateForWeek(suggestedWeek(initialDate, termStart, teachingWeeks), termStart, termEnd));
+  const defaultWeek = initialWeek && initialWeek >= 1 && initialWeek <= teachingWeeks ? initialWeek : suggestedWeek(initialDate, termStart, teachingWeeks);
+  const defaultKind = initialKind && kinds.includes(initialKind) ? initialKind : (kinds[0] ?? "Classwork");
+  const [kind, setKind] = useState<QuickMarkKind>(defaultKind);
+  const [weekNumber, setWeekNumber] = useState(defaultWeek);
+  const [workDate, setWorkDate] = useState(() => workDateForWeek(defaultWeek, termStart, termEnd));
   const [maxScore, setMaxScore] = useState(10);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const dateBounds = weekBounds(weekNumber, termStart, termEnd);
+  const nextWorkNumber = existingWork
+    .filter((work) => work.weekNumber === weekNumber && work.kind.toLowerCase() === kind.toLowerCase())
+    .reduce((highest, work) => Math.max(highest, work.workNumber), 0) + 1;
+
   async function createSheet() {
     if (busy) return;
-    setBusy(true);
     setError("");
+    if (!workDate || workDate < dateBounds.min || workDate > dateBounds.max) {
+      setError(`Choose a date inside Week ${weekNumber}.`);
+      return;
+    }
+    setBusy(true);
     try {
       const response = await fetch("/api/school/teacher-academic-workspace", {
         method: "POST",
@@ -83,26 +121,28 @@ export default function TeacherQuickMarkSheet({ classId, subjectId, termId, teac
   function chooseWeek(nextWeek: number) {
     setWeekNumber(nextWeek);
     setWorkDate(workDateForWeek(nextWeek, termStart, termEnd));
+    setError("");
   }
 
   return (
-    <div className="gradebook-create-work">
+    <div className="gradebook-create-work" id="add-work">
       <div className="gradebook-create-work-heading">
         <div>
-          <span>Add marks</span>
-          <strong>Choose the type of work and the week</strong>
-          <small>SukuuNova numbers each one automatically: Homework 1, Homework 2, Classwork 1, and so on.</small>
+          <span>Add work</span>
+          <strong>Choose the week, then create the mark sheet</strong>
+          <small>SukuuNova handles the numbering for you. If Week {weekNumber} already has {kind} work, the next one becomes {kind} {nextWorkNumber}.</small>
         </div>
         <CalendarDays size={20} aria-hidden="true" />
       </div>
       <div className="gradebook-create-work-fields">
-        <label><span>Type of work</span><select value={kind} disabled={busy} onChange={(event) => setKind(event.target.value as QuickMarkKind)}>{kinds.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
         <label><span>Week</span><select value={weekNumber} disabled={busy} onChange={(event) => chooseWeek(Number(event.target.value))}>{Array.from({ length: teachingWeeks }, (_, index) => index + 1).map((week) => <option key={week} value={week}>Week {week}</option>)}</select></label>
+        <label><span>Type of work</span><select value={kind} disabled={busy} onChange={(event) => { setKind(event.target.value as QuickMarkKind); setError(""); }}>{kinds.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+        <label><span>Date</span><input type="date" min={dateBounds.min} max={dateBounds.max} value={workDate} disabled={busy} onChange={(event) => { setWorkDate(event.target.value); setError(""); }} /></label>
         <label><span>Marks out of</span><input type="number" min={1} max={100000} inputMode="decimal" value={maxScore} disabled={busy} onChange={(event) => setMaxScore(Number(event.target.value))} /></label>
       </div>
       <div className="gradebook-create-work-footer">
-        <p><strong>Week {weekNumber}</strong> · The system will create the next <strong>{kind}</strong> number automatically.</p>
-        <button type="button" className="gradebook-primary-action" disabled={busy || !Number.isFinite(maxScore) || maxScore <= 0 || !workDate} onClick={() => void createSheet()}>{busy ? <><Loader2 size={16} className="spin" /> Creating…</> : <><Plus size={16} /> Create next {kind} & enter marks</>}</button>
+        <p>This will create <strong>{kind} {nextWorkNumber}</strong> in <strong>Week {weekNumber}</strong>, dated <strong>{workDate}</strong>.</p>
+        <button type="button" className="gradebook-primary-action" disabled={busy || !Number.isFinite(maxScore) || maxScore <= 0 || !workDate} onClick={() => void createSheet()}>{busy ? <><Loader2 size={16} className="spin" /> Creating…</> : <><Plus size={16} /> Create {kind} {nextWorkNumber} & enter marks</>}</button>
       </div>
       {error ? <div role="alert" className="gradebook-entry-status is-error">{error}</div> : null}
     </div>
