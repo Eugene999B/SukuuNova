@@ -23,7 +23,12 @@ async function schoolWalletBalance(schoolId: string) {
 export async function getSmsCenterOverviewSafe(session: PlatformSession) {
   await requireSmsAdmin(session);
   const [schools, inventory, readiness, activeProvider, audits] = await Promise.all([
-    db.school.findMany({ select: { id: true, name: true, uniqueCode: true, status: true }, orderBy: { name: "asc" } }),
+    // School is tenant-guarded at the Prisma model layer. This Super Admin-only
+    // network overview intentionally reads only the minimal platform directory
+    // fields through SQL, then re-enters each school's tenant context for wallet data.
+    db.$queryRawUnsafe<Array<{ id: string; name: string; uniqueCode: string; status: string }>>(
+      `SELECT "id","name","uniqueCode","status" FROM "School" ORDER BY "name" ASC`,
+    ),
     getMessagingInventory(session),
     getSmsProviderReadiness(),
     getActiveSmsProviderKey(),
