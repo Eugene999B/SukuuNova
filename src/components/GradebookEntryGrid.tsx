@@ -135,7 +135,7 @@ export default function GradebookEntryGrid({ assessments, rows, rules, gradeScal
         const total = previewSubjectTotal(assessments.map(assessment => {
           const cell = cells[cellKey(row.student.id, assessment.id)];
           const value = cell.value.trim() === "" ? null : Number(cell.value);
-          return { ...assessment, percentage: cell.status === "excused" || value == null || !Number.isFinite(value) ? null : value / assessment.maxScore * 100 };
+          return { ...assessment, status: cell.status, percentage: cell.status === "excused" || value == null || !Number.isFinite(value) ? null : value / assessment.maxScore * 100 };
         }), rules);
         const grade = total == null ? null : gradeScale.find(band => total >= band.min && total <= band.max);
         return <tr key={row.student.id}>
