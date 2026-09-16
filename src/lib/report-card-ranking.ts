@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { getClassSubjectIntelligence } from "@/lib/performance-intelligence";
-import { calculateSubjectResult, gradeForPercentage, rankTotals, RANK_EPSILON, type AssessmentRules, type GradeBand } from "@/lib/assessment-engine";
+import { calculateAvailableSubjectResult, gradeForPercentage, rankTotals, RANK_EPSILON, type AssessmentRules, type GradeBand } from "@/lib/assessment-engine";
 import { resolveStudentTermClass, resolveTermRoster } from "@/lib/student-term-context";
 
 function asObject(value: Prisma.JsonValue | null | undefined): Record<string, Prisma.JsonValue> {
@@ -117,7 +117,7 @@ export async function overallTotalsForScope(
     }
     const subjectTotals: number[] = [];
     for (const rows of subjects.values()) {
-      const result = calculateSubjectResult(rows.map((assessment) => {
+      const result = calculateAvailableSubjectResult(rows.map((assessment) => {
         const hit = assessment.scores.find((score) => score.studentId === student.id);
         return { id: assessment.id, name: assessment.subject.name, type: assessment.type, maxScore: assessment.maxScore, weight: assessment.weight, score: hit?.value ?? null, status: hit?.status ?? null };
       }), input.rules);
@@ -172,7 +172,7 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
   for (const subjectId of subjectsForReport) {
     const subject = assessments.find((assessment) => assessment.subjectId === subjectId)?.subject;
     if (!subject) continue;
-    const intelligence = await getClassSubjectIntelligence(tx, { classId: historicalClass.id, subjectId, termId: report.termId, rules, scope: positionScope });
+    const intelligence = await getClassSubjectIntelligence(tx, { classId: historicalClass.id, subjectId, termId: report.termId, rules, scope: positionScope, useAvailableMarks: true });
     const row = intelligence.rows.find((entry) => entry.studentId === report.studentId);
     const position = row?.position ?? null;
     const total = row?.total ?? null;
@@ -194,7 +194,7 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
   const existing = asObject(report.calculationSnapshot);
   const snapshot = {
     ...existing,
-    calculationVersion: 4,
+    calculationVersion: 5,
     rankingFrozenAt: new Date().toISOString(),
     classId: historicalClass.id,
     className: historicalClass.name,
