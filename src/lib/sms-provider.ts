@@ -10,8 +10,17 @@ export type SmsProviderReadiness = {
 };
 export type SmsSendResult = { providerKey: SmsProviderKey; providerMessageId?: string; creditsUsed?: number };
 export type SmsSendInput = { phone: string; body: string; senderId?: string };
+export type ArkeselBalanceDetails = {
+  providerKey: "arkesel";
+  configured: boolean;
+  available: boolean;
+  balance?: number;
+  currency?: string;
+  error?: string;
+};
 
 export const DEFAULT_SMS_PROVIDER: SmsProviderKey = "arkesel";
+const GLOBAL_SMS_SENDER_ID = "SukuuNova";
 const PROVIDERS: Array<{ key: SmsProviderKey; label: string; detail: string }> = [
   { key: "arkesel", label: "Arkesel", detail: "Default Ghana/Africa SMS provider." },
   { key: "sailup", label: "Sailup", detail: "Low-cost Ghana SMS alternative." },
@@ -48,6 +57,7 @@ export async function getSmsProviderReadiness() {
       default: provider.key === DEFAULT_SMS_PROVIDER,
     })),
     senderConfigured: Boolean(process.env.SMS_SENDER_ID),
+    senderId: GLOBAL_SMS_SENDER_ID,
   };
 }
 
@@ -64,13 +74,63 @@ function positiveInt(value: unknown) {
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : undefined;
 }
+function finiteNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
 function firstString(...values: unknown[]) {
   for (const value of values) if (typeof value === "string" && value.trim()) return value.trim();
   return undefined;
 }
+function firstNumber(...values: unknown[]) {
+  for (const value of values) {
+    const number = finiteNumber(value);
+    if (number !== undefined) return number;
+  }
+  return undefined;
+}
+function arkeselBalanceUrl() {
+  const configuredUrl = process.env.ARKESEL_SMS_URL || "https://sms.arkesel.com/api/v2/sms/send";
+  try {
+    return new URL("/api/v2/clients/balance-details", configuredUrl).toString();
+  } catch {
+    return "https://sms.arkesel.com/api/v2/clients/balance-details";
+  }
+}
+
+export async function getArkeselBalanceDetails(): Promise<ArkeselBalanceDetails> {
+  const apiKey = process.env.ARKESEL_API_KEY;
+  if (!apiKey) return { providerKey: "arkesel", configured: false, available: false, error: "Arkesel API key is not configured." };
+  try {
+    const response = await fetch(arkeselBalanceUrl(), { method: "GET", headers: { "api-key": apiKey } });
+    const body = await jsonResponse(response);
+    if (!response.ok) return { providerKey: "arkesel", configured: true, available: false, error: `Arkesel balance HTTP ${response.status}` };
+    const data = asRecord(body.data);
+    const balanceDetails = asRecord(data.balance_details ?? body.balance_details);
+    const balance = firstNumber(
+      data.balance,
+      data.sms_balance,
+      data.smsBalance,
+      data.credit_balance,
+      data.creditBalance,
+      balanceDetails.balance,
+      balanceDetails.sms_balance,
+      balanceDetails.smsBalance,
+      body.balance,
+      body.sms_balance,
+      body.smsBalance,
+    );
+    const currency = firstString(data.currency, balanceDetails.currency, body.currency);
+    if (balance === undefined) return { providerKey: "arkesel", configured: true, available: false, currency, error: "Arkesel balance response did not include a numeric SMS balance." };
+    return { providerKey: "arkesel", configured: true, available: true, balance, currency };
+  } catch (error) {
+    return { providerKey: "arkesel", configured: true, available: false, error: error instanceof Error ? error.message : "Unable to load Arkesel balance." };
+  }
+}
 
 export async function sendSmsThroughProvider(providerKey: SmsProviderKey, input: SmsSendInput): Promise<SmsSendResult> {
-  const sender = input.senderId || process.env.SMS_SENDER_ID || "SukuuNova";
+  // SukuuNova uses one platform sender ID. Tenant/school sender IDs are intentionally ignored.
+  const sender = GLOBAL_SMS_SENDER_ID;
 
   if (providerKey === "arkesel") {
     const apiKey = process.env.ARKESEL_API_KEY;
