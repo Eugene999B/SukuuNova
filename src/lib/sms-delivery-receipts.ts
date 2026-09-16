@@ -44,11 +44,23 @@ export function describeSmsDeliveryStatus(value: string | null | undefined): {
   return { status: "queued", label: "Queued", group: "in_transit", explanation: "The SMS is waiting to be processed." };
 }
 
-function receiptTimestampSql() {
+// Provider callbacks can be duplicated or arrive out of order. A confirmed
+// delivery is final, and a terminal failure must not be downgraded to a later
+// QUEUED/SUBMITTED callback. A later DELIVERED receipt is allowed to correct a
+// previous terminal failure.
+function receiptUpdateSql() {
   return `
+    "status"=CASE
+      WHEN upper("status")='DELIVERED' THEN "status"
+      WHEN upper("status") IN ('NOT_DELIVERED','PROHIBITED','EXPIRED') AND $2 IN ('QUEUED','SUBMITTED') THEN "status"
+      ELSE $2
+    END,
     "updatedAt"=CURRENT_TIMESTAMP,
     "deliveredAt"=CASE WHEN $2='DELIVERED' THEN COALESCE("deliveredAt",CURRENT_TIMESTAMP) ELSE "deliveredAt" END,
-    "failedAt"=CASE WHEN $2 IN ('NOT_DELIVERED','PROHIBITED','EXPIRED') THEN COALESCE("failedAt",CURRENT_TIMESTAMP) ELSE "failedAt" END,
+    "failedAt"=CASE
+      WHEN upper("status")<>'DELIVERED' AND $2 IN ('NOT_DELIVERED','PROHIBITED','EXPIRED') THEN COALESCE("failedAt",CURRENT_TIMESTAMP)
+      ELSE "failedAt"
+    END,
     "acceptedAt"=CASE WHEN $2 IN ('QUEUED','SUBMITTED','DELIVERED','NOT_DELIVERED','PROHIBITED','EXPIRED') THEN COALESCE("acceptedAt",CURRENT_TIMESTAMP) ELSE "acceptedAt" END`;
 }
 
@@ -58,16 +70,18 @@ export async function applyArkeselSmsDeliveryReceipt(input: { smsId: string; sta
   if (!smsId || !status) return { matched: false, invalid: true };
 
   const platformUpdated = await db.$executeRawUnsafe(
-    `UPDATE "PlatformSmsDelivery" SET "status"=$2,${receiptTimestampSql()} WHERE "providerKey"='arkesel' AND "providerMessageId"=$1`,
+    `UPDATE "PlatformSmsDelivery" SET ${receiptUpdateSql()} WHERE "providerKey"='arkesel' AND "providerMessageId"=$1`,
     smsId,
     status,
   );
   if (platformUpdated > 0) return { matched: true, scope: "platform" as const, status };
 
-  const directories = await db.schoolLoginDirectory.findMany({ where: { status: "active" }, select: { schoolId: true } });
+  // Delivery can settle after a school is suspended or otherwise inactive, so
+  // search every known tenant directory rather than active schools only.
+  const directories = await db.schoolLoginDirectory.findMany({ select: { schoolId: true } });
   for (const directory of directories) {
     const updated = await withTenant(directory.schoolId, (tx) => tx.$executeRawUnsafe(
-      `UPDATE "SmsProviderDelivery" SET "status"=$2,${receiptTimestampSql()} WHERE "providerKey"='arkesel' AND "providerMessageId"=$1`,
+      `UPDATE "SmsProviderDelivery" SET ${receiptUpdateSql()} WHERE "providerKey"='arkesel' AND "providerMessageId"=$1`,
       smsId,
       status,
     ));
