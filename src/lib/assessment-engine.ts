@@ -187,6 +187,22 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
     breakdown[bucketName] = { earned, possible, percentage, weight, contribution: percentage == null ? 0 : percentage * weight / 100 };
   }
 
+  // Keep detail.contribution compatible with the report-card component view:
+  // one normalized type contribution is repeated for rows of that type, while
+  // callers de-duplicate by type. Multiple Homeworks therefore contribute their
+  // combined earned points, not merely the last Homework in the term.
+  const typeContributions = new Map<string, number>();
+  for (const type of new Set(normalizedRows.map((row) => row.type))) {
+    const rows = normalizedRows.filter((row) => row.type === type && row.status !== "excused");
+    const bucket = breakdown[assessmentBucket(type)];
+    if (bucket.possible <= 0) {
+      typeContributions.set(type, 0);
+      continue;
+    }
+    const earned = rows.reduce((sum, row) => sum + (row.rawScore ?? 0), 0);
+    typeContributions.set(type, earned / bucket.possible * bucket.weight);
+  }
+
   const details = normalizedRows.map((row) => {
     const bucket = breakdown[row.bucket];
     return {
@@ -199,7 +215,7 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
       status: row.status,
       percentage: row.percentage,
       weight: bucket.weight,
-      contribution: row.status === "excused" || row.rawScore == null || bucket.possible <= 0 ? 0 : row.rawScore / bucket.possible * bucket.weight,
+      contribution: typeContributions.get(row.type) ?? 0,
     };
   });
 
