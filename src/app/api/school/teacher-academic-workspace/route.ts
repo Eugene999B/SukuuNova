@@ -102,7 +102,7 @@ export async function POST(request: Request) {
         // Serialize this sequence inside the tenant transaction so two clicks or
         // concurrent requests cannot allocate the same number.
         const sequenceKey = `mark-sheet:${session.schoolId}:${input.termId}:${input.classId}:${input.subjectId}:${input.kind}:${week.weekNumber}`;
-        await tx.$queryRawUnsafe(`SELECT pg_advisory_xact_lock(hashtext($1))`, sequenceKey);
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${sequenceKey}))`;
         const sequence = await tx.$queryRawUnsafe<Array<{ next: number }>>(
           `SELECT (COALESCE(MAX("workNumber"),0)+1)::int AS "next" FROM "TeacherAcademicWork" WHERE "schoolId"=$1 AND "termId"=$2 AND "classId"=$3 AND "subjectId"=$4 AND "kind"=$5 AND "weekNumber"=$6`,
           session.schoolId, input.termId, input.classId, input.subjectId, input.kind, week.weekNumber,
