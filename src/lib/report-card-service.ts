@@ -199,7 +199,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
   const rankedCount = totals.size;
   for (const line of liveLines) {
     if (!line.subjectId) continue;
-    const intelligence = await getClassSubjectIntelligence(tx, { classId: historicalClass.id, subjectId: line.subjectId, termId: report.termId, rules, scope: policy.positionScope });
+    const intelligence = await getClassSubjectIntelligence(tx, { classId: historicalClass.id, subjectId: line.subjectId, termId: report.termId, rules, scope: policy.positionScope, useAvailableMarks: true });
     line.position = intelligence.rows.find((r) => r.studentId === report.studentId)?.position ?? null;
     line.remark = remarkForLine(line.total, scale, line.position, rankedCount, policy);
   }
