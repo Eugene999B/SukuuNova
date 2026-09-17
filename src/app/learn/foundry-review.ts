@@ -1,5 +1,5 @@
 import { questionKindLabel, isPublishable, validateFoundryQuestion } from "./question-foundry";
-import { STARTER_FOUNDRY_PACK } from "./verified-starter-pack";
+import { STANDARD_FOUNDRY_PACK } from "./verified-content";
 import { isRichInteractionPublishable, richInteractionLabel, validateRichInteraction } from "./rich-interactions";
 import { RICH_STARTER_FOUNDRY_PACK } from "./rich-starter-pack";
 
@@ -33,7 +33,7 @@ export type FoundryReviewRow = {
   issueCodes: string[];
 };
 
-const standardRows: FoundryReviewRow[] = STARTER_FOUNDRY_PACK.map((question) => {
+const standardRows: FoundryReviewRow[] = STANDARD_FOUNDRY_PACK.map((question) => {
   const issues = validateFoundryQuestion(question);
   return {
     id: question.id,

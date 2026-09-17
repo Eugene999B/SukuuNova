@@ -4,7 +4,7 @@ import {
   type LearnQuestion,
   type SessionConfig,
 } from "./learn-domain";
-import { VERIFIED_STARTER_QUESTIONS } from "./verified-starter-pack";
+import { VERIFIED_STANDARD_QUESTIONS } from "./verified-content";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -81,10 +81,10 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     }
   }
 
-  absorb(VERIFIED_STARTER_QUESTIONS.filter((question) => starterMatches(question, config, false)));
+  absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, false)));
 
   if (fresh.length < requested) {
-    absorb(VERIFIED_STARTER_QUESTIONS.filter((question) => starterMatches(question, config, true)));
+    absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, true)));
   }
 
   absorb(

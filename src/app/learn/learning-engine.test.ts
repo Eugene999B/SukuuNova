@@ -63,6 +63,22 @@ describe("SukuuNova Learn session engine", () => {
     ]);
   });
 
+  it("routes newly covered topics to reviewed content before generated fallback", () => {
+    const session = buildLearningSession({
+      lane: "school",
+      programId: "ghana",
+      levelId: "jhs-3",
+      subjectId: "mathematics",
+      topicId: "geometry",
+      mode: "topic",
+      count: 1,
+      seed: 20260917,
+    });
+
+    expect(session).toHaveLength(1);
+    expect(session[0].id).toBe("expand-math-geometry-001");
+  });
+
   it("never repeats an exposure key inside a session", () => {
     const session = buildLearningSession({ ...baseConfig, count: 100, seed: 77 });
     const diagnostics = sessionDiagnostics(session);
