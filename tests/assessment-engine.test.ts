@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateSubjectResult, categoryWeight, gradeForPercentage, normalizeAssessmentType, validateAssessmentRules } from "@/lib/assessment-engine";
+import { calculateAvailableSubjectResult, calculateSubjectResult, categoryWeight, gradeForPercentage, normalizeAssessmentType, validateAssessmentRules } from "@/lib/assessment-engine";
 
 const rules = {
   categories: [
@@ -113,6 +113,44 @@ describe("assessment engine", () => {
     ], rules);
     expect(result.complete).toBe(false);
     expect(result.total).toBeNull();
+  });
+
+  it("lets report cards calculate from available marks without turning missing work into zero", () => {
+    const result = calculateAvailableSubjectResult([
+      { id: "hw1", name: "Homework 1", type: "homework", maxScore: 10, weight: 10, score: 8 },
+      { id: "hw2", name: "Homework 2", type: "homework", maxScore: 10, weight: 10, score: null },
+      { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 40, score: 70 }
+    ], { ...rules, missingScorePolicy: "zero" });
+    // Available CA is 8/10 = 80%, contributing 48. Exam contributes 28.
+    expect(result.complete).toBe(false);
+    expect(result.breakdown.ca.earned).toBe(8);
+    expect(result.breakdown.ca.possible).toBe(10);
+    expect(result.breakdown.ca.percentage).toBe(80);
+    expect(result.total).toBe(76);
+    expect(result.includedWeight).toBe(100);
+  });
+
+  it("lets a report show the accumulated weighted total when only CA has been recorded", () => {
+    const result = calculateAvailableSubjectResult([
+      { id: "cw", name: "Classwork 1", type: "classwork", maxScore: 20, weight: 1, score: 18 },
+      { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 1, score: null }
+    ], rules);
+    expect(result.complete).toBe(false);
+    expect(result.breakdown.ca.percentage).toBe(90);
+    expect(result.breakdown.exam.percentage).toBeNull();
+    expect(result.total).toBe(54);
+    expect(result.includedWeight).toBe(60);
+  });
+
+  it("keeps a completely unmarked report subject blank", () => {
+    const result = calculateAvailableSubjectResult([
+      { id: "cw", name: "Classwork 1", type: "classwork", maxScore: 20, weight: 1, score: null },
+      { id: "exam", name: "Exam", type: "exam", maxScore: 100, weight: 1, score: null }
+    ], rules);
+    expect(result.total).toBeNull();
+    expect(result.breakdown.ca.percentage).toBeNull();
+    expect(result.breakdown.exam.percentage).toBeNull();
+    expect(result.includedWeight).toBe(0);
   });
 
   it("treats missing marks as zero when the school explicitly chooses that policy", () => {

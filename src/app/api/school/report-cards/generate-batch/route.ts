@@ -12,7 +12,7 @@ const BATCH_SIZE = 3;
 const schema = z.object({
   termId: z.string().min(1).max(120),
   classId: z.string().min(1).max(120),
-  skipStudentIds: z.array(z.string().min(1).max(120)).max(200).default([]),
+  skipStudentIds: z.array(z.string().min(1).max(120)).max(5000).default([]),
 });
 
 type FailedReport = { studentId: string; admissionNo: string; message: string };
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
         resolveTermRoster(tx, { schoolId: session.schoolId, termId: input.termId }),
         tx.reportCard.findMany({
           where: { schoolId: session.schoolId, termId: input.termId },
-          select: { studentId: true },
+          select: { studentId: true, status: true },
         }),
       ]);
       if (!term) throw new AppError("The selected reporting term no longer exists.", 404, "TERM_NOT_FOUND");
@@ -40,17 +40,17 @@ export async function POST(request: Request) {
       const students = roster
         .filter((student) => student.termClassId === input.classId)
         .map((student) => ({ id: student.id, admissionNo: student.admissionNo, name: student.name }));
-      const existingIds = new Set<string>();
+      const lockedIds = new Set<string>();
       for (const report of candidates) {
         const context = await resolveStudentTermClass(tx, { schoolId: session.schoolId, studentId: report.studentId, termId: input.termId });
-        if (context.classId === input.classId) existingIds.add(report.studentId);
+        if (context.classId === input.classId && report.status !== "draft") lockedIds.add(report.studentId);
       }
-      const pending = students.filter((student) => !existingIds.has(student.id) && !skippedIds.has(student.id));
+      const pending = students.filter((student) => !lockedIds.has(student.id) && !skippedIds.has(student.id));
       return { batch: pending.slice(0, BATCH_SIZE), pendingCount: pending.length };
     });
 
     if (!scope.batch.length) {
-      return NextResponse.json({ generated: 0, attempted: 0, remaining: 0, failed: [] satisfies FailedReport[] });
+      return NextResponse.json({ generated: 0, attempted: 0, remaining: 0, processedStudentIds: [] as string[], failed: [] satisfies FailedReport[] });
     }
 
     let generated = 0;
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
         failed.push({
           studentId: student.id,
           admissionNo: student.admissionNo,
-          message: error instanceof Error ? error.message.slice(0, 180) : "Report is not ready to generate.",
+          message: error instanceof Error ? error.message.slice(0, 180) : "Report could not be generated.",
         });
       }
     }
@@ -80,6 +80,7 @@ export async function POST(request: Request) {
         generated,
         attempted: scope.batch.length,
         remaining: Math.max(0, scope.pendingCount - scope.batch.length),
+        processedStudentIds: scope.batch.map((student) => student.id),
         failed,
       },
       { headers: { "Cache-Control": "private, no-store" } },
