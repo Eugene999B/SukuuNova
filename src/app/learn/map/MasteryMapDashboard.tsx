@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, BookOpenCheck, Compass, Grid3X3, ShieldCheck, Sparkles, Target } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpenCheck, Compass, FileJson, Grid3X3, ShieldCheck, Sparkles, Target } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   EMPTY_LEARNER_PROGRESS,
@@ -61,6 +61,7 @@ export function MasteryMapDashboard() {
           <div className={styles.heroActions}>
             <Link href="/learn/explore" className={styles.primaryButton}><Compass size={16} /> Explore a topic <ArrowRight size={15} /></Link>
             <Link href="/learn/repair" className={styles.secondaryButton}><Target size={16} /> Fix my weaknesses</Link>
+            <Link href="/learn/passport" className={styles.secondaryButton}><FileJson size={16} /> Backup my progress</Link>
           </div>
         </div>
         <aside className={styles.scopeCard}>
