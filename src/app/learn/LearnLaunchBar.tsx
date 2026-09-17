@@ -1,13 +1,20 @@
 import Link from "next/link";
-import { ArrowRight, ShieldCheck } from "lucide-react";
+import { ArrowRight, Compass, Medal } from "lucide-react";
 import styles from "./launch-bar.module.css";
 
 export function LearnLaunchBar() {
   return (
-    <Link href="/learn/practice" className={styles.launchBar}>
-      <span className={styles.icon}><ShieldCheck size={18} /></span>
-      <span className={styles.copy}><small>NEW PRACTICE ENGINE</small><strong>Build a no-repeat, exposure-aware session</strong></span>
-      <ArrowRight size={18} />
-    </Link>
+    <aside className={styles.launchDock} aria-label="SukuuNova Learn shortcuts">
+      <Link href="/learn/practice" className={styles.primaryAction}>
+        <span className={styles.icon}><Compass size={18} /></span>
+        <span className={styles.copy}><small>HARDENED PRACTICE</small><strong>Start an intelligent session</strong></span>
+        <ArrowRight size={18} />
+      </Link>
+      <Link href="/learn/exams" className={styles.secondaryAction}>
+        <span className={styles.secondaryIcon}><Medal size={17} /></span>
+        <span className={styles.copy}><small>2026 EXAM CENTRE</small><strong>Open versioned BECE & WASSCE blueprints</strong></span>
+        <ArrowRight size={18} />
+      </Link>
+    </aside>
   );
 }
