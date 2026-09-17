@@ -44,11 +44,12 @@ describe("first-class teaching weeks", () => {
     expect(termDetailRoute).toContain("weeks: termWeeks");
   });
 
-  it("derives quick mark-sheet weeks from the work date and validates explicitly selected weeks elsewhere", () => {
-    expect(teacherRoute).toContain("getTeachingWeekForDate");
-    expect(teacherRoute).toContain("await getTeachingWeekForDate(tx, session.schoolId, input.termId, input.workDate)");
-    expect(teacherRoute).toContain("assertTeachingWeekDate");
-    expect(teacherRoute.match(/await assertTeachingWeekDate\(/g)?.length).toBe(1);
+  it("validates the teacher-selected worksheet week and date against the authoritative calendar", () => {
+    expect(teacherRoute).toContain('action: z.literal("createMarkSheet")');
+    expect(teacherRoute).toContain("weekNumber: z.number().int().min(1).max(30)");
+    expect(teacherRoute).toContain("assertTeachingWeekNumber(input.weekNumber, term.teachingWeeks)");
+    expect(teacherRoute).toContain("await assertTeachingWeekDate(tx, session.schoolId, input.termId, input.weekNumber, input.workDate)");
+    expect(teacherRoute.match(/await assertTeachingWeekDate\(/g)?.length).toBe(2);
     expect(teacherRoute).toContain("getTermWeeks(tx, session.schoolId, termId)");
   });
 
