@@ -190,8 +190,21 @@ export function isPublishable(question: FoundryQuestion) {
 
 export function releaseQuestion(question: FoundryQuestion): LearnQuestion | null {
   if (!isPublishable(question)) return null;
-  const { version: _version, dna: _dna, source: _source, review: _review, ...learnQuestion } = question;
-  return learnQuestion;
+  return {
+    id: question.id,
+    exposureKey: question.exposureKey,
+    kind: question.kind,
+    subject: question.subject,
+    topic: question.topic,
+    skill: question.skill,
+    difficulty: question.difficulty,
+    prompt: question.prompt,
+    options: question.options,
+    answer: question.answer,
+    acceptedAnswers: question.acceptedAnswers,
+    explanation: question.explanation,
+    hint: question.hint,
+  };
 }
 
 function promptFingerprint(prompt: string) {
