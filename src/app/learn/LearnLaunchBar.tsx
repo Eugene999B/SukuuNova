@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Compass, Medal } from "lucide-react";
+import { ArrowRight, Compass, Medal, Puzzle } from "lucide-react";
 import styles from "./launch-bar.module.css";
 
 export function LearnLaunchBar() {
@@ -13,6 +13,11 @@ export function LearnLaunchBar() {
       <Link href="/learn/exams" className={styles.secondaryAction}>
         <span className={styles.secondaryIcon}><Medal size={17} /></span>
         <span className={styles.copy}><small>2026 EXAM CENTRE</small><strong>Open versioned BECE & WASSCE blueprints</strong></span>
+        <ArrowRight size={18} />
+      </Link>
+      <Link href="/learn/interactions" className={styles.secondaryAction}>
+        <span className={styles.secondaryIcon}><Puzzle size={17} /></span>
+        <span className={styles.copy}><small>INTERACTION LAB</small><strong>Practice matching and ordering</strong></span>
         <ArrowRight size={18} />
       </Link>
     </aside>
