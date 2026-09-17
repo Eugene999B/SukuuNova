@@ -13,6 +13,7 @@ export type FoundryReviewRow = {
   format: string;
   subject: string;
   topic: string;
+  skill: string;
   prompt: string;
   objective: string;
   framework: string;
@@ -42,6 +43,7 @@ const standardRows: FoundryReviewRow[] = STANDARD_FOUNDRY_PACK.map((question) =>
     format: questionKindLabel(question.kind),
     subject: question.subject,
     topic: question.topic,
+    skill: question.skill,
     prompt: question.prompt,
     objective: question.dna.objective,
     framework: question.dna.framework,
@@ -72,6 +74,7 @@ const richRows: FoundryReviewRow[] = RICH_STARTER_FOUNDRY_PACK.map((question) =>
     format: richInteractionLabel(question.kind),
     subject: question.subject,
     topic: question.topic,
+    skill: question.skill,
     prompt: question.prompt,
     objective: question.dna.objective,
     framework: question.dna.framework,
@@ -131,7 +134,7 @@ export function filterFoundryRows(input: {
     if (status !== "all" && row.status !== status) return false;
     if (subject !== "all" && row.subject !== subject) return false;
     if (!query) return true;
-    return [row.id, row.subject, row.topic, row.format, row.prompt, row.objective]
+    return [row.id, row.subject, row.topic, row.skill, row.format, row.prompt, row.objective]
       .join(" ")
       .toLowerCase()
       .includes(query);
