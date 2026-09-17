@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import GradebookEntryGrid from "@/components/GradebookEntryGrid";
+import TeacherWeeklyMarkbook from "@/components/TeacherWeeklyMarkbook";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
@@ -9,25 +11,16 @@ import { assessmentBucketWeights, calculateSubjectResult } from "@/lib/assessmen
 import { selectAcademicTerm, termLifecycle } from "@/lib/term-date";
 import { gradeScale } from "@/lib/report-card-ranking";
 import { DEFAULT_TEACHING_WEEKS, getTeachingWeekMap } from "@/lib/term-teaching-weeks";
-import GradebookEntryGrid from "@/components/GradebookEntryGrid";
-import TeacherAssessmentMarkSheet from "@/components/TeacherAssessmentMarkSheet";
-import TeacherWeeklyWorkSetup from "@/components/TeacherWeeklyWorkSetup";
 import "@/app/school/module-workspace.css";
 import "@/app/school/academic-workspace.css";
 import "@/app/school/gradebook/studio/gradebook-entry.css";
-import "../teacher-gradebook.css";
-import "../weekly-gradebook.css";
+import "../markbook-v3.css";
 
 type WorkMeta = { assessmentId: string; title: string; kind: string; workDate: Date; weekNumber: number; workNumber: number };
 
-function dateLabel(value: Date | undefined) {
-  if (!value) return "Date unavailable";
-  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(value);
-}
-
 export default async function TeacherGradebookContextPage({ params, searchParams }: {
   params: Promise<{ context: string }>;
-  searchParams: Promise<{ term?: string; view?: string; assessment?: string; week?: string; add?: string }>;
+  searchParams: Promise<{ term?: string; view?: string; week?: string }>;
 }) {
   const session = await requireSchoolSession();
   const [{ context }, query] = await Promise.all([params, searchParams]);
@@ -93,12 +86,12 @@ export default async function TeacherGradebookContextPage({ params, searchParams
     };
   });
 
-  const contextPath = "/teacher/gradebook/" + encodeURIComponent(classId) + "__" + encodeURIComponent(subjectId);
-  const view = query.view === "overview" || query.view === "results" ? query.view : "worksheet";
+  const contextPath = `/teacher/gradebook/${encodeURIComponent(classId)}__${encodeURIComponent(subjectId)}`;
   const parsedWeek = Number(query.week);
   const selectedWeek = Number.isInteger(parsedWeek) && parsedWeek >= 1 && parsedWeek <= data.teachingWeeks ? parsedWeek : 1;
+  const view = query.view === "overview" || query.view === "results" ? query.view : "markbook";
   const termQuery = query.term ? `term=${encodeURIComponent(query.term)}&` : "";
-  const hrefFor = (nextView: "worksheet" | "overview" | "results") => `${contextPath}?${termQuery}week=${selectedWeek}${nextView === "worksheet" ? "" : `&view=${nextView}`}`;
+  const viewHref = (nextView: "markbook" | "overview" | "results") => `${contextPath}?${termQuery}week=${selectedWeek}${nextView === "markbook" ? "" : `&view=${nextView}`}`;
 
   const workByAssessment = new Map(data.workRows.map((row) => [row.assessmentId, row]));
   const assessmentRows = data.performance?.assessments.map((assessment) => {
@@ -106,86 +99,98 @@ export default async function TeacherGradebookContextPage({ params, searchParams
     const recorded = data.performance?.rows.filter((row) => row.scores.find((score) => score.assessmentId === assessment.id)?.expected).length ?? 0;
     return { ...assessment, work, recorded };
   }) ?? [];
-  const learnerCount = data.performance?.rows.length ?? 0;
   const weekRows = assessmentRows
     .filter((assessment) => assessment.work?.weekNumber === selectedWeek)
     .sort((a, b) => (a.work?.workNumber ?? 0) - (b.work?.workNumber ?? 0));
-  const selectedRow = weekRows.find((assessment) => assessment.id === query.assessment) ?? weekRows[0] ?? null;
-  const selectedAssessment = selectedRow ? data.performance?.assessments.find((assessment) => assessment.id === selectedRow.id) ?? null : null;
-  const selectedScoreRows = selectedAssessment && data.performance ? data.performance.rows.map((row) => ({
-    student: row.student,
-    expected: row.scores.find((score) => score.assessmentId === selectedAssessment.id)?.expected ?? null,
-  })) : [];
-  const addingWork = query.add === "1" || !weekRows.length;
+  const learnerCount = data.performance?.rows.length ?? 0;
   const nextWorkNumber = Math.max(0, ...weekRows.map((row) => row.work?.workNumber ?? 0)) + 1;
+  const markbookWorks = weekRows.flatMap((row) => row.work ? [{
+    id: row.id,
+    workNumber: row.work.workNumber,
+    workDate: row.work.workDate.toISOString().slice(0, 10),
+    maxScore: row.maxScore,
+    recorded: row.recorded,
+  }] : []);
+  const markbookRows = data.performance?.rows.map((row) => ({
+    student: row.student,
+    scores: Object.fromEntries(markbookWorks.map((work) => {
+      const expected = row.scores.find((score) => score.assessmentId === work.id)?.expected ?? null;
+      return [work.id, expected ? { ...expected, enteredAt: new Date(expected.enteredAt).toISOString() } : null];
+    })),
+  })) ?? [];
 
-  return <AppShell universe="teacher" title="My Gradebook" subtitle="Weekly worksheets for the classes and subjects assigned to you." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role="Teacher">
-    <div className="module-workspace teacher-gradebook-redesign">
-      <section className="weekly-context-card">
-        <div>
-          <span>ASSIGNED GRADEBOOK</span>
-          <h2>{data.assignment.class.name} · {data.assignment.subject.name}</h2>
-          <p>{data.selectedTerm ? `${data.selectedTerm.name} · ${data.readOnly ? "Read-only history" : "Active term"}` : "No active term"} · {learnerCount} learners</p>
-        </div>
-        <Link href="/teacher/gradebook">← Change class, subject or week</Link>
-      </section>
-
-      {data.selectedTerm && data.readOnly ? <section className="module-card"><div className="module-notice"><strong>This is a previous term.</strong><p>You can review its marks, but the active term is controlled automatically by the school calendar.</p></div></section> : null}
-
-      {!data.selectedTerm || !data.performance ? <section className="module-card module-empty"><strong>No academic term is available.</strong><p>School leadership controls the calendar. A writable worksheet appears automatically when a term is active.</p></section> : <>
-        <nav className="weekly-secondary-nav" aria-label="Gradebook views">
-          <Link className={view === "worksheet" ? "is-active" : ""} href={hrefFor("worksheet")}>Worksheet</Link>
-          <Link className={view === "overview" ? "is-active" : ""} href={hrefFor("overview")}>Term overview</Link>
-          <Link className={view === "results" ? "is-active" : ""} href={hrefFor("results")}>Results</Link>
-        </nav>
-
-        {view === "worksheet" ? <section className="weekly-sheet" id="marks">
-          <div className="weekly-sheet-head">
+  return (
+    <AppShell universe="teacher" title="My Gradebook" subtitle="A fast weekly markbook for the classes and subjects assigned to you." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role="Teacher">
+      <div className="teacher-markbook-page">
+        <section className="markbook-context">
+          <div className="markbook-context-main">
+            <Link href="/teacher/gradebook" className="markbook-back">← Change class or subject</Link>
             <div>
-              <span>WEEKLY MARKS</span>
-              <h1>Week {selectedWeek} Worksheet</h1>
-              <p>Open an existing work to continue where you stopped, or add another work for this same week.</p>
+              <span className="markbook-kicker">OPEN MARKBOOK</span>
+              <h2>{data.assignment.class.name}</h2>
+              <p>{data.assignment.subject.name} · {learnerCount} learners</p>
             </div>
-            <div className="weekly-work-summary-badge"><strong>{weekRows.length} work{weekRows.length === 1 ? "" : "s"}</strong><small>{learnerCount} learners</small></div>
+          </div>
+          <div className="markbook-term-chip">
+            <span>{data.readOnly ? "HISTORICAL TERM" : "ACTIVE TERM"}</span>
+            <strong>{data.selectedTerm?.name ?? "No term"}</strong>
+            <small>{data.selectedTerm?.academicYear.name ?? "School calendar"}</small>
+          </div>
+        </section>
+
+        {!data.selectedTerm || !data.performance ? <section className="markbook-no-term"><strong>No academic term is available.</strong><span>School leadership controls the active term from the academic calendar.</span></section> : <>
+          <div className="markbook-topline">
+            <nav className="markbook-view-tabs" aria-label="Gradebook views">
+              <Link className={view === "markbook" ? "is-active" : ""} href={viewHref("markbook")}>Markbook</Link>
+              <Link className={view === "overview" ? "is-active" : ""} href={viewHref("overview")}>Term overview</Link>
+              <Link className={view === "results" ? "is-active" : ""} href={viewHref("results")}>Results</Link>
+            </nav>
+            {data.readOnly ? <span className="markbook-readonly">Read-only</span> : null}
           </div>
 
-          <div className="weekly-week-switcher" aria-label="Choose teaching week">
-            {Array.from({ length: data.teachingWeeks }, (_, index) => index + 1).map((weekNumber) => <Link key={weekNumber} className={weekNumber === selectedWeek ? "is-active" : ""} href={`${contextPath}?${termQuery}week=${weekNumber}`}>Week {weekNumber}</Link>)}
-          </div>
-
-          {weekRows.length ? <div className="weekly-work-tabs" aria-label={`Week ${selectedWeek} work`}>
-            {weekRows.map((row) => <Link key={row.id} className={!addingWork && selectedRow?.id === row.id ? "is-active" : ""} href={`${contextPath}?${termQuery}week=${selectedWeek}&assessment=${encodeURIComponent(row.id)}`}>Work {row.work?.workNumber}</Link>)}
-            {!data.readOnly ? <Link className="weekly-add-work" href={`${contextPath}?${termQuery}week=${selectedWeek}&add=1`}>+ Add another work</Link> : null}
-          </div> : null}
-
-          {addingWork && !data.readOnly ? <TeacherWeeklyWorkSetup classId={classId} subjectId={subjectId} termId={data.selectedTerm.id} weekNumber={selectedWeek} nextWorkNumber={nextWorkNumber} termStart={data.selectedTerm.startDate.toISOString().slice(0, 10)} termEnd={data.selectedTerm.endDate.toISOString().slice(0, 10)} /> : null}
-
-          {addingWork && data.readOnly && !weekRows.length ? <div className="weekly-empty-work"><strong>No work was recorded in Week {selectedWeek}.</strong><span>This historical term is read-only, so new work cannot be added.</span></div> : null}
-
-          {!addingWork && selectedAssessment && selectedRow?.work ? <>
-            <div className="weekly-work-summary">
-              <div><span>WEEK {selectedWeek}</span><h3>Work {selectedRow.work.workNumber}</h3><p>{dateLabel(selectedRow.work.workDate)} · Marks out of {selectedAssessment.maxScore}</p></div>
-              <div className="weekly-work-summary-badge"><strong>{selectedRow.recorded}/{learnerCount}</strong><small>marks recorded</small></div>
+          {view === "markbook" ? <section className="markbook-workspace-card">
+            <div className="markbook-workspace-head">
+              <div><span className="markbook-kicker">WEEKLY MARKS</span><h1>Week {selectedWeek} Markbook</h1><p>Each work is a column. Enter marks like a real mark book and SukuuNova saves every change automatically.</p></div>
+              <div className="markbook-work-count"><strong>{markbookWorks.length}</strong><span>work{markbookWorks.length === 1 ? "" : "s"} this week</span></div>
             </div>
-            <TeacherAssessmentMarkSheet key={selectedAssessment.id} assessment={{ id: selectedAssessment.id, name: `Week ${selectedWeek} · Work ${selectedRow.work.workNumber}`, type: "Weekly work", maxScore: selectedAssessment.maxScore }} rows={selectedScoreRows} locked={data.readOnly || data.selectedTerm.isLocked} />
-          </> : null}
-        </section> : null}
 
-        {view === "overview" ? <section className="module-card gradebook-overview-panel">
-          <div className="gradebook-section-heading"><div><span>TERM OVERVIEW</span><h2>Review all recorded work</h2><p>This view is for checking the term as a whole. Normal mark entry stays inside each weekly worksheet.</p></div></div>
-          {data.performance.assessments.length ? <GradebookEntryGrid key={`${context}:${data.selectedTerm.id}:${data.performance.assessments.length}`} locked={data.readOnly || data.selectedTerm.isLocked} assessments={data.performance.assessments} gradeScale={data.gradeScale} rules={{ categories: data.performance.config.categories, rounding: data.performance.config.rounding, missingScorePolicy: data.performance.config.missingScorePolicy, caWeight: data.performance.config.caWeight, examWeight: data.performance.config.examWeight }} rows={data.performance.rows.map((row) => ({ student: row.student, total: row.total, scores: row.scores.map((score) => ({ assessmentId: score.assessmentId, expected: score.expected, rawScore: score.rawScore, maxScore: score.maxScore, status: score.status })) }))} /> : <div className="module-empty"><strong>No marks recorded yet.</strong><span>Open a weekly worksheet and create Work 1 first.</span></div>}
-        </section> : null}
+            <nav className="markbook-week-strip" aria-label="Choose teaching week">
+              {Array.from({ length: data.teachingWeeks }, (_, index) => index + 1).map((weekNumber) => <Link key={weekNumber} className={weekNumber === selectedWeek ? "is-active" : ""} href={`${contextPath}?${termQuery}week=${weekNumber}`}>W{weekNumber}</Link>)}
+            </nav>
 
-        {view === "results" ? <section className="module-card gradebook-results-panel">
-          <div className="gradebook-section-heading"><div><span>TERM RESULTS</span><h2>Calculated result breakdown</h2><p>SukuuNova continues to calculate configured CA and examination contributions from the recorded evidence.</p></div></div>
-          <div className="gradebook-results-table-wrap"><table className="gradebook-results-table"><thead><tr><th>Learner</th><th>Continuous assessment · {data.weights.ca}%</th><th>Exam · {data.weights.exam}%</th><th>Final result</th></tr></thead><tbody>{data.results.map((result) => {
-            const band = result.total == null ? null : data.gradeScale.find((candidate) => result.total! >= candidate.min && result.total! <= candidate.max);
-            return <tr key={result.student.id}><td><strong>{result.student.name}</strong><small>{result.student.admissionNo}</small></td><td><strong>{result.breakdown.ca.possible ? `${result.breakdown.ca.earned}/${result.breakdown.ca.possible}` : "—"}</strong><span>{result.breakdown.ca.percentage == null ? "No CA evidence" : `${result.breakdown.ca.percentage.toFixed(2)}% → ${result.breakdown.ca.contribution.toFixed(2)}/${data.weights.ca}`}</span></td><td><strong>{result.breakdown.exam.possible ? `${result.breakdown.exam.earned}/${result.breakdown.exam.possible}` : "—"}</strong><span>{result.breakdown.exam.percentage == null ? "No exam evidence" : `${result.breakdown.exam.percentage.toFixed(2)}% → ${result.breakdown.exam.contribution.toFixed(2)}/${data.weights.exam}`}</span></td><td><strong>{result.total == null ? "Incomplete" : `${result.total.toFixed(2)}%`}</strong><span>{result.total == null ? "Missing required marks" : band ? `${band.grade}${band.label ? ` · ${band.label}` : ""}` : "Ungraded"}</span></td></tr>;
-          })}</tbody></table></div>
-        </section> : null}
+            <TeacherWeeklyMarkbook
+              weekNumber={selectedWeek}
+              classId={classId}
+              subjectId={subjectId}
+              termId={data.selectedTerm.id}
+              termStart={data.selectedTerm.startDate.toISOString().slice(0, 10)}
+              termEnd={data.selectedTerm.endDate.toISOString().slice(0, 10)}
+              nextWorkNumber={nextWorkNumber}
+              works={markbookWorks}
+              rows={markbookRows}
+              locked={data.readOnly || data.selectedTerm.isLocked}
+            />
+          </section> : null}
 
-        <section className="module-card gradebook-term-archive"><div className="module-section-title"><div><span>Previous terms</span><h3>Review older marks only when you need them</h3></div></div><div className="module-actions">{data.terms.filter((term) => term.id !== data.selectedTerm?.id).slice(0, 8).map((term) => <Link key={term.id} className="button secondary" href={`${contextPath}?term=${encodeURIComponent(term.id)}&week=1`}>{term.name}{term.isLocked ? " · locked" : ""}</Link>)}</div></section>
-      </>}
-    </div>
-  </AppShell>;
+          {view === "overview" ? <section className="module-card gradebook-overview-panel">
+            <div className="gradebook-section-heading"><div><span>TERM OVERVIEW</span><h2>Review all recorded work</h2><p>This is the whole-term audit view. Everyday entry stays in the weekly Markbook.</p></div></div>
+            {data.performance.assessments.length ? <GradebookEntryGrid key={`${context}:${data.selectedTerm.id}:${data.performance.assessments.length}`} locked={data.readOnly || data.selectedTerm.isLocked} assessments={data.performance.assessments} gradeScale={data.gradeScale} rules={{ categories: data.performance.config.categories, rounding: data.performance.config.rounding, missingScorePolicy: data.performance.config.missingScorePolicy, caWeight: data.performance.config.caWeight, examWeight: data.performance.config.examWeight }} rows={data.performance.rows.map((row) => ({ student: row.student, total: row.total, scores: row.scores.map((score) => ({ assessmentId: score.assessmentId, expected: score.expected, rawScore: score.rawScore, maxScore: score.maxScore, status: score.status })) }))} /> : <div className="module-empty"><strong>No marks recorded yet.</strong><span>Open the Markbook and add Work 1.</span></div>}
+          </section> : null}
+
+          {view === "results" ? <section className="module-card gradebook-results-panel">
+            <div className="gradebook-section-heading"><div><span>TERM RESULTS</span><h2>Calculated result breakdown</h2><p>SukuuNova calculates the configured continuous-assessment and examination contributions from the marks teachers record.</p></div></div>
+            <div className="gradebook-results-table-wrap"><table className="gradebook-results-table"><thead><tr><th>Learner</th><th>Continuous assessment · {data.weights.ca}%</th><th>Exam · {data.weights.exam}%</th><th>Final result</th></tr></thead><tbody>{data.results.map((result) => {
+              const band = result.total == null ? null : data.gradeScale.find((candidate) => result.total! >= candidate.min && result.total! <= candidate.max);
+              return <tr key={result.student.id}><td><strong>{result.student.name}</strong><small>{result.student.admissionNo}</small></td><td><strong>{result.breakdown.ca.possible ? `${result.breakdown.ca.earned}/${result.breakdown.ca.possible}` : "—"}</strong><span>{result.breakdown.ca.percentage == null ? "No CA evidence" : `${result.breakdown.ca.percentage.toFixed(2)}% → ${result.breakdown.ca.contribution.toFixed(2)}/${data.weights.ca}`}</span></td><td><strong>{result.breakdown.exam.possible ? `${result.breakdown.exam.earned}/${result.breakdown.exam.possible}` : "—"}</strong><span>{result.breakdown.exam.percentage == null ? "No exam evidence" : `${result.breakdown.exam.percentage.toFixed(2)}% → ${result.breakdown.exam.contribution.toFixed(2)}/${data.weights.exam}`}</span></td><td><strong>{result.total == null ? "Incomplete" : `${result.total.toFixed(2)}%`}</strong><span>{result.total == null ? "Missing required marks" : band ? `${band.grade}${band.label ? ` · ${band.label}` : ""}` : "Ungraded"}</span></td></tr>;
+            })}</tbody></table></div>
+          </section> : null}
+
+          {data.terms.some((term) => term.id !== data.selectedTerm?.id) ? <details className="markbook-archive">
+            <summary>Previous terms</summary>
+            <div>{data.terms.filter((term) => term.id !== data.selectedTerm?.id).slice(0, 8).map((term) => <Link key={term.id} href={`${contextPath}?term=${encodeURIComponent(term.id)}&week=1`}>{term.name}{term.isLocked ? " · locked" : ""}</Link>)}</div>
+          </details> : null}
+        </>}
+      </div>
+    </AppShell>
+  );
 }
