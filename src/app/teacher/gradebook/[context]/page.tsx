@@ -134,7 +134,7 @@ export default async function TeacherGradebookContextPage({ params, searchParams
           <div className="markbook-term-chip">
             <span>{data.readOnly ? "HISTORICAL TERM" : "ACTIVE TERM"}</span>
             <strong>{data.selectedTerm?.name ?? "No term"}</strong>
-            <small>{data.selectedTerm?.academicYear.name ?? "School calendar"}</small>
+            <small>School academic calendar</small>
           </div>
         </section>
 
