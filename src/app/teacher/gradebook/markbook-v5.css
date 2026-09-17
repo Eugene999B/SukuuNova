@@ -1,0 +1,224 @@
+.markbook-context-v5 {
+  align-items: center;
+  min-height: 84px;
+}
+
+.markbook-context-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.markbook-context-v5 .markbook-term-chip {
+  min-width: 150px;
+  padding: 10px 12px;
+}
+
+.markbook-context-v5 .markbook-term-chip strong {
+  font-size: 14px;
+}
+
+.markbook-context-v5 .markbook-term-chip small {
+  font-size: 9.5px;
+}
+
+.markbook-context-v5 .markbook-view-tabs {
+  flex: 0 0 auto;
+}
+
+.markbook-workspace-head-v5 {
+  align-items: center;
+  padding-bottom: 2px;
+}
+
+.markbook-workspace-head-v5 > div:first-child {
+  gap: 3px;
+}
+
+.markbook-workspace-head-v5 h1 {
+  font-size: 28px;
+}
+
+.markbook-week-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.markbook-week-arrow {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  font-size: 16px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.markbook-week-arrow:hover {
+  border-color: var(--ui-primary-border);
+  color: var(--ui-primary);
+}
+
+.markbook-week-arrow.is-disabled {
+  opacity: .38;
+  cursor: default;
+}
+
+.markbook-week-picker {
+  position: relative;
+}
+
+.markbook-week-picker summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 12px;
+  font-weight: 850;
+  list-style: none;
+  cursor: pointer;
+}
+
+.markbook-week-picker summary::-webkit-details-marker {
+  display: none;
+}
+
+.markbook-week-picker summary::after {
+  content: "⌄";
+  margin-left: 3px;
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+.markbook-week-picker[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.markbook-week-picker summary span {
+  color: var(--ui-text-muted);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.markbook-week-options {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 7px);
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(84px, 1fr));
+  gap: 6px;
+  width: 300px;
+  padding: 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 13px;
+  background: var(--ui-surface);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .2);
+}
+
+.markbook-week-options a {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  font-size: 10.5px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.markbook-week-options a:hover {
+  border-color: var(--ui-primary-border);
+  color: var(--ui-primary);
+}
+
+.markbook-week-options a.is-active {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-primary-contrast);
+}
+
+.markbook-workspace-head-v5 .markbook-work-count {
+  min-width: 62px;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.markbook-workspace-head-v5 .markbook-work-count strong {
+  font-size: 16px;
+}
+
+.markbook-workspace-head-v5 .markbook-work-count span {
+  margin-top: 1px;
+  font-size: 8.5px;
+}
+
+.teacher-markbook-page > .markbook-context-v5 + .markbook-workspace-card {
+  margin-top: 0;
+}
+
+.markbook-workspace-card .markbook-toolbar {
+  margin-top: -2px;
+}
+
+@media (max-width: 1080px) {
+  .markbook-context-v5 {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .markbook-context-actions {
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 760px) {
+  .markbook-context-actions,
+  .markbook-week-controls {
+    align-items: stretch;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .markbook-context-v5 .markbook-view-tabs {
+    width: 100%;
+  }
+
+  .markbook-context-v5 .markbook-term-chip {
+    flex: 1 1 180px;
+  }
+
+  .markbook-workspace-head-v5 {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .markbook-week-picker {
+    flex: 1;
+  }
+
+  .markbook-week-picker summary {
+    justify-content: center;
+  }
+
+  .markbook-week-options {
+    left: 0;
+    right: auto;
+    width: min(300px, calc(100vw - 56px));
+  }
+}
