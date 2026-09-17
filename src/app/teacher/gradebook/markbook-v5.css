@@ -1,6 +1,111 @@
+/* Gradebook v5 — focused teacher markbook experience.
+   This layer intentionally overrides the shared v3 styles without changing gradebook logic. */
+
+.gradebook-start-page,
+.teacher-markbook-page {
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 26px 22px 48px;
+  box-sizing: border-box;
+}
+
+/* Entry screen */
+.gradebook-start-heading {
+  padding: 4px 2px;
+}
+
+.gradebook-start-heading h1 {
+  font-size: clamp(30px, 3vw, 38px);
+}
+
+.gradebook-start-heading p {
+  max-width: 690px;
+  font-size: 13px;
+}
+
+.gradebook-active-term {
+  min-width: 190px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-xs);
+}
+
+.gradebook-launch-card {
+  border-radius: 18px;
+  box-shadow: var(--shadow-md);
+}
+
+.markbook-launcher {
+  gap: 24px;
+  padding: 26px;
+}
+
+.markbook-launcher-title h2 {
+  font-size: 24px;
+}
+
+.markbook-launcher-title p {
+  font-size: 12px;
+}
+
+.markbook-launch-step {
+  padding: 16px;
+  border-radius: 14px;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.markbook-launch-step:focus-within {
+  border-color: var(--ui-primary-border);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.markbook-step-copy strong {
+  font-size: 13px;
+}
+
+.markbook-step-copy small {
+  font-size: 10.5px;
+}
+
+.markbook-launch-step select {
+  min-height: 48px;
+  font-size: 13px;
+}
+
+.markbook-launch-footer strong {
+  font-size: 13px;
+}
+
+.markbook-launch-footer span {
+  font-size: 11px;
+}
+
+/* One compact context bar: class, subject, views and active term */
 .markbook-context-v5 {
   align-items: center;
-  min-height: 84px;
+  min-height: 86px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.markbook-context-v5 .markbook-context-main {
+  gap: 14px;
+}
+
+.markbook-context-v5 .markbook-context-main h2 {
+  font-size: 21px;
+}
+
+.markbook-context-v5 .markbook-context-main p {
+  font-size: 11.5px;
+}
+
+.markbook-context-v5 .markbook-back {
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 10.5px;
 }
 
 .markbook-context-actions {
@@ -11,9 +116,27 @@
   min-width: 0;
 }
 
+.markbook-context-v5 .markbook-view-tabs {
+  flex: 0 0 auto;
+  padding: 4px;
+}
+
+.markbook-context-v5 .markbook-view-tabs a {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  font-size: 10.5px;
+}
+
 .markbook-context-v5 .markbook-term-chip {
-  min-width: 150px;
-  padding: 10px 12px;
+  min-width: 154px;
+  padding: 9px 12px;
+  border-radius: 11px;
+}
+
+.markbook-context-v5 .markbook-term-chip span {
+  font-size: 8.5px;
 }
 
 .markbook-context-v5 .markbook-term-chip strong {
@@ -21,11 +144,16 @@
 }
 
 .markbook-context-v5 .markbook-term-chip small {
-  font-size: 9.5px;
+  font-size: 9px;
 }
 
-.markbook-context-v5 .markbook-view-tabs {
-  flex: 0 0 auto;
+/* Main week workspace */
+.markbook-workspace-card {
+  gap: 16px;
+  padding: 20px;
+  border-radius: 17px;
+  overflow: visible;
+  box-shadow: var(--shadow-md);
 }
 
 .markbook-workspace-head-v5 {
@@ -38,14 +166,20 @@
 }
 
 .markbook-workspace-head-v5 h1 {
-  font-size: 28px;
+  font-size: 29px;
+  line-height: 1.05;
+}
+
+.markbook-workspace-head-v5 p {
+  max-width: 590px;
+  font-size: 11.5px;
 }
 
 .markbook-week-controls {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 7px;
 }
 
 .markbook-week-arrow {
@@ -60,10 +194,12 @@
   font-size: 16px;
   font-weight: 900;
   text-decoration: none;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
 .markbook-week-arrow:hover {
   border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
   color: var(--ui-primary);
 }
 
@@ -79,14 +215,16 @@
 .markbook-week-picker summary {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
+  min-width: 112px;
   min-height: 38px;
-  padding: 0 13px;
+  padding: 0 12px;
   border: 1px solid var(--ui-border-strong);
   border-radius: 10px;
   background: var(--ui-surface);
   color: var(--ui-text);
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 850;
   list-style: none;
   cursor: pointer;
@@ -98,9 +236,14 @@
 
 .markbook-week-picker summary::after {
   content: "⌄";
-  margin-left: 3px;
+  margin-left: 2px;
   color: var(--ui-text-muted);
   font-size: 12px;
+}
+
+.markbook-week-picker[open] summary {
+  border-color: var(--ui-primary-border);
+  box-shadow: var(--ui-focus);
 }
 
 .markbook-week-picker[open] summary::after {
@@ -109,7 +252,7 @@
 
 .markbook-week-picker summary span {
   color: var(--ui-text-muted);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 750;
 }
 
@@ -126,7 +269,7 @@
   border: 1px solid var(--ui-border-strong);
   border-radius: 13px;
   background: var(--ui-surface);
-  box-shadow: 0 18px 45px rgba(0, 0, 0, .2);
+  box-shadow: var(--shadow-xl);
 }
 
 .markbook-week-options a {
@@ -140,10 +283,12 @@
   font-size: 10.5px;
   font-weight: 800;
   text-decoration: none;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
 }
 
 .markbook-week-options a:hover {
   border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
   color: var(--ui-primary);
 }
 
@@ -154,8 +299,9 @@
 }
 
 .markbook-workspace-head-v5 .markbook-work-count {
-  min-width: 62px;
+  min-width: 60px;
   padding: 8px 10px;
+  border-radius: 10px;
   text-align: center;
 }
 
@@ -168,12 +314,350 @@
   font-size: 8.5px;
 }
 
-.teacher-markbook-page > .markbook-context-v5 + .markbook-workspace-card {
-  margin-top: 0;
+/* One toolbar instead of floating controls across the page */
+.markbook-shell {
+  gap: 13px;
 }
 
 .markbook-workspace-card .markbook-toolbar {
-  margin-top: -2px;
+  min-height: 58px;
+  margin-top: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface-raised);
+}
+
+.markbook-toolbar-left {
+  gap: 9px;
+}
+
+.markbook-search {
+  width: min(300px, 38vw);
+  min-width: 220px;
+  min-height: 40px;
+  padding: 0 11px;
+  border-color: var(--ui-border-strong);
+  background: var(--ui-surface);
+}
+
+.markbook-search input {
+  font-size: 11.5px;
+}
+
+.markbook-save-state {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 9.5px;
+}
+
+.markbook-add-work-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Work setup is a deliberate modal rather than a strip that crushes the worksheet. */
+.markbook-new-work {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 1000;
+  display: grid;
+  gap: 18px;
+  width: min(520px, calc(100vw - 32px));
+  padding: 22px;
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 18px;
+  background: var(--ui-surface);
+  box-shadow: 0 0 0 100vmax color-mix(in srgb, var(--color-bg) 76%, transparent), var(--shadow-2xl);
+  transform: translate(-50%, -50%);
+}
+
+.markbook-new-work-heading {
+  align-items: flex-start;
+}
+
+.markbook-new-work-heading strong {
+  font-size: 20px;
+}
+
+.markbook-new-work-heading small {
+  max-width: 390px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.markbook-new-work-heading > button {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-raised);
+}
+
+.markbook-new-work-fields {
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.markbook-new-work-fields label > span {
+  font-size: 9.5px;
+}
+
+.markbook-new-work-fields input {
+  min-height: 44px;
+  border-radius: 10px;
+  background: var(--ui-surface-raised);
+  font-size: 12px;
+}
+
+.markbook-new-work-fields > button {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 46px;
+}
+
+/* Bulk same-mark entry stays visible while a teacher works through selections. */
+.markbook-bulk-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  grid-template-columns: auto minmax(170px, .8fr) minmax(120px, .45fr) auto auto;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: var(--ui-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.markbook-bulk-count {
+  min-height: 42px;
+}
+
+.markbook-bulk-count strong {
+  font-size: 18px;
+}
+
+.markbook-bulk-count span {
+  font-size: 10px;
+}
+
+.markbook-bulk-bar input,
+.markbook-bulk-bar select,
+.markbook-clear-selection {
+  min-height: 42px;
+  border-radius: 9px;
+}
+
+/* Empty weeks should feel intentional, not broken. */
+.markbook-empty {
+  width: min(560px, 100%);
+  margin: 24px auto 8px;
+  padding: 42px 24px;
+  border-radius: 15px;
+  background: var(--ui-surface-raised);
+}
+
+.markbook-empty-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+}
+
+.markbook-empty strong {
+  font-size: 16px;
+}
+
+.markbook-empty span {
+  max-width: 430px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* Real mark-sheet proportions: names stay put, work columns stay compact. */
+.markbook-grid-wrap {
+  width: max-content;
+  max-width: 100%;
+  max-height: min(64vh, 690px);
+  overflow: auto;
+  border-color: var(--ui-border-strong);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.markbook-grid {
+  width: max-content;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.markbook-grid thead th {
+  background: var(--ui-surface-raised);
+}
+
+.markbook-grid tbody tr:nth-child(even) td:not(.markbook-select-col):not(.markbook-learner-col) {
+  background: var(--ui-surface-raised);
+}
+
+.markbook-grid tbody tr:hover td,
+.markbook-grid tbody tr:hover .markbook-select-col,
+.markbook-grid tbody tr:hover .markbook-learner-col {
+  background: var(--ui-primary-soft) !important;
+}
+
+.markbook-select-col {
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
+}
+
+.markbook-learner-col {
+  left: 44px;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+}
+
+.markbook-select-col input {
+  width: 16px;
+  height: 16px;
+}
+
+.markbook-grid thead .markbook-learner-col > div {
+  padding: 11px 13px;
+}
+
+.markbook-grid thead .markbook-learner-col span {
+  font-size: 10px;
+}
+
+.markbook-grid thead .markbook-learner-col small {
+  font-size: 8.5px;
+}
+
+.markbook-grid thead th:not(.markbook-select-col):not(.markbook-learner-col) {
+  width: 142px;
+  min-width: 142px;
+  max-width: 142px;
+}
+
+.markbook-work-head {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  min-height: 62px;
+  padding: 9px 10px;
+  box-sizing: border-box;
+}
+
+.markbook-work-head > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.markbook-work-head strong {
+  font-size: 11.5px;
+}
+
+.markbook-work-head span {
+  font-size: 8.5px;
+}
+
+.markbook-work-head > small {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  width: max-content;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--ui-surface);
+  font-size: 7.5px;
+}
+
+.markbook-work-head b {
+  font-size: 11px;
+}
+
+.markbook-grid th.is-active-work {
+  border-top: 0;
+  box-shadow: inset 0 3px 0 var(--ui-primary);
+  background: var(--ui-primary-soft);
+}
+
+.markbook-learner {
+  min-height: 48px;
+  padding: 8px 12px;
+  box-sizing: border-box;
+  align-content: center;
+}
+
+.markbook-learner strong {
+  font-size: 11px;
+}
+
+.markbook-learner small {
+  font-size: 8.5px;
+}
+
+.markbook-cell {
+  display: grid;
+  place-items: center;
+  width: 142px;
+  min-width: 142px;
+  min-height: 48px;
+  padding: 5px;
+  box-sizing: border-box;
+}
+
+.markbook-cell input {
+  width: 76px;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  font-size: 13px;
+  font-weight: 850;
+  text-align: center;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.markbook-cell input:hover:not(:disabled) {
+  border-color: var(--ui-primary-border);
+}
+
+.markbook-cell input:focus {
+  background: var(--ui-surface);
+  transform: translateY(-1px);
+}
+
+/* Normal saved cells do not need a repeated label. Keep only active states visible. */
+.markbook-cell-state {
+  opacity: 0;
+  right: 5px;
+  bottom: 3px;
+}
+
+.markbook-cell-state.is-saving,
+.markbook-cell-state.is-offline {
+  opacity: 1;
+}
+
+.markbook-hints {
+  gap: 8px 18px;
+  padding: 2px 2px 0;
+  font-size: 9px;
+}
+
+.markbook-archive {
+  border-radius: 13px;
+  box-shadow: var(--shadow-xs);
 }
 
 @media (max-width: 1080px) {
@@ -185,9 +669,22 @@
   .markbook-context-actions {
     justify-content: space-between;
   }
+
+  .markbook-bulk-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .markbook-bulk-count {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 760px) {
+  .gradebook-start-page,
+  .teacher-markbook-page {
+    padding: 18px 12px 34px;
+  }
+
   .markbook-context-actions,
   .markbook-week-controls {
     align-items: stretch;
@@ -197,6 +694,11 @@
 
   .markbook-context-v5 .markbook-view-tabs {
     width: 100%;
+  }
+
+  .markbook-context-v5 .markbook-view-tabs a {
+    flex: 1;
+    justify-content: center;
   }
 
   .markbook-context-v5 .markbook-term-chip {
@@ -220,5 +722,46 @@
     left: 0;
     right: auto;
     width: min(300px, calc(100vw - 56px));
+  }
+
+  .markbook-toolbar,
+  .markbook-toolbar-left {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .markbook-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .markbook-add-work-button {
+    width: 100%;
+  }
+
+  .markbook-new-work-fields,
+  .markbook-bulk-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .markbook-bulk-count {
+    grid-column: auto;
+  }
+
+  .markbook-learner-col {
+    width: 190px;
+    min-width: 190px;
+    max-width: 190px;
+  }
+
+  .markbook-grid thead th:not(.markbook-select-col):not(.markbook-learner-col),
+  .markbook-cell {
+    width: 124px;
+    min-width: 124px;
+    max-width: 124px;
+  }
+
+  .markbook-cell input {
+    width: 70px;
   }
 }
