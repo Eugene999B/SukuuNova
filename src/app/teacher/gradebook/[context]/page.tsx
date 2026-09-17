@@ -15,6 +15,7 @@ import "@/app/school/module-workspace.css";
 import "@/app/school/academic-workspace.css";
 import "@/app/school/gradebook/studio/gradebook-entry.css";
 import "../markbook-v3.css";
+import "../markbook-v5.css";
 
 type WorkMeta = { assessmentId: string; title: string; kind: string; workDate: Date; weekNumber: number; workNumber: number };
 
