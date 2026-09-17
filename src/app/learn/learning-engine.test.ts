@@ -45,6 +45,24 @@ describe("SukuuNova Learn session engine", () => {
     expect(second.map((item) => item.exposureKey)).toEqual(first.map((item) => item.exposureKey));
   });
 
+  it("prefers released Foundry questions for strict topic practice", () => {
+    const session = buildLearningSession({
+      lane: "school",
+      programId: "ghana",
+      levelId: "jhs-3",
+      subjectId: "computing",
+      topicId: "digital-safety",
+      mode: "topic",
+      count: 2,
+      seed: 20260917,
+    });
+
+    expect(session.map((item) => item.id)).toEqual([
+      "starter-computing-safety-001",
+      "starter-computing-safety-002",
+    ]);
+  });
+
   it("never repeats an exposure key inside a session", () => {
     const session = buildLearningSession({ ...baseConfig, count: 100, seed: 77 });
     const diagnostics = sessionDiagnostics(session);
