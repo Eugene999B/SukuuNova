@@ -49,7 +49,9 @@ export type OrderingInteraction = RichInteractionBase & {
 
 export type RichInteractionQuestion = MatchingInteraction | OrderingInteraction;
 
-export type RichLearnerQuestion = Omit<RichInteractionQuestion, "version" | "dna" | "source" | "review">;
+export type RichLearnerQuestion =
+  | Omit<MatchingInteraction, "version" | "dna" | "source" | "review">
+  | Omit<OrderingInteraction, "version" | "dna" | "source" | "review">;
 
 const REQUIRED_PUBLISH_CHECKS: VerificationCheck[] = [
   "answer-check",
