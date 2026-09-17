@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Compass,
   Flame,
+  Gauge,
   RefreshCcw,
   ShieldCheck,
   Sparkles,
@@ -93,6 +94,7 @@ export function ProgressDashboard() {
           </p>
           <div className={styles.heroActions}>
             <Link href="/learn/practice" className={styles.primaryButton}>Start intelligent practice <ArrowRight size={17} /></Link>
+            <Link href="/learn/readiness" className={styles.secondaryButton}>Check learning readiness <Gauge size={17} /></Link>
             <Link href="/learn/explore" className={styles.secondaryButton}>Explore a subject <Compass size={17} /></Link>
           </div>
         </div>
