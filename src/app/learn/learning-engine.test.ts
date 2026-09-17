@@ -63,6 +63,22 @@ describe("SukuuNova Learn session engine", () => {
     ]);
   });
 
+  it("resolves catalog ids to their labels before strict topic matching", () => {
+    const session = buildLearningSession({
+      lane: "school",
+      programId: "ghana",
+      levelId: "jhs-3",
+      subjectId: "computing",
+      topicId: "coding",
+      mode: "topic",
+      count: 2,
+      seed: 20260917,
+    });
+
+    expect(session).toHaveLength(2);
+    expect(session.every((item) => item.subject === "Computing" && item.topic === "Computational thinking")).toBe(true);
+  });
+
   it("routes newly covered topics to reviewed content before generated fallback", () => {
     const session = buildLearningSession({
       lane: "school",

@@ -1,5 +1,6 @@
 import {
   buildSession,
+  catalogFor,
   isCorrectAnswer,
   type LearnQuestion,
   type SessionConfig,
@@ -8,6 +9,11 @@ import { VERIFIED_STANDARD_QUESTIONS } from "./verified-content";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
+
+type SelectionLabels = {
+  subject?: string;
+  topic?: string;
+};
 
 function clampRequestedCount(count: number) {
   if (!Number.isFinite(count)) return 10;
@@ -27,16 +33,41 @@ function stableRank(seed: number, value: string) {
   return hash >>> 0;
 }
 
-function selectionMatches(label: string, selection: string) {
+function normalizedLabel(value: string) {
+  return value
+    .toLowerCase()
+    .replaceAll("&", " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function resolveSelectionLabels(config: SessionConfig): SelectionLabels {
+  const catalog = catalogFor(config.lane);
+  const program = catalog.programs.find((item) => item.id === config.programId);
+  const level = program?.levels.find((item) => item.id === config.levelId);
+  const subject = level?.subjects.find((item) => item.id === config.subjectId);
+  const topic = subject?.topics.find((item) => item.id === config.topicId);
+  return { subject: subject?.label, topic: topic?.label };
+}
+
+function selectionMatches(label: string, selection: string, resolvedLabel?: string) {
   if (selection === "all") return true;
-  const selected = selection.toLowerCase().replaceAll("-", " ").trim();
-  const candidate = label.toLowerCase().replaceAll("&", "and").trim();
+  const candidate = normalizedLabel(label);
+  if (resolvedLabel) return candidate === normalizedLabel(resolvedLabel);
+
+  const selected = normalizedLabel(selection.replaceAll("-", " "));
   return candidate.includes(selected) || selected.includes(candidate.split(" ")[0]);
 }
 
-function starterMatches(question: LearnQuestion, config: SessionConfig, includeAnyTopic: boolean) {
-  const subjectMatches = selectionMatches(question.subject, config.subjectId);
-  const topicMatches = includeAnyTopic || selectionMatches(question.topic, config.topicId);
+function starterMatches(
+  question: LearnQuestion,
+  config: SessionConfig,
+  includeAnyTopic: boolean,
+  selection = resolveSelectionLabels(config),
+) {
+  const subjectMatches = selectionMatches(question.subject, config.subjectId, selection.subject);
+  const topicMatches = includeAnyTopic || selectionMatches(question.topic, config.topicId, selection.topic);
   return subjectMatches && topicMatches;
 }
 
@@ -44,11 +75,11 @@ function adaptiveRank(left: LearnQuestion, right: LearnQuestion, seed: number) {
   return left.difficulty - right.difficulty || stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey);
 }
 
-function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: number) {
+function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: number, selection: SelectionLabels) {
   if (config.mode === "weakness") {
     return [...questions].sort((left, right) => {
-      const leftTarget = starterMatches(left, config, false) ? 0 : 1;
-      const rightTarget = starterMatches(right, config, false) ? 0 : 1;
+      const leftTarget = starterMatches(left, config, false, selection) ? 0 : 1;
+      const rightTarget = starterMatches(right, config, false, selection) ? 0 : 1;
       return leftTarget - rightTarget || adaptiveRank(left, right, seed);
     });
   }
@@ -69,9 +100,11 @@ function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: numb
  * 2. Recently seen concepts are placed behind fresh concepts whenever enough
  *    fresh material exists.
  *
- * Released Question Foundry content is preferred first. When that verified pack
- * is still small, the engine broadens to generated practice rather than cloning
- * one concept under different question IDs.
+ * Released Question Foundry content is preferred first. Catalog ids are resolved
+ * to their human labels before matching, so ids such as `coding` correctly map
+ * to labels such as `Computational thinking` without fragile string guessing.
+ * When the verified pack is still small, the engine broadens to generated
+ * practice rather than cloning one concept under different question IDs.
  */
 export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const requested = clampRequestedCount(config.count);
@@ -80,6 +113,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const unique = new Set<string>();
   const fresh: LearnQuestion[] = [];
   const recycled: LearnQuestion[] = [];
+  const selection = resolveSelectionLabels(config);
 
   function absorb(questions: LearnQuestion[]) {
     for (const question of questions) {
@@ -90,10 +124,10 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     }
   }
 
-  absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, false)));
+  absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, false, selection)));
 
   if (fresh.length < requested) {
-    absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, true)));
+    absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, true, selection)));
   }
 
   absorb(
@@ -116,8 +150,8 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     );
   }
 
-  const orderedFresh = orderPool(fresh, config, seed);
-  const orderedRecycled = orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS));
+  const orderedFresh = orderPool(fresh, config, seed, selection);
+  const orderedRecycled = orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection);
   return [...orderedFresh, ...orderedRecycled].slice(0, requested);
 }
 
