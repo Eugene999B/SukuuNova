@@ -140,7 +140,7 @@ export function ProgressDashboard() {
           <section className={styles.topicSection}>
             <div className={styles.sectionHeading}>
               <div><span>MASTERY MAP</span><h2>Every topic with learning evidence</h2></div>
-              <Link href="/learn/repair">Repair priority <ArrowRight size={15} /></Link>
+              <Link href="/learn/map">See all 20 starter topics <ArrowRight size={15} /></Link>
             </div>
             {snapshot.topics.length ? (
               <div className={styles.topicList}>
