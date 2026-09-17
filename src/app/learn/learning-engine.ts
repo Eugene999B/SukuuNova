@@ -40,11 +40,20 @@ function starterMatches(question: LearnQuestion, config: SessionConfig, includeA
   return subjectMatches && topicMatches;
 }
 
+function adaptiveRank(left: LearnQuestion, right: LearnQuestion, seed: number) {
+  return left.difficulty - right.difficulty || stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey);
+}
+
 function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: number) {
+  if (config.mode === "weakness") {
+    return [...questions].sort((left, right) => {
+      const leftTarget = starterMatches(left, config, false) ? 0 : 1;
+      const rightTarget = starterMatches(right, config, false) ? 0 : 1;
+      return leftTarget - rightTarget || adaptiveRank(left, right, seed);
+    });
+  }
   if (config.mode === "adaptive") {
-    return [...questions].sort(
-      (left, right) => left.difficulty - right.difficulty || stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey),
-    );
+    return [...questions].sort((left, right) => adaptiveRank(left, right, seed));
   }
   if (config.mode === "random" || config.mode === "timed") {
     return [...questions].sort((left, right) => stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey));

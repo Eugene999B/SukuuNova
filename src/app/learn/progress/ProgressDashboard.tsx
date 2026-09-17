@@ -103,6 +103,11 @@ export function ProgressDashboard() {
           <strong>{loaded ? priorityMessage : "Reading your local learning evidence..."}</strong>
           <p>{snapshot.priority ? bandCopy[snapshot.priority.band].detail : "Your recommendation updates from your own practice evidence."}</p>
           {snapshot.priority ? <div className={`${styles.priorityBand} ${bandClass(snapshot.priority.band)}`}>{bandCopy[snapshot.priority.band].label}</div> : null}
+          {loaded ? (
+            <div className={styles.heroActions}>
+              <Link href="/learn/repair" className={styles.primaryButton}>{snapshot.priority ? "Fix my weaknesses" : "Build my baseline"} <ArrowRight size={16} /></Link>
+            </div>
+          ) : null}
         </aside>
       </section>
 
@@ -114,7 +119,7 @@ export function ProgressDashboard() {
           <span>YOUR DASHBOARD STARTS WITH PRACTICE</span>
           <h2>No learning evidence yet.</h2>
           <p>Answer a few questions and SukuuNova will begin separating strong evidence, developing topics, repair priorities and areas that still need more attempts.</p>
-          <Link href="/learn/practice" className={styles.primaryButton}>Build my first signal <ArrowRight size={17} /></Link>
+          <Link href="/learn/repair" className={styles.primaryButton}>Build my first signal <ArrowRight size={17} /></Link>
         </section>
       ) : (
         <>
@@ -135,7 +140,7 @@ export function ProgressDashboard() {
           <section className={styles.topicSection}>
             <div className={styles.sectionHeading}>
               <div><span>MASTERY MAP</span><h2>Every topic with learning evidence</h2></div>
-              <Link href="/learn/practice">Keep practising <ArrowRight size={15} /></Link>
+              <Link href="/learn/repair">Repair priority <ArrowRight size={15} /></Link>
             </div>
             {snapshot.topics.length ? (
               <div className={styles.topicList}>
