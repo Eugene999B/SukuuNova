@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import TeacherGradebookLauncher from "@/components/TeacherGradebookLauncher";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { selectAcademicTerm, termLifecycle } from "@/lib/term-date";
+import { DEFAULT_TEACHING_WEEKS, getTeachingWeekMap } from "@/lib/term-teaching-weeks";
+import "./weekly-gradebook.css";
 
 export default async function TeacherGradebookPage() {
   const session = await requireSchoolSession();
@@ -12,7 +15,8 @@ export default async function TeacherGradebookPage() {
     const access = await getSchoolAuthorization(tx, session.userId);
     if (access.workspace !== "teacher") redirect("/dashboard");
     if (!(await access.can("scores:write:assigned")) && !(await access.can("scores:write:all"))) throw new Error("You do not have gradebook access.");
-    const [school, assignments, terms, settings] = await Promise.all([
+
+    const [school, assignments, terms, settings, weekMap] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.classSubjectTeacher.findMany({
         where: { schoolId: session.schoolId, teacherId: session.userId },
@@ -26,32 +30,45 @@ export default async function TeacherGradebookPage() {
       }),
       tx.term.findMany({ orderBy: { startDate: "desc" }, select: { id: true, name: true, startDate: true, endDate: true, isLocked: true, academicYear: { select: { name: true } } } }),
       tx.schoolSettings.findUnique({ where: { schoolId: session.schoolId }, select: { timezone: true } }),
+      getTeachingWeekMap(tx, session.schoolId),
     ]);
+
     const timezone = settings?.timezone || "Africa/Accra";
     const activeTerm = selectAcademicTerm(terms, undefined, new Date(), timezone);
     const endedOpenTerms = terms.filter((term) => termLifecycle(term, new Date(), timezone).state === "ended");
-    return { school, assignments, terms, activeTerm, endedOpenTerms, timezone, role: access.roles.map((role) => role.name).join(" · ") };
+    const teachingWeeks = activeTerm ? (weekMap.get(activeTerm.id) ?? DEFAULT_TEACHING_WEEKS) : DEFAULT_TEACHING_WEEKS;
+
+    return { school, assignments, terms, activeTerm, endedOpenTerms, teachingWeeks, role: access.roles.map((role) => role.name).join(" · ") };
   });
 
+  const launcherAssignments = data.assignments.map((assignment) => ({
+    classId: assignment.classId,
+    subjectId: assignment.subjectId,
+    className: assignment.class.name,
+    classLevel: assignment.class.level,
+    subjectName: assignment.subject.name,
+    learnerCount: assignment.class._count.students,
+  }));
+
   return (
-    <AppShell universe="teacher" title="My Gradebook" subtitle="Fast marks for the classes and subjects assigned to you." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}>
-      <div className="teacher-workspace">
-        <section className="teacher-page-head">
-          <div><span className="teacher-eyebrow">TEACHER · GRADEBOOK</span><h2>Your active-term markbooks</h2><p>The school calendar chooses the term. Choose your class and subject, then record ordinary marks directly inside the markbook.</p></div>
-          <Link className="teacher-primary-action" href="/teacher/studio#activities">Create online assessment →</Link>
+    <AppShell universe="teacher" title="My Gradebook" subtitle="Choose your assigned class, subject and week, then open the worksheet." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role={data.role || "Teacher"}>
+      <div className="teacher-workspace weekly-gradebook-home">
+        <section className="weekly-gradebook-hero">
+          <div><span className="teacher-eyebrow">TEACHER · GRADEBOOK</span><h2>Enter marks without setting up a complicated assessment.</h2><p>SukuuNova already knows the active term. Choose only a class assigned to you, its assigned subject, and the teaching week.</p></div>
+          <div className="weekly-active-term"><span>ACTIVE TERM</span><strong>{data.activeTerm?.name ?? "No active term"}</strong><small>{data.activeTerm?.academicYear.name ?? "School calendar controls the working term"}</small></div>
         </section>
-        <section className="teacher-scope-strip">
-          <div><span>Teaching assignments</span><strong>{data.assignments.length}</strong></div>
-          <div><span>Current term</span><strong>{data.activeTerm?.name ?? "—"}</strong></div>
-          <div><span>Academic year</span><strong>{data.activeTerm?.academicYear.name ?? "—"}</strong></div>
+
+        {!data.activeTerm ? <section className="teacher-surface"><strong>No writable academic term is active today.</strong><p>School leadership must configure the academic calendar before teachers can enter new marks.</p></section> : null}
+        {!data.assignments.length ? <section className="teacher-surface"><strong>No teaching assignment is available.</strong><p>Only class-subject combinations assigned to this teacher account can appear in the gradebook.</p></section> : null}
+
+        <section className="teacher-surface weekly-launcher-surface"><TeacherGradebookLauncher assignments={launcherAssignments} teachingWeeks={data.teachingWeeks} disabled={!data.activeTerm || !data.assignments.length} /></section>
+
+        {data.endedOpenTerms.length ? <section className="teacher-surface weekly-history-note"><div><span className="teacher-eyebrow">LEADERSHIP ACTION NEEDED</span><h3>{data.endedOpenTerms.length} ended term{data.endedOpenTerms.length === 1 ? " is" : "s are"} still unlocked.</h3><p>Teachers stay on the current term automatically. Leadership can review and close older terms from Academic Terms.</p></div></section> : null}
+
+        <section className="teacher-surface weekly-history-note">
+          <div><span className="teacher-eyebrow">OTHER TOOLS</span><h3>Online assessments remain separate from everyday weekly marks.</h3><p>Use the weekly worksheet for ordinary teacher-entered marks. Use Online Assessments when learners should answer digitally.</p></div>
+          <Link className="teacher-primary-action" href="/teacher/studio#activities">Online assessments →</Link>
         </section>
-        {!data.activeTerm ? <section className="teacher-surface"><span className="teacher-eyebrow">TERM CONTROL</span><h3>No writable academic term is active today.</h3><p>Teachers cannot choose a future or expired term for new marks. School leadership must configure the calendar and finalize any ended term.</p></section> : null}
-        {data.endedOpenTerms.length ? <section className="teacher-surface"><span className="teacher-eyebrow">LEADERSHIP ACTION NEEDED</span><h3>{data.endedOpenTerms.length} ended term{data.endedOpenTerms.length===1?" is":"s are"} still unlocked.</h3><p>Those terms remain historical for teachers. Leadership should review reports and lock them from Academic Terms so records are formally closed.</p></section> : null}
-        <section className="teacher-surface">
-          <span className="teacher-eyebrow">ASSIGNED MARKBOOKS</span><h3>Choose a class and subject</h3>
-          {data.assignments.length && data.activeTerm ? <div className="teacher-assignment-list">{data.assignments.map((assignment) => <Link key={`${assignment.classId}:${assignment.subjectId}`} href={`/teacher/gradebook/${encodeURIComponent(assignment.classId)}__${encodeURIComponent(assignment.subjectId)}?term=${encodeURIComponent(data.activeTerm!.id)}`}><strong>{assignment.class.level ? `${assignment.class.level} · ` : ""}{assignment.class.name}</strong><span>{assignment.subject.name} · {assignment.class._count.students} learners · Record marks →</span></Link>)}</div> : <div className="teacher-empty-state"><strong>{data.assignments.length ? "Waiting for an active term." : "No subject teaching assignment yet."}</strong><p>{data.assignments.length ? "Your markbooks will become writable automatically when the configured term starts." : "School leadership must assign one or more class-subject responsibilities to this teacher account."}</p></div>}
-        </section>
-        <section className="teacher-surface"><span className="teacher-eyebrow">HISTORY</span><h3>Previous terms stay available without becoming the working term</h3><div className="teacher-assignment-list">{data.terms.filter((term)=>term.id!==data.activeTerm?.id).slice(0,6).map((term)=><div key={term.id}><strong>{term.academicYear.name} · {term.name}</strong><span>{term.isLocked?"Locked archive":"Ended / upcoming"} · leadership controls reopening</span></div>)}</div></section>
       </div>
     </AppShell>
   );
