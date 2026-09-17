@@ -112,6 +112,7 @@ export function PracticeEngine() {
   const [count, setCount] = useState(20);
   const [progress, setProgress] = useState<LearnerProgress>(EMPTY_PROGRESS);
   const [session, setSession] = useState<LearnQuestion[]>([]);
+  const [sessionSeen, setSessionSeen] = useState<string[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [response, setResponse] = useState<ResponseValue>("");
   const [submitted, setSubmitted] = useState(false);
@@ -121,7 +122,7 @@ export function PracticeEngine() {
   const preset = PRESETS.find((item) => item.id === presetId) ?? PRESETS[0];
   const currentQuestion = session[questionIndex];
   const complete = session.length > 0 && questionIndex >= session.length;
-  const diagnostics = useMemo(() => sessionDiagnostics(session, progress.exposures), [session, progress.exposures]);
+  const diagnostics = useMemo(() => sessionDiagnostics(session, sessionSeen), [session, sessionSeen]);
 
   useEffect(() => {
     try {
@@ -142,6 +143,7 @@ export function PracticeEngine() {
   }
 
   function launch() {
+    const baselineSeen = [...progress.exposures];
     const next = buildLearningSession({
       lane: "school",
       programId: "ghana",
@@ -150,9 +152,10 @@ export function PracticeEngine() {
       topicId: preset.topicId,
       mode,
       count,
-      seen: progress.exposures,
+      seen: baselineSeen,
     });
     setSession(next);
+    setSessionSeen(baselineSeen);
     setQuestionIndex(0);
     setResponse("");
     setSubmitted(false);
@@ -210,6 +213,7 @@ export function PracticeEngine() {
 
   function reset() {
     setSession([]);
+    setSessionSeen([]);
     setQuestionIndex(0);
     setResponse("");
     setSubmitted(false);
