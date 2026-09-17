@@ -4,6 +4,7 @@ import {
   type LearnQuestion,
   type SessionConfig,
 } from "./learn-domain";
+import { VERIFIED_STARTER_QUESTIONS } from "./verified-starter-pack";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -17,6 +18,40 @@ function derivedSeed(seed: number, attempt: number) {
   return (seed + Math.imul(attempt + 1, 0x9e3779b9)) >>> 0;
 }
 
+function stableRank(seed: number, value: string) {
+  let hash = (2166136261 ^ seed) >>> 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function selectionMatches(label: string, selection: string) {
+  if (selection === "all") return true;
+  const selected = selection.toLowerCase().replaceAll("-", " ").trim();
+  const candidate = label.toLowerCase().replaceAll("&", "and").trim();
+  return candidate.includes(selected) || selected.includes(candidate.split(" ")[0]);
+}
+
+function starterMatches(question: LearnQuestion, config: SessionConfig, includeAnyTopic: boolean) {
+  const subjectMatches = selectionMatches(question.subject, config.subjectId);
+  const topicMatches = includeAnyTopic || selectionMatches(question.topic, config.topicId);
+  return subjectMatches && topicMatches;
+}
+
+function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: number) {
+  if (config.mode === "adaptive") {
+    return [...questions].sort(
+      (left, right) => left.difficulty - right.difficulty || stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey),
+    );
+  }
+  if (config.mode === "random" || config.mode === "timed") {
+    return [...questions].sort((left, right) => stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey));
+  }
+  return questions;
+}
+
 /**
  * Builds a learner session while enforcing two product-level guarantees that are
  * intentionally stricter than the starter question generator:
@@ -25,8 +60,9 @@ function derivedSeed(seed: number, attempt: number) {
  * 2. Recently seen concepts are placed behind fresh concepts whenever enough
  *    fresh material exists.
  *
- * When a selected topic pack is still small, the engine broadens to related
- * practice rather than cloning the same concept under different question IDs.
+ * Released Question Foundry content is preferred first. When that verified pack
+ * is still small, the engine broadens to generated practice rather than cloning
+ * one concept under different question IDs.
  */
 export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const requested = clampRequestedCount(config.count);
@@ -43,6 +79,12 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
       if (recent.has(question.exposureKey)) recycled.push(question);
       else fresh.push(question);
     }
+  }
+
+  absorb(VERIFIED_STARTER_QUESTIONS.filter((question) => starterMatches(question, config, false)));
+
+  if (fresh.length < requested) {
+    absorb(VERIFIED_STARTER_QUESTIONS.filter((question) => starterMatches(question, config, true)));
   }
 
   absorb(
@@ -65,7 +107,9 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     );
   }
 
-  return [...fresh, ...recycled].slice(0, requested);
+  const orderedFresh = orderPool(fresh, config, seed);
+  const orderedRecycled = orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS));
+  return [...orderedFresh, ...orderedRecycled].slice(0, requested);
 }
 
 export function sessionDiagnostics(questions: LearnQuestion[], seen: string[] = []) {
