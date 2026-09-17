@@ -1,9 +1,10 @@
 import { auditQuestionPack, releaseQuestion } from "./question-foundry";
 import type { LearnQuestion } from "./learn-domain";
+import { DEPTH_FOUNDRY_PACK } from "./verified-depth-pack";
 import { EXPANSION_FOUNDRY_PACK } from "./verified-expansion-pack";
 import { STARTER_FOUNDRY_PACK } from "./verified-starter-pack";
 
-export const STANDARD_FOUNDRY_PACK = [...STARTER_FOUNDRY_PACK, ...EXPANSION_FOUNDRY_PACK];
+export const STANDARD_FOUNDRY_PACK = [...STARTER_FOUNDRY_PACK, ...EXPANSION_FOUNDRY_PACK, ...DEPTH_FOUNDRY_PACK];
 
 export const STANDARD_CONTENT_AUDIT = auditQuestionPack(STANDARD_FOUNDRY_PACK);
 

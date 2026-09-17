@@ -6,10 +6,11 @@ describe("SukuuNova school starter topic coverage", () => {
     expect(SCHOOL_STARTER_COVERAGE_SUMMARY.totalTopics).toBe(20);
     expect(SCHOOL_STARTER_COVERAGE_SUMMARY.coveredTopics).toBe(20);
     expect(SCHOOL_STARTER_COVERAGE_SUMMARY.missingTopics).toEqual([]);
+    expect(SCHOOL_STARTER_COVERAGE_SUMMARY.totalQuestions).toBe(45);
   });
 
-  it("keeps every covered topic backed by at least one reviewed standard question", () => {
-    expect(SCHOOL_STARTER_TOPIC_COVERAGE.every((entry) => entry.questionCount >= 1)).toBe(true);
+  it("backs every starter topic with at least two reviewed standard questions", () => {
+    expect(SCHOOL_STARTER_TOPIC_COVERAGE.every((entry) => entry.questionCount >= 2)).toBe(true);
   });
 
   it("tracks four starter topics for each launch subject", () => {
