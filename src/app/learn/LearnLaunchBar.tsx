@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BarChart3, CalendarDays, Compass, Medal, Puzzle, Target } from "lucide-react";
+import { ArrowRight, BarChart3, Brain, CalendarDays, Compass, Medal, Puzzle, Target } from "lucide-react";
 import styles from "./launch-bar.module.css";
 
 export function LearnLaunchBar() {
@@ -23,6 +23,11 @@ export function LearnLaunchBar() {
       <Link href="/learn/plan" className={styles.secondaryAction}>
         <span className={styles.secondaryIcon}><Target size={17} /></span>
         <span className={styles.copy}><small>7-DAY STUDY PLAN</small><strong>Follow a spaced, evidence-driven learning week</strong></span>
+        <ArrowRight size={18} />
+      </Link>
+      <Link href="/learn/confidence" className={styles.secondaryAction}>
+        <span className={styles.secondaryIcon}><Brain size={17} /></span>
+        <span className={styles.copy}><small>CONFIDENCE CHECK</small><strong>Separate strong knowledge from fragile guesses</strong></span>
         <ArrowRight size={18} />
       </Link>
       <Link href="/learn/exams" className={styles.secondaryAction}>
