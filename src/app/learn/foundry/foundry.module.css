@@ -147,7 +147,7 @@
 
 .filters {
   display: grid;
-  grid-template-columns: 1.15fr 1fr .8fr 1.25fr;
+  grid-template-columns: 1.1fr 1fr 1fr .75fr 1.25fr;
   gap: 12px;
   margin-bottom: 20px;
   padding: 15px;
@@ -222,7 +222,9 @@
 .identity > span,
 .family,
 .statusGood,
-.statusHeld {
+.statusHeld,
+.decisionApproved,
+.decisionHeld {
   padding: 5px 8px;
   border: 1px solid var(--arcade-line);
   border-radius: 999px;
@@ -234,6 +236,8 @@
 .statusGood { color: var(--arcade-accent) !important; border-color: color-mix(in srgb, var(--arcade-accent) 35%, var(--arcade-line)) !important; background: color-mix(in srgb, var(--arcade-accent) 7%, transparent); }
 .statusHeld { color: var(--arcade-warning) !important; border-color: color-mix(in srgb, var(--arcade-warning) 35%, var(--arcade-line)) !important; }
 .family { color: var(--arcade-text-soft) !important; }
+.decisionApproved { color: var(--arcade-accent) !important; border-color: color-mix(in srgb, var(--arcade-accent) 40%, var(--arcade-line)) !important; }
+.decisionHeld { color: var(--arcade-warning) !important; border-color: color-mix(in srgb, var(--arcade-warning) 40%, var(--arcade-line)) !important; }
 .confidence { display: inline-flex; align-items: center; gap: 6px; color: var(--arcade-accent); }
 .confidence strong { font-size: 12px; }
 
@@ -275,6 +279,63 @@
 }
 .issues span { color: var(--arcade-text-soft); }
 
+.localReview {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--arcade-accent-2) 24%, var(--arcade-line));
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--arcade-accent-2) 5%, var(--arcade-surface-raised));
+}
+
+.localReviewHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.localReviewHeader > div { display: grid; gap: 3px; }
+.localReviewHeader span,
+.localReview > label { color: var(--arcade-muted); font-size: 8px; font-weight: 900; letter-spacing: .09em; text-transform: uppercase; }
+.localReviewHeader strong { font-size: 11px; }
+.localReviewHeader small { color: var(--arcade-muted); font-size: 8px; }
+.browserOnly { padding: 5px 7px; border: 1px solid var(--arcade-line); border-radius: 999px; white-space: nowrap; }
+
+.localReview textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--arcade-line-strong);
+  border-radius: 10px;
+  outline: none;
+  color: var(--arcade-text);
+  background: var(--arcade-surface);
+  font: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.localReview textarea:focus { border-color: var(--arcade-accent); }
+.localReview textarea::placeholder { color: var(--arcade-muted); }
+
+.reviewButtons { display: flex; flex-wrap: wrap; gap: 7px; }
+.approveButton,
+.holdButton,
+.clearButton {
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--arcade-line);
+  border-radius: 10px;
+  font-size: 9px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.approveButton { color: var(--arcade-canvas); border-color: var(--arcade-accent); background: var(--arcade-accent); }
+.holdButton { color: var(--arcade-warning); border-color: color-mix(in srgb, var(--arcade-warning) 40%, var(--arcade-line)); background: color-mix(in srgb, var(--arcade-warning) 8%, var(--arcade-surface)); }
+.clearButton { color: var(--arcade-text-soft); background: var(--arcade-surface); }
+.approveButton:disabled { opacity: .45; cursor: not-allowed; }
+
 .emptyState {
   min-height: 180px;
   display: grid;
@@ -304,6 +365,10 @@
 .guardrail strong { font-size: 11px; }
 .guardrail p { margin: 4px 0 0; color: var(--arcade-text-soft); font-size: 10px; line-height: 1.6; }
 
+@media (max-width: 1100px) {
+  .filters { grid-template-columns: 1fr 1fr 1fr; }
+}
+
 @media (max-width: 940px) {
   .hero { grid-template-columns: 1fr; }
   .summaryGrid { max-width: 560px; }
@@ -320,4 +385,5 @@
   .filters { grid-template-columns: 1fr; }
   .consoleHeader { align-items: flex-start; flex-direction: column; }
   .summaryGrid { grid-template-columns: 1fr 1fr; }
+  .localReviewHeader { flex-direction: column; }
 }
