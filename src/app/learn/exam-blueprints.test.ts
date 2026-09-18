@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EXAM_BLUEPRINTS, examBlueprint, practiceReadySubjects } from "./exam-blueprints";
+import { EXAM_BLUEPRINTS, examBlueprint, examSubjectCapability, practiceReadySubjects } from "./exam-blueprints";
 
 describe("SukuuNova Learn exam blueprints", () => {
   it("keeps exam references versioned and source-backed", () => {
@@ -28,6 +28,24 @@ describe("SukuuNova Learn exam blueprints", () => {
       "Mathematics (Core)",
       "Social Studies",
     ]);
+  });
+
+  it("derives exam readiness from audience-eligible published content", () => {
+    const bece = examBlueprint("bece-2026");
+    expect(practiceReadySubjects(bece).map((subject) => subject.id).sort()).toEqual([
+      "computing",
+      "english",
+      "mathematics",
+      "science",
+      "social-studies",
+    ]);
+
+    const wassce = examBlueprint("wassce-2026");
+    const byId = Object.fromEntries(wassce.subjects.map((subject) => [subject.id, examSubjectCapability(wassce, subject)]));
+    expect(byId.english.ready).toBe(true);
+    expect(byId["integrated-science"].ready).toBe(true);
+    expect(byId["core-mathematics"].ready).toBe(true);
+    expect(byId["social-studies"].ready).toBe(false);
   });
 
   it("keeps every timed paper duration positive", () => {
