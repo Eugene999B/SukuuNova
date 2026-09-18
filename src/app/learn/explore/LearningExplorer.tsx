@@ -28,13 +28,12 @@ import {
   catalogFor,
   type CatalogLevel,
   type CatalogSubject,
-  type CatalogTopic,
   type LearnLane,
   type LearnQuestion,
   type PracticeMode,
 } from "../learn-domain";
+import { learningCapabilityForSelection } from "../learning-capabilities";
 import { buildLearningSession, isCorrectAnswer } from "../learning-engine";
-import { variantCapacityForSelection } from "../variant-engine";
 import styles from "./explore.module.css";
 
 type LearnerProgress = {
@@ -80,20 +79,30 @@ function masteryKey(question: LearnQuestion) {
   return `${question.subject} · ${question.topic}`;
 }
 
-function topicIsReady(topic: CatalogTopic) {
-  return topic.availability !== "expanding";
+function capabilityConfig(
+  lane: LearnLane,
+  programId: string,
+  levelId: string,
+  subjectId: string,
+  topicId: string,
+) {
+  return { lane, programId, levelId, subjectId, topicId, mode: "topic" as const, count: 10 };
 }
 
-function subjectIsReady(subject: CatalogSubject) {
-  return subject.availability !== "expanding" && subject.topics.some(topicIsReady);
+function subjectIsReady(lane: LearnLane, programId: string, levelId: string, subject: CatalogSubject) {
+  return learningCapabilityForSelection(capabilityConfig(lane, programId, levelId, subject.id, "all")).ready;
 }
 
-function firstReadySubject(level: CatalogLevel) {
-  return level.subjects.find(subjectIsReady) ?? level.subjects[0];
+function topicIsReady(lane: LearnLane, programId: string, levelId: string, subject: CatalogSubject, topicId: string) {
+  return learningCapabilityForSelection(capabilityConfig(lane, programId, levelId, subject.id, topicId)).ready;
 }
 
-function firstReadyTopic(subject: CatalogSubject) {
-  return subject.topics.find(topicIsReady) ?? subject.topics[0];
+function firstReadySubject(lane: LearnLane, programId: string, level: CatalogLevel) {
+  return level.subjects.find((subject) => subjectIsReady(lane, programId, level.id, subject)) ?? level.subjects[0];
+}
+
+function firstReadyTopic(lane: LearnLane, programId: string, levelId: string, subject: CatalogSubject) {
+  return subject.topics.find((topic) => topicIsReady(lane, programId, levelId, subject, topic.id)) ?? subject.topics[0];
 }
 
 export function LearningExplorer() {
@@ -118,11 +127,9 @@ export function LearningExplorer() {
 
   const program = catalog.programs.find((item) => item.id === programId) ?? catalog.programs[0];
   const level = program.levels.find((item) => item.id === levelId) ?? program.levels[0];
-  const subject = level.subjects.find((item) => item.id === subjectId) ?? firstReadySubject(level);
-  const topic = subject.topics.find((item) => item.id === topicId) ?? firstReadyTopic(subject);
-  const practiceAvailable = subjectIsReady(subject) && topicIsReady(topic);
-  const currentQuestion = session[questionIndex];
-  const variantCapacity = useMemo(() => variantCapacityForSelection({
+  const subject = level.subjects.find((item) => item.id === subjectId) ?? firstReadySubject(lane, program.id, level);
+  const topic = subject.topics.find((item) => item.id === topicId) ?? firstReadyTopic(lane, program.id, level.id, subject);
+  const capability = useMemo(() => learningCapabilityForSelection({
     lane,
     programId,
     levelId,
@@ -131,6 +138,9 @@ export function LearningExplorer() {
     mode,
     count,
   }), [lane, programId, levelId, subjectId, topicId, mode, count]);
+  const practiceAvailable = capability.ready;
+  const variantCapacity = capability.variantCapacity;
+  const currentQuestion = session[questionIndex];
 
   useEffect(() => {
     try {
@@ -162,12 +172,12 @@ export function LearningExplorer() {
     const nextCatalog = catalogFor(nextLane);
     const nextProgram = nextCatalog.programs[0];
     const nextLevel = nextProgram.levels[0];
-    const nextSubject = firstReadySubject(nextLevel);
+    const nextSubject = firstReadySubject(nextLane, nextProgram.id, nextLevel);
     setLane(nextLane);
     setProgramId(nextProgram.id);
     setLevelId(nextLevel.id);
     setSubjectId(nextSubject.id);
-    setTopicId(firstReadyTopic(nextSubject).id);
+    setTopicId(firstReadyTopic(nextLane, nextProgram.id, nextLevel.id, nextSubject).id);
     setSession([]);
     setLaunchNotice("");
   }
@@ -175,28 +185,28 @@ export function LearningExplorer() {
   function selectProgram(nextProgramId: string) {
     const nextProgram = catalog.programs.find((item) => item.id === nextProgramId) ?? catalog.programs[0];
     const nextLevel = nextProgram.levels[0];
-    const nextSubject = firstReadySubject(nextLevel);
+    const nextSubject = firstReadySubject(lane, nextProgram.id, nextLevel);
     setProgramId(nextProgram.id);
     setLevelId(nextLevel.id);
     setSubjectId(nextSubject.id);
-    setTopicId(firstReadyTopic(nextSubject).id);
+    setTopicId(firstReadyTopic(lane, nextProgram.id, nextLevel.id, nextSubject).id);
     setLaunchNotice("");
   }
 
   function selectLevel(nextLevelId: string) {
     const nextLevel = program.levels.find((item) => item.id === nextLevelId) ?? program.levels[0];
-    const nextSubject = firstReadySubject(nextLevel);
+    const nextSubject = firstReadySubject(lane, program.id, nextLevel);
     setLevelId(nextLevel.id);
     setSubjectId(nextSubject.id);
-    setTopicId(firstReadyTopic(nextSubject).id);
+    setTopicId(firstReadyTopic(lane, program.id, nextLevel.id, nextSubject).id);
     setLaunchNotice("");
   }
 
   function selectSubject(nextSubjectId: string) {
-    const nextSubject = level.subjects.find((item) => item.id === nextSubjectId) ?? firstReadySubject(level);
-    if (!subjectIsReady(nextSubject)) return;
+    const nextSubject = level.subjects.find((item) => item.id === nextSubjectId) ?? firstReadySubject(lane, program.id, level);
+    if (!subjectIsReady(lane, program.id, level.id, nextSubject)) return;
     setSubjectId(nextSubject.id);
-    setTopicId(firstReadyTopic(nextSubject).id);
+    setTopicId(firstReadyTopic(lane, program.id, level.id, nextSubject).id);
     setLaunchNotice("");
   }
 
@@ -345,13 +355,13 @@ export function LearningExplorer() {
             </div>
             <div className={styles.selectorBlock}>
               <label>Subject / section</label>
-              <select value={subjectId} onChange={(event) => selectSubject(event.target.value)}>{level.subjects.map((item) => <option key={item.id} value={item.id} disabled={!subjectIsReady(item)}>{item.label}{subjectIsReady(item) ? "" : " — coverage expanding"}</option>)}</select>
+              <select value={subjectId} onChange={(event) => selectSubject(event.target.value)}>{level.subjects.map((item) => { const ready = subjectIsReady(lane, program.id, level.id, item); return <option key={item.id} value={item.id} disabled={!ready}>{item.label}{ready ? "" : " — coverage expanding"}</option>; })}</select>
             </div>
           </div>
 
           <div className={styles.selectorBlock}>
             <label>Topic / learning target</label>
-            <div className={styles.topicGrid}>{subject.topics.map((item) => <button key={item.id} disabled={!topicIsReady(item)} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => { setTopicId(item.id); setLaunchNotice(""); }}><BookOpen size={15} /><span>{item.label}{topicIsReady(item) ? "" : " · expanding"}</span>{topicId === item.id && topicIsReady(item) && <Check size={15} />}</button>)}</div>
+            <div className={styles.topicGrid}>{subject.topics.map((item) => { const ready = topicIsReady(lane, program.id, level.id, subject, item.id); return <button key={item.id} disabled={!ready} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => { setTopicId(item.id); setLaunchNotice(""); }}><BookOpen size={15} /><span>{item.label}{ready ? "" : " · expanding"}</span>{topicId === item.id && ready && <Check size={15} />}</button>; })}</div>
           </div>
 
           <div className={styles.divider} />
@@ -365,7 +375,7 @@ export function LearningExplorer() {
             <div><label>Questions</label><div className={styles.countGroup}>{[10, 20, 30, 50, 75, 100].map((value) => <button key={value} className={count === value ? styles.countActive : styles.countButton} onClick={() => setCount(value)}>{value}</button>)}</div></div>
             <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Sparkles size={18} /> {practiceAvailable ? "Build my session" : "Coverage expanding"} <ArrowRight size={18} /></button>
           </div>
-          <p className={styles.engineNote}>{!practiceAvailable ? "This subject or topic is present in the curriculum map, but its reviewed SukuuNova practice pack is still expanding." : variantCapacity >= 1_000_000 ? `This selection has ${new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(variantCapacity)} deterministic parameterized variants available before reviewed fixed questions are counted. Explicit subject/topic selections never widen into unrelated content.` : "SukuuNova combines reviewed fixed questions with deterministic parameterized practice. Explicit subject/topic selections never widen into unrelated content."}</p>
+          <p className={styles.engineNote}>{!practiceAvailable ? "This path is mapped in SukuuNova, but no audience-eligible reviewed questions or verified generators are published for it yet." : variantCapacity >= 1_000_000 ? `This selection has ${new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(variantCapacity)} deterministic parameterized variants, plus ${capability.reviewedStandardQuestions} audience-eligible reviewed fixed questions. Explicit subject/topic selections never widen into unrelated content.` : `This selection currently has ${capability.reviewedStandardQuestions} audience-eligible reviewed fixed questions and ${capability.richInteractions} reviewed rich interactions. Explicit subject/topic selections never widen into unrelated content.`}</p>
         </div>
       </section>
 
