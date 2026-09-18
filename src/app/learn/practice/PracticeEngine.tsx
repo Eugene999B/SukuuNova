@@ -7,8 +7,10 @@ import {
   Brain,
   Check,
   CheckCircle2,
+  Download,
   Flame,
   Gauge,
+  Printer,
   RotateCcw,
   ShieldCheck,
   Sparkles,
@@ -24,6 +26,11 @@ import {
   type LearnQuestion,
 } from "../learning-engine";
 import type { PracticeMode } from "../learn-domain";
+import {
+  buildPracticeReportHtml,
+  buildPracticeReportJson,
+  type PracticeAttempt,
+} from "./session-report";
 import styles from "./practice.module.css";
 
 type ResponseValue = string | string[] | number | boolean;
@@ -118,6 +125,7 @@ export function PracticeEngine() {
   const [submitted, setSubmitted] = useState(false);
   const [lastCorrect, setLastCorrect] = useState(false);
   const [sessionCorrect, setSessionCorrect] = useState(0);
+  const [attempts, setAttempts] = useState<PracticeAttempt[]>([]);
 
   const preset = PRESETS.find((item) => item.id === presetId) ?? PRESETS[0];
   const currentQuestion = session[questionIndex];
@@ -161,6 +169,7 @@ export function PracticeEngine() {
     setSubmitted(false);
     setLastCorrect(false);
     setSessionCorrect(0);
+    setAttempts([]);
     window.setTimeout(() => document.getElementById("practice-player")?.scrollIntoView({ behavior: "smooth", block: "start" }), 60);
   }
 
@@ -176,6 +185,14 @@ export function PracticeEngine() {
     if (["fill", "numeric", "short"].includes(currentQuestion.kind) && String(response).trim() === "") return;
 
     const correct = isCorrectAnswer(currentQuestion, response);
+    setAttempts((current) => [
+      ...current,
+      {
+        questionId: currentQuestion.id,
+        response: Array.isArray(response) ? [...response] : response,
+        correct,
+      },
+    ]);
     const key = masteryKey(currentQuestion);
     const previous = progress.mastery[key] ?? { answered: 0, correct: 0 };
     const exposures = [currentQuestion.exposureKey, ...progress.exposures.filter((item) => item !== currentQuestion.exposureKey)].slice(0, 300);
@@ -218,6 +235,39 @@ export function PracticeEngine() {
     setResponse("");
     setSubmitted(false);
     setSessionCorrect(0);
+    setAttempts([]);
+  }
+
+  function reportInput() {
+    return {
+      title: preset.label,
+      mode,
+      questions: session,
+      attempts,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
+  function printResults() {
+    const reportWindow = window.open("", "_blank", "width=980,height=760");
+    if (!reportWindow) return;
+    reportWindow.document.open();
+    reportWindow.document.write(buildPracticeReportHtml(reportInput()));
+    reportWindow.document.close();
+    reportWindow.focus();
+    window.setTimeout(() => reportWindow.print(), 120);
+  }
+
+  function downloadResults() {
+    const blob = new Blob([buildPracticeReportJson(reportInput())], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `sukuunova-practice-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }
 
   function renderResponse() {
@@ -376,9 +426,12 @@ export function PracticeEngine() {
             <article><strong>{diagnostics.formats.length}</strong><span>answer formats</span></article>
           </div>
           <div className={styles.resultActions}>
+            <button type="button" onClick={printResults}><Printer size={16} /> Print full result</button>
+            <button type="button" onClick={downloadResults}><Download size={16} /> Download report</button>
             <button type="button" onClick={launch}><RotateCcw size={16} /> Build another</button>
             <button type="button" onClick={reset}>Change setup</button>
           </div>
+          <small className={styles.privacyNote}>Anonymous by default: this report is built in your browser and does not require a learner account.</small>
         </section>
       )}
     </main>
