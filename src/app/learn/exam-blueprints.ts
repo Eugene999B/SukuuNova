@@ -1,3 +1,5 @@
+import { learningCapabilityForSelection, type LearningCapability } from "./learning-capabilities";
+
 export type ExamPaper = {
   id: string;
   label: string;
@@ -7,8 +9,8 @@ export type ExamPaper = {
 
 export type ExamSubjectBlueprint = {
   id: string;
+  catalogSubjectId: string;
   label: string;
-  practiceReady: boolean;
   papers?: ExamPaper[];
 };
 
@@ -39,8 +41,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
     subjects: [
       {
         id: "english",
+        catalogSubjectId: "english",
         label: "English Language",
-        practiceReady: true,
         papers: [
           { id: "english-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 70 },
           { id: "english-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 50 },
@@ -48,8 +50,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       },
       {
         id: "social-studies",
+        catalogSubjectId: "social",
         label: "Social Studies",
-        practiceReady: true,
         papers: [
           { id: "social-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 60 },
           { id: "social-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 45 },
@@ -57,8 +59,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       },
       {
         id: "science",
+        catalogSubjectId: "science",
         label: "Science",
-        practiceReady: true,
         papers: [
           { id: "science-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 85 },
           { id: "science-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 45 },
@@ -66,8 +68,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       },
       {
         id: "mathematics",
+        catalogSubjectId: "mathematics",
         label: "Mathematics",
-        practiceReady: true,
         papers: [
           { id: "math-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 60 },
           { id: "math-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 60 },
@@ -75,19 +77,19 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       },
       {
         id: "computing",
+        catalogSubjectId: "computing",
         label: "Computing",
-        practiceReady: true,
         papers: [
           { id: "computing-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 75 },
           { id: "computing-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 45 },
         ],
       },
-      { id: "rme", label: "Religious and Moral Education", practiceReady: false },
-      { id: "career-technology", label: "Career Technology", practiceReady: false },
-      { id: "creative-arts", label: "Creative Arts & Design", practiceReady: false },
-      { id: "ghanaian-language", label: "Ghanaian Language", practiceReady: false },
-      { id: "french", label: "French", practiceReady: false },
-      { id: "arabic", label: "Arabic", practiceReady: false },
+      { id: "rme", catalogSubjectId: "rme", label: "Religious and Moral Education" },
+      { id: "career-technology", catalogSubjectId: "career-technology", label: "Career Technology" },
+      { id: "creative-arts", catalogSubjectId: "creative-arts-design", label: "Creative Arts & Design" },
+      { id: "ghanaian-language", catalogSubjectId: "ghanaian-language", label: "Ghanaian Language" },
+      { id: "french", catalogSubjectId: "french", label: "French" },
+      { id: "arabic", catalogSubjectId: "arabic", label: "Arabic" },
     ],
   },
   {
@@ -101,10 +103,10 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
     sourceUrl: "https://waecgh.org/home/wassce-school/",
     note: "WAEC lists four core subjects for school candidates. Elective combinations depend on the candidate's programme, so SukuuNova models them separately instead of pretending one universal elective blueprint exists.",
     subjects: [
-      { id: "english", label: "English Language", practiceReady: true },
-      { id: "integrated-science", label: "Integrated Science", practiceReady: true },
-      { id: "core-mathematics", label: "Mathematics (Core)", practiceReady: true },
-      { id: "social-studies", label: "Social Studies", practiceReady: true },
+      { id: "english", catalogSubjectId: "english", label: "English Language" },
+      { id: "integrated-science", catalogSubjectId: "science", label: "Integrated Science" },
+      { id: "core-mathematics", catalogSubjectId: "mathematics", label: "Mathematics (Core)" },
+      { id: "social-studies", catalogSubjectId: "social", label: "Social Studies" },
     ],
   },
 ];
@@ -122,6 +124,25 @@ export function examBlueprint(id: ExamBlueprint["id"]) {
   return blueprint;
 }
 
+function programIdForBlueprint(blueprint: ExamBlueprint) {
+  return blueprint.id === "bece-2026" ? "bece" : "wassce";
+}
+
+export function examSubjectCapability(
+  blueprint: ExamBlueprint,
+  subject: ExamSubjectBlueprint,
+): LearningCapability {
+  return learningCapabilityForSelection({
+    lane: "exam",
+    programId: programIdForBlueprint(blueprint),
+    levelId: "practice",
+    subjectId: subject.catalogSubjectId,
+    topicId: "all",
+    mode: "random",
+    count: 10,
+  });
+}
+
 export function practiceReadySubjects(blueprint: ExamBlueprint) {
-  return blueprint.subjects.filter((subject) => subject.practiceReady);
+  return blueprint.subjects.filter((subject) => examSubjectCapability(blueprint, subject).ready);
 }
