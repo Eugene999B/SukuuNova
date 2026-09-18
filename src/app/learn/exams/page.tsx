@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, BookOpenCheck, CalendarCheck2, Clock3, ExternalLink, GraduationCap, ShieldCheck, Sparkles, Target } from "lucide-react";
-import { EXAM_BLUEPRINTS, GHANA_CCP_REFERENCE, practiceReadySubjects } from "../exam-blueprints";
+import { EXAM_BLUEPRINTS, GHANA_CCP_REFERENCE, examSubjectCapability, practiceReadySubjects } from "../exam-blueprints";
 import styles from "./exams.module.css";
 
 export const metadata: Metadata = {
@@ -62,27 +62,32 @@ export default function ExamCentrePage() {
               <p className={styles.note}>{blueprint.note}</p>
 
               <div className={styles.subjectGrid}>
-                {blueprint.subjects.map((subject) => (
-                  <section className={subject.practiceReady ? styles.subjectReady : styles.subjectPlanned} key={subject.id}>
-                    <div className={styles.subjectTitle}>
-                      <BookOpenCheck size={16} />
-                      <strong>{subject.label}</strong>
-                      <span>{subject.practiceReady ? "Practice lane" : "Coverage planned"}</span>
-                    </div>
-                    {subject.papers?.length ? (
-                      <div className={styles.paperList}>
-                        {subject.papers.map((paper) => (
-                          <div key={paper.id}>
-                            <span>{paper.label}</span>
-                            {paper.durationMinutes ? <small><Clock3 size={12} /> {duration(paper.durationMinutes)}</small> : null}
-                          </div>
-                        ))}
+                {blueprint.subjects.map((subject) => {
+                  const capability = examSubjectCapability(blueprint, subject);
+                  return (
+                    <section className={capability.ready ? styles.subjectReady : styles.subjectPlanned} key={subject.id}>
+                      <div className={styles.subjectTitle}>
+                        <BookOpenCheck size={16} />
+                        <strong>{subject.label}</strong>
+                        <span>{capability.ready ? "Practice lane" : "Coverage planned"}</span>
                       </div>
-                    ) : (
-                      <p className={styles.subjectCopy}>{subject.practiceReady ? "The current Learn engine can already serve this subject while deeper exam-specific packs expand." : "Kept visible in the blueprint so coverage grows deliberately rather than being silently omitted."}</p>
-                    )}
-                  </section>
-                ))}
+                      {subject.papers?.length ? (
+                        <div className={styles.paperList}>
+                          {subject.papers.map((paper) => (
+                            <div key={paper.id}>
+                              <span>{paper.label}</span>
+                              {paper.durationMinutes ? <small><Clock3 size={12} /> {duration(paper.durationMinutes)}</small> : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className={styles.subjectCopy}>{capability.ready
+                          ? "Published supply: " + capability.reviewedStandardQuestions + " reviewed fixed questions plus " + new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(capability.variantCapacity) + " deterministic variants."
+                          : "Kept visible in the blueprint so coverage grows deliberately rather than being silently omitted."}</p>
+                      )}
+                    </section>
+                  );
+                })}
               </div>
 
               <footer className={styles.sourceRow}>
