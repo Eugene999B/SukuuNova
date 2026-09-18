@@ -1,4 +1,6 @@
 import type { VerificationCheck } from "./question-foundry";
+import type { SessionConfig } from "./learn-domain";
+import { audienceMatchesSession, learningAudienceForFoundryLevel, type LearningAudience } from "./verified-content";
 import {
   isRichInteractionPublishable,
   releaseRichInteraction,
@@ -156,7 +158,25 @@ export const RICH_STARTER_FOUNDRY_PACK: RichInteractionQuestion[] = [
   },
 ];
 
-export const RELEASED_RICH_INTERACTIONS: RichLearnerQuestion[] = RICH_STARTER_FOUNDRY_PACK
-  .filter(isRichInteractionPublishable)
-  .map(releaseRichInteraction)
-  .filter((question): question is RichLearnerQuestion => question !== null);
+export type ReleasedRichInteractionEntry = {
+  question: RichLearnerQuestion;
+  foundryLevel: string;
+  audience: LearningAudience;
+};
+
+export const RELEASED_RICH_INTERACTION_ENTRIES: ReleasedRichInteractionEntry[] = RICH_STARTER_FOUNDRY_PACK.flatMap((foundryQuestion) => {
+  if (!isRichInteractionPublishable(foundryQuestion)) return [];
+  const question = releaseRichInteraction(foundryQuestion);
+  if (!question) return [];
+  return [{
+    question,
+    foundryLevel: foundryQuestion.dna.level,
+    audience: learningAudienceForFoundryLevel(foundryQuestion.dna.level),
+  }];
+});
+
+export const RELEASED_RICH_INTERACTIONS: RichLearnerQuestion[] = RELEASED_RICH_INTERACTION_ENTRIES.map((entry) => entry.question);
+
+export function richInteractionEntriesForAudience(config: SessionConfig) {
+  return RELEASED_RICH_INTERACTION_ENTRIES.filter((entry) => audienceMatchesSession(entry.audience, config));
+}

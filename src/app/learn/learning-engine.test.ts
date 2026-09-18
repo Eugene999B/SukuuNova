@@ -95,6 +95,34 @@ describe("SukuuNova Learn session engine", () => {
     expect(session[0].id).toBe("expand-math-geometry-001");
   });
 
+  it("does not leak JHS reviewed fixed questions into SHS topics", () => {
+    const session = buildLearningSession({
+      lane: "school",
+      programId: "ghana",
+      levelId: "shs-2",
+      subjectId: "computing",
+      topicId: "digital-safety",
+      mode: "topic",
+      count: 10,
+      seed: 44,
+    });
+    expect(session).toEqual([]);
+  });
+
+  it("does not leak JHS reviewed fixed questions into WASSCE-only selections", () => {
+    const session = buildLearningSession({
+      lane: "exam",
+      programId: "wassce",
+      levelId: "practice",
+      subjectId: "social",
+      topicId: "governance",
+      mode: "topic",
+      count: 10,
+      seed: 44,
+    });
+    expect(session).toEqual([]);
+  });
+
   it("never repeats an exposure key inside a session", () => {
     const session = buildLearningSession({ ...baseConfig, count: 100, seed: 77 });
     const diagnostics = sessionDiagnostics(session);

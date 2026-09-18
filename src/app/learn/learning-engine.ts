@@ -1,11 +1,10 @@
 import {
-  buildSession,
   catalogFor,
   isCorrectAnswer,
   type LearnQuestion,
   type SessionConfig,
 } from "./learn-domain";
-import { VERIFIED_STANDARD_QUESTIONS } from "./verified-content";
+import { verifiedStandardQuestionsForAudience } from "./verified-content";
 import { buildVariantQuestions } from "./variant-engine";
 
 const MAX_SESSION_SIZE = 100;
@@ -115,6 +114,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const fresh: LearnQuestion[] = [];
   const recycled: LearnQuestion[] = [];
   const selection = resolveSelectionLabels(config);
+  const reviewedQuestions = verifiedStandardQuestionsForAudience(config);
 
   function absorb(questions: LearnQuestion[]) {
     for (const question of questions) {
@@ -127,35 +127,17 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
 
   const strictSelection = config.subjectId !== "all" || config.topicId !== "all";
 
-  absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, false, selection)));
+  absorb(reviewedQuestions.filter((question) => starterMatches(question, config, false, selection)));
   absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed));
 
   if (!strictSelection && fresh.length < requested) {
-    absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, true, selection)));
+    absorb(reviewedQuestions.filter((question) => starterMatches(question, config, true, selection)));
   }
 
-  absorb(
-    buildSession({
-      ...config,
-      count: requested,
-      seed,
-    }).filter((question) => !strictSelection || starterMatches(question, config, false, selection)),
-  );
 
   for (let attempt = 0; fresh.length < requested && attempt < BROADENING_ATTEMPTS; attempt += 1) {
     const nextSeed = derivedSeed(seed, attempt);
     absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed));
-    if (!strictSelection) {
-      absorb(
-        buildSession({
-          ...config,
-          subjectId: "all",
-          topicId: "all",
-          count: MAX_SESSION_SIZE,
-          seed: nextSeed,
-        }),
-      );
-    }
   }
 
   const orderedFresh = orderPool(fresh, config, seed, selection);
