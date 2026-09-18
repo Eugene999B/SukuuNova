@@ -27,8 +27,7 @@ export const SCHOOL_STARTER_TOPIC_COVERAGE: StarterTopicCoverage[] = (representa
       questionCount,
       covered: questionCount > 0,
     };
-  })),
-);
+  }));
 
 export const SCHOOL_STARTER_COVERAGE_SUMMARY = {
   totalTopics: SCHOOL_STARTER_TOPIC_COVERAGE.length,
