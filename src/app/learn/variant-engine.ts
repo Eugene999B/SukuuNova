@@ -17,8 +17,11 @@ type VariantTemplate = {
   render: (variantIndex: number) => LearnQuestion;
 };
 
-const JHS_SHS_LEVELS = ["jhs-1", "jhs-2", "jhs-3", "shs-1", "shs-2", "shs-3"] as const;
+const JHS_LEVELS = ["jhs-1", "jhs-2", "jhs-3"] as const;
+const SHS_LEVELS = ["shs-1", "shs-2", "shs-3"] as const;
+const JHS_SHS_LEVELS = [...JHS_LEVELS, ...SHS_LEVELS] as const;
 const UPPER_PRIMARY_TO_SHS = ["basic-4", "basic-5", "basic-6", ...JHS_SHS_LEVELS] as const;
+const BECE_PROGRAMS = ["bece"] as const;
 const EXAM_PROGRAMS = ["bece", "wassce"] as const;
 
 const EARLY_NAMES = [
@@ -552,11 +555,642 @@ function renderBinary(variant: number): LearnQuestion {
   };
 }
 
+
+function textChoiceQuestion(
+  common: Omit<LearnQuestion, "kind" | "answer" | "options" | "acceptedAnswers">,
+  correct: string,
+  distractors: readonly string[],
+  variant: number,
+): LearnQuestion {
+  const values = Array.from(new Set([correct, ...distractors.filter((value) => value !== correct)])).slice(0, 4);
+  if (values.length < 2) throw new Error("Text-choice templates require at least two unique options.");
+  const offset = variant % values.length;
+  const rotated = [...values.slice(offset), ...values.slice(0, offset)];
+  return {
+    ...common,
+    kind: "single",
+    options: rotated.map((value, index) => ({ id: String(index), label: value })),
+    answer: String(rotated.indexOf(correct)),
+  };
+}
+
+const VOCABULARY_BANK = [
+  ["abundant", "plentiful", "scarce"],
+  ["accurate", "precise", "inaccurate"],
+  ["ancient", "old", "modern"],
+  ["brief", "concise", "lengthy"],
+  ["calm", "peaceful", "agitated"],
+  ["cautious", "careful", "reckless"],
+  ["difficult", "challenging", "easy"],
+  ["eager", "keen", "reluctant"],
+  ["enormous", "huge", "tiny"],
+  ["fragile", "delicate", "sturdy"],
+  ["generous", "giving", "selfish"],
+  ["genuine", "authentic", "fake"],
+  ["hostile", "unfriendly", "friendly"],
+  ["intelligent", "clever", "foolish"],
+  ["joyful", "happy", "sad"],
+  ["loyal", "faithful", "disloyal"],
+  ["rapid", "swift", "slow"],
+  ["rare", "uncommon", "common"],
+  ["silent", "quiet", "noisy"],
+  ["simple", "straightforward", "complex"],
+  ["sturdy", "strong", "weak"],
+  ["timid", "shy", "bold"],
+  ["vacant", "empty", "occupied"],
+  ["visible", "seen", "hidden"],
+] as const;
+
+const vocabularyDimensions = [VOCABULARY_BANK.length, EARLY_NAMES.length, EARLY_PLACES.length, grammarTimes.length, 2] as const;
+const vocabularyCapacity = product(vocabularyDimensions);
+
+function renderVocabulary(variant: number): LearnQuestion {
+  const [entryIndex, nameIndex, placeIndex, timeIndex, relation] = decodeVariant(variant, vocabularyDimensions);
+  const [word, synonym, antonym] = VOCABULARY_BANK[entryIndex];
+  const target = relation === 0 ? synonym : antonym;
+  const distractors = [1, 7, 13].map((offset) => VOCABULARY_BANK[(entryIndex + offset) % VOCABULARY_BANK.length][relation === 0 ? 1 : 2]);
+  const relationLabel = relation === 0 ? "closest in meaning to" : "opposite in meaning to";
+  return textChoiceQuestion(
+    {
+      id: `variant-english-vocabulary-${variant}`,
+      exposureKey: `variant:english:vocabulary:${variant}`,
+      subject: "English Language",
+      topic: "Vocabulary",
+      skill: relation === 0 ? "Recognise synonyms in context" : "Recognise antonyms in context",
+      difficulty: 2,
+      prompt: `${EARLY_NAMES[nameIndex]} meets the word “${word}” while reading at ${EARLY_PLACES[placeIndex]} ${grammarTimes[timeIndex]}. Which word is ${relationLabel} “${word}”?`,
+      explanation: `“${target}” is ${relation === 0 ? "a synonym" : "an antonym"} of “${word}”.`,
+      hint: relation === 0 ? "Look for the option with the most similar meaning." : "Look for the option with the most contrasting meaning.",
+    },
+    target,
+    distractors,
+    variant,
+  );
+}
+
+const READING_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+const readingDimensions = [EARLY_NAMES.length, EARLY_PLACES.length, EARLY_OBJECTS.length, 50, READING_DAYS.length, 3] as const;
+const readingCapacity = product(readingDimensions);
+
+function renderReading(variant: number): LearnQuestion {
+  const [nameIndex, placeIndex, objectIndex, quantityIndex, dayIndex, questionType] = decodeVariant(variant, readingDimensions);
+  const name = EARLY_NAMES[nameIndex];
+  const place = EARLY_PLACES[placeIndex];
+  const object = EARLY_OBJECTS[objectIndex];
+  const quantity = quantityIndex + 1;
+  const day = READING_DAYS[dayIndex];
+  const passage = `${name} visited ${place} on ${day}. ${name} collected ${quantity} ${objectLabel(object, quantity)} for a class activity.`;
+
+  if (questionType === 0) {
+    return textChoiceQuestion(
+      {
+        id: `variant-english-reading-${variant}`,
+        exposureKey: `variant:english:reading:${variant}`,
+        subject: "English Language",
+        topic: "Reading comprehension",
+        skill: "Retrieve an explicit place detail",
+        difficulty: 2,
+        prompt: `${passage} Where did ${name} visit?`,
+        explanation: `The passage directly says that ${name} visited ${place}.`,
+        hint: "Find the place named in the first sentence.",
+      },
+      place,
+      [EARLY_PLACES[(placeIndex + 1) % EARLY_PLACES.length], EARLY_PLACES[(placeIndex + 7) % EARLY_PLACES.length], EARLY_PLACES[(placeIndex + 13) % EARLY_PLACES.length]],
+      variant,
+    );
+  }
+
+  if (questionType === 1) {
+    return textChoiceQuestion(
+      {
+        id: `variant-english-reading-${variant}`,
+        exposureKey: `variant:english:reading:${variant}`,
+        subject: "English Language",
+        topic: "Reading comprehension",
+        skill: "Retrieve an explicit time detail",
+        difficulty: 2,
+        prompt: `${passage} On which day did the visit happen?`,
+        explanation: `The passage states that the visit happened on ${day}.`,
+        hint: "Look for the day named in the first sentence.",
+      },
+      day,
+      [READING_DAYS[(dayIndex + 1) % READING_DAYS.length], READING_DAYS[(dayIndex + 3) % READING_DAYS.length], READING_DAYS[(dayIndex + 5) % READING_DAYS.length]],
+      variant,
+    );
+  }
+
+  return textChoiceQuestion(
+    {
+      id: `variant-english-reading-${variant}`,
+      exposureKey: `variant:english:reading:${variant}`,
+      subject: "English Language",
+      topic: "Reading comprehension",
+      skill: "Retrieve an explicit quantity",
+      difficulty: 2,
+      prompt: `${passage} How many ${object[1]} did ${name} collect?`,
+      explanation: `The passage says that ${name} collected ${quantity} ${objectLabel(object, quantity)}.`,
+      hint: "Find the number in the second sentence.",
+    },
+    String(quantity),
+    [String(quantity + 1), String(Math.max(1, quantity - 1)), String(quantity + 5)],
+    variant,
+  );
+}
+
+const writingDimensions = [EARLY_NAMES.length, EARLY_PLACES.length, grammarVerbs.length, grammarTimes.length, 2] as const;
+const writingCapacity = product(writingDimensions);
+
+function renderWriting(variant: number): LearnQuestion {
+  const [nameIndex, placeIndex, verbIndex, timeIndex, frame] = decodeVariant(variant, writingDimensions);
+  const name = EARLY_NAMES[nameIndex];
+  const verb = grammarVerbs[verbIndex][1];
+  const place = EARLY_PLACES[placeIndex];
+  const time = grammarTimes[timeIndex];
+  const correct = `${name} ${verb} at ${place} ${time}.`;
+  const lowerName = `${name.toLowerCase()} ${verb} at ${place} ${time}.`;
+  const noStop = `${name} ${verb} at ${place} ${time}`;
+  const lowerNoStop = `${name.toLowerCase()} ${verb} at ${place} ${time}`;
+
+  return textChoiceQuestion(
+    {
+      id: `variant-english-writing-${variant}`,
+      exposureKey: `variant:english:writing:${variant}`,
+      subject: "English Language",
+      topic: "Writing",
+      skill: "Apply basic sentence capitalization and punctuation",
+      difficulty: 2,
+      prompt: frame === 0
+        ? "Which sentence begins the person’s proper name with a capital letter and ends with a full stop?"
+        : "Choose the sentence that correctly applies the stated capitalization and end-punctuation rules.",
+      explanation: `“${correct}” begins the proper name with a capital letter and ends with a full stop.`,
+      hint: "Check the first letter of the person’s name and the punctuation at the end.",
+    },
+    correct,
+    [lowerName, noStop, lowerNoStop],
+    variant,
+  );
+}
+
+const environmentDimensions = [EARLY_PLACES.length, 50, 24, 365, 2] as const;
+const environmentCapacity = product(environmentDimensions);
+
+function renderEnvironment(variant: number): LearnQuestion {
+  const [placeIndex, rateIndex, hoursIndex, daysIndex, task] = decodeVariant(variant, environmentDimensions);
+  const rate = rateIndex + 1;
+  const hours = hoursIndex + 1;
+  const days = daysIndex + 1;
+  const daily = rate * hours;
+  const total = daily * days;
+  const answer = task === 0 ? daily : total;
+  return numericOrSingle(
+    {
+      id: `variant-science-environment-${variant}`,
+      exposureKey: `variant:science:environment:${variant}`,
+      subject: "Science",
+      topic: "Environment",
+      skill: "Quantify water conservation in an environmental scenario",
+      difficulty: 3,
+      prompt: task === 0
+        ? `A leaking pipe at ${EARLY_PLACES[placeIndex]} loses ${rate} litres of water each hour for ${hours} hours per day. How many litres are wasted in one day?`
+        : `A leaking pipe at ${EARLY_PLACES[placeIndex]} loses ${rate} litres each hour for ${hours} hours per day. If it is repaired, how many litres would be saved over ${days} days?`,
+      explanation: task === 0
+        ? `Daily waste = ${rate} × ${hours} = ${daily} litres.`
+        : `Daily waste is ${rate} × ${hours} = ${daily} litres, so over ${days} days the saving is ${daily} × ${days} = ${total} litres.`,
+      hint: task === 0 ? "Multiply the hourly loss by the number of leaking hours." : "Find the daily loss first, then multiply by the number of days.",
+    },
+    answer,
+    variant % 2 === 0 ? "numeric" : "single",
+    variant,
+  );
+}
+
+const GOVERNANCE_FUNCTIONS = [
+  ["debate and pass national laws", "Parliament"],
+  ["scrutinise proposed laws through debate and committees", "Parliament"],
+  ["approve public spending through the national budget process", "Parliament"],
+  ["implement public policy through ministries and departments", "Executive"],
+  ["coordinate the day-to-day work of government ministries", "Executive"],
+  ["carry out laws and approved government programmes", "Executive"],
+  ["interpret the law when deciding a court case", "Judiciary"],
+  ["settle legal disputes brought before the courts", "Judiciary"],
+] as const;
+const CIVIC_AUDIENCES = ["a school civic club", "a community forum", "a youth meeting", "a class discussion", "a radio civic programme", "a debate club", "a community workshop", "a student council session"] as const;
+const governanceDimensions = [GOVERNANCE_FUNCTIONS.length, EARLY_NAMES.length, EARLY_PLACES.length, grammarTimes.length, CIVIC_AUDIENCES.length, 2] as const;
+const governanceCapacity = product(governanceDimensions);
+
+function renderGovernance(variant: number): LearnQuestion {
+  const [functionIndex, nameIndex, placeIndex, timeIndex, audienceIndex, frame] = decodeVariant(variant, governanceDimensions);
+  const [action, institution] = GOVERNANCE_FUNCTIONS[functionIndex];
+  return textChoiceQuestion(
+    {
+      id: `variant-social-governance-${variant}`,
+      exposureKey: `variant:social:governance:${variant}`,
+      subject: "Social Studies",
+      topic: "Governance",
+      skill: "Distinguish the core functions of state institutions",
+      difficulty: 2,
+      prompt: frame === 0
+        ? `At ${CIVIC_AUDIENCES[audienceIndex]} in ${EARLY_PLACES[placeIndex]} ${grammarTimes[timeIndex]}, ${EARLY_NAMES[nameIndex]} asks which institution is mainly responsible to ${action}. Which answer fits best?`
+        : `${EARLY_NAMES[nameIndex]} is preparing a civic presentation for ${CIVIC_AUDIENCES[audienceIndex]}. Which institution is most directly associated with the function “${action}”?`,
+      explanation: `${institution} is the institution most directly associated with the stated function: ${action}.`,
+      hint: "Separate law-making, law-implementation and judicial decision-making.",
+    },
+    institution,
+    ["Parliament", "Executive", "Judiciary", "Electoral Commission"],
+    variant,
+  );
+}
+
+const CITIZENSHIP_SCENARIOS = [
+  ["receiving a fair hearing when accused of wrongdoing", "A civic right"],
+  ["being treated equally under the law", "A civic right"],
+  ["expressing an opinion peacefully within the law", "A civic right"],
+  ["having personal privacy respected within lawful limits", "A civic right"],
+  ["accessing basic education", "A civic right"],
+  ["taking part in peaceful lawful association", "A civic right"],
+  ["obeying lawful rules and regulations", "A civic responsibility"],
+  ["respecting the rights of other people", "A civic responsibility"],
+  ["protecting public property from damage", "A civic responsibility"],
+  ["helping to keep shared surroundings clean", "A civic responsibility"],
+  ["reporting a serious danger to an appropriate authority", "A civic responsibility"],
+  ["using public resources carefully rather than wasting them", "A civic responsibility"],
+  ["taking part constructively in community activities", "A civic responsibility"],
+  ["following lawful safety instructions in public spaces", "A civic responsibility"],
+  ["showing respect for other people’s lawful beliefs and views", "A civic responsibility"],
+  ["helping preserve community facilities for others", "A civic responsibility"],
+] as const;
+const citizenshipDimensions = [CITIZENSHIP_SCENARIOS.length, EARLY_NAMES.length, EARLY_PLACES.length, grammarTimes.length, CIVIC_AUDIENCES.length, 2] as const;
+const citizenshipCapacity = product(citizenshipDimensions);
+
+function renderCitizenship(variant: number): LearnQuestion {
+  const [scenarioIndex, nameIndex, placeIndex, timeIndex, audienceIndex, frame] = decodeVariant(variant, citizenshipDimensions);
+  const [scenario, category] = CITIZENSHIP_SCENARIOS[scenarioIndex];
+  return textChoiceQuestion(
+    {
+      id: `variant-social-citizenship-${variant}`,
+      exposureKey: `variant:social:citizenship:${variant}`,
+      subject: "Social Studies",
+      topic: "Citizenship",
+      skill: "Distinguish civic rights from responsibilities",
+      difficulty: 2,
+      prompt: frame === 0
+        ? `${EARLY_NAMES[nameIndex]} discusses “${scenario}” at ${CIVIC_AUDIENCES[audienceIndex]} in ${EARLY_PLACES[placeIndex]} ${grammarTimes[timeIndex]}. How should this example be classified?`
+        : `In a citizenship lesson, how is the example “${scenario}” best described?`,
+      explanation: `The example is best classified as ${category.toLowerCase()}.`,
+      hint: "Ask whether the example describes something a person is entitled to or something citizens should do.",
+    },
+    category,
+    ["A civic right", "A civic responsibility", "A commercial transaction", "A punishment"],
+    variant,
+  );
+}
+
+const POSITIVE_ENVIRONMENT_ACTIONS = [
+  "planting trees to replace lost vegetation",
+  "sorting reusable materials for recycling",
+  "using a bin instead of dropping litter",
+  "repairing a leaking tap",
+  "protecting vegetation along a river bank",
+  "joining a community clean-up",
+  "reusing a durable container",
+  "switching off unused electrical devices",
+  "reporting illegal dumping to the proper authority",
+  "keeping drains free from solid waste",
+  "using water carefully during cleaning",
+  "maintaining trees already planted",
+  "using designated waste collection points",
+  "avoiding unnecessary burning of waste",
+  "protecting a community green area",
+  "encouraging safe disposal of household waste",
+] as const;
+const HARMFUL_ENVIRONMENT_ACTIONS = [
+  "dumping rubbish into a drain",
+  "burning mixed plastic waste in the open",
+  "leaving a leaking tap running",
+  "cutting young trees without replacement",
+  "throwing litter beside a water source",
+  "blocking a drain with solid waste",
+  "wasting water during cleaning",
+  "leaving unused lights on all day",
+  "dumping refuse in an undeveloped plot",
+  "removing vegetation from a river bank",
+  "pouring waste oil onto bare soil",
+  "leaving rubbish after a public event",
+  "damaging newly planted trees",
+  "throwing batteries into an open fire",
+  "discarding plastic directly into a stream",
+  "ignoring a serious waste spill",
+] as const;
+const peopleEnvironmentDimensions = [POSITIVE_ENVIRONMENT_ACTIONS.length, HARMFUL_ENVIRONMENT_ACTIONS.length, EARLY_NAMES.length, EARLY_PLACES.length, grammarTimes.length] as const;
+const peopleEnvironmentCapacity = product(peopleEnvironmentDimensions);
+
+function renderPeopleEnvironment(variant: number): LearnQuestion {
+  const [positiveIndex, harmfulIndex, nameIndex, placeIndex, timeIndex] = decodeVariant(variant, peopleEnvironmentDimensions);
+  const correct = POSITIVE_ENVIRONMENT_ACTIONS[positiveIndex];
+  return textChoiceQuestion(
+    {
+      id: `variant-social-people-environment-${variant}`,
+      exposureKey: `variant:social:people-environment:${variant}`,
+      subject: "Social Studies",
+      topic: "People & environment",
+      skill: "Choose environmentally responsible community actions",
+      difficulty: 2,
+      prompt: `${EARLY_NAMES[nameIndex]} wants to reduce environmental harm at ${EARLY_PLACES[placeIndex]} ${grammarTimes[timeIndex]}. Which action is the most environmentally responsible choice?`,
+      explanation: `The responsible action is ${correct}; it reduces waste, pollution or resource loss rather than increasing it.`,
+      hint: "Choose the action that reduces pollution, waste or damage to natural resources.",
+    },
+    correct,
+    [
+      HARMFUL_ENVIRONMENT_ACTIONS[harmfulIndex],
+      HARMFUL_ENVIRONMENT_ACTIONS[(harmfulIndex + 5) % HARMFUL_ENVIRONMENT_ACTIONS.length],
+      HARMFUL_ENVIRONMENT_ACTIONS[(harmfulIndex + 11) % HARMFUL_ENVIRONMENT_ACTIONS.length],
+    ],
+    variant,
+  );
+}
+
+const DEVELOPMENT_SECTORS = ["Education", "Health", "Water & sanitation", "Roads"] as const;
+const developmentDimensions = [1000, 100, 100, DEVELOPMENT_SECTORS.length, 2] as const;
+const developmentCapacity = product(developmentDimensions);
+
+function renderNationalDevelopment(variant: number): LearnQuestion {
+  const [baseIndex, gapAIndex, gapBIndex, rotation, task] = decodeVariant(variant, developmentDimensions);
+  const base = (baseIndex + 1) * 1000;
+  const gapA = (gapAIndex + 1) * 100;
+  const gapB = (gapBIndex + 1) * 100;
+  const ordered = [base, base + gapA, base + gapA + gapB, base + 2 * gapA + 2 * gapB + 100];
+  const allocations = DEVELOPMENT_SECTORS.map((_, index) => ordered[(index + rotation) % ordered.length]);
+  const targetValue = task === 0 ? Math.max(...allocations) : Math.min(...allocations);
+  const targetSector = DEVELOPMENT_SECTORS[allocations.indexOf(targetValue)];
+  const summary = DEVELOPMENT_SECTORS.map((sector, index) => `${sector}: GH₵${allocations[index].toLocaleString("en")}`).join("; ");
+  return textChoiceQuestion(
+    {
+      id: `variant-social-development-${variant}`,
+      exposureKey: `variant:social:development:${variant}`,
+      subject: "Social Studies",
+      topic: "National development",
+      skill: "Interpret a simple public-development allocation table",
+      difficulty: 3,
+      prompt: `A district development plan shows these allocations — ${summary}. Which sector receives the ${task === 0 ? "largest" : "smallest"} allocation?`,
+      explanation: `${targetSector} has the ${task === 0 ? "largest" : "smallest"} amount at GH₵${targetValue.toLocaleString("en")}.`,
+      hint: task === 0 ? "Compare the four amounts and identify the greatest." : "Compare the four amounts and identify the least.",
+    },
+    targetSector,
+    DEVELOPMENT_SECTORS,
+    variant,
+  );
+}
+
+const DIGITAL_SERVICES = ["email", "school portal", "social account", "cloud drive", "learning app", "online shop", "banking app", "game account", "messaging app", "video platform", "work portal", "library account", "exam portal", "travel account", "photo service", "community forum"] as const;
+const DIGITAL_CHANNELS = ["email", "text message", "chat message", "phone call", "pop-up", "QR code", "social message", "web notification"] as const;
+const DIGITAL_SAFETY_SCENARIOS = [
+  ["an unexpected message asks for a password through a link", "Open the official service separately and verify the alert", ["Enter the password through the message link", "Forward the password to the sender", "Ignore the official site and trust the message"]],
+  ["the same password is being used on several important accounts", "Create a long, unique password or passphrase for this account", ["Keep reusing the same password", "Use only a first name and birth year", "Share one password with a friend for backup"]],
+  ["the service offers multi-factor authentication", "Enable multi-factor authentication", ["Disable all extra verification", "Give the verification code to anyone who asks", "Post backup codes in a group chat"]],
+  ["a user finishes using an account on a public computer", "Sign out completely before leaving", ["Leave the account open for the next person", "Save the password in the public browser", "Write the password on the desk"]],
+  ["an unknown sender sends an unexpected attachment", "Verify the sender and attachment before opening it", ["Open it immediately because it arrived by email", "Disable security warnings first", "Upload it everywhere before checking"]],
+  ["a classmate asks for the account password", "Keep the password private", ["Share the password because the classmate is known", "Post the password in a class group", "Use the classmate’s password too"]],
+  ["a device offers a security update from its trusted update system", "Install the trusted security update", ["Avoid all security updates forever", "Download a random replacement from an unknown site", "Turn off device protection before updating"]],
+  ["an unfamiliar QR code promises a prize and asks for login details", "Check the destination and use the official service instead", ["Scan and enter login details immediately", "Send the QR code with your password to friends", "Turn off browser warnings before opening it"]],
+  ["a pop-up says the account is locked and demands credentials", "Close the pop-up and check the account through the official app or site", ["Type credentials into the pop-up", "Send the password to the pop-up support contact", "Reuse the same password on another suspicious page"]],
+  ["a phone containing signed-in accounts is lost", "Use trusted account or device controls to lock it and report the loss", ["Do nothing even if sensitive accounts are open", "Post account passwords publicly so helpers can log in", "Disable all recovery options"]],
+  ["a login code arrives when the user did not try to sign in", "Do not share the code and review account security", ["Send the code to anyone claiming to be support", "Post the code online to ask what it means", "Use the code on an unknown site"]],
+  ["a website address looks slightly different from the normal service address", "Stop and verify the official address before signing in", ["Enter credentials first and check later", "Ignore the spelling difference", "Share the suspicious address with passwords included"]],
+] as const;
+const digitalSafetyDimensions = [DIGITAL_SAFETY_SCENARIOS.length, EARLY_NAMES.length, DIGITAL_SERVICES.length, DIGITAL_CHANNELS.length, grammarTimes.length] as const;
+const digitalSafetyCapacity = product(digitalSafetyDimensions);
+
+function renderDigitalSafety(variant: number): LearnQuestion {
+  const [scenarioIndex, nameIndex, serviceIndex, channelIndex, timeIndex] = decodeVariant(variant, digitalSafetyDimensions);
+  const [event, safeAction, distractors] = DIGITAL_SAFETY_SCENARIOS[scenarioIndex];
+  return textChoiceQuestion(
+    {
+      id: `variant-computing-safety-${variant}`,
+      exposureKey: `variant:computing:safety:${variant}`,
+      subject: "Computing",
+      topic: "Digital safety",
+      skill: "Choose a safer response to common account and device risks",
+      difficulty: 2,
+      prompt: `${EARLY_NAMES[nameIndex]} is using a ${DIGITAL_SERVICES[serviceIndex]} ${grammarTimes[timeIndex]} when ${event} via a ${DIGITAL_CHANNELS[channelIndex]}. What is the safest next action?`,
+      explanation: `${safeAction}. This reduces the chance of exposing credentials, devices or account access to an unverified request.`,
+      hint: "Prefer official channels, protect credentials, and verify unexpected requests before acting.",
+    },
+    safeAction,
+    distractors,
+    variant,
+  );
+}
+
+const NETWORK_CONTEXTS = ["software update", "video file", "audio archive", "photo collection", "lesson package", "document bundle", "backup file", "presentation", "dataset", "map file", "project folder", "training video", "research file", "media package", "design file", "offline course"] as const;
+const networkDimensions = [100, 1000, NETWORK_CONTEXTS.length, 2] as const;
+const networkCapacity = product(networkDimensions);
+
+function renderNetworks(variant: number): LearnQuestion {
+  const [rateIndex, secondsIndex, contextIndex, task] = decodeVariant(variant, networkDimensions);
+  const rate = rateIndex + 1;
+  const seconds = secondsIndex + 1;
+  const size = rate * seconds;
+  const answer = task === 0 ? size : seconds;
+  return numericOrSingle(
+    {
+      id: `variant-computing-network-${variant}`,
+      exposureKey: `variant:computing:network:${variant}`,
+      subject: "Computing",
+      topic: "Internet & networks",
+      skill: "Relate data-transfer rate, file size and transfer time",
+      difficulty: 3,
+      prompt: task === 0
+        ? `A ${NETWORK_CONTEXTS[contextIndex]} transfers at a steady ${rate} MB/s for ${seconds} seconds. How many megabytes are transferred?`
+        : `A ${NETWORK_CONTEXTS[contextIndex]} is ${size} MB and transfers at a steady ${rate} MB/s. How many seconds will the transfer take?`,
+      explanation: task === 0
+        ? `Data transferred = rate × time = ${rate} × ${seconds} = ${size} MB.`
+        : `Time = file size ÷ rate = ${size} ÷ ${rate} = ${seconds} seconds.`,
+      hint: task === 0 ? "Multiply transfer rate by time." : "Divide file size by transfer rate.",
+    },
+    answer,
+    variant % 2 === 0 ? "numeric" : "single",
+    variant,
+  );
+}
+
+const codingDimensions = [1000, 100, 100, 2, 2] as const;
+const codingCapacity = product(codingDimensions);
+
+function renderComputationalThinking(variant: number): LearnQuestion {
+  const [baseIndex, stepIndex, repeatIndex, operation, kindIndex] = decodeVariant(variant, codingDimensions);
+  const base = baseIndex;
+  const step = stepIndex + 1;
+  const repeats = repeatIndex + 1;
+  const addition = operation === 0;
+  const start = addition ? base : base + step * repeats;
+  const answer = addition ? base + step * repeats : base;
+  const operator = addition ? "+" : "-";
+  return numericOrSingle(
+    {
+      id: `variant-computing-coding-${variant}`,
+      exposureKey: `variant:computing:coding:${variant}`,
+      subject: "Computing",
+      topic: "Computational thinking",
+      skill: "Trace a repeated pseudocode update",
+      difficulty: 3,
+      prompt: `Trace this pseudocode: SET value = ${start}; REPEAT ${repeats} TIMES: value = value ${operator} ${step}; END REPEAT. What is the final value?`,
+      explanation: `The value changes by ${step} exactly ${repeats} times, so the final value is ${answer}.`,
+      hint: `Apply the ${operator} ${step} update exactly ${repeats} times.`,
+    },
+    answer,
+    kindIndex === 0 ? "numeric" : "single",
+    variant,
+  );
+}
+
 export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
   kgNumberStories,
   basicOneNumberStories,
   basicTwoNumberStories,
   basicThreeNumberStories,
+  {
+    id: "english-vocabulary-context",
+    subjectId: "english",
+    subject: "English Language",
+    topicId: "vocabulary",
+    topic: "Vocabulary",
+    skill: "Recognise synonyms and antonyms in context",
+    difficulty: 2,
+    capacity: vocabularyCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderVocabulary,
+  },
+  {
+    id: "english-reading-retrieval",
+    subjectId: "english",
+    subject: "English Language",
+    topicId: "reading",
+    topic: "Reading comprehension",
+    skill: "Retrieve explicit details from short passages",
+    difficulty: 2,
+    capacity: readingCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderReading,
+  },
+  {
+    id: "english-writing-mechanics",
+    subjectId: "english",
+    subject: "English Language",
+    topicId: "writing",
+    topic: "Writing",
+    skill: "Apply basic capitalization and end punctuation",
+    difficulty: 2,
+    capacity: writingCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderWriting,
+  },
+  {
+    id: "science-environment-water-conservation",
+    subjectId: "science",
+    subject: "Science",
+    topicId: "environment",
+    topic: "Environment",
+    skill: "Quantify water conservation in environmental scenarios",
+    difficulty: 3,
+    capacity: environmentCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderEnvironment,
+  },
+  {
+    id: "social-governance-functions",
+    subjectId: "social",
+    subject: "Social Studies",
+    topicId: "governance",
+    topic: "Governance",
+    skill: "Distinguish core functions of state institutions",
+    difficulty: 2,
+    capacity: governanceCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderGovernance,
+  },
+  {
+    id: "social-citizenship-rights-responsibilities",
+    subjectId: "social",
+    subject: "Social Studies",
+    topicId: "citizenship",
+    topic: "Citizenship",
+    skill: "Distinguish civic rights from responsibilities",
+    difficulty: 2,
+    capacity: citizenshipCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderCitizenship,
+  },
+  {
+    id: "social-people-environment-actions",
+    subjectId: "social",
+    subject: "Social Studies",
+    topicId: "environment",
+    topic: "People & environment",
+    skill: "Choose environmentally responsible community actions",
+    difficulty: 2,
+    capacity: peopleEnvironmentCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderPeopleEnvironment,
+  },
+  {
+    id: "social-national-development-allocation",
+    subjectId: "social",
+    subject: "Social Studies",
+    topicId: "development",
+    topic: "National development",
+    skill: "Interpret public-development allocations",
+    difficulty: 3,
+    capacity: developmentCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderNationalDevelopment,
+  },
+  {
+    id: "computing-digital-safety-scenarios",
+    subjectId: "computing",
+    subject: "Computing",
+    topicId: "digital-safety",
+    topic: "Digital safety",
+    skill: "Choose safer responses to common digital risks",
+    difficulty: 2,
+    capacity: digitalSafetyCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderDigitalSafety,
+  },
+  {
+    id: "computing-network-transfer",
+    subjectId: "computing",
+    subject: "Computing",
+    topicId: "internet",
+    topic: "Internet & networks",
+    skill: "Relate transfer rate, size and time",
+    difficulty: 3,
+    capacity: networkCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderNetworks,
+  },
+  {
+    id: "computing-pseudocode-tracing",
+    subjectId: "computing",
+    subject: "Computing",
+    topicId: "coding",
+    topic: "Computational thinking",
+    skill: "Trace repeated pseudocode updates",
+    difficulty: 3,
+    capacity: codingCapacity,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
+    render: renderComputationalThinking,
+  },
   {
     id: "math-number-operations",
     subjectId: "mathematics",
