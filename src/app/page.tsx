@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Building2, GraduationCap, LogIn, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
+import { ArrowRight, BrainCircuit, Building2, GraduationCap, LogIn, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
 import "./home.css";
 import "./home-photos.css";
 import "./home-experience.css";
@@ -31,11 +31,11 @@ export default function HomePage() {
 
         <section className="hero hero-reframed" id="platform">
           <div className="hero-copy-wrap">
-            <div className="eyebrow"><Sparkles size={13} aria-hidden="true" /> School management, made simpler</div>
-            <h1>Run the school from <span>one clear place.</span></h1>
-            <p className="hero-copy">SukuuNova gives school leaders, teachers and families one secure place to handle the everyday work of school—without turning simple tasks into complicated software.</p>
-            <div className="hero-actions"><Link className="primary-cta" href="/login/school">Open your school <ArrowRight size={16} aria-hidden="true" /></Link><Link className="secondary-cta" href="/for-schools">Explore SukuuNova <ArrowRight size={16} aria-hidden="true" /></Link></div>
-            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={36} height={36} /><div><strong>Built around the real school day.</strong><span>People, classes, attendance, communication and finance stay connected.</span></div></div>
+            <div className="eyebrow"><Sparkles size={13} aria-hidden="true" /> School management + independent learning</div>
+            <h1>Run schools. <span>Power learning.</span></h1>
+            <p className="hero-copy">SukuuNova now has two powerful sides: a secure school-management system for institutions, and SukuuNova Learn for anyone who wants to practise by level, subject, topic, course or major exam.</p>
+            <div className="hero-actions"><Link className="primary-cta" href="/learn">Start learning <ArrowRight size={16} aria-hidden="true" /></Link><Link className="secondary-cta" href="/login/school">Open school management <ArrowRight size={16} aria-hidden="true" /></Link></div>
+            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={36} height={36} /><div><strong>One SukuuNova. Two distinct experiences.</strong><span>Learning practice works without a sign-in; school operations keep their secure role-based access.</span></div></div>
           </div>
 
           <div className="home-hero-visual" aria-label="SukuuNova in the real school day">
@@ -43,6 +43,26 @@ export default function HomePage() {
             <div className="home-hero-photo home-hero-photo-secondary"><Image src={`/brand/${photoItems[1][0]}`} alt={photoItems[1][1]} fill sizes="(max-width: 900px) 52vw, 28vw" /><div className="home-hero-photo-badge"><span>CONNECTED</span><strong>People stay in the loop.</strong></div></div>
             <div className="home-hero-float"><span className="home-hero-float-dot" /><span>One secure school workspace</span></div>
           </div>
+        </section>
+
+
+        <section className="home-product-doors" aria-label="Choose a SukuuNova product">
+          <Link className="home-product-door home-product-door-learn" href="/learn">
+            <span className="home-product-door-icon"><BrainCircuit size={24} aria-hidden="true" /></span>
+            <span className="section-kicker">SUKUUNOVA LEARN</span>
+            <h2>Questions that adapt to what you want to learn.</h2>
+            <p>Choose KG through SHS, university courses, BECE, WASSCE, IELTS, skills, a subject, a topic or a smart random session. Get instant marking, explanations and anonymous local progress.</p>
+            <div className="home-product-door-tags"><span>KG → University</span><span>Exam Centre</span><span>No sign-in</span></div>
+            <span className="home-product-door-link">Open the learning system <ArrowRight size={16} /></span>
+          </Link>
+          <Link className="home-product-door home-product-door-manage" href="/for-schools">
+            <span className="home-product-door-icon"><Building2 size={24} aria-hidden="true" /></span>
+            <span className="section-kicker">SCHOOL MANAGEMENT</span>
+            <h2>Run the people, records and work behind the school day.</h2>
+            <p>Manage students, families, teaching, attendance, fees, communication, reporting and role-aware school operations from one secure workspace.</p>
+            <div className="home-product-door-tags"><span>Students & families</span><span>Academics</span><span>Finance</span></div>
+            <span className="home-product-door-link">Explore school management <ArrowRight size={16} /></span>
+          </Link>
         </section>
 
         <section className="home-confidence-strip" aria-label="SukuuNova product principles">

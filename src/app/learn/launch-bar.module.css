@@ -1,0 +1,97 @@
+.launchDock {
+  position: fixed;
+  z-index: 40;
+  right: 18px;
+  bottom: 18px;
+  width: min(430px, calc(100vw - 28px));
+  display: grid;
+  gap: 8px;
+}
+
+.primaryAction,
+.secondaryAction {
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 42px 1fr 20px;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border: 1px solid color-mix(in srgb, var(--arcade-accent) 34%, transparent);
+  border-radius: var(--radius-xl);
+  color: var(--arcade-text-soft);
+  text-decoration: none;
+  background: color-mix(in srgb, var(--arcade-surface) 92%, transparent);
+  box-shadow: var(--shadow-2xl);
+  backdrop-filter: blur(22px);
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.secondaryAction {
+  min-height: 56px;
+  border-color: var(--arcade-line);
+  background: color-mix(in srgb, var(--arcade-surface) 88%, transparent);
+}
+
+.primaryAction:hover,
+.primaryAction:focus-visible,
+.secondaryAction:hover,
+.secondaryAction:focus-visible {
+  transform: translateY(-2px);
+  border-color: var(--arcade-accent);
+  background: color-mix(in srgb, var(--arcade-surface-raised) 94%, transparent);
+}
+
+.icon,
+.secondaryIcon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-lg);
+}
+
+.icon {
+  color: var(--arcade-canvas);
+  background: linear-gradient(145deg, var(--arcade-accent), var(--arcade-accent-2));
+}
+
+.secondaryIcon {
+  color: var(--arcade-warning);
+  border: 1px solid color-mix(in srgb, var(--arcade-warning) 35%, var(--arcade-line));
+  background: color-mix(in srgb, var(--arcade-warning) 8%, var(--arcade-surface-soft));
+}
+
+.copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.copy small {
+  color: var(--arcade-accent);
+  font-size: 7px;
+  font-weight: 950;
+  letter-spacing: .12em;
+}
+
+.secondaryAction .copy small { color: var(--arcade-warning); }
+
+.copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.primaryAction > svg,
+.secondaryAction > svg { color: var(--arcade-accent); }
+.secondaryAction > svg { color: var(--arcade-warning); }
+
+@media (max-width: 780px) {
+  .launchDock {
+    right: 14px;
+    bottom: 88px;
+    width: calc(100% - 28px);
+  }
+}
