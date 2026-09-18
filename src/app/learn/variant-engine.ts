@@ -14,6 +14,8 @@ type VariantTemplate = {
   capacity: number;
   schoolLevels: readonly string[];
   examPrograms: readonly string[];
+  universityPrograms?: readonly string[];
+  skillsPrograms?: readonly string[];
   render: (variantIndex: number) => LearnQuestion;
 };
 
@@ -1043,7 +1045,547 @@ function renderComputationalThinking(variant: number): LearnQuestion {
   );
 }
 
+
+const UNIVERSITY_CONTEXTS = [
+  "a tutorial", "a lab session", "an assignment", "a revision workshop",
+  "a practical class", "a study group", "a lecture example", "a project review",
+  "a quiz", "a seminar", "an online lesson", "a class exercise",
+  "a peer-learning session", "a mock assessment", "a course project", "a workbook example",
+] as const;
+
+const DATA_TYPE_LABELS = ["Integer", "Real number", "Boolean", "String"] as const;
+const variableDimensions = [DATA_TYPE_LABELS.length, 1000, 9, EARLY_NAMES.length, UNIVERSITY_CONTEXTS.length] as const;
+const variableCapacity = product(variableDimensions);
+
+function renderVariables(variant: number): LearnQuestion {
+  const [typeIndex, valueIndex, fractionIndex, nameIndex, contextIndex] = decodeVariant(variant, variableDimensions);
+  const type = DATA_TYPE_LABELS[typeIndex];
+  const variableName = `item${(valueIndex % 97) + 1}`;
+  let value = "";
+  if (type === "Integer") value = String(valueIndex - 500);
+  else if (type === "Real number") value = `${valueIndex - 500}.${fractionIndex + 1}`;
+  else if (type === "Boolean") value = valueIndex % 2 === 0 ? "true" : "false";
+  else value = `"${EARLY_NAMES[nameIndex]}-${UNIVERSITY_CONTEXTS[contextIndex].replaceAll(" ", "-")}"`;
+
+  return textChoiceQuestion(
+    {
+      id: `variant-uni-cs-variables-${variant}`,
+      exposureKey: `variant:uni:cs:variables:${variant}`,
+      subject: "Programming",
+      topic: "Variables & data types",
+      skill: "Classify common programming data types",
+      difficulty: 2,
+      prompt: `During ${UNIVERSITY_CONTEXTS[contextIndex]}, a variable is assigned: ${variableName} = ${value}. Which data type best describes this value?`,
+      explanation: `${value} is best classified as a ${type.toLowerCase()} value.`,
+      hint: "Distinguish whole numbers, decimal numbers, true/false values and quoted text.",
+    },
+    type,
+    DATA_TYPE_LABELS,
+    variant,
+  );
+}
+
+const controlFlowDimensions = [1000, 1000, 4, 100, 2] as const;
+const controlFlowCapacity = product(controlFlowDimensions);
+
+function renderControlFlow(variant: number): LearnQuestion {
+  const [leftIndex, rightIndex, comparison, outputIndex, kindIndex] = decodeVariant(variant, controlFlowDimensions);
+  const left = leftIndex - 500;
+  const right = rightIndex - 500;
+  const trueValue = outputIndex + 100;
+  const falseValue = -(outputIndex + 1);
+  const operators = ["<", ">", "<=", ">="] as const;
+  const operator = operators[comparison];
+  const condition = comparison === 0 ? left < right
+    : comparison === 1 ? left > right
+    : comparison === 2 ? left <= right
+    : left >= right;
+  const answer = condition ? trueValue : falseValue;
+  return numericOrSingle(
+    {
+      id: `variant-uni-cs-control-${variant}`,
+      exposureKey: `variant:uni:cs:control:${variant}`,
+      subject: "Programming",
+      topic: "Control flow",
+      skill: "Trace an if/else decision",
+      difficulty: 3,
+      prompt: `Trace the pseudocode: SET x = ${left}; IF x ${operator} ${right} THEN SET result = ${trueValue}; ELSE SET result = ${falseValue}; END IF. What is result?`,
+      explanation: `The condition ${left} ${operator} ${right} is ${condition ? "true" : "false"}, so result becomes ${answer}.`,
+      hint: "Evaluate the condition first, then follow only the matching branch.",
+    },
+    answer,
+    kindIndex === 0 ? "numeric" : "single",
+    variant,
+  );
+}
+
+const DATA_STRUCTURE_SCENARIOS = [
+  ["undoing the most recent editor action first", "Stack"],
+  ["processing print jobs in the order they arrived", "Queue"],
+  ["keeping unique course codes without duplicates", "Set"],
+  ["accessing an item directly by its numbered position", "Array / list"],
+  ["tracking browser back-history so the latest page is revisited first", "Stack"],
+  ["serving support tickets in arrival order", "Queue"],
+  ["recording unique student IDs only once", "Set"],
+  ["storing a sequence of monthly values by index", "Array / list"],
+] as const;
+const DATA_STRUCTURE_OPTIONS = ["Stack", "Queue", "Set", "Array / list"] as const;
+const dataStructureDimensions = [DATA_STRUCTURE_SCENARIOS.length, EARLY_NAMES.length, UNIVERSITY_CONTEXTS.length, 100, 8] as const;
+const dataStructureCapacity = product(dataStructureDimensions);
+
+function renderDataStructures(variant: number): LearnQuestion {
+  const [scenarioIndex, nameIndex, contextIndex, itemIndex] = decodeVariant(variant, dataStructureDimensions);
+  const [scenario, structure] = DATA_STRUCTURE_SCENARIOS[scenarioIndex];
+  return textChoiceQuestion(
+    {
+      id: `variant-uni-cs-structures-${variant}`,
+      exposureKey: `variant:uni:cs:structures:${variant}`,
+      subject: "Programming",
+      topic: "Data structures",
+      skill: "Choose a data structure from its access behaviour",
+      difficulty: 3,
+      prompt: `In ${UNIVERSITY_CONTEXTS[contextIndex]}, ${EARLY_NAMES[nameIndex]} is designing a system for ${scenario} across ${itemIndex + 1} items. Which data structure best matches the required behaviour?`,
+      explanation: `${structure} best matches the stated access/uniqueness behaviour.`,
+      hint: "Focus on whether the task needs last-in-first-out, first-in-first-out, uniqueness or indexed sequence access.",
+    },
+    structure,
+    DATA_STRUCTURE_OPTIONS,
+    variant,
+  );
+}
+
+const uniNetworkDimensions = [100, 1000, UNIVERSITY_CONTEXTS.length, 2] as const;
+const uniNetworkCapacity = product(uniNetworkDimensions);
+
+function renderUniversityNetworkBasics(variant: number): LearnQuestion {
+  const [rateIndex, secondsIndex, contextIndex, task] = decodeVariant(variant, uniNetworkDimensions);
+  const rateMbps = (rateIndex + 1) * 8;
+  const seconds = secondsIndex + 1;
+  const megabytes = (rateMbps / 8) * seconds;
+  const answer = task === 0 ? megabytes : seconds;
+  return numericOrSingle(
+    {
+      id: `variant-uni-cs-network-basics-${variant}`,
+      exposureKey: `variant:uni:cs:network-basics:${variant}`,
+      subject: "Computer Networks",
+      topic: "Network basics",
+      skill: "Relate bit rate, byte size and transfer time",
+      difficulty: 3,
+      prompt: task === 0
+        ? `During ${UNIVERSITY_CONTEXTS[contextIndex]}, a link carries data steadily at ${rateMbps} Mbit/s for ${seconds} seconds. Ignoring overhead, how many megabytes are transferred?`
+        : `During ${UNIVERSITY_CONTEXTS[contextIndex]}, ${megabytes} MB must cross a ${rateMbps} Mbit/s link. Ignoring overhead, how many seconds does the transfer take?`,
+      explanation: task === 0
+        ? `${rateMbps} Mbit/s equals ${rateMbps / 8} MB/s, so ${rateMbps / 8} × ${seconds} = ${megabytes} MB.`
+        : `${rateMbps} Mbit/s equals ${rateMbps / 8} MB/s, so ${megabytes} ÷ ${rateMbps / 8} = ${seconds} seconds.`,
+      hint: "Convert megabits to megabytes by dividing by 8 before using size = rate × time.",
+    },
+    answer,
+    variant % 2 === 0 ? "numeric" : "single",
+    variant,
+  );
+}
+
+const PROTOCOL_SCENARIOS = [
+  ["translate a domain name into an IP address", "DNS"],
+  ["automatically provide an IP configuration to a client", "DHCP"],
+  ["request ordinary web resources without transport encryption", "HTTP"],
+  ["request web resources over an encrypted web connection", "HTTPS"],
+  ["provide reliable ordered byte-stream delivery", "TCP"],
+  ["send datagrams without connection setup or delivery guarantees", "UDP"],
+  ["resolve a human-readable hostname before connecting to a server", "DNS"],
+  ["lease network addressing details to a newly connected device", "DHCP"],
+  ["load a web page securely with TLS protection", "HTTPS"],
+  ["use a connection-oriented transport with retransmission", "TCP"],
+  ["prioritise low-overhead datagram delivery over guaranteed arrival", "UDP"],
+  ["retrieve a basic unencrypted web page", "HTTP"],
+] as const;
+const PROTOCOL_OPTIONS = ["DNS", "DHCP", "HTTP", "HTTPS", "TCP", "UDP"] as const;
+const protocolDimensions = [PROTOCOL_SCENARIOS.length, EARLY_NAMES.length, UNIVERSITY_CONTEXTS.length, grammarTimes.length, 8] as const;
+const protocolCapacity = product(protocolDimensions);
+
+function renderProtocols(variant: number): LearnQuestion {
+  const [scenarioIndex, nameIndex, contextIndex, timeIndex] = decodeVariant(variant, protocolDimensions);
+  const [role, protocol] = PROTOCOL_SCENARIOS[scenarioIndex];
+  return textChoiceQuestion(
+    {
+      id: `variant-uni-cs-protocols-${variant}`,
+      exposureKey: `variant:uni:cs:protocols:${variant}`,
+      subject: "Computer Networks",
+      topic: "Protocols",
+      skill: "Match common network protocols to their roles",
+      difficulty: 3,
+      prompt: `During ${UNIVERSITY_CONTEXTS[contextIndex]} ${grammarTimes[timeIndex]}, ${EARLY_NAMES[nameIndex]} needs a protocol to ${role}. Which protocol fits best?`,
+      explanation: `${protocol} is the protocol most directly associated with this role.`,
+      hint: "Separate naming/address configuration, web application protocols and transport protocols.",
+    },
+    protocol,
+    PROTOCOL_OPTIONS,
+    variant,
+  );
+}
+
+const NURSING_CONTEXTS = ["a skills lab", "a classroom simulation", "a physiology tutorial", "a supervised practice exercise", "a revision session", "a case-study worksheet", "a vital-signs exercise", "a calculation drill"] as const;
+const cardiovascularDimensions = [141, 600, EARLY_NAMES.length, NURSING_CONTEXTS.length] as const;
+const cardiovascularCapacity = product(cardiovascularDimensions);
+
+function renderCardiovascular(variant: number): LearnQuestion {
+  const [rateIndex, minutesIndex, nameIndex, contextIndex] = decodeVariant(variant, cardiovascularDimensions);
+  const rate = rateIndex + 40;
+  const minutes = minutesIndex + 1;
+  const beats = rate * minutes;
+  return numericOrSingle(
+    {
+      id: `variant-uni-nursing-cardio-${variant}`,
+      exposureKey: `variant:uni:nursing:cardio:${variant}`,
+      subject: "Anatomy & Physiology",
+      topic: "Cardiovascular system",
+      skill: "Use heart-rate units in a physiology calculation",
+      difficulty: 2,
+      prompt: `In ${NURSING_CONTEXTS[contextIndex]}, a hypothetical pulse rate used for practice is ${rate} beats per minute. If that rate stayed constant for ${minutes} minutes, how many beats would that represent?`,
+      explanation: `Total beats = ${rate} beats/min × ${minutes} min = ${beats} beats.`,
+      hint: "Multiply the rate per minute by the number of minutes. This is a unit calculation, not a clinical interpretation.",
+    },
+    beats,
+    variant % 2 === 0 ? "numeric" : "single",
+    variant,
+  );
+}
+
+const respiratoryDimensions = [33, 600, EARLY_NAMES.length, NURSING_CONTEXTS.length] as const;
+const respiratoryCapacity = product(respiratoryDimensions);
+
+function renderRespiratory(variant: number): LearnQuestion {
+  const [rateIndex, minutesIndex, nameIndex, contextIndex] = decodeVariant(variant, respiratoryDimensions);
+  const rate = rateIndex + 8;
+  const minutes = minutesIndex + 1;
+  const breaths = rate * minutes;
+  return numericOrSingle(
+    {
+      id: `variant-uni-nursing-respiratory-${variant}`,
+      exposureKey: `variant:uni:nursing:respiratory:${variant}`,
+      subject: "Anatomy & Physiology",
+      topic: "Respiratory system",
+      skill: "Use respiratory-rate units in a physiology calculation",
+      difficulty: 2,
+      prompt: `For a calculation exercise in ${NURSING_CONTEXTS[contextIndex]}, use a hypothetical respiratory rate of ${rate} breaths per minute for ${minutes} minutes. How many breaths does the arithmetic represent?`,
+      explanation: `Total breaths = ${rate} breaths/min × ${minutes} min = ${breaths} breaths.`,
+      hint: "Multiply rate by time. Do not use this arithmetic alone to make a clinical judgment.",
+    },
+    breaths,
+    variant % 2 === 0 ? "numeric" : "single",
+    variant,
+  );
+}
+
+const PATIENT_CARE_SCENARIOS = [
+  ["before a routine care interaction", "Perform appropriate hand hygiene", ["Skip hand hygiene because gloves may be used", "Reuse visibly soiled gloves", "Touch several surfaces first and clean hands later"]],
+  ["before using a record for a care task", "Confirm the correct patient identity using approved identifiers", ["Assume identity from bed location alone", "Use another patient’s record because the names look similar", "Ask a visitor to guess the identity"]],
+  ["after completing an observed care activity", "Document the relevant information according to the approved record process", ["Rely only on memory and never document", "Enter the information in an unrelated patient record", "Share the record details publicly"]],
+  ["when an unexpected safety concern is noticed", "Follow the local escalation and supervision process", ["Hide the concern to avoid questions", "Invent a treatment without authorisation", "Post identifiable details in a public chat"]],
+  ["when confidential information is no longer needed on screen", "Secure the record or sign out according to policy", ["Leave the record open for anyone nearby", "Photograph the record on a personal device for convenience", "Share the login with another person"]],
+  ["when preparing equipment for a learning simulation", "Check that the correct clean equipment is available before the task", ["Use damaged equipment without reporting it", "Ignore cleanliness because it is only practice", "Mix labelled items without checking them"]],
+  ["when a learner is uncertain about a supervised care step", "Ask the qualified supervisor and follow the approved procedure", ["Guess the step and continue silently", "Copy an unverified social-media post", "Perform an unfamiliar invasive step without supervision"]],
+  ["when disposing of routine waste from a simulation", "Use the designated waste stream for the item", ["Leave waste on the floor", "Put every item into the same unlabelled container", "Carry contaminated waste around unnecessarily"]],
+  ["before communicating a handover in a training scenario", "Use the approved structured handover process and relevant facts", ["Add rumours that are not in the record", "Omit an important observed safety concern", "Discuss identifiable details in a public area"]],
+  ["after removing gloves in a routine training exercise", "Perform hand hygiene as required by the local protocol", ["Assume gloves replace hand hygiene", "Touch personal items first with soiled hands", "Reuse disposable gloves"]],
+  ["when a record entry is found to be incorrect", "Use the approved correction process rather than hiding the error", ["Delete evidence secretly if policy forbids it", "Change another person’s record to match", "Ignore the error even when it affects the record"]],
+  ["before beginning a delegated learning task", "Confirm the task, supervision and local procedure are understood", ["Begin without knowing the task", "Ignore the supervisor’s instructions", "Use a procedure from an unrelated setting without checking"]],
+] as const;
+const patientCareDimensions = [PATIENT_CARE_SCENARIOS.length, EARLY_NAMES.length, NURSING_CONTEXTS.length, grammarTimes.length, 8] as const;
+const patientCareCapacity = product(patientCareDimensions);
+
+function renderPatientCare(variant: number): LearnQuestion {
+  const [scenarioIndex, nameIndex, contextIndex, timeIndex] = decodeVariant(variant, patientCareDimensions);
+  const [situation, safeAction, distractors] = PATIENT_CARE_SCENARIOS[scenarioIndex];
+  return textChoiceQuestion(
+    {
+      id: `variant-uni-nursing-care-${variant}`,
+      exposureKey: `variant:uni:nursing:care:${variant}`,
+      subject: "Fundamentals of Nursing",
+      topic: "Patient care",
+      skill: "Apply basic safety, identity, hygiene and documentation principles",
+      difficulty: 2,
+      prompt: `In ${NURSING_CONTEXTS[contextIndex]} ${grammarTimes[timeIndex]}, ${EARLY_NAMES[nameIndex]} is asked what to do ${situation}. Which is the safest general training response?`,
+      explanation: `${safeAction}. Exact clinical procedures still follow local policy, supervision and the patient’s situation.`,
+      hint: "Choose the option that protects identity, hygiene, confidentiality, documentation and supervised practice.",
+    },
+    safeAction,
+    distractors,
+    variant,
+  );
+}
+
+const ACCOUNTING_TRANSACTIONS = [
+  ["the owner invests cash in the business", "Debit Cash; Credit Capital", ["Debit Capital; Credit Cash", "Debit Expense; Credit Cash", "Debit Cash; Credit Sales Revenue"]],
+  ["the business buys equipment for cash", "Debit Equipment; Credit Cash", ["Debit Cash; Credit Equipment", "Debit Equipment; Credit Capital", "Debit Expense; Credit Accounts Payable"]],
+  ["the business earns service revenue and receives cash immediately", "Debit Cash; Credit Service Revenue", ["Debit Service Revenue; Credit Cash", "Debit Cash; Credit Capital", "Debit Accounts Receivable; Credit Cash"]],
+  ["the business pays rent in cash", "Debit Rent Expense; Credit Cash", ["Debit Cash; Credit Rent Expense", "Debit Rent Expense; Credit Capital", "Debit Accounts Payable; Credit Rent Expense"]],
+  ["a customer pays an amount previously owed on account", "Debit Cash; Credit Accounts Receivable", ["Debit Accounts Receivable; Credit Cash", "Debit Cash; Credit Sales Revenue", "Debit Expense; Credit Cash"]],
+  ["the business buys inventory for cash", "Debit Inventory; Credit Cash", ["Debit Cash; Credit Inventory", "Debit Inventory; Credit Revenue", "Debit Accounts Payable; Credit Cash"]],
+  ["the business buys inventory on credit from a supplier", "Debit Inventory; Credit Accounts Payable", ["Debit Accounts Payable; Credit Inventory", "Debit Cash; Credit Inventory", "Debit Inventory; Credit Cash"]],
+  ["the business pays a supplier for an amount already owed", "Debit Accounts Payable; Credit Cash", ["Debit Cash; Credit Accounts Payable", "Debit Inventory; Credit Cash", "Debit Expense; Credit Accounts Receivable"]],
+  ["the business receives cash from a bank loan", "Debit Cash; Credit Loan Payable", ["Debit Loan Payable; Credit Cash", "Debit Cash; Credit Capital", "Debit Expense; Credit Loan Payable"]],
+  ["the business pays a utility bill in cash", "Debit Utilities Expense; Credit Cash", ["Debit Cash; Credit Utilities Expense", "Debit Utilities Expense; Credit Revenue", "Debit Accounts Payable; Credit Utilities Expense"]],
+  ["the business buys office supplies for cash", "Debit Supplies; Credit Cash", ["Debit Cash; Credit Supplies", "Debit Supplies; Credit Revenue", "Debit Expense; Credit Capital"]],
+  ["a customer pays cash in advance for a service not yet earned", "Debit Cash; Credit Unearned Revenue", ["Debit Unearned Revenue; Credit Cash", "Debit Cash; Credit Service Revenue", "Debit Accounts Receivable; Credit Revenue"]],
+] as const;
+const BUSINESS_NAMES = ["Apex Traders", "North Star Services", "Greenline Ventures", "Unity Supplies", "Prime Works", "Coastal Enterprise", "Golden Field Ltd", "Nova Retail", "Bridgepoint Services", "Summit Stores", "Cedar Works", "Blue Horizon", "MarketLink Ltd", "Bright Path", "Atlas Services", "Crown Trading"] as const;
+const doubleEntryDimensions = [ACCOUNTING_TRANSACTIONS.length, 1000, BUSINESS_NAMES.length, 31, 8] as const;
+const doubleEntryCapacity = product(doubleEntryDimensions);
+
+function renderDoubleEntry(variant: number): LearnQuestion {
+  const [transactionIndex, amountIndex, businessIndex, dayIndex] = decodeVariant(variant, doubleEntryDimensions);
+  const [transaction, entry, distractors] = ACCOUNTING_TRANSACTIONS[transactionIndex];
+  const amount = (amountIndex + 1) * 10;
+  return textChoiceQuestion(
+    {
+      id: `variant-uni-business-double-entry-${variant}`,
+      exposureKey: `variant:uni:business:double-entry:${variant}`,
+      subject: "Financial Accounting",
+      topic: "Double entry",
+      skill: "Apply basic debit and credit rules",
+      difficulty: 3,
+      prompt: `On day ${dayIndex + 1}, ${BUSINESS_NAMES[businessIndex]} records GH₵${amount.toLocaleString("en")} because ${transaction}. Which entry captures the basic double-entry effect?`,
+      explanation: `The appropriate basic entry is: ${entry}.`,
+      hint: "Identify which asset, liability, equity, revenue or expense accounts increase or decrease.",
+    },
+    entry,
+    distractors,
+    variant,
+  );
+}
+
+const statementDimensions = [1000, 500, 500, BUSINESS_NAMES.length, 2] as const;
+const statementCapacity = product(statementDimensions);
+
+function renderFinancialStatements(variant: number): LearnQuestion {
+  const [revenueIndex, costIndex, expenseIndex, businessIndex, task] = decodeVariant(variant, statementDimensions);
+  const cost = (costIndex + 1) * 100;
+  const expenses = (expenseIndex + 1) * 50;
+  const revenue = cost + expenses + (revenueIndex + 1) * 200;
+  const grossProfit = revenue - cost;
+  const netProfit = grossProfit - expenses;
+  const answer = task === 0 ? grossProfit : netProfit;
+  return numericOrSingle(
+    {
+      id: `variant-uni-business-statements-${variant}`,
+      exposureKey: `variant:uni:business:statements:${variant}`,
+      subject: "Financial Accounting",
+      topic: "Financial statements",
+      skill: "Calculate gross and net profit from simplified figures",
+      difficulty: 3,
+      prompt: task === 0
+        ? `${BUSINESS_NAMES[businessIndex]} reports revenue of GH₵${revenue.toLocaleString("en")} and cost of sales of GH₵${cost.toLocaleString("en")}. What is gross profit?`
+        : `${BUSINESS_NAMES[businessIndex]} reports revenue of GH₵${revenue.toLocaleString("en")}, cost of sales of GH₵${cost.toLocaleString("en")} and other expenses of GH₵${expenses.toLocaleString("en")}. What is net profit?`,
+      explanation: task === 0
+        ? `Gross profit = revenue − cost of sales = ${revenue} − ${cost} = GH₵${grossProfit}.`
+        : `Net profit = revenue − cost of sales − other expenses = ${revenue} − ${cost} − ${expenses} = GH₵${netProfit}.`,
+      hint: task === 0 ? "Subtract cost of sales from revenue." : "Subtract both cost of sales and other expenses from revenue.",
+    },
+    answer,
+    variant % 2 === 0 ? "numeric" : "single",
+    variant,
+  );
+}
+
+const MANAGEMENT_SCENARIOS = [
+  ["setting objectives and deciding actions before work begins", "Planning"],
+  ["preparing a budget and schedule for a future project", "Planning"],
+  ["deciding how tasks and resources will be arranged", "Organising"],
+  ["assigning roles and grouping related activities", "Organising"],
+  ["motivating staff and communicating direction", "Leading"],
+  ["coaching a team toward agreed goals", "Leading"],
+  ["comparing actual results with targets", "Controlling"],
+  ["correcting performance after reviewing a variance", "Controlling"],
+  ["choosing milestones for next quarter", "Planning"],
+  ["designing reporting lines for a new unit", "Organising"],
+  ["giving constructive direction during implementation", "Leading"],
+  ["checking whether quality standards are being met", "Controlling"],
+  ["deciding what should be achieved and by when", "Planning"],
+  ["allocating people to specific responsibilities", "Organising"],
+  ["building commitment around a shared objective", "Leading"],
+  ["measuring outcomes and taking corrective action", "Controlling"],
+] as const;
+const MANAGEMENT_OPTIONS = ["Planning", "Organising", "Leading", "Controlling"] as const;
+const managementDimensions = [MANAGEMENT_SCENARIOS.length, EARLY_NAMES.length, BUSINESS_NAMES.length, grammarTimes.length, 8] as const;
+const managementCapacity = product(managementDimensions);
+
+function renderManagement(variant: number): LearnQuestion {
+  const [scenarioIndex, nameIndex, businessIndex, timeIndex] = decodeVariant(variant, managementDimensions);
+  const [scenario, managementFunction] = MANAGEMENT_SCENARIOS[scenarioIndex];
+  return textChoiceQuestion(
+    {
+      id: `variant-uni-business-management-${variant}`,
+      exposureKey: `variant:uni:business:management:${variant}`,
+      subject: "Management",
+      topic: "Management functions",
+      skill: "Identify planning, organising, leading and controlling",
+      difficulty: 2,
+      prompt: `At ${BUSINESS_NAMES[businessIndex]} ${grammarTimes[timeIndex]}, ${EARLY_NAMES[nameIndex]} is ${scenario}. Which management function is most directly illustrated?`,
+      explanation: `The scenario most directly illustrates ${managementFunction.toLowerCase()}.`,
+      hint: "Ask whether the action sets direction, arranges resources, guides people or checks results.",
+    },
+    managementFunction,
+    MANAGEMENT_OPTIONS,
+    variant,
+  );
+}
+
 export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
+  {
+    id: "uni-cs-variables",
+    subjectId: "programming",
+    subject: "Programming",
+    topicId: "variables",
+    topic: "Variables & data types",
+    skill: "Classify common programming data types",
+    difficulty: 2,
+    capacity: variableCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["computer-science"],
+    render: renderVariables,
+  },
+  {
+    id: "uni-cs-control-flow",
+    subjectId: "programming",
+    subject: "Programming",
+    topicId: "control-flow",
+    topic: "Control flow",
+    skill: "Trace if/else decisions",
+    difficulty: 3,
+    capacity: controlFlowCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["computer-science"],
+    render: renderControlFlow,
+  },
+  {
+    id: "uni-cs-data-structures",
+    subjectId: "programming",
+    subject: "Programming",
+    topicId: "data-structures",
+    topic: "Data structures",
+    skill: "Choose data structures from access behaviour",
+    difficulty: 3,
+    capacity: dataStructureCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["computer-science"],
+    render: renderDataStructures,
+  },
+  {
+    id: "uni-cs-network-basics",
+    subjectId: "networks",
+    subject: "Computer Networks",
+    topicId: "network-basics",
+    topic: "Network basics",
+    skill: "Relate bit rate, byte size and transfer time",
+    difficulty: 3,
+    capacity: uniNetworkCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["computer-science"],
+    render: renderUniversityNetworkBasics,
+  },
+  {
+    id: "uni-cs-protocols",
+    subjectId: "networks",
+    subject: "Computer Networks",
+    topicId: "protocols",
+    topic: "Protocols",
+    skill: "Match common protocols to their roles",
+    difficulty: 3,
+    capacity: protocolCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["computer-science"],
+    render: renderProtocols,
+  },
+  {
+    id: "uni-nursing-cardiovascular",
+    subjectId: "anatomy",
+    subject: "Anatomy & Physiology",
+    topicId: "cardiovascular",
+    topic: "Cardiovascular system",
+    skill: "Use heart-rate units in physiology calculations",
+    difficulty: 2,
+    capacity: cardiovascularCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["nursing"],
+    render: renderCardiovascular,
+  },
+  {
+    id: "uni-nursing-respiratory",
+    subjectId: "anatomy",
+    subject: "Anatomy & Physiology",
+    topicId: "respiratory",
+    topic: "Respiratory system",
+    skill: "Use respiratory-rate units in physiology calculations",
+    difficulty: 2,
+    capacity: respiratoryCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["nursing"],
+    render: renderRespiratory,
+  },
+  {
+    id: "uni-nursing-patient-care",
+    subjectId: "fundamentals",
+    subject: "Fundamentals of Nursing",
+    topicId: "patient-care",
+    topic: "Patient care",
+    skill: "Apply basic safety and documentation principles",
+    difficulty: 2,
+    capacity: patientCareCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["nursing"],
+    render: renderPatientCare,
+  },
+  {
+    id: "uni-business-double-entry",
+    subjectId: "accounting",
+    subject: "Financial Accounting",
+    topicId: "double-entry",
+    topic: "Double entry",
+    skill: "Apply debit and credit rules",
+    difficulty: 3,
+    capacity: doubleEntryCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["business"],
+    render: renderDoubleEntry,
+  },
+  {
+    id: "uni-business-statements",
+    subjectId: "accounting",
+    subject: "Financial Accounting",
+    topicId: "statements",
+    topic: "Financial statements",
+    skill: "Calculate simplified profit measures",
+    difficulty: 3,
+    capacity: statementCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["business"],
+    render: renderFinancialStatements,
+  },
+  {
+    id: "uni-business-management",
+    subjectId: "management",
+    subject: "Management",
+    topicId: "functions",
+    topic: "Management functions",
+    skill: "Identify core management functions",
+    difficulty: 2,
+    capacity: managementCapacity,
+    schoolLevels: [],
+    examPrograms: [],
+    universityPrograms: ["business"],
+    render: renderManagement,
+  },
   kgNumberStories,
   basicOneNumberStories,
   basicTwoNumberStories,
@@ -1313,6 +1855,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
 function audienceMatches(template: VariantTemplate, config: SessionConfig) {
   if (config.lane === "school") return template.schoolLevels.includes(config.levelId);
   if (config.lane === "exam") return template.examPrograms.includes(config.programId);
+  if (config.lane === "university") return template.universityPrograms?.includes(config.programId) ?? false;
+  if (config.lane === "skills") return template.skillsPrograms?.includes(config.programId) ?? false;
   return false;
 }
 
