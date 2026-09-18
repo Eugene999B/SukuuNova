@@ -6,6 +6,7 @@ import {
   type SessionConfig,
 } from "./learn-domain";
 import { VERIFIED_STANDARD_QUESTIONS } from "./verified-content";
+import { buildVariantQuestions } from "./variant-engine";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -124,9 +125,12 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     }
   }
 
-  absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, false, selection)));
+  const strictTopic = config.mode === "topic" && config.subjectId !== "all" && config.topicId !== "all";
 
-  if (fresh.length < requested) {
+  absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, false, selection)));
+  absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed));
+
+  if (!strictTopic && fresh.length < requested) {
     absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, true, selection)));
   }
 
@@ -135,19 +139,23 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
       ...config,
       count: requested,
       seed,
-    }),
+    }).filter((question) => !strictTopic || starterMatches(question, config, false, selection)),
   );
 
   for (let attempt = 0; fresh.length < requested && attempt < BROADENING_ATTEMPTS; attempt += 1) {
-    absorb(
-      buildSession({
-        ...config,
-        subjectId: "all",
-        topicId: "all",
-        count: MAX_SESSION_SIZE,
-        seed: derivedSeed(seed, attempt),
-      }),
-    );
+    const nextSeed = derivedSeed(seed, attempt);
+    absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed));
+    if (!strictTopic) {
+      absorb(
+        buildSession({
+          ...config,
+          subjectId: "all",
+          topicId: "all",
+          count: MAX_SESSION_SIZE,
+          seed: nextSeed,
+        }),
+      );
+    }
   }
 
   const orderedFresh = orderPool(fresh, config, seed, selection);

@@ -25,13 +25,13 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
-  buildSession,
   catalogFor,
-  isCorrectAnswer,
   type LearnLane,
   type LearnQuestion,
   type PracticeMode,
 } from "../learn-domain";
+import { buildLearningSession, isCorrectAnswer } from "../learning-engine";
+import { variantCapacityForSelection } from "../variant-engine";
 import styles from "./explore.module.css";
 
 type LearnerProgress = {
@@ -101,6 +101,15 @@ export function LearningExplorer() {
   const subject = level.subjects.find((item) => item.id === subjectId) ?? level.subjects[0];
   const topic = subject.topics.find((item) => item.id === topicId) ?? subject.topics[0];
   const currentQuestion = session[questionIndex];
+  const variantCapacity = useMemo(() => variantCapacityForSelection({
+    lane,
+    programId,
+    levelId,
+    subjectId,
+    topicId,
+    mode,
+    count,
+  }), [lane, programId, levelId, subjectId, topicId, mode, count]);
 
   useEffect(() => {
     try {
@@ -166,7 +175,7 @@ export function LearningExplorer() {
   }
 
   function launchSession() {
-    const nextSession = buildSession({
+    const nextSession = buildLearningSession({
       lane,
       programId,
       levelId,
@@ -324,7 +333,7 @@ export function LearningExplorer() {
             <div><label>Questions</label><div className={styles.countGroup}>{[10, 20, 30, 50, 75, 100].map((value) => <button key={value} className={count === value ? styles.countActive : styles.countButton} onClick={() => setCount(value)}>{value}</button>)}</div></div>
             <button className={styles.launch} onClick={launchSession}><Sparkles size={18} /> Build my session <ArrowRight size={18} /></button>
           </div>
-          <p className={styles.engineNote}>This milestone uses a verified starter content pack plus parameterized question generation. When a selected topic pack is still small, the engine widens to related practice instead of repeating one identical question.</p>
+          <p className={styles.engineNote}>{variantCapacity >= 1_000_000 ? `This selection has ${new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(variantCapacity)} deterministic parameterized variants available before reviewed fixed questions are counted. Topic Focus stays on the selected topic.` : "SukuuNova combines reviewed fixed questions with deterministic parameterized practice. Topic Focus stays on the selected topic; broader modes can mix related material when useful."}</p>
         </div>
       </section>
 
