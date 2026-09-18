@@ -20,7 +20,7 @@ const algebraConfig = {
 
 describe("SukuuNova parameterized variant engine", () => {
   it("publishes only large deterministic template spaces", () => {
-    expect(VARIANT_TEMPLATES.length).toBeGreaterThanOrEqual(13);
+    expect(VARIANT_TEMPLATES.length).toBeGreaterThanOrEqual(24);
     expect(VARIANT_TEMPLATES.every((template) => template.capacity >= 1_000_000)).toBe(true);
   });
 
@@ -62,6 +62,60 @@ describe("SukuuNova parameterized variant engine", () => {
       const questions = buildVariantQuestions(config);
       expect(questions.length, template.id).toBeGreaterThan(0);
       expect(questions.every((question) => isCorrectAnswer(question, question.answer)), template.id).toBe(true);
+    }
+  });
+
+  it("gives every JHS launch topic at least one million deterministic variants", () => {
+    const launchTopics: Record<string, string[]> = {
+      mathematics: ["number", "algebra", "geometry", "statistics"],
+      english: ["grammar", "vocabulary", "reading", "writing"],
+      science: ["living", "matter", "energy", "environment"],
+      social: ["governance", "citizenship", "environment", "development"],
+      computing: ["digital-safety", "systems", "internet", "coding"],
+    };
+
+    for (const [subjectId, topicIds] of Object.entries(launchTopics)) {
+      for (const topicId of topicIds) {
+        const capacity = variantCapacityForSelection({
+          lane: "school",
+          programId: "ghana",
+          levelId: "jhs-3",
+          subjectId,
+          topicId,
+          mode: "topic",
+          count: 100,
+          seed: 20260918,
+        });
+        expect(capacity, `${subjectId} · ${topicId}`).toBeGreaterThanOrEqual(1_000_000);
+      }
+    }
+  });
+
+  it("builds 100 unique generated questions inside every JHS launch topic", () => {
+    const launchTopics: Record<string, string[]> = {
+      mathematics: ["number", "algebra", "geometry", "statistics"],
+      english: ["grammar", "vocabulary", "reading", "writing"],
+      science: ["living", "matter", "energy", "environment"],
+      social: ["governance", "citizenship", "environment", "development"],
+      computing: ["digital-safety", "systems", "internet", "coding"],
+    };
+
+    for (const [subjectId, topicIds] of Object.entries(launchTopics)) {
+      for (const topicId of topicIds) {
+        const questions = buildVariantQuestions({
+          lane: "school",
+          programId: "ghana",
+          levelId: "jhs-3",
+          subjectId,
+          topicId,
+          mode: "topic",
+          count: 100,
+          seed: 9182026,
+        });
+        expect(questions, `${subjectId} · ${topicId}`).toHaveLength(100);
+        expect(new Set(questions.map((question) => question.exposureKey)).size, `${subjectId} · ${topicId}`).toBe(100);
+        expect(questions.every((question) => isCorrectAnswer(question, question.answer)), `${subjectId} · ${topicId}`).toBe(true);
+      }
     }
   });
 
