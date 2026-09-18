@@ -11,10 +11,12 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Download,
   Flame,
   GraduationCap,
   Layers3,
   Medal,
+  Printer,
   RotateCcw,
   School,
   Sparkles,
@@ -28,12 +30,18 @@ import {
   catalogFor,
   type CatalogLevel,
   type CatalogSubject,
+  type CatalogTopic,
   type LearnLane,
   type LearnQuestion,
   type PracticeMode,
 } from "../learn-domain";
 import { learningCapabilityForSelection } from "../learning-capabilities";
 import { buildLearningSession, isCorrectAnswer } from "../learning-engine";
+import {
+  buildPracticeReportHtml,
+  buildPracticeReportJson,
+  type PracticeAttempt,
+} from "../practice/session-report";
 import styles from "./explore.module.css";
 
 type LearnerProgress = {
@@ -54,6 +62,13 @@ const EMPTY_PROGRESS: LearnerProgress = {
   streak: 0,
   exposures: [],
   mastery: {},
+};
+
+const ALL_TOPICS: CatalogTopic = { id: "all", label: "All practice-ready topics" };
+const ALL_SUBJECTS: CatalogSubject = {
+  id: "all",
+  label: "All practice-ready subjects",
+  topics: [ALL_TOPICS],
 };
 
 const lanes: Array<{ id: LearnLane; label: string; copy: string; icon: typeof School }> = [
@@ -121,14 +136,19 @@ export function LearningExplorer() {
   const [submitted, setSubmitted] = useState(false);
   const [lastCorrect, setLastCorrect] = useState(false);
   const [sessionCorrect, setSessionCorrect] = useState(0);
+  const [attempts, setAttempts] = useState<PracticeAttempt[]>([]);
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [launchNotice, setLaunchNotice] = useState("");
 
   const program = catalog.programs.find((item) => item.id === programId) ?? catalog.programs[0];
   const level = program.levels.find((item) => item.id === levelId) ?? program.levels[0];
-  const subject = level.subjects.find((item) => item.id === subjectId) ?? firstReadySubject(lane, program.id, level);
-  const topic = subject.topics.find((item) => item.id === topicId) ?? firstReadyTopic(lane, program.id, level.id, subject);
+  const subject = subjectId === "all"
+    ? ALL_SUBJECTS
+    : level.subjects.find((item) => item.id === subjectId) ?? firstReadySubject(lane, program.id, level);
+  const topic = topicId === "all"
+    ? ALL_TOPICS
+    : subject.topics.find((item) => item.id === topicId) ?? firstReadyTopic(lane, program.id, level.id, subject);
   const capability = useMemo(() => learningCapabilityForSelection({
     lane,
     programId,
@@ -140,6 +160,15 @@ export function LearningExplorer() {
   }), [lane, programId, levelId, subjectId, topicId, mode, count]);
   const practiceAvailable = capability.ready;
   const variantCapacity = capability.variantCapacity;
+  const levelCapability = useMemo(() => learningCapabilityForSelection({
+    lane,
+    programId,
+    levelId,
+    subjectId: "all",
+    topicId: "all",
+    mode,
+    count,
+  }), [lane, programId, levelId, mode, count]);
   const currentQuestion = session[questionIndex];
 
   useEffect(() => {
@@ -203,10 +232,32 @@ export function LearningExplorer() {
   }
 
   function selectSubject(nextSubjectId: string) {
+    if (nextSubjectId === "all") {
+      if (!levelCapability.ready) return;
+      setSubjectId("all");
+      setTopicId("all");
+      setMode((current) => current === "topic" ? "random" : current);
+      setLaunchNotice("");
+      return;
+    }
+
     const nextSubject = level.subjects.find((item) => item.id === nextSubjectId) ?? firstReadySubject(lane, program.id, level);
     if (!subjectIsReady(lane, program.id, level.id, nextSubject)) return;
     setSubjectId(nextSubject.id);
     setTopicId(firstReadyTopic(lane, program.id, level.id, nextSubject).id);
+    setLaunchNotice("");
+  }
+
+  function selectTopic(nextTopicId: string) {
+    if (subjectId === "all") return;
+    if (nextTopicId === "all") {
+      setTopicId("all");
+      setMode((current) => current === "topic" ? "random" : current);
+      setLaunchNotice("");
+      return;
+    }
+    if (!topicIsReady(lane, program.id, level.id, subject, nextTopicId)) return;
+    setTopicId(nextTopicId);
     setLaunchNotice("");
   }
 
@@ -233,6 +284,7 @@ export function LearningExplorer() {
     setSubmitted(false);
     setLastCorrect(false);
     setSessionCorrect(0);
+    setAttempts([]);
     setSessionStartedAt(Date.now());
     setSessionSeconds(0);
     window.setTimeout(() => document.getElementById("session-player")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
@@ -244,6 +296,14 @@ export function LearningExplorer() {
     if (["fill", "numeric", "short"].includes(currentQuestion.kind) && String(response).trim() === "") return;
 
     const correct = isCorrectAnswer(currentQuestion, response);
+    setAttempts((current) => [
+      ...current,
+      {
+        questionId: currentQuestion.id,
+        response: Array.isArray(response) ? [...response] : response,
+        correct,
+      },
+    ]);
     const key = masteryKey(currentQuestion);
     const previousMastery = progress.mastery[key] ?? { answered: 0, correct: 0 };
     const exposures = [currentQuestion.exposureKey, ...progress.exposures.filter((item) => item !== currentQuestion.exposureKey)].slice(0, 200);
@@ -285,6 +345,42 @@ export function LearningExplorer() {
     if (submitted) return;
     const current = Array.isArray(response) ? response : [];
     setResponse(current.includes(optionId) ? current.filter((item) => item !== optionId) : [...current, optionId]);
+  }
+
+  function reportTitle() {
+    return [program.label, level.label, subject.label, topic.label].join(" · ");
+  }
+
+  function reportInput() {
+    return {
+      title: reportTitle(),
+      mode,
+      questions: session,
+      attempts,
+      completedAt: new Date().toISOString(),
+    };
+  }
+
+  function printResults() {
+    const reportWindow = window.open("", "_blank", "width=980,height=760");
+    if (!reportWindow) return;
+    reportWindow.document.open();
+    reportWindow.document.write(buildPracticeReportHtml(reportInput()));
+    reportWindow.document.close();
+    reportWindow.focus();
+    window.setTimeout(() => reportWindow.print(), 120);
+  }
+
+  function downloadResults() {
+    const blob = new Blob([buildPracticeReportJson(reportInput())], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `sukuunova-explorer-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }
 
   const weakest = useMemo(() => {
@@ -355,13 +451,25 @@ export function LearningExplorer() {
             </div>
             <div className={styles.selectorBlock}>
               <label>Subject / section</label>
-              <select value={subjectId} onChange={(event) => selectSubject(event.target.value)}>{level.subjects.map((item) => { const ready = subjectIsReady(lane, program.id, level.id, item); return <option key={item.id} value={item.id} disabled={!ready}>{item.label}{ready ? "" : " — coverage expanding"}</option>; })}</select>
+              <select value={subjectId} onChange={(event) => selectSubject(event.target.value)}>
+                {levelCapability.ready && <option value="all">All practice-ready subjects</option>}
+                {level.subjects.map((item) => { const ready = subjectIsReady(lane, program.id, level.id, item); return <option key={item.id} value={item.id} disabled={!ready}>{item.label}{ready ? "" : " — coverage expanding"}</option>; })}
+              </select>
             </div>
           </div>
 
           <div className={styles.selectorBlock}>
             <label>Topic / learning target</label>
-            <div className={styles.topicGrid}>{subject.topics.map((item) => { const ready = topicIsReady(lane, program.id, level.id, subject, item.id); return <button key={item.id} disabled={!ready} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => { setTopicId(item.id); setLaunchNotice(""); }}><BookOpen size={15} /><span>{item.label}{ready ? "" : " · expanding"}</span>{topicId === item.id && ready && <Check size={15} />}</button>; })}</div>
+            <div className={styles.topicGrid}>
+              {subjectId === "all" ? (
+                <button className={styles.topicActive} type="button"><Sparkles size={15} /><span>All topics across ready subjects</span><Check size={15} /></button>
+              ) : (
+                <>
+                  <button className={topicId === "all" ? styles.topicActive : styles.topicButton} type="button" onClick={() => selectTopic("all")}><Sparkles size={15} /><span>All practice-ready topics</span>{topicId === "all" && <Check size={15} />}</button>
+                  {subject.topics.map((item) => { const ready = topicIsReady(lane, program.id, level.id, subject, item.id); return <button key={item.id} disabled={!ready} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => selectTopic(item.id)}><BookOpen size={15} /><span>{item.label}{ready ? "" : " · expanding"}</span>{topicId === item.id && ready && <Check size={15} />}</button>; })}
+                </>
+              )}
+            </div>
           </div>
 
           <div className={styles.divider} />
@@ -391,7 +499,12 @@ export function LearningExplorer() {
               <div className={styles.scoreRing}><strong>{sessionAccuracy}%</strong><span>{sessionCorrect}/{session.length}</span></div>
             </div>
             <div className={styles.completeStats}><article><BarChart3 size={18} /><span>Session accuracy</span><strong>{sessionAccuracy}%</strong></article><article><Clock3 size={18} /><span>Time</span><strong>{Math.floor(sessionSeconds / 60)}m {sessionSeconds % 60}s</strong></article><article><Brain size={18} /><span>Lifetime answered</span><strong>{progress.answered}</strong></article></div>
-            <div className={styles.completeActions}><button onClick={launchSession}><RotateCcw size={16} /> New variant session</button><button onClick={() => { setSession([]); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Change learning path</button></div>
+            <div className={styles.completeActions}>
+              <button onClick={printResults}><Printer size={16} /> Print full result</button>
+              <button onClick={downloadResults}><Download size={16} /> Download report</button>
+              <button onClick={launchSession}><RotateCcw size={16} /> New variant session</button>
+              <button onClick={() => { setSession([]); setAttempts([]); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Change learning path</button>
+            </div>
           </div>
         ) : currentQuestion ? (
           <QuestionPlayer

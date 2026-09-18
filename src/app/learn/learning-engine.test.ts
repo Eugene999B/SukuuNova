@@ -95,6 +95,41 @@ describe("SukuuNova Learn session engine", () => {
     expect(session[0].id).toBe("expand-math-geometry-001");
   });
 
+  it("builds a broad all-subject/all-topic random session from eligible material only", () => {
+    const session = buildLearningSession({
+      lane: "school",
+      programId: "ghana",
+      levelId: "jhs-3",
+      subjectId: "all",
+      topicId: "all",
+      mode: "random",
+      count: 100,
+      seed: 20260918,
+    });
+    const subjects = new Set(session.map((item) => item.subject));
+
+    expect(session).toHaveLength(100);
+    expect(subjects.size).toBeGreaterThanOrEqual(4);
+    expect(new Set(session.map((item) => item.exposureKey)).size).toBe(100);
+  });
+
+  it("builds subject-wide random practice without leaking into other subjects", () => {
+    const session = buildLearningSession({
+      lane: "school",
+      programId: "ghana",
+      levelId: "jhs-3",
+      subjectId: "mathematics",
+      topicId: "all",
+      mode: "random",
+      count: 100,
+      seed: 20260918,
+    });
+
+    expect(session).toHaveLength(100);
+    expect(session.every((item) => item.subject === "Mathematics")).toBe(true);
+    expect(new Set(session.map((item) => item.topic)).size).toBeGreaterThanOrEqual(3);
+  });
+
   it("does not leak JHS reviewed fixed questions into SHS topics", () => {
     const session = buildLearningSession({
       lane: "school",
