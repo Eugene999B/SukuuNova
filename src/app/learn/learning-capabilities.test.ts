@@ -49,6 +49,18 @@ describe("SukuuNova learning capability registry", () => {
     expect(capability.variantCapacity).toBeGreaterThanOrEqual(1_000_000);
   });
 
+  it("aggregates capacity across all eligible subjects and topics", () => {
+    const capability = learningCapabilityForSelection(config({
+      subjectId: "all",
+      topicId: "all",
+    }));
+
+    expect(capability.ready).toBe(true);
+    expect(capability.stage).toBe("massive");
+    expect(capability.reviewedStandardQuestions).toBe(45);
+    expect(capability.variantCapacity).toBeGreaterThan(10_000_000);
+  });
+
   it("maps JHS reviewed content into BECE but not WASSCE", () => {
     const bece = learningCapabilityForSelection(config({
       lane: "exam",
