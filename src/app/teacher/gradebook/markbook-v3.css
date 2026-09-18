@@ -1,0 +1,1184 @@
+.gradebook-start-page,
+.teacher-markbook-page {
+  display: grid;
+  gap: 20px;
+  padding: 22px 0 40px;
+}
+
+.gradebook-start-heading,
+.markbook-context,
+.markbook-workspace-head,
+.markbook-launch-footer,
+.markbook-toolbar,
+.markbook-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.gradebook-start-heading {
+  align-items: flex-start;
+  padding: 2px 2px 4px;
+}
+
+.gradebook-start-heading > div:first-child,
+.markbook-workspace-head > div:first-child,
+.markbook-launcher-title > div:last-child,
+.markbook-new-work-heading > div,
+.markbook-context-main > div {
+  display: grid;
+  gap: 6px;
+}
+
+.gradebook-start-heading span,
+.markbook-kicker,
+.markbook-launcher-title span,
+.markbook-new-work-heading span,
+.gradebook-active-term span,
+.markbook-term-chip span {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ui-primary);
+}
+
+.gradebook-start-heading h1,
+.markbook-workspace-head h1,
+.markbook-context-main h2,
+.markbook-launcher-title h2 {
+  margin: 0;
+  color: var(--ui-text);
+  letter-spacing: -.035em;
+}
+
+.gradebook-start-heading h1 {
+  font-size: clamp(30px, 3vw, 40px);
+  line-height: 1.05;
+}
+
+.gradebook-start-heading p,
+.markbook-workspace-head p,
+.markbook-launcher-title p,
+.markbook-context-main p {
+  margin: 0;
+  color: var(--ui-text-secondary);
+  line-height: 1.55;
+}
+
+.gradebook-start-heading p {
+  max-width: 720px;
+  font-size: 14px;
+}
+
+.gradebook-active-term,
+.markbook-term-chip {
+  display: grid;
+  gap: 4px;
+  min-width: 190px;
+  padding: 15px 17px;
+  border: 1px solid var(--ui-primary-border);
+  border-radius: 16px;
+  background: var(--ui-primary-soft);
+}
+
+.gradebook-active-term strong,
+.markbook-term-chip strong {
+  font-size: 16px;
+  color: var(--ui-text);
+}
+
+.gradebook-active-term small,
+.markbook-term-chip small {
+  font-size: 11px;
+  color: var(--ui-text-secondary);
+}
+
+.gradebook-start-alert {
+  display: grid;
+  gap: 5px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-warning-border);
+  border-radius: 14px;
+  background: var(--ui-warning-soft);
+}
+
+.gradebook-start-alert strong {
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.gradebook-start-alert span {
+  font-size: 12px;
+  color: var(--ui-text-secondary);
+}
+
+.gradebook-launch-card,
+.markbook-context,
+.markbook-workspace-card {
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+}
+
+.gradebook-launch-card {
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.markbook-launcher {
+  display: grid;
+  gap: 26px;
+  padding: 28px;
+}
+
+.markbook-launcher-title {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.markbook-launcher-icon,
+.markbook-empty-icon {
+  display: grid;
+  place-items: center;
+  color: var(--ui-primary);
+  background: var(--ui-primary-soft);
+  border: 1px solid var(--ui-primary-border);
+}
+
+.markbook-launcher-icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
+}
+
+.markbook-launcher-title h2 {
+  font-size: 25px;
+}
+
+.markbook-launcher-title p {
+  font-size: 13px;
+}
+
+.markbook-launch-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.markbook-launch-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 18px;
+  background: var(--ui-surface-raised);
+  transition: border-color .18s ease, background .18s ease;
+}
+
+.markbook-launch-step:focus-within {
+  border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
+}
+
+.markbook-step-number {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.markbook-step-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.markbook-step-copy strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ui-text);
+}
+
+.markbook-step-copy small {
+  font-size: 10px;
+  color: var(--ui-text-muted);
+}
+
+.markbook-launch-step select,
+.markbook-new-work-fields input,
+.markbook-bulk-bar input,
+.markbook-bulk-bar select,
+.markbook-search input,
+.markbook-cell input {
+  font: inherit;
+}
+
+.markbook-launch-step select {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 13px;
+  font-weight: 750;
+  outline: none;
+}
+
+.markbook-launch-step select:focus,
+.markbook-new-work-fields input:focus,
+.markbook-bulk-bar input:focus,
+.markbook-bulk-bar select:focus,
+.markbook-cell input:focus {
+  border-color: var(--ui-primary);
+  box-shadow: var(--ui-focus);
+}
+
+.markbook-launch-footer {
+  padding-top: 20px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.markbook-launch-footer > div {
+  display: grid;
+  gap: 4px;
+}
+
+.markbook-launch-footer strong {
+  font-size: 14px;
+  color: var(--ui-text);
+}
+
+.markbook-launch-footer span {
+  font-size: 12px;
+  color: var(--ui-text-secondary);
+}
+
+.markbook-launch-footer button,
+.markbook-add-work-button,
+.markbook-new-work-fields button,
+.markbook-bulk-bar > button:not(.markbook-clear-selection) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 17px;
+  border: 1px solid var(--ui-primary);
+  border-radius: 12px;
+  background: var(--ui-primary);
+  color: var(--ui-primary-contrast);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.markbook-launch-footer button:disabled,
+.markbook-new-work-fields button:disabled,
+.markbook-bulk-bar button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.markbook-context {
+  padding: 18px 20px;
+  border-radius: 20px;
+}
+
+.markbook-context-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.markbook-context-main h2 {
+  font-size: 24px;
+}
+
+.markbook-context-main p {
+  font-size: 12px;
+}
+
+.markbook-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--ui-border);
+  border-radius: 11px;
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.markbook-back:hover {
+  border-color: var(--ui-primary-border);
+  color: var(--ui-primary);
+}
+
+.markbook-view-tabs {
+  display: flex;
+  gap: 6px;
+  width: max-content;
+  padding: 5px;
+  border: 1px solid var(--ui-border);
+  border-radius: 13px;
+  background: var(--ui-surface);
+}
+
+.markbook-view-tabs a {
+  padding: 9px 14px;
+  border-radius: 9px;
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.markbook-view-tabs a.is-active {
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
+}
+
+.markbook-readonly {
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.markbook-no-term {
+  display: grid;
+  place-items: center;
+  gap: 6px;
+  padding: 44px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 20px;
+  background: var(--ui-surface);
+  text-align: center;
+}
+
+.markbook-no-term strong {
+  font-size: 17px;
+  color: var(--ui-text);
+}
+
+.markbook-no-term span {
+  font-size: 12px;
+  color: var(--ui-text-secondary);
+}
+
+.markbook-workspace-card {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 24px;
+  overflow: visible;
+}
+
+.markbook-workspace-head {
+  align-items: flex-start;
+}
+
+.markbook-workspace-head h1 {
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.markbook-workspace-head p {
+  max-width: 740px;
+  font-size: 12px;
+}
+
+.markbook-work-count {
+  display: grid;
+  gap: 2px;
+  min-width: 118px;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  background: var(--ui-surface-raised);
+  text-align: right;
+}
+
+.markbook-work-count strong {
+  font-size: 20px;
+  color: var(--ui-text);
+}
+
+.markbook-work-count span {
+  font-size: 10px;
+  color: var(--ui-text-muted);
+}
+
+.markbook-week-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 1px 7px;
+  scrollbar-width: thin;
+}
+
+.markbook-week-strip a {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 72px;
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.markbook-week-strip a:hover {
+  border-color: var(--ui-primary-border);
+  color: var(--ui-text);
+}
+
+.markbook-week-strip a.is-active {
+  border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
+}
+
+.markbook-shell {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.markbook-toolbar {
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  background: var(--ui-surface-raised);
+}
+
+.markbook-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.markbook-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(320px, 36vw);
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: 11px;
+  background: var(--ui-surface);
+  color: var(--ui-text-muted);
+}
+
+.markbook-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ui-text);
+  font-size: 12px;
+}
+
+.markbook-save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.markbook-save-state.is-saving {
+  background: var(--ui-info-soft);
+  color: var(--ui-info);
+}
+
+.markbook-save-state.is-offline {
+  background: var(--ui-warning-soft);
+  color: var(--ui-warning);
+}
+
+.markbook-add-work-button {
+  min-height: 40px;
+  padding: 0 14px;
+}
+
+.markbook-new-work {
+  position: fixed;
+  top: 132px;
+  right: 24px;
+  z-index: 40;
+  display: grid;
+  gap: 18px;
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid var(--ui-primary-border);
+  border-radius: 20px;
+  background: var(--ui-surface);
+}
+
+.markbook-new-work::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--ui-primary-soft);
+  opacity: .25;
+}
+
+.markbook-new-work > * {
+  position: relative;
+  z-index: 1;
+}
+
+.markbook-new-work-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.markbook-new-work-heading strong {
+  font-size: 18px;
+  color: var(--ui-text);
+}
+
+.markbook-new-work-heading small {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ui-text-secondary);
+}
+
+.markbook-new-work-heading > button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+}
+
+.markbook-new-work-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.markbook-new-work-fields label,
+.markbook-bulk-bar label {
+  display: grid;
+  gap: 6px;
+}
+
+.markbook-new-work-fields label > span,
+.markbook-bulk-bar label > span {
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .065em;
+  text-transform: uppercase;
+  color: var(--ui-text-muted);
+}
+
+.markbook-new-work-fields input,
+.markbook-bulk-bar input,
+.markbook-bulk-bar select {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 12px;
+  font-weight: 700;
+  outline: none;
+}
+
+.markbook-new-work-fields button {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.markbook-bulk-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: auto minmax(190px, .8fr) minmax(130px, .45fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px 14px;
+  border: 1px solid var(--ui-primary-border);
+  border-radius: 14px;
+  background: var(--ui-primary-soft);
+}
+
+.markbook-bulk-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding-right: 4px;
+  color: var(--ui-primary);
+}
+
+.markbook-bulk-count strong {
+  font-size: 18px;
+}
+
+.markbook-bulk-count span {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.markbook-clear-selection {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text-secondary);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.markbook-message {
+  padding: 11px 13px;
+  border: 1px solid var(--ui-success-border);
+  border-radius: 11px;
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.markbook-message.is-error {
+  border-color: var(--ui-danger-border);
+  background: var(--ui-danger-soft);
+  color: var(--ui-danger);
+}
+
+.markbook-empty {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  min-height: 300px;
+  padding: 36px 20px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: 16px;
+  background: var(--ui-surface-raised);
+  text-align: center;
+}
+
+.markbook-empty-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+}
+
+.markbook-empty strong {
+  font-size: 16px;
+  color: var(--ui-text);
+}
+
+.markbook-empty span {
+  max-width: 500px;
+  font-size: 12px;
+  color: var(--ui-text-secondary);
+}
+
+.markbook-grid-wrap {
+  overflow: auto;
+  min-height: 390px;
+  max-height: min(68vh, 760px);
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: var(--ui-surface-raised);
+  scrollbar-width: thin;
+}
+
+.markbook-grid {
+  width: max-content;
+  min-width: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--ui-surface);
+}
+
+.markbook-grid th,
+.markbook-grid td {
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.markbook-grid tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.markbook-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 64px;
+  padding: 0;
+  background: var(--ui-surface-raised);
+  text-align: left;
+}
+
+.markbook-select-col {
+  position: sticky !important;
+  left: 0;
+  z-index: 7 !important;
+  width: 48px;
+  min-width: 48px;
+  max-width: 48px;
+  background: var(--ui-surface) !important;
+  text-align: center !important;
+}
+
+.markbook-learner-col {
+  position: sticky !important;
+  left: 48px;
+  z-index: 6 !important;
+  width: 270px;
+  min-width: 270px;
+  max-width: 270px;
+  background: var(--ui-surface) !important;
+}
+
+.markbook-grid thead .markbook-select-col,
+.markbook-grid thead .markbook-learner-col {
+  background: var(--ui-surface-raised) !important;
+}
+
+.markbook-grid thead .markbook-select-col {
+  z-index: 9 !important;
+}
+
+.markbook-grid thead .markbook-learner-col {
+  z-index: 8 !important;
+}
+
+.markbook-select-col input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ui-primary);
+}
+
+.markbook-grid thead .markbook-learner-col > div {
+  display: grid;
+  gap: 3px;
+  padding: 12px 15px;
+}
+
+.markbook-grid thead .markbook-learner-col span {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  color: var(--ui-text);
+}
+
+.markbook-grid thead .markbook-learner-col small {
+  font-size: 9px;
+  color: var(--ui-text-muted);
+}
+
+.markbook-grid thead th:not(.markbook-select-col):not(.markbook-learner-col) {
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  cursor: pointer;
+}
+
+.markbook-work-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 150px;
+  box-sizing: border-box;
+  padding: 10px 11px;
+}
+
+.markbook-work-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.markbook-work-head strong {
+  font-size: 12px;
+  color: var(--ui-text);
+}
+
+.markbook-work-head span {
+  font-size: 9px;
+  color: var(--ui-text-secondary);
+}
+
+.markbook-work-head > small {
+  display: grid;
+  gap: 1px;
+  text-align: right;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ui-text-muted);
+}
+
+.markbook-work-head b {
+  font-size: 14px;
+  color: var(--ui-text);
+}
+
+.markbook-grid th.is-active-work {
+  border-top: 3px solid var(--ui-primary);
+  background: var(--ui-primary-soft);
+}
+
+.markbook-grid td.is-active-work {
+  background: var(--ui-primary-soft);
+}
+
+.markbook-grid tbody tr:hover td,
+.markbook-grid tbody tr:hover .markbook-select-col,
+.markbook-grid tbody tr:hover .markbook-learner-col {
+  background: var(--ui-surface-raised) !important;
+}
+
+.markbook-grid tbody tr.is-selected td,
+.markbook-grid tbody tr.is-selected .markbook-select-col,
+.markbook-grid tbody tr.is-selected .markbook-learner-col {
+  background: var(--ui-primary-soft) !important;
+}
+
+.markbook-learner {
+  display: grid;
+  gap: 3px;
+  padding: 10px 14px;
+}
+
+.markbook-learner strong {
+  overflow: hidden;
+  color: var(--ui-text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.markbook-learner small {
+  color: var(--ui-text-muted);
+  font-size: 9px;
+}
+
+.markbook-cell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 150px;
+  min-width: 150px;
+  min-height: 56px;
+}
+
+.markbook-cell input {
+  width: 84px;
+  height: 38px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font-size: 14px;
+  font-weight: 850;
+  text-align: center;
+  outline: none;
+}
+
+.markbook-cell input::placeholder {
+  color: var(--ui-text-muted);
+}
+
+.markbook-cell input:focus {
+  position: relative;
+  z-index: 2;
+  border-color: var(--ui-primary);
+  background: var(--ui-surface);
+}
+
+.markbook-cell input:disabled {
+  cursor: not-allowed;
+}
+
+.markbook-cell-state {
+  position: absolute;
+  right: 7px;
+  bottom: 3px;
+  color: var(--ui-success);
+  font-size: 7px;
+  font-weight: 800;
+  text-transform: uppercase;
+  opacity: 0;
+}
+
+.markbook-cell-state.is-saving,
+.markbook-cell-state.is-offline {
+  opacity: 1;
+}
+
+.markbook-cell-state.is-saving {
+  color: var(--ui-info);
+}
+
+.markbook-cell-state.is-offline {
+  color: var(--ui-warning);
+}
+
+.markbook-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 3px 2px;
+  color: var(--ui-text-muted);
+  font-size: 10px;
+}
+
+.markbook-hints b {
+  color: var(--ui-text-secondary);
+}
+
+.markbook-archive {
+  border: 1px solid var(--ui-border);
+  border-radius: 15px;
+  background: var(--ui-surface);
+}
+
+.markbook-archive summary {
+  padding: 13px 15px;
+  color: var(--ui-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.markbook-archive > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 15px 15px;
+}
+
+.markbook-archive a {
+  padding: 8px 11px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.gradebook-overview-panel,
+.gradebook-results-panel {
+  overflow: hidden;
+}
+
+.gradebook-results-table-wrap {
+  overflow: auto;
+}
+
+.gradebook-results-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.gradebook-results-table th,
+.gradebook-results-table td {
+  padding: 12px 13px;
+  border-bottom: 1px solid var(--ui-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.gradebook-results-table th {
+  color: var(--ui-text-muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.gradebook-results-table td {
+  color: var(--ui-text-secondary);
+  font-size: 10px;
+}
+
+.gradebook-results-table td strong,
+.gradebook-results-table td span,
+.gradebook-results-table td small {
+  display: block;
+}
+
+.gradebook-results-table td strong {
+  color: var(--ui-text);
+  font-size: 12px;
+}
+
+.gradebook-results-table td span,
+.gradebook-results-table td small {
+  margin-top: 2px;
+  color: var(--ui-text-muted);
+  font-size: 9px;
+}
+
+.spin {
+  animation: markbook-spin 1s linear infinite;
+}
+
+@keyframes markbook-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 980px) {
+  .gradebook-start-heading,
+  .markbook-context,
+  .markbook-workspace-head,
+  .markbook-launch-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gradebook-active-term,
+  .markbook-term-chip {
+    min-width: 0;
+  }
+
+  .markbook-launch-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .markbook-bulk-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .markbook-bulk-count {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .gradebook-start-page,
+  .teacher-markbook-page {
+    padding-top: 14px;
+  }
+
+  .markbook-launcher,
+  .markbook-workspace-card {
+    padding: 16px;
+  }
+
+  .markbook-context-main,
+  .markbook-toolbar,
+  .markbook-toolbar-left,
+  .markbook-topline {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .markbook-context-main {
+    gap: 10px;
+  }
+
+  .markbook-search,
+  .markbook-view-tabs {
+    width: 100%;
+  }
+
+  .markbook-view-tabs a {
+    flex: 1;
+    text-align: center;
+  }
+
+  .markbook-add-work-button {
+    width: 100%;
+  }
+
+  .markbook-new-work {
+    top: auto;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+  }
+
+  .markbook-bulk-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .markbook-bulk-count {
+    grid-column: auto;
+  }
+
+  .markbook-learner-col {
+    width: 210px;
+    min-width: 210px;
+    max-width: 210px;
+  }
+
+  .markbook-grid thead th:not(.markbook-select-col):not(.markbook-learner-col),
+  .markbook-cell {
+    width: 132px;
+    min-width: 132px;
+    max-width: 132px;
+  }
+
+  .markbook-work-head {
+    min-width: 132px;
+  }
+}
