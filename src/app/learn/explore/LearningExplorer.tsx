@@ -26,6 +26,9 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import {
   catalogFor,
+  type CatalogLevel,
+  type CatalogSubject,
+  type CatalogTopic,
   type LearnLane,
   type LearnQuestion,
   type PracticeMode,
@@ -77,6 +80,22 @@ function masteryKey(question: LearnQuestion) {
   return `${question.subject} · ${question.topic}`;
 }
 
+function topicIsReady(topic: CatalogTopic) {
+  return topic.availability !== "expanding";
+}
+
+function subjectIsReady(subject: CatalogSubject) {
+  return subject.availability !== "expanding" && subject.topics.some(topicIsReady);
+}
+
+function firstReadySubject(level: CatalogLevel) {
+  return level.subjects.find(subjectIsReady) ?? level.subjects[0];
+}
+
+function firstReadyTopic(subject: CatalogSubject) {
+  return subject.topics.find(topicIsReady) ?? subject.topics[0];
+}
+
 export function LearningExplorer() {
   const [lane, setLane] = useState<LearnLane>("school");
   const catalog = useMemo(() => catalogFor(lane), [lane]);
@@ -95,11 +114,13 @@ export function LearningExplorer() {
   const [sessionCorrect, setSessionCorrect] = useState(0);
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [launchNotice, setLaunchNotice] = useState("");
 
   const program = catalog.programs.find((item) => item.id === programId) ?? catalog.programs[0];
   const level = program.levels.find((item) => item.id === levelId) ?? program.levels[0];
-  const subject = level.subjects.find((item) => item.id === subjectId) ?? level.subjects[0];
-  const topic = subject.topics.find((item) => item.id === topicId) ?? subject.topics[0];
+  const subject = level.subjects.find((item) => item.id === subjectId) ?? firstReadySubject(level);
+  const topic = subject.topics.find((item) => item.id === topicId) ?? firstReadyTopic(subject);
+  const practiceAvailable = subjectIsReady(subject) && topicIsReady(topic);
   const currentQuestion = session[questionIndex];
   const variantCapacity = useMemo(() => variantCapacityForSelection({
     lane,
@@ -141,40 +162,50 @@ export function LearningExplorer() {
     const nextCatalog = catalogFor(nextLane);
     const nextProgram = nextCatalog.programs[0];
     const nextLevel = nextProgram.levels[0];
-    const nextSubject = nextLevel.subjects[0];
+    const nextSubject = firstReadySubject(nextLevel);
     setLane(nextLane);
     setProgramId(nextProgram.id);
     setLevelId(nextLevel.id);
     setSubjectId(nextSubject.id);
-    setTopicId(nextSubject.topics[0].id);
+    setTopicId(firstReadyTopic(nextSubject).id);
     setSession([]);
+    setLaunchNotice("");
   }
 
   function selectProgram(nextProgramId: string) {
     const nextProgram = catalog.programs.find((item) => item.id === nextProgramId) ?? catalog.programs[0];
     const nextLevel = nextProgram.levels[0];
-    const nextSubject = nextLevel.subjects[0];
+    const nextSubject = firstReadySubject(nextLevel);
     setProgramId(nextProgram.id);
     setLevelId(nextLevel.id);
     setSubjectId(nextSubject.id);
-    setTopicId(nextSubject.topics[0].id);
+    setTopicId(firstReadyTopic(nextSubject).id);
+    setLaunchNotice("");
   }
 
   function selectLevel(nextLevelId: string) {
     const nextLevel = program.levels.find((item) => item.id === nextLevelId) ?? program.levels[0];
-    const nextSubject = nextLevel.subjects[0];
+    const nextSubject = firstReadySubject(nextLevel);
     setLevelId(nextLevel.id);
     setSubjectId(nextSubject.id);
-    setTopicId(nextSubject.topics[0].id);
+    setTopicId(firstReadyTopic(nextSubject).id);
+    setLaunchNotice("");
   }
 
   function selectSubject(nextSubjectId: string) {
-    const nextSubject = level.subjects.find((item) => item.id === nextSubjectId) ?? level.subjects[0];
+    const nextSubject = level.subjects.find((item) => item.id === nextSubjectId) ?? firstReadySubject(level);
+    if (!subjectIsReady(nextSubject)) return;
     setSubjectId(nextSubject.id);
-    setTopicId(nextSubject.topics[0].id);
+    setTopicId(firstReadyTopic(nextSubject).id);
+    setLaunchNotice("");
   }
 
   function launchSession() {
+    if (!practiceAvailable) {
+      setSession([]);
+      setLaunchNotice("This curriculum path is mapped, but reviewed practice coverage is still expanding. Choose a practice-ready subject or topic.");
+      return;
+    }
     const nextSession = buildLearningSession({
       lane,
       programId,
@@ -186,6 +217,7 @@ export function LearningExplorer() {
       seen: progress.exposures,
     });
     setSession(nextSession);
+    setLaunchNotice(nextSession.length ? "" : "This path is mapped correctly, but its reviewed question pack is not deep enough yet. SukuuNova will not substitute unrelated questions.");
     setQuestionIndex(0);
     setResponse("");
     setSubmitted(false);
@@ -313,13 +345,13 @@ export function LearningExplorer() {
             </div>
             <div className={styles.selectorBlock}>
               <label>Subject / section</label>
-              <select value={subjectId} onChange={(event) => selectSubject(event.target.value)}>{level.subjects.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+              <select value={subjectId} onChange={(event) => selectSubject(event.target.value)}>{level.subjects.map((item) => <option key={item.id} value={item.id} disabled={!subjectIsReady(item)}>{item.label}{subjectIsReady(item) ? "" : " — coverage expanding"}</option>)}</select>
             </div>
           </div>
 
           <div className={styles.selectorBlock}>
             <label>Topic / learning target</label>
-            <div className={styles.topicGrid}>{subject.topics.map((item) => <button key={item.id} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => setTopicId(item.id)}><BookOpen size={15} /><span>{item.label}</span>{topicId === item.id && <Check size={15} />}</button>)}</div>
+            <div className={styles.topicGrid}>{subject.topics.map((item) => <button key={item.id} disabled={!topicIsReady(item)} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => { setTopicId(item.id); setLaunchNotice(""); }}><BookOpen size={15} /><span>{item.label}{topicIsReady(item) ? "" : " · expanding"}</span>{topicId === item.id && topicIsReady(item) && <Check size={15} />}</button>)}</div>
           </div>
 
           <div className={styles.divider} />
@@ -331,9 +363,9 @@ export function LearningExplorer() {
 
           <div className={styles.sessionFooter}>
             <div><label>Questions</label><div className={styles.countGroup}>{[10, 20, 30, 50, 75, 100].map((value) => <button key={value} className={count === value ? styles.countActive : styles.countButton} onClick={() => setCount(value)}>{value}</button>)}</div></div>
-            <button className={styles.launch} onClick={launchSession}><Sparkles size={18} /> Build my session <ArrowRight size={18} /></button>
+            <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Sparkles size={18} /> {practiceAvailable ? "Build my session" : "Coverage expanding"} <ArrowRight size={18} /></button>
           </div>
-          <p className={styles.engineNote}>{variantCapacity >= 1_000_000 ? `This selection has ${new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(variantCapacity)} deterministic parameterized variants available before reviewed fixed questions are counted. Topic Focus stays on the selected topic.` : "SukuuNova combines reviewed fixed questions with deterministic parameterized practice. Topic Focus stays on the selected topic; broader modes can mix related material when useful."}</p>
+          <p className={styles.engineNote}>{!practiceAvailable ? "This subject or topic is present in the curriculum map, but its reviewed SukuuNova practice pack is still expanding." : variantCapacity >= 1_000_000 ? `This selection has ${new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(variantCapacity)} deterministic parameterized variants available before reviewed fixed questions are counted. Explicit subject/topic selections never widen into unrelated content.` : "SukuuNova combines reviewed fixed questions with deterministic parameterized practice. Explicit subject/topic selections never widen into unrelated content."}</p>
         </div>
       </section>
 
@@ -341,7 +373,7 @@ export function LearningExplorer() {
         <div className={styles.sectionTitle}><div><span className={styles.stepLabel}>03 · PRACTICE</span><h2>Mixed-format question player</h2></div><p>Single choice, multi-select, fill-in, numerical, true/false and short-text scoring all use one question contract.</p></div>
 
         {!session.length ? (
-          <div className={styles.playerEmpty}><Brain size={36} /><h3>Your intelligent session appears here.</h3><p>Choose your learning path above, then build a session.</p></div>
+          <div className={styles.playerEmpty}><Brain size={36} /><h3>{launchNotice ? "Coverage is still expanding here." : "Your intelligent session appears here."}</h3><p>{launchNotice || "Choose your learning path above, then build a session."}</p></div>
         ) : isComplete ? (
           <div className={styles.completeCard}>
             <div className={styles.completeTop}>

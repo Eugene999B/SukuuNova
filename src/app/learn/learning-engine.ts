@@ -49,7 +49,7 @@ function resolveSelectionLabels(config: SessionConfig): SelectionLabels {
   const level = program?.levels.find((item) => item.id === config.levelId);
   const subject = level?.subjects.find((item) => item.id === config.subjectId);
   const topic = subject?.topics.find((item) => item.id === config.topicId);
-  return { subject: subject?.label, topic: topic?.label };
+  return { subject: subject?.contentLabel ?? subject?.label, topic: topic?.label };
 }
 
 function selectionMatches(label: string, selection: string, resolvedLabel?: string) {
@@ -125,12 +125,12 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     }
   }
 
-  const strictTopic = config.mode === "topic" && config.subjectId !== "all" && config.topicId !== "all";
+  const strictSelection = config.subjectId !== "all" || config.topicId !== "all";
 
   absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, false, selection)));
   absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed));
 
-  if (!strictTopic && fresh.length < requested) {
+  if (!strictSelection && fresh.length < requested) {
     absorb(VERIFIED_STANDARD_QUESTIONS.filter((question) => starterMatches(question, config, true, selection)));
   }
 
@@ -139,13 +139,13 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
       ...config,
       count: requested,
       seed,
-    }).filter((question) => !strictTopic || starterMatches(question, config, false, selection)),
+    }).filter((question) => !strictSelection || starterMatches(question, config, false, selection)),
   );
 
   for (let attempt = 0; fresh.length < requested && attempt < BROADENING_ATTEMPTS; attempt += 1) {
     const nextSeed = derivedSeed(seed, attempt);
     absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed));
-    if (!strictTopic) {
+    if (!strictSelection) {
       absorb(
         buildSession({
           ...config,

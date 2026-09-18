@@ -8,8 +8,8 @@ describe("SukuuNova reviewed topic-practice coverage", () => {
     const level = ghana?.levels.find((item) => item.id === "jhs-3");
     expect(level).toBeDefined();
 
-    for (const subject of level?.subjects ?? []) {
-      for (const topic of subject.topics) {
+    for (const subject of (level?.subjects ?? []).filter((item) => item.availability !== "expanding")) {
+      for (const topic of subject.topics.filter((item) => item.availability !== "expanding")) {
         const session = buildLearningSession({
           lane: "school",
           programId: "ghana",

@@ -21,6 +21,146 @@ const JHS_SHS_LEVELS = ["jhs-1", "jhs-2", "jhs-3", "shs-1", "shs-2", "shs-3"] as
 const UPPER_PRIMARY_TO_SHS = ["basic-4", "basic-5", "basic-6", ...JHS_SHS_LEVELS] as const;
 const EXAM_PROGRAMS = ["bece", "wassce"] as const;
 
+const EARLY_NAMES = [
+  "Ama", "Kojo", "Akosua", "Kwame", "Esi", "Kofi", "Adwoa", "Yaw",
+  "Abena", "Kwaku", "Efua", "Kwesi", "Mansa", "Nana", "Sena", "Tetteh",
+  "Amina", "Zainab", "Ibrahim", "Fati", "Kweku", "Afia", "Araba", "Ekow",
+  "Yaa", "Kobby", "Nii", "Naa", "Selina", "Daniel", "Mary", "Joseph",
+] as const;
+
+const EARLY_OBJECTS = [
+  ["bead", "beads"], ["book", "books"], ["pencil", "pencils"], ["orange", "oranges"],
+  ["mango", "mangoes"], ["stone", "stones"], ["ball", "balls"], ["cup", "cups"],
+  ["shell", "shells"], ["stick", "sticks"], ["star", "stars"], ["coin", "coins"],
+  ["button", "buttons"], ["flower", "flowers"], ["seed", "seeds"], ["toy", "toys"],
+  ["card", "cards"], ["crayon", "crayons"], ["bottle", "bottles"], ["leaf", "leaves"],
+  ["bean", "beans"], ["block", "blocks"], ["drum", "drums"], ["spoon", "spoons"],
+  ["plate", "plates"], ["bag", "bags"], ["cap", "caps"], ["rope", "ropes"],
+  ["basket", "baskets"], ["box", "boxes"], ["chalk piece", "chalk pieces"], ["counter", "counters"],
+] as const;
+
+const EARLY_PLACES = [
+  "home", "school", "the classroom", "the playground", "the library", "the garden", "the market", "the farm",
+  "the kitchen", "the reading corner", "the activity table", "the school yard", "the community centre", "the art corner", "the maths corner", "the veranda",
+  "the hall", "the club room", "the learning centre", "the picnic area", "the sports field", "the craft table", "the science corner", "the shop",
+  "the park", "the assembly area", "the study room", "the family room", "the courtyard", "the games area", "the project table", "the story corner",
+] as const;
+
+function objectLabel(pair: readonly [string, string], count: number) {
+  return count === 1 ? pair[0] : pair[1];
+}
+
+function createNumberStoryTemplate({
+  id,
+  subjectId,
+  subject,
+  topicId,
+  topic,
+  maxValue,
+  difficulty,
+  schoolLevels,
+}: {
+  id: string;
+  subjectId: string;
+  subject: string;
+  topicId: string;
+  topic: string;
+  maxValue: number;
+  difficulty: 1 | 2;
+  schoolLevels: readonly string[];
+}): VariantTemplate {
+  const dimensions = [maxValue + 1, maxValue + 1, EARLY_NAMES.length, EARLY_OBJECTS.length, EARLY_PLACES.length, 2, 2] as const;
+  return {
+    id,
+    subjectId,
+    subject,
+    topicId,
+    topic,
+    skill: "Solve addition and subtraction number stories",
+    difficulty,
+    capacity: product(dimensions),
+    schoolLevels,
+    examPrograms: [],
+    render: (variant) => {
+      const [leftIndex, rightIndex, nameIndex, objectIndex, placeIndex, operation, kindIndex] = decodeVariant(variant, dimensions);
+      const left = leftIndex;
+      const right = rightIndex;
+      const name = EARLY_NAMES[nameIndex];
+      const helper = EARLY_NAMES[(nameIndex + 7) % EARLY_NAMES.length];
+      const object = EARLY_OBJECTS[objectIndex];
+      const place = EARLY_PLACES[placeIndex];
+      const addition = operation === 0;
+      const starting = addition ? left : left + right;
+      const answer = addition ? left + right : left;
+      const prompt = addition
+        ? `${name} has ${left} ${objectLabel(object, left)} at ${place}. ${helper} gives ${name} ${right} more ${objectLabel(object, right)}. How many ${object[1]} does ${name} have now?`
+        : `${name} has ${starting} ${objectLabel(object, starting)} at ${place}. ${name} gives away ${right} ${objectLabel(object, right)}. How many ${object[1]} are left?`;
+      return numericOrSingle(
+        {
+          id: `variant-${id}-${variant}`,
+          exposureKey: `variant:${id}:${variant}`,
+          subject,
+          topic,
+          skill: addition ? "Solve addition number stories" : "Solve subtraction number stories",
+          difficulty,
+          prompt,
+          explanation: addition
+            ? `${left} + ${right} = ${answer}.`
+            : `${starting} - ${right} = ${answer}.`,
+          hint: addition ? "Put the two groups together." : "Take away the group that was given out.",
+        },
+        answer,
+        kindIndex === 0 ? "numeric" : "single",
+        variant,
+      );
+    },
+  };
+}
+
+const kgNumberStories = createNumberStoryTemplate({
+  id: "kg-number-stories",
+  subjectId: "numeracy",
+  subject: "Numeracy",
+  topicId: "number-stories",
+  topic: "Counting & simple number stories",
+  maxValue: 10,
+  difficulty: 1,
+  schoolLevels: ["kg-1", "kg-2"],
+});
+
+const basicOneNumberStories = createNumberStoryTemplate({
+  id: "basic-1-number-stories",
+  subjectId: "mathematics",
+  subject: "Mathematics",
+  topicId: "number",
+  topic: "Number & operations",
+  maxValue: 20,
+  difficulty: 1,
+  schoolLevels: ["basic-1"],
+});
+
+const basicTwoNumberStories = createNumberStoryTemplate({
+  id: "basic-2-number-stories",
+  subjectId: "mathematics",
+  subject: "Mathematics",
+  topicId: "number",
+  topic: "Number & operations",
+  maxValue: 100,
+  difficulty: 2,
+  schoolLevels: ["basic-2"],
+});
+
+const basicThreeNumberStories = createNumberStoryTemplate({
+  id: "basic-3-number-stories",
+  subjectId: "mathematics",
+  subject: "Mathematics",
+  topicId: "number",
+  topic: "Number & operations",
+  maxValue: 1000,
+  difficulty: 2,
+  schoolLevels: ["basic-3"],
+});
+
 function product(values: readonly number[]) {
   return values.reduce((result, value) => result * value, 1);
 }
@@ -275,11 +415,10 @@ function renderConcord(variant: number): LearnQuestion {
     prompt: style === 0
       ? `Choose the correct verb: ${subject} ___ ${grammarPlaces[placeIndex]} ${grammarTimes[timeIndex]}.`
       : `Complete the sentence correctly: ${subject} ___ ${grammarPlaces[placeIndex]} ${grammarTimes[timeIndex]}.`,
-    options: [
-      { id: "a", label: correct },
-      { id: "b", label: incorrect },
-    ],
-    answer: "a",
+    options: variant % 2 === 0
+      ? [{ id: "a", label: correct }, { id: "b", label: incorrect }]
+      : [{ id: "a", label: incorrect }, { id: "b", label: correct }],
+    answer: variant % 2 === 0 ? "a" : "b",
     explanation: plurality === 0
       ? `The subject is singular, so the present-tense verb takes the singular form “${correct}”.`
       : `The subject is plural, so the base verb form “${correct}” agrees with it.`,
@@ -414,6 +553,10 @@ function renderBinary(variant: number): LearnQuestion {
 }
 
 export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
+  kgNumberStories,
+  basicOneNumberStories,
+  basicTwoNumberStories,
+  basicThreeNumberStories,
   {
     id: "math-number-operations",
     subjectId: "mathematics",

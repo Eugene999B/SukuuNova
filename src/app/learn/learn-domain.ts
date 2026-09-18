@@ -2,15 +2,20 @@ export type LearnLane = "school" | "exam" | "university" | "skills";
 export type PracticeMode = "topic" | "adaptive" | "random" | "timed" | "weakness";
 export type QuestionKind = "single" | "multi" | "fill" | "numeric" | "boolean" | "short";
 
+export type CatalogAvailability = "ready" | "expanding";
+
 export type CatalogTopic = {
   id: string;
   label: string;
+  availability?: CatalogAvailability;
 };
 
 export type CatalogSubject = {
   id: string;
   label: string;
   topics: CatalogTopic[];
+  availability?: CatalogAvailability;
+  contentLabel?: string;
 };
 
 export type CatalogLevel = {
@@ -60,78 +65,334 @@ export type SessionConfig = {
   seed?: number;
 };
 
-const schoolSubjects: CatalogSubject[] = [
-  {
-    id: "mathematics",
-    label: "Mathematics",
-    topics: [
-      { id: "number", label: "Number & operations" },
-      { id: "algebra", label: "Algebra" },
-      { id: "geometry", label: "Geometry" },
-      { id: "statistics", label: "Statistics & probability" },
-    ],
-  },
-  {
-    id: "english",
-    label: "English Language",
-    topics: [
-      { id: "grammar", label: "Grammar & concord" },
-      { id: "vocabulary", label: "Vocabulary" },
-      { id: "reading", label: "Reading comprehension" },
-      { id: "writing", label: "Writing" },
-    ],
-  },
-  {
-    id: "science",
-    label: "Science",
-    topics: [
-      { id: "living", label: "Living things" },
-      { id: "matter", label: "Matter & materials" },
-      { id: "energy", label: "Force & energy" },
-      { id: "environment", label: "Environment" },
-    ],
-  },
-  {
-    id: "social",
-    label: "Social Studies",
-    topics: [
-      { id: "governance", label: "Governance" },
-      { id: "citizenship", label: "Citizenship" },
-      { id: "environment", label: "People & environment" },
-      { id: "development", label: "National development" },
-    ],
-  },
-  {
-    id: "computing",
-    label: "Computing",
-    topics: [
-      { id: "digital-safety", label: "Digital safety" },
-      { id: "systems", label: "Computer systems" },
-      { id: "internet", label: "Internet & networks" },
-      { id: "coding", label: "Computational thinking" },
-    ],
-  },
+const expandingTopic: CatalogTopic = {
+  id: "coverage-expanding",
+  label: "Curriculum coverage expanding",
+  availability: "expanding",
+};
+
+function expandingSubject(id: string, label: string): CatalogSubject {
+  return { id, label, availability: "expanding", topics: [expandingTopic] };
+}
+
+function expandingDetailedSubject(id: string, label: string, topics: CatalogTopic[]): CatalogSubject {
+  return {
+    id,
+    label,
+    availability: "expanding",
+    topics: topics.map((topic) => ({ ...topic, availability: "expanding" })),
+  };
+}
+
+const mathematicsSubject: CatalogSubject = {
+  id: "mathematics",
+  label: "Mathematics",
+  topics: [
+    { id: "number", label: "Number & operations" },
+    { id: "algebra", label: "Algebra" },
+    { id: "geometry", label: "Geometry" },
+    { id: "statistics", label: "Statistics & probability" },
+  ],
+};
+
+const englishSubject: CatalogSubject = {
+  id: "english",
+  label: "English Language",
+  topics: [
+    { id: "grammar", label: "Grammar & concord" },
+    { id: "vocabulary", label: "Vocabulary" },
+    { id: "reading", label: "Reading comprehension" },
+    { id: "writing", label: "Writing" },
+  ],
+};
+
+const scienceSubject: CatalogSubject = {
+  id: "science",
+  label: "Science",
+  topics: [
+    { id: "living", label: "Living things" },
+    { id: "matter", label: "Matter & materials" },
+    { id: "energy", label: "Force & energy" },
+    { id: "environment", label: "Environment" },
+  ],
+};
+
+const socialSubject: CatalogSubject = {
+  id: "social",
+  label: "Social Studies",
+  topics: [
+    { id: "governance", label: "Governance" },
+    { id: "citizenship", label: "Citizenship" },
+    { id: "environment", label: "People & environment" },
+    { id: "development", label: "National development" },
+  ],
+};
+
+const computingSubject: CatalogSubject = {
+  id: "computing",
+  label: "Computing",
+  topics: [
+    { id: "digital-safety", label: "Digital safety" },
+    { id: "systems", label: "Computer systems" },
+    { id: "internet", label: "Internet & networks" },
+    { id: "coding", label: "Computational thinking" },
+  ],
+};
+
+const kgNumeracySubject: CatalogSubject = {
+  id: "numeracy",
+  label: "Numeracy",
+  topics: [
+    { id: "number-stories", label: "Counting & simple number stories" },
+    { id: "patterns", label: "Patterns", availability: "expanding" },
+    { id: "measurement", label: "Early measurement", availability: "expanding" },
+  ],
+};
+
+const kgSubjects: CatalogSubject[] = [
+  kgNumeracySubject,
+  expandingSubject("language-literacy", "Language & Literacy"),
+  expandingSubject("creative-arts", "Creative Arts"),
+  expandingSubject("owop", "Our World & Our People"),
 ];
 
-const primaryLevels = ["KG 1", "KG 2", "Basic 1", "Basic 2", "Basic 3", "Basic 4", "Basic 5", "Basic 6"];
-const secondaryLevels = ["JHS 1", "JHS 2", "JHS 3", "SHS 1", "SHS 2", "SHS 3"];
+const lowerPrimaryMathematics: CatalogSubject = {
+  id: "mathematics",
+  label: "Mathematics",
+  topics: [
+    { id: "number", label: "Number & operations" },
+    { id: "geometry", label: "Geometry", availability: "expanding" },
+    { id: "measurement", label: "Measurement", availability: "expanding" },
+    { id: "data", label: "Data", availability: "expanding" },
+  ],
+};
+
+const lowerPrimarySubjects: CatalogSubject[] = [
+  lowerPrimaryMathematics,
+  expandingSubject("english", "English Language"),
+  expandingSubject("science", "Science"),
+  expandingSubject("ghanaian-language", "Ghanaian Language"),
+  expandingSubject("history", "History"),
+  expandingSubject("creative-arts", "Creative Arts"),
+  expandingSubject("rme", "Religious and Moral Education"),
+  expandingSubject("pe", "Physical Education"),
+];
+
+const upperPrimaryMathematics: CatalogSubject = {
+  id: "mathematics",
+  label: "Mathematics",
+  topics: [
+    { id: "number", label: "Number & operations" },
+    { id: "geometry", label: "Geometry" },
+    { id: "measurement", label: "Measurement", availability: "expanding" },
+    { id: "data", label: "Data handling", availability: "expanding" },
+  ],
+};
+
+const upperPrimaryEnglish: CatalogSubject = {
+  id: "english",
+  label: "English Language",
+  topics: [
+    { id: "grammar", label: "Grammar & concord" },
+    { id: "vocabulary", label: "Vocabulary", availability: "expanding" },
+    { id: "reading", label: "Reading comprehension", availability: "expanding" },
+    { id: "writing", label: "Writing", availability: "expanding" },
+  ],
+};
+
+const upperPrimarySubjects: CatalogSubject[] = [
+  upperPrimaryMathematics,
+  upperPrimaryEnglish,
+  expandingSubject("science", "Science"),
+  expandingSubject("ghanaian-language", "Ghanaian Language"),
+  expandingSubject("history", "History"),
+  expandingSubject("creative-arts", "Creative Arts"),
+  expandingSubject("rme", "Religious and Moral Education"),
+  expandingSubject("pe", "Physical Education"),
+  expandingSubject("french", "French"),
+  expandingSubject("computing", "Computing"),
+];
+
+const jhsSubjects: CatalogSubject[] = [
+  mathematicsSubject,
+  englishSubject,
+  scienceSubject,
+  socialSubject,
+  computingSubject,
+  expandingSubject("french", "French Language"),
+  expandingSubject("arabic", "Arabic"),
+  expandingSubject("ghanaian-language", "Ghanaian Language"),
+  expandingSubject("pe-health", "Physical Education & Health"),
+  expandingSubject("rme", "Religious and Moral Education"),
+  expandingSubject("creative-arts-design", "Creative Arts & Design"),
+  expandingSubject("career-technology", "Career Technology"),
+];
+
+const generalScienceSubject: CatalogSubject = {
+  ...scienceSubject,
+  label: "General Science",
+  contentLabel: "Science",
+};
+
+const shsSubjects: CatalogSubject[] = [
+  mathematicsSubject,
+  englishSubject,
+  generalScienceSubject,
+  socialSubject,
+  computingSubject,
+  expandingSubject("additional-mathematics", "Additional Mathematics"),
+  expandingSubject("agricultural-science", "Agricultural Science"),
+  expandingSubject("agriculture", "Agriculture"),
+  expandingSubject("applied-technology", "Applied Technology"),
+  expandingSubject("arabic", "Arabic"),
+  expandingSubject("art-design-foundation", "Art & Design Foundation"),
+  expandingSubject("art-design-studio", "Art & Design Studio"),
+  expandingSubject("aviation-aerospace-engineering", "Aviation & Aerospace Engineering"),
+  expandingSubject("biology", "Biology"),
+  expandingSubject("biomedical-science", "Biomedical Science"),
+  expandingSubject("chemistry", "Chemistry"),
+  expandingSubject("design-communication-technology", "Design Communication Technology"),
+  expandingSubject("economics", "Economics"),
+  expandingSubject("engineering", "Engineering"),
+  expandingSubject("french", "French"),
+  expandingSubject("government", "Government"),
+  expandingSubject("history", "History"),
+  expandingSubject("ict", "Information & Communication Technology"),
+  expandingSubject("literature-english", "Literature in English"),
+  expandingSubject("manufacturing-engineering", "Manufacturing Engineering"),
+  expandingSubject("performing-arts", "Performing Arts"),
+  expandingSubject("pe-health-core", "Physical Education & Health (Core)"),
+  expandingSubject("pe-health-elective", "Physical Education & Health (Elective)"),
+  expandingSubject("physics", "Physics"),
+  expandingSubject("rme", "Religious and Moral Education"),
+  expandingSubject("robotics", "Robotics"),
+  expandingSubject("spanish", "Spanish"),
+  expandingSubject("geography", "Geography"),
+];
+
+const beceSubjects: CatalogSubject[] = [
+  mathematicsSubject,
+  englishSubject,
+  scienceSubject,
+  socialSubject,
+  computingSubject,
+  expandingSubject("arabic", "Arabic"),
+  expandingSubject("career-technology", "Career Technology"),
+  expandingSubject("creative-arts-design", "Creative Art & Design"),
+  expandingSubject("french", "French"),
+  expandingSubject("ghanaian-language", "Ghanaian Language"),
+  expandingSubject("rme", "Religious and Moral Education"),
+];
+
+const wassceCoreSubjects: CatalogSubject[] = [
+  { ...mathematicsSubject, label: "Mathematics (Core)", contentLabel: "Mathematics" },
+  englishSubject,
+  { ...scienceSubject, label: "Integrated Science", contentLabel: "Science" },
+  socialSubject,
+];
+
+const wassceElectives: CatalogSubject[] = [
+  expandingSubject("elective-mathematics", "Mathematics (Elective)"),
+  expandingSubject("biology", "Biology"),
+  expandingSubject("chemistry", "Chemistry"),
+  expandingSubject("physics", "Physics"),
+  expandingSubject("geography", "Geography"),
+  expandingSubject("government", "Government"),
+  expandingSubject("economics", "Economics"),
+  expandingSubject("history", "History"),
+  expandingSubject("literature-english", "Literature in English"),
+  expandingSubject("french", "French"),
+  expandingSubject("arabic", "Arabic"),
+  expandingSubject("general-agriculture", "General Agriculture"),
+  expandingSubject("animal-husbandry", "Animal Husbandry"),
+  expandingSubject("crop-husbandry", "Crop Husbandry & Horticulture"),
+  expandingSubject("fisheries", "Fisheries"),
+  expandingSubject("forestry", "Forestry"),
+  expandingSubject("business-management", "Business Management"),
+  expandingSubject("financial-accounting", "Financial Accounting"),
+  expandingSubject("cost-accounting", "Principles of Cost Accounting"),
+  expandingSubject("ict-elective", "ICT (Elective)"),
+  expandingSubject("technical-drawing", "Technical Drawing"),
+  expandingSubject("applied-electricity", "Applied Electricity"),
+  expandingSubject("auto-mechanics", "Auto Mechanics"),
+  expandingSubject("building-construction", "Building Construction"),
+  expandingSubject("electronics", "Electronics"),
+  expandingSubject("metalwork", "Metalwork"),
+  expandingSubject("woodwork", "Woodwork"),
+  expandingSubject("foods-nutrition", "Foods & Nutrition"),
+  expandingSubject("clothing-textiles", "Clothing & Textiles"),
+  expandingSubject("graphic-design", "Graphic Design"),
+  expandingSubject("music", "Music"),
+  expandingSubject("engineering", "Engineering"),
+  expandingSubject("biomedical-science", "Biomedical Science"),
+  expandingSubject("manufacturing-engineering", "Manufacturing Engineering"),
+  expandingSubject("aviation-aerospace-engineering", "Aviation & Aerospace Engineering"),
+];
+
+const ieltsAcademicSubjects: CatalogSubject[] = [
+  expandingDetailedSubject("reading", "Reading", [
+    { id: "reading-skills", label: "Reading skills" },
+    { id: "matching", label: "Matching" },
+    { id: "true-false", label: "True / False / Not Given" },
+  ]),
+  expandingDetailedSubject("listening", "Listening", [
+    { id: "listening-detail", label: "Listening for detail" },
+    { id: "maps", label: "Maps & diagrams" },
+  ]),
+  expandingDetailedSubject("writing", "Writing", [
+    { id: "task-1", label: "Task 1" },
+    { id: "task-2", label: "Task 2" },
+  ]),
+  expandingDetailedSubject("speaking", "Speaking", [
+    { id: "part-1", label: "Part 1" },
+    { id: "part-2", label: "Part 2" },
+    { id: "part-3", label: "Part 3" },
+  ]),
+];
+
+const ieltsGeneralSubjects: CatalogSubject[] = [
+  expandingDetailedSubject("reading", "Reading", [{ id: "reading-skills", label: "Reading skills" }]),
+  expandingDetailedSubject("listening", "Listening", [{ id: "listening-detail", label: "Listening for detail" }]),
+  expandingDetailedSubject("writing", "Writing", [
+    { id: "task-1", label: "Task 1" },
+    { id: "task-2", label: "Task 2" },
+  ]),
+  expandingDetailedSubject("speaking", "Speaking", [
+    { id: "part-1", label: "Part 1" },
+    { id: "part-2", label: "Part 2" },
+    { id: "part-3", label: "Part 3" },
+  ]),
+];
+
+function schoolLevel(id: string, label: string, subjects: CatalogSubject[]): CatalogLevel {
+  return { id, label, subjects };
+}
 
 export const LEARNING_CATALOGS: LearningCatalog[] = [
   {
     id: "school",
     label: "School",
-    programs: [
-      {
-        id: "ghana",
-        label: "Ghana curriculum",
-        description: "SukuuNova's first curriculum lane, structured from kindergarten through SHS.",
-        levels: [...primaryLevels, ...secondaryLevels].map((label) => ({
-          id: label.toLowerCase().replaceAll(" ", "-"),
-          label,
-          subjects: schoolSubjects,
-        })),
-      },
-    ],
+    programs: [{
+      id: "ghana",
+      label: "Ghana curriculum",
+      description: "Ghana curriculum phases from KG through SHS, with practice-ready and expanding coverage shown separately.",
+      levels: [
+        schoolLevel("kg-1", "KG 1", kgSubjects),
+        schoolLevel("kg-2", "KG 2", kgSubjects),
+        schoolLevel("basic-1", "Basic 1", lowerPrimarySubjects),
+        schoolLevel("basic-2", "Basic 2", lowerPrimarySubjects),
+        schoolLevel("basic-3", "Basic 3", lowerPrimarySubjects),
+        schoolLevel("basic-4", "Basic 4", upperPrimarySubjects),
+        schoolLevel("basic-5", "Basic 5", upperPrimarySubjects),
+        schoolLevel("basic-6", "Basic 6", upperPrimarySubjects),
+        schoolLevel("jhs-1", "JHS 1", jhsSubjects),
+        schoolLevel("jhs-2", "JHS 2", jhsSubjects),
+        schoolLevel("jhs-3", "JHS 3", jhsSubjects),
+        schoolLevel("shs-1", "SHS 1", shsSubjects),
+        schoolLevel("shs-2", "SHS 2", shsSubjects),
+        schoolLevel("shs-3", "SHS 3", shsSubjects),
+      ],
+    }],
   },
   {
     id: "exam",
@@ -140,40 +401,22 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "bece",
         label: "BECE",
-        description: "Subject practice, timed drills and full mock pathways for BECE preparation.",
-        levels: [{ id: "practice", label: "BECE practice", subjects: schoolSubjects }],
+        description: "Current Ghana BECE subject map with practice-ready core coverage and visible expansion lanes.",
+        levels: [{ id: "practice", label: "BECE practice", subjects: beceSubjects }],
       },
       {
         id: "wassce",
         label: "WASSCE",
-        description: "A separate WASSCE lane so exam practice remains distinct from ordinary classwork.",
-        levels: [{ id: "practice", label: "WASSCE practice", subjects: schoolSubjects }],
+        description: "Core-subject practice plus a broad elective catalogue that can grow by programme without mixing it into ordinary classwork.",
+        levels: [{ id: "practice", label: "WASSCE practice", subjects: [...wassceCoreSubjects, ...wassceElectives] }],
       },
       {
         id: "ielts",
         label: "IELTS",
-        description: "Dedicated Academic and General Training pathways with section-specific practice.",
+        description: "Academic and General Training structures are mapped separately; reviewed interactive task coverage is expanding.",
         levels: [
-          {
-            id: "academic",
-            label: "Academic",
-            subjects: [
-              { id: "reading", label: "Reading", topics: [{ id: "reading-skills", label: "Reading skills" }, { id: "matching", label: "Matching" }, { id: "true-false", label: "True / False / Not Given" }] },
-              { id: "listening", label: "Listening", topics: [{ id: "listening-detail", label: "Listening for detail" }, { id: "maps", label: "Maps & diagrams" }] },
-              { id: "writing", label: "Writing", topics: [{ id: "task-1", label: "Task 1" }, { id: "task-2", label: "Task 2" }] },
-              { id: "speaking", label: "Speaking", topics: [{ id: "part-1", label: "Part 1" }, { id: "part-2", label: "Part 2" }, { id: "part-3", label: "Part 3" }] },
-            ],
-          },
-          {
-            id: "general",
-            label: "General Training",
-            subjects: [
-              { id: "reading", label: "Reading", topics: [{ id: "reading-skills", label: "Reading skills" }] },
-              { id: "listening", label: "Listening", topics: [{ id: "listening-detail", label: "Listening for detail" }] },
-              { id: "writing", label: "Writing", topics: [{ id: "task-1", label: "Task 1" }, { id: "task-2", label: "Task 2" }] },
-              { id: "speaking", label: "Speaking", topics: [{ id: "part-1", label: "Part 1" }, { id: "part-2", label: "Part 2" }, { id: "part-3", label: "Part 3" }] },
-            ],
-          },
+          { id: "academic", label: "Academic", subjects: ieltsAcademicSubjects },
+          { id: "general", label: "General Training", subjects: ieltsGeneralSubjects },
         ],
       },
     ],
@@ -186,19 +429,41 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         id: "computer-science",
         label: "Computer Science",
         description: "Course and module practice for computing students.",
-        levels: [{ id: "foundation", label: "Foundation", subjects: [{ id: "programming", label: "Programming", topics: [{ id: "variables", label: "Variables & data types" }, { id: "control-flow", label: "Control flow" }, { id: "data-structures", label: "Data structures" }] }, { id: "networks", label: "Computer Networks", topics: [{ id: "network-basics", label: "Network basics" }, { id: "protocols", label: "Protocols" }] }] }],
+        levels: [{ id: "foundation", label: "Foundation", subjects: [
+          expandingDetailedSubject("programming", "Programming", [
+            { id: "variables", label: "Variables & data types" },
+            { id: "control-flow", label: "Control flow" },
+            { id: "data-structures", label: "Data structures" },
+          ]),
+          expandingDetailedSubject("networks", "Computer Networks", [
+            { id: "network-basics", label: "Network basics" },
+            { id: "protocols", label: "Protocols" },
+          ]),
+        ] }],
       },
       {
         id: "nursing",
         label: "Nursing",
         description: "Concept checks and case-oriented practice for nursing students.",
-        levels: [{ id: "foundation", label: "Foundation", subjects: [{ id: "anatomy", label: "Anatomy & Physiology", topics: [{ id: "cardiovascular", label: "Cardiovascular system" }, { id: "respiratory", label: "Respiratory system" }] }, { id: "fundamentals", label: "Fundamentals of Nursing", topics: [{ id: "patient-care", label: "Patient care" }] }] }],
+        levels: [{ id: "foundation", label: "Foundation", subjects: [
+          expandingDetailedSubject("anatomy", "Anatomy & Physiology", [
+            { id: "cardiovascular", label: "Cardiovascular system" },
+            { id: "respiratory", label: "Respiratory system" },
+          ]),
+          expandingDetailedSubject("fundamentals", "Fundamentals of Nursing", [{ id: "patient-care", label: "Patient care" }]),
+        ] }],
       },
       {
         id: "business",
         label: "Business",
         description: "Accounting, management and quantitative practice.",
-        levels: [{ id: "foundation", label: "Foundation", subjects: [{ id: "accounting", label: "Financial Accounting", topics: [{ id: "double-entry", label: "Double entry" }, { id: "statements", label: "Financial statements" }] }, { id: "management", label: "Management", topics: [{ id: "functions", label: "Management functions" }] }] }],
+        levels: [{ id: "foundation", label: "Foundation", subjects: [
+          expandingDetailedSubject("accounting", "Financial Accounting", [
+            { id: "double-entry", label: "Double entry" },
+            { id: "statements", label: "Financial statements" },
+          ]),
+          expandingDetailedSubject("management", "Management", [{ id: "functions", label: "Management functions" }]),
+        ] }],
       },
     ],
   },
@@ -210,13 +475,28 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         id: "digital",
         label: "Digital Skills",
         description: "Everyday technology, productivity and online-safety skills.",
-        levels: [{ id: "core", label: "Core skills", subjects: [{ id: "productivity", label: "Productivity", topics: [{ id: "documents", label: "Documents" }, { id: "spreadsheets", label: "Spreadsheets" }] }, { id: "safety", label: "Online Safety", topics: [{ id: "passwords", label: "Passwords & accounts" }, { id: "phishing", label: "Phishing awareness" }] }] }],
+        levels: [{ id: "core", label: "Core skills", subjects: [
+          expandingDetailedSubject("productivity", "Productivity", [
+            { id: "documents", label: "Documents" },
+            { id: "spreadsheets", label: "Spreadsheets" },
+          ]),
+          expandingDetailedSubject("safety", "Online Safety", [
+            { id: "passwords", label: "Passwords & accounts" },
+            { id: "phishing", label: "Phishing awareness" },
+          ]),
+        ] }],
       },
       {
         id: "reasoning",
         label: "Aptitude & Reasoning",
         description: "Numerical, verbal and logical reasoning drills.",
-        levels: [{ id: "core", label: "Core skills", subjects: [{ id: "numerical", label: "Numerical Reasoning", topics: [{ id: "ratios", label: "Ratios" }, { id: "patterns", label: "Number patterns" }] }, { id: "verbal", label: "Verbal Reasoning", topics: [{ id: "analogies", label: "Analogies" }] }] }],
+        levels: [{ id: "core", label: "Core skills", subjects: [
+          expandingDetailedSubject("numerical", "Numerical Reasoning", [
+            { id: "ratios", label: "Ratios" },
+            { id: "patterns", label: "Number patterns" },
+          ]),
+          expandingDetailedSubject("verbal", "Verbal Reasoning", [{ id: "analogies", label: "Analogies" }]),
+        ] }],
       },
     ],
   },

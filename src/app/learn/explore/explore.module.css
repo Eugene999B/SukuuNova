@@ -659,3 +659,7 @@
     scroll-behavior: auto !important;
   }
 }
+
+.topicButton:disabled { opacity: .48; cursor: not-allowed; transform: none; }
+.topicButton:disabled:hover { border-color: var(--ex-line); background: color-mix(in srgb, var(--ex-text) 3%, transparent); color: var(--ex-muted); }
+.launch:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }

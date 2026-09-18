@@ -13,8 +13,9 @@ export type StarterTopicCoverage = {
 const ghanaSchool = catalogFor("school").programs.find((program) => program.id === "ghana");
 const representativeLevel = ghanaSchool?.levels.find((level) => level.id === "jhs-3") ?? ghanaSchool?.levels[0];
 
-export const SCHOOL_STARTER_TOPIC_COVERAGE: StarterTopicCoverage[] = (representativeLevel?.subjects ?? []).flatMap((subject) =>
-  subject.topics.map((topic) => {
+export const SCHOOL_STARTER_TOPIC_COVERAGE: StarterTopicCoverage[] = (representativeLevel?.subjects ?? [])
+  .filter((subject) => subject.availability !== "expanding")
+  .flatMap((subject) => subject.topics.filter((topic) => topic.availability !== "expanding").map((topic) => {
     const questionCount = STANDARD_FOUNDRY_PACK.filter(
       (question) => question.subject === subject.label && question.topic === topic.label,
     ).length;
@@ -26,7 +27,7 @@ export const SCHOOL_STARTER_TOPIC_COVERAGE: StarterTopicCoverage[] = (representa
       questionCount,
       covered: questionCount > 0,
     };
-  }),
+  })),
 );
 
 export const SCHOOL_STARTER_COVERAGE_SUMMARY = {

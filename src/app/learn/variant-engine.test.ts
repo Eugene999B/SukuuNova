@@ -20,7 +20,7 @@ const algebraConfig = {
 
 describe("SukuuNova parameterized variant engine", () => {
   it("publishes only large deterministic template spaces", () => {
-    expect(VARIANT_TEMPLATES.length).toBeGreaterThanOrEqual(9);
+    expect(VARIANT_TEMPLATES.length).toBeGreaterThanOrEqual(13);
     expect(VARIANT_TEMPLATES.every((template) => template.capacity >= 1_000_000)).toBe(true);
   });
 
@@ -52,7 +52,7 @@ describe("SukuuNova parameterized variant engine", () => {
       const config = {
         lane: "school" as const,
         programId: "ghana",
-        levelId: template.schoolLevels.includes("jhs-3") ? "jhs-3" : "basic-6",
+        levelId: template.schoolLevels[0] ?? "jhs-3",
         subjectId: template.subjectId,
         topicId: template.topicId,
         mode: "topic" as const,
