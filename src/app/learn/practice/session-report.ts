@@ -22,7 +22,7 @@ function escapeHtml(value: string) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .replaceAll("'", "&#39;");
 }
 
 function answerLabel(question: LearnQuestion, value: PracticeResponse | undefined) {
@@ -98,20 +98,20 @@ export function buildPracticeReportHtml(input: PracticeReportInput) {
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>SukuuNova Practice Report</title>
 <style>
-  *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:#111827;background:#fff}
+  *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;color:CanvasText;background:Canvas}
   main{max-width:900px;margin:0 auto;padding:38px 28px 56px}
-  header{display:flex;justify-content:space-between;gap:22px;align-items:flex-start;padding-bottom:22px;border-bottom:2px solid #111827}
+  header{display:flex;justify-content:space-between;gap:22px;align-items:flex-start;padding-bottom:22px;border-bottom:2px solid CanvasText}
   h1{margin:4px 0 8px;font-size:30px}.eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
-  .score{text-align:right}.score strong{display:block;font-size:34px}.score span{font-size:12px;color:#4b5563}
-  .summary{margin:20px 0 28px;padding:14px 16px;border:1px solid #d1d5db;border-radius:12px;background:#f9fafb;font-size:13px;line-height:1.6}
-  .question{page-break-inside:avoid;margin:0 0 18px;padding:18px;border:1px solid #d1d5db;border-radius:12px}
-  .meta{display:flex;gap:7px;flex-wrap:wrap}.meta span{padding:4px 7px;border-radius:999px;background:#f3f4f6;font-size:10px}
+  .score{text-align:right}.score strong{display:block;font-size:34px}.score span{font-size:12px;color:GrayText}
+  .summary{margin:20px 0 28px;padding:14px 16px;border:1px solid ButtonFace;border-radius:12px;background:Canvas;font-size:13px;line-height:1.6}
+  .question{page-break-inside:avoid;margin:0 0 18px;padding:18px;border:1px solid ButtonFace;border-radius:12px}
+  .meta{display:flex;gap:7px;flex-wrap:wrap}.meta span{padding:4px 7px;border-radius:999px;background:ButtonFace;font-size:10px}
   .question h2{margin:14px 0;font-size:17px;line-height:1.45}
-  .answer-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.answer-grid>div,.explanation{padding:11px;border-radius:9px;background:#f9fafb}
-  small{display:block;margin-bottom:4px;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.07em}
+  .answer-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.answer-grid>div,.explanation{padding:11px;border-radius:9px;background:Canvas}
+  small{display:block;margin-bottom:4px;color:GrayText;font-size:10px;text-transform:uppercase;letter-spacing:.07em}
   .correct,.wrong{display:inline-block;margin:12px 0 0;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:800}
-  .correct{background:#dcfce7;color:#166534}.wrong{background:#fee2e2;color:#991b1b}.explanation{margin-top:10px}.explanation p{margin:0;line-height:1.55;font-size:12px}
-  footer{margin-top:24px;color:#6b7280;font-size:10px;line-height:1.5}
+  .correct,.wrong{border:1px solid ButtonFace;background:Canvas;color:CanvasText}.explanation{margin-top:10px}.explanation p{margin:0;line-height:1.55;font-size:12px}
+  footer{margin-top:24px;color:GrayText;font-size:10px;line-height:1.5}
   @media print{main{max-width:none;padding:16mm 12mm}.question{break-inside:avoid}}
   @media(max-width:620px){header{display:block}.score{text-align:left;margin-top:14px}.answer-grid{grid-template-columns:1fr}}
 </style>
