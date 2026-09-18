@@ -1241,7 +1241,7 @@ function renderCardiovascular(variant: number): LearnQuestion {
       topic: "Cardiovascular system",
       skill: "Use heart-rate units in a physiology calculation",
       difficulty: 2,
-      prompt: `In ${NURSING_CONTEXTS[contextIndex]}, a hypothetical pulse rate used for practice is ${rate} beats per minute. If that rate stayed constant for ${minutes} minutes, how many beats would that represent?`,
+      prompt: `In ${NURSING_CONTEXTS[contextIndex]}, ${EARLY_NAMES[nameIndex]} works through a hypothetical pulse-rate calculation of ${rate} beats per minute for ${minutes} minutes. How many beats does the arithmetic represent?`,
       explanation: `Total beats = ${rate} beats/min × ${minutes} min = ${beats} beats.`,
       hint: "Multiply the rate per minute by the number of minutes. This is a unit calculation, not a clinical interpretation.",
     },
@@ -1267,7 +1267,7 @@ function renderRespiratory(variant: number): LearnQuestion {
       topic: "Respiratory system",
       skill: "Use respiratory-rate units in a physiology calculation",
       difficulty: 2,
-      prompt: `For a calculation exercise in ${NURSING_CONTEXTS[contextIndex]}, use a hypothetical respiratory rate of ${rate} breaths per minute for ${minutes} minutes. How many breaths does the arithmetic represent?`,
+      prompt: `For a calculation exercise in ${NURSING_CONTEXTS[contextIndex]}, ${EARLY_NAMES[nameIndex]} uses a hypothetical respiratory rate of ${rate} breaths per minute for ${minutes} minutes. How many breaths does the arithmetic represent?`,
       explanation: `Total breaths = ${rate} breaths/min × ${minutes} min = ${breaths} breaths.`,
       hint: "Multiply rate by time. Do not use this arithmetic alone to make a clinical judgment.",
     },
@@ -1291,11 +1291,11 @@ const PATIENT_CARE_SCENARIOS = [
   ["when a record entry is found to be incorrect", "Use the approved correction process rather than hiding the error", ["Delete evidence secretly if policy forbids it", "Change another person’s record to match", "Ignore the error even when it affects the record"]],
   ["before beginning a delegated learning task", "Confirm the task, supervision and local procedure are understood", ["Begin without knowing the task", "Ignore the supervisor’s instructions", "Use a procedure from an unrelated setting without checking"]],
 ] as const;
-const patientCareDimensions = [PATIENT_CARE_SCENARIOS.length, EARLY_NAMES.length, NURSING_CONTEXTS.length, grammarTimes.length, 8] as const;
+const patientCareDimensions = [PATIENT_CARE_SCENARIOS.length, EARLY_NAMES.length, NURSING_CONTEXTS.length, EARLY_PLACES.length, grammarTimes.length, 8] as const;
 const patientCareCapacity = product(patientCareDimensions);
 
 function renderPatientCare(variant: number): LearnQuestion {
-  const [scenarioIndex, nameIndex, contextIndex, timeIndex] = decodeVariant(variant, patientCareDimensions);
+  const [scenarioIndex, nameIndex, contextIndex, placeIndex, timeIndex] = decodeVariant(variant, patientCareDimensions);
   const [situation, safeAction, distractors] = PATIENT_CARE_SCENARIOS[scenarioIndex];
   return textChoiceQuestion(
     {
@@ -1305,7 +1305,7 @@ function renderPatientCare(variant: number): LearnQuestion {
       topic: "Patient care",
       skill: "Apply basic safety, identity, hygiene and documentation principles",
       difficulty: 2,
-      prompt: `In ${NURSING_CONTEXTS[contextIndex]} ${grammarTimes[timeIndex]}, ${EARLY_NAMES[nameIndex]} is asked what to do ${situation}. Which is the safest general training response?`,
+      prompt: `In ${NURSING_CONTEXTS[contextIndex]} at ${EARLY_PLACES[placeIndex]} ${grammarTimes[timeIndex]}, ${EARLY_NAMES[nameIndex]} is asked what to do ${situation}. Which is the safest general training response?`,
       explanation: `${safeAction}. Exact clinical procedures still follow local policy, supervision and the patient’s situation.`,
       hint: "Choose the option that protects identity, hygiene, confidentiality, documentation and supervised practice.",
     },
