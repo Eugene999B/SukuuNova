@@ -113,7 +113,7 @@ async function main() {
     await page.waitForFunction(()=>document.querySelector("main[data-session-active=\"true\"]"));
     assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Active learning must use the focused session surface");
     assert.equal(await page.locator("main").evaluate(el=>getComputedStyle(el).position),"fixed","Focused session must own the mobile viewport");
-    assert.equal(await page.locator("div").filter({has:page.getByRole("button",{name:"Exit session",exact:true})}).first().evaluate(el=>getComputedStyle(el).position),"sticky","Mobile session controls must stay reachable");
+    assert.equal(await page.getByTestId("session-tools").evaluate(el=>getComputedStyle(el).position),"sticky","Mobile session controls must stay reachable");
     const prompts=new Set<string>();
     let sawIntelligentMission=false;
     let verifiedOneColumnChoices=false;
