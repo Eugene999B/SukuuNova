@@ -82,6 +82,41 @@ async function main() {
     assert.equal((await context.request.get("/api/school/finance-v2/export?from=2026-02-30")).status(),400);
     await page.goto("/school/finance");
     await page.getByText("GH₵375.00", { exact: true }).waitFor();
+    // Public learning journey: mobile navigation, selection, audio and real answers.
+    await page.setViewportSize({width:390,height:844});
+    await page.goto("/learn");
+    await page.getByRole("link",{name:"Start practice",exact:true}).waitFor();
+    assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning home overflows on mobile");
+    await page.getByLabel("Learning audio settings").click();
+    await page.getByLabel("Interaction sounds",{exact:true}).check();
+    await page.getByLabel("Gentle focus music",{exact:true}).check();
+    await page.getByLabel("Gentle focus music",{exact:true}).uncheck();
+    await page.getByLabel("Learning audio settings").click();
+    await page.goto("/learn/explore?lane=exam");
+    await page.getByRole("button",{name:/Exam Centre/}).waitFor();
+    await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("Exam Centre"));
+    await page.getByRole("button",{name:"✦ Mixed topics",exact:true}).click();
+    await page.getByLabel("Or choose 1–100").fill("3");
+    await page.getByRole("button",{name:"Start practice",exact:true}).click();
+    const prompts=new Set<string>();
+    for(let question=0;question<3;question++){
+      const player=page.getByTestId("learning-question");
+      await player.waitFor();
+      prompts.add(await player.locator("h3").innerText());
+      assert.equal(await player.getByRole("button",{name:"Check answer",exact:true}).isDisabled(),true,"Blank answers must not be marked");
+      const choices=player.getByTestId("learning-option");
+      if(await choices.count())await choices.first().click();
+      else await player.getByLabel("Your answer").fill("0");
+      await player.getByRole("button",{name:"Check answer",exact:true}).click();
+      await player.getByRole("status").waitFor();
+      await player.getByRole("button",{name:question===2?"View results":"Next question",exact:true}).click();
+    }
+    await page.getByText("SESSION COMPLETE",{exact:true}).waitFor();
+    assert.equal(prompts.size,3,"Mixed session must not repeat a question");
+    assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on mobile");
+    await page.goto("/learn/explore?lane=university");
+    await page.getByRole("button",{name:/University Courses/}).waitFor();
+    await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("University"));
     assert.deepEqual(pageErrors, [], "Browser emitted JavaScript errors");
     console.log("Browser smoke passed: login, mobile dashboard, labeled device tabs, Unicode learner import, confirmed enrollment, payroll plan denial desktop learner directory, legacy invoice collection, retry protection, overpayment denial and complete finance totals.");
   } finally { await browser.close(); await rawDb.$disconnect(); }

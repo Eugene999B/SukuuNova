@@ -7,10 +7,10 @@ import { useEffect, useState } from "react";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 
 const links = [
-  ["What it does", "/features"],
   ["Learn", "/learn"],
-  ["How it works", "#how-it-works"],
+  ["Practice", "/learn/explore"],
   ["For schools", "/for-schools"],
+  ["School features", "/features"],
   ["About", "/about"],
   ["Contact", "/contact"],
 ] as const;

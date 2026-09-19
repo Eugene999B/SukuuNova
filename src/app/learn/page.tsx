@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { LearnExperience } from "./LearnExperience";
-import { LearnLaunchBar } from "./LearnLaunchBar";
 
 export const metadata: Metadata = {
   title: "SukuuNova Learn | Learn. Practice. Master.",
@@ -12,7 +11,6 @@ export default function LearnPage() {
   return (
     <>
       <LearnExperience />
-      <LearnLaunchBar />
     </>
   );
 }

@@ -5,9 +5,9 @@ import styles from "./launch-bar.module.css";
 export function LearnLaunchBar() {
   return (
     <aside className={styles.launchDock} aria-label="SukuuNova Learn shortcuts">
-      <Link href="/learn/practice" className={styles.primaryAction}>
+      <Link href="/learn/explore" className={styles.primaryAction}>
         <span className={styles.icon}><Compass size={18} /></span>
-        <span className={styles.copy}><small>HARDENED PRACTICE</small><strong>Start an intelligent session</strong></span>
+        <span className={styles.copy}><small>YOUR NEXT SESSION</small><strong>Choose what to practise</strong></span>
         <ArrowRight size={18} />
       </Link>
       <Link href="/learn/today" className={styles.secondaryAction}>
