@@ -118,6 +118,52 @@ function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: numb
   return questions;
 }
 
+function diversifyPool(questions: LearnQuestion[], seed: number) {
+  const pending = [...questions];
+  const output: LearnQuestion[] = [];
+  const windowSize = 10;
+
+  while (pending.length) {
+    const candidates = pending.slice(0, Math.min(windowSize, pending.length));
+    const previous = output[output.length - 1];
+    const beforePrevious = output[output.length - 2];
+
+    let bestIndex = 0;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    candidates.forEach((candidate, index) => {
+      let score = index * 5;
+      if (previous) {
+        if (
+          candidate.generationFamily &&
+          previous.generationFamily &&
+          candidate.generationFamily === previous.generationFamily
+        ) score += 60;
+        if (candidate.kind === previous.kind) score += 22;
+        if (candidate.challenge && candidate.challenge === previous.challenge) score += 10;
+        if (candidate.topic === previous.topic) score += 4;
+      }
+      if (
+        beforePrevious &&
+        candidate.generationFamily &&
+        candidate.generationFamily === previous?.generationFamily &&
+        candidate.generationFamily === beforePrevious.generationFamily
+      ) score += 100;
+
+      score += (stableRank(seed + output.length, candidate.exposureKey) % 997) / 997;
+      if (score < bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+
+    output.push(pending.splice(bestIndex, 1)[0]);
+  }
+
+  return output;
+}
+
+
 /**
  * Builds a learner session while enforcing two product-level guarantees that are
  * intentionally stricter than the starter question generator:
@@ -181,8 +227,11 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed));
   }
 
-  const orderedFresh = orderPool(fresh, config, seed, selection);
-  const orderedRecycled = orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection);
+  const orderedFresh = diversifyPool(orderPool(fresh, config, seed, selection), seed);
+  const orderedRecycled = diversifyPool(
+    orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection),
+    derivedSeed(seed, BROADENING_ATTEMPTS),
+  );
   return [...orderedFresh, ...orderedRecycled].slice(0, requested);
 }
 
