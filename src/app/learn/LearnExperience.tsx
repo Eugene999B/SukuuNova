@@ -5,8 +5,8 @@ import styles from "./hub.module.css";
 const paths = [
   { title:"School", detail:"Foundation practice · later years mapped", copy:"Pick your class and SukuuNova will clearly separate practice-ready topics from coverage still being built.", lane:"school", icon:BookOpen, tone:"violet" },
   { title:"Exam preparation", detail:"BECE · WASSCE · IELTS mapped", copy:"Practise only where reviewed coverage exists. Full mocks stay unavailable until exam-specific structure and marking are validated.", lane:"exam", icon:Medal, tone:"blue" },
-  { title:"University", detail:"Discipline · Course · Topic maps", copy:"Explore mapped university routes. Reviewed course-level question packs are still expanding and are not presented as complete.", lane:"university", icon:GraduationCap, tone:"orange" },
-  { title:"Skills & careers", detail:"Digital skills · Business · Aptitude", copy:"Make room for a new skill with a short, focused practice session.", lane:"skills", icon:Compass, tone:"green" },
+  { title:"University", detail:"Level 100 · Computer Science · Nursing · Business", copy:"Start real Level 100 practice in programming, networks, anatomy, patient care, accounting and management.", lane:"university", icon:GraduationCap, tone:"orange" },
+  { title:"Skills & careers", detail:"Digital productivity · Online safety · Aptitude", copy:"Practise documents, spreadsheets, account safety, numerical reasoning and verbal analogies.", lane:"skills", icon:Compass, tone:"green" },
 ];
 export function LearnExperience(){
  return <main className={styles.hub}>
@@ -29,6 +29,6 @@ export function LearnExperience(){
    <div className={styles.cards}>{paths.map(({title,detail,copy,lane,icon:Icon,tone})=><Link key={lane} href={"/learn/explore?lane="+lane} className={styles.card} data-tone={tone}><span className={styles.cardIcon}><Icon size={25}/></span><small>{detail}</small><h3>{title}</h3><p>{copy}</p><span className={styles.cardLink}>Explore subjects <ArrowRight size={17}/></span></Link>)}</div>
   </section>
   <section className={styles.continue}><div><CalendarDays size={24}/><h3>Build a small daily habit</h3><p>A short challenge helps you return, even on a busy day.</p><Link href="/learn/today">Today’s challenge <ArrowRight size={16}/></Link></div><div><BarChart3 size={24}/><h3>See what is getting stronger</h3><p>Your answers build a topic-by-topic picture of your progress on this browser.</p><Link href="/learn/progress">See my progress <ArrowRight size={16}/></Link></div></section>
-  <footer className={styles.footer}><p>Practice availability varies by subject and topic. Paths without published questions are marked “Coming soon”. Exam practice is independent preparation, not an official exam or score prediction.</p><Link href="/for-schools">Looking for school management? <ArrowRight size={15}/></Link></footer>
+  <footer className={styles.footer}><p>Practice availability varies by subject and topic. Paths without published questions are labelled clearly instead of blocking the whole learning area. Exam practice is independent preparation, not an official exam or score prediction.</p><Link href="/for-schools">Looking for school management? <ArrowRight size={15}/></Link></footer>
  </main>;
 }
