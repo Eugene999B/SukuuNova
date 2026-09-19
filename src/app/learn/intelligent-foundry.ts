@@ -92,7 +92,13 @@ function seedValue(seed: number) {
 function variantIndex(template: SmartTemplate, seed: number, position: number) {
   const blocks = Math.max(1, Math.floor(template.capacity / BLOCK_SIZE));
   const block = (seedValue(seed) + hash(template.id)) % blocks;
-  return (block * BLOCK_SIZE + position) % template.capacity;
+  // A large odd stride deliberately moves across several mixed-radix
+  // dimensions at once. Consecutive questions therefore vary wording,
+  // context, task direction and response format instead of changing only
+  // one number inside the same sentence frame.
+  const stride = 104_729 + (hash(`${template.id}:${seedValue(seed)}`) % 9_973);
+  const salt = hash(`${seedValue(seed)}:${template.id}:foundry`) % 999_983;
+  return (block * BLOCK_SIZE + salt + position * stride) % template.capacity;
 }
 
 function clampDifficulty(value: number): 1 | 2 | 3 | 4 | 5 {
@@ -724,7 +730,7 @@ function renderContractReasoning(variant: number, config: SessionConfig) {
   });
 }
 
-const managementDimensions = [PEOPLE.length, MODERN_CONTEXTS.length, 5, 8, 4] as const;
+const managementDimensions = [PEOPLE.length, MODERN_CONTEXTS.length, 5, 8, 64] as const;
 const managementCapacity = product(managementDimensions);
 const MANAGEMENT_CONCEPTS = [
   ["planning", "sets measurable goals and decides the actions, deadlines and resources needed to reach them", "Planning sets objectives and specifies how they will be achieved."],
@@ -752,6 +758,166 @@ function renderManagementScenario(variant: number, config: SessionConfig) {
     explanation,
     hint: "Identify the purpose of the manager's action.",
     difficulty: levelDifficulty(config.levelId) + (style >= 5 ? 1 : 0) + (rotation % 2),
+  });
+}
+
+
+const compoundDimensions = [9_900, 240, 60, MODERN_CONTEXTS.length, 6, 3] as const;
+const compoundCapacity = product(compoundDimensions);
+
+function renderCompoundGrowth(variant: number, config: SessionConfig) {
+  const [principalIndex, rateIndex, yearsIndex, contextIndex, style, format] = decode(variant, compoundDimensions);
+  const principal = (principalIndex + 100) * 10;
+  const rate = Number((((rateIndex % 240) + 1) / 20).toFixed(2));
+  const years = (yearsIndex % 20) + 1;
+  const factor = 1 + rate / 100;
+  const future = Number((principal * factor ** years).toFixed(2));
+  const growth = Number((future - principal).toFixed(2));
+  const context = MODERN_CONTEXTS[contextIndex];
+  const askGrowth = style % 3 === 2;
+  return numericQuestion({
+    id: "compound-growth",
+    config,
+    variant,
+    skill: askGrowth ? "Separate compound growth from final value" : "Model compound growth",
+    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    mission: "Project the value through time",
+    prompt: askGrowth
+      ? `${context} models GH₵${principal.toLocaleString()} growing at ${rate}% per year for ${years} years with annual compounding. How much growth occurs above the starting value?`
+      : `${context} models GH₵${principal.toLocaleString()} growing at ${rate}% per year for ${years} years with annual compounding. What is the projected value after ${years} years?`,
+    answer: askGrowth ? growth : future,
+    explanation: `Compound value = ${principal}(1 + ${rate}/100)^${years} = GH₵${future}. ${askGrowth ? `Growth = ${future} - ${principal} = GH₵${growth}.` : ""}`,
+    hint: "Use A = P(1 + r)^n with r written as a decimal.",
+    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    formatIndex: format,
+    optionStep: Math.max(1, Math.round(principal * rate / 100)),
+  });
+}
+
+const probabilityDimensions = [999, 999, 40, MODERN_CONTEXTS.length, 6, 3] as const;
+const probabilityCapacity = product(probabilityDimensions);
+
+function renderProbability(variant: number, config: SessionConfig) {
+  const [successIndex, failureIndex, scaleIndex, contextIndex, style, format] = decode(variant, probabilityDimensions);
+  const success = (successIndex % 90) + 1;
+  const failure = (failureIndex % 90) + 1;
+  const scale = (scaleIndex % 10) + 1;
+  const successCount = success * scale;
+  const failureCount = failure * scale;
+  const total = successCount + failureCount;
+  const probability = Number((successCount / total).toFixed(3));
+  const percent = Number((probability * 100).toFixed(1));
+  const context = MODERN_CONTEXTS[contextIndex];
+  const askPercent = style % 2 === 1;
+  return numericQuestion({
+    id: "probability-model",
+    config,
+    variant,
+    skill: askPercent ? "Translate probability into percentage risk" : "Model empirical probability",
+    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    mission: "Quantify uncertainty",
+    prompt: askPercent
+      ? `In a simulation for ${context}, ${successCount} of ${total} trials meet the target condition. What percentage of trials meet the condition?`
+      : `In a simulation for ${context}, ${successCount} of ${total} trials meet the target condition. Estimate the empirical probability as a decimal.`,
+    answer: askPercent ? percent : probability,
+    explanation: askPercent
+      ? `Percentage = (${successCount}/${total})×100 = ${percent}%.`
+      : `Empirical probability = ${successCount}/${total} = ${probability}.`,
+    hint: askPercent ? "Divide successful trials by total trials, then multiply by 100." : "Divide successful trials by total trials.",
+    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    formatIndex: format,
+    optionStep: askPercent ? 1 : 0.01,
+  });
+}
+
+const geneticsDimensions = [16, 16, PEOPLE.length, MODERN_CONTEXTS.length, 6, 4] as const;
+const geneticsCapacity = product(geneticsDimensions) * 1_000;
+
+function renderGenetics(variant: number, config: SessionConfig) {
+  const [parentAIndex, parentBIndex, personIndex, contextIndex, style, rotation] = decode(variant, geneticsDimensions);
+  const dominantChance = [0, 25, 50, 75, 100][(parentAIndex + parentBIndex + rotation) % 5];
+  const person = PEOPLE[personIndex];
+  const context = MODERN_CONTEXTS[contextIndex];
+  const answer = `${dominantChance}%`;
+  return singleQuestion({
+    id: "genetics-probability",
+    config,
+    variant,
+    skill: "Interpret a simplified Mendelian probability model",
+    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    mission: "Reason from genotype to probability",
+    prompt: `A teaching simulation in ${context} gives ${person} a Punnett-square result in which ${dominantChance} of every 100 equally likely offspring outcomes show the stated phenotype. What probability should be reported for that phenotype?`,
+    answer,
+    distractors: ["0%", "25%", "50%", "75%", "100%"].filter((item) => item !== answer).slice(0, 3),
+    explanation: `The simulation already represents ${dominantChance} favourable outcomes out of 100, so the phenotype probability is ${dominantChance}%.`,
+    hint: "Convert favourable outcomes out of 100 directly to a percentage.",
+    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    topic: topicLabel(config, "Genetics and inheritance"),
+  });
+}
+
+const scaleDimensions = [500, 500, 200, MODERN_CONTEXTS.length, 6, 3] as const;
+const scaleCapacity = product(scaleDimensions);
+
+function renderDesignScale(variant: number, config: SessionConfig) {
+  const [lengthIndex, widthIndex, scaleIndex, contextIndex, style, format] = decode(variant, scaleDimensions);
+  const scale = (scaleIndex % 100) + 1;
+  const drawingLength = Number(((lengthIndex + 10) / 10).toFixed(1));
+  const drawingWidth = Number(((widthIndex + 10) / 10).toFixed(1));
+  const actualLength = Number((drawingLength * scale).toFixed(1));
+  const actualWidth = Number((drawingWidth * scale).toFixed(1));
+  const askArea = style % 2 === 1;
+  const answer = askArea ? Number((actualLength * actualWidth).toFixed(2)) : actualLength;
+  const context = MODERN_CONTEXTS[contextIndex];
+  return numericQuestion({
+    id: "design-scale",
+    config,
+    variant,
+    skill: askArea ? "Transfer drawing scale into real area" : "Interpret technical drawing scale",
+    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    mission: "Turn the drawing into reality",
+    prompt: askArea
+      ? `A plan for ${context} uses scale 1:${scale}. A rectangle measures ${drawingLength} cm by ${drawingWidth} cm on the drawing. What real area does this represent in cm²?`
+      : `A plan for ${context} uses scale 1:${scale}. A line measures ${drawingLength} cm on the drawing. What real length does it represent in cm?`,
+    answer,
+    explanation: askArea
+      ? `Real dimensions are ${drawingLength}×${scale} = ${actualLength} cm and ${drawingWidth}×${scale} = ${actualWidth} cm. Area = ${actualLength}×${actualWidth} = ${answer} cm².`
+      : `At 1:${scale}, real length = drawing length × scale = ${drawingLength}×${scale} = ${actualLength} cm.`,
+    hint: "Multiply each drawing dimension by the scale factor before finding any area.",
+    difficulty: levelDifficulty(config.levelId) + (askArea ? 1 : 0),
+    formatIndex: format,
+  });
+}
+
+const researchDimensions = [PEOPLE.length, MODERN_CONTEXTS.length, 6, 6, 64] as const;
+const researchCapacity = product(researchDimensions) * 100;
+const RESEARCH_CONCEPTS = [
+  ["random assignment", "participants are allocated to conditions by chance", "Random assignment reduces systematic pre-existing differences between experimental groups."],
+  ["random sampling", "members of a population have a chance-based route into the sample", "Random sampling is a method for selecting participants from a population."],
+  ["control group", "one group does not receive the intervention being tested", "A control group provides a comparison for estimating an intervention effect."],
+  ["independent variable", "the researcher deliberately changes one factor", "The independent variable is the factor manipulated by the researcher."],
+  ["dependent variable", "the researcher measures the outcome that may respond to a manipulation", "The dependent variable is the measured outcome."],
+  ["confounding variable", "a third factor changes alongside the supposed cause and could explain the result", "A confound varies with the explanatory factor and offers an alternative explanation."],
+] as const;
+
+function renderResearchDesign(variant: number, config: SessionConfig) {
+  const [personIndex, contextIndex, conceptIndex, style, rotation] = decode(variant, researchDimensions);
+  const [answer, description, explanation] = RESEARCH_CONCEPTS[conceptIndex];
+  const person = PEOPLE[personIndex];
+  const context = MODERN_CONTEXTS[contextIndex];
+  return singleQuestion({
+    id: "research-design",
+    config,
+    variant,
+    skill: "Identify research-design concepts from evidence",
+    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Evaluate",
+    mission: "Audit the study design",
+    prompt: `${person} is reviewing a study at ${context}. In the design, ${description}. Which research-method concept is most directly illustrated?`,
+    answer,
+    distractors: RESEARCH_CONCEPTS.filter((_, index) => index !== conceptIndex).slice(rotation % 3, (rotation % 3) + 3).map((item) => item[0]),
+    explanation,
+    hint: "Focus on what the design is doing, not the technology mentioned in the setting.",
+    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
   });
 }
 
