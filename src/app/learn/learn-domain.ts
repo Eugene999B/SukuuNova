@@ -3,6 +3,7 @@ import { SHS_PROGRAMS, UNIVERSITY_PROGRAMS } from "./broad-catalog";
 export type LearnLane = "school" | "exam" | "university" | "skills";
 export type PracticeMode = "topic" | "adaptive" | "random" | "timed" | "weakness";
 export type QuestionKind = "single" | "multi" | "fill" | "numeric" | "boolean" | "short";
+export type CognitiveChallenge = "Recall" | "Apply" | "Analyse" | "Evaluate" | "Transfer";
 
 export type CatalogAvailability = "ready" | "expanding";
 
@@ -53,6 +54,9 @@ export type LearnQuestion = {
   acceptedAnswers?: string[];
   explanation: string;
   hint?: string;
+  challenge?: CognitiveChallenge;
+  mission?: string;
+  generationFamily?: string;
 };
 
 export type SessionConfig = {
@@ -65,6 +69,8 @@ export type SessionConfig = {
   count: number;
   seen?: string[];
   seed?: number;
+  mastery?: Record<string, { answered: number; correct: number }>;
+  streak?: number;
 };
 
 const expandingTopic: CatalogTopic = {

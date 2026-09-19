@@ -10,6 +10,7 @@ export type LearnerProgress = {
   answered: number;
   correct: number;
   streak: number;
+  xp: number;
   exposures: string[];
   mastery: Record<string, TopicMasteryRecord>;
 };
@@ -31,6 +32,7 @@ export const EMPTY_LEARNER_PROGRESS: LearnerProgress = {
   answered: 0,
   correct: 0,
   streak: 0,
+  xp: 0,
   exposures: [],
   mastery: {},
 };
@@ -71,6 +73,7 @@ export function normalizeLearnerProgress(value: unknown): LearnerProgress {
     answered,
     correct,
     streak: finiteCount(candidate.streak),
+    xp: finiteCount(candidate.xp),
     exposures,
     mastery,
   };

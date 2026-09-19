@@ -8,6 +8,7 @@ import { verifiedStandardQuestionsForAudience } from "./verified-content";
 import { buildVariantQuestions } from "./variant-engine";
 import { specializedQuestionsForSelection } from "./specialized-content";
 import { broadPracticeQuestionsForSelection } from "./broad-practice";
+import { buildIntelligentQuestions } from "./intelligent-foundry";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -73,8 +74,30 @@ function starterMatches(
   return subjectMatches && topicMatches;
 }
 
-function adaptiveRank(left: LearnQuestion, right: LearnQuestion, seed: number) {
-  return left.difficulty - right.difficulty || stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey);
+function adaptiveTargetDifficulty(config: SessionConfig, selection: SelectionLabels) {
+  const mastery = config.mastery ?? {};
+  let answered = 0;
+  let correct = 0;
+  for (const [key, stats] of Object.entries(mastery)) {
+    const normalizedKey = normalizedLabel(key);
+    const subjectMatches = selection.subject ? normalizedKey.includes(normalizedLabel(selection.subject)) : true;
+    const topicMatches = config.topicId === "all" || !selection.topic || normalizedKey.includes(normalizedLabel(selection.topic));
+    if (!subjectMatches || !topicMatches) continue;
+    answered += stats.answered;
+    correct += stats.correct;
+  }
+
+  if (answered < 3) return 2;
+  const accuracy = correct / Math.max(1, answered);
+  let target = accuracy < 0.5 ? 2 : accuracy < 0.75 ? 3 : accuracy < 0.9 ? 4 : 5;
+  if ((config.streak ?? 0) >= 5) target = Math.min(5, target + 1);
+  return target;
+}
+
+function adaptiveRank(left: LearnQuestion, right: LearnQuestion, seed: number, targetDifficulty = 2) {
+  const leftDistance = Math.abs(left.difficulty - targetDifficulty);
+  const rightDistance = Math.abs(right.difficulty - targetDifficulty);
+  return leftDistance - rightDistance || stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey);
 }
 
 function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: number, selection: SelectionLabels) {
@@ -82,16 +105,72 @@ function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: numb
     return [...questions].sort((left, right) => {
       const leftTarget = starterMatches(left, config, false, selection) ? 0 : 1;
       const rightTarget = starterMatches(right, config, false, selection) ? 0 : 1;
-      return leftTarget - rightTarget || adaptiveRank(left, right, seed);
+      return leftTarget - rightTarget || adaptiveRank(left, right, seed, adaptiveTargetDifficulty(config, selection));
     });
   }
   if (config.mode === "adaptive") {
-    return [...questions].sort((left, right) => adaptiveRank(left, right, seed));
+    const target = adaptiveTargetDifficulty(config, selection);
+    return [...questions].sort((left, right) => adaptiveRank(left, right, seed, target));
   }
   if (config.mode === "random" || config.mode === "timed") {
     return [...questions].sort((left, right) => stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey));
   }
   return questions;
+}
+
+function diversifyPool(questions: LearnQuestion[], seed: number) {
+  const pending = [...questions];
+  const output: LearnQuestion[] = [];
+
+  while (pending.length) {
+    const previous = output[output.length - 1];
+    const beforePrevious = output[output.length - 2];
+    let bestIndex = 0;
+    let bestScore = Number.POSITIVE_INFINITY;
+
+    pending.forEach((candidate, index) => {
+      // Preserve the original order softly, but search the whole pool so a
+      // massive generated family cannot crowd out other topics or formats.
+      let score = index * 0.03;
+
+      if (previous) {
+        score += Math.abs(candidate.difficulty - previous.difficulty) * 10;
+
+        if (
+          candidate.generationFamily &&
+          previous.generationFamily &&
+          candidate.generationFamily === previous.generationFamily
+        ) score += 85;
+
+        if (candidate.topic === previous.topic) score += 35;
+        if (candidate.kind === previous.kind) score += 12;
+        if (candidate.challenge && candidate.challenge === previous.challenge) score += 8;
+      }
+
+      if (
+        beforePrevious &&
+        candidate.generationFamily &&
+        candidate.generationFamily === previous?.generationFamily &&
+        candidate.generationFamily === beforePrevious.generationFamily
+      ) score += 180;
+
+      if (
+        beforePrevious &&
+        candidate.topic === previous?.topic &&
+        candidate.topic === beforePrevious.topic
+      ) score += 70;
+
+      score += (stableRank(seed + output.length, candidate.exposureKey) % 997) / 997;
+      if (score < bestScore) {
+        bestScore = score;
+        bestIndex = index;
+      }
+    });
+
+    output.push(pending.splice(bestIndex, 1)[0]);
+  }
+
+  return output;
 }
 
 /**
@@ -121,6 +200,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const reviewedQuestions = verifiedStandardQuestionsForAudience(config);
   const specializedQuestions = specializedQuestionsForSelection(config);
   const broadQuestions = broadPracticeQuestionsForSelection(config);
+  const intelligentQuestions = buildIntelligentQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
 
   function absorb(questions: LearnQuestion[]) {
     for (const question of questions) {
@@ -142,6 +222,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   absorb(specializedQuestions);
   absorb(broadQuestions);
   absorb(reviewedQuestions.filter((question) => starterMatches(question, config, false, selection)));
+  absorb(intelligentQuestions);
   absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed));
 
   if (!strictSelection && fresh.length < requested) {
@@ -152,11 +233,38 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   for (let attempt = 0; fresh.length < requested && attempt < BROADENING_ATTEMPTS; attempt += 1) {
     const nextSeed = derivedSeed(seed, attempt);
     absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed));
+    absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed));
   }
 
-  const orderedFresh = orderPool(fresh, config, seed, selection);
-  const orderedRecycled = orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection);
+  const orderedFresh = diversifyPool(orderPool(fresh, config, seed, selection), seed);
+  const orderedRecycled = diversifyPool(
+    orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection),
+    derivedSeed(seed, BROADENING_ATTEMPTS),
+  );
   return [...orderedFresh, ...orderedRecycled].slice(0, requested);
+}
+
+export function rebalanceAdaptiveSession(
+  questions: LearnQuestion[],
+  currentIndex: number,
+  correct: boolean,
+  streak: number,
+  seed = 1,
+) {
+  if (currentIndex < 0 || currentIndex >= questions.length - 1) return questions;
+  const prefix = questions.slice(0, currentIndex + 1);
+  const current = questions[currentIndex];
+  const target = Math.max(1, Math.min(5, current.difficulty + (correct ? 1 : -1) + (correct && streak >= 4 ? 1 : 0)));
+  const remaining = questions.slice(currentIndex + 1).sort((left, right) => {
+    const leftTopicPenalty = !correct && left.topic === current.topic ? -35 : 0;
+    const rightTopicPenalty = !correct && right.topic === current.topic ? -35 : 0;
+    const leftFamilyPenalty = correct && current.generationFamily && left.generationFamily === current.generationFamily ? 18 : 0;
+    const rightFamilyPenalty = correct && current.generationFamily && right.generationFamily === current.generationFamily ? 18 : 0;
+    const leftScore = Math.abs(left.difficulty - target) * 100 + leftTopicPenalty + leftFamilyPenalty;
+    const rightScore = Math.abs(right.difficulty - target) * 100 + rightTopicPenalty + rightFamilyPenalty;
+    return leftScore - rightScore || stableRank(seed, left.exposureKey) - stableRank(seed, right.exposureKey);
+  });
+  return [...prefix, ...remaining];
 }
 
 export function sessionDiagnostics(questions: LearnQuestion[], seen: string[] = []) {

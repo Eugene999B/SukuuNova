@@ -36,7 +36,7 @@ import {
   type PracticeMode,
 } from "../learn-domain";
 import { learningCapabilityForSelection } from "../learning-capabilities";
-import { buildLearningSession, isCorrectAnswer } from "../learning-engine";
+import { buildLearningSession, isCorrectAnswer, rebalanceAdaptiveSession } from "../learning-engine";
 import styles from "./explore.module.css";
 import { normalizeLearnerProgress } from "../learner-progress";
 import { useLearningSound } from "../LearnShell";
@@ -48,6 +48,7 @@ type LearnerProgress = {
   answered: number;
   correct: number;
   streak: number;
+  xp: number;
   exposures: string[];
   mastery: Record<string, { answered: number; correct: number }>;
 };
@@ -59,6 +60,7 @@ const EMPTY_PROGRESS: LearnerProgress = {
   answered: 0,
   correct: 0,
   streak: 0,
+  xp: 0,
   exposures: [],
   mastery: {},
 };
@@ -79,6 +81,13 @@ const modes: Array<{ id: PracticeMode; label: string; description: string }> = [
 
 function percent(value: number, total: number) {
   return total ? Math.round((value / total) * 100) : 0;
+}
+
+function compactCapacity(value: number) {
+  if (value >= 1_000_000_000) return `${Math.floor(value / 1_000_000_000)}B+`;
+  if (value >= 1_000_000) return `${Math.floor(value / 1_000_000)}M+`;
+  if (value >= 1_000) return `${Math.floor(value / 1_000)}K+`;
+  return String(value);
 }
 
 function masteryKey(question: LearnQuestion) {
@@ -268,6 +277,8 @@ export function LearningExplorer() {
       mode,
       count,
       seen: progress.exposures,
+      mastery: progress.mastery,
+      streak: progress.streak,
     });
     setSession(nextSession);
     setLaunchNotice(nextSession.length ? (nextSession.length < count ? `This topic has ${nextSession.length} different questions available for this session. Your score uses that total.` : "") : "This selection does not have enough distinct questions for a useful session yet. Choose another available topic.");
@@ -291,11 +302,13 @@ export function LearningExplorer() {
     const key = masteryKey(currentQuestion);
     const previousMastery = progress.mastery[key] ?? { answered: 0, correct: 0 };
     const exposures = [currentQuestion.exposureKey, ...progress.exposures.filter((item) => item !== currentQuestion.exposureKey)].slice(0, 200);
+    const earnedXp = correct ? 10 + currentQuestion.difficulty * 2 : 0;
     const nextProgress: LearnerProgress = {
       ...progress,
       answered: progress.answered + 1,
       correct: progress.correct + (correct ? 1 : 0),
       streak: correct ? progress.streak + 1 : 0,
+      xp: progress.xp + earnedXp,
       exposures,
       mastery: {
         ...progress.mastery,
@@ -306,6 +319,17 @@ export function LearningExplorer() {
       },
     };
     persist(nextProgress);
+    if (mode === "adaptive") {
+      setSession((current) =>
+        rebalanceAdaptiveSession(
+          current,
+          questionIndex,
+          correct,
+          nextProgress.streak,
+          nextProgress.answered * 7_919 + questionIndex,
+        ),
+      );
+    }
     setLastCorrect(correct);
     setSessionCorrect((value) => value + (correct ? 1 : 0));
     setSubmitted(true);
@@ -322,6 +346,7 @@ export function LearningExplorer() {
       playSound("complete");
       return;
     }
+    playSound("tap");
     setQuestionIndex((value) => value + 1);
     setResponse("");
     setSubmitted(false);
@@ -362,7 +387,7 @@ export function LearningExplorer() {
         <div className={styles.heroStats}>
           <article><Brain size={20} /><strong>{percent(progress.correct, progress.answered)}%</strong><span>accuracy</span></article>
           <article><Flame size={20} /><strong>{progress.streak}</strong><span>answer streak</span></article>
-          <article><Trophy size={20} /><strong>{progress.sessions}</strong><span>sessions</span></article>
+          <article><Trophy size={20} /><strong>{progress.xp}</strong><span>XP earned</span></article>
         </div>
       </section>
 
@@ -405,7 +430,7 @@ export function LearningExplorer() {
           </div>
 
           <div className={styles.subjectSection}>
-            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>SUBJECT / COURSE</span><strong>{level.subjects.length} choices in {level.label}</strong></div><span className={practiceAvailable?styles.readyBadge:styles.mappedBadge}>{practiceAvailable?"Practice ready":"Browse the course map"}</span></div>
+            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>SUBJECT / COURSE</span><strong>{level.subjects.length} choices in {level.label}</strong></div><span className={practiceAvailable?styles.readyBadge:styles.mappedBadge}>{capability.stage==="massive"?`${compactCapacity(capability.intelligentCapacity + capability.variantCapacity)} generated variants`:practiceAvailable?"Practice ready":"Browse the course map"}</span></div>
             <div className={styles.subjectGrid}>{level.subjects.map(item=>{const ready=subjectIsReady(lane,program.id,level.id,item);return <button key={item.id} className={subjectId===item.id?styles.subjectCardActive:styles.subjectCard} onClick={()=>selectSubject(item.id)}><BookOpen size={17}/><span><strong>{item.label}</strong><small>{ready?"Questions available":"Course map"}</small></span>{ready&&<span className={styles.readyDot}>●</span>}</button>;})}</div>
           </div>
 
@@ -423,7 +448,7 @@ export function LearningExplorer() {
             <div className={styles.launchPanel}>
               <div><label>Questions</label><div className={styles.countGroup}>{[5,10,20,30,50].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>{setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Custom 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
               <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Zap size={19}/>{practiceAvailable?(lane==="exam"?"Start practice":"Let's go!"):"Practice is being built"}<ArrowRight size={18}/></button>
-              <p>{practiceAvailable?"Your questions stay inside this exact path. Different sessions favour fresh questions.":"You can browse this full course map now. Question coverage for this exact selection is still being built."}</p>
+              <p>{practiceAvailable?(capability.stage==="massive"?"This path uses a large deterministic question foundry: fresh scenarios, mixed formats and adaptive difficulty without changing the learning objective.":"Your questions stay inside this exact path. Different sessions favour fresh questions."):"You can browse this full course map now. Question coverage for this exact selection is still being built."}</p>
             </div>
           </div>
 
@@ -434,7 +459,7 @@ export function LearningExplorer() {
       <section id="session-player" className={styles.playerSection}>
         <div className={styles.sectionTitle}><div><span className={styles.stepLabel}>03 · PRACTICE</span><h2>Time to practise</h2></div><p>Choose an answer, check the explanation, and keep going.</p></div>
 
-        {session.length>0&&!isComplete&&<div className={styles.sessionTools}><div><strong>Focused session</strong><span>{program.label} · {level.label} · {subject.label} · {topic.label}</span><small>{Math.floor(sessionSeconds/60)}m {sessionSeconds%60}s elapsed · {session.length} questions</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup? Your answered questions stay in local progress."))return;setSession([]);setSessionStartedAt(null);setLaunchNotice("");answerLock.current=false;}}>Exit session</button></div>}
+        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>Focused session</strong><span>{program.label} · {level.label} · {subject.label} · {topic.label}</span><small>{Math.floor(sessionSeconds/60)}m {sessionSeconds%60}s elapsed · {session.length} questions</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup? Your answered questions stay in local progress."))return;setSession([]);setSessionStartedAt(null);setLaunchNotice("");answerLock.current=false;}}>Exit session</button></div>}
         {launchNotice&&session.length>0&&<p role="status" className={styles.engineNote}>{launchNotice}</p>}
         {!session.length ? (
           <div className={styles.playerEmpty}><Brain size={36} /><h3>{launchNotice ? "Coverage is still expanding here." : "Your intelligent session appears here."}</h3><p>{launchNotice || "Choose your learning path above, then build a session."}</p></div>
@@ -509,7 +534,11 @@ function QuestionPlayer({
         <div className={styles.difficulty}>Difficulty {question.difficulty}/5</div>
       </div>
       <div className={styles.playerProgress}><span style={{ width: `${percent(index + (submitted ? 1 : 0), total)}%` }} /></div>
-      <div className={styles.formatTag}>{question.kind.replace("single", "single choice").replace("multi", "multi-select")}</div>
+      <div className={styles.questionSignals} data-testid="question-signals">
+        <span className={styles.formatTag}>{question.kind.replace("single", "single choice").replace("multi", "multi-select")}</span>
+        {question.challenge && <span className={styles.challengeTag} data-testid="question-challenge">{question.challenge}</span>}
+        {question.mission && <span className={styles.missionTag} data-testid="question-mission"><Zap size={12}/>{question.mission}</span>}
+      </div>
       <h3 id="learn-question" tabIndex={-1}>{question.prompt}</h3>
 
       {question.kind === "single" && <div className={styles.optionGrid}>{question.options?.map((option) => {
@@ -533,7 +562,7 @@ function QuestionPlayer({
 
       {question.kind === "numeric" && <div className={styles.textAnswer}><input aria-label="Your answer" disabled={submitted} inputMode="decimal" value={typeof response === "number" || typeof response === "string" ? response : ""} onChange={(event) => setResponse(event.target.value)} placeholder="Enter your numerical answer" onKeyDown={(event) => { if (event.key === "Enter") submit(); }} /></div>}
 
-      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? "Yes! +10 XP" : "Almost — learn it and go again."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
+      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? `Yes! +${10 + question.difficulty * 2} XP` : "Almost — learn it and go again."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
     </div>
   );
 }
