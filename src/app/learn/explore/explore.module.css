@@ -682,7 +682,7 @@
 .sessionTools>div span{font-size:10px;color:var(--ex-muted)}
 .sessionTools>div small{font-size:9px;color:var(--ex-accent-two)}
 .sessionFocused{position:fixed;inset:0;z-index:140;width:100%;max-width:none;height:100dvh;overflow:auto;padding:0;background:var(--ex-bg)}
-.sessionFocused>.topbar,.sessionFocused>.hero,.sessionFocused>.workspace,.sessionFocused>.masterySection{display:none}
+.sessionFocused>.topbar,.sessionFocused>.hero,.sessionFocused>.workspace,.sessionFocused>.journey,.sessionFocused>.masterySection{display:none}
 .sessionFocused>.playerSection{width:min(100% - 40px,1040px);min-height:100dvh;margin:0 auto;padding:28px 0 48px;scroll-margin-top:0}
 .sessionFocused>.playerSection .sectionTitle{margin-bottom:16px}
 .sessionFocused>.playerSection .playerCard,.sessionFocused>.playerSection .completeCard{box-shadow:0 28px 80px color-mix(in srgb,var(--ex-accent) 9%,transparent)}
