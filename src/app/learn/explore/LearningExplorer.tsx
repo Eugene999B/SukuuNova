@@ -83,6 +83,13 @@ function percent(value: number, total: number) {
   return total ? Math.round((value / total) * 100) : 0;
 }
 
+function compactCapacity(value: number) {
+  if (value >= 1_000_000_000) return `${Math.floor(value / 1_000_000_000)}B+`;
+  if (value >= 1_000_000) return `${Math.floor(value / 1_000_000)}M+`;
+  if (value >= 1_000) return `${Math.floor(value / 1_000)}K+`;
+  return String(value);
+}
+
 function masteryKey(question: LearnQuestion) {
   return `${question.subject} · ${question.topic}`;
 }
@@ -423,7 +430,7 @@ export function LearningExplorer() {
           </div>
 
           <div className={styles.subjectSection}>
-            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>SUBJECT / COURSE</span><strong>{level.subjects.length} choices in {level.label}</strong></div><span className={practiceAvailable?styles.readyBadge:styles.mappedBadge}>{practiceAvailable?"Practice ready":"Browse the course map"}</span></div>
+            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>SUBJECT / COURSE</span><strong>{level.subjects.length} choices in {level.label}</strong></div><span className={practiceAvailable?styles.readyBadge:styles.mappedBadge}>{capability.stage==="massive"?`${compactCapacity(capability.intelligentCapacity + capability.variantCapacity)} generated variants`:practiceAvailable?"Practice ready":"Browse the course map"}</span></div>
             <div className={styles.subjectGrid}>{level.subjects.map(item=>{const ready=subjectIsReady(lane,program.id,level.id,item);return <button key={item.id} className={subjectId===item.id?styles.subjectCardActive:styles.subjectCard} onClick={()=>selectSubject(item.id)}><BookOpen size={17}/><span><strong>{item.label}</strong><small>{ready?"Questions available":"Course map"}</small></span>{ready&&<span className={styles.readyDot}>●</span>}</button>;})}</div>
           </div>
 
@@ -441,7 +448,7 @@ export function LearningExplorer() {
             <div className={styles.launchPanel}>
               <div><label>Questions</label><div className={styles.countGroup}>{[5,10,20,30,50].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>{setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Custom 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
               <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Zap size={19}/>{practiceAvailable?(lane==="exam"?"Start practice":"Let's go!"):"Practice is being built"}<ArrowRight size={18}/></button>
-              <p>{practiceAvailable?"Your questions stay inside this exact path. Different sessions favour fresh questions.":"You can browse this full course map now. Question coverage for this exact selection is still being built."}</p>
+              <p>{practiceAvailable?(capability.stage==="massive"?"This path uses a large deterministic question foundry: fresh scenarios, mixed formats and adaptive difficulty without changing the learning objective.":"Your questions stay inside this exact path. Different sessions favour fresh questions."):"You can browse this full course map now. Question coverage for this exact selection is still being built."}</p>
             </div>
           </div>
 
