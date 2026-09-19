@@ -268,3 +268,7 @@ select {
   outline: 0;
   box-shadow: var(--focus-ring);
 }
+
+/* Learn uses the shared surfaces with a distinct learning accent. */
+:root{--learn-accent:#6241d9;--learn-accent-soft:#eee9ff;--learn-accent-ink:#ffffff;--learn-canvas:#faf9fd;}
+:root[data-theme="dark"]{--learn-accent:#b6a1ff;--learn-accent-soft:#26203b;--learn-accent-ink:#21153d;--learn-canvas:var(--color-bg);}
