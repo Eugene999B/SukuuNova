@@ -221,6 +221,8 @@ const upperPrimarySubjects: CatalogSubject[] = [
   expandingSubject("computing", "Computing"),
 ];
 
+const upperPrimaryExpandingSubjects = upperPrimarySubjects.map(markSubjectExpanding);
+
 const jhsSubjects: CatalogSubject[] = [
   mathematicsSubject,
   englishSubject,
@@ -235,6 +237,8 @@ const jhsSubjects: CatalogSubject[] = [
   expandingSubject("creative-arts-design", "Creative Arts & Design"),
   expandingSubject("career-technology", "Career Technology"),
 ];
+
+const jhsExpandingSubjects = jhsSubjects.map(markSubjectExpanding);
 
 const generalScienceSubject: CatalogSubject = {
   ...scienceSubject,
@@ -279,11 +283,11 @@ const shsSubjects: CatalogSubject[] = [
 ];
 
 const beceSubjects: CatalogSubject[] = [
-  mathematicsSubject,
-  englishSubject,
-  scienceSubject,
-  socialSubject,
-  computingSubject,
+  markSubjectExpanding(mathematicsSubject),
+  markSubjectExpanding(englishSubject),
+  markSubjectExpanding(scienceSubject),
+  markSubjectExpanding(socialSubject),
+  markSubjectExpanding(computingSubject),
   expandingSubject("arabic", "Arabic"),
   expandingSubject("career-technology", "Career Technology"),
   expandingSubject("creative-arts-design", "Creative Art & Design"),
@@ -391,11 +395,11 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         schoolLevel("basic-2", "Basic 2", lowerPrimarySubjects),
         schoolLevel("basic-3", "Basic 3", lowerPrimarySubjects),
         schoolLevel("basic-4", "Basic 4", upperPrimarySubjects),
-        schoolLevel("basic-5", "Basic 5", upperPrimarySubjects),
-        schoolLevel("basic-6", "Basic 6", upperPrimarySubjects),
+        schoolLevel("basic-5", "Basic 5", upperPrimaryExpandingSubjects),
+        schoolLevel("basic-6", "Basic 6", upperPrimaryExpandingSubjects),
         schoolLevel("jhs-1", "JHS 1", jhsSubjects),
-        schoolLevel("jhs-2", "JHS 2", jhsSubjects),
-        schoolLevel("jhs-3", "JHS 3", jhsSubjects),
+        schoolLevel("jhs-2", "JHS 2", jhsExpandingSubjects),
+        schoolLevel("jhs-3", "JHS 3", jhsExpandingSubjects),
         schoolLevel("shs-1", "SHS 1", shsSubjects),
         schoolLevel("shs-2", "SHS 2", shsSubjects),
         schoolLevel("shs-3", "SHS 3", shsSubjects),
@@ -409,7 +413,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "bece",
         label: "BECE",
-        description: "Current Ghana BECE subject map with practice-ready core coverage and visible expansion lanes.",
+        description: "The current Ghana BECE subject map is visible, but exam-specific practice is held back until paper-aligned question packs are validated.",
         levels: [{ id: "practice", label: "BECE practice", subjects: beceSubjects }],
       },
       {
