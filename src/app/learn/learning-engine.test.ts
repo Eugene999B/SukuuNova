@@ -177,6 +177,17 @@ describe("SukuuNova Learn session engine", () => {
     expect(new Set(session.map((item) => item.exposureKey)).size).toBe(100);
     expect(new Set(session.map((item) => item.generationFamily).filter(Boolean)).size).toBeGreaterThanOrEqual(4);
     expect(new Set(session.map((item) => item.kind)).size).toBeGreaterThanOrEqual(2);
+
+    let longestFamilyRun = 0;
+    let currentRun = 0;
+    let lastFamily: string | undefined;
+    for (const item of session) {
+      if (item.generationFamily && item.generationFamily === lastFamily) currentRun += 1;
+      else currentRun = item.generationFamily ? 1 : 0;
+      lastFamily = item.generationFamily;
+      longestFamilyRun = Math.max(longestFamilyRun, currentRun);
+    }
+    expect(longestFamilyRun).toBeLessThanOrEqual(2);
   });
 
   it("rebalances a live adaptive session after every answer", () => {
