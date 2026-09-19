@@ -7,7 +7,7 @@ export function buildConfidenceSession(dateKey: string): LearnQuestion[] {
   return buildLearningSession({
     lane: "school",
     programId: "ghana",
-    levelId: "jhs-3",
+    levelId: "jhs-1",
     subjectId: "all",
     topicId: "all",
     mode: "adaptive",
