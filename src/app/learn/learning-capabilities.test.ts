@@ -28,15 +28,16 @@ describe("SukuuNova learning capability registry", () => {
     expect(capability.ready).toBe(false);
   });
 
-  it("marks scalable generated topics as massive", () => {
+  it("does not promote generic JHS generators into SHS readiness", () => {
     const capability = learningCapabilityForSelection(config({
       levelId: "shs-2",
       subjectId: "mathematics",
       topicId: "algebra",
     }));
-    expect(capability.ready).toBe(true);
-    expect(capability.variantCapacity).toBeGreaterThanOrEqual(1_000_000);
-    expect(capability.stage).toBe("massive");
+    expect(capability.reviewedStandardQuestions).toBe(0);
+    expect(capability.variantCapacity).toBe(0);
+    expect(capability.ready).toBe(false);
+    expect(capability.stage).toBe("mapped");
   });
 
   it("gives KG a million-scale age-specific numeracy path", () => {
