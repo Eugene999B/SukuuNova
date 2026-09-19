@@ -15,6 +15,7 @@ import "@/app/school/module-workspace.css";
 import "@/app/school/academic-workspace.css";
 import "@/app/school/gradebook/studio/gradebook-entry.css";
 import "../markbook-v3.css";
+import "../markbook-v5.css";
 
 type WorkMeta = { assessmentId: string; title: string; kind: string; workDate: Date; weekNumber: number; workNumber: number };
 
@@ -92,6 +93,7 @@ export default async function TeacherGradebookContextPage({ params, searchParams
   const view = query.view === "overview" || query.view === "results" ? query.view : "markbook";
   const termQuery = query.term ? `term=${encodeURIComponent(query.term)}&` : "";
   const viewHref = (nextView: "markbook" | "overview" | "results") => `${contextPath}?${termQuery}week=${selectedWeek}${nextView === "markbook" ? "" : `&view=${nextView}`}`;
+  const weekHref = (weekNumber: number) => `${contextPath}?${termQuery}week=${weekNumber}`;
 
   const workByAssessment = new Map(data.workRows.map((row) => [row.assessmentId, row]));
   const assessmentRows = data.performance?.assessments.map((assessment) => {
@@ -120,43 +122,52 @@ export default async function TeacherGradebookContextPage({ params, searchParams
   })) ?? [];
 
   return (
-    <AppShell universe="teacher" title="My Gradebook" subtitle="A fast weekly markbook for the classes and subjects assigned to you." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role="Teacher">
+    <AppShell universe="teacher" title="My Gradebook" subtitle="Weekly marks for the classes and subjects assigned to you." active="My Gradebook" schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} userName={session.name} role="Teacher">
       <div className="teacher-markbook-page">
-        <section className="markbook-context">
+        <section className="markbook-context markbook-context-v5">
           <div className="markbook-context-main">
             <Link href="/teacher/gradebook" className="markbook-back">← Change class or subject</Link>
             <div>
-              <span className="markbook-kicker">OPEN MARKBOOK</span>
+              <span className="markbook-kicker">CURRENT MARKBOOK</span>
               <h2>{data.assignment.class.name}</h2>
               <p>{data.assignment.subject.name} · {learnerCount} learners</p>
             </div>
           </div>
-          <div className="markbook-term-chip">
-            <span>{data.readOnly ? "HISTORICAL TERM" : "ACTIVE TERM"}</span>
-            <strong>{data.selectedTerm?.name ?? "No term"}</strong>
-            <small>School academic calendar</small>
-          </div>
-        </section>
-
-        {!data.selectedTerm || !data.performance ? <section className="markbook-no-term"><strong>No academic term is available.</strong><span>School leadership controls the active term from the academic calendar.</span></section> : <>
-          <div className="markbook-topline">
+          <div className="markbook-context-actions">
             <nav className="markbook-view-tabs" aria-label="Gradebook views">
               <Link className={view === "markbook" ? "is-active" : ""} href={viewHref("markbook")}>Markbook</Link>
               <Link className={view === "overview" ? "is-active" : ""} href={viewHref("overview")}>Term overview</Link>
               <Link className={view === "results" ? "is-active" : ""} href={viewHref("results")}>Results</Link>
             </nav>
+            <div className="markbook-term-chip">
+              <span>{data.readOnly ? "HISTORICAL TERM" : "ACTIVE TERM"}</span>
+              <strong>{data.selectedTerm?.name ?? "No term"}</strong>
+              <small>School academic calendar</small>
+            </div>
             {data.readOnly ? <span className="markbook-readonly">Read-only</span> : null}
           </div>
+        </section>
 
+        {!data.selectedTerm || !data.performance ? <section className="markbook-no-term"><strong>No academic term is available.</strong><span>School leadership controls the active term from the academic calendar.</span></section> : <>
           {view === "markbook" ? <section className="markbook-workspace-card">
-            <div className="markbook-workspace-head">
-              <div><span className="markbook-kicker">WEEKLY MARKS</span><h1>Week {selectedWeek} Markbook</h1><p>Each work is a column. Enter marks like a real mark book and SukuuNova saves every change automatically.</p></div>
-              <div className="markbook-work-count"><strong>{markbookWorks.length}</strong><span>work{markbookWorks.length === 1 ? "" : "s"} this week</span></div>
+            <div className="markbook-workspace-head markbook-workspace-head-v5">
+              <div>
+                <span className="markbook-kicker">WEEKLY MARKS</span>
+                <h1>Week {selectedWeek}</h1>
+                <p>Enter marks directly in the sheet. Every change saves automatically.</p>
+              </div>
+              <div className="markbook-week-controls">
+                {selectedWeek > 1 ? <Link className="markbook-week-arrow" href={weekHref(selectedWeek - 1)} aria-label={`Open Week ${selectedWeek - 1}`}>←</Link> : <span className="markbook-week-arrow is-disabled">←</span>}
+                <details className="markbook-week-picker">
+                  <summary>Week {selectedWeek} <span>of {data.teachingWeeks}</span></summary>
+                  <div className="markbook-week-options">
+                    {Array.from({ length: data.teachingWeeks }, (_, index) => index + 1).map((weekNumber) => <Link key={weekNumber} className={weekNumber === selectedWeek ? "is-active" : ""} href={weekHref(weekNumber)}>Week {weekNumber}</Link>)}
+                  </div>
+                </details>
+                {selectedWeek < data.teachingWeeks ? <Link className="markbook-week-arrow" href={weekHref(selectedWeek + 1)} aria-label={`Open Week ${selectedWeek + 1}`}>→</Link> : <span className="markbook-week-arrow is-disabled">→</span>}
+                <div className="markbook-work-count"><strong>{markbookWorks.length}</strong><span>work{markbookWorks.length === 1 ? "" : "s"}</span></div>
+              </div>
             </div>
-
-            <nav className="markbook-week-strip" aria-label="Choose teaching week">
-              {Array.from({ length: data.teachingWeeks }, (_, index) => index + 1).map((weekNumber) => <Link key={weekNumber} className={weekNumber === selectedWeek ? "is-active" : ""} href={`${contextPath}?${termQuery}week=${weekNumber}`}>W{weekNumber}</Link>)}
-            </nav>
 
             <TeacherWeeklyMarkbook
               weekNumber={selectedWeek}

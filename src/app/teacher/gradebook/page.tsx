@@ -7,6 +7,7 @@ import { withTenant } from "@/lib/db";
 import { selectAcademicTerm } from "@/lib/term-date";
 import { DEFAULT_TEACHING_WEEKS, getTeachingWeekMap } from "@/lib/term-teaching-weeks";
 import "./markbook-v3.css";
+import "./markbook-v5.css";
 
 export default async function TeacherGradebookPage() {
   const session = await requireSchoolSession();
