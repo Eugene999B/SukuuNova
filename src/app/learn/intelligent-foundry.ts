@@ -732,7 +732,8 @@ function renderContractReasoning(variant: number, config: SessionConfig) {
 }
 
 const managementDimensions = [PEOPLE.length, MODERN_CONTEXTS.length, 5, 8, 64] as const;
-const managementCapacity = product(managementDimensions);
+// Capacity counts distinct scenario prompts, not metadata-only permutations.
+const managementCapacity = PEOPLE.length * MODERN_CONTEXTS.length * 5;
 const MANAGEMENT_CONCEPTS = [
   ["planning", "sets measurable goals and decides the actions, deadlines and resources needed to reach them", "Planning sets objectives and specifies how they will be achieved."],
   ["organising", "groups tasks, assigns responsibilities and arranges resources into a workable structure", "Organising structures tasks, roles and resources."],
@@ -831,28 +832,43 @@ function renderProbability(variant: number, config: SessionConfig) {
   });
 }
 
-const geneticsDimensions = [16, 16, PEOPLE.length, MODERN_CONTEXTS.length, 6, 4] as const;
+const geneticsDimensions = [PEOPLE.length, MODERN_CONTEXTS.length, 5, 12] as const;
 const geneticsCapacity = product(geneticsDimensions);
+const GENETICS_TRAITS = [
+  "seed colour",
+  "flower colour",
+  "coat colour",
+  "blood-group marker expression",
+  "leaf shape",
+  "fruit colour",
+  "stem height",
+  "wing pattern",
+  "pod colour",
+  "kernel texture",
+  "pigmentation marker",
+  "disease-resistance marker",
+] as const;
 
 function renderGenetics(variant: number, config: SessionConfig) {
-  const [parentAIndex, parentBIndex, personIndex, contextIndex, style, rotation] = decode(variant, geneticsDimensions);
-  const dominantChance = [0, 25, 50, 75, 100][(parentAIndex + parentBIndex + rotation) % 5];
+  const [personIndex, contextIndex, chanceIndex, traitIndex] = decode(variant, geneticsDimensions);
+  const dominantChance = [0, 25, 50, 75, 100][chanceIndex];
   const person = PEOPLE[personIndex];
   const context = MODERN_CONTEXTS[contextIndex];
+  const trait = GENETICS_TRAITS[traitIndex];
   const answer = `${dominantChance}%`;
   return singleQuestion({
     id: "genetics-probability",
     config,
     variant,
     skill: "Interpret a simplified Mendelian probability model",
-    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    challenge: dominantChance === 50 ? "Analyse" : dominantChance === 0 || dominantChance === 100 ? "Apply" : "Transfer",
     mission: "Reason from genotype to probability",
-    prompt: `A teaching simulation in ${context} gives ${person} a Punnett-square result in which ${dominantChance} of every 100 equally likely offspring outcomes show the stated phenotype. What probability should be reported for that phenotype?`,
+    prompt: `In a teaching cross about ${trait}, ${person} uses a Punnett-square model at ${context}. The model predicts ${dominantChance} favourable phenotype outcomes for every 100 equally likely offspring outcomes. What probability should be reported for that phenotype?`,
     answer,
     distractors: ["0%", "25%", "50%", "75%", "100%"].filter((item) => item !== answer).slice(0, 3),
-    explanation: `The simulation already represents ${dominantChance} favourable outcomes out of 100, so the phenotype probability is ${dominantChance}%.`,
+    explanation: `The model represents ${dominantChance} favourable outcomes out of 100, so the phenotype probability is ${dominantChance}%.`,
     hint: "Convert favourable outcomes out of 100 directly to a percentage.",
-    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    difficulty: levelDifficulty(config.levelId) + (chanceIndex === 1 || chanceIndex === 3 ? 1 : 0),
     topic: topicLabel(config, "Genetics and inheritance"),
   });
 }
@@ -890,7 +906,7 @@ function renderDesignScale(variant: number, config: SessionConfig) {
   });
 }
 
-const researchDimensions = [PEOPLE.length, MODERN_CONTEXTS.length, 6, 6, 64] as const;
+const researchDimensions = [PEOPLE.length, MODERN_CONTEXTS.length, 6] as const;
 const researchCapacity = product(researchDimensions);
 const RESEARCH_CONCEPTS = [
   ["random assignment", "participants are allocated to conditions by chance", "Random assignment reduces systematic pre-existing differences between experimental groups."],
@@ -902,23 +918,27 @@ const RESEARCH_CONCEPTS = [
 ] as const;
 
 function renderResearchDesign(variant: number, config: SessionConfig) {
-  const [personIndex, contextIndex, conceptIndex, style, rotation] = decode(variant, researchDimensions);
+  const [personIndex, contextIndex, conceptIndex] = decode(variant, researchDimensions);
   const [answer, description, explanation] = RESEARCH_CONCEPTS[conceptIndex];
   const person = PEOPLE[personIndex];
   const context = MODERN_CONTEXTS[contextIndex];
+  const distractorOffset = variant % 3;
   return singleQuestion({
     id: "research-design",
     config,
     variant,
     skill: "Identify research-design concepts from evidence",
-    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Evaluate",
+    challenge: conceptIndex < 2 ? "Apply" : conceptIndex < 5 ? "Analyse" : "Evaluate",
     mission: "Audit the study design",
     prompt: `${person} is reviewing a study at ${context}. In the design, ${description}. Which research-method concept is most directly illustrated?`,
     answer,
-    distractors: RESEARCH_CONCEPTS.filter((_, index) => index !== conceptIndex).slice(rotation % 3, (rotation % 3) + 3).map((item) => item[0]),
+    distractors: RESEARCH_CONCEPTS
+      .filter((_, index) => index !== conceptIndex)
+      .slice(distractorOffset, distractorOffset + 3)
+      .map((item) => item[0]),
     explanation,
     hint: "Focus on what the design is doing, not the technology mentioned in the setting.",
-    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    difficulty: levelDifficulty(config.levelId) + (conceptIndex >= 4 ? 1 : 0),
   });
 }
 
