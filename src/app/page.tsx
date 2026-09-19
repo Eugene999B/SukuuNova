@@ -36,9 +36,9 @@ export default function HomePage() {
           <div className="home-learn-stage" aria-label="Find your learning path">
             <div className="home-learn-stage-title"><span>✦ SUKUUNOVA LEARN</span><strong>What are you curious about today?</strong><p>A class, a course, a big exam. Start where you are.</p></div>
             <div className="home-learn-paths">
-             <Link href="/learn/explore?lane=school"><BookOpen size={22}/><span><strong>School subjects</strong><small>Kindergarten to SHS</small></span><ArrowRight size={17}/></Link>
-             <Link href="/learn/explore?lane=exam"><Medal size={22}/><span><strong>Exam preparation</strong><small>BECE · WASSCE · IELTS</small></span><ArrowRight size={17}/></Link>
-             <Link href="/learn/explore?lane=university"><GraduationCap size={22}/><span><strong>University courses</strong><small>Explore your discipline</small></span><ArrowRight size={17}/></Link>
+             <Link href="/learn/explore?lane=school"><BookOpen size={22}/><span><strong>School subjects</strong><small>KG to JHS practice · SHS mapped</small></span><ArrowRight size={17}/></Link>
+             <Link href="/learn/explore?lane=exam"><Medal size={22}/><span><strong>Exam preparation</strong><small>BECE topic practice · WASSCE/IELTS mapped</small></span><ArrowRight size={17}/></Link>
+             <Link href="/learn/explore?lane=university"><GraduationCap size={22}/><span><strong>University courses</strong><small>Course maps · reviewed practice expanding</small></span><ArrowRight size={17}/></Link>
              <Link href="/learn/explore?lane=skills"><Sparkles size={22}/><span><strong>Skills for what’s next</strong><small>Digital · Career · Aptitude</small></span><ArrowRight size={17}/></Link>
             </div><div className="home-learn-stage-note">Choose a topic. Set your pace. Understand each answer.</div>
           </div>
@@ -50,8 +50,8 @@ export default function HomePage() {
             <span className="home-product-door-icon"><BrainCircuit size={24} aria-hidden="true" /></span>
             <span className="section-kicker">SUKUUNOVA LEARN</span>
             <h2>Questions that adapt to what you want to learn.</h2>
-            <p>Choose KG through SHS, university courses, BECE, WASSCE, IELTS, skills, a subject, a topic or a smart random session. Get instant marking, explanations and progress saved on this browser. Available practice is clearly marked.</p>
-            <div className="home-product-door-tags"><span>KG → University</span><span>Exam Centre</span><span>No sign-in</span></div>
+            <p>Choose a mapped school, exam or course path and SukuuNova will show what is genuinely practice-ready. Available sessions include marking, explanations and browser-local progress; mapped paths without validated question depth stay clearly unavailable.</p>
+            <div className="home-product-door-tags"><span>Practice-ready paths</span><span>Exam Centre maps</span><span>No sign-in</span></div>
             <span className="home-product-door-link">Open the learning system <ArrowRight size={16} /></span>
           </Link>
           <Link className="home-product-door home-product-door-manage" href="/for-schools">
