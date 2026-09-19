@@ -8,6 +8,11 @@ type Seed = {
 };
 
 const TOPICS = ["core-concepts", "applications", "problem-solving"] as const;
+const TOPIC_LABELS: Record<(typeof TOPICS)[number], string> = {
+  "core-concepts": "Core concepts",
+  applications: "Applications",
+  "problem-solving": "Problem solving",
+};
 
 const SHS_PACKS: Record<string, Seed[]> = {
   "core-mathematics": [
@@ -250,14 +255,14 @@ const UNIVERSITY_PACKS: Record<string, Seed[]> = {
   ]
 };
 
-function makeQuestion(prefix: string, subject: string, seed: Seed, index: number, difficulty: 1 | 2 | 3 | 4 | 5): LearnQuestion {
+function makeQuestion(prefix: string, subject: string, seed: Seed, index: number, topicId: (typeof TOPICS)[number], difficulty: 1 | 2 | 3 | 4 | 5): LearnQuestion {
   const options = [seed.a, ...seed.wrong].map((label, optionIndex) => ({ id: String(optionIndex), label }));
   return {
     id: `${prefix}-${index}`,
     exposureKey: `broad:${prefix}:${index}`,
     kind: "single",
     subject,
-    topic: TOPICS[index % TOPICS.length],
+    topic: TOPIC_LABELS[topicId],
     skill: index === 0 ? "Recall a key concept" : index === 1 ? "Apply the concept" : "Reason through a problem",
     difficulty,
     prompt: seed.q,
@@ -290,16 +295,17 @@ export function broadPracticeQuestionsForSelection(config: SessionConfig): Learn
     .map((part) => part ? part[0].toUpperCase() + part.slice(1) : part)
     .join(" ");
 
-  const questions = pack.map((seed, index) =>
-    makeQuestion(
-      `${config.lane}-${config.programId}-${config.levelId}-${config.subjectId}`,
-      subject,
-      seed,
-      index,
-      levelDifficulty(config.levelId),
-    ),
-  );
-
-  if (config.topicId === "all") return questions;
-  return questions.filter((question) => question.topic === config.topicId);
+  return pack
+    .map((seed, index) => ({ seed, index, topicId: TOPICS[index % TOPICS.length] }))
+    .filter((item) => config.topicId === "all" || item.topicId === config.topicId)
+    .map(({ seed, index, topicId }) =>
+      makeQuestion(
+        `${config.lane}-${config.programId}-${config.levelId}-${config.subjectId}`,
+        subject,
+        seed,
+        index,
+        topicId,
+        levelDifficulty(config.levelId),
+      ),
+    );
 }
