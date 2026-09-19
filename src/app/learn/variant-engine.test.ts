@@ -65,6 +65,27 @@ describe("SukuuNova parameterized variant engine", () => {
     }
   });
 
+  it("does not reuse JHS generators as SHS or WASSCE preparation", () => {
+    const shs = buildVariantQuestions({
+      ...algebraConfig,
+      levelId: "shs-3",
+      count: 20,
+    });
+    const wassce = buildVariantQuestions({
+      lane: "exam",
+      programId: "wassce",
+      levelId: "practice",
+      subjectId: "mathematics",
+      topicId: "algebra",
+      mode: "topic",
+      count: 20,
+      seed: 1,
+    });
+
+    expect(shs).toEqual([]);
+    expect(wassce).toEqual([]);
+  });
+
   it("keeps unsupported university selections out of school/exam templates", () => {
     const questions = buildVariantQuestions({
       lane: "university",
