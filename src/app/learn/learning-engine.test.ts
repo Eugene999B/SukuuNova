@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildLearningSession,
   isCorrectAnswer,
+  rebalanceAdaptiveSession,
   sessionDiagnostics,
   type LearnQuestion,
 } from "./learning-engine";
@@ -155,6 +156,44 @@ describe("SukuuNova Learn session engine", () => {
 
     expect(secondGenerated.length).toBeGreaterThan(0);
     expect(secondGenerated.every((item) => !firstGenerated.has(item.exposureKey))).toBe(true);
+  });
+
+
+  it("fills a 100-question SHS session from intelligent generators without repeats", () => {
+    const session = buildLearningSession({
+      lane: "school",
+      programId: "shs-general-science",
+      levelId: "shs-1",
+      subjectId: "core-mathematics",
+      topicId: "all",
+      mode: "adaptive",
+      count: 100,
+      seed: 424242,
+      mastery: {},
+      streak: 0,
+    });
+
+    expect(session).toHaveLength(100);
+    expect(new Set(session.map((item) => item.exposureKey)).size).toBe(100);
+    expect(new Set(session.map((item) => item.generationFamily).filter(Boolean)).size).toBeGreaterThanOrEqual(4);
+    expect(new Set(session.map((item) => item.kind)).size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("rebalances a live adaptive session after every answer", () => {
+    const questions = [
+      question({ id: "current", exposureKey: "current", difficulty: 3, topic: "Algebra", generationFamily: "a" }),
+      question({ id: "easy", exposureKey: "easy", difficulty: 1, topic: "Geometry", generationFamily: "b" }),
+      question({ id: "repair", exposureKey: "repair", difficulty: 2, topic: "Algebra", generationFamily: "c" }),
+      question({ id: "stretch", exposureKey: "stretch", difficulty: 4, topic: "Geometry", generationFamily: "d" }),
+      question({ id: "hard", exposureKey: "hard", difficulty: 5, topic: "Statistics", generationFamily: "e" }),
+    ];
+
+    const afterCorrect = rebalanceAdaptiveSession(questions, 0, true, 1, 7);
+    expect(afterCorrect[1].difficulty).toBe(4);
+
+    const afterWrong = rebalanceAdaptiveSession(questions, 0, false, 0, 7);
+    expect(afterWrong[1].difficulty).toBe(2);
+    expect(afterWrong[1].topic).toBe("Algebra");
   });
 
   it("scores single-choice answers exactly", () => {
