@@ -668,3 +668,21 @@
 .workspace{border:0;min-inline-size:0}.workspace:disabled{opacity:.55}.page{overflow-wrap:anywhere}.page select,.page input{max-width:100%}.sessionTools{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px;font-size:13px}.sessionTools button{padding:10px 14px;border:1px solid var(--ex-line);border-radius:12px;background:var(--ex-surface);color:var(--ex-text);cursor:pointer}.sessionFooter input{display:block;width:100px;margin-top:8px;padding:10px;border:1px solid var(--ex-line);border-radius:10px;background:var(--ex-surface);color:var(--ex-text)}.sessionFooter label{display:block;margin-top:12px}.playerSection{scroll-margin-top:145px}.answerFooter button:disabled{opacity:.45;cursor:not-allowed}.hero{padding-top:35px}.hero h1{max-width:750px}.page button,.page a{-webkit-tap-highlight-color:transparent}.page input:focus-visible,.page select:focus-visible{outline:3px solid var(--ex-accent);outline-offset:3px}@media(max-width:620px){.sessionTools{align-items:flex-start}.sessionTools button{font-size:12px}.choiceChips{max-height:220px;overflow:auto}.countGroup{flex-wrap:wrap}.workspace{min-width:0}.twoColumns{min-width:0}.selectorBlock{min-width:0}}
 
 .page{--ex-bg:var(--learn-canvas);--ex-surface:var(--color-surface);--ex-raised:var(--color-surface-raised);--ex-soft:var(--color-surface-soft);--ex-line:var(--color-border);--ex-line-strong:var(--color-border-strong);--ex-text:var(--color-text-primary);--ex-text-soft:var(--color-text-secondary);--ex-muted:var(--color-text-muted);--ex-accent:var(--learn-accent);--ex-accent-two:var(--color-info);--ex-danger:var(--color-danger)}
+
+
+/* Exam honesty and focused answering mode. */
+.examNotice{display:grid;grid-template-columns:24px 1fr;gap:10px;margin-top:18px;padding:14px;border:1px solid var(--ex-line);border-radius:var(--radius-lg);background:color-mix(in srgb,var(--ex-accent-two) 7%,transparent);color:var(--ex-muted)}
+.examNotice>svg{color:var(--ex-accent-two);margin-top:2px}
+.examNotice div{display:grid;gap:4px}
+.examNotice strong{color:var(--ex-text-soft);font-size:10px}
+.examNotice span{font-size:9px;line-height:1.55}
+.sessionTools>div{display:grid;gap:4px}
+.sessionTools>div strong{font-size:12px;color:var(--ex-text-soft)}
+.sessionTools>div span{font-size:10px;color:var(--ex-muted)}
+.sessionTools>div small{font-size:9px;color:var(--ex-accent-two)}
+.sessionFocused{position:fixed;inset:0;z-index:140;width:100%;max-width:none;height:100dvh;overflow:auto;padding:0;background:var(--ex-bg)}
+.sessionFocused>.topbar,.sessionFocused>.hero,.sessionFocused>.workspace,.sessionFocused>.masterySection{display:none}
+.sessionFocused>.playerSection{width:min(100% - 40px,1040px);min-height:100dvh;margin:0 auto;padding:28px 0 48px;scroll-margin-top:0}
+.sessionFocused>.playerSection .sectionTitle{margin-bottom:16px}
+.sessionFocused>.playerSection .playerCard,.sessionFocused>.playerSection .completeCard{box-shadow:0 28px 80px color-mix(in srgb,var(--ex-accent) 9%,transparent)}
+@media(max-width:620px){.sessionFocused>.playerSection{width:min(100% - 24px,1040px);padding:18px 0 32px}.sessionFocused>.playerSection .sectionTitle{display:none}.sessionFocused .sessionTools{margin-bottom:12px}.sessionFocused .sessionTools>div span{line-height:1.45}.sessionFocused .playerCard,.sessionFocused .completeCard{padding:20px}}
