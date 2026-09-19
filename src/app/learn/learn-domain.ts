@@ -84,6 +84,14 @@ function expandingDetailedSubject(id: string, label: string, topics: CatalogTopi
   };
 }
 
+function markSubjectExpanding(subject: CatalogSubject): CatalogSubject {
+  return {
+    ...subject,
+    availability: "expanding",
+    topics: subject.topics.map((topic) => ({ ...topic, availability: "expanding" })),
+  };
+}
+
 const mathematicsSubject: CatalogSubject = {
   id: "mathematics",
   label: "Mathematics",
@@ -235,11 +243,11 @@ const generalScienceSubject: CatalogSubject = {
 };
 
 const shsSubjects: CatalogSubject[] = [
-  mathematicsSubject,
-  englishSubject,
-  generalScienceSubject,
-  socialSubject,
-  computingSubject,
+  markSubjectExpanding(mathematicsSubject),
+  markSubjectExpanding(englishSubject),
+  markSubjectExpanding(generalScienceSubject),
+  markSubjectExpanding(socialSubject),
+  markSubjectExpanding(computingSubject),
   expandingSubject("additional-mathematics", "Additional Mathematics"),
   expandingSubject("agricultural-science", "Agricultural Science"),
   expandingSubject("agriculture", "Agriculture"),
@@ -285,10 +293,10 @@ const beceSubjects: CatalogSubject[] = [
 ];
 
 const wassceCoreSubjects: CatalogSubject[] = [
-  { ...mathematicsSubject, label: "Mathematics (Core)", contentLabel: "Mathematics" },
-  englishSubject,
-  { ...scienceSubject, label: "Integrated Science", contentLabel: "Science" },
-  socialSubject,
+  { ...markSubjectExpanding(mathematicsSubject), label: "Mathematics (Core)", contentLabel: "Mathematics" },
+  markSubjectExpanding(englishSubject),
+  { ...markSubjectExpanding(scienceSubject), label: "Integrated Science", contentLabel: "Science" },
+  markSubjectExpanding(socialSubject),
 ];
 
 const wassceElectives: CatalogSubject[] = [
@@ -407,7 +415,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "wassce",
         label: "WASSCE",
-        description: "Core-subject practice plus a broad elective catalogue that can grow by programme without mixing it into ordinary classwork.",
+        description: "The current WASSCE structure is mapped, but trusted paper-specific practice is still expanding and is not exposed as ready.",
         levels: [{ id: "practice", label: "WASSCE practice", subjects: [...wassceCoreSubjects, ...wassceElectives] }],
       },
       {
@@ -428,7 +436,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "computer-science",
         label: "Computer Science",
-        description: "Course and module practice for computing students.",
+        description: "Computer Science course and module maps are visible while reviewed university-level practice is still expanding.",
         levels: [{ id: "foundation", label: "Foundation", subjects: [
           expandingDetailedSubject("programming", "Programming", [
             { id: "variables", label: "Variables & data types" },
@@ -444,7 +452,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "nursing",
         label: "Nursing",
-        description: "Concept checks and case-oriented practice for nursing students.",
+        description: "Nursing course maps are visible while reviewed case-oriented university practice is still expanding.",
         levels: [{ id: "foundation", label: "Foundation", subjects: [
           expandingDetailedSubject("anatomy", "Anatomy & Physiology", [
             { id: "cardiovascular", label: "Cardiovascular system" },
@@ -456,7 +464,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "business",
         label: "Business",
-        description: "Accounting, management and quantitative practice.",
+        description: "Business course maps are visible while reviewed university-level practice is still expanding.",
         levels: [{ id: "foundation", label: "Foundation", subjects: [
           expandingDetailedSubject("accounting", "Financial Accounting", [
             { id: "double-entry", label: "Double entry" },
