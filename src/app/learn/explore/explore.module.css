@@ -687,3 +687,573 @@
 .sessionFocused>.playerSection .sectionTitle{margin-bottom:16px}
 .sessionFocused>.playerSection .playerCard,.sessionFocused>.playerSection .completeCard{box-shadow:0 28px 80px color-mix(in srgb,var(--ex-accent) 9%,transparent)}
 @media(max-width:620px){.sessionFocused>.playerSection{width:min(100% - 24px,1040px);padding:18px 0 32px}.sessionFocused>.playerSection .sectionTitle{display:none}.sessionFocused .sessionTools{margin-bottom:12px}.sessionFocused .sessionTools>div span{line-height:1.45}.sessionFocused .playerCard,.sessionFocused .completeCard{padding:20px}}
+
+
+/* 2026 full learning-flow rebuild */
+.journey {
+  width: min(1320px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+}
+
+.journey:disabled { opacity: 1; }
+
+.heroPromise {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.heroPromise span {
+  padding: 8px 11px;
+  border: 1px solid var(--ex-line);
+  border-radius: var(--radius-pill);
+  color: var(--ex-text-soft);
+  background: color-mix(in srgb, var(--ex-text) 4%, transparent);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.laneDeck {
+  padding: 22px;
+  border: 1px solid var(--ex-line);
+  border-radius: 28px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--ex-accent) 7%, transparent), transparent 45%),
+    color-mix(in srgb, var(--ex-surface) 92%, transparent);
+  box-shadow: var(--shadow-xl);
+}
+
+.deckIntro {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.deckIntro h2 {
+  margin: 4px 0 0;
+  font-size: clamp(22px, 3vw, 32px);
+  letter-spacing: -.035em;
+}
+
+.deckIntro p {
+  margin: 0 0 3px auto;
+  color: var(--ex-muted);
+  font-size: 10px;
+}
+
+.laneCards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.laneCard,
+.laneCardActive {
+  min-height: 126px;
+  display: grid;
+  grid-template-columns: 44px 1fr 18px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 16px;
+  border: 1px solid var(--ex-line);
+  border-radius: 20px;
+  text-align: left;
+  color: var(--ex-muted);
+  background: color-mix(in srgb, var(--ex-text) 3%, transparent);
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.laneCard:hover,
+.laneCardActive {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--ex-accent) 50%, transparent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--ex-accent) 13%, transparent), color-mix(in srgb, var(--ex-accent-two) 6%, transparent));
+}
+
+.laneCard .laneIcon,
+.laneCardActive .laneIcon {
+  grid-row: 1 / span 2;
+  width: 44px;
+  height: 44px;
+}
+
+.laneCard strong,
+.laneCardActive strong {
+  align-self: end;
+  color: var(--ex-text);
+  font-size: 13px;
+}
+
+.laneCard small,
+.laneCardActive small {
+  align-self: start;
+  font-size: 9px;
+}
+
+.laneCard > svg,
+.laneCardActive > svg {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  color: var(--ex-accent);
+}
+
+.pathStudio {
+  margin-top: 14px;
+  padding: clamp(20px, 4vw, 38px);
+  border: 1px solid var(--ex-line);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--ex-accent-two) 12%, transparent), transparent 30rem),
+    color-mix(in srgb, var(--ex-surface) 94%, transparent);
+  box-shadow: var(--shadow-xl);
+}
+
+.studioHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, .7fr);
+  gap: 24px;
+  align-items: start;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--ex-line);
+}
+
+.studioHead h2 {
+  margin: 5px 0 0;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1;
+  letter-spacing: -.05em;
+}
+
+.studioHead p {
+  max-width: 720px;
+  margin: 10px 0 0;
+  color: var(--ex-muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.institutionNote,
+.examNotice {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 10px;
+  align-items: start;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--ex-accent-two) 25%, transparent);
+  border-radius: 16px;
+  color: var(--ex-muted);
+  background: color-mix(in srgb, var(--ex-accent-two) 6%, transparent);
+}
+
+.institutionNote > svg,
+.examNotice > svg { color: var(--ex-accent-two); margin-top: 2px; }
+.institutionNote div,
+.examNotice div { display: flex; flex-direction: column; gap: 3px; }
+.institutionNote strong,
+.examNotice strong { color: var(--ex-text-soft); font-size: 10px; }
+.institutionNote span,
+.examNotice span { font-size: 9px; line-height: 1.5; }
+
+.programSection,
+.levelSection,
+.subjectSection,
+.topicSection {
+  margin-top: 28px;
+}
+
+.sectionLine {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.sectionLine > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sectionLine strong {
+  color: var(--ex-text-soft);
+  font-size: 12px;
+}
+
+.searchBox {
+  width: min(360px, 100%);
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border: 1px solid var(--ex-line);
+  border-radius: 14px;
+  color: var(--ex-muted);
+  background: var(--ex-raised);
+}
+
+.searchBox:focus-within {
+  border-color: var(--ex-accent);
+  box-shadow: var(--focus-ring);
+}
+
+.searchBox input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: var(--ex-text);
+  background: transparent;
+  font-size: 10px;
+}
+
+.programGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.programCard,
+.programCardActive {
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: 1fr 16px;
+  gap: 4px 8px;
+  align-content: center;
+  padding: 12px 13px;
+  border: 1px solid var(--ex-line);
+  border-radius: 16px;
+  text-align: left;
+  color: var(--ex-muted);
+  background: color-mix(in srgb, var(--ex-text) 2.5%, transparent);
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.programCard:hover,
+.programCardActive {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--ex-accent) 45%, transparent);
+  background: color-mix(in srgb, var(--ex-accent) 8%, transparent);
+}
+
+.programCard span,
+.programCardActive span {
+  color: var(--ex-text-soft);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.programCard small,
+.programCardActive small { font-size: 8px; }
+.programCard > svg,
+.programCardActive > svg { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--ex-accent); }
+
+.moreButton {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--ex-line);
+  border-radius: 12px;
+  color: var(--ex-text-soft);
+  background: transparent;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.levelTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.levelTab,
+.levelTabActive {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid var(--ex-line);
+  border-radius: 14px;
+  color: var(--ex-muted);
+  background: color-mix(in srgb, var(--ex-text) 3%, transparent);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.levelTabActive {
+  color: var(--ex-bg);
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--ex-accent), var(--ex-accent-two));
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--ex-accent) 22%, transparent);
+}
+
+.subjectGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.subjectCard,
+.subjectCardActive {
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: 28px 1fr 12px;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ex-line);
+  border-radius: 16px;
+  text-align: left;
+  color: var(--ex-muted);
+  background: color-mix(in srgb, var(--ex-text) 2.5%, transparent);
+}
+
+.subjectCard:hover,
+.subjectCardActive {
+  border-color: color-mix(in srgb, var(--ex-accent-two) 45%, transparent);
+  background: color-mix(in srgb, var(--ex-accent-two) 7%, transparent);
+}
+
+.subjectCardActive { box-shadow: inset 3px 0 0 var(--ex-accent); }
+.subjectCard > svg,
+.subjectCardActive > svg { color: var(--ex-accent); }
+.subjectCard span:nth-child(2),
+.subjectCardActive span:nth-child(2) { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.subjectCard strong,
+.subjectCardActive strong { color: var(--ex-text-soft); font-size: 9px; line-height: 1.3; }
+.subjectCard small,
+.subjectCardActive small { font-size: 8px; }
+.readyDot { color: var(--ex-success); font-size: 10px; }
+.mapDot { color: var(--ex-muted); font-size: 13px; }
+
+.readyBadge,
+.mappedBadge {
+  padding: 6px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.readyBadge {
+  color: var(--ex-success);
+  background: color-mix(in srgb, var(--ex-success) 10%, transparent);
+}
+
+.mappedBadge {
+  color: var(--ex-accent-two);
+  background: color-mix(in srgb, var(--ex-accent-two) 9%, transparent);
+}
+
+.topicSection .topicGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.topicSection .topicButton,
+.topicSection .topicActive {
+  min-height: 54px;
+  border-radius: 15px;
+}
+
+.sessionComposer {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr);
+  gap: 18px;
+  margin-top: 30px;
+  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--ex-accent) 25%, var(--ex-line));
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--ex-accent) 8%, transparent), color-mix(in srgb, var(--ex-accent-two) 5%, transparent));
+}
+
+.sessionComposer .modeGrid { margin-top: 12px; }
+
+.launchPanel {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--ex-bg) 35%, transparent);
+}
+
+.launchPanel label {
+  display: block;
+  margin: 8px 0 7px;
+  color: var(--ex-text-soft);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.launchPanel input {
+  width: 92px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--ex-line);
+  border-radius: 11px;
+  color: var(--ex-text);
+  background: var(--ex-raised);
+}
+
+.launchPanel .launch {
+  width: 100%;
+  min-height: 58px;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.launchPanel p {
+  margin: 0;
+  color: var(--ex-muted);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.institutionStrip {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ex-line);
+}
+
+.institutionStrip > span {
+  color: var(--ex-muted);
+  font-size: 8px;
+}
+
+.institutionStrip > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.institutionStrip b {
+  padding: 6px 8px;
+  border: 1px solid var(--ex-line);
+  border-radius: 10px;
+  color: var(--ex-text-soft);
+  font-size: 7px;
+  font-weight: 800;
+}
+
+.playerCard {
+  position: relative;
+  overflow: hidden;
+}
+
+.playerCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--ex-accent), var(--ex-accent-two), var(--ex-success));
+}
+
+.correctFeedback,
+.wrongFeedback {
+  animation: feedback-pop .28s ease-out;
+}
+
+.correctFeedback strong { font-size: 14px; }
+.wrongFeedback strong { font-size: 13px; }
+
+@keyframes feedback-pop {
+  0% { transform: scale(.985); opacity: .55; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 1050px) {
+  .programGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .subjectGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .topicSection .topicGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sessionComposer { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .page { padding-bottom: 48px; }
+  .topbar,
+  .hero,
+  .journey,
+  .playerSection,
+  .masterySection {
+    width: min(100% - 24px, 680px);
+  }
+
+  .topbar {
+    min-height: 64px;
+    grid-template-columns: auto 1fr;
+  }
+
+  .wordmark { justify-self: end; }
+  .liveBadge { display: none; }
+
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    padding: 42px 0 28px;
+  }
+
+  .hero h1 { font-size: clamp(42px, 12vw, 60px); }
+  .hero p { font-size: 12px; }
+  .heroStats { gap: 7px; }
+  .heroStats article { min-height: 92px; padding: 12px; }
+  .heroStats strong { font-size: 21px; }
+
+  .deckIntro { display: block; }
+  .deckIntro p { margin-top: 7px; }
+  .laneDeck { padding: 14px; border-radius: 22px; }
+  .laneCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .laneCard,
+  .laneCardActive {
+    min-height: 108px;
+    grid-template-columns: 36px 1fr;
+    padding: 12px;
+  }
+  .laneCard .laneIcon,
+  .laneCardActive .laneIcon { width: 36px; height: 36px; }
+  .laneCard > svg,
+  .laneCardActive > svg { display: none; }
+
+  .pathStudio { padding: 18px 14px; border-radius: 22px; }
+  .studioHead { grid-template-columns: 1fr; gap: 12px; }
+  .pathPreview { justify-content: flex-start; max-width: 100%; }
+  .sectionLine { align-items: stretch; flex-direction: column; gap: 9px; }
+  .searchBox { width: 100%; }
+  .programGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .programCard,
+  .programCardActive { min-height: 70px; }
+  .subjectGrid { grid-template-columns: 1fr; }
+  .topicSection .topicGrid { grid-template-columns: 1fr; }
+  .levelTabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .levelTab,
+  .levelTabActive { flex: 0 0 auto; }
+
+  .sessionComposer {
+    padding: 14px;
+    border-radius: 18px;
+  }
+  .modeGrid { grid-template-columns: 1fr; }
+  .countGroup { gap: 5px; }
+  .countButton,
+  .countActive { min-width: 42px; padding-inline: 9px; }
+
+  .playerSection { margin-top: 24px; }
+  .playerCard,
+  .completeCard,
+  .playerEmpty { border-radius: 22px; }
+}
+
+@media (max-width: 420px) {
+  .laneCards { grid-template-columns: 1fr 1fr; }
+  .programGrid { grid-template-columns: 1fr; }
+  .heroPromise { gap: 6px; }
+  .heroPromise span { font-size: 8px; }
+}
