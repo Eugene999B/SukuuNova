@@ -17,9 +17,10 @@ type VariantTemplate = {
   render: (variantIndex: number) => LearnQuestion;
 };
 
-const JHS_SHS_LEVELS = ["jhs-1", "jhs-2", "jhs-3", "shs-1", "shs-2", "shs-3"] as const;
-const UPPER_PRIMARY_TO_SHS = ["basic-4", "basic-5", "basic-6", ...JHS_SHS_LEVELS] as const;
-const EXAM_PROGRAMS = ["bece", "wassce"] as const;
+const UPPER_PRIMARY_LEVELS = ["basic-4", "basic-5", "basic-6"] as const;
+const JHS_LEVELS = ["jhs-1", "jhs-2", "jhs-3"] as const;
+const UPPER_PRIMARY_TO_JHS = [...UPPER_PRIMARY_LEVELS, ...JHS_LEVELS] as const;
+const BECE_PROGRAMS = ["bece"] as const;
 
 const EARLY_NAMES = [
   "Ama", "Kojo", "Akosua", "Kwame", "Esi", "Kofi", "Adwoa", "Yaw",
@@ -566,8 +567,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Apply arithmetic operations",
     difficulty: 2,
     capacity: arithmeticCapacity,
-    schoolLevels: UPPER_PRIMARY_TO_SHS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: UPPER_PRIMARY_TO_JHS,
+    examPrograms: BECE_PROGRAMS,
     render: renderArithmetic,
   },
   {
@@ -579,8 +580,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Solve one-variable linear equations",
     difficulty: 3,
     capacity: algebraCapacity,
-    schoolLevels: JHS_SHS_LEVELS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
     render: renderLinearEquation,
   },
   {
@@ -592,8 +593,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Calculate rectangle measures",
     difficulty: 2,
     capacity: geometryCapacity,
-    schoolLevels: UPPER_PRIMARY_TO_SHS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: UPPER_PRIMARY_TO_JHS,
+    examPrograms: BECE_PROGRAMS,
     render: renderRectangle,
   },
   {
@@ -605,8 +606,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Calculate the arithmetic mean",
     difficulty: 3,
     capacity: statisticsCapacity,
-    schoolLevels: JHS_SHS_LEVELS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
     render: renderArithmeticMean,
   },
   {
@@ -618,8 +619,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Apply subject–verb agreement",
     difficulty: 2,
     capacity: grammarCapacity,
-    schoolLevels: UPPER_PRIMARY_TO_SHS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: UPPER_PRIMARY_TO_JHS,
+    examPrograms: BECE_PROGRAMS,
     render: renderConcord,
   },
   {
@@ -631,8 +632,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Apply magnification to biological specimens",
     difficulty: 3,
     capacity: livingCapacity,
-    schoolLevels: JHS_SHS_LEVELS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
     render: renderMagnification,
   },
   {
@@ -644,8 +645,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Apply the density relationship",
     difficulty: 3,
     capacity: matterCapacity,
-    schoolLevels: JHS_SHS_LEVELS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
     render: renderDensity,
   },
   {
@@ -657,8 +658,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Apply force, mass and acceleration",
     difficulty: 3,
     capacity: forceCapacity,
-    schoolLevels: JHS_SHS_LEVELS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
     render: renderForce,
   },
   {
@@ -670,8 +671,8 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     skill: "Convert between binary and decimal",
     difficulty: 3,
     capacity: binaryCapacity,
-    schoolLevels: JHS_SHS_LEVELS,
-    examPrograms: EXAM_PROGRAMS,
+    schoolLevels: JHS_LEVELS,
+    examPrograms: BECE_PROGRAMS,
     render: renderBinary,
   },
 ];
