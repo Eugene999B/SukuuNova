@@ -9,7 +9,7 @@ import {
 const baseConfig = {
   lane: "school" as const,
   programId: "ghana",
-  levelId: "jhs-3",
+  levelId: "jhs-1",
   subjectId: "science",
   topicId: "living",
   mode: "random" as const,
@@ -49,7 +49,7 @@ describe("SukuuNova Learn session engine", () => {
     const session = buildLearningSession({
       lane: "school",
       programId: "ghana",
-      levelId: "jhs-3",
+      levelId: "jhs-1",
       subjectId: "computing",
       topicId: "digital-safety",
       mode: "topic",
@@ -67,7 +67,7 @@ describe("SukuuNova Learn session engine", () => {
     const session = buildLearningSession({
       lane: "school",
       programId: "ghana",
-      levelId: "jhs-3",
+      levelId: "jhs-1",
       subjectId: "computing",
       topicId: "coding",
       mode: "topic",
@@ -83,7 +83,7 @@ describe("SukuuNova Learn session engine", () => {
     const session = buildLearningSession({
       lane: "school",
       programId: "ghana",
-      levelId: "jhs-3",
+      levelId: "jhs-1",
       subjectId: "mathematics",
       topicId: "geometry",
       mode: "topic",
@@ -123,27 +123,38 @@ describe("SukuuNova Learn session engine", () => {
     expect(session).toEqual([]);
   });
 
-  it("never repeats an exposure key inside a session", () => {
+  it("never repeats an exposure key and does not flood a session with one generated skill", () => {
     const session = buildLearningSession({ ...baseConfig, count: 100, seed: 77 });
     const diagnostics = sessionDiagnostics(session);
+    const generatedBySkill = session
+      .filter((item) => item.exposureKey.startsWith("variant:"))
+      .reduce<Record<string, number>>((counts, item) => {
+        counts[item.skill] = (counts[item.skill] ?? 0) + 1;
+        return counts;
+      }, {});
 
-    expect(session).toHaveLength(100);
-    expect(diagnostics.uniqueExposureCount).toBe(100);
+    expect(session.length).toBeGreaterThan(0);
+    expect(session.length).toBeLessThan(100);
+    expect(diagnostics.uniqueExposureCount).toBe(session.length);
+    expect(Object.values(generatedBySkill).every((count) => count <= 4)).toBe(true);
   });
 
-  it("caps oversized requests at 100 questions", () => {
+  it("caps oversized requests without inventing extra content depth", () => {
     const session = buildLearningSession({ ...baseConfig, count: 999, seed: 101 });
-    expect(session).toHaveLength(100);
+    expect(session.length).toBeGreaterThan(0);
+    expect(session.length).toBeLessThanOrEqual(100);
+    expect(new Set(session.map((item) => item.exposureKey)).size).toBe(session.length);
   });
 
-  it("prefers fresh exposure keys over recently seen material", () => {
+  it("prefers fresh generated variants before recycling reviewed questions", () => {
     const first = buildLearningSession({ ...baseConfig, count: 30, seed: 31 });
     const seen = first.map((item) => item.exposureKey);
     const second = buildLearningSession({ ...baseConfig, count: 30, seed: 32, seen });
-    const overlap = second.filter((item) => seen.includes(item.exposureKey));
+    const firstGenerated = new Set(first.filter((item) => item.exposureKey.startsWith("variant:")).map((item) => item.exposureKey));
+    const secondGenerated = second.filter((item) => item.exposureKey.startsWith("variant:"));
 
-    expect(second).toHaveLength(30);
-    expect(overlap).toHaveLength(0);
+    expect(secondGenerated.length).toBeGreaterThan(0);
+    expect(secondGenerated.every((item) => !firstGenerated.has(item.exposureKey))).toBe(true);
   });
 
   it("scores single-choice answers exactly", () => {
