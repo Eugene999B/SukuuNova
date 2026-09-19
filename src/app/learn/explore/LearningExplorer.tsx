@@ -36,7 +36,7 @@ import {
   type PracticeMode,
 } from "../learn-domain";
 import { learningCapabilityForSelection } from "../learning-capabilities";
-import { buildLearningSession, isCorrectAnswer } from "../learning-engine";
+import { buildLearningSession, isCorrectAnswer, rebalanceAdaptiveSession } from "../learning-engine";
 import styles from "./explore.module.css";
 import { normalizeLearnerProgress } from "../learner-progress";
 import { useLearningSound } from "../LearnShell";
@@ -48,6 +48,7 @@ type LearnerProgress = {
   answered: number;
   correct: number;
   streak: number;
+  xp: number;
   exposures: string[];
   mastery: Record<string, { answered: number; correct: number }>;
 };
@@ -59,6 +60,7 @@ const EMPTY_PROGRESS: LearnerProgress = {
   answered: 0,
   correct: 0,
   streak: 0,
+  xp: 0,
   exposures: [],
   mastery: {},
 };
@@ -268,6 +270,8 @@ export function LearningExplorer() {
       mode,
       count,
       seen: progress.exposures,
+      mastery: progress.mastery,
+      streak: progress.streak,
     });
     setSession(nextSession);
     setLaunchNotice(nextSession.length ? (nextSession.length < count ? `This topic has ${nextSession.length} different questions available for this session. Your score uses that total.` : "") : "This selection does not have enough distinct questions for a useful session yet. Choose another available topic.");
@@ -291,11 +295,13 @@ export function LearningExplorer() {
     const key = masteryKey(currentQuestion);
     const previousMastery = progress.mastery[key] ?? { answered: 0, correct: 0 };
     const exposures = [currentQuestion.exposureKey, ...progress.exposures.filter((item) => item !== currentQuestion.exposureKey)].slice(0, 200);
+    const earnedXp = correct ? 10 + currentQuestion.difficulty * 2 : 0;
     const nextProgress: LearnerProgress = {
       ...progress,
       answered: progress.answered + 1,
       correct: progress.correct + (correct ? 1 : 0),
       streak: correct ? progress.streak + 1 : 0,
+      xp: progress.xp + earnedXp,
       exposures,
       mastery: {
         ...progress.mastery,
@@ -306,6 +312,17 @@ export function LearningExplorer() {
       },
     };
     persist(nextProgress);
+    if (mode === "adaptive") {
+      setSession((current) =>
+        rebalanceAdaptiveSession(
+          current,
+          questionIndex,
+          correct,
+          nextProgress.streak,
+          nextProgress.answered * 7_919 + questionIndex,
+        ),
+      );
+    }
     setLastCorrect(correct);
     setSessionCorrect((value) => value + (correct ? 1 : 0));
     setSubmitted(true);
@@ -322,6 +339,7 @@ export function LearningExplorer() {
       playSound("complete");
       return;
     }
+    playSound("tap");
     setQuestionIndex((value) => value + 1);
     setResponse("");
     setSubmitted(false);
@@ -362,7 +380,7 @@ export function LearningExplorer() {
         <div className={styles.heroStats}>
           <article><Brain size={20} /><strong>{percent(progress.correct, progress.answered)}%</strong><span>accuracy</span></article>
           <article><Flame size={20} /><strong>{progress.streak}</strong><span>answer streak</span></article>
-          <article><Trophy size={20} /><strong>{progress.sessions}</strong><span>sessions</span></article>
+          <article><Trophy size={20} /><strong>{progress.xp}</strong><span>XP earned</span></article>
         </div>
       </section>
 
@@ -509,7 +527,11 @@ function QuestionPlayer({
         <div className={styles.difficulty}>Difficulty {question.difficulty}/5</div>
       </div>
       <div className={styles.playerProgress}><span style={{ width: `${percent(index + (submitted ? 1 : 0), total)}%` }} /></div>
-      <div className={styles.formatTag}>{question.kind.replace("single", "single choice").replace("multi", "multi-select")}</div>
+      <div className={styles.questionSignals}>
+        <span className={styles.formatTag}>{question.kind.replace("single", "single choice").replace("multi", "multi-select")}</span>
+        {question.challenge && <span className={styles.challengeTag}>{question.challenge}</span>}
+        {question.mission && <span className={styles.missionTag}><Zap size={12}/>{question.mission}</span>}
+      </div>
       <h3 id="learn-question" tabIndex={-1}>{question.prompt}</h3>
 
       {question.kind === "single" && <div className={styles.optionGrid}>{question.options?.map((option) => {
@@ -533,7 +555,7 @@ function QuestionPlayer({
 
       {question.kind === "numeric" && <div className={styles.textAnswer}><input aria-label="Your answer" disabled={submitted} inputMode="decimal" value={typeof response === "number" || typeof response === "string" ? response : ""} onChange={(event) => setResponse(event.target.value)} placeholder="Enter your numerical answer" onKeyDown={(event) => { if (event.key === "Enter") submit(); }} /></div>}
 
-      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? "Yes! +10 XP" : "Almost — learn it and go again."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
+      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? `Yes! +${10 + question.difficulty * 2} XP` : "Almost — learn it and go again."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
     </div>
   );
 }
