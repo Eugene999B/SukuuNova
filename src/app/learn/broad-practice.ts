@@ -256,7 +256,10 @@ const UNIVERSITY_PACKS: Record<string, Seed[]> = {
 };
 
 function makeQuestion(prefix: string, subject: string, seed: Seed, index: number, topicId: (typeof TOPICS)[number], difficulty: 1 | 2 | 3 | 4 | 5): LearnQuestion {
-  const options = [seed.a, ...seed.wrong].map((label, optionIndex) => ({ id: String(optionIndex), label }));
+  const values = [seed.a, ...seed.wrong];
+  const offset = (prefix.length + index * 3) % values.length;
+  const rotated = [...values.slice(offset), ...values.slice(0, offset)];
+  const options = rotated.map((label, optionIndex) => ({ id: String(optionIndex), label }));
   return {
     id: `${prefix}-${index}`,
     exposureKey: `broad:${prefix}:${index}`,
@@ -267,7 +270,7 @@ function makeQuestion(prefix: string, subject: string, seed: Seed, index: number
     difficulty,
     prompt: seed.q,
     options,
-    answer: "0",
+    answer: String(rotated.indexOf(seed.a)),
     explanation: seed.why,
   };
 }
