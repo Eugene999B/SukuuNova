@@ -85,7 +85,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem("sukuunova-learn-audio-v2") || "{}") as Partial<AudioPreferences> & { volume?: number };
+      const stored = JSON.parse(localStorage.getItem("sukuunova-learn-audio-v3") || "{}") as Partial<AudioPreferences> & { volume?: number };
       const legacyVolume = clampVolume(stored.volume, 52);
       const nextEffects = stored.effects !== false;
       const nextMusic = stored.music === true;
@@ -111,7 +111,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
     prefs.current = { effects, music, effectsVolume, musicVolume };
     if (loaded) {
       try {
-        localStorage.setItem("sukuunova-learn-audio-v2", JSON.stringify(prefs.current));
+        localStorage.setItem("sukuunova-learn-audio-v3", JSON.stringify(prefs.current));
       } catch {
         // Audio preferences are optional; learning still works without storage.
       }
