@@ -5,7 +5,7 @@ import { buildLearningSession } from "./learning-engine";
 describe("SukuuNova reviewed topic-practice coverage", () => {
   it("can build two-question reviewed topic sessions across every starter topic without broadening", () => {
     const ghana = catalogFor("school").programs.find((program) => program.id === "ghana");
-    const level = ghana?.levels.find((item) => item.id === "jhs-3");
+    const level = ghana?.levels.find((item) => item.id === "jhs-1");
     expect(level).toBeDefined();
 
     for (const subject of (level?.subjects ?? []).filter((item) => item.availability !== "expanding")) {
@@ -13,7 +13,7 @@ describe("SukuuNova reviewed topic-practice coverage", () => {
         const session = buildLearningSession({
           lane: "school",
           programId: "ghana",
-          levelId: "jhs-3",
+          levelId: "jhs-1",
           subjectId: subject.id,
           topicId: topic.id,
           mode: "topic",
