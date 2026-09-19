@@ -409,7 +409,7 @@ export function LearningExplorer() {
             <div><label>Questions</label><div className={styles.countGroup}>{[5, 10, 20, 30, 50].map((value) => <button key={value} className={count === value ? styles.countActive : styles.countButton} aria-pressed={count===value} onClick={() => {setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Or choose 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
             <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Sparkles size={18} /> {practiceAvailable ? (lane === "exam" ? "Start topic practice" : "Start practice") : "No practice yet"} <ArrowRight size={18} /></button>
           </div>
-          <p className={styles.engineNote}>{practiceAvailable ? "Questions stay within your selection. If fewer different questions are available, we will show the actual session size." : "Questions for this selection are coming soon. Try another topic or subject."}</p>
+          <p className={styles.engineNote}>{practiceAvailable ? "Questions stay within your selection. If fewer different questions are available, we will show the actual session size." : "Practice hasn't been published for this selection yet. Try another topic or subject."}</p>
         </div>
       </fieldset>
 
