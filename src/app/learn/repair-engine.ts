@@ -65,7 +65,7 @@ export function buildRepairSession(progress: LearnerProgress, count = 10, seed?:
     return buildLearningSession({
       lane: "school",
       programId: "ghana",
-      levelId: "jhs-3",
+      levelId: "jhs-1",
       subjectId: "all",
       topicId: "all",
       mode: "adaptive",
@@ -78,7 +78,7 @@ export function buildRepairSession(progress: LearnerProgress, count = 10, seed?:
   return buildLearningSession({
     lane: "school",
     programId: "ghana",
-    levelId: "jhs-3",
+    levelId: "jhs-1",
     subjectId: selectionId(plan.subject),
     topicId: selectionId(plan.topic),
     mode: "weakness",

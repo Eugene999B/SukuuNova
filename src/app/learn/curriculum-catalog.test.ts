@@ -22,12 +22,11 @@ describe("SukuuNova curriculum-aware catalogue", () => {
     expect(schoolLevel("shs-1")?.subjects.some((subject) => subject.label === "Robotics")).toBe(true);
   });
 
-  it("keeps at least one honest practice-ready path at every Ghana school level", () => {
+  it("keeps honest practice-ready paths only where current content supports them", () => {
     for (const id of [
       "kg-1", "kg-2",
-      "basic-1", "basic-2", "basic-3", "basic-4", "basic-5", "basic-6",
-      "jhs-1", "jhs-2", "jhs-3",
-      "shs-1", "shs-2", "shs-3",
+      "basic-1", "basic-2", "basic-3", "basic-4",
+      "jhs-1",
     ]) {
       const level = schoolLevel(id);
       expect(level, id).toBeDefined();
@@ -39,6 +38,12 @@ describe("SukuuNova curriculum-aware catalogue", () => {
         ),
         id,
       ).toBe(true);
+    }
+
+    for (const id of ["basic-5", "basic-6", "jhs-2", "jhs-3", "shs-1", "shs-2", "shs-3"]) {
+      const level = schoolLevel(id);
+      expect(level, id).toBeDefined();
+      expect(level?.subjects.every((subject) => subject.availability === "expanding"), id).toBe(true);
     }
   });
 
@@ -58,7 +63,7 @@ describe("SukuuNova curriculum-aware catalogue", () => {
       "Science",
       "Social Studies",
     ].sort());
-    expect(subjects.filter((subject) => subject.availability !== "expanding")).toHaveLength(5);
+    expect(subjects.filter((subject) => subject.availability !== "expanding")).toHaveLength(0);
   });
 
   it("models WASSCE core separately from its growing elective catalogue", () => {

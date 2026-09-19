@@ -88,6 +88,8 @@ async function main() {
     await page.getByRole("link",{name:"Start practice",exact:true}).waitFor();
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning home overflows on mobile");
     await page.getByLabel("Learning audio settings").click();
+    await page.getByRole("button",{name:"Test sound",exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector("[data-audio-state]")?.getAttribute("data-audio-state")==="ready");
     await page.getByLabel("Interaction sounds",{exact:true}).check();
     await page.getByLabel("Gentle focus music",{exact:true}).check();
     await page.getByLabel("Gentle focus music",{exact:true}).uncheck();
@@ -95,9 +97,16 @@ async function main() {
     await page.goto("/learn/explore?lane=exam");
     await page.getByRole("button",{name:/Exam Centre/}).waitFor();
     await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("Exam Centre"));
+    assert.equal(await page.getByRole("button",{name:"Coming soon",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
+
+    await page.goto("/learn/explore?lane=school");
+    await page.getByRole("button",{name:/School/}).waitFor();
+    await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("School"));
     await page.getByRole("button",{name:"✦ Mixed topics",exact:true}).click();
     await page.getByLabel("Or choose 1–100").fill("3");
     await page.getByRole("button",{name:"Start practice",exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector("main[data-session-active=\"true\"]"));
+    assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Active learning must use the focused session surface");
     const prompts=new Set<string>();
     for(let question=0;question<3;question++){
       const player=page.getByTestId("learning-question");

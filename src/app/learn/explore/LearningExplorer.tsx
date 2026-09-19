@@ -145,8 +145,10 @@ export function LearningExplorer() {
     count,
   }), [lane, programId, levelId, subjectId, topicId, mode, count]);
   const practiceAvailable = capability.ready;
-  
+  const availableModes = lane === "exam" ? modes.filter((item) => item.id !== "adaptive") : modes;
   const currentQuestion = session[questionIndex];
+  const sessionInProgress = session.length > 0 && questionIndex < session.length;
+  const sessionFocused = session.length > 0;
 
   useEffect(() => {
     try {
@@ -164,6 +166,16 @@ export function LearningExplorer() {
     const timer = window.setInterval(update, 1000);
     return () => window.clearInterval(timer);
   }, [sessionStartedAt, session.length]);
+
+  useEffect(() => {
+    if (!sessionInProgress) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [sessionInProgress]);
 
   useEffect(() => {
     const choice = new URLSearchParams(window.location.search).get("lane");
@@ -190,6 +202,7 @@ export function LearningExplorer() {
     setLevelId(nextLevel.id);
     setSubjectId(nextSubject.id);
     setTopicId(firstReadyTopic(nextLane, nextProgram.id, nextLevel.id, nextSubject).id);
+    setMode(nextLane === "exam" ? "timed" : "adaptive");
     setSession([]);
     setLaunchNotice("");
   }
@@ -316,7 +329,7 @@ export function LearningExplorer() {
   const sessionAccuracy = percent(sessionCorrect, session.length);
 
   return (
-    <main className={styles.page}>
+    <main className={`${styles.page} ${sessionFocused ? styles.sessionFocused : ""}`} data-session-active={sessionInProgress ? "true" : "false"}>
       <header className={styles.topbar}>
         <Link href="/learn" className={styles.backLink}><ArrowLeft size={16} /> Learn home</Link>
         <div className={styles.wordmark}><span>S</span><div><strong>SukuuNova Learn</strong><small>Explorer</small></div></div>
@@ -361,6 +374,8 @@ export function LearningExplorer() {
             <div className={styles.pathPreview}><span>{program.label}</span><ChevronRight size={13} /><span>{level.label}</span><ChevronRight size={13} /><span>{subject.label}</span><ChevronRight size={13} /><strong>{topic.label}</strong></div>
           </div>
 
+          {lane === "exam" && <div className={styles.examNotice}><Medal size={18} /><div><strong>Topic practice only — not a full mock.</strong><span>Full-paper mocks stay unavailable until paper structure, timing, question types and marking are validated for that exam.</span></div></div>}
+
           <div className={styles.selectorBlock}>
             <label>{lane==="exam"?"Choose your exam":lane==="university"?"Choose your course":"Choose your programme"}</label>
             <div className={styles.choiceChips}>{catalog.programs.map((item) => <button key={item.id} className={programId === item.id ? styles.chipActive : styles.chip} onClick={() => selectProgram(item.id)}>{item.label}</button>)}</div>
@@ -387,12 +402,12 @@ export function LearningExplorer() {
 
           <div className={styles.selectorBlock}>
             <label>Your practice style</label>
-            <div className={styles.modeGrid}>{modes.map((item) => <button key={item.id} className={mode === item.id ? styles.modeActive : styles.modeButton} onClick={() => setMode(item.id)}><span className={styles.modeDot} /><span><strong>{item.label}</strong><small>{item.description}</small></span>{mode === item.id && <CheckCircle2 size={17} />}</button>)}</div>
+            <div className={styles.modeGrid}>{availableModes.map((item) => <button key={item.id} className={mode === item.id ? styles.modeActive : styles.modeButton} onClick={() => setMode(item.id)}><span className={styles.modeDot} /><span><strong>{item.label}</strong><small>{item.description}</small></span>{mode === item.id && <CheckCircle2 size={17} />}</button>)}</div>
           </div>
 
           <div className={styles.sessionFooter}>
             <div><label>Questions</label><div className={styles.countGroup}>{[5, 10, 20, 30, 50].map((value) => <button key={value} className={count === value ? styles.countActive : styles.countButton} aria-pressed={count===value} onClick={() => {setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Or choose 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
-            <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Sparkles size={18} /> {practiceAvailable ? "Start practice" : "Coming soon"} <ArrowRight size={18} /></button>
+            <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Sparkles size={18} /> {practiceAvailable ? (lane === "exam" ? "Start topic practice" : "Start practice") : "Coming soon"} <ArrowRight size={18} /></button>
           </div>
           <p className={styles.engineNote}>{practiceAvailable ? "Questions stay within your selection. If fewer different questions are available, we will show the actual session size." : "Questions for this selection are coming soon. Try another topic or subject."}</p>
         </div>
@@ -401,14 +416,14 @@ export function LearningExplorer() {
       <section id="session-player" className={styles.playerSection}>
         <div className={styles.sectionTitle}><div><span className={styles.stepLabel}>03 · PRACTICE</span><h2>Time to practise</h2></div><p>Choose an answer, check the explanation, and keep going.</p></div>
 
-        {session.length>0&&!isComplete&&<div className={styles.sessionTools}><span>{Math.floor(sessionSeconds/60)}m {sessionSeconds%60}s elapsed · {session.length} questions</span><button type="button" onClick={()=>{setSession([]);setSessionStartedAt(null);setLaunchNotice("");answerLock.current=false;}}>End session & change setup</button></div>}
+        {session.length>0&&!isComplete&&<div className={styles.sessionTools}><div><strong>Focused session</strong><span>{program.label} · {level.label} · {subject.label} · {topic.label}</span><small>{Math.floor(sessionSeconds/60)}m {sessionSeconds%60}s elapsed · {session.length} questions</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup? Your answered questions stay in local progress."))return;setSession([]);setSessionStartedAt(null);setLaunchNotice("");answerLock.current=false;}}>Exit session</button></div>}
         {launchNotice&&session.length>0&&<p role="status" className={styles.engineNote}>{launchNotice}</p>}
         {!session.length ? (
           <div className={styles.playerEmpty}><Brain size={36} /><h3>{launchNotice ? "Coverage is still expanding here." : "Your intelligent session appears here."}</h3><p>{launchNotice || "Choose your learning path above, then build a session."}</p></div>
         ) : isComplete ? (
           <div className={styles.completeCard}>
             <div className={styles.completeTop}>
-              <div><span className={styles.kicker}>SESSION COMPLETE</span><h3>{sessionAccuracy >= 80 ? "Strong mastery signal." : sessionAccuracy >= 60 ? "Good work — now repair the gaps." : "We found the concepts to work on next."}</h3><p>Well done for showing up. Your progress is saved on this browser. Revisit a tricky topic or try something new.</p></div>
+              <div><span className={styles.kicker}>SESSION COMPLETE</span><h3>{sessionAccuracy >= 80 ? "Strong result in this session." : sessionAccuracy >= 60 ? "Good work — review the missed ideas next." : "This session found useful areas to revisit."}</h3><p>This result describes only the questions you just answered. Your local practice history is saved on this browser; it is not an official grade or mastery certification.</p></div>
               <div className={styles.scoreRing}><strong>{sessionAccuracy}%</strong><span>{sessionCorrect}/{session.length}</span></div>
             </div>
             <div className={styles.completeStats}><article><BarChart3 size={18} /><span>Session accuracy</span><strong>{sessionAccuracy}%</strong></article><article><Clock3 size={18} /><span>Time</span><strong>{Math.floor(sessionSeconds / 60)}m {sessionSeconds % 60}s</strong></article><article><Brain size={18} /><span>Lifetime answered</span><strong>{progress.answered}</strong></article></div>
@@ -431,7 +446,7 @@ export function LearningExplorer() {
       </section>
 
       <section className={styles.masterySection}>
-        <div className={styles.sectionTitle}><div><span className={styles.stepLabel}>04 · MASTERY</span><h2>Your learning map starts immediately.</h2></div><p>Your progress stays on this browser. Clearing browser data removes it; it does not sync between devices.</p></div>
+        <div className={styles.sectionTitle}><div><span className={styles.stepLabel}>04 · PRACTICE MAP</span><h2>Your learning picture builds with evidence.</h2></div><p>Your progress stays on this browser. A few answers are only an early signal; clearing browser data removes them and they do not sync between devices.</p></div>
         <div className={styles.masteryGrid}>
           {Object.entries(progress.mastery).length ? Object.entries(progress.mastery).sort(([, a], [, b]) => b.answered - a.answered).slice(0, 8).map(([key, value]) => {
             const score = percent(value.correct, value.answered);

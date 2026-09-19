@@ -21,7 +21,7 @@ export function learningAudienceForFoundryLevel(level: string): LearningAudience
   const normalized = level.trim().toLowerCase();
 
   if (normalized.includes("jhs")) {
-    return { schoolLevels: ["jhs-1", "jhs-2", "jhs-3"], examPrograms: ["bece"] };
+    return { schoolLevels: ["jhs-1"], examPrograms: [] };
   }
   if (normalized.includes("shs") || normalized.includes("secondary")) {
     return { schoolLevels: ["shs-1", "shs-2", "shs-3"], examPrograms: ["wassce"] };

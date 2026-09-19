@@ -10,7 +10,7 @@ import {
 const algebraConfig = {
   lane: "school" as const,
   programId: "ghana",
-  levelId: "jhs-3",
+  levelId: "jhs-1",
   subjectId: "mathematics",
   topicId: "algebra",
   mode: "topic" as const,
@@ -63,6 +63,27 @@ describe("SukuuNova parameterized variant engine", () => {
       expect(questions.length, template.id).toBeGreaterThan(0);
       expect(questions.every((question) => isCorrectAnswer(question, question.answer)), template.id).toBe(true);
     }
+  });
+
+  it("does not reuse JHS generators as SHS or WASSCE preparation", () => {
+    const shs = buildVariantQuestions({
+      ...algebraConfig,
+      levelId: "shs-3",
+      count: 20,
+    });
+    const wassce = buildVariantQuestions({
+      lane: "exam",
+      programId: "wassce",
+      levelId: "practice",
+      subjectId: "mathematics",
+      topicId: "algebra",
+      mode: "topic",
+      count: 20,
+      seed: 1,
+    });
+
+    expect(shs).toEqual([]);
+    expect(wassce).toEqual([]);
   });
 
   it("keeps unsupported university selections out of school/exam templates", () => {

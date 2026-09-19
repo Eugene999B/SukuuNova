@@ -84,6 +84,14 @@ function expandingDetailedSubject(id: string, label: string, topics: CatalogTopi
   };
 }
 
+function markSubjectExpanding(subject: CatalogSubject): CatalogSubject {
+  return {
+    ...subject,
+    availability: "expanding",
+    topics: subject.topics.map((topic) => ({ ...topic, availability: "expanding" })),
+  };
+}
+
 const mathematicsSubject: CatalogSubject = {
   id: "mathematics",
   label: "Mathematics",
@@ -213,6 +221,8 @@ const upperPrimarySubjects: CatalogSubject[] = [
   expandingSubject("computing", "Computing"),
 ];
 
+const upperPrimaryExpandingSubjects = upperPrimarySubjects.map(markSubjectExpanding);
+
 const jhsSubjects: CatalogSubject[] = [
   mathematicsSubject,
   englishSubject,
@@ -228,6 +238,8 @@ const jhsSubjects: CatalogSubject[] = [
   expandingSubject("career-technology", "Career Technology"),
 ];
 
+const jhsExpandingSubjects = jhsSubjects.map(markSubjectExpanding);
+
 const generalScienceSubject: CatalogSubject = {
   ...scienceSubject,
   label: "General Science",
@@ -235,11 +247,11 @@ const generalScienceSubject: CatalogSubject = {
 };
 
 const shsSubjects: CatalogSubject[] = [
-  mathematicsSubject,
-  englishSubject,
-  generalScienceSubject,
-  socialSubject,
-  computingSubject,
+  markSubjectExpanding(mathematicsSubject),
+  markSubjectExpanding(englishSubject),
+  markSubjectExpanding(generalScienceSubject),
+  markSubjectExpanding(socialSubject),
+  markSubjectExpanding(computingSubject),
   expandingSubject("additional-mathematics", "Additional Mathematics"),
   expandingSubject("agricultural-science", "Agricultural Science"),
   expandingSubject("agriculture", "Agriculture"),
@@ -271,11 +283,11 @@ const shsSubjects: CatalogSubject[] = [
 ];
 
 const beceSubjects: CatalogSubject[] = [
-  mathematicsSubject,
-  englishSubject,
-  scienceSubject,
-  socialSubject,
-  computingSubject,
+  markSubjectExpanding(mathematicsSubject),
+  markSubjectExpanding(englishSubject),
+  markSubjectExpanding(scienceSubject),
+  markSubjectExpanding(socialSubject),
+  markSubjectExpanding(computingSubject),
   expandingSubject("arabic", "Arabic"),
   expandingSubject("career-technology", "Career Technology"),
   expandingSubject("creative-arts-design", "Creative Art & Design"),
@@ -285,10 +297,10 @@ const beceSubjects: CatalogSubject[] = [
 ];
 
 const wassceCoreSubjects: CatalogSubject[] = [
-  { ...mathematicsSubject, label: "Mathematics (Core)", contentLabel: "Mathematics" },
-  englishSubject,
-  { ...scienceSubject, label: "Integrated Science", contentLabel: "Science" },
-  socialSubject,
+  { ...markSubjectExpanding(mathematicsSubject), label: "Mathematics (Core)", contentLabel: "Mathematics" },
+  markSubjectExpanding(englishSubject),
+  { ...markSubjectExpanding(scienceSubject), label: "Integrated Science", contentLabel: "Science" },
+  markSubjectExpanding(socialSubject),
 ];
 
 const wassceElectives: CatalogSubject[] = [
@@ -383,11 +395,11 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         schoolLevel("basic-2", "Basic 2", lowerPrimarySubjects),
         schoolLevel("basic-3", "Basic 3", lowerPrimarySubjects),
         schoolLevel("basic-4", "Basic 4", upperPrimarySubjects),
-        schoolLevel("basic-5", "Basic 5", upperPrimarySubjects),
-        schoolLevel("basic-6", "Basic 6", upperPrimarySubjects),
+        schoolLevel("basic-5", "Basic 5", upperPrimaryExpandingSubjects),
+        schoolLevel("basic-6", "Basic 6", upperPrimaryExpandingSubjects),
         schoolLevel("jhs-1", "JHS 1", jhsSubjects),
-        schoolLevel("jhs-2", "JHS 2", jhsSubjects),
-        schoolLevel("jhs-3", "JHS 3", jhsSubjects),
+        schoolLevel("jhs-2", "JHS 2", jhsExpandingSubjects),
+        schoolLevel("jhs-3", "JHS 3", jhsExpandingSubjects),
         schoolLevel("shs-1", "SHS 1", shsSubjects),
         schoolLevel("shs-2", "SHS 2", shsSubjects),
         schoolLevel("shs-3", "SHS 3", shsSubjects),
@@ -401,13 +413,13 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "bece",
         label: "BECE",
-        description: "Current Ghana BECE subject map with practice-ready core coverage and visible expansion lanes.",
+        description: "The current Ghana BECE subject map is visible, but exam-specific practice is held back until paper-aligned question packs are validated.",
         levels: [{ id: "practice", label: "BECE practice", subjects: beceSubjects }],
       },
       {
         id: "wassce",
         label: "WASSCE",
-        description: "Core-subject practice plus a broad elective catalogue that can grow by programme without mixing it into ordinary classwork.",
+        description: "The current WASSCE structure is mapped, but trusted paper-specific practice is still expanding and is not exposed as ready.",
         levels: [{ id: "practice", label: "WASSCE practice", subjects: [...wassceCoreSubjects, ...wassceElectives] }],
       },
       {
@@ -428,7 +440,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "computer-science",
         label: "Computer Science",
-        description: "Course and module practice for computing students.",
+        description: "Computer Science course and module maps are visible while reviewed university-level practice is still expanding.",
         levels: [{ id: "foundation", label: "Foundation", subjects: [
           expandingDetailedSubject("programming", "Programming", [
             { id: "variables", label: "Variables & data types" },
@@ -444,7 +456,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "nursing",
         label: "Nursing",
-        description: "Concept checks and case-oriented practice for nursing students.",
+        description: "Nursing course maps are visible while reviewed case-oriented university practice is still expanding.",
         levels: [{ id: "foundation", label: "Foundation", subjects: [
           expandingDetailedSubject("anatomy", "Anatomy & Physiology", [
             { id: "cardiovascular", label: "Cardiovascular system" },
@@ -456,7 +468,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "business",
         label: "Business",
-        description: "Accounting, management and quantitative practice.",
+        description: "Business course maps are visible while reviewed university-level practice is still expanding.",
         levels: [{ id: "foundation", label: "Foundation", subjects: [
           expandingDetailedSubject("accounting", "Financial Accounting", [
             { id: "double-entry", label: "Double entry" },

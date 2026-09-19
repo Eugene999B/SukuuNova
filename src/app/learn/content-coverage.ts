@@ -11,7 +11,7 @@ export type StarterTopicCoverage = {
 };
 
 const ghanaSchool = catalogFor("school").programs.find((program) => program.id === "ghana");
-const representativeLevel = ghanaSchool?.levels.find((level) => level.id === "jhs-3") ?? ghanaSchool?.levels[0];
+const representativeLevel = ghanaSchool?.levels.find((level) => level.id === "jhs-1") ?? ghanaSchool?.levels[0];
 
 export const SCHOOL_STARTER_TOPIC_COVERAGE: StarterTopicCoverage[] = (representativeLevel?.subjects ?? [])
   .filter((subject) => subject.availability !== "expanding")

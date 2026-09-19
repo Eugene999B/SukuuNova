@@ -5,7 +5,7 @@ function config(overrides: Partial<Parameters<typeof learningCapabilityForSelect
   return {
     lane: "school" as const,
     programId: "ghana",
-    levelId: "jhs-3",
+    levelId: "jhs-1",
     subjectId: "computing",
     topicId: "digital-safety",
     mode: "topic" as const,
@@ -28,15 +28,16 @@ describe("SukuuNova learning capability registry", () => {
     expect(capability.ready).toBe(false);
   });
 
-  it("marks scalable generated topics as massive", () => {
+  it("does not promote generic JHS generators into SHS readiness", () => {
     const capability = learningCapabilityForSelection(config({
       levelId: "shs-2",
       subjectId: "mathematics",
       topicId: "algebra",
     }));
-    expect(capability.ready).toBe(true);
-    expect(capability.variantCapacity).toBeGreaterThanOrEqual(1_000_000);
-    expect(capability.stage).toBe("massive");
+    expect(capability.reviewedStandardQuestions).toBe(0);
+    expect(capability.variantCapacity).toBe(0);
+    expect(capability.ready).toBe(false);
+    expect(capability.stage).toBe("mapped");
   });
 
   it("gives KG a million-scale age-specific numeracy path", () => {
@@ -49,24 +50,18 @@ describe("SukuuNova learning capability registry", () => {
     expect(capability.variantCapacity).toBeGreaterThanOrEqual(1_000_000);
   });
 
-  it("maps JHS reviewed content into BECE but not WASSCE", () => {
-    const bece = learningCapabilityForSelection(config({
-      lane: "exam",
-      programId: "bece",
-      levelId: "practice",
-      subjectId: "social",
-      topicId: "governance",
-    }));
-    const wassce = learningCapabilityForSelection(config({
-      lane: "exam",
-      programId: "wassce",
-      levelId: "practice",
-      subjectId: "social",
-      topicId: "governance",
-    }));
-    expect(bece.reviewedStandardQuestions).toBeGreaterThan(0);
-    expect(bece.ready).toBe(true);
-    expect(wassce.reviewedStandardQuestions).toBe(0);
-    expect(wassce.ready).toBe(false);
+  it("does not repurpose school foundation content as exam preparation", () => {
+    for (const programId of ["bece", "wassce"] as const) {
+      const capability = learningCapabilityForSelection(config({
+        lane: "exam",
+        programId,
+        levelId: "practice",
+        subjectId: "social",
+        topicId: "governance",
+      }));
+      expect(capability.reviewedStandardQuestions).toBe(0);
+      expect(capability.variantCapacity).toBe(0);
+      expect(capability.ready).toBe(false);
+    }
   });
 });

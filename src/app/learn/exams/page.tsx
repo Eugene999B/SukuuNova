@@ -56,7 +56,7 @@ export default function ExamCentrePage() {
                   <h2>{blueprint.label}</h2>
                   <p>{blueprint.authority}</p>
                 </div>
-                <div className={styles.coverage}><strong>{ready.length}</strong><span>launch subjects</span></div>
+                <div className={styles.coverage}><strong>{ready.length}</strong><span>topic-practice subjects</span></div>
               </div>
 
               <p className={styles.note}>{blueprint.note}</p>
@@ -67,7 +67,7 @@ export default function ExamCentrePage() {
                     <div className={styles.subjectTitle}>
                       <BookOpenCheck size={16} />
                       <strong>{subject.label}</strong>
-                      <span>{subject.practiceReady ? "Practice lane" : "Coverage planned"}</span>
+                      <span>{subject.practiceReady ? "Foundation topic practice" : "Coverage mapped · practice pending"}</span>
                     </div>
                     {subject.papers?.length ? (
                       <div className={styles.paperList}>
@@ -79,7 +79,7 @@ export default function ExamCentrePage() {
                         ))}
                       </div>
                     ) : (
-                      <p className={styles.subjectCopy}>{subject.practiceReady ? "The current Learn engine can already serve this subject while deeper exam-specific packs expand." : "Kept visible in the blueprint so coverage grows deliberately rather than being silently omitted."}</p>
+                      <p className={styles.subjectCopy}>{subject.practiceReady ? "Reviewed foundation questions are available for topic practice. This is not presented as a full paper mock." : "The exam area is mapped, but trusted paper-specific practice is not exposed until its content and marking are validated."}</p>
                     )}
                   </section>
                 ))}
@@ -97,7 +97,7 @@ export default function ExamCentrePage() {
       <section className={styles.guardrail}>
         <div><ShieldCheck size={22} /><span>EXAM SAFETY</span></div>
         <h2>Practice intelligence, not fake certainty.</h2>
-        <p>SukuuNova can report mastery, accuracy, pace and weak areas. It does not present those signals as an official WAEC grade prediction, and it does not copy proprietary past papers into the platform.</p>
+        <p>SukuuNova can report practice accuracy, pace and areas to revisit. It does not present those signals as an official WAEC grade prediction, and no full BECE or WASSCE mock is exposed until paper-specific structure, timing, question types and marking have been validated.</p>
       </section>
     </main>
   );

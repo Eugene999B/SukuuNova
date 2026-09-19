@@ -103,14 +103,16 @@ function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: numb
  * Released Question Foundry content is preferred first. Catalog ids are resolved
  * to their human labels before matching, so ids such as `coding` correctly map
  * to labels such as `Computational thinking` without fragile string guessing.
- * When the verified pack is still small, the engine broadens to generated
- * practice rather than cloning one concept under different question IDs.
+ * Generated variants are capped per skill family inside a session so a huge
+ * parameter space cannot masquerade as cognitive variety. When depth is small,
+ * the session returns fewer questions and the UI reports the actual size.
  */
 export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const requested = clampRequestedCount(config.count);
   const seed = config.seed ?? Date.now();
   const recent = new Set(config.seen ?? []);
   const unique = new Set<string>();
+  const generatedPerSkill = new Map<string, number>();
   const fresh: LearnQuestion[] = [];
   const recycled: LearnQuestion[] = [];
   const selection = resolveSelectionLabels(config);
@@ -119,6 +121,12 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   function absorb(questions: LearnQuestion[]) {
     for (const question of questions) {
       if (unique.has(question.exposureKey)) continue;
+      if (question.exposureKey.startsWith("variant:")) {
+        const family = `${question.subject}|${question.topic}|${question.skill}`;
+        const familyCount = generatedPerSkill.get(family) ?? 0;
+        if (familyCount >= 4) continue;
+        generatedPerSkill.set(family, familyCount + 1);
+      }
       unique.add(question.exposureKey);
       if (recent.has(question.exposureKey)) recycled.push(question);
       else fresh.push(question);

@@ -5,7 +5,7 @@ describe("SukuuNova Learn exam blueprints", () => {
   it("keeps exam references versioned and source-backed", () => {
     for (const blueprint of EXAM_BLUEPRINTS) {
       expect(blueprint.referenceYear).toBe(2026);
-      expect(blueprint.lastVerified).toBe("2026-09-17");
+      expect(blueprint.lastVerified).toBe("2026-09-19");
       expect(blueprint.sourceUrl.startsWith("https://")).toBe(true);
       expect(blueprint.authority).toContain("West African Examinations Council");
     }
@@ -17,7 +17,7 @@ describe("SukuuNova Learn exam blueprints", () => {
 
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toEqual(expect.arrayContaining(["english", "social-studies", "science", "mathematics", "computing"]));
-    expect(practiceReadySubjects(bece)).toHaveLength(5);
+    expect(practiceReadySubjects(bece)).toHaveLength(0);
   });
 
   it("records the four WASSCE school core subjects separately from electives", () => {
@@ -28,6 +28,14 @@ describe("SukuuNova Learn exam blueprints", () => {
       "Mathematics (Core)",
       "Social Studies",
     ]);
+  });
+
+  it("does not claim a full mock where paper-specific content is not implemented", () => {
+    const bece = examBlueprint("bece-2026");
+    const wassce = examBlueprint("wassce-2026");
+    expect(practiceReadySubjects(bece)).toHaveLength(0);
+    expect(practiceReadySubjects(wassce)).toHaveLength(0);
+    expect([...bece.subjects, ...wassce.subjects].every((subject) => subject.fullMockReady !== true)).toBe(true);
   });
 
   it("keeps every timed paper duration positive", () => {
