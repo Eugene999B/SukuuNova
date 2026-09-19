@@ -178,7 +178,76 @@ const UNIVERSITY_PACKS: Record<string, Seed[]> = {
     { q: "The time value of money means:", a: "Money available today can be worth more than the same amount received later", wrong: ["Money never changes value", "Interest has no effect", "Future cash is always worth more"], why: "Current money can earn returns, so timing affects value." },
     { q: "Diversification mainly helps reduce:", a: "Asset-specific risk", wrong: ["All market risk", "Every possible loss", "Inflation automatically"], why: "Holding varied assets can reduce idiosyncratic risk." },
     { q: "Net present value compares:", a: "Present value of expected cash inflows with present value of outflows", wrong: ["Only accounting profit", "Number of employees", "Tax rates only"], why: "NPV discounts project cash flows to a common present-value basis." },
+  ],,
+  "information-technology|introduction-to-it": [
+    { q: "Which statement best describes an information system?", a: "People, processes, data and technology working together", wrong: ["Only a desktop computer", "Only a database table", "Only internet cables"], why: "Information systems combine technology with people, data and processes to support work and decisions." },
+    { q: "What is the main purpose of an operating system?", a: "Manage hardware resources and provide services for applications", wrong: ["Design company logos", "Replace every application", "Create electricity"], why: "Operating systems coordinate hardware and provide core services used by programs." },
+    { q: "Which storage type normally retains data when power is removed?", a: "SSD", wrong: ["CPU register", "RAM", "Cache only"], why: "SSDs are non-volatile storage devices." },
   ],
+  "computer-engineering|engineering-mathematics": SHS_PACKS["elective-mathematics"],
+  "computer-engineering|programming": [
+    { q: "Which construct repeats a block of code while a condition remains true?", a: "Loop", wrong: ["Variable declaration", "Comment", "Import only"], why: "Loops repeat instructions based on a condition or sequence." },
+    { q: "What is an algorithm?", a: "A finite sequence of steps for solving a problem", wrong: ["A hardware cable", "An image file", "A type of battery"], why: "Algorithms describe ordered computational steps." },
+    { q: "Which data type is appropriate for true/false values?", a: "Boolean", wrong: ["String only", "Float only", "Array only"], why: "Boolean values represent two logical states." },
+  ],
+  "marketing|principles-of-marketing": [
+    { q: "The marketing mix commonly includes product, price, place and:", a: "Promotion", wrong: ["Payroll", "Politics", "Production tax"], why: "The traditional 4Ps are product, price, place and promotion." },
+    { q: "Market segmentation means:", a: "Dividing a broad market into groups with similar needs or characteristics", wrong: ["Selling one product to nobody", "Removing all customer data", "Setting every price to zero"], why: "Segmentation groups customers so strategies can be better targeted." },
+    { q: "A brand promise mainly communicates:", a: "The value and experience customers should expect", wrong: ["A legal court ruling", "A bank balance", "A weather forecast"], why: "Brand promises express the experience or value a brand aims to deliver." },
+  ],
+  "human-resource-management|principles-of-management": SHS_PACKS["business-management"],
+  "human-resource-management|introduction-to-hrm": [
+    { q: "Recruitment focuses on:", a: "Attracting suitable candidates for vacancies", wrong: ["Firing every employee", "Calculating rainfall", "Designing buildings"], why: "Recruitment seeks a pool of suitable applicants for available roles." },
+    { q: "A job description mainly states:", a: "Duties, responsibilities and reporting relationships", wrong: ["The employee's private hobbies", "A company's tax return only", "Weather conditions"], why: "Job descriptions define the work attached to a role." },
+    { q: "Performance appraisal is used to:", a: "Review employee performance against expectations and development needs", wrong: ["Set national interest rates", "Replace all training", "Measure soil pH"], why: "Appraisal supports feedback, evaluation and development." },
+  ],
+  "procurement-supply-chain|introduction-to-procurement": [
+    { q: "Procurement is primarily concerned with:", a: "Obtaining goods, works and services needed by an organisation", wrong: ["Only advertising", "Only payroll", "Only production"], why: "Procurement covers sourcing and acquiring required goods, works and services." },
+    { q: "A purchase order is:", a: "A formal document authorising a purchase from a supplier", wrong: ["A staff attendance sheet", "A bank loan only", "A marketing slogan"], why: "Purchase orders state what is being bought and the agreed commercial terms." },
+    { q: "Supplier evaluation helps an organisation assess:", a: "Quality, delivery, cost and reliability", wrong: ["Only logo colour", "Only office location", "Only employee age"], why: "Supplier evaluation checks whether vendors meet performance requirements." },
+  ],
+  "architecture|design-studio-i": [
+    { q: "In architectural design, circulation refers to:", a: "How people move through and between spaces", wrong: ["Only wall colour", "Only roof material", "Only property price"], why: "Circulation describes movement routes and spatial connections." },
+    { q: "A floor plan is primarily a:", a: "Horizontal section showing spatial arrangement", wrong: ["Perspective photograph only", "Vertical structural test", "Written contract"], why: "Plans show spaces as if viewed from above after a horizontal cut." },
+    { q: "Orientation of a building can strongly affect:", a: "Daylight and heat gain", wrong: ["The laws of arithmetic", "The spelling of street names", "Only furniture brand"], why: "Orientation changes exposure to sun, wind and daylight." },
+  ],
+  "political-science|introduction-to-political-science": [
+    { q: "Political science studies:", a: "Power, governance, institutions and political behaviour", wrong: ["Only weather", "Only anatomy", "Only chemistry"], why: "Political science examines how power and collective decisions are organised." },
+    { q: "A state is commonly understood to require a population, territory, government and:", a: "Sovereignty", wrong: ["One political party only", "A monarchy", "A single language"], why: "Sovereignty is a core element of statehood." },
+    { q: "Civil society refers to:", a: "Organisations and associations outside the state and market that participate in public life", wrong: ["Only the military", "Only parliament", "Only private companies"], why: "Civil society includes voluntary groups, NGOs, professional bodies and associations." },
+  ],
+  "sociology|introduction-to-sociology": [
+    { q: "Socialisation is the process through which people:", a: "Learn norms, values and roles of society", wrong: ["Become biologically identical", "Stop interacting", "Avoid culture"], why: "Socialisation transmits social expectations and cultural patterns." },
+    { q: "Which term describes an expected pattern of behaviour attached to a social position?", a: "Role", wrong: ["Climate", "Genome", "Currency"], why: "Social roles are expectations associated with statuses or positions." },
+    { q: "A social institution is:", a: "An organised pattern that meets major social needs", wrong: ["Only a physical building", "Any random crowd", "A computer program"], why: "Institutions such as family, education and religion organise recurring social functions." },
+  ],
+  "communication-media|introduction-to-communication": [
+    { q: "Feedback in communication is:", a: "A receiver's response that shows how a message was interpreted", wrong: ["Only background noise", "A printing error", "A camera lens"], why: "Feedback helps communicators judge whether meaning was received as intended." },
+    { q: "Gatekeeping in media refers to:", a: "Selecting and shaping which information reaches audiences", wrong: ["Locking a studio door", "Charging phone batteries", "Fixing microphones"], why: "Gatekeeping describes editorial selection and prioritisation of content." },
+    { q: "Audience segmentation helps communicators:", a: "Tailor messages to groups with different needs and characteristics", wrong: ["Eliminate all research", "Use one message without context", "Avoid measuring impact"], why: "Segmentation improves relevance by recognising audience differences." },
+  ],
+  "biochemistry|general-chemistry": SHS_PACKS.chemistry,
+  "actuarial-science|calculus": [
+    { q: "The derivative of x² is:", a: "2x", wrong: ["x", "x³", "2"], why: "The power rule gives d(x²)/dx = 2x." },
+    { q: "The integral of 2x with respect to x is:", a: "x² + C", wrong: ["2 + C", "x + C", "2x² + C"], why: "An antiderivative of 2x is x²." },
+    { q: "A limit describes:", a: "The value a function approaches as the input approaches a point", wrong: ["Only the maximum value", "A random integer", "The graph colour"], why: "Limits formalise behaviour near a point and underpin calculus." },
+  ],
+  "statistics|introduction-to-statistics": [
+    { q: "The median is:", a: "The middle value after ordering the data", wrong: ["Always the largest value", "The sum of all values", "The most frequent category only"], why: "The median divides ordered data into two halves." },
+    { q: "Standard deviation measures:", a: "Spread around the mean", wrong: ["Sample size only", "The maximum only", "The units of a graph"], why: "Standard deviation summarises typical dispersion around the mean." },
+    { q: "A sample is:", a: "A subset of a population used for study", wrong: ["Always the entire population", "A guaranteed unbiased result", "Only a chart"], why: "Samples provide observations used to infer properties of a wider population." },
+  ],
+  "education|foundations-of-education": [
+    { q: "A learning objective should primarily describe:", a: "What learners are expected to know or be able to do", wrong: ["The teacher's salary", "The classroom colour", "The school address"], why: "Objectives state intended learning outcomes." },
+    { q: "Formative assessment is mainly used to:", a: "Provide feedback during learning", wrong: ["Award only final certificates", "Replace teaching", "Punish errors"], why: "Formative assessment informs teaching and helps learners improve while learning is still happening." },
+    { q: "Differentiation in teaching means:", a: "Adjusting support, tasks or methods to learner needs", wrong: ["Giving everyone identical support regardless of need", "Removing objectives", "Avoiding assessment"], why: "Differentiation responds to learner readiness, needs and strengths." },
+  ],
+  "agriculture|introduction-to-agriculture": SHS_PACKS["general-agriculture"],
+  "hospitality-tourism|introduction-to-hospitality": [
+    { q: "Hospitality service quality is strongly influenced by:", a: "Consistency, responsiveness and guest experience", wrong: ["Only building height", "Only room colour", "Only staff uniforms"], why: "Guests judge service through reliable delivery and how needs are handled." },
+    { q: "Occupancy rate measures:", a: "The proportion of available rooms that are sold", wrong: ["Number of staff only", "Average meal price", "Tourist visas issued"], why: "Occupancy compares rooms sold with rooms available." },
+    { q: "Front office operations commonly include:", a: "Reservations, check-in, guest accounts and check-out", wrong: ["Only kitchen production", "Only building maintenance", "Only advertising"], why: "The front office manages major guest-contact and room-account processes." },
+  ]
 };
 
 function makeQuestion(prefix: string, subject: string, seed: Seed, index: number, difficulty: 1 | 2 | 3 | 4 | 5): LearnQuestion {
