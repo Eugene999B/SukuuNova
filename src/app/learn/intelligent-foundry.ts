@@ -90,15 +90,16 @@ function seedValue(seed: number) {
 }
 
 function variantIndex(template: SmartTemplate, seed: number, position: number) {
-  const blocks = Math.max(1, Math.floor(template.capacity / BLOCK_SIZE));
-  const block = (seedValue(seed) + hash(template.id)) % blocks;
-  // A large odd stride deliberately moves across several mixed-radix
-  // dimensions at once. Consecutive questions therefore vary wording,
-  // context, task direction and response format instead of changing only
-  // one number inside the same sentence frame.
-  const stride = 104_729 + (hash(`${template.id}:${seedValue(seed)}`) % 9_973);
-  const salt = hash(`${seedValue(seed)}:${template.id}:foundry`) % 999_983;
-  return (block * BLOCK_SIZE + salt + position * stride) % template.capacity;
+  // Mix two independent 32-bit hashes into a safe 53-bit integer. This is
+  // intentionally non-local: question N+1 should jump across the template's
+  // mixed-radix dimensions (numbers, scenario, wording, cognitive style and
+  // response format), rather than looking like question N with one digit
+  // changed. The result remains deterministic for testability and replay.
+  const key = `${template.id}:${seedValue(seed)}:${position}`;
+  const high = hash(`${key}:high`);
+  const low = hash(`${key}:low`) & 0x1fffff;
+  const mixed = high * 0x200000 + low;
+  return mixed % template.capacity;
 }
 
 function clampDifficulty(value: number): 1 | 2 | 3 | 4 | 5 {
