@@ -17,10 +17,10 @@ type VariantTemplate = {
   render: (variantIndex: number) => LearnQuestion;
 };
 
-const UPPER_PRIMARY_LEVELS = ["basic-4", "basic-5", "basic-6"] as const;
-const JHS_LEVELS = ["jhs-1", "jhs-2", "jhs-3"] as const;
+const UPPER_PRIMARY_LEVELS = ["basic-4"] as const;
+const JHS_LEVELS = ["jhs-1"] as const;
 const UPPER_PRIMARY_TO_JHS = [...UPPER_PRIMARY_LEVELS, ...JHS_LEVELS] as const;
-const BECE_PROGRAMS = ["bece"] as const;
+const EXAM_PROGRAMS: readonly string[] = [];
 
 const EARLY_NAMES = [
   "Ama", "Kojo", "Akosua", "Kwame", "Esi", "Kofi", "Adwoa", "Yaw",
@@ -568,7 +568,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 2,
     capacity: arithmeticCapacity,
     schoolLevels: UPPER_PRIMARY_TO_JHS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderArithmetic,
   },
   {
@@ -581,7 +581,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 3,
     capacity: algebraCapacity,
     schoolLevels: JHS_LEVELS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderLinearEquation,
   },
   {
@@ -594,7 +594,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 2,
     capacity: geometryCapacity,
     schoolLevels: UPPER_PRIMARY_TO_JHS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderRectangle,
   },
   {
@@ -607,7 +607,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 3,
     capacity: statisticsCapacity,
     schoolLevels: JHS_LEVELS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderArithmeticMean,
   },
   {
@@ -620,7 +620,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 2,
     capacity: grammarCapacity,
     schoolLevels: UPPER_PRIMARY_TO_JHS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderConcord,
   },
   {
@@ -633,7 +633,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 3,
     capacity: livingCapacity,
     schoolLevels: JHS_LEVELS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderMagnification,
   },
   {
@@ -646,7 +646,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 3,
     capacity: matterCapacity,
     schoolLevels: JHS_LEVELS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderDensity,
   },
   {
@@ -659,7 +659,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 3,
     capacity: forceCapacity,
     schoolLevels: JHS_LEVELS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderForce,
   },
   {
@@ -672,7 +672,7 @@ export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
     difficulty: 3,
     capacity: binaryCapacity,
     schoolLevels: JHS_LEVELS,
-    examPrograms: BECE_PROGRAMS,
+    examPrograms: EXAM_PROGRAMS,
     render: renderBinary,
   },
 ];
