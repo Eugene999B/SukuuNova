@@ -25,16 +25,16 @@ function clampVolume(value: unknown, fallback: number, max = 70) {
 
 export function LearnShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [effects, setEffects] = useState(false);
+  const [effects, setEffects] = useState(true);
   const [music, setMusic] = useState(false);
-  const [effectsVolume, setEffectsVolume] = useState(35);
+  const [effectsVolume, setEffectsVolume] = useState(52);
   const [musicVolume, setMusicVolume] = useState(24);
   const [audioState, setAudioState] = useState<AudioState>("idle");
   const [loaded, setLoaded] = useState(false);
   const audio = useRef<AudioContext | null>(null);
   const musicGain = useRef<GainNode | null>(null);
   const lastTap = useRef(0);
-  const prefs = useRef<AudioPreferences>({ effects: false, music: false, effectsVolume: 35, musicVolume: 24 });
+  const prefs = useRef<AudioPreferences>({ effects: true, music: false, effectsVolume: 52, musicVolume: 24 });
 
   const reflectAudioState = useCallback((ctx: AudioContext | null) => {
     if (!ctx) {
@@ -86,10 +86,10 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem("sukuunova-learn-audio-v2") || "{}") as Partial<AudioPreferences> & { volume?: number };
-      const legacyVolume = clampVolume(stored.volume, 35);
-      const nextEffects = stored.effects === true;
+      const legacyVolume = clampVolume(stored.volume, 52);
+      const nextEffects = stored.effects !== false;
       const nextMusic = stored.music === true;
-      const nextEffectsVolume = clampVolume(stored.effectsVolume, legacyVolume);
+      const nextEffectsVolume = clampVolume(stored.effectsVolume, legacyVolume, 80);
       const nextMusicVolume = clampVolume(stored.musicVolume, Math.min(24, legacyVolume), 50);
       setEffects(nextEffects);
       setMusic(nextMusic);
@@ -130,22 +130,22 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
       const ctx = await ensureAudio();
       if (!ctx) return;
       const notes: Record<Cue, number[]> = {
-        tap: [523.25],
+        tap: [587.33],
         start: [392, 523.25, 659.25],
-        correct: [523.25, 659.25, 783.99],
-        retry: [392, 349.23],
-        complete: [523.25, 659.25, 783.99, 1046.5],
+        correct: [659.25, 783.99, 1046.5],
+        retry: [220, 196],
+        complete: [523.25, 659.25, 783.99, 1046.5, 1318.51],
       };
 
       notes[cue].forEach((hz, index) => {
         const oscillator = ctx.createOscillator();
         const gain = ctx.createGain();
         const at = ctx.currentTime + index * 0.095;
-        oscillator.type = "sine";
+        oscillator.type = cue === "retry" ? "square" : cue === "tap" ? "triangle" : "sine";
         oscillator.frequency.value = hz;
         gain.gain.setValueAtTime(0.0001, at);
         gain.gain.exponentialRampToValueAtTime(
-          Math.max(0.0001, (prefs.current.effectsVolume / 100) * 0.11),
+          Math.max(0.0001, (prefs.current.effectsVolume / 100) * (cue === "tap" ? 0.08 : cue === "retry" ? 0.1 : 0.16)),
           at + 0.015,
         );
         gain.gain.exponentialRampToValueAtTime(0.0001, at + (cue === "tap" ? 0.07 : 0.25));
