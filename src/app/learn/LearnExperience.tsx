@@ -3,7 +3,7 @@ import { ArrowRight, BookOpen, GraduationCap, Medal, Sparkles, Compass, Calendar
 import styles from "./hub.module.css";
 
 const paths = [
-  { title:"School", detail:"Foundation practice · later years mapped", copy:"Pick your class and SukuuNova will clearly separate practice-ready topics from coverage still being built.", lane:"school", icon:BookOpen, tone:"violet" },
+  { title:"School", detail:"KG · Primary · JHS · SHS", copy:"Pick your class and SukuuNova will clearly separate practice-ready topics from coverage still being built.", lane:"school", icon:BookOpen, tone:"violet" },
   { title:"Exam preparation", detail:"BECE · WASSCE · IELTS mapped", copy:"Practise only where reviewed coverage exists. Full mocks stay unavailable until exam-specific structure and marking are validated.", lane:"exam", icon:Medal, tone:"blue" },
   { title:"University", detail:"Level 100 · Computer Science · Nursing · Business", copy:"Start real Level 100 practice in programming, networks, anatomy, patient care, accounting and management.", lane:"university", icon:GraduationCap, tone:"orange" },
   { title:"Skills & careers", detail:"Digital productivity · Online safety · Aptitude", copy:"Practise documents, spreadsheets, account safety, numerical reasoning and verbal analogies.", lane:"skills", icon:Compass, tone:"green" },
