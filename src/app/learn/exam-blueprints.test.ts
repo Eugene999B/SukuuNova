@@ -5,7 +5,7 @@ describe("SukuuNova Learn exam blueprints", () => {
   it("keeps exam references versioned and source-backed", () => {
     for (const blueprint of EXAM_BLUEPRINTS) {
       expect(blueprint.referenceYear).toBe(2026);
-      expect(blueprint.lastVerified).toBe("2026-09-17");
+      expect(blueprint.lastVerified).toBe("2026-09-19");
       expect(blueprint.sourceUrl.startsWith("https://")).toBe(true);
       expect(blueprint.authority).toContain("West African Examinations Council");
     }
@@ -28,6 +28,13 @@ describe("SukuuNova Learn exam blueprints", () => {
       "Mathematics (Core)",
       "Social Studies",
     ]);
+  });
+
+  it("does not claim a full mock where paper-specific content is not implemented", () => {
+    const bece = examBlueprint("bece-2026");
+    const wassce = examBlueprint("wassce-2026");
+    expect(practiceReadySubjects(bece).every((subject) => subject.practiceScope === "topic" && subject.fullMockReady === false)).toBe(true);
+    expect(practiceReadySubjects(wassce)).toHaveLength(0);
   });
 
   it("keeps every timed paper duration positive", () => {
