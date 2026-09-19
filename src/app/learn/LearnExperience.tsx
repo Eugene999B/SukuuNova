@@ -3,9 +3,9 @@ import { ArrowRight, BookOpen, GraduationCap, Medal, Sparkles, Compass, Calendar
 import styles from "./hub.module.css";
 
 const paths = [
-  { title:"School", detail:"KG · Primary · JHS · SHS", copy:"Pick your class and SukuuNova will clearly separate practice-ready topics from coverage still being built.", lane:"school", icon:BookOpen, tone:"violet" },
+  { title:"School", detail:"KG · Primary · JHS · 9 SHS pathways", copy:"Move from basic school into General Science, General Arts, Business, Visual Arts, Home Economics, Agriculture, Technical, STEM and Performing Arts pathways.", lane:"school", icon:BookOpen, tone:"violet" },
   { title:"Exam preparation", detail:"BECE · WASSCE · IELTS mapped", copy:"Practise only where reviewed coverage exists. Full mocks stay unavailable until exam-specific structure and marking are validated.", lane:"exam", icon:Medal, tone:"blue" },
-  { title:"University", detail:"Level 100 · Computer Science · Nursing · Business", copy:"Start real Level 100 practice in programming, networks, anatomy, patient care, accounting and management.", lane:"university", icon:GraduationCap, tone:"orange" },
+  { title:"University", detail:"25+ popular programmes · Levels 100–600", copy:"Search Computer Science, Medicine, Nursing, Law, Economics, Engineering, Pharmacy, Business, Psychology, Public Health and more.", lane:"university", icon:GraduationCap, tone:"orange" },
   { title:"Skills & careers", detail:"Digital productivity · Online safety · Aptitude", copy:"Practise documents, spreadsheets, account safety, numerical reasoning and verbal analogies.", lane:"skills", icon:Compass, tone:"green" },
 ];
 export function LearnExperience(){
@@ -13,14 +13,14 @@ export function LearnExperience(){
   <section className={styles.hero}>
    <div><span className={styles.eyebrow}><Sparkles size={16}/> A little practice. A clearer mind.</span>
     <h1>Your next<br/><em>“I get it”</em><br/>starts here.</h1>
-    <p>From your first numbers to your next big exam. Choose what you want to learn, answer at your pace, and understand the why.</p>
+    <p>From KG to SHS pathways, university programmes and career skills. Pick a path, hear every action, answer at your pace, and understand the why.</p>
     <div className={styles.actions}><Link className={styles.primary} href="/learn/explore">Start practice <ArrowRight size={18}/></Link><Link href="/learn/today">Try today’s challenge <ArrowRight size={16}/></Link></div>
-    <div className={styles.trust}><span>No sign-in needed</span><span>Explanations included</span><span>Your pace</span></div>
+    <div className={styles.trust}><span>🔊 Sound on by default</span><span>⚡ Instant feedback</span><span>🎯 Focused practice</span></div>
    </div>
    <div className={styles.preview} aria-label="Your learning journey">
     <div className={styles.previewHead}><span className={styles.spark}>✦</span><span>SMALL STEPS. REAL UNDERSTANDING.</span></div>
-    <div className={styles.route}><span>01</span><div><small>FIND YOUR START</small><strong>A class, course or exam</strong></div><BookOpen size={21}/></div>
-    <div className={styles.route}><span>02</span><div><small>MAKE IT YOURS</small><strong>One topic or a mixed set</strong></div><Compass size={21}/></div>
+    <div className={styles.route}><span>01</span><div><small>FIND YOUR START</small><strong>A class, SHS pathway, degree or exam</strong></div><BookOpen size={21}/></div>
+    <div className={styles.route}><span>02</span><div><small>MAKE IT YOURS</small><strong>Programme → level → course → topic</strong></div><Compass size={21}/></div>
     <div className={styles.route}><span>03</span><div><small>BUILD YOUR CONFIDENCE</small><strong>Answer. Understand. Try again.</strong></div><Sparkles size={21}/></div>
     <div className={styles.previewFooter}><span>5 minutes is a good start.</span><span>Let’s learn ↗</span></div>
    </div>
