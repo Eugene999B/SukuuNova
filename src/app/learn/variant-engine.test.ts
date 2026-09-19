@@ -10,7 +10,7 @@ import {
 const algebraConfig = {
   lane: "school" as const,
   programId: "ghana",
-  levelId: "jhs-3",
+  levelId: "jhs-1",
   subjectId: "mathematics",
   topicId: "algebra",
   mode: "topic" as const,
