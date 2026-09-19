@@ -42,8 +42,7 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       {
         id: "english",
         label: "English Language",
-        practiceReady: true,
-        practiceScope: "topic",
+        practiceReady: false,
         fullMockReady: false,
         papers: [
           { id: "english-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 70 },
@@ -53,8 +52,7 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       {
         id: "social-studies",
         label: "Social Studies",
-        practiceReady: true,
-        practiceScope: "topic",
+        practiceReady: false,
         fullMockReady: false,
         papers: [
           { id: "social-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 60 },
@@ -64,8 +62,7 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       {
         id: "science",
         label: "Science",
-        practiceReady: true,
-        practiceScope: "topic",
+        practiceReady: false,
         fullMockReady: false,
         papers: [
           { id: "science-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 85 },
@@ -75,8 +72,7 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       {
         id: "mathematics",
         label: "Mathematics",
-        practiceReady: true,
-        practiceScope: "topic",
+        practiceReady: false,
         fullMockReady: false,
         papers: [
           { id: "math-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 60 },
@@ -86,8 +82,7 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
       {
         id: "computing",
         label: "Computing",
-        practiceReady: true,
-        practiceScope: "topic",
+        practiceReady: false,
         fullMockReady: false,
         papers: [
           { id: "computing-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 75 },
