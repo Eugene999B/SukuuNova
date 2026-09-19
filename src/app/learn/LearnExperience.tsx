@@ -3,8 +3,8 @@ import { ArrowRight, BookOpen, GraduationCap, Medal, Sparkles, Compass, Calendar
 import styles from "./hub.module.css";
 
 const paths = [
-  { title:"School", detail:"KG · Primary · JHS practice · SHS mapped", copy:"Pick your class and SukuuNova will clearly separate practice-ready topics from coverage still being built.", lane:"school", icon:BookOpen, tone:"violet" },
-  { title:"Exam preparation", detail:"BECE topic practice · WASSCE & IELTS mapped", copy:"Practise only where reviewed coverage exists. Full mocks stay unavailable until exam-specific structure and marking are validated.", lane:"exam", icon:Medal, tone:"blue" },
+  { title:"School", detail:"Foundation practice · later years mapped", copy:"Pick your class and SukuuNova will clearly separate practice-ready topics from coverage still being built.", lane:"school", icon:BookOpen, tone:"violet" },
+  { title:"Exam preparation", detail:"BECE · WASSCE · IELTS mapped", copy:"Practise only where reviewed coverage exists. Full mocks stay unavailable until exam-specific structure and marking are validated.", lane:"exam", icon:Medal, tone:"blue" },
   { title:"University", detail:"Discipline · Course · Topic maps", copy:"Explore mapped university routes. Reviewed course-level question packs are still expanding and are not presented as complete.", lane:"university", icon:GraduationCap, tone:"orange" },
   { title:"Skills & careers", detail:"Digital skills · Business · Aptitude", copy:"Make room for a new skill with a short, focused practice session.", lane:"skills", icon:Compass, tone:"green" },
 ];
