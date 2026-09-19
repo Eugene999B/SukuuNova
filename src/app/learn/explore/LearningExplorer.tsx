@@ -238,7 +238,7 @@ export function LearningExplorer() {
   function launchSession() {
     if (!practiceAvailable) {
       setSession([]);
-      setLaunchNotice("This curriculum path is mapped, but reviewed practice coverage is still expanding. Choose a practice-ready subject or topic.");
+      setLaunchNotice("Practice is not published for this exact selection yet. Choose an available subject or topic.");
       return;
     }
     playSound("start");
@@ -254,7 +254,7 @@ export function LearningExplorer() {
       seen: progress.exposures,
     });
     setSession(nextSession);
-    setLaunchNotice(nextSession.length ? (nextSession.length < count ? `This topic has ${nextSession.length} different questions available for this session. Your score uses that total.` : "") : "This path is mapped correctly, but its reviewed question pack is not deep enough yet. SukuuNova will not substitute unrelated questions.");
+    setLaunchNotice(nextSession.length ? (nextSession.length < count ? `This topic has ${nextSession.length} different questions available for this session. Your score uses that total.` : "") : "This selection does not have enough distinct questions for a useful session yet. Choose another available topic.");
     setQuestionIndex(0);
     setResponse("");
     setSubmitted(false);
@@ -383,18 +383,18 @@ export function LearningExplorer() {
 
           <div className={styles.twoColumns}>
             <div className={styles.selectorBlock}>
-              <label htmlFor="learn-level">{lane==="school"?"Your class":"Level / pathway"}</label>
+              <label htmlFor="learn-level">{lane==="school"?"Your class":lane==="university"?"Your level":lane==="exam"?"Exam level / format":"Skill level"}</label>
               <select id="learn-level" value={levelId} onChange={(event) => selectLevel(event.target.value)}>{program.levels.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
             </div>
             <div className={styles.selectorBlock}>
               <label htmlFor="learn-subject">Subject / section</label>
-              <select id="learn-subject" value={subjectId} onChange={(event) => selectSubject(event.target.value)}>{level.subjects.map((item) => { const ready = subjectIsReady(lane, program.id, level.id, item); return <option key={item.id} value={item.id} disabled={!ready}>{item.label}{ready ? "" : " — Coming soon"}</option>; })}</select>
+              <select id="learn-subject" value={subjectId} onChange={(event) => selectSubject(event.target.value)}>{level.subjects.map((item) => { const ready = subjectIsReady(lane, program.id, level.id, item); return <option key={item.id} value={item.id} disabled={!ready}>{item.label}{ready ? "" : " — No practice yet"}</option>; })}</select>
             </div>
           </div>
 
           <div className={styles.selectorBlock}>
             <label>One topic or a mix?</label>
-            <div className={styles.topicGrid}><button aria-pressed={topicId==="all"} className={topicId==="all"?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId("all");setMode("random");}}>✦ Mixed topics</button>{(showAllTopics?subject.topics:subject.topics.slice(0,8)).map((item) => { const ready = topicIsReady(lane, program.id, level.id, subject, item.id); return <button key={item.id} disabled={!ready} aria-pressed={topicId===item.id} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => { setTopicId(item.id); setLaunchNotice(""); }}><BookOpen size={15} /><span>{item.label}{ready ? "" : " · Coming soon"}</span>{topicId === item.id && ready && <Check size={15} />}</button>; })}</div>
+            <div className={styles.topicGrid}><button aria-pressed={topicId==="all"} className={topicId==="all"?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId("all");setMode("random");}}><Sparkles size={15}/><span>Mixed topics</span>{topicId==="all"&&<Check size={15}/>}</button>{(showAllTopics?subject.topics:subject.topics.slice(0,8)).map((item) => { const ready = topicIsReady(lane, program.id, level.id, subject, item.id); return <button key={item.id} disabled={!ready} aria-pressed={topicId===item.id} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => { setTopicId(item.id); setLaunchNotice(""); }}><BookOpen size={15} /><span>{item.label}{ready ? "" : " · No practice yet"}</span>{topicId === item.id && ready && <Check size={15} />}</button>; })}</div>
           </div>
 
           {subject.topics.length>8&&<button type="button" className={styles.chip} onClick={()=>setShowAllTopics(v=>!v)}>{showAllTopics?"Show fewer topics":"Show all topics"}</button>}
@@ -407,7 +407,7 @@ export function LearningExplorer() {
 
           <div className={styles.sessionFooter}>
             <div><label>Questions</label><div className={styles.countGroup}>{[5, 10, 20, 30, 50].map((value) => <button key={value} className={count === value ? styles.countActive : styles.countButton} aria-pressed={count===value} onClick={() => {setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Or choose 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
-            <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Sparkles size={18} /> {practiceAvailable ? (lane === "exam" ? "Start topic practice" : "Start practice") : "Coming soon"} <ArrowRight size={18} /></button>
+            <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Sparkles size={18} /> {practiceAvailable ? (lane === "exam" ? "Start topic practice" : "Start practice") : "No practice yet"} <ArrowRight size={18} /></button>
           </div>
           <p className={styles.engineNote}>{practiceAvailable ? "Questions stay within your selection. If fewer different questions are available, we will show the actual session size." : "Questions for this selection are coming soon. Try another topic or subject."}</p>
         </div>
