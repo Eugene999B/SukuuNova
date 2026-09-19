@@ -440,8 +440,8 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "computer-science",
         label: "Computer Science",
-        description: "Computer Science course and module maps are visible while reviewed university-level practice is still expanding.",
-        levels: [{ id: "foundation", label: "Foundation", subjects: [
+        description: "Level 100 Computer Science practice is available now for programming and computer networks.",
+        levels: [{ id: "level-100", label: "Level 100", subjects: [
           expandingDetailedSubject("programming", "Programming", [
             { id: "variables", label: "Variables & data types" },
             { id: "control-flow", label: "Control flow" },
@@ -456,8 +456,8 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "nursing",
         label: "Nursing",
-        description: "Nursing course maps are visible while reviewed case-oriented university practice is still expanding.",
-        levels: [{ id: "foundation", label: "Foundation", subjects: [
+        description: "Level 100 Nursing practice is available now for anatomy, physiology and patient-care fundamentals.",
+        levels: [{ id: "level-100", label: "Level 100", subjects: [
           expandingDetailedSubject("anatomy", "Anatomy & Physiology", [
             { id: "cardiovascular", label: "Cardiovascular system" },
             { id: "respiratory", label: "Respiratory system" },
@@ -468,8 +468,8 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "business",
         label: "Business",
-        description: "Business course maps are visible while reviewed university-level practice is still expanding.",
-        levels: [{ id: "foundation", label: "Foundation", subjects: [
+        description: "Level 100 Business practice is available now for financial accounting and management fundamentals.",
+        levels: [{ id: "level-100", label: "Level 100", subjects: [
           expandingDetailedSubject("accounting", "Financial Accounting", [
             { id: "double-entry", label: "Double entry" },
             { id: "statements", label: "Financial statements" },
