@@ -178,7 +178,7 @@ const UNIVERSITY_PACKS: Record<string, Seed[]> = {
     { q: "The time value of money means:", a: "Money available today can be worth more than the same amount received later", wrong: ["Money never changes value", "Interest has no effect", "Future cash is always worth more"], why: "Current money can earn returns, so timing affects value." },
     { q: "Diversification mainly helps reduce:", a: "Asset-specific risk", wrong: ["All market risk", "Every possible loss", "Inflation automatically"], why: "Holding varied assets can reduce idiosyncratic risk." },
     { q: "Net present value compares:", a: "Present value of expected cash inflows with present value of outflows", wrong: ["Only accounting profit", "Number of employees", "Tax rates only"], why: "NPV discounts project cash flows to a common present-value basis." },
-  ],,
+  ],
   "information-technology|introduction-to-it": [
     { q: "Which statement best describes an information system?", a: "People, processes, data and technology working together", wrong: ["Only a desktop computer", "Only a database table", "Only internet cables"], why: "Information systems combine technology with people, data and processes to support work and decisions." },
     { q: "What is the main purpose of an operating system?", a: "Manage hardware resources and provide services for applications", wrong: ["Design company logos", "Replace every application", "Create electricity"], why: "Operating systems coordinate hardware and provide core services used by programs." },
