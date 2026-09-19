@@ -17,7 +17,7 @@ describe("SukuuNova Learn exam blueprints", () => {
 
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toEqual(expect.arrayContaining(["english", "social-studies", "science", "mathematics", "computing"]));
-    expect(practiceReadySubjects(bece)).toHaveLength(5);
+    expect(practiceReadySubjects(bece)).toHaveLength(0);
   });
 
   it("records the four WASSCE school core subjects separately from electives", () => {
@@ -33,8 +33,9 @@ describe("SukuuNova Learn exam blueprints", () => {
   it("does not claim a full mock where paper-specific content is not implemented", () => {
     const bece = examBlueprint("bece-2026");
     const wassce = examBlueprint("wassce-2026");
-    expect(practiceReadySubjects(bece).every((subject) => subject.practiceScope === "topic" && subject.fullMockReady === false)).toBe(true);
+    expect(practiceReadySubjects(bece)).toHaveLength(0);
     expect(practiceReadySubjects(wassce)).toHaveLength(0);
+    expect([...bece.subjects, ...wassce.subjects].every((subject) => subject.fullMockReady !== true)).toBe(true);
   });
 
   it("keeps every timed paper duration positive", () => {
