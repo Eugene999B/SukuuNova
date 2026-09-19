@@ -141,7 +141,14 @@ async function main() {
         await player.getByLabel("Your answer").fill("0");
       }
       await checkButton.click();
-      await player.getByRole("status").waitFor();
+      const feedback=player.getByRole("status");
+      await feedback.waitFor();
+      const feedbackText=await feedback.innerText();
+      const expectedCue=feedbackText.includes("Yes!")?"correct":"retry";
+      await page.waitForFunction(
+        (cue)=>document.querySelector("[data-audio-control]")?.getAttribute("data-last-cue")===cue,
+        expectedCue,
+      );
       await player.getByRole("button",{name:question===2?"View results":"Next question",exact:true}).click();
     }
     await page.getByText("SESSION COMPLETE",{exact:true}).waitFor();
