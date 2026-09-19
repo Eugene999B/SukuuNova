@@ -832,7 +832,7 @@ function renderProbability(variant: number, config: SessionConfig) {
 }
 
 const geneticsDimensions = [16, 16, PEOPLE.length, MODERN_CONTEXTS.length, 6, 4] as const;
-const geneticsCapacity = product(geneticsDimensions) * 1_000;
+const geneticsCapacity = product(geneticsDimensions);
 
 function renderGenetics(variant: number, config: SessionConfig) {
   const [parentAIndex, parentBIndex, personIndex, contextIndex, style, rotation] = decode(variant, geneticsDimensions);
@@ -891,7 +891,7 @@ function renderDesignScale(variant: number, config: SessionConfig) {
 }
 
 const researchDimensions = [PEOPLE.length, MODERN_CONTEXTS.length, 6, 6, 64] as const;
-const researchCapacity = product(researchDimensions) * 100;
+const researchCapacity = product(researchDimensions);
 const RESEARCH_CONCEPTS = [
   ["random assignment", "participants are allocated to conditions by chance", "Random assignment reduces systematic pre-existing differences between experimental groups."],
   ["random sampling", "members of a population have a chance-based route into the sample", "Random sampling is a method for selecting participants from a population."],
