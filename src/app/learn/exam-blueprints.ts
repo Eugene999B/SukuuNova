@@ -9,6 +9,8 @@ export type ExamSubjectBlueprint = {
   id: string;
   label: string;
   practiceReady: boolean;
+  practiceScope?: "topic";
+  fullMockReady?: boolean;
   papers?: ExamPaper[];
 };
 
@@ -18,7 +20,7 @@ export type ExamBlueprint = {
   authority: string;
   country: "Ghana";
   referenceYear: 2026;
-  lastVerified: "2026-09-17";
+  lastVerified: "2026-09-19";
   sourceLabel: string;
   sourceUrl: string;
   note: string;
@@ -32,7 +34,7 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
     authority: "West African Examinations Council, Ghana",
     country: "Ghana",
     referenceYear: 2026,
-    lastVerified: "2026-09-17",
+    lastVerified: "2026-09-19",
     sourceLabel: "WAEC Ghana 2026 BECE final timetable",
     sourceUrl: "https://waecgh.org/wp-content/uploads/2026/03/BECESCPC_TIMETABLE.pdf",
     note: "Paper durations below are a 2026 timetable snapshot. SukuuNova keeps the year attached so future exam changes do not silently rewrite older practice blueprints.",
@@ -41,6 +43,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
         id: "english",
         label: "English Language",
         practiceReady: true,
+        practiceScope: "topic",
+        fullMockReady: false,
         papers: [
           { id: "english-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 70 },
           { id: "english-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 50 },
@@ -50,6 +54,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
         id: "social-studies",
         label: "Social Studies",
         practiceReady: true,
+        practiceScope: "topic",
+        fullMockReady: false,
         papers: [
           { id: "social-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 60 },
           { id: "social-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 45 },
@@ -59,6 +65,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
         id: "science",
         label: "Science",
         practiceReady: true,
+        practiceScope: "topic",
+        fullMockReady: false,
         papers: [
           { id: "science-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 85 },
           { id: "science-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 45 },
@@ -68,6 +76,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
         id: "mathematics",
         label: "Mathematics",
         practiceReady: true,
+        practiceScope: "topic",
+        fullMockReady: false,
         papers: [
           { id: "math-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 60 },
           { id: "math-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 60 },
@@ -77,6 +87,8 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
         id: "computing",
         label: "Computing",
         practiceReady: true,
+        practiceScope: "topic",
+        fullMockReady: false,
         papers: [
           { id: "computing-2", label: "Paper 2 · Essay", responseMode: "written", durationMinutes: 75 },
           { id: "computing-1", label: "Paper 1 · Objective", responseMode: "objective", durationMinutes: 45 },
@@ -96,15 +108,15 @@ export const EXAM_BLUEPRINTS: ExamBlueprint[] = [
     authority: "West African Examinations Council, Ghana",
     country: "Ghana",
     referenceYear: 2026,
-    lastVerified: "2026-09-17",
+    lastVerified: "2026-09-19",
     sourceLabel: "WAEC Ghana WASSCE School subject information",
     sourceUrl: "https://waecgh.org/home/wassce-school/",
     note: "WAEC lists four core subjects for school candidates. Elective combinations depend on the candidate's programme, so SukuuNova models them separately instead of pretending one universal elective blueprint exists.",
     subjects: [
-      { id: "english", label: "English Language", practiceReady: true },
-      { id: "integrated-science", label: "Integrated Science", practiceReady: true },
-      { id: "core-mathematics", label: "Mathematics (Core)", practiceReady: true },
-      { id: "social-studies", label: "Social Studies", practiceReady: true },
+      { id: "english", label: "English Language", practiceReady: false, fullMockReady: false },
+      { id: "integrated-science", label: "Integrated Science", practiceReady: false, fullMockReady: false },
+      { id: "core-mathematics", label: "Mathematics (Core)", practiceReady: false, fullMockReady: false },
+      { id: "social-studies", label: "Social Studies", practiceReady: false, fullMockReady: false },
     ],
   },
 ];
