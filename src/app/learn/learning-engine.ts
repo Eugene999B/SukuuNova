@@ -121,34 +121,44 @@ function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: numb
 function diversifyPool(questions: LearnQuestion[], seed: number) {
   const pending = [...questions];
   const output: LearnQuestion[] = [];
-  const windowSize = 10;
 
   while (pending.length) {
-    const candidates = pending.slice(0, Math.min(windowSize, pending.length));
     const previous = output[output.length - 1];
     const beforePrevious = output[output.length - 2];
-
     let bestIndex = 0;
     let bestScore = Number.POSITIVE_INFINITY;
 
-    candidates.forEach((candidate, index) => {
-      let score = index * 5;
+    pending.forEach((candidate, index) => {
+      // Preserve the original order softly, but search the whole pool so a
+      // massive generated family cannot crowd out other topics or formats.
+      let score = index * 0.03;
+
       if (previous) {
+        score += Math.abs(candidate.difficulty - previous.difficulty) * 10;
+
         if (
           candidate.generationFamily &&
           previous.generationFamily &&
           candidate.generationFamily === previous.generationFamily
-        ) score += 60;
-        if (candidate.kind === previous.kind) score += 22;
-        if (candidate.challenge && candidate.challenge === previous.challenge) score += 10;
-        if (candidate.topic === previous.topic) score += 4;
+        ) score += 85;
+
+        if (candidate.topic === previous.topic) score += 35;
+        if (candidate.kind === previous.kind) score += 12;
+        if (candidate.challenge && candidate.challenge === previous.challenge) score += 8;
       }
+
       if (
         beforePrevious &&
         candidate.generationFamily &&
         candidate.generationFamily === previous?.generationFamily &&
         candidate.generationFamily === beforePrevious.generationFamily
-      ) score += 100;
+      ) score += 180;
+
+      if (
+        beforePrevious &&
+        candidate.topic === previous?.topic &&
+        candidate.topic === beforePrevious.topic
+      ) score += 70;
 
       score += (stableRank(seed + output.length, candidate.exposureKey) % 997) / 997;
       if (score < bestScore) {
@@ -162,7 +172,6 @@ function diversifyPool(questions: LearnQuestion[], seed: number) {
 
   return output;
 }
-
 
 /**
  * Builds a learner session while enforcing two product-level guarantees that are
