@@ -1,6 +1,7 @@
 import { catalogFor, type SessionConfig } from "./learn-domain";
 import { richInteractionEntriesForAudience } from "./rich-starter-pack";
 import { variantCapacityForSelection } from "./variant-engine";
+import { specializedQuestionsForSelection } from "./specialized-content";
 import { verifiedStandardEntriesForAudience } from "./verified-content";
 
 export type LearningCapabilityStage = "mapped" | "starter" | "deep" | "massive";
@@ -55,7 +56,8 @@ export function learningCapabilityForSelection(config: SessionConfig): LearningC
   });
 
   const variantCapacity = variantCapacityForSelection(config);
-  const reviewedStandardQuestions = standardEntries.length;
+  const specializedQuestions = specializedQuestionsForSelection(config);
+  const reviewedStandardQuestions = standardEntries.length + specializedQuestions.length;
   const richInteractions = richEntries.length;
   const ready = reviewedStandardQuestions > 0 || variantCapacity > 0;
   const evidenceDepth = reviewedStandardQuestions + richInteractions;
