@@ -38,7 +38,7 @@ export default function HomePage() {
             <div className="home-learn-paths">
              <Link href="/learn/explore?lane=school"><BookOpen size={22}/><span><strong>School subjects</strong><small>Foundation practice · later years mapped</small></span><ArrowRight size={17}/></Link>
              <Link href="/learn/explore?lane=exam"><Medal size={22}/><span><strong>Exam preparation</strong><small>BECE · WASSCE · IELTS mapped</small></span><ArrowRight size={17}/></Link>
-             <Link href="/learn/explore?lane=university"><GraduationCap size={22}/><span><strong>University courses</strong><small>Course maps · reviewed practice expanding</small></span><ArrowRight size={17}/></Link>
+             <Link href="/learn/explore?lane=university"><GraduationCap size={22}/><span><strong>University courses</strong><small>Level 100 practice · CS · Nursing · Business</small></span><ArrowRight size={17}/></Link>
              <Link href="/learn/explore?lane=skills"><Sparkles size={22}/><span><strong>Skills for what’s next</strong><small>Digital · Career · Aptitude</small></span><ArrowRight size={17}/></Link>
             </div><div className="home-learn-stage-note">Choose a topic. Set your pace. Understand each answer.</div>
           </div>
@@ -50,8 +50,8 @@ export default function HomePage() {
             <span className="home-product-door-icon"><BrainCircuit size={24} aria-hidden="true" /></span>
             <span className="section-kicker">SUKUUNOVA LEARN</span>
             <h2>Questions that adapt to what you want to learn.</h2>
-            <p>Choose a mapped school, exam or course path and SukuuNova will show what is genuinely practice-ready. Available sessions include marking, explanations and browser-local progress; mapped paths without validated question depth stay clearly unavailable.</p>
-            <div className="home-product-door-tags"><span>Practice-ready paths</span><span>Exam Centre maps</span><span>No sign-in</span></div>
+            <p>Choose a school, exam, university or skills path and start wherever practice is available. Sessions include marking, explanations and browser-local progress, with unavailable topics labelled clearly instead of pretending they are complete.</p>
+            <div className="home-product-door-tags"><span>School practice</span><span>Level 100 practice</span><span>No sign-in</span></div>
             <span className="home-product-door-link">Open the learning system <ArrowRight size={16} /></span>
           </Link>
           <Link className="home-product-door home-product-door-manage" href="/for-schools">
