@@ -209,7 +209,7 @@ const UNIVERSITY_SPECS: UniversitySpec[] = [
     },
   },
   {
-    id: "business-administration",
+    id: "business",
     label: "Business Administration",
     description: "Management, accounting, marketing, finance, operations, entrepreneurship and strategy.",
     levels: {
@@ -479,7 +479,7 @@ const existingReadyLevel100: Record<string, CatalogSubject[]> = {
     ]),
     readyCourse("fundamentals", "Fundamentals of Nursing", [["patient-care", "Patient care"]]),
   ],
-  "business-administration": [
+  business: [
     readyCourse("accounting", "Financial Accounting", [
       ["double-entry", "Double entry"],
       ["statements", "Financial statements"],
