@@ -36,8 +36,8 @@ export default function HomePage() {
           <div className="home-learn-stage" aria-label="Find your learning path">
             <div className="home-learn-stage-title"><span>✦ SUKUUNOVA LEARN</span><strong>What are you curious about today?</strong><p>A class, a course, a big exam. Start where you are.</p></div>
             <div className="home-learn-paths">
-             <Link href="/learn/explore?lane=school"><BookOpen size={22}/><span><strong>School subjects</strong><small>KG to JHS practice · SHS mapped</small></span><ArrowRight size={17}/></Link>
-             <Link href="/learn/explore?lane=exam"><Medal size={22}/><span><strong>Exam preparation</strong><small>BECE topic practice · WASSCE/IELTS mapped</small></span><ArrowRight size={17}/></Link>
+             <Link href="/learn/explore?lane=school"><BookOpen size={22}/><span><strong>School subjects</strong><small>Foundation practice · later years mapped</small></span><ArrowRight size={17}/></Link>
+             <Link href="/learn/explore?lane=exam"><Medal size={22}/><span><strong>Exam preparation</strong><small>BECE · WASSCE · IELTS mapped</small></span><ArrowRight size={17}/></Link>
              <Link href="/learn/explore?lane=university"><GraduationCap size={22}/><span><strong>University courses</strong><small>Course maps · reviewed practice expanding</small></span><ArrowRight size={17}/></Link>
              <Link href="/learn/explore?lane=skills"><Sparkles size={22}/><span><strong>Skills for what’s next</strong><small>Digital · Career · Aptitude</small></span><ArrowRight size={17}/></Link>
             </div><div className="home-learn-stage-note">Choose a topic. Set your pace. Understand each answer.</div>
