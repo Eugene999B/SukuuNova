@@ -527,10 +527,10 @@ function QuestionPlayer({
         <div className={styles.difficulty}>Difficulty {question.difficulty}/5</div>
       </div>
       <div className={styles.playerProgress}><span style={{ width: `${percent(index + (submitted ? 1 : 0), total)}%` }} /></div>
-      <div className={styles.questionSignals}>
+      <div className={styles.questionSignals} data-testid="question-signals">
         <span className={styles.formatTag}>{question.kind.replace("single", "single choice").replace("multi", "multi-select")}</span>
-        {question.challenge && <span className={styles.challengeTag}>{question.challenge}</span>}
-        {question.mission && <span className={styles.missionTag}><Zap size={12}/>{question.mission}</span>}
+        {question.challenge && <span className={styles.challengeTag} data-testid="question-challenge">{question.challenge}</span>}
+        {question.mission && <span className={styles.missionTag} data-testid="question-mission"><Zap size={12}/>{question.mission}</span>}
       </div>
       <h3 id="learn-question" tabIndex={-1}>{question.prompt}</h3>
 
