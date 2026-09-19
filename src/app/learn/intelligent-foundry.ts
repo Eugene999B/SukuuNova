@@ -1050,6 +1050,46 @@ const SMART_TEMPLATES: readonly SmartTemplate[] = [
     capacity: managementCapacity,
     render: renderManagementScenario,
   },
+  {
+    id: "compound-growth",
+    lanes: ["school", "university"],
+    subjectIds: ["core-mathematics", "elective-mathematics", "economics", "financial-accounting", "business-management", "principles-of-finance", "corporate-finance-i", "corporate-finance-ii", "financial-mathematics-i", "financial-mathematics-ii"],
+    topicIds: genericTopics,
+    capacity: compoundCapacity,
+    render: renderCompoundGrowth,
+  },
+  {
+    id: "probability-model",
+    lanes: ["school", "university"],
+    subjectIds: ["core-mathematics", "elective-mathematics", "statistics", "probability-i", "probability-ii", "business-statistics", "business-statistics-ii", "biostatistics", "biostatistics-i", "biostatistics-ii"],
+    topicIds: genericTopics,
+    capacity: probabilityCapacity,
+    render: renderProbability,
+  },
+  {
+    id: "genetics-probability",
+    lanes: ["school", "university"],
+    subjectIds: ["biology", "human-biology", "cell-biology", "medical-genetics", "genetics", "molecular-biology-i", "molecular-biology-ii"],
+    topicIds: genericTopics,
+    capacity: geneticsCapacity,
+    render: renderGenetics,
+  },
+  {
+    id: "design-scale",
+    lanes: ["school", "university"],
+    subjectIds: ["technical-drawing", "engineering-drawing", "architectural-graphics", "design-studio-i", "design-studio-ii", "building-construction", "surveying"],
+    topicIds: genericTopics,
+    capacity: scaleCapacity,
+    render: renderDesignScale,
+  },
+  {
+    id: "research-design",
+    lanes: ["university"],
+    subjectIds: ["research-methods", "advanced-research-methods", "educational-research", "marketing-research", "media-research", "research-methods-and-statistics"],
+    topicIds: genericTopics,
+    capacity: researchCapacity,
+    render: renderResearchDesign,
+  },
 ];
 
 function templateMatches(template: SmartTemplate, config: SessionConfig) {
