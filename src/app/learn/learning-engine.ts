@@ -6,6 +6,7 @@ import {
 } from "./learn-domain";
 import { verifiedStandardQuestionsForAudience } from "./verified-content";
 import { buildVariantQuestions } from "./variant-engine";
+import { specializedQuestionsForSelection } from "./specialized-content";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -117,6 +118,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const recycled: LearnQuestion[] = [];
   const selection = resolveSelectionLabels(config);
   const reviewedQuestions = verifiedStandardQuestionsForAudience(config);
+  const specializedQuestions = specializedQuestionsForSelection(config);
 
   function absorb(questions: LearnQuestion[]) {
     for (const question of questions) {
@@ -135,6 +137,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
 
   const strictSelection = config.subjectId !== "all" || config.topicId !== "all";
 
+  absorb(specializedQuestions);
   absorb(reviewedQuestions.filter((question) => starterMatches(question, config, false, selection)));
   absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed));
 

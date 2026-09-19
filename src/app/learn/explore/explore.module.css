@@ -354,7 +354,8 @@
 .topicActive { color: var(--ex-text-soft); border-color: color-mix(in srgb, var(--ex-accent-two) 38%, transparent); background: color-mix(in srgb, var(--ex-accent-two) 7%, transparent); }
 .topicButton svg:first-child, .topicActive svg:first-child { color: var(--ex-accent); }
 .topicActive svg:last-child { color: var(--ex-success); }
-.topicButton span, .topicActive span { font-size: 9px; font-weight: 800; }
+.topicButton span, .topicActive span { min-width: 0; font-size: 9px; font-weight: 800; line-height: 1.35; overflow-wrap: normal; word-break: normal; }
+.topicButton:disabled { cursor: not-allowed; opacity: .5; }
 
 .divider { height: 1px; margin: 28px 0 0; background: var(--ex-line); }
 
