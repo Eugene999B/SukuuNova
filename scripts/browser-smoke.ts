@@ -97,12 +97,12 @@ async function main() {
     await page.goto("/learn/explore?lane=exam");
     await page.getByRole("button",{name:/Exam Centre/}).waitFor();
     await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("Exam Centre"));
-    assert.equal(await page.getByRole("button",{name:"Coming soon",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
+    assert.equal(await page.getByRole("button",{name:"No practice yet",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
 
     await page.goto("/learn/explore?lane=school");
     await page.getByRole("button",{name:/School/}).waitFor();
     await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("School"));
-    await page.getByRole("button",{name:"✦ Mixed topics",exact:true}).click();
+    await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
     await page.getByLabel("Or choose 1–100").fill("3");
     await page.getByRole("button",{name:"Start practice",exact:true}).click();
     await page.waitForFunction(()=>document.querySelector("main[data-session-active=\"true\"]"));
@@ -124,8 +124,15 @@ async function main() {
     assert.equal(prompts.size,3,"Mixed session must not repeat a question");
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on mobile");
     await page.goto("/learn/explore?lane=university");
-    await page.getByRole("button",{name:/University Courses/}).waitFor();
+    await page.getByRole("button",{name:/University/}).waitFor();
     await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("University"));
+    assert.equal(await page.getByLabel("Your level").inputValue(),"level-100","University must use a clear Level 100 path");
+    assert.ok((await page.getByLabel("Subject / section").locator("option").allTextContents()).some(text=>text==="Programming"),"Programming must be available, not a Coming soon dead end");
+    await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
+    await page.getByLabel("Or choose 1–100").fill("3");
+    await page.getByRole("button",{name:"Start practice",exact:true}).click();
+    await page.getByTestId("learning-question").waitFor();
+    assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"University practice must launch a focused session");
     assert.deepEqual(pageErrors, [], "Browser emitted JavaScript errors");
     console.log("Browser smoke passed: login, mobile dashboard, labeled device tabs, Unicode learner import, confirmed enrollment, payroll plan denial desktop learner directory, legacy invoice collection, retry protection, overpayment denial and complete finance totals.");
   } finally { await browser.close(); await rawDb.$disconnect(); }
