@@ -84,6 +84,10 @@ function expandingDetailedSubject(id: string, label: string, topics: CatalogTopi
   };
 }
 
+function readyDetailedSubject(id: string, label: string, topics: CatalogTopic[]): CatalogSubject {
+  return { id, label, topics };
+}
+
 function markSubjectExpanding(subject: CatalogSubject): CatalogSubject {
   return {
     ...subject,
@@ -442,12 +446,12 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         label: "Computer Science",
         description: "Level 100 Computer Science practice is available now for programming and computer networks.",
         levels: [{ id: "level-100", label: "Level 100", subjects: [
-          expandingDetailedSubject("programming", "Programming", [
+          readyDetailedSubject("programming", "Programming", [
             { id: "variables", label: "Variables & data types" },
             { id: "control-flow", label: "Control flow" },
             { id: "data-structures", label: "Data structures" },
           ]),
-          expandingDetailedSubject("networks", "Computer Networks", [
+          readyDetailedSubject("networks", "Computer Networks", [
             { id: "network-basics", label: "Network basics" },
             { id: "protocols", label: "Protocols" },
           ]),
@@ -458,11 +462,11 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         label: "Nursing",
         description: "Level 100 Nursing practice is available now for anatomy, physiology and patient-care fundamentals.",
         levels: [{ id: "level-100", label: "Level 100", subjects: [
-          expandingDetailedSubject("anatomy", "Anatomy & Physiology", [
+          readyDetailedSubject("anatomy", "Anatomy & Physiology", [
             { id: "cardiovascular", label: "Cardiovascular system" },
             { id: "respiratory", label: "Respiratory system" },
           ]),
-          expandingDetailedSubject("fundamentals", "Fundamentals of Nursing", [{ id: "patient-care", label: "Patient care" }]),
+          readyDetailedSubject("fundamentals", "Fundamentals of Nursing", [{ id: "patient-care", label: "Patient care" }]),
         ] }],
       },
       {
@@ -470,11 +474,11 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         label: "Business",
         description: "Level 100 Business practice is available now for financial accounting and management fundamentals.",
         levels: [{ id: "level-100", label: "Level 100", subjects: [
-          expandingDetailedSubject("accounting", "Financial Accounting", [
+          readyDetailedSubject("accounting", "Financial Accounting", [
             { id: "double-entry", label: "Double entry" },
             { id: "statements", label: "Financial statements" },
           ]),
-          expandingDetailedSubject("management", "Management", [{ id: "functions", label: "Management functions" }]),
+          readyDetailedSubject("management", "Management", [{ id: "functions", label: "Management functions" }]),
         ] }],
       },
     ],
@@ -488,11 +492,11 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         label: "Digital Skills",
         description: "Everyday technology, productivity and online-safety skills.",
         levels: [{ id: "core", label: "Core skills", subjects: [
-          expandingDetailedSubject("productivity", "Productivity", [
+          readyDetailedSubject("productivity", "Productivity", [
             { id: "documents", label: "Documents" },
             { id: "spreadsheets", label: "Spreadsheets" },
           ]),
-          expandingDetailedSubject("safety", "Online Safety", [
+          readyDetailedSubject("safety", "Online Safety", [
             { id: "passwords", label: "Passwords & accounts" },
             { id: "phishing", label: "Phishing awareness" },
           ]),
@@ -503,11 +507,11 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
         label: "Aptitude & Reasoning",
         description: "Numerical, verbal and logical reasoning drills.",
         levels: [{ id: "core", label: "Core skills", subjects: [
-          expandingDetailedSubject("numerical", "Numerical Reasoning", [
+          readyDetailedSubject("numerical", "Numerical Reasoning", [
             { id: "ratios", label: "Ratios" },
             { id: "patterns", label: "Number patterns" },
           ]),
-          expandingDetailedSubject("verbal", "Verbal Reasoning", [{ id: "analogies", label: "Analogies" }]),
+          readyDetailedSubject("verbal", "Verbal Reasoning", [{ id: "analogies", label: "Analogies" }]),
         ] }],
       },
     ],
