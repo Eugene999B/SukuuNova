@@ -1,3 +1,5 @@
+import { SHS_PROGRAMS, UNIVERSITY_PROGRAMS } from "./broad-catalog";
+
 export type LearnLane = "school" | "exam" | "university" | "skills";
 export type PracticeMode = "topic" | "adaptive" | "random" | "timed" | "weakness";
 export type QuestionKind = "single" | "multi" | "fill" | "numeric" | "boolean" | "short";
@@ -388,27 +390,27 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
   {
     id: "school",
     label: "School",
-    programs: [{
-      id: "ghana",
-      label: "Ghana curriculum",
-      description: "Ghana curriculum phases from KG through SHS, with practice-ready and expanding coverage shown separately.",
-      levels: [
-        schoolLevel("kg-1", "KG 1", kgSubjects),
-        schoolLevel("kg-2", "KG 2", kgSubjects),
-        schoolLevel("basic-1", "Basic 1", lowerPrimarySubjects),
-        schoolLevel("basic-2", "Basic 2", lowerPrimarySubjects),
-        schoolLevel("basic-3", "Basic 3", lowerPrimarySubjects),
-        schoolLevel("basic-4", "Basic 4", upperPrimarySubjects),
-        schoolLevel("basic-5", "Basic 5", upperPrimaryExpandingSubjects),
-        schoolLevel("basic-6", "Basic 6", upperPrimaryExpandingSubjects),
-        schoolLevel("jhs-1", "JHS 1", jhsSubjects),
-        schoolLevel("jhs-2", "JHS 2", jhsExpandingSubjects),
-        schoolLevel("jhs-3", "JHS 3", jhsExpandingSubjects),
-        schoolLevel("shs-1", "SHS 1", shsSubjects),
-        schoolLevel("shs-2", "SHS 2", shsSubjects),
-        schoolLevel("shs-3", "SHS 3", shsSubjects),
-      ],
-    }],
+    programs: [
+      {
+        id: "ghana",
+        label: "KG · Primary · JHS",
+        description: "Ghana's basic-school pathway from KG through JHS. Senior High is separated into its own study pathways so learners can choose the programme that matches their subjects.",
+        levels: [
+          schoolLevel("kg-1", "KG 1", kgSubjects),
+          schoolLevel("kg-2", "KG 2", kgSubjects),
+          schoolLevel("basic-1", "Basic 1", lowerPrimarySubjects),
+          schoolLevel("basic-2", "Basic 2", lowerPrimarySubjects),
+          schoolLevel("basic-3", "Basic 3", lowerPrimarySubjects),
+          schoolLevel("basic-4", "Basic 4", upperPrimarySubjects),
+          schoolLevel("basic-5", "Basic 5", upperPrimaryExpandingSubjects),
+          schoolLevel("basic-6", "Basic 6", upperPrimaryExpandingSubjects),
+          schoolLevel("jhs-1", "JHS 1", jhsSubjects),
+          schoolLevel("jhs-2", "JHS 2", jhsExpandingSubjects),
+          schoolLevel("jhs-3", "JHS 3", jhsExpandingSubjects),
+        ],
+      },
+      ...SHS_PROGRAMS,
+    ],
   },
   {
     id: "exam",
@@ -440,48 +442,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
   {
     id: "university",
     label: "University",
-    programs: [
-      {
-        id: "computer-science",
-        label: "Computer Science",
-        description: "Level 100 Computer Science practice is available now for programming and computer networks.",
-        levels: [{ id: "level-100", label: "Level 100", subjects: [
-          readyDetailedSubject("programming", "Programming", [
-            { id: "variables", label: "Variables & data types" },
-            { id: "control-flow", label: "Control flow" },
-            { id: "data-structures", label: "Data structures" },
-          ]),
-          readyDetailedSubject("networks", "Computer Networks", [
-            { id: "network-basics", label: "Network basics" },
-            { id: "protocols", label: "Protocols" },
-          ]),
-        ] }],
-      },
-      {
-        id: "nursing",
-        label: "Nursing",
-        description: "Level 100 Nursing practice is available now for anatomy, physiology and patient-care fundamentals.",
-        levels: [{ id: "level-100", label: "Level 100", subjects: [
-          readyDetailedSubject("anatomy", "Anatomy & Physiology", [
-            { id: "cardiovascular", label: "Cardiovascular system" },
-            { id: "respiratory", label: "Respiratory system" },
-          ]),
-          readyDetailedSubject("fundamentals", "Fundamentals of Nursing", [{ id: "patient-care", label: "Patient care" }]),
-        ] }],
-      },
-      {
-        id: "business",
-        label: "Business",
-        description: "Level 100 Business practice is available now for financial accounting and management fundamentals.",
-        levels: [{ id: "level-100", label: "Level 100", subjects: [
-          readyDetailedSubject("accounting", "Financial Accounting", [
-            { id: "double-entry", label: "Double entry" },
-            { id: "statements", label: "Financial statements" },
-          ]),
-          readyDetailedSubject("management", "Management", [{ id: "functions", label: "Management functions" }]),
-        ] }],
-      },
-    ],
+    programs: UNIVERSITY_PROGRAMS,
   },
   {
     id: "skills",

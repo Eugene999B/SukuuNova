@@ -17,7 +17,10 @@ import {
   Medal,
   RotateCcw,
   School,
+  Search,
   Sparkles,
+  Volume2,
+  Zap,
   Target,
   Trophy,
   X,
@@ -38,6 +41,7 @@ import styles from "./explore.module.css";
 import { normalizeLearnerProgress } from "../learner-progress";
 import { useLearningSound } from "../LearnShell";
 import { hasLearningAnswer, sessionSize } from "../session-controls";
+import { UNIVERSITY_INSTITUTION_EXAMPLES } from "../broad-catalog";
 
 type LearnerProgress = {
   sessions: number;
@@ -130,6 +134,8 @@ export function LearningExplorer() {
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [launchNotice, setLaunchNotice] = useState("");
+  const [programQuery, setProgramQuery] = useState("");
+  const [showAllPrograms, setShowAllPrograms] = useState(false);
 
   const program = catalog.programs.find((item) => item.id === programId) ?? catalog.programs[0];
   const level = program.levels.find((item) => item.id === levelId) ?? program.levels[0];
@@ -145,6 +151,15 @@ export function LearningExplorer() {
     count,
   }), [lane, programId, levelId, subjectId, topicId, mode, count]);
   const practiceAvailable = capability.ready;
+  const visiblePrograms = useMemo(() => {
+    const query = programQuery.trim().toLowerCase();
+    const matches = query
+      ? catalog.programs.filter((item) =>
+          item.label.toLowerCase().includes(query) || item.description.toLowerCase().includes(query),
+        )
+      : catalog.programs;
+    return showAllPrograms || query ? matches : matches.slice(0, lane === "university" ? 12 : 10);
+  }, [catalog.programs, lane, programQuery, showAllPrograms]);
   const availableModes = lane === "exam" ? modes.filter((item) => item.id !== "adaptive") : modes;
   const currentQuestion = session[questionIndex];
   const sessionInProgress = session.length > 0 && questionIndex < session.length;
@@ -205,6 +220,8 @@ export function LearningExplorer() {
     setMode(nextLane === "exam" ? "timed" : "adaptive");
     setSession([]);
     setLaunchNotice("");
+    setProgramQuery("");
+    setShowAllPrograms(false);
   }
 
   function selectProgram(nextProgramId: string) {
@@ -228,8 +245,7 @@ export function LearningExplorer() {
   }
 
   function selectSubject(nextSubjectId: string) {
-    const nextSubject = level.subjects.find((item) => item.id === nextSubjectId) ?? firstReadySubject(lane, program.id, level);
-    if (!subjectIsReady(lane, program.id, level.id, nextSubject)) return;
+    const nextSubject = level.subjects.find((item) => item.id === nextSubjectId) ?? level.subjects[0];
     setSubjectId(nextSubject.id);
     setTopicId(firstReadyTopic(lane, program.id, level.id, nextSubject).id);
     setLaunchNotice("");
@@ -332,85 +348,87 @@ export function LearningExplorer() {
     <main className={`${styles.page} ${sessionFocused ? styles.sessionFocused : ""}`} data-session-active={sessionInProgress ? "true" : "false"}>
       <header className={styles.topbar}>
         <Link href="/learn" className={styles.backLink}><ArrowLeft size={16} /> Learn home</Link>
-        <div className={styles.wordmark}><span>S</span><div><strong>SukuuNova Learn</strong><small>Explorer</small></div></div>
-        <div className={styles.liveBadge}><span /> Local mastery active</div>
+        <div className={styles.wordmark}><span>S</span><div><strong>SukuuNova Learn</strong><small>Play · Learn · Grow</small></div></div>
+        <div className={styles.liveBadge}><Volume2 size={13} /><span /> Sound on by default</div>
       </header>
 
       <section className={styles.hero}>
         <div>
-          <span className={styles.kicker}><Sparkles size={14} /> LEARNING EXPLORER</span>
-          <h1>What will you <em>learn today?</em></h1>
-          <p>Choose your class, course or exam. Pick a subject, focus on one topic or mix them, and decide how many questions you want.</p>
+          <span className={styles.kicker}><Zap size={14} /> YOUR LEARNING PLAYGROUND</span>
+          <h1>Pick a path. <em>Make it yours.</em></h1>
+          <p>School, SHS pathways, exams, university programmes and career skills live in one place. Build a quick drill or a focused session and get instant feedback.</p>
+          <div className={styles.heroPromise}><span>🔊 action sounds</span><span>⚡ instant marking</span><span>🎯 focused sessions</span><span>🏆 local progress</span></div>
         </div>
         <div className={styles.heroStats}>
-          <article><Brain size={20} /><strong>{percent(progress.correct, progress.answered)}%</strong><span>lifetime accuracy</span></article>
-          <article><Flame size={20} /><strong>{progress.streak}</strong><span>current answer streak</span></article>
-          <article><Trophy size={20} /><strong>{progress.sessions}</strong><span>sessions completed</span></article>
+          <article><Brain size={20} /><strong>{percent(progress.correct, progress.answered)}%</strong><span>accuracy</span></article>
+          <article><Flame size={20} /><strong>{progress.streak}</strong><span>answer streak</span></article>
+          <article><Trophy size={20} /><strong>{progress.sessions}</strong><span>sessions</span></article>
         </div>
       </section>
 
-      <fieldset className={styles.workspace} disabled={session.length > 0 && !isComplete} aria-label="Practice setup">
-        <aside className={styles.laneRail}>
-          <span className={styles.stepLabel}>01 · PURPOSE</span>
-          {lanes.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button key={item.id} aria-pressed={lane===item.id} className={lane === item.id ? styles.laneActive : styles.laneButton} onClick={() => resetSelectionForLane(item.id)}>
-                <span className={styles.laneIcon}><Icon size={18} /></span>
-                <span><strong>{item.label}</strong><small>{item.copy}</small></span>
-                <ChevronRight size={16} />
-              </button>
-            );
-          })}
-          <div className={styles.railInsight}>
-            <Target size={17} />
-            <div><small>WEAKEST SIGNAL</small><strong>{weakest?.key ?? "Complete practice to build your map"}</strong>{weakest && <span>{weakest.score}% across {weakest.answered} answer{weakest.answered === 1 ? "" : "s"}</span>}</div>
+      <fieldset className={styles.journey} disabled={session.length > 0 && !isComplete} aria-label="Build your learning session">
+        <section className={styles.laneDeck}>
+          <div className={styles.deckIntro}><span className={styles.stepLabel}>STEP 1</span><h2>Where are you learning?</h2><p>Switch paths any time. Your progress stays on this browser.</p></div>
+          <div className={styles.laneCards}>
+            {lanes.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button key={item.id} aria-pressed={lane===item.id} className={lane===item.id?styles.laneCardActive:styles.laneCard} onClick={()=>resetSelectionForLane(item.id)}>
+                  <span className={styles.laneIcon}><Icon size={22}/></span>
+                  <strong>{item.label}</strong>
+                  <small>{item.copy}</small>
+                  <ChevronRight size={17}/>
+                </button>
+              );
+            })}
           </div>
-        </aside>
+        </section>
 
-        <div className={styles.builder}>
-          <div className={styles.builderHeader}>
-            <div><span className={styles.stepLabel}>02 · PATH</span><h2>{catalog.label}</h2><p>{program.description}</p></div>
-            <div className={styles.pathPreview}><span>{program.label}</span><ChevronRight size={13} /><span>{level.label}</span><ChevronRight size={13} /><span>{subject.label}</span><ChevronRight size={13} /><strong>{topic.label}</strong></div>
-          </div>
-
-          {lane === "exam" && <div className={styles.examNotice}><Medal size={18} /><div><strong>Topic practice only — not a full mock.</strong><span>Full-paper mocks stay unavailable until paper structure, timing, question types and marking are validated for that exam.</span></div></div>}
-
-          <div className={styles.selectorBlock}>
-            <label>{lane==="exam"?"Choose your exam":lane==="university"?"Choose your course":"Choose your programme"}</label>
-            <div className={styles.choiceChips}>{catalog.programs.map((item) => <button key={item.id} className={programId === item.id ? styles.chipActive : styles.chip} onClick={() => selectProgram(item.id)}>{item.label}</button>)}</div>
+        <section className={styles.pathStudio}>
+          <div className={styles.studioHead}>
+            <div><span className={styles.stepLabel}>STEP 2</span><h2>{lane==="university"?"Choose your programme":lane==="school"?"Choose your school pathway":lane==="exam"?"Choose your exam":"Choose your skill track"}</h2><p>{program.description}</p></div>
+            <div className={styles.pathPreview}><span>{program.label}</span><ChevronRight size={13}/><span>{level.label}</span><ChevronRight size={13}/><span>{subject.label}</span><ChevronRight size={13}/><strong>{topic.label}</strong></div>
           </div>
 
-          <div className={styles.twoColumns}>
-            <div className={styles.selectorBlock}>
-              <label htmlFor="learn-level">{lane==="school"?"Your class":lane==="university"?"Your level":lane==="exam"?"Exam level / format":"Skill level"}</label>
-              <select id="learn-level" value={levelId} onChange={(event) => selectLevel(event.target.value)}>{program.levels.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+          {lane==="university"&&<div className={styles.institutionNote}><GraduationCap size={18}/><div><strong>Built to travel across universities</strong><span>Programme maps use common undergraduate course families. Exact course codes and semester order vary by institution.</span></div></div>}
+          {lane==="exam"&&<div className={styles.examNotice}><Medal size={18}/><div><strong>Practice, not a fake official mock.</strong><span>Paper-perfect mocks stay separate until structure, timing and marking are validated.</span></div></div>}
+
+          <div className={styles.programSection}>
+            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>PROGRAMME / PATHWAY</span><strong>{catalog.programs.length} available paths</strong></div>{catalog.programs.length>8&&<label className={styles.searchBox}><Search size={15}/><input value={programQuery} onChange={e=>setProgramQuery(e.target.value)} placeholder={lane==="university"?"Search medicine, law, engineering…":"Search pathways…"}/></label>}</div>
+            <div className={styles.programGrid}>{visiblePrograms.map((item)=><button key={item.id} className={programId===item.id?styles.programCardActive:styles.programCard} onClick={()=>selectProgram(item.id)}><span>{item.label}</span><small>{item.levels.length} level{item.levels.length===1?"":"s"}</small><ChevronRight size={15}/></button>)}</div>
+            {!programQuery&&catalog.programs.length>visiblePrograms.length&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllPrograms(true)}>Show all {catalog.programs.length} paths</button>}
+          </div>
+
+          <div className={styles.levelSection}>
+            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>LEVEL / YEAR</span><strong>{lane==="school"&&program.id.startsWith("shs-")?"Choose your SHS year":lane==="university"?"Choose your university level":"Choose your level"}</strong></div></div>
+            <div className={styles.levelTabs}>{program.levels.map(item=><button key={item.id} className={levelId===item.id?styles.levelTabActive:styles.levelTab} onClick={()=>selectLevel(item.id)}>{item.label}</button>)}</div>
+          </div>
+
+          <div className={styles.subjectSection}>
+            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>SUBJECT / COURSE</span><strong>{level.subjects.length} choices in {level.label}</strong></div><span className={practiceAvailable?styles.readyBadge:styles.mappedBadge}>{practiceAvailable?"Practice ready":"Browse the course map"}</span></div>
+            <div className={styles.subjectGrid}>{level.subjects.map(item=>{const ready=subjectIsReady(lane,program.id,level.id,item);return <button key={item.id} className={subjectId===item.id?styles.subjectCardActive:styles.subjectCard} onClick={()=>selectSubject(item.id)}><BookOpen size={17}/><span><strong>{item.label}</strong><small>{ready?"Questions available":"Course map"}</small></span>{ready&&<span className={styles.readyDot}>●</span>}</button>;})}</div>
+          </div>
+
+          <div className={styles.topicSection}>
+            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>TOPIC</span><strong>Pick one topic or mix the whole subject</strong></div></div>
+            <div className={styles.topicGrid}><button aria-pressed={topicId==="all"} className={topicId==="all"?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId("all");setMode("random");setLaunchNotice("");}}><Sparkles size={15}/><span>Mixed topics</span>{topicId==="all"&&<Check size={15}/>}</button>{(showAllTopics?subject.topics:subject.topics.slice(0,10)).map(item=>{const ready=topicIsReady(lane,program.id,level.id,subject,item.id);return <button key={item.id} aria-pressed={topicId===item.id} className={topicId===item.id?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId(item.id);setLaunchNotice("");}}><BookOpen size={15}/><span>{item.label}</span>{ready?<Check size={15}/>:<span className={styles.mapDot}>○</span>}</button>;})}</div>
+            {subject.topics.length>10&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllTopics(v=>!v)}>{showAllTopics?"Show fewer topics":`Show all ${subject.topics.length} topics`}</button>}
+          </div>
+
+          <div className={styles.sessionComposer}>
+            <div>
+              <span className={styles.stepLabel}>STEP 3 · BUILD THE SESSION</span>
+              <div className={styles.modeGrid}>{availableModes.map(item=><button key={item.id} className={mode===item.id?styles.modeActive:styles.modeButton} onClick={()=>setMode(item.id)}><span className={styles.modeDot}/><span><strong>{item.label}</strong><small>{item.description}</small></span>{mode===item.id&&<CheckCircle2 size={17}/>}</button>)}</div>
             </div>
-            <div className={styles.selectorBlock}>
-              <label htmlFor="learn-subject">Subject / section</label>
-              <select id="learn-subject" value={subjectId} onChange={(event) => selectSubject(event.target.value)}>{level.subjects.map((item) => { const ready = subjectIsReady(lane, program.id, level.id, item); return <option key={item.id} value={item.id} disabled={!ready}>{item.label}{ready ? "" : " — No practice yet"}</option>; })}</select>
+            <div className={styles.launchPanel}>
+              <div><label>Questions</label><div className={styles.countGroup}>{[5,10,20,30,50].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>{setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Custom 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
+              <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Zap size={19}/>{practiceAvailable?(lane==="exam"?"Start practice":"Let's go!"):"Practice is being built"}<ArrowRight size={18}/></button>
+              <p>{practiceAvailable?"Your questions stay inside this exact path. Different sessions favour fresh questions.":"You can browse this full course map now. Question coverage for this exact selection is still being built."}</p>
             </div>
           </div>
 
-          <div className={styles.selectorBlock}>
-            <label>One topic or a mix?</label>
-            <div className={styles.topicGrid}><button aria-pressed={topicId==="all"} className={topicId==="all"?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId("all");setMode("random");}}><Sparkles size={15}/><span>Mixed topics</span>{topicId==="all"&&<Check size={15}/>}</button>{(showAllTopics?subject.topics:subject.topics.slice(0,8)).map((item) => { const ready = topicIsReady(lane, program.id, level.id, subject, item.id); return <button key={item.id} disabled={!ready} aria-pressed={topicId===item.id} className={topicId === item.id ? styles.topicActive : styles.topicButton} onClick={() => { setTopicId(item.id); setLaunchNotice(""); }}><BookOpen size={15} /><span>{item.label}{ready ? "" : " · No practice yet"}</span>{topicId === item.id && ready && <Check size={15} />}</button>; })}</div>
-          </div>
-
-          {subject.topics.length>8&&<button type="button" className={styles.chip} onClick={()=>setShowAllTopics(v=>!v)}>{showAllTopics?"Show fewer topics":"Show all topics"}</button>}
-          <div className={styles.divider} />
-
-          <div className={styles.selectorBlock}>
-            <label>Your practice style</label>
-            <div className={styles.modeGrid}>{availableModes.map((item) => <button key={item.id} className={mode === item.id ? styles.modeActive : styles.modeButton} onClick={() => setMode(item.id)}><span className={styles.modeDot} /><span><strong>{item.label}</strong><small>{item.description}</small></span>{mode === item.id && <CheckCircle2 size={17} />}</button>)}</div>
-          </div>
-
-          <div className={styles.sessionFooter}>
-            <div><label>Questions</label><div className={styles.countGroup}>{[5, 10, 20, 30, 50].map((value) => <button key={value} className={count === value ? styles.countActive : styles.countButton} aria-pressed={count===value} onClick={() => {setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Or choose 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
-            <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Sparkles size={18} /> {practiceAvailable ? (lane === "exam" ? "Start topic practice" : "Start practice") : "No practice yet"} <ArrowRight size={18} /></button>
-          </div>
-          <p className={styles.engineNote}>{practiceAvailable ? "Questions stay within your selection. If fewer different questions are available, we will show the actual session size." : "Practice hasn't been published for this selection yet. Try another topic or subject."}</p>
-        </div>
+          {lane==="university"&&<div className={styles.institutionStrip}><span>Examples of universities this programme-first structure can serve:</span><div>{UNIVERSITY_INSTITUTION_EXAMPLES.slice(0,8).map(item=><b key={item}>{item}</b>)}</div></div>}
+        </section>
       </fieldset>
 
       <section id="session-player" className={styles.playerSection}>
@@ -515,7 +533,7 @@ function QuestionPlayer({
 
       {question.kind === "numeric" && <div className={styles.textAnswer}><input aria-label="Your answer" disabled={submitted} inputMode="decimal" value={typeof response === "number" || typeof response === "string" ? response : ""} onChange={(event) => setResponse(event.target.value)} placeholder="Enter your numerical answer" onKeyDown={(event) => { if (event.key === "Enter") submit(); }} /></div>}
 
-      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? "Correct." : "Not quite."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
+      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? "Yes! +10 XP" : "Almost — learn it and go again."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
     </div>
   );
 }

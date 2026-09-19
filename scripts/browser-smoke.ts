@@ -82,29 +82,33 @@ async function main() {
     assert.equal((await context.request.get("/api/school/finance-v2/export?from=2026-02-30")).status(),400);
     await page.goto("/school/finance");
     await page.getByText("GH₵375.00", { exact: true }).waitFor();
-    // Public learning journey: mobile navigation, selection, audio and real answers.
+    // Public learning journey: mobile navigation, broad paths, default audio and real answers.
     await page.setViewportSize({width:390,height:844});
     await page.goto("/learn");
     await page.getByRole("link",{name:"Start practice",exact:true}).waitFor();
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning home overflows on mobile");
     await page.getByLabel("Learning audio settings").click();
+    assert.equal(await page.getByLabel("Interaction sounds",{exact:true}).isChecked(),true,"Interaction sounds must be enabled by default");
     await page.getByRole("button",{name:"Test sound",exact:true}).click();
     await page.waitForFunction(()=>document.querySelector("[data-audio-state]")?.getAttribute("data-audio-state")==="ready");
-    await page.getByLabel("Interaction sounds",{exact:true}).check();
     await page.getByLabel("Gentle focus music",{exact:true}).check();
     await page.getByLabel("Gentle focus music",{exact:true}).uncheck();
     await page.getByLabel("Learning audio settings").click();
+
     await page.goto("/learn/explore?lane=exam");
     await page.getByRole("button",{name:/Exam Centre/}).waitFor();
     await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("Exam Centre"));
-    assert.equal(await page.getByRole("button",{name:"No practice yet",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
+    assert.equal(await page.getByRole("button",{name:"Practice is being built",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
 
     await page.goto("/learn/explore?lane=school");
     await page.getByRole("button",{name:/School/}).waitFor();
     await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("School"));
+    await page.getByRole("button",{name:/General Science/}).click();
+    await page.getByRole("button",{name:"SHS 1",exact:true}).waitFor();
+    await page.getByRole("button",{name:/Core Mathematics/}).click();
     await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
-    await page.getByLabel("Or choose 1–100").fill("3");
-    await page.getByRole("button",{name:"Start practice",exact:true}).click();
+    await page.getByLabel("Custom 1–100").fill("3");
+    await page.getByRole("button",{name:/Let's go!/}).click();
     await page.waitForFunction(()=>document.querySelector("main[data-session-active=\"true\"]"));
     assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Active learning must use the focused session surface");
     const prompts=new Set<string>();
@@ -121,18 +125,25 @@ async function main() {
       await player.getByRole("button",{name:question===2?"View results":"Next question",exact:true}).click();
     }
     await page.getByText("SESSION COMPLETE",{exact:true}).waitFor();
-    assert.equal(prompts.size,3,"Mixed session must not repeat a question");
+    assert.equal(prompts.size,3,"SHS session must not repeat a question");
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on mobile");
+
     await page.goto("/learn/explore?lane=university");
     await page.getByRole("button",{name:/University/}).waitFor();
     await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("University"));
-    assert.equal(await page.getByLabel("Your level").inputValue(),"level-100","University must use a clear Level 100 path");
-    assert.ok((await page.getByLabel("Subject / section").locator("option").allTextContents()).some(text=>text==="Programming"),"Programming must be available, not a Coming soon dead end");
+    const programmeSearch=page.getByPlaceholder("Search medicine, law, engineering…");
+    await programmeSearch.waitFor();
+    await programmeSearch.fill("law");
+    await page.getByRole("button",{name:/Law \(LLB\)/}).waitFor();
+    await programmeSearch.fill("medicine");
+    await page.getByRole("button",{name:/Medicine \(MBChB\)/}).click();
+    await page.getByRole("button",{name:"Level 100",exact:true}).waitFor();
+    await page.getByRole("button",{name:/Human Anatomy/}).click();
     await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
-    await page.getByLabel("Or choose 1–100").fill("3");
-    await page.getByRole("button",{name:"Start practice",exact:true}).click();
+    await page.getByLabel("Custom 1–100").fill("3");
+    await page.getByRole("button",{name:/Let's go!/}).click();
     await page.getByTestId("learning-question").waitFor();
-    assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"University practice must launch a focused session");
+    assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Medicine practice must launch a focused session");
     assert.deepEqual(pageErrors, [], "Browser emitted JavaScript errors");
     console.log("Browser smoke passed: login, mobile dashboard, labeled device tabs, Unicode learner import, confirmed enrollment, payroll plan denial desktop learner directory, legacy invoice collection, retry protection, overpayment denial and complete finance totals.");
   } finally { await browser.close(); await rawDb.$disconnect(); }
