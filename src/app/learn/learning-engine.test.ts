@@ -96,21 +96,23 @@ describe("SukuuNova Learn session engine", () => {
     expect(session[0].id).toBe("expand-math-geometry-001");
   });
 
-  it("does not leak JHS reviewed fixed questions into SHS topics", () => {
+  it("fills SHS topics from SHS generators without leaking JHS reviewed fixed questions", () => {
     const session = buildLearningSession({
       lane: "school",
-      programId: "ghana",
+      programId: "shs-general-science",
       levelId: "shs-2",
       subjectId: "computing",
-      topicId: "digital-safety",
+      topicId: "digital-safety-and-ethics",
       mode: "topic",
       count: 10,
       seed: 44,
     });
-    expect(session).toEqual([]);
+    expect(session).toHaveLength(10);
+    expect(session.every((item) => !item.id.startsWith("starter-"))).toBe(true);
+    expect(session.every((item) => item.topic === "Digital safety & ethics")).toBe(true);
   });
 
-  it("does not leak JHS reviewed fixed questions into WASSCE-only selections", () => {
+  it("fills WASSCE selections from exam generators without leaking JHS reviewed fixed questions", () => {
     const session = buildLearningSession({
       lane: "exam",
       programId: "wassce",
@@ -121,7 +123,9 @@ describe("SukuuNova Learn session engine", () => {
       count: 10,
       seed: 44,
     });
-    expect(session).toEqual([]);
+    expect(session).toHaveLength(10);
+    expect(session.every((item) => !item.id.startsWith("starter-"))).toBe(true);
+    expect(session.every((item) => item.subject === "Social Studies" && item.topic === "Governance")).toBe(true);
   });
 
   it("never repeats an exposure key and does not flood a session with one generated skill", () => {
@@ -134,8 +138,7 @@ describe("SukuuNova Learn session engine", () => {
         return counts;
       }, {});
 
-    expect(session.length).toBeGreaterThan(0);
-    expect(session.length).toBeLessThan(100);
+    expect(session).toHaveLength(100);
     expect(diagnostics.uniqueExposureCount).toBe(session.length);
     expect(Object.values(generatedBySkill).every((count) => count <= 4)).toBe(true);
   });
