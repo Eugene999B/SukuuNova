@@ -6,6 +6,7 @@ import {
   sessionDiagnostics,
   type LearnQuestion,
 } from "./learning-engine";
+import { catalogFor } from "./learn-domain";
 
 const baseConfig = {
   lane: "school" as const,
@@ -76,8 +77,15 @@ describe("SukuuNova Learn session engine", () => {
       seed: 20260917,
     });
 
+    const currentTopic = catalogFor("school").programs
+      .find((program) => program.id === "ghana")?.levels
+      .find((level) => level.id === "jhs-1")?.subjects
+      .find((subject) => subject.id === "computing")?.topics
+      .find((topic) => topic.id === "coding")?.label;
+
     expect(session).toHaveLength(2);
-    expect(session.every((item) => item.subject === "Computing" && item.topic === "Computational thinking")).toBe(true);
+    expect(currentTopic).toBeTruthy();
+    expect(session.every((item) => item.subject === "Computing" && item.topic === currentTopic)).toBe(true);
   });
 
   it("routes newly covered topics to reviewed content before generated fallback", () => {
