@@ -218,6 +218,27 @@ describe("SukuuNova Learn session engine", () => {
     expect(afterWrong[1].topic).toBe("Algebra");
   });
 
+  it("uses confidence to distinguish secure knowledge from guessing", () => {
+    const questions = [
+      question({ id: "current", exposureKey: "current-confidence", difficulty: 3, topic: "Algebra", generationFamily: "a" }),
+      question({ id: "same", exposureKey: "same-confidence", difficulty: 3, topic: "Algebra", generationFamily: "b" }),
+      question({ id: "stretch", exposureKey: "stretch-confidence", difficulty: 5, topic: "Geometry", generationFamily: "c" }),
+      question({ id: "repair", exposureKey: "repair-confidence", difficulty: 1, topic: "Algebra", generationFamily: "d" }),
+      question({ id: "middle", exposureKey: "middle-confidence", difficulty: 4, topic: "Statistics", generationFamily: "e" }),
+    ];
+
+    const confidentCorrect = rebalanceAdaptiveSession(questions, 0, true, 1, 9, "high");
+    expect(confidentCorrect[1].difficulty).toBe(5);
+
+    const guessingCorrect = rebalanceAdaptiveSession(questions, 0, true, 1, 9, "low");
+    expect(guessingCorrect[1].difficulty).toBe(3);
+    expect(guessingCorrect[1].topic).toBe("Algebra");
+
+    const confidentlyWrong = rebalanceAdaptiveSession(questions, 0, false, 0, 9, "high");
+    expect(confidentlyWrong[1].difficulty).toBe(1);
+    expect(confidentlyWrong[1].topic).toBe("Algebra");
+  });
+
   it("scores single-choice answers exactly", () => {
     const item = question({ kind: "single", answer: "b" });
     expect(isCorrectAnswer(item, "b")).toBe(true);
