@@ -4,6 +4,7 @@ import {
   buildIntelligentQuestions,
   intelligentCapacityForSelection,
   intelligentTemplatesForSelection,
+  questionPassesFoundryQualityGate,
 } from "./intelligent-foundry";
 
 const shsMath = {
@@ -66,6 +67,44 @@ describe("SukuuNova intelligent question foundry", () => {
     expect(new Set(first.map((question) => question.challenge)).size).toBeGreaterThanOrEqual(2);
     expect(first.every((question) => Boolean(question.mission))).toBe(true);
     expect(second.map((question) => question.id)).toEqual(first.map((question) => question.id));
+  });
+
+  it("quality-gates every generated question before learner delivery", () => {
+    const selections = [
+      shsMath,
+      { ...shsMath, topicId: "geometry-and-measurement" },
+      {
+        lane: "university" as const,
+        programId: "medicine",
+        levelId: "level-100",
+        subjectId: "human-physiology",
+        topicId: "physiology",
+        mode: "adaptive" as const,
+        count: 80,
+        seed: 8080,
+      },
+      {
+        lane: "university" as const,
+        programId: "law",
+        levelId: "level-100",
+        subjectId: "law-of-contract-i",
+        topicId: "contract-formation",
+        mode: "adaptive" as const,
+        count: 80,
+        seed: 9090,
+      },
+    ];
+
+    for (const selection of selections) {
+      const questions = buildIntelligentQuestions(selection, 80, selection.seed);
+      expect(questions.length, `${selection.programId}/${selection.subjectId}/${selection.topicId}`).toBeGreaterThan(0);
+      expect(questions.every(questionPassesFoundryQualityGate)).toBe(true);
+      expect(questions.every((question) => {
+        if (question.kind !== "single") return true;
+        const labels = question.options?.map((option) => option.label.trim().toLowerCase()) ?? [];
+        return new Set(labels).size === labels.length;
+      })).toBe(true);
+    }
   });
 
   it("moves to a fresh generated region when the seed changes", () => {
