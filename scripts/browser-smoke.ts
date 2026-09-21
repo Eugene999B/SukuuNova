@@ -155,7 +155,7 @@ async function main() {
       const feedbackText=await feedback.innerText();
       const expectedCue=feedbackText.includes("Yes!")?"correct":"retry";
       await page.waitForFunction(
-        (cue)=>document.querySelector("[data-audio-control]")?.getAttribute("data-last-cue")===cue,
+        (cue)=>document.querySelector("[data-audio-root]")?.getAttribute("data-last-cue")===cue,
         expectedCue,
       );
       await player.getByRole("button",{name:question===4?"View results":"Next question",exact:true}).click();
