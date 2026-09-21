@@ -186,7 +186,14 @@ function renderNumber(target: Target, config: SessionConfig, seed: number, posit
 
 function renderOperations(target: Target, config: SessionConfig, seed: number, position: number, multiplicationOnly = false): LearnQuestion {
   const profile = LEVELS[config.levelId];
-  const family = position % (multiplicationOnly ? 4 : 6);
+  const familyPool = multiplicationOnly
+    ? ["multiply", "divide", "inverse", "estimate"] as const
+    : config.levelId === "basic-1"
+      ? ["add", "subtract", "inverse"] as const
+      : config.levelId === "basic-2" || config.levelId === "basic-4"
+        ? ["add", "subtract", "inverse", "estimate"] as const
+        : ["add", "subtract", "multiply", "divide", "inverse", "estimate"] as const;
+  const family = familyPool[position % familyPool.length];
   const name = pick(NAMES, seed, position);
   const context = pick(CONTEXTS, seed, position);
   const style = hash(`${seed}:opstyle:${position}`) % 6;
@@ -196,7 +203,7 @@ function renderOperations(target: Target, config: SessionConfig, seed: number, p
   const multA = Math.max(2, (a % Math.max(3, Math.floor(profile.multiplierMax * 1.7))) + 2);
   const multB = Math.max(2, (bRaw % profile.multiplierMax) + 2);
 
-  if (!multiplicationOnly && family === 0) {
+  if (family === "add") {
     const answer = a + b;
     return numericQuestion({
       id: String(seed), target, config, family: "addition-context", skill: "Add whole numbers in context",
@@ -210,7 +217,7 @@ function renderOperations(target: Target, config: SessionConfig, seed: number, p
     });
   }
 
-  if (!multiplicationOnly && family === 1) {
+  if (family === "subtract") {
     const larger = a + b;
     const answer = a;
     return numericQuestion({
@@ -225,7 +232,7 @@ function renderOperations(target: Target, config: SessionConfig, seed: number, p
     });
   }
 
-  if (family === (multiplicationOnly ? 0 : 2)) {
+  if (family === "multiply") {
     const answer = multA * multB;
     return numericQuestion({
       id: String(seed), target, config, family: "multiplication-model", skill: "Use multiplication for equal groups",
@@ -235,7 +242,7 @@ function renderOperations(target: Target, config: SessionConfig, seed: number, p
     });
   }
 
-  if (family === (multiplicationOnly ? 1 : 3)) {
+  if (family === "divide") {
     const divisor = 2 + (hash(`${seed}:divisor`) % Math.max(2, profile.divisorMax - 1));
     const quotient = Math.max(2, multA);
     const total = divisor * quotient;
@@ -247,7 +254,7 @@ function renderOperations(target: Target, config: SessionConfig, seed: number, p
     });
   }
 
-  if (family === (multiplicationOnly ? 2 : 4)) {
+  if (family === "inverse") {
     const answer = a + b;
     const missing = b;
     return numericQuestion({
@@ -258,7 +265,7 @@ function renderOperations(target: Target, config: SessionConfig, seed: number, p
     });
   }
 
-  if (family === (multiplicationOnly ? 3 : 5)) {
+  if (family === "estimate") {
     const base = profile.roundBase;
     const exact = a + b;
     const estimate = Math.round(a / base) * base + Math.round(b / base) * base;
