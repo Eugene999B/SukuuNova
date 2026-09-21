@@ -103,7 +103,13 @@ async function main() {
     await page.getByRole("button",{name:/BECE/}).click();
     await page.getByRole("button",{name:"BECE practice",exact:true}).click();
     await page.getByRole("button",{name:/Mathematics/}).first().click();
-    assert.equal(await page.getByRole("button",{name:"Mixed topics",exact:true}).isDisabled(),true,"Mapped exam topics must stop before session setup when practice is not ready");
+    assert.equal(await page.getByRole("button",{name:"Mixed topics",exact:true}).isDisabled(),false,"Published exam subjects must have working practice");
+    await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
+    await page.getByRole("button",{name:"5",exact:true}).click();
+    await page.getByRole("button",{name:"Start",exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector("main[data-session-active=\"true\"]"));
+    await page.getByTestId("learning-question").waitFor();
+    assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Exam practice must launch instead of ending in a coming-soon state");
 
     await page.goto("/learn/explore?entry=basic");
     await page.getByRole("heading",{name:"Your class / level",exact:true}).waitFor();
