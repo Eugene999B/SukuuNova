@@ -4,13 +4,11 @@ import Link from "next/link";
 import {
   ArrowLeft,
   ArrowRight,
-  BarChart3,
   BookOpen,
   Brain,
   Check,
   CheckCircle2,
   ChevronRight,
-  Clock3,
   GraduationCap,
   Layers3,
   Medal,
@@ -18,9 +16,7 @@ import {
   School,
   Search,
   Sparkles,
-  Volume2,
   Zap,
-  Target,
   X,
   XCircle,
 } from "lucide-react";
@@ -38,8 +34,7 @@ import { buildLearningSession, isCorrectAnswer, rebalanceAdaptiveSession } from 
 import styles from "./explore.module.css";
 import { normalizeLearnerProgress } from "../learner-progress";
 import { useLearningSound } from "../LearnShell";
-import { hasLearningAnswer, sessionSize } from "../session-controls";
-import { UNIVERSITY_INSTITUTION_EXAMPLES } from "../broad-catalog";
+import { hasLearningAnswer } from "../session-controls";
 
 type LearnerProgress = {
   sessions: number;
@@ -81,13 +76,6 @@ function percent(value: number, total: number) {
   return total ? Math.round((value / total) * 100) : 0;
 }
 
-function compactCapacity(value: number) {
-  if (value >= 1_000_000_000) return `${Math.floor(value / 1_000_000_000)}B+`;
-  if (value >= 1_000_000) return `${Math.floor(value / 1_000_000)}M+`;
-  if (value >= 1_000) return `${Math.floor(value / 1_000)}K+`;
-  return String(value);
-}
-
 function masteryKey(question: LearnQuestion) {
   return `${question.subject} · ${question.topic}`;
 }
@@ -121,7 +109,6 @@ function firstReadyTopic(lane: LearnLane, programId: string, levelId: string, su
 export function LearningExplorer() {
   const playSound=useLearningSound();
   const answerLock=useRef(false);
-  const [requestedCount,setRequestedCount]=useState("10");
   const [showAllTopics,setShowAllTopics]=useState(false);
   const [lane, setLane] = useState<LearnLane>("school");
   const catalog = useMemo(() => catalogFor(lane), [lane]);
@@ -166,7 +153,7 @@ export function LearningExplorer() {
           item.label.toLowerCase().includes(query) || item.description.toLowerCase().includes(query),
         )
       : catalog.programs;
-    return showAllPrograms || query ? matches : matches.slice(0, lane === "university" ? 12 : 10);
+    return showAllPrograms || query ? matches : matches.slice(0, 8);
   }, [catalog.programs, lane, programQuery, showAllPrograms]);
   const availableModes = lane === "exam" ? modes.filter((item) => item.id !== "adaptive") : modes;
   const currentQuestion = session[questionIndex];
@@ -362,72 +349,37 @@ export function LearningExplorer() {
     setResponse(current.includes(optionId) ? current.filter((item) => item !== optionId) : [...current, optionId]);
   }
 
-  const weakest = useMemo(() => {
-    return Object.entries(progress.mastery)
-      .filter(([, value]) => value.answered > 0)
-      .map(([key, value]) => ({ key, score: percent(value.correct, value.answered), answered: value.answered }))
-      .sort((a, b) => a.score - b.score)[0];
-  }, [progress.mastery]);
-
   const isComplete = session.length > 0 && questionIndex >= session.length;
   const sessionAccuracy = percent(sessionCorrect, session.length);
 
   return (
-    <main className={`${styles.page} ${sessionFocused ? styles.sessionFocused : ""}`} data-session-active={sessionInProgress ? "true" : "false"}>
+    <main className={`${styles.page} ${sessionFocused ? styles.sessionFocused : styles.setupFocused}`} data-session-active={sessionInProgress ? "true" : "false"}>
       <header className={styles.topbar}>
-        <Link href="/learn" className={styles.backLink}><ArrowLeft size={16} /> Learn home</Link>
-        <div className={styles.wordmark}><span>S</span><div><strong>SukuuNova Learn</strong><small>Play · Learn · Grow</small></div></div>
-        <div className={styles.liveBadge}><Volume2 size={13} /><span /> Sound on by default</div>
+        <Link href="/learn" className={styles.backLink}><ArrowLeft size={17} /> Exit</Link>
+        <strong className={styles.compactBrand}>SukuuNova Learn</strong>
+        <span className={styles.stepCounter}>{sessionFocused ? "Practice" : `${flowStep + 1}/6`}</span>
       </header>
 
-      <section className={styles.hero}>
-        <div>
-          <span className={styles.kicker}><Zap size={14} /> YOUR LEARNING PLAYGROUND</span>
-          <h1>Pick a path. <em>Make it yours.</em></h1>
-          <p>School, SHS pathways, exams, university programmes and career skills live in one place. Build a quick drill or a focused session and get instant feedback.</p>
-          <div className={styles.heroPromise}><span>🔊 action sounds</span><span>⚡ instant marking</span><span>🎯 focused sessions</span><span>🏆 local progress</span></div>
-        </div>
-        <div className={styles.heroTrust}>
-          <article><CheckCircle2 size={22} /><strong>No learner account needed</strong><span>Start practising immediately. Nothing here pretends you are signed in.</span></article>
-          <article><Target size={22} /><strong>Progress stays on this browser</strong><span>Answered questions and XP are device-local and can disappear if browser data is cleared.</span></article>
-          <article><BarChart3 size={22} /><strong>{progress.answered ? `${progress.answered} answers on this device` : "Evidence starts with your first answer"}</strong><span>{progress.answered ? "Detailed accuracy lives in your practice map below — not as a fake account score." : "We do not show a meaningless 0% accuracy before you have practised."}</span></article>
-        </div>
-      </section>
-
       <fieldset className={styles.journey} disabled={session.length > 0 && !isComplete} aria-label="Build your learning session">
-        <div className={styles.flowHeader}>
-          <div>
-            <span className={styles.stepLabel}>BUILD YOUR SESSION</span>
-            <h2>One choice at a time.</h2>
-            <p>No wall of dropdowns. Pick a path, then SukuuNova reveals only the next decision.</p>
-          </div>
-          <div className={styles.flowProgress} aria-label="Session setup progress">
-            {["Path","Programme","Level","Subject","Topic","Session"].map((label,index)=>(
-              <button
-                type="button"
-                key={label}
-                className={flowStep===index?styles.flowPillActive:index<flowStep?styles.flowPillDone:styles.flowPill}
-                disabled={index>flowStep}
-                onClick={()=>index<=flowStep&&setFlowStep(index)}
-              >
-                <span>{index+1}</span>{label}
-              </button>
-            ))}
-          </div>
+        <div className={styles.flowTrack} aria-label={`Step ${flowStep + 1} of 6`}>
+          <span style={{ width: `${((flowStep + 1) / 6) * 100}%` }} />
         </div>
 
-        {flowStep===0&&<section className={`${styles.flowStage} ${styles.laneDeck}`}>
+        {flowStep===0&&<section className={styles.flowStage}>
           <div className={styles.stageTop}>
-            <div className={styles.deckIntro}><div><span className={styles.stepLabel}>STEP 1</span><h2>Where are you learning?</h2></div><p>Choose one learning world. We will build the rest from there.</p></div>
+            <div>
+              <span className={styles.stepLabel}>START</span>
+              <h2>Where do you want to learn?</h2>
+              <p>Choose one. The next screen replaces this one.</p>
+            </div>
           </div>
           <div className={styles.laneCards}>
             {lanes.map((item) => {
               const Icon = item.icon;
               return (
-                <button key={item.id} aria-pressed={lane===item.id} className={lane===item.id?styles.laneCardActive:styles.laneCard} onClick={()=>resetSelectionForLane(item.id)}>
+                <button key={item.id} className={styles.laneCard} onClick={()=>resetSelectionForLane(item.id)}>
                   <span className={styles.laneIcon}><Icon size={24}/></span>
-                  <strong>{item.label}</strong>
-                  <small>{item.copy}</small>
+                  <span className={styles.choiceCopy}><strong>{item.label}</strong><small>{item.copy}</small></span>
                   <ChevronRight size={19}/>
                 </button>
               );
@@ -438,82 +390,121 @@ export function LearningExplorer() {
         {flowStep===1&&<section className={styles.flowStage}>
           <div className={styles.stageTop}>
             <button type="button" className={styles.backStep} onClick={()=>setFlowStep(0)}><ArrowLeft size={17}/> Back</button>
-            <div><span className={styles.stepLabel}>STEP 2</span><h2>{lane==="university"?"Choose your programme":lane==="school"?"Choose your school pathway":lane==="exam"?"Choose your exam":"Choose your skill track"}</h2><p>Pick one. The next screen will ask only for the level or year.</p></div>
+            <div>
+              <span className={styles.stepLabel}>CHOOSE ONE</span>
+              <h2>{lane==="university"?"Your programme":lane==="school"?"Your school pathway":lane==="exam"?"Your exam":"Your skill track"}</h2>
+            </div>
           </div>
-          {lane==="university"&&<div className={styles.institutionNote}><GraduationCap size={18}/><div><strong>Programme-first, institution-aware</strong><span>We use common programme structures without pretending every university uses the same course codes or semester order.</span></div></div>}
-          {lane==="exam"&&<div className={styles.examNotice}><Medal size={18}/><div><strong>Practice, not a fake official mock.</strong><span>Paper-perfect mocks stay separate until structure, timing and marking are validated.</span></div></div>}
-          <div className={styles.programSection}>
-            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>PROGRAMME / PATHWAY</span><strong>{catalog.programs.length} available paths</strong></div>{catalog.programs.length>8&&<label className={styles.searchBox}><Search size={17}/><input value={programQuery} onChange={e=>setProgramQuery(e.target.value)} placeholder={lane==="university"?"Search medicine, law, engineering…":"Search pathways…"}/></label>}</div>
-            <div className={styles.programGrid}>{visiblePrograms.map((item)=><button key={item.id} className={programId===item.id?styles.programCardActive:styles.programCard} onClick={()=>selectProgram(item.id)}><span>{item.label}</span><small>{item.levels.length} level{item.levels.length===1?"":"s"}</small><ChevronRight size={17}/></button>)}</div>
-            {!programQuery&&catalog.programs.length>visiblePrograms.length&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllPrograms(true)}>Show all {catalog.programs.length} paths</button>}
+
+          {catalog.programs.length>8&&<label className={styles.searchBox}>
+            <Search size={18}/>
+            <input value={programQuery} onChange={e=>setProgramQuery(e.target.value)} placeholder={lane==="university"?"Search programmes…":"Search…"} />
+          </label>}
+
+          <div className={styles.programGrid}>
+            {visiblePrograms.map((item)=><button key={item.id} className={styles.programCard} onClick={()=>selectProgram(item.id)}>
+              <span>{item.label}</span><ChevronRight size={17}/>
+            </button>)}
           </div>
+
+          {!programQuery&&catalog.programs.length>visiblePrograms.length&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllPrograms(true)}>Show all {catalog.programs.length}</button>}
         </section>}
 
         {flowStep===2&&<section className={styles.flowStage}>
           <div className={styles.stageTop}>
             <button type="button" className={styles.backStep} onClick={()=>setFlowStep(1)}><ArrowLeft size={17}/> Back</button>
-            <div><span className={styles.stepLabel}>STEP 3</span><h2>{lane==="school"&&program.id.startsWith("shs-")?"Which SHS year?":lane==="university"?"Which university level?":"Choose your level"}</h2><p className={styles.selectionSummary}>{program.label}</p></div>
+            <div>
+              <span className={styles.stepLabel}>CHOOSE ONE</span>
+              <h2>{lane==="school"&&program.id.startsWith("shs-")?"Your SHS year":lane==="university"?"Your level":"Your class / level"}</h2>
+              <p className={styles.selectionSummary}>{program.label}</p>
+            </div>
           </div>
-          <div className={styles.levelTabs}>{program.levels.map(item=><button key={item.id} className={levelId===item.id?styles.levelTabActive:styles.levelTab} onClick={()=>selectLevel(item.id)}>{item.label}<ChevronRight size={16}/></button>)}</div>
+          <div className={styles.levelTabs}>{program.levels.map(item=><button key={item.id} className={styles.levelTab} onClick={()=>selectLevel(item.id)}>{item.label}<ChevronRight size={16}/></button>)}</div>
         </section>}
 
         {flowStep===3&&<section className={styles.flowStage}>
           <div className={styles.stageTop}>
             <button type="button" className={styles.backStep} onClick={()=>setFlowStep(2)}><ArrowLeft size={17}/> Back</button>
-            <div><span className={styles.stepLabel}>STEP 4</span><h2>Choose a subject or course.</h2><p className={styles.selectionSummary}>{program.label} · {level.label}</p></div>
+            <div>
+              <span className={styles.stepLabel}>CHOOSE ONE</span>
+              <h2>{lane==="university"?"Your course":"Your subject"}</h2>
+              <p className={styles.selectionSummary}>{program.label} · {level.label}</p>
+            </div>
           </div>
-          <div className={styles.sectionLine}><div><strong>{level.subjects.length} choices</strong><span>Only content with real question coverage is marked ready.</span></div></div>
-          <div className={styles.subjectGrid}>{level.subjects.map(item=>{const ready=subjectIsReady(lane,program.id,level.id,item);return <button key={item.id} className={subjectId===item.id?styles.subjectCardActive:styles.subjectCard} onClick={()=>selectSubject(item.id)}><BookOpen size={20}/><span><strong>{item.label}</strong><small>{ready?"Practice available":"Course map — content expanding"}</small></span>{ready?<span className={styles.readyDot}>●</span>:<ChevronRight size={16}/>}</button>;})}</div>
+          <div className={styles.subjectGrid}>{level.subjects.map(item=>{
+            const ready=subjectIsReady(lane,program.id,level.id,item);
+            return <button key={item.id} className={styles.subjectCard} onClick={()=>selectSubject(item.id)}>
+              <BookOpen size={19}/>
+              <span><strong>{item.label}</strong><small>{ready?"Ready":"Content expanding"}</small></span>
+              <ChevronRight size={16}/>
+            </button>;
+          })}</div>
         </section>}
 
         {flowStep===4&&<section className={styles.flowStage}>
           <div className={styles.stageTop}>
             <button type="button" className={styles.backStep} onClick={()=>setFlowStep(3)}><ArrowLeft size={17}/> Back</button>
-            <div><span className={styles.stepLabel}>STEP 5</span><h2>What do you want to practise?</h2><p className={styles.selectionSummary}>{program.label} · {level.label} · {subject.label}</p></div>
+            <div>
+              <span className={styles.stepLabel}>CHOOSE ONE</span>
+              <h2>Your topic</h2>
+              <p className={styles.selectionSummary}>{subject.label}</p>
+            </div>
           </div>
-          <div className={styles.sectionLine}><div><strong>Pick one topic or mix the whole subject.</strong><span>Exact-topic sessions never silently widen into unrelated material.</span></div><span className={practiceAvailable?styles.readyBadge:styles.mappedBadge}>{capability.stage==="massive"?`${compactCapacity(capability.intelligentCapacity + capability.variantCapacity)} validated combinations`:practiceAvailable?"Practice ready":"Mapped — content expanding"}</span></div>
           <div className={styles.topicGrid}>
-            <button aria-pressed={topicId==="all"} className={topicId==="all"?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId("all");setMode("random");setLaunchNotice("");setFlowStep(5);}}><Sparkles size={17}/><span>Mixed topics</span>{topicId==="all"&&<Check size={16}/>}</button>
-            {(showAllTopics?subject.topics:subject.topics.slice(0,12)).map(item=>{const ready=topicIsReady(lane,program.id,level.id,subject,item.id);return <button key={item.id} aria-pressed={topicId===item.id} className={topicId===item.id?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId(item.id);setLaunchNotice("");setFlowStep(5);}}><BookOpen size={17}/><span>{item.label}</span>{ready?<Check size={16}/>:<span className={styles.mapDot}>○</span>}</button>;})}
+            <button className={styles.topicButton} disabled={!subjectIsReady(lane,program.id,level.id,subject)} onClick={()=>{setTopicId("all");setMode("random");setLaunchNotice("");setFlowStep(5);}}>
+              <Sparkles size={17}/><span>Mixed topics</span><ChevronRight size={16}/>
+            </button>
+            {subject.topics.map(item=>{
+              const ready=topicIsReady(lane,program.id,level.id,subject,item.id);
+              return <button key={item.id} disabled={!ready} className={styles.topicButton} onClick={()=>{setTopicId(item.id);setLaunchNotice("");setFlowStep(5);}}>
+                <BookOpen size={17}/><span>{item.label}</span>{ready?<ChevronRight size={16}/>:<small>Soon</small>}
+              </button>;
+            })}
           </div>
-          {subject.topics.length>12&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllTopics(v=>!v)}>{showAllTopics?"Show fewer topics":`Show all ${subject.topics.length} topics`}</button>}
         </section>}
 
         {flowStep===5&&<section className={styles.flowStage}>
           <div className={styles.stageTop}>
             <button type="button" className={styles.backStep} onClick={()=>setFlowStep(4)}><ArrowLeft size={17}/> Back</button>
-            <div><span className={styles.stepLabel}>STEP 6</span><h2>Set the challenge, then play.</h2><p className={styles.selectionSummary}>{program.label} · {level.label} · {subject.label} · {topic.label}</p></div>
+            <div>
+              <span className={styles.stepLabel}>READY</span>
+              <h2>Start your session</h2>
+              <p className={styles.selectionSummary}>{subject.label} · {topic.label}</p>
+            </div>
           </div>
+
           <div className={styles.sessionComposer}>
             <div>
-              <span className={styles.stepLabel}>HOW SHOULD SUKUUNOVA ASK?</span>
-              <div className={styles.modeGrid}>{availableModes.map(item=><button key={item.id} className={mode===item.id?styles.modeActive:styles.modeButton} onClick={()=>setMode(item.id)}><span className={styles.modeDot}/><span><strong>{item.label}</strong><small>{item.description}</small></span>{mode===item.id&&<CheckCircle2 size={19}/>}</button>)}</div>
+              <span className={styles.miniLabel}>Mode</span>
+              <div className={styles.modeGrid}>{availableModes.map(item=><button key={item.id} className={mode===item.id?styles.modeActive:styles.modeButton} onClick={()=>setMode(item.id)}>
+                <span className={styles.modeDot}/><strong>{item.label}</strong>{mode===item.id&&<Check size={18}/>}
+              </button>)}</div>
             </div>
+
             <div className={styles.launchPanel}>
-              <div><label>Questions</label><div className={styles.countGroup}>{[5,10,20,30,50,100].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>{setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Custom 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
-              <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Zap size={21}/>{practiceAvailable?(lane==="exam"?"Start practice":"Start my session"):"Questions for this topic are still being built"}<ArrowRight size={20}/></button>
-              <p>{practiceAvailable?(capability.stage==="massive"?"SukuuNova will build a fresh, quality-gated session from deterministic question families, mixed formats and adaptive ordering.":"This exact selection has usable practice. SukuuNova will favour fresh questions and never widen your topic silently."):"This course map is visible, but SukuuNova will not invent weak questions just to make the button work."}</p>
+              <span className={styles.miniLabel}>Questions</span>
+              <div className={styles.countGroup}>{[5,10,20,30,50,100].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>setCount(value)}>{value}</button>)}</div>
+              <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Zap size={21}/>{practiceAvailable?"Start":"Not ready yet"}<ArrowRight size={20}/></button>
+              {launchNotice&&<p role="status" className={styles.engineNote}>{launchNotice}</p>}
             </div>
           </div>
-          {lane==="university"&&<div className={styles.institutionStrip}><span>Examples of universities this programme-first structure can serve:</span><div>{UNIVERSITY_INSTITUTION_EXAMPLES.slice(0,8).map(item=><b key={item}>{item}</b>)}</div></div>}
         </section>}
       </fieldset>
 
-      <section id="session-player" className={styles.playerSection}>
-        <div className={styles.sectionTitle}><div><span className={styles.stepLabel}>03 · PRACTICE</span><h2>Time to practise</h2></div><p>Choose an answer, check the explanation, and keep going.</p></div>
-
-        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>Focused session</strong><span>{program.label} · {level.label} · {subject.label} · {topic.label}</span><small>{Math.floor(sessionSeconds/60)}m {sessionSeconds%60}s elapsed · {session.length} questions</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup? Your answered questions stay in local progress."))return;setSession([]);setSessionStartedAt(null);setLaunchNotice("");answerLock.current=false;}}>Exit session</button></div>}
+      {session.length>0&&<section id="session-player" className={styles.playerSection}>
+        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>{subject.label}</strong><span>{topic.label}</span><small>{questionIndex + 1}/{session.length}</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup?"))return;setSession([]);setSessionStartedAt(null);setLaunchNotice("");setFlowStep(5);answerLock.current=false;}}>Exit session</button></div>}
         {launchNotice&&session.length>0&&<p role="status" className={styles.engineNote}>{launchNotice}</p>}
-        {!session.length ? (
-          <div className={styles.playerEmpty}><Brain size={36} /><h3>{launchNotice ? "Coverage is still expanding here." : "Your intelligent session appears here."}</h3><p>{launchNotice || "Choose your learning path above, then build a session."}</p></div>
-        ) : isComplete ? (
+
+        {isComplete ? (
           <div className={styles.completeCard}>
             <div className={styles.completeTop}>
-              <div><span className={styles.kicker}>SESSION COMPLETE</span><h3>{sessionAccuracy >= 80 ? "Strong result in this session." : sessionAccuracy >= 60 ? "Good work — review the missed ideas next." : "This session found useful areas to revisit."}</h3><p>This result describes only the questions you just answered. Your local practice history is saved on this browser; it is not an official grade or mastery certification.</p></div>
-              <div className={styles.scoreRing}><strong>{sessionAccuracy}%</strong><span>{sessionCorrect}/{session.length}</span></div>
+              <div>
+                <span className={styles.kicker}>SESSION COMPLETE</span>
+                <h3>{sessionCorrect} of {session.length} correct</h3>
+                <p>Review another set or change your learning path.</p>
+              </div>
             </div>
-            <div className={styles.completeStats}><article><BarChart3 size={18} /><span>Session accuracy</span><strong>{sessionAccuracy}%</strong></article><article><Clock3 size={18} /><span>Time</span><strong>{Math.floor(sessionSeconds / 60)}m {sessionSeconds % 60}s</strong></article><article><Brain size={18} /><span>Lifetime answered</span><strong>{progress.answered}</strong></article></div>
-            <div className={styles.completeActions}><button onClick={launchSession}><RotateCcw size={16} /> Practise again</button><button onClick={() => { setSession([]); setFlowStep(0); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Change learning path</button></div>
+            <div className={styles.completeActions}><button onClick={launchSession}><RotateCcw size={16} /> Practise again</button><button onClick={() => { setSession([]); setFlowStep(0); }}>Change learning path</button></div>
           </div>
         ) : currentQuestion ? (
           <QuestionPlayer
@@ -529,17 +520,7 @@ export function LearningExplorer() {
             next={nextQuestion}
           />
         ) : null}
-      </section>
-
-      <section className={styles.masterySection}>
-        <div className={styles.sectionTitle}><div><span className={styles.stepLabel}>04 · PRACTICE MAP</span><h2>Your learning picture builds with evidence.</h2></div><p>Your progress stays on this browser. A few answers are only an early signal; clearing browser data removes them and they do not sync between devices.</p></div>
-        <div className={styles.masteryGrid}>
-          {Object.entries(progress.mastery).length ? Object.entries(progress.mastery).sort(([, a], [, b]) => b.answered - a.answered).slice(0, 8).map(([key, value]) => {
-            const score = percent(value.correct, value.answered);
-            return <article key={key}><div><strong>{key}</strong><span>{value.answered} answered</span></div><div className={styles.masteryBar}><span style={{ width: `${score}%` }} /></div><b>{score}%</b></article>;
-          }) : <div className={styles.noMastery}><Target size={28} /><strong>No mastery signals yet.</strong><span>Finish a few questions and this map will build itself.</span></div>}
-        </div>
-      </section>
+      </section>}
     </main>
   );
 }
