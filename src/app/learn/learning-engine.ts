@@ -194,6 +194,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const recent = new Set(config.seen ?? []);
   const unique = new Set<string>();
   const generatedPerSkill = new Map<string, number>();
+  const sourcePriority = new Map<string, number>();
   const fresh: LearnQuestion[] = [];
   const recycled: LearnQuestion[] = [];
   const selection = resolveSelectionLabels(config);
@@ -202,7 +203,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const broadQuestions = broadPracticeQuestionsForSelection(config);
   const intelligentQuestions = buildIntelligentQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
 
-  function absorb(questions: LearnQuestion[]) {
+  function absorb(questions: LearnQuestion[], priority = 2) {
     for (const question of questions) {
       if (unique.has(question.exposureKey)) continue;
       if (question.exposureKey.startsWith("variant:")) {
@@ -212,6 +213,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
         generatedPerSkill.set(family, familyCount + 1);
       }
       unique.add(question.exposureKey);
+      sourcePriority.set(question.exposureKey, priority);
       if (recent.has(question.exposureKey)) recycled.push(question);
       else fresh.push(question);
     }
@@ -219,21 +221,23 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
 
   const strictSelection = config.subjectId !== "all" || config.topicId !== "all";
 
-  absorb(specializedQuestions);
-  absorb(broadQuestions);
-  absorb(reviewedQuestions.filter((question) => starterMatches(question, config, false, selection)));
-  absorb(intelligentQuestions);
-  absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed));
+  // Human-reviewed/specialized material is evidence-backed and must lead exact
+  // topic practice. Generated material expands depth after that foundation.
+  absorb(specializedQuestions, 0);
+  absorb(broadQuestions, 0);
+  absorb(reviewedQuestions.filter((question) => starterMatches(question, config, false, selection)), 0);
+  absorb(intelligentQuestions, 1);
+  absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed), 2);
 
   if (!strictSelection && fresh.length < requested) {
-    absorb(reviewedQuestions.filter((question) => starterMatches(question, config, true, selection)));
+    absorb(reviewedQuestions.filter((question) => starterMatches(question, config, true, selection)), 0);
   }
 
 
   for (let attempt = 0; fresh.length < requested && attempt < BROADENING_ATTEMPTS; attempt += 1) {
     const nextSeed = derivedSeed(seed, attempt);
-    absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed));
-    absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed));
+    absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed), 2);
+    absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
   }
 
   const orderedFresh = diversifyPool(orderPool(fresh, config, seed, selection), seed);
@@ -241,7 +245,15 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection),
     derivedSeed(seed, BROADENING_ATTEMPTS),
   );
-  return [...orderedFresh, ...orderedRecycled].slice(0, requested);
+
+  const evidenceFirst = (questions: LearnQuestion[]) => {
+    if (config.mode !== "topic") return questions;
+    return [...questions].sort((left, right) =>
+      (sourcePriority.get(left.exposureKey) ?? 9) - (sourcePriority.get(right.exposureKey) ?? 9)
+    );
+  };
+
+  return [...evidenceFirst(orderedFresh), ...evidenceFirst(orderedRecycled)].slice(0, requested);
 }
 
 export function rebalanceAdaptiveSession(
