@@ -17,6 +17,7 @@ import { buildSchoolLanguageQuestions, isNativeLanguageQuestion } from "./school
 import { buildRichStimulusQuestions } from "./rich-stimulus-foundry";
 import { examBankQuestionsForSelection } from "./exam-question-bank";
 import { composeIntelligentOrder, sessionIntelligenceDiagnostics } from "./intelligence-core";
+import { buildNursingQuestions } from "./nursing-foundry";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -285,11 +286,15 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const primaryMathQuestions = buildPrimaryMathQuestions(config, candidateCount(requested, 5), seed);
   const languageQuestions = buildSchoolLanguageQuestions(config, candidateCount(requested, 6), seed);
   const richStimulusQuestions = buildRichStimulusQuestions(config, candidateCount(requested, 5), seed);
+  const nursingQuestions = buildNursingQuestions(config, candidateCount(requested, 7), seed);
   const examBankQuestions = examBankQuestionsForSelection(config);
   const coverageQuestions = buildCoverageQuestions(config, candidateCount(requested, 4), seed);
 
+  const nursingFocused = config.lane === "university" && config.programId === "nursing";
+
   function absorb(questions: LearnQuestion[], priority = 2) {
     for (const sourceQuestion of questions) {
+      if (nursingFocused && priority > 0.5 && !sourceQuestion.exposureKey.startsWith("nursing:")) continue;
       const isLanguageSubject = /french|twi|ghanaian language/i.test(sourceQuestion.subject);
       if (isLanguageSubject && !sourceQuestion.exposureKey.startsWith("language:")) continue;
       if (sourceQuestion.exposureKey.startsWith("language:") && !isNativeLanguageQuestion(sourceQuestion)) continue;
@@ -321,6 +326,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   // material, then use generated families only to expand depth.
   absorb(examBankQuestions, -1);
   absorb(reviewedQuestions.filter((question) => starterMatches(question, config, false, selection)), 0);
+  absorb(nursingQuestions, 0.5);
   absorb(specializedQuestions, 1);
   absorb(broadQuestions, 1);
   absorb(primaryMathQuestions, 1);
@@ -341,6 +347,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     absorb(buildPrimaryMathQuestions(config, expandedCount, nextSeed), 1);
     absorb(buildSchoolLanguageQuestions(config, expandedCount, nextSeed), 1);
     absorb(buildRichStimulusQuestions(config, expandedCount, nextSeed), 1);
+    absorb(buildNursingQuestions(config, expandedCount * 2, nextSeed), 0.5);
     absorb(buildVariantQuestions(config, expandedCount, nextSeed), 3);
     absorb(buildIntelligentQuestions(config, expandedCount, nextSeed), 2);
     absorb(buildCoverageQuestions(config, expandedCount, nextSeed), 4);
