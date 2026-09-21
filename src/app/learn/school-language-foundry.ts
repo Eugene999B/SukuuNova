@@ -215,7 +215,7 @@ function french(config: SessionConfig, family: Family, position: number, seed: n
   const item = FRENCH_SENTENCES[(position + seed) % FRENCH_SENTENCES.length];
   if (family === "editing") {
     const wrong = [item.target.replace(" à ", " a "), item.target.replace(/\.$/, ""), item.target.replace(/^./u, (letter) => letter.toLowerCase())].filter((value) => value !== item.target);
-    return make(config, family, position, seed, "Quelle phrase est écrite correctement ?", item.target, wrong,
+    return make(config, family, position, seed, "Choisis la phrase française correctement écrite pour exprimer : « " + item.english + " ».", item.target, wrong,
       "La phrase correcte est : « " + item.target + " »", "Relire et corriger une phrase");
   }
   if (family === "meaning") {
@@ -271,7 +271,7 @@ function twi(config: SessionConfig, family: Family, position: number, seed: numb
   const item = TWI_SENTENCES[(position + seed) % TWI_SENTENCES.length];
   if (family === "editing") {
     const wrong = [item.target.replace(/\.$/, ""), item.target.replace("ɔ", "o"), item.target.replace("ɛ", "e")].filter((value) => value !== item.target);
-    return make(config, family, position, seed, "Paw kasamu a wɔatwerɛ no yiye.", item.target, wrong,
+    return make(config, family, position, seed, "Paw Asante Twi kasamu a wɔatwerɛ no yiye a ɛkyerɛ « " + item.english + " ».", item.target, wrong,
       "Kasamu a wɔatwerɛ no yiye ne: « " + item.target + " »", "Hwɛ nkyerɛwee ne kasamu nhyehyɛe");
   }
   if (family === "meaning") {
