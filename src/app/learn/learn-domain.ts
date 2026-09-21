@@ -1,4 +1,5 @@
 import { SHS_PROGRAMS, UNIVERSITY_PROGRAMS } from "./broad-catalog";
+import { topicsForSchoolLevel } from "./school-curriculum";
 
 export type LearnLane = "school" | "exam" | "university" | "skills";
 export type PracticeMode = "topic" | "adaptive" | "random" | "timed" | "weakness";
@@ -452,8 +453,15 @@ const ieltsGeneralSubjects: CatalogSubject[] = [
   ]),
 ];
 
+function classAlignedSubjects(levelId: string, subjects: CatalogSubject[]): CatalogSubject[] {
+  return subjects.map((subject) => ({
+    ...subject,
+    topics: topicsForSchoolLevel(levelId, subject.id, subject.topics),
+  }));
+}
+
 function schoolLevel(id: string, label: string, subjects: CatalogSubject[]): CatalogLevel {
-  return { id, label, subjects };
+  return { id, label, subjects: classAlignedSubjects(id, subjects) };
 }
 
 function publishSubject(subject: CatalogSubject): CatalogSubject {
