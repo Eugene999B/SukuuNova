@@ -39,6 +39,31 @@ function candidateCount(requested: number, factor = 4, floor = 24) {
   return Math.min(MAX_SESSION_SIZE * 2, Math.max(floor, requested * factor));
 }
 
+function limitFamilyRuns(questions: LearnQuestion[], maxRun = 2) {
+  const output = [...questions];
+
+  for (let index = maxRun; index < output.length; index += 1) {
+    const family = output[index].generationFamily ?? "no-family";
+    let runLength = 1;
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      if ((output[cursor].generationFamily ?? "no-family") !== family) break;
+      runLength += 1;
+    }
+    if (runLength <= maxRun) continue;
+
+    const swapIndex = output.findIndex(
+      (candidate, candidateIndex) =>
+        candidateIndex > index
+        && (candidate.generationFamily ?? "no-family") !== family,
+    );
+    if (swapIndex < 0) continue;
+
+    [output[index], output[swapIndex]] = [output[swapIndex], output[index]];
+  }
+
+  return output;
+}
+
 function composeCandidateWindow(
   questions: LearnQuestion[],
   config: SessionConfig,
@@ -50,8 +75,10 @@ function composeCandidateWindow(
     questions.length,
     Math.max(24, Math.min(MAX_SESSION_SIZE, requested * 8)),
   );
-  if (windowSize >= questions.length) return composeIntelligentOrder(questions, config, seed);
-  const head = composeIntelligentOrder(questions.slice(0, windowSize), config, seed);
+  const head = limitFamilyRuns(
+    composeIntelligentOrder(questions.slice(0, windowSize), config, seed),
+  );
+  if (windowSize >= questions.length) return head;
   return [...head, ...questions.slice(windowSize)];
 }
 
