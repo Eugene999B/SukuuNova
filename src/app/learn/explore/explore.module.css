@@ -3760,7 +3760,7 @@
   }
 
   .sessionFocused .answerFooter button {
-    min-height: 42px;
+    min-height: 48px;
     padding-inline: 13px;
     font-size: 9px;
   }
