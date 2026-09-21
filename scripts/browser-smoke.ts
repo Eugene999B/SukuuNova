@@ -93,7 +93,7 @@ async function main() {
     await page.waitForFunction(()=>document.querySelector("[data-audio-state]")?.getAttribute("data-audio-state")==="ready");
     await page.getByLabel("Gentle focus music",{exact:true}).check();
     await page.getByLabel("Gentle focus music",{exact:true}).uncheck();
-    await page.getByLabel("Learning audio settings").click();
+    await page.getByRole("button",{name:"Close audio settings",exact:true}).click();
 
     await page.goto("/learn/explore?entry=exam");
     await page.getByRole("heading",{name:"Your exam",exact:true}).waitFor();
@@ -155,7 +155,7 @@ async function main() {
       const feedbackText=await feedback.innerText();
       const expectedCue=feedbackText.includes("Yes!")?"correct":"retry";
       await page.waitForFunction(
-        (cue)=>document.querySelector("[data-audio-control]")?.getAttribute("data-last-cue")===cue,
+        (cue)=>document.querySelector("[data-audio-root]")?.getAttribute("data-last-cue")===cue,
         expectedCue,
       );
       await player.getByRole("button",{name:question===4?"View results":"Next question",exact:true}).click();

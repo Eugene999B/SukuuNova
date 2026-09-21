@@ -26,3 +26,7 @@
   .learn-audio-panel{position:fixed;top:64px;right:10px;left:10px;width:auto;max-width:none;padding:16px;border-radius:16px}
   .learn-audio-test{min-height:44px}
 }
+
+
+.learn-audio-close{min-height:40px;border:1px solid var(--color-border);border-radius:11px;background:var(--color-surface-soft);color:var(--color-text-secondary);font-size:12px;font-weight:750;cursor:pointer}
+@media(max-width:550px){.learn-audio-close{min-height:44px}}

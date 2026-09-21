@@ -274,6 +274,8 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
     audio.current = null;
   }, []);
 
+  const explorerFocused = pathname === "/learn/explore";
+
   const links = [
     ["Home", "/learn"],
     ["Practice", "/learn/explore"],
@@ -290,9 +292,9 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SoundContext.Provider value={play}>
-      <div className="learn-frame">
+      <div className="learn-frame" data-audio-root data-audio-state={audioState} data-last-cue={lastCue ?? ""}>
         <a className="learn-skip" href="#learning-content">Skip to learning</a>
-        <header className="learn-global-header">
+        {!explorerFocused && <header className="learn-global-header">
           <Link href="/learn" className="learn-wordmark"><span>✦</span><strong>SukuuNova <b>Learn</b></strong></Link>
           <Link className="learn-school-link" href="/">School management ↗</Link>
           <nav aria-label="Learning navigation">
@@ -341,9 +343,16 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
                     ? "This browser does not expose a usable Web Audio context. Learning remains fully usable without sound."
                     : "Use Test sound after opening this panel. Browsers may require that tap before audio can start or resume."}
               </small>
+              <button
+                type="button"
+                className="learn-audio-close"
+                onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}
+              >
+                Close audio settings
+              </button>
             </div>
           </details>
-        </header>
+        </header>}
         <div id="learning-content">{children}</div>
       </div>
     </SoundContext.Provider>
