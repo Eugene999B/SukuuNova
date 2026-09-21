@@ -1,6 +1,8 @@
 import {
   catalogFor,
   isCorrectAnswer,
+  resolveCatalogSelection,
+  reviewedTopicLabelsForSelection,
   type LearnQuestion,
   type SessionConfig,
 } from "./learn-domain";
@@ -10,6 +12,8 @@ import { specializedQuestionsForSelection } from "./specialized-content";
 import { broadPracticeQuestionsForSelection } from "./broad-practice";
 import { buildIntelligentQuestions } from "./intelligent-foundry";
 import { buildCoverageQuestions } from "./coverage-foundry";
+import { buildPrimaryMathQuestions } from "./primary-math-foundry";
+import { buildSchoolLanguageQuestions, isNativeLanguageQuestion } from "./school-language-foundry";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -47,11 +51,7 @@ function normalizedLabel(value: string) {
 }
 
 function resolveSelectionLabels(config: SessionConfig): SelectionLabels {
-  const catalog = catalogFor(config.lane);
-  const program = catalog.programs.find((item) => item.id === config.programId);
-  const level = program?.levels.find((item) => item.id === config.levelId);
-  const subject = level?.subjects.find((item) => item.id === config.subjectId);
-  const topic = subject?.topics.find((item) => item.id === config.topicId);
+  const { subject, topic } = resolveCatalogSelection(config);
   return { subject: subject?.contentLabel ?? subject?.label, topic: topic?.label };
 }
 
@@ -71,8 +71,20 @@ function starterMatches(
   selection = resolveSelectionLabels(config),
 ) {
   const subjectMatches = selectionMatches(question.subject, config.subjectId, selection.subject);
-  const topicMatches = includeAnyTopic || selectionMatches(question.topic, config.topicId, selection.topic);
+  const reviewedLabels = reviewedTopicLabelsForSelection(config);
+  const topicMatches = includeAnyTopic
+    || selectionMatches(question.topic, config.topicId, selection.topic)
+    || reviewedLabels.some((label) => normalizedLabel(question.topic) === normalizedLabel(label));
   return subjectMatches && topicMatches;
+}
+
+function baselineDifficultyForLevel(levelId: string) {
+  if (levelId === "kg-1" || levelId === "kg-2" || levelId === "basic-1") return 1;
+  if (levelId === "basic-2" || levelId === "basic-3") return 2;
+  if (levelId === "basic-4" || levelId === "basic-5" || levelId === "jhs-1" || levelId === "shs-1" || levelId === "level-100") return 3;
+  if (levelId === "basic-6" || levelId === "jhs-2" || levelId === "jhs-3" || levelId === "shs-2" || levelId === "level-200" || levelId === "level-300") return 4;
+  if (levelId === "shs-3" || /^level-[456]00$/.test(levelId)) return 5;
+  return 3;
 }
 
 function adaptiveTargetDifficulty(config: SessionConfig, selection: SelectionLabels) {
@@ -88,9 +100,10 @@ function adaptiveTargetDifficulty(config: SessionConfig, selection: SelectionLab
     correct += stats.correct;
   }
 
-  if (answered < 3) return 2;
+  const baseline = baselineDifficultyForLevel(config.levelId);
+  if (answered < 3) return baseline;
   const accuracy = correct / Math.max(1, answered);
-  let target = accuracy < 0.5 ? 2 : accuracy < 0.75 ? 3 : accuracy < 0.9 ? 4 : 5;
+  let target = accuracy < 0.5 ? Math.max(1, baseline - 1) : accuracy < 0.85 ? baseline : Math.min(5, baseline + 1);
   if ((config.streak ?? 0) >= 5) target = Math.min(5, target + 1);
   return target;
 }
@@ -205,10 +218,21 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const specializedQuestions = specializedQuestionsForSelection(config);
   const broadQuestions = broadPracticeQuestionsForSelection(config);
   const intelligentQuestions = buildIntelligentQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
+  const primaryMathQuestions = buildPrimaryMathQuestions(config, Math.max(requested * 5, MAX_SESSION_SIZE * 2), seed);
+  const languageQuestions = buildSchoolLanguageQuestions(config, Math.max(requested * 6, MAX_SESSION_SIZE * 2), seed);
   const coverageQuestions = buildCoverageQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
 
   function absorb(questions: LearnQuestion[], priority = 2) {
-    for (const question of questions) {
+    for (const sourceQuestion of questions) {
+      const isLanguageSubject = /french|twi|ghanaian language/i.test(sourceQuestion.subject);
+      if (isLanguageSubject && !sourceQuestion.exposureKey.startsWith("language:")) continue;
+      if (sourceQuestion.exposureKey.startsWith("language:") && !isNativeLanguageQuestion(sourceQuestion)) continue;
+
+      const question: LearnQuestion = {
+        ...sourceQuestion,
+        ...(config.subjectId !== "all" && selection.subject ? { subject: selection.subject } : {}),
+        ...(config.topicId !== "all" && selection.topic ? { topic: selection.topic } : {}),
+      };
       if (unique.has(question.exposureKey)) continue;
       if (question.exposureKey.startsWith("variant:")) {
         const family = `${question.subject}|${question.topic}|${question.skill}`;
@@ -232,6 +256,8 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   absorb(reviewedQuestions.filter((question) => starterMatches(question, config, false, selection)), 0);
   absorb(specializedQuestions, 1);
   absorb(broadQuestions, 1);
+  absorb(primaryMathQuestions, 1);
+  absorb(languageQuestions, 1);
   absorb(intelligentQuestions, 2);
   absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed), 3);
   absorb(coverageQuestions, 4);
@@ -243,6 +269,8 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
 
   for (let attempt = 0; fresh.length < requested && attempt < BROADENING_ATTEMPTS; attempt += 1) {
     const nextSeed = derivedSeed(seed, attempt);
+    absorb(buildPrimaryMathQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
+    absorb(buildSchoolLanguageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
     absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed), 3);
     absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 2);
     absorb(buildCoverageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 4);

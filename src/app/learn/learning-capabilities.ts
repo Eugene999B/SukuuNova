@@ -1,10 +1,12 @@
-import { catalogFor, type SessionConfig } from "./learn-domain";
+import { resolveCatalogSelection, reviewedTopicLabelsForSelection, type SessionConfig } from "./learn-domain";
 import { richInteractionEntriesForAudience } from "./rich-starter-pack";
 import { variantCapacityForSelection } from "./variant-engine";
 import { specializedQuestionsForSelection } from "./specialized-content";
 import { broadPracticeQuestionsForSelection } from "./broad-practice";
 import { intelligentCapacityForSelection } from "./intelligent-foundry";
 import { coverageCapacityForSelection } from "./coverage-foundry";
+import { primaryMathCapacityForSelection } from "./primary-math-foundry";
+import { languageCapacityForSelection } from "./school-language-foundry";
 import { verifiedStandardEntriesForAudience } from "./verified-content";
 
 export type LearningCapabilityStage = "mapped" | "starter" | "deep" | "massive";
@@ -17,6 +19,8 @@ export type LearningCapability = {
   variantCapacity: number;
   intelligentCapacity: number;
   coverageCapacity: number;
+  primaryMathCapacity: number;
+  languageCapacity: number;
   estimatedStandardSupply: number;
 };
 
@@ -30,11 +34,7 @@ function normalized(value: string) {
 }
 
 function resolveSelection(config: SessionConfig) {
-  const catalog = catalogFor(config.lane);
-  const program = catalog.programs.find((item) => item.id === config.programId);
-  const level = program?.levels.find((item) => item.id === config.levelId);
-  const subject = level?.subjects.find((item) => item.id === config.subjectId);
-  const topic = subject?.topics.find((item) => item.id === config.topicId);
+  const { subject, topic } = resolveCatalogSelection(config);
   return {
     subjectLabel: subject?.contentLabel ?? subject?.label,
     topicLabel: topic?.label,
@@ -50,9 +50,11 @@ function matchesLabel(value: string, selectedId: string, resolvedLabel?: string)
 export function learningCapabilityForSelection(config: SessionConfig): LearningCapability {
   const selection = resolveSelection(config);
 
+  const reviewedTopicLabels = reviewedTopicLabelsForSelection(config);
   const standardEntries = verifiedStandardEntriesForAudience(config).filter((entry) => {
-    return matchesLabel(entry.question.subject, config.subjectId, selection.subjectLabel)
-      && matchesLabel(entry.question.topic, config.topicId, selection.topicLabel);
+    const topicMatches = matchesLabel(entry.question.topic, config.topicId, selection.topicLabel)
+      || reviewedTopicLabels.some((label) => normalized(entry.question.topic) === normalized(label));
+    return matchesLabel(entry.question.subject, config.subjectId, selection.subjectLabel) && topicMatches;
   });
 
   const richEntries = richInteractionEntriesForAudience(config).filter((entry) => {
@@ -63,15 +65,17 @@ export function learningCapabilityForSelection(config: SessionConfig): LearningC
   const variantCapacity = variantCapacityForSelection(config);
   const intelligentCapacity = intelligentCapacityForSelection(config);
   const coverageCapacity = coverageCapacityForSelection(config);
+  const primaryMathCapacity = primaryMathCapacityForSelection(config);
+  const languageCapacity = languageCapacityForSelection(config);
   const specializedQuestions = specializedQuestionsForSelection(config);
   const broadQuestions = broadPracticeQuestionsForSelection(config);
   const reviewedStandardQuestions = standardEntries.length + specializedQuestions.length + broadQuestions.length;
   const richInteractions = richEntries.length;
-  const ready = reviewedStandardQuestions > 0 || variantCapacity > 0 || intelligentCapacity > 0 || coverageCapacity > 0;
+  const ready = reviewedStandardQuestions > 0 || variantCapacity > 0 || intelligentCapacity > 0 || coverageCapacity > 0 || primaryMathCapacity > 0 || languageCapacity > 0;
   const evidenceDepth = reviewedStandardQuestions + richInteractions;
 
   let stage: LearningCapabilityStage = "mapped";
-  if (variantCapacity + intelligentCapacity + coverageCapacity >= 1_000_000) stage = "massive";
+  if (variantCapacity + intelligentCapacity + coverageCapacity + primaryMathCapacity + languageCapacity >= 1_000_000) stage = "massive";
   else if (ready && (variantCapacity >= 10_000 || evidenceDepth >= 10)) stage = "deep";
   else if (ready) stage = "starter";
 
@@ -83,7 +87,9 @@ export function learningCapabilityForSelection(config: SessionConfig): LearningC
     variantCapacity,
     intelligentCapacity,
     coverageCapacity,
-    estimatedStandardSupply: variantCapacity + intelligentCapacity + coverageCapacity + reviewedStandardQuestions,
+    primaryMathCapacity,
+    languageCapacity,
+    estimatedStandardSupply: variantCapacity + intelligentCapacity + coverageCapacity + primaryMathCapacity + languageCapacity + reviewedStandardQuestions,
   };
 }
 

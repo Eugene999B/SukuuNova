@@ -17,7 +17,7 @@ type VariantTemplate = {
   render: (variantIndex: number) => LearnQuestion;
 };
 
-const UPPER_PRIMARY_LEVELS = ["basic-4"] as const;
+const UPPER_PRIMARY_LEVELS = [] as const;
 const JHS_LEVELS = ["jhs-1"] as const;
 const UPPER_PRIMARY_TO_JHS = [...UPPER_PRIMARY_LEVELS, ...JHS_LEVELS] as const;
 const EXAM_PROGRAMS: readonly string[] = [];
@@ -137,7 +137,7 @@ const basicOneNumberStories = createNumberStoryTemplate({
   topic: "Number & operations",
   maxValue: 20,
   difficulty: 1,
-  schoolLevels: ["basic-1"],
+  schoolLevels: [],
 });
 
 const basicTwoNumberStories = createNumberStoryTemplate({
@@ -148,7 +148,7 @@ const basicTwoNumberStories = createNumberStoryTemplate({
   topic: "Number & operations",
   maxValue: 100,
   difficulty: 2,
-  schoolLevels: ["basic-2"],
+  schoolLevels: [],
 });
 
 const basicThreeNumberStories = createNumberStoryTemplate({
@@ -159,7 +159,7 @@ const basicThreeNumberStories = createNumberStoryTemplate({
   topic: "Number & operations",
   maxValue: 1000,
   difficulty: 2,
-  schoolLevels: ["basic-3"],
+  schoolLevels: [],
 });
 
 function product(values: readonly number[]) {
@@ -555,9 +555,6 @@ function renderBinary(variant: number): LearnQuestion {
 
 export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
   kgNumberStories,
-  basicOneNumberStories,
-  basicTwoNumberStories,
-  basicThreeNumberStories,
   {
     id: "math-number-operations",
     subjectId: "mathematics",

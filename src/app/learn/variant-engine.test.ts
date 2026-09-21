@@ -20,7 +20,7 @@ const algebraConfig = {
 
 describe("SukuuNova parameterized variant engine", () => {
   it("publishes only large deterministic template spaces", () => {
-    expect(VARIANT_TEMPLATES.length).toBeGreaterThanOrEqual(13);
+    expect(VARIANT_TEMPLATES.length).toBeGreaterThanOrEqual(10);
     expect(VARIANT_TEMPLATES.every((template) => template.capacity >= 1_000_000)).toBe(true);
   });
 

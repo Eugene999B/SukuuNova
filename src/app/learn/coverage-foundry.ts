@@ -1,4 +1,4 @@
-import { catalogFor, type CognitiveChallenge, type LearnQuestion, type SessionConfig } from "./learn-domain";
+import { resolveCatalogSelection, type CognitiveChallenge, type LearnQuestion, type SessionConfig } from "./learn-domain";
 
 type Concept = {
   term: string;
@@ -435,13 +435,106 @@ const PROFILES: readonly Profile[] = [
   },
 ];
 
+
+const PRIMARY_CONTEXTS = [
+  "a classroom activity","a school garden","a reading club","a science corner",
+  "a school assembly","a community clean-up","a sports lesson","a computer lab",
+  "a class project","a school library","a home-learning activity","a group presentation",
+] as const;
+
+const PRIMARY_PROFILES: readonly Profile[] = [
+  {
+    id: "primary-science",
+    mission: "Observe, explain and test ideas",
+    contexts: PRIMARY_CONTEXTS,
+    concepts: [
+      concept("observation","information gathered carefully using the senses or suitable tools","record what is actually seen or measured before explaining it","write what you expected to happen as though it was observed","Good science separates observations from guesses and explanations."),
+      concept("mixture","two or more substances together without forming a single new pure substance","identify sand and water as a mixture that can be separated","assume every mixture becomes a new substance","Mixtures contain substances together and can often be separated by physical methods."),
+      concept("separation","using a property difference to separate parts of a mixture","use filtering, settling, sieving or evaporation when appropriate","use the same separation method for every mixture","The best separation method depends on properties such as particle size, solubility or boiling point."),
+      concept("habitat","the place and conditions in which an organism lives","connect an organism's needs with features of its habitat","describe habitat as only the food an organism eats","A habitat includes the surroundings and conditions an organism needs to survive."),
+      concept("life cycle","the stages through which a living thing grows and reproduces","order stages such as seed, seedling and mature plant","treat growth as one unchanging stage","Life cycles show ordered changes across an organism's development."),
+      concept("force","a push or pull that can change motion or shape","use a push to move an object or a pull to bring it closer","describe colour as a force","Forces are pushes or pulls that can change how objects move or deform."),
+      concept("energy","the capacity to cause change or do work","recognise light, heat or movement as forms in which energy is observed","treat energy as a material stored in a container like water","Energy is transferred and transformed as changes occur."),
+      concept("environment","the surroundings and conditions affecting living things","reduce litter, protect water and care for local habitats","assume human actions never affect surroundings","Environmental choices can protect or damage the systems people and other organisms depend on."),
+    ],
+  },
+  {
+    id: "primary-digital",
+    mission: "Use technology safely and purposefully",
+    contexts: PRIMARY_CONTEXTS,
+    concepts: [
+      concept("input device","hardware used to send data or commands into a computer","use a keyboard, mouse, microphone or scanner to enter information","call a monitor an input device when it is only displaying information","Input devices send information into a computer system."),
+      concept("output device","hardware that presents information from a computer","use a monitor, speaker or printer to receive output","call a keyboard an output device because it has visible keys","Output devices present processed information to users."),
+      concept("storage","keeping digital information so it can be used later","save a file to suitable storage with a clear name","close work without saving and expect it to remain automatically","Storage preserves digital data for later use."),
+      concept("file","a named collection of digital information","save a document or presentation as a file and organise it in a folder","treat every folder as though it were itself a document","Files store content; folders help organise files."),
+      concept("presentation","a set of slides used to communicate information visually and verbally","organise slides with readable text, useful images and a clear sequence","fill every slide with long paragraphs in tiny text","Effective presentations communicate ideas clearly rather than simply filling slides."),
+      concept("network","connected devices that can communicate and share resources","connect computers so they can exchange data or access shared services","assume two computers are networked simply because they are in the same room","A network requires a communication connection between devices."),
+      concept("internet","a global network of interconnected networks","use online services to find information or communicate responsibly","treat every website as automatically accurate and safe","Internet use requires information judgement as well as technical access."),
+      concept("digital safety","practices that reduce online and device risks","use strong passwords, protect personal information and report suspicious activity","share passwords publicly because friends can be trusted","Digital safety combines secure habits, privacy awareness and responsible behaviour."),
+    ],
+  },
+  {
+    id: "primary-rme",
+    mission: "Think about values, belief and responsible living",
+    contexts: PRIMARY_CONTEXTS,
+    concepts: [
+      concept("worship","acts through which people express reverence, devotion or commitment in a religious tradition","identify prayer, praise or other recognised forms of worship in context","assume every religion uses exactly the same form of worship","Forms of worship differ across traditions while serving purposes such as devotion and gratitude."),
+      concept("respect","treating people, beliefs and shared spaces with proper consideration","listen to others and disagree without insulting them","mock a person's belief because it differs from yours","Respect supports peaceful living among people with different beliefs and backgrounds."),
+      concept("honesty","speaking and acting truthfully","admit a mistake and give an accurate account of what happened","hide the truth whenever it is inconvenient","Honesty builds trust and supports responsible relationships."),
+      concept("responsibility","accepting duties and the consequences of choices","complete assigned duties and care for shared property","blame others for every result of your own choices","Responsibility connects choices with duties and consequences."),
+      concept("gratitude","recognising and appreciating help, gifts or benefits","thank people and show appreciation through words or actions","treat help from others as something that never deserves acknowledgement","Gratitude involves recognising value and expressing appreciation."),
+      concept("tolerance","living peacefully with people whose beliefs or practices differ from one's own","allow respectful differences while following shared rules","force everyone to hold the same belief before cooperating","Tolerance supports coexistence without requiring people to abandon their convictions."),
+      concept("service","using time, effort or resources to help others or the community","join a useful community activity without expecting personal reward","help only when there is a guaranteed prize","Service contributes to the wellbeing of others and the wider community."),
+      concept("moral choice","a decision that can be judged using values such as fairness, honesty, care and responsibility","consider consequences and values before deciding what to do","choose only what is easiest without considering harm or fairness","Moral reasoning considers values, duties, consequences and other people's wellbeing."),
+    ],
+  },
+  {
+    id: "primary-pe",
+    mission: "Move safely, skilfully and fairly",
+    contexts: PRIMARY_CONTEXTS,
+    concepts: [
+      concept("balance","control of body position while still or moving","keep the centre of mass controlled over the base of support","move carelessly and call any fall good balance","Balance helps a learner control body position during movement."),
+      concept("coordination","using body parts together smoothly and effectively","time eyes, hands and feet together when catching or moving","perform each body action without regard to timing","Coordination combines movements so a skill can be performed effectively."),
+      concept("fitness","the ability to meet physical demands with qualities such as endurance, strength and flexibility","practise suitable activity regularly and recover safely","assume fitness comes from one activity performed once","Fitness develops through regular, appropriate physical activity."),
+      concept("warm-up","progressive activity that prepares the body for harder movement","begin with controlled movement before intense activity","start maximum effort immediately without preparation","A warm-up prepares muscles, joints and circulation for activity."),
+      concept("fair play","following rules and treating participants respectfully","accept decisions, follow rules and avoid unfair advantage","break a rule whenever it helps your team win","Fair play protects safety, trust and meaningful competition."),
+      concept("teamwork","coordinating effort and communication toward a shared goal","pass, communicate and support teammates","ignore teammates whenever you have the ball","Teamwork combines individual skill with cooperation."),
+      concept("safety","actions that reduce avoidable risk during physical activity","check space and equipment and follow safe technique","use damaged equipment because practice matters more than safety","Safe participation includes appropriate equipment, technique and awareness."),
+      concept("movement quality","how movement changes in speed, force, direction and control","demonstrate fast and slow or light and strong movement deliberately","treat every movement as identical in speed and force","Movement can be varied and controlled to meet a task."),
+    ],
+  },
+  {
+    id: "primary-history",
+    mission: "Use evidence to understand change over time",
+    contexts: PRIMARY_CONTEXTS,
+    concepts: [
+      concept("timeline","an ordered representation of events by time","place events from earliest to latest","arrange events randomly and call the result chronological","Timelines make sequence and change over time easier to see."),
+      concept("historical source","evidence that provides information about the past","use photographs, objects, documents or oral accounts carefully","treat an unsupported guess as historical evidence","Historical claims should be connected to evidence from sources."),
+      concept("oral tradition","historical knowledge passed through spoken accounts across generations","compare an oral account with other available evidence","assume every story is automatically exact in every detail","Oral traditions are important sources that should be interpreted in context."),
+      concept("heritage","places, practices, objects and traditions valued and passed between generations","protect a historical site or cultural practice and explain its importance","destroy an old site because only new things have value","Heritage connects communities with valued aspects of their past."),
+      concept("chronology","the arrangement of events in time order","identify which event came before or after another","compare events without considering when they occurred","Chronology helps explain sequence and change."),
+      concept("cause","a factor that helps produce a historical event or change","use evidence to explain why an event happened","assume an event happened for only one reason without examining evidence","Historical events often have multiple interacting causes."),
+      concept("consequence","an outcome that follows from an event or decision","identify short- and long-term results of a change","describe something that happened earlier as a consequence of a later event","Consequences are effects that follow events or decisions."),
+      concept("continuity and change","what remains similar and what becomes different over time","compare the same community or institution at two times","assume everything in society changes at the same speed","History includes both change and continuity."),
+    ],
+  },
+];
+
 function normalize(value: string) {
   return value.toLowerCase().replaceAll("&", " and ").replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
 }
 
-function profileFor(subject: string, topic: string): Profile {
+function profileFor(subject: string, topic: string, config?: SessionConfig, subjectId?: string): Profile {
   const text = normalize(subject + " " + topic);
-  const pick = (id: string) => PROFILES.find((profile) => profile.id === id)!;
+  const pick = (id: string) => [...PROFILES, ...PRIMARY_PROFILES].find((profile) => profile.id === id)!;
+
+  if (config?.lane === "school" && /^(kg-|basic-)/.test(config.levelId)) {
+    if (subjectId === "science") return pick("primary-science");
+    if (subjectId === "computing") return pick("primary-digital");
+    if (subjectId === "rme") return pick("primary-rme");
+    if (subjectId === "pe" || subjectId === "pe-health") return pick("primary-pe");
+    if (subjectId === "history") return pick("primary-history");
+  }
 
   if (/statistics|probability|regression|sampling|data handling|data interpretation|biostatistics|econometrics/.test(text)) return pick("statistics");
   if (/algebra|equation|function|calculus|linear|mathematics for|business mathematics|financial mathematics/.test(text)) return pick("algebra");
@@ -474,13 +567,13 @@ function product(values: readonly number[]) {
   return values.reduce((total, value) => total * value, 1);
 }
 
-const DIMENSION_BASE = [ACTORS.length, MOMENTS.length, STEMS.length, 8, 4, 32] as const;
+const DIMENSION_BASE = [ACTORS.length, MOMENTS.length, STEMS.length, 8, 8, 32] as const;
 
 function profileCapacity(profile: Profile) {
   return product([profile.concepts.length, profile.contexts.length, ...DIMENSION_BASE]);
 }
 
-export const MINIMUM_TOPIC_GENERATED_CAPACITY = Math.min(...PROFILES.map(profileCapacity));
+export const MINIMUM_TOPIC_GENERATED_CAPACITY = Math.min(...[...PROFILES, ...PRIMARY_PROFILES].map(profileCapacity));
 
 function hash(value: string) {
   let result = 2166136261;
@@ -511,29 +604,76 @@ function clampDifficulty(value: number): 1 | 2 | 3 | 4 | 5 {
 }
 
 function levelDifficulty(levelId: string) {
-  if (/kg-|basic-[12]/.test(levelId)) return 1;
-  if (/basic-|jhs-1/.test(levelId)) return 2;
-  if (/jhs-[23]|shs-1|level-100/.test(levelId)) return 2;
-  if (/shs-2|level-200/.test(levelId)) return 3;
-  if (/shs-3|level-300/.test(levelId)) return 4;
-  if (/level-[456]00/.test(levelId)) return 5;
+  if (/kg-|basic-1/.test(levelId)) return 1;
+  if (/basic-[23]/.test(levelId)) return 2;
+  if (/basic-[45]|jhs-1|shs-1|level-100/.test(levelId)) return 3;
+  if (/basic-6|jhs-[23]|shs-2|level-[23]00/.test(levelId)) return 4;
+  if (/shs-3|level-[456]00/.test(levelId)) return 5;
   return 3;
 }
 
+
+function conceptsForLevel(profile: Profile, config: SessionConfig) {
+  if (config.lane !== "school" || !/^(kg-|basic-)/.test(config.levelId)) return profile.concepts;
+
+  const ids = (values: string[]) => profile.concepts.filter((item) => values.includes(item.term));
+  if (profile.id === "language") {
+    if (/kg-|basic-[12]/.test(config.levelId)) return ids(["subject-verb agreement","context clue","main idea","punctuation"]);
+    if (/basic-[34]/.test(config.levelId)) return ids(["subject-verb agreement","context clue","main idea","inference","paragraph unity","punctuation"]);
+    return ids(["subject-verb agreement","context clue","main idea","inference","paragraph unity","punctuation","register"]);
+  }
+  if (profile.id === "number") {
+    if (/kg-|basic-[12]/.test(config.levelId)) return ids(["place value","fraction","estimation","unit conversion"]);
+    if (/basic-[34]/.test(config.levelId)) return ids(["place value","fraction","estimation","order of operations","unit conversion"]);
+    return profile.concepts;
+  }
+  if (profile.id === "geometry") {
+    if (/kg-|basic-[123]/.test(config.levelId)) return ids(["perimeter","area","angle","scale"]);
+    if (config.levelId === "basic-4") return ids(["perimeter","area","angle","scale"]);
+    return ids(["perimeter","area","volume","angle","scale","coordinate"]);
+  }
+  if (profile.id === "statistics") {
+    if (/kg-|basic-[123]/.test(config.levelId)) return ids(["mean","median","mode","range"]);
+    if (/basic-[45]/.test(config.levelId)) return ids(["mean","median","mode","range","probability"]);
+    return ids(["mean","median","mode","range","probability","sample"]);
+  }
+  if (profile.id === "arts") {
+    if (/kg-|basic-[123]/.test(config.levelId)) return ids(["balance","contrast","rhythm","texture","composition"]);
+    return ids(["balance","contrast","rhythm","texture","perspective","motif","composition"]);
+  }
+  if (profile.id === "social") {
+    if (/kg-|basic-[123]/.test(config.levelId)) return ids(["citizenship","institution","culture","participation"]);
+    return ids(["governance","citizenship","institution","culture","development","participation"]);
+  }
+  if (profile.id === "general") {
+    if (/kg-|basic-[123]/.test(config.levelId)) return ids(["classification","comparison","process","measurement"]);
+    if (/basic-[45]/.test(config.levelId)) return ids(["classification","comparison","cause and effect","evidence","process","measurement"]);
+    return ids(["classification","comparison","cause and effect","evidence","process","system","measurement","evaluation"]);
+  }
+  return profile.concepts;
+}
+
+function contextsForLevel(profile: Profile, config: SessionConfig) {
+  if (config.lane === "school" && /^(kg-|basic-)/.test(config.levelId)) return PRIMARY_CONTEXTS;
+  return profile.contexts;
+}
+
+function profileForTarget(target: Target, config: SessionConfig) {
+  return profileFor(target.subjectLabel, target.topicLabel, config, target.subjectId);
+}
+
 function targetsFor(config: SessionConfig): Target[] {
-  const catalog = catalogFor(config.lane);
-  const program = catalog.programs.find((item) => item.id === config.programId);
-  const level = program?.levels.find((item) => item.id === config.levelId);
+  const { level, subject: resolvedSubject, topic: resolvedTopic } = resolveCatalogSelection(config);
   if (!level) return [];
 
   const subjects = config.subjectId === "all"
     ? level.subjects
-    : level.subjects.filter((subject) => subject.id === config.subjectId);
+    : resolvedSubject ? [resolvedSubject] : [];
 
   return subjects.flatMap((subject) => {
     const topics = config.topicId === "all"
       ? subject.topics
-      : subject.topics.filter((topic) => topic.id === config.topicId);
+      : resolvedTopic && resolvedSubject?.id === subject.id ? [resolvedTopic] : [];
     return topics.map((topic) => ({
       subjectId: subject.id,
       subjectLabel: subject.contentLabel ?? subject.label,
@@ -559,12 +699,14 @@ function singleChoice(answer: string, distractors: string[], variant: number) {
 }
 
 function renderQuestion(target: Target, profile: Profile, variant: number, config: SessionConfig): LearnQuestion {
-  const dimensions = [profile.concepts.length, profile.contexts.length, ...DIMENSION_BASE] as const;
+  const concepts = conceptsForLevel(profile, config);
+  const contexts = contextsForLevel(profile, config);
+  const dimensions = [concepts.length, contexts.length, ...DIMENSION_BASE] as const;
   const [conceptIndex, contextIndex, actorIndex, momentIndex, stemIndex, angleIndex, formIndex, caseIndex] = decode(variant, dimensions);
-  const item = profile.concepts[conceptIndex];
-  const others = rotate(profile.concepts.filter((concept) => concept.term !== item.term), caseIndex);
+  const item = concepts[conceptIndex];
+  const others = rotate(concepts.filter((concept) => concept.term !== item.term), caseIndex);
   const actor = ACTORS[actorIndex];
-  const context = profile.contexts[contextIndex];
+  const context = contexts[contextIndex];
   const moment = MOMENTS[momentIndex];
   const stem = STEMS[stemIndex];
   const challenge: CognitiveChallenge = angleIndex < 2 ? "Recall" : angleIndex < 4 ? "Apply" : angleIndex < 6 ? "Analyse" : "Transfer";
@@ -573,78 +715,90 @@ function renderQuestion(target: Target, profile: Profile, variant: number, confi
     exposureKey: `coverage:${config.lane}:${config.programId}:${config.levelId}:${target.subjectId}:${target.topicId}:${variant}`,
     subject: target.subjectLabel,
     topic: target.topicLabel,
-    difficulty: clampDifficulty(levelDifficulty(config.levelId) + (challenge === "Analyse" ? 1 : challenge === "Transfer" ? 1 : 0)),
+    difficulty: clampDifficulty(levelDifficulty(config.levelId) + (challenge === "Analyse" || challenge === "Transfer" ? 1 : 0)),
     challenge,
     mission: profile.mission,
-    generationFamily: `coverage-${profile.id}-${target.topicId}`,
+    generationFamily: `coverage-${profile.id}-${target.topicId}-${item.term.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}-${formIndex}`,
   } as const;
 
   if (formIndex === 0) {
     const choice = singleChoice(item.term, others.slice(0, 3).map((entry) => entry.term), variant);
-    return {
-      ...base,
-      kind: "single",
-      skill: `Recognise ${item.term}`,
-      prompt: `${actor} is studying ${target.topicLabel} in ${target.subjectLabel} ${moment} at ${context}. The key idea is: ${item.definition}. ${stem}`,
-      options: choice.options,
-      answer: choice.answer,
-      explanation: item.explanation,
-      hint: `Look for the concept whose definition matches the description in the question.`,
-    };
+    return { ...base, kind: "single", skill: `Recognise ${item.term}`,
+      prompt: `Which term best matches this description: ${item.definition}?`,
+      options: choice.options, answer: choice.answer, explanation: item.explanation,
+      hint: "Match the description to the idea it defines." };
   }
 
   if (formIndex === 1) {
     const choice = singleChoice(item.application, others.slice(0, 3).map((entry) => entry.application), variant);
-    return {
-      ...base,
-      kind: "single",
-      skill: `Apply ${item.term}`,
-      prompt: `${actor} is working on ${target.topicLabel} ${moment} at ${context}. Which action is the best application of ${item.term}? ${stem}`,
-      options: choice.options,
-      answer: choice.answer,
-      explanation: `${item.application}. ${item.explanation}`,
-      hint: `Choose the action that directly uses the principle named in the question.`,
-    };
+    return { ...base, kind: "single", skill: `Apply ${item.term}`,
+      prompt: `${actor} is working on ${target.topicLabel} ${moment} at ${context}. Which action shows the best use of ${item.term}?`,
+      options: choice.options, answer: choice.answer, explanation: `${item.application}. ${item.explanation}`,
+      hint: "Choose the action that actually uses the principle." };
   }
 
   if (formIndex === 2) {
     const trueStatement = caseIndex % 2 === 0;
     const statement = trueStatement ? item.definition : item.misconception;
-    return {
-      ...base,
-      kind: "boolean",
-      skill: `Evaluate a statement about ${item.term}`,
-      prompt: `${actor} makes this statement while studying ${target.topicLabel} ${moment}: “${item.term} means ${statement}.” Is the statement correct?`,
-      answer: trueStatement,
-      explanation: trueStatement ? item.explanation : `The statement is not correct. ${item.explanation}`,
-      hint: `Compare the statement with the accepted meaning of ${item.term}.`,
-    };
+    return { ...base, kind: "boolean", skill: `Evaluate a claim about ${item.term}`,
+      prompt: `A classmate says, “${item.term} means ${statement}.” Is the classmate correct?`,
+      answer: trueStatement, explanation: trueStatement ? item.explanation : `No. ${item.explanation}`,
+      hint: `Check the claim against the meaning of ${item.term}.` };
   }
 
-  const choice = singleChoice(item.misconception, others.slice(0, 3).map((entry) => entry.misconception), variant);
-  return {
-    ...base,
-    kind: "single",
-    skill: `Detect a misconception about ${item.term}`,
-    prompt: `${actor} is reviewing ${target.topicLabel} ${moment} at ${context}. Which option shows the specific misconception about ${item.term} that should be corrected? ${stem}`,
-    options: choice.options,
-    answer: choice.answer,
-    explanation: `${item.misconception} is the misconception. ${item.explanation}`,
-    hint: `Identify the claim that conflicts with the accepted meaning of ${item.term}.`,
-  };
+  if (formIndex === 3) {
+    const choice = singleChoice(item.misconception, others.slice(0, 3).map((entry) => entry.misconception), variant);
+    return { ...base, kind: "single", skill: `Detect a misconception about ${item.term}`,
+      prompt: `Four learners are discussing ${target.topicLabel}. Which statement about ${item.term} needs to be corrected?`,
+      options: choice.options, answer: choice.answer, explanation: `${item.misconception} is the misconception. ${item.explanation}`,
+      hint: "Look for the statement that conflicts with the accepted idea." };
+  }
+
+  if (formIndex === 4) {
+    const choice = singleChoice(item.application, others.slice(0, 3).map((entry) => entry.application), variant);
+    return { ...base, kind: "single", skill: `Recognise an example of ${item.term}`,
+      prompt: `The teacher asks for a real example of ${item.term}. Which response should be accepted?`,
+      options: choice.options, answer: choice.answer, explanation: `${item.application}. ${item.explanation}`,
+      hint: "Choose the example that fits the concept, not just the topic." };
+  }
+
+  if (formIndex === 5) {
+    const choice = singleChoice(item.definition, others.slice(0, 3).map((entry) => entry.definition), variant);
+    return { ...base, kind: "single", skill: `Correct reasoning about ${item.term}`,
+      prompt: `${actor} wrote this in an exercise: “${item.misconception}.” Which explanation would best correct the work?`,
+      options: choice.options, answer: choice.answer, explanation: item.explanation,
+      hint: "Choose the explanation that directly fixes the error." };
+  }
+
+  if (formIndex === 6) {
+    const choice = singleChoice(item.term, others.slice(0, 3).map((entry) => entry.term), variant);
+    return { ...base, kind: "single", skill: `Connect evidence to ${item.term}`,
+      prompt: `During ${context}, ${actor} notices this: ${item.application}. Which idea from ${target.topicLabel} best explains what is happening?`,
+      options: choice.options, answer: choice.answer, explanation: item.explanation,
+      hint: "Use the evidence in the example to identify the underlying idea." };
+  }
+
+  const choice = singleChoice(item.application, others.slice(0, 3).map((entry) => entry.application), variant);
+  return { ...base, kind: "single", skill: `Transfer ${item.term} to a new situation`,
+    prompt: `${actor} must make a decision ${moment} at ${context}. The decision should show understanding of ${item.term}. ${stem}`,
+    options: choice.options, answer: choice.answer, explanation: `${item.application}. ${item.explanation}`,
+    hint: "Choose the response that would still be correct in a new situation." };
 }
 
 export function coverageCapacityForSelection(config: SessionConfig) {
   return targetsFor(config).reduce((total, target) => {
-    return total + profileCapacity(profileFor(target.subjectLabel, target.topicLabel));
+    const profile = profileForTarget(target, config);
+    const concepts = conceptsForLevel(profile, config);
+    const contexts = contextsForLevel(profile, config);
+    return total + product([concepts.length, contexts.length, ...DIMENSION_BASE]);
   }, 0);
 }
 
 export function coverageCapacityPerTarget(config: SessionConfig) {
   return targetsFor(config).map((target) => ({
     ...target,
-    profile: profileFor(target.subjectLabel, target.topicLabel).id,
-    capacity: profileCapacity(profileFor(target.subjectLabel, target.topicLabel)),
+    profile: profileForTarget(target, config).id,
+    capacity: (() => { const profile = profileForTarget(target, config); return product([conceptsForLevel(profile, config).length, contextsForLevel(profile, config).length, ...DIMENSION_BASE]); })(),
   }));
 }
 
@@ -661,15 +815,17 @@ export function buildCoverageQuestions(
 
   const output: LearnQuestion[] = [];
   const seen = new Set<string>();
+  const seenPrompts = new Set<string>();
 
-  for (let position = 0; output.length < requested && position < requested * 6; position += 1) {
+  for (let position = 0; output.length < requested && position < requested * 24; position += 1) {
     const target = targets[(hash(`${seed}:target:${position}`) + position) % targets.length];
-    const profile = profileFor(target.subjectLabel, target.topicLabel);
-    const capacity = profileCapacity(profile);
-    const variant = mixedIndex(`${config.lane}:${config.programId}:${config.levelId}:${target.subjectId}:${target.topicId}:${seed}:${position}`, capacity);
+    const profile = profileForTarget(target, config);
+    const capacity = product([conceptsForLevel(profile, config).length, contextsForLevel(profile, config).length, ...DIMENSION_BASE]);
+    const variant = (mixedIndex(`${config.lane}:${config.programId}:${config.levelId}:${target.subjectId}:${target.topicId}:${seed}:${position}`, capacity) + position) % capacity;
     const question = renderQuestion(target, profile, variant, config);
-    if (seen.has(question.exposureKey)) continue;
+    if (seen.has(question.exposureKey) || seenPrompts.has(question.prompt)) continue;
     seen.add(question.exposureKey);
+    seenPrompts.add(question.prompt);
     output.push(question);
   }
 

@@ -1,4 +1,5 @@
 import { SHS_PROGRAMS, UNIVERSITY_PROGRAMS } from "./broad-catalog";
+import { topicsForSchoolLevel } from "./school-curriculum";
 
 export type LearnLane = "school" | "exam" | "university" | "skills";
 export type PracticeMode = "topic" | "adaptive" | "random" | "timed" | "weakness";
@@ -255,7 +256,7 @@ const lowerPrimarySubjects: CatalogSubject[] = [
   lowerPrimaryMathematics,
   expandingSubject("english", "English Language"),
   expandingSubject("science", "Science"),
-  expandingSubject("ghanaian-language", "Ghanaian Language"),
+  expandingSubject("ghanaian-language", "Asante Twi (Ghanaian Language)"),
   expandingSubject("history", "History"),
   expandingSubject("creative-arts", "Creative Arts"),
   expandingSubject("rme", "Religious and Moral Education"),
@@ -288,7 +289,7 @@ const upperPrimarySubjects: CatalogSubject[] = [
   upperPrimaryMathematics,
   upperPrimaryEnglish,
   expandingSubject("science", "Science"),
-  expandingSubject("ghanaian-language", "Ghanaian Language"),
+  expandingSubject("ghanaian-language", "Asante Twi (Ghanaian Language)"),
   expandingSubject("history", "History"),
   expandingSubject("creative-arts", "Creative Arts"),
   expandingSubject("rme", "Religious and Moral Education"),
@@ -307,7 +308,7 @@ const jhsSubjects: CatalogSubject[] = [
   computingSubject,
   expandingSubject("french", "French Language"),
   expandingSubject("arabic", "Arabic"),
-  expandingSubject("ghanaian-language", "Ghanaian Language"),
+  expandingSubject("ghanaian-language", "Asante Twi (Ghanaian Language)"),
   expandingSubject("pe-health", "Physical Education & Health"),
   expandingSubject("rme", "Religious and Moral Education"),
   expandingSubject("creative-arts-design", "Creative Arts & Design"),
@@ -368,7 +369,7 @@ const beceSubjects: CatalogSubject[] = [
   expandingSubject("career-technology", "Career Technology"),
   expandingSubject("creative-arts-design", "Creative Art & Design"),
   expandingSubject("french", "French"),
-  expandingSubject("ghanaian-language", "Ghanaian Language"),
+  expandingSubject("ghanaian-language", "Asante Twi (Ghanaian Language)"),
   expandingSubject("rme", "Religious and Moral Education"),
 ];
 
@@ -452,8 +453,15 @@ const ieltsGeneralSubjects: CatalogSubject[] = [
   ]),
 ];
 
+function classAlignedSubjects(levelId: string, subjects: CatalogSubject[]): CatalogSubject[] {
+  return subjects.map((subject) => ({
+    ...subject,
+    topics: topicsForSchoolLevel(levelId, subject.id, subject.topics),
+  }));
+}
+
 function schoolLevel(id: string, label: string, subjects: CatalogSubject[]): CatalogLevel {
-  return { id, label, subjects };
+  return { id, label, subjects: classAlignedSubjects(id, subjects) };
 }
 
 function publishSubject(subject: CatalogSubject): CatalogSubject {
@@ -570,6 +578,92 @@ export const LEARNING_CATALOGS: LearningCatalog[] = ([
     ],
   },
 ] as LearningCatalog[]).map(publishCatalog);
+
+const LEGACY_JHS_TOPIC_IDS: Record<string, Record<string, string>> = {
+  mathematics: {
+    algebra: "variables-equations",
+    "number-and-operations": "number",
+    "statistics-and-probability": "data",
+  },
+  english: {
+    "grammar-and-concord": "grammar",
+    "reading-comprehension": "reading",
+  },
+  science: {
+    living: "systems",
+    "living-things": "systems",
+    matter: "diversity-matter",
+    "matter-and-materials": "diversity-matter",
+    energy: "forces-energy",
+    "force-and-energy": "forces-energy",
+    environment: "humans-environment",
+  },
+  social: {
+    citizenship: "identity-society",
+    "people-and-environment": "environment",
+    "national-development": "development",
+  },
+  computing: {
+    "computer-systems": "systems",
+    "internet-and-networks": "internet",
+    "computational-thinking": "coding",
+  },
+};
+
+const REVIEWED_TOPIC_LABELS: Record<string, Record<string, readonly string[]>> = {
+  mathematics: {
+    number: ["Number & operations"],
+    "variables-equations": ["Algebra"],
+    geometry: ["Geometry"],
+    data: ["Statistics & probability"],
+  },
+  english: {
+    grammar: ["Grammar & concord"],
+    vocabulary: ["Vocabulary"],
+    reading: ["Reading comprehension"],
+    writing: ["Writing"],
+  },
+  science: {
+    systems: ["Living things"],
+    "diversity-matter": ["Matter & materials"],
+    "forces-energy": ["Force & energy"],
+    "humans-environment": ["Environment"],
+  },
+  social: {
+    governance: ["Governance"],
+    "identity-society": ["Citizenship"],
+    environment: ["People & environment"],
+    development: ["National development"],
+  },
+  computing: {
+    "digital-safety": ["Digital safety"],
+    systems: ["Computer systems"],
+    internet: ["Internet & networks"],
+    coding: ["Computational thinking"],
+  },
+};
+
+export function resolveCatalogSelection(config: Pick<SessionConfig, "lane" | "programId" | "levelId" | "subjectId" | "topicId">) {
+  const catalog = LEARNING_CATALOGS.find((item) => item.id === config.lane) ?? LEARNING_CATALOGS[0];
+  const program = catalog.programs.find((item) => item.id === config.programId);
+  const level = program?.levels.find((item) => item.id === config.levelId);
+  const subject = config.subjectId === "all" ? undefined : level?.subjects.find((item) => item.id === config.subjectId);
+  let topic = config.topicId === "all" ? undefined : subject?.topics.find((item) => item.id === config.topicId);
+
+  if (!topic && config.lane === "school" && config.levelId.startsWith("jhs-") && subject && config.topicId !== "all") {
+    const alias = LEGACY_JHS_TOPIC_IDS[subject.id]?.[config.topicId];
+    if (alias) topic = subject.topics.find((item) => item.id === alias);
+  }
+
+  return { catalog, program, level, subject, topic };
+}
+
+export function reviewedTopicLabelsForSelection(config: Pick<SessionConfig, "lane" | "programId" | "levelId" | "subjectId" | "topicId">) {
+  const { subject, topic } = resolveCatalogSelection(config);
+  if (!subject || !topic) return [] as string[];
+  if (config.lane !== "school" || !config.levelId.startsWith("jhs-")) return [topic.label];
+  return [topic.label, ...(REVIEWED_TOPIC_LABELS[subject.id]?.[topic.id] ?? [])];
+}
 
 function hashText(text: string) {
   let hash = 2166136261;

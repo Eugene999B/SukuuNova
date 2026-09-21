@@ -20,6 +20,18 @@ function selectionId(label: string) {
     .replace(/^-|-$/g, "");
 }
 
+function starterSubjectId(label: string) {
+  const aliases: Record<string, string> = {
+    mathematics: "mathematics",
+    "english-language": "english",
+    science: "science",
+    "social-studies": "social",
+    computing: "computing",
+  };
+  const slug = selectionId(label);
+  return aliases[slug] ?? slug;
+}
+
 export function buildRepairPlan(progress: LearnerProgress): RepairPlan {
   const snapshot = buildProgressSnapshot(progress);
   const candidates = [...snapshot.repair, ...snapshot.developing, ...snapshot.evidence];
@@ -79,7 +91,7 @@ export function buildRepairSession(progress: LearnerProgress, count = 10, seed?:
     lane: "school",
     programId: "ghana",
     levelId: "jhs-1",
-    subjectId: selectionId(plan.subject),
+    subjectId: starterSubjectId(plan.subject),
     topicId: selectionId(plan.topic),
     mode: "weakness",
     count: requested,
