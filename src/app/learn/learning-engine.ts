@@ -13,6 +13,7 @@ import { broadPracticeQuestionsForSelection } from "./broad-practice";
 import { buildIntelligentQuestions } from "./intelligent-foundry";
 import { buildCoverageQuestions } from "./coverage-foundry";
 import { buildPrimaryMathQuestions } from "./primary-math-foundry";
+import { buildSchoolLanguageQuestions, isNativeLanguageQuestion } from "./school-language-foundry";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -218,10 +219,15 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const broadQuestions = broadPracticeQuestionsForSelection(config);
   const intelligentQuestions = buildIntelligentQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
   const primaryMathQuestions = buildPrimaryMathQuestions(config, Math.max(requested * 5, MAX_SESSION_SIZE * 2), seed);
+  const languageQuestions = buildSchoolLanguageQuestions(config, Math.max(requested * 6, MAX_SESSION_SIZE * 2), seed);
   const coverageQuestions = buildCoverageQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
 
   function absorb(questions: LearnQuestion[], priority = 2) {
     for (const sourceQuestion of questions) {
+      const isLanguageSubject = /french|twi|ghanaian language/i.test(sourceQuestion.subject);
+      if (isLanguageSubject && !sourceQuestion.exposureKey.startsWith("language:")) continue;
+      if (sourceQuestion.exposureKey.startsWith("language:") && !isNativeLanguageQuestion(sourceQuestion)) continue;
+
       const question: LearnQuestion = {
         ...sourceQuestion,
         ...(config.subjectId !== "all" && selection.subject ? { subject: selection.subject } : {}),
@@ -251,6 +257,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   absorb(specializedQuestions, 1);
   absorb(broadQuestions, 1);
   absorb(primaryMathQuestions, 1);
+  absorb(languageQuestions, 1);
   absorb(intelligentQuestions, 2);
   absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed), 3);
   absorb(coverageQuestions, 4);
@@ -263,6 +270,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   for (let attempt = 0; fresh.length < requested && attempt < BROADENING_ATTEMPTS; attempt += 1) {
     const nextSeed = derivedSeed(seed, attempt);
     absorb(buildPrimaryMathQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
+    absorb(buildSchoolLanguageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
     absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed), 3);
     absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 2);
     absorb(buildCoverageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 4);
