@@ -136,6 +136,7 @@ function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: numb
 }
 
 function diversifyPool(questions: LearnQuestion[], config: SessionConfig, seed: number) {
+  if (config.mode === "weakness") return questions;
   return composeIntelligentOrder(questions, config, seed);
 }
 
