@@ -401,14 +401,29 @@ export function rebalanceAdaptiveSession(
   correct: boolean,
   streak: number,
   seed = 1,
+  confidence?: "low" | "medium" | "high",
 ) {
   if (currentIndex < 0 || currentIndex >= questions.length - 1) return questions;
   const prefix = questions.slice(0, currentIndex + 1);
   const current = questions[currentIndex];
-  const target = Math.max(1, Math.min(5, current.difficulty + (correct ? 1 : -1) + (correct && streak >= 4 ? 1 : 0)));
+  const confidenceAdjustment =
+    confidence === "high" ? (correct ? 1 : -1)
+    : confidence === "low" && correct ? -1
+    : 0;
+  const target = Math.max(
+    1,
+    Math.min(
+      5,
+      current.difficulty
+        + (correct ? 1 : -1)
+        + (correct && streak >= 4 ? 1 : 0)
+        + confidenceAdjustment,
+    ),
+  );
+  const needsReinforcement = !correct || confidence === "low";
   const remaining = questions.slice(currentIndex + 1).sort((left, right) => {
-    const leftTopicPenalty = !correct && left.topic === current.topic ? -35 : 0;
-    const rightTopicPenalty = !correct && right.topic === current.topic ? -35 : 0;
+    const leftTopicPenalty = needsReinforcement && left.topic === current.topic ? -35 : 0;
+    const rightTopicPenalty = needsReinforcement && right.topic === current.topic ? -35 : 0;
     const leftFamilyPenalty = correct && current.generationFamily && left.generationFamily === current.generationFamily ? 18 : 0;
     const rightFamilyPenalty = correct && current.generationFamily && right.generationFamily === current.generationFamily ? 18 : 0;
     const leftScore = Math.abs(left.difficulty - target) * 100 + leftTopicPenalty + leftFamilyPenalty;
