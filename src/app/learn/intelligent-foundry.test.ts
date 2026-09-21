@@ -83,6 +83,38 @@ describe("SukuuNova intelligent question foundry", () => {
     }
   });
 
+  it("keeps generated scenarios inside the selected academic domain", () => {
+    const medicine = buildIntelligentQuestions({
+      lane: "university",
+      programId: "medicine",
+      levelId: "level-100",
+      subjectId: "human-physiology",
+      topicId: "all",
+      mode: "adaptive",
+      count: 24,
+      seed: 20260921,
+    }, 24, 20260921);
+
+    expect(medicine.length).toBeGreaterThan(0);
+    expect(medicine.some((question) => /hospital|clinic|health|medical|laboratory|care|physiology/i.test(question.prompt))).toBe(true);
+    expect(medicine.every((question) => !/e-commerce warehouse|construction technology firm|fintech analytics team/i.test(question.prompt))).toBe(true);
+
+    const contract = buildIntelligentQuestions({
+      lane: "university",
+      programId: "law",
+      levelId: "level-100",
+      subjectId: "law-of-contract-i",
+      topicId: "all",
+      mode: "adaptive",
+      count: 24,
+      seed: 20260922,
+    }, 24, 20260922);
+
+    expect(contract.length).toBeGreaterThan(0);
+    expect(contract.some((question) => /agreement|transaction|contract|sale|lease/i.test(question.prompt))).toBe(true);
+    expect(contract.every((question) => !/biomedical research laboratory|teaching hospital|physiology laboratory/i.test(question.prompt))).toBe(true);
+  });
+
   it("uses modern scenario variation rather than a single repeated sentence frame", () => {
     const questions = buildIntelligentQuestions({
       lane: "university",
