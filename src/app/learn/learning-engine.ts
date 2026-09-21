@@ -16,7 +16,7 @@ import { buildPrimaryMathQuestions } from "./primary-math-foundry";
 import { buildSchoolLanguageQuestions, isNativeLanguageQuestion } from "./school-language-foundry";
 import { buildRichStimulusQuestions } from "./rich-stimulus-foundry";
 import { examBankQuestionsForSelection } from "./exam-question-bank";
-import { composeIntelligentOrder } from "./intelligence-core";
+import { composeIntelligentOrder, sessionIntelligenceDiagnostics } from "./intelligence-core";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -306,6 +306,7 @@ export function sessionDiagnostics(questions: LearnQuestion[], seen: string[] = 
     recycledCount,
     freshCount: questions.length - recycledCount,
     formats,
+    intelligence: sessionIntelligenceDiagnostics(questions),
   };
 }
 
