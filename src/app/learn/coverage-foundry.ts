@@ -1,4 +1,4 @@
-import { catalogFor, type CognitiveChallenge, type LearnQuestion, type SessionConfig } from "./learn-domain";
+import { catalogFor, resolveCatalogSelection, type CognitiveChallenge, type LearnQuestion, type SessionConfig } from "./learn-domain";
 
 type Concept = {
   term: string;
@@ -663,19 +663,17 @@ function profileForTarget(target: Target, config: SessionConfig) {
 }
 
 function targetsFor(config: SessionConfig): Target[] {
-  const catalog = catalogFor(config.lane);
-  const program = catalog.programs.find((item) => item.id === config.programId);
-  const level = program?.levels.find((item) => item.id === config.levelId);
+  const { level, subject: resolvedSubject, topic: resolvedTopic } = resolveCatalogSelection(config);
   if (!level) return [];
 
   const subjects = config.subjectId === "all"
     ? level.subjects
-    : level.subjects.filter((subject) => subject.id === config.subjectId);
+    : resolvedSubject ? [resolvedSubject] : [];
 
   return subjects.flatMap((subject) => {
     const topics = config.topicId === "all"
       ? subject.topics
-      : subject.topics.filter((topic) => topic.id === config.topicId);
+      : resolvedTopic && resolvedSubject?.id === subject.id ? [resolvedTopic] : [];
     return topics.map((topic) => ({
       subjectId: subject.id,
       subjectLabel: subject.contentLabel ?? subject.label,
@@ -818,11 +816,11 @@ export function buildCoverageQuestions(
   const output: LearnQuestion[] = [];
   const seen = new Set<string>();
 
-  for (let position = 0; output.length < requested && position < requested * 6; position += 1) {
+  for (let position = 0; output.length < requested && position < requested * 24; position += 1) {
     const target = targets[(hash(`${seed}:target:${position}`) + position) % targets.length];
     const profile = profileForTarget(target, config);
     const capacity = product([conceptsForLevel(profile, config).length, contextsForLevel(profile, config).length, ...DIMENSION_BASE]);
-    const variant = mixedIndex(`${config.lane}:${config.programId}:${config.levelId}:${target.subjectId}:${target.topicId}:${seed}:${position}`, capacity);
+    const variant = (mixedIndex(`${config.lane}:${config.programId}:${config.levelId}:${target.subjectId}:${target.topicId}:${seed}:${position}`, capacity) + position) % capacity;
     const question = renderQuestion(target, profile, variant, config);
     if (seen.has(question.exposureKey)) continue;
     seen.add(question.exposureKey);
