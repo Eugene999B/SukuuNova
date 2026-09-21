@@ -13,9 +13,11 @@ export type StarterTopicCoverage = {
 const ghanaSchool = catalogFor("school").programs.find((program) => program.id === "ghana");
 const representativeLevel = ghanaSchool?.levels.find((level) => level.id === "jhs-1") ?? ghanaSchool?.levels[0];
 
+const STARTER_SUBJECT_IDS = new Set(["mathematics", "english", "science", "social", "computing"]);
+
 export const SCHOOL_STARTER_TOPIC_COVERAGE: StarterTopicCoverage[] = (representativeLevel?.subjects ?? [])
-  .filter((subject) => subject.availability !== "expanding")
-  .flatMap((subject) => subject.topics.filter((topic) => topic.availability !== "expanding").map((topic) => {
+  .filter((subject) => STARTER_SUBJECT_IDS.has(subject.id))
+  .flatMap((subject) => subject.topics.map((topic) => {
     const questionCount = STANDARD_FOUNDRY_PACK.filter(
       (question) => question.subject === subject.label && question.topic === topic.label,
     ).length;
