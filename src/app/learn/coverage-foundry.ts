@@ -815,6 +815,7 @@ export function buildCoverageQuestions(
 
   const output: LearnQuestion[] = [];
   const seen = new Set<string>();
+  const seenPrompts = new Set<string>();
 
   for (let position = 0; output.length < requested && position < requested * 24; position += 1) {
     const target = targets[(hash(`${seed}:target:${position}`) + position) % targets.length];
@@ -822,8 +823,9 @@ export function buildCoverageQuestions(
     const capacity = product([conceptsForLevel(profile, config).length, contextsForLevel(profile, config).length, ...DIMENSION_BASE]);
     const variant = (mixedIndex(`${config.lane}:${config.programId}:${config.levelId}:${target.subjectId}:${target.topicId}:${seed}:${position}`, capacity) + position) % capacity;
     const question = renderQuestion(target, profile, variant, config);
-    if (seen.has(question.exposureKey)) continue;
+    if (seen.has(question.exposureKey) || seenPrompts.has(question.prompt)) continue;
     seen.add(question.exposureKey);
+    seenPrompts.add(question.prompt);
     output.push(question);
   }
 
