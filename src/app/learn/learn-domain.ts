@@ -456,6 +456,28 @@ function schoolLevel(id: string, label: string, subjects: CatalogSubject[]): Cat
   return { id, label, subjects };
 }
 
+function publishSubject(subject: CatalogSubject): CatalogSubject {
+  return {
+    id: subject.id,
+    label: subject.label,
+    ...(subject.contentLabel ? { contentLabel: subject.contentLabel } : {}),
+    topics: subject.topics.map((topic) => ({ id: topic.id, label: topic.label })),
+  };
+}
+
+function publishCatalog(catalog: LearningCatalog): LearningCatalog {
+  return {
+    ...catalog,
+    programs: catalog.programs.map((program) => ({
+      ...program,
+      levels: program.levels.map((level) => ({
+        ...level,
+        subjects: level.subjects.map(publishSubject),
+      })),
+    })),
+  };
+}
+
 export const LEARNING_CATALOGS: LearningCatalog[] = [
   {
     id: "school",
@@ -547,8 +569,7 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       },
     ],
   },
-];
-
+].map(publishCatalog);
 function hashText(text: string) {
   let hash = 2166136261;
   for (let index = 0; index < text.length; index += 1) {
