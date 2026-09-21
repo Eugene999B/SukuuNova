@@ -557,6 +557,62 @@ export function LearningExplorer() {
   );
 }
 
+function QuestionStimulusView({ stimulus }: { stimulus: NonNullable<LearnQuestion["stimulus"]> }) {
+  if (stimulus.kind === "passage") {
+    return <article className={styles.passageStimulus} data-testid="question-passage">
+      {stimulus.title && <strong>{stimulus.title}</strong>}
+      <p>{stimulus.text}</p>
+    </article>;
+  }
+
+  if (stimulus.kind === "table") {
+    return <div className={styles.tableStimulus} data-testid="question-table">
+      {stimulus.title && <strong>{stimulus.title}</strong>}
+      <div className={styles.tableScroll}>
+        <table>
+          <thead><tr>{stimulus.columns.map((column)=><th key={column}>{column}</th>)}</tr></thead>
+          <tbody>{stimulus.rows.map((row,rowIndex)=><tr key={rowIndex}>{row.map((cell,cellIndex)=><td key={cellIndex}>{cell}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+    </div>;
+  }
+
+  const labels=stimulus.labels??{};
+  return <figure className={styles.diagramStimulus} data-testid="question-diagram">
+    <svg viewBox="0 0 360 220" role="img" aria-label={stimulus.ariaLabel}>
+      {stimulus.diagram === "rectangle" && <>
+        <rect x="75" y="50" width="210" height="120" rx="4" />
+        {labels.top && <text x="180" y="36" textAnchor="middle">{labels.top}</text>}
+        {labels.side && <text x="303" y="115" textAnchor="middle">{labels.side}</text>}
+        {labels.centre && <text x="180" y="115" textAnchor="middle">{labels.centre}</text>}
+      </>}
+      {stimulus.diagram === "triangle" && <>
+        <polygon points="180,35 65,175 295,175" />
+        {labels.top && <text x="180" y="67" textAnchor="middle">{labels.top}</text>}
+        {labels.left && <text x="92" y="159" textAnchor="middle">{labels.left}</text>}
+        {labels.right && <text x="267" y="159" textAnchor="middle">{labels.right}</text>}
+        {labels.leftSide && <text x="105" y="102" textAnchor="middle">{labels.leftSide}</text>}
+        {labels.rightSide && <text x="258" y="102" textAnchor="middle">{labels.rightSide}</text>}
+        {labels.base && <text x="180" y="201" textAnchor="middle">{labels.base}</text>}
+      </>}
+      {stimulus.diagram === "angle" && <>
+        <line x1="35" y1="160" x2="325" y2="160" />
+        <line x1="180" y1="160" x2="105" y2="55" />
+        <circle cx="180" cy="160" r="3" />
+        {labels.first && <text x="135" y="126" textAnchor="middle">{labels.first}</text>}
+        {labels.second && <text x="235" y="143" textAnchor="middle">{labels.second}</text>}
+      </>}
+      {stimulus.diagram === "coordinate-grid" && <>
+        {Array.from({length:9},(_,index)=><line key={`v-${index}`} x1={40+index*35} y1="30" x2={40+index*35} y2="190" className={styles.gridLine}/>)}
+        {Array.from({length:7},(_,index)=><line key={`h-${index}`} x1="40" y1={30+index*27} x2="320" y2={30+index*27} className={styles.gridLine}/>)}
+        <line x1="40" y1="110" x2="320" y2="110" />
+        <line x1="180" y1="30" x2="180" y2="190" />
+      </>}
+    </svg>
+    <figcaption>{stimulus.ariaLabel}</figcaption>
+  </figure>;
+}
+
 function QuestionPlayer({
   question,
   index,
@@ -594,7 +650,12 @@ function QuestionPlayer({
         <span className={styles.formatTag}>{question.kind.replace("single", "single choice").replace("multi", "multi-select")}</span>
         {question.challenge && <span className={styles.challengeTag} data-testid="question-challenge">{question.challenge}</span>}
         {question.mission && <span className={styles.missionTag} data-testid="question-mission"><Zap size={12}/>{question.mission}</span>}
+        {question.provenance && question.provenance.sourceType !== "original" && <span className={styles.sourceTag} data-testid="question-source">
+          {question.provenance.sourceType === "official-sample" ? "Official sample" : "Past paper"}
+          {question.provenance.year ? ` · ${question.provenance.year}` : ""}
+        </span>}
       </div>
+      {question.stimulus && <QuestionStimulusView stimulus={question.stimulus} />}
       <h3 id="learn-question" tabIndex={-1}>{question.prompt}</h3>
 
       {question.kind === "single" && <div className={styles.optionGrid}>{question.options?.map((option, optionIndex) => {
