@@ -1,4 +1,4 @@
-import { catalogFor, type SessionConfig } from "./learn-domain";
+import { resolveCatalogSelection, reviewedTopicLabelsForSelection, type SessionConfig } from "./learn-domain";
 import { richInteractionEntriesForAudience } from "./rich-starter-pack";
 import { variantCapacityForSelection } from "./variant-engine";
 import { specializedQuestionsForSelection } from "./specialized-content";
@@ -32,11 +32,7 @@ function normalized(value: string) {
 }
 
 function resolveSelection(config: SessionConfig) {
-  const catalog = catalogFor(config.lane);
-  const program = catalog.programs.find((item) => item.id === config.programId);
-  const level = program?.levels.find((item) => item.id === config.levelId);
-  const subject = level?.subjects.find((item) => item.id === config.subjectId);
-  const topic = subject?.topics.find((item) => item.id === config.topicId);
+  const { subject, topic } = resolveCatalogSelection(config);
   return {
     subjectLabel: subject?.contentLabel ?? subject?.label,
     topicLabel: topic?.label,
@@ -52,9 +48,11 @@ function matchesLabel(value: string, selectedId: string, resolvedLabel?: string)
 export function learningCapabilityForSelection(config: SessionConfig): LearningCapability {
   const selection = resolveSelection(config);
 
+  const reviewedTopicLabels = reviewedTopicLabelsForSelection(config);
   const standardEntries = verifiedStandardEntriesForAudience(config).filter((entry) => {
-    return matchesLabel(entry.question.subject, config.subjectId, selection.subjectLabel)
-      && matchesLabel(entry.question.topic, config.topicId, selection.topicLabel);
+    const topicMatches = matchesLabel(entry.question.topic, config.topicId, selection.topicLabel)
+      || reviewedTopicLabels.some((label) => normalized(entry.question.topic) === normalized(label));
+    return matchesLabel(entry.question.subject, config.subjectId, selection.subjectLabel) && topicMatches;
   });
 
   const richEntries = richInteractionEntriesForAudience(config).filter((entry) => {
