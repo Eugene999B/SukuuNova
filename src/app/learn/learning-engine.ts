@@ -35,6 +35,118 @@ function derivedSeed(seed: number, attempt: number) {
   return (seed + Math.imul(attempt + 1, 0x9e3779b9)) >>> 0;
 }
 
+function candidateCount(requested: number, factor = 4, floor = 24) {
+  return Math.min(MAX_SESSION_SIZE * 2, Math.max(floor, requested * factor));
+}
+
+function selectCompositionWindow(questions: LearnQuestion[], windowSize: number) {
+  if (questions.length <= windowSize) return { selected: [...questions], remaining: [] as LearnQuestion[] };
+
+  const selected: LearnQuestion[] = [];
+  const selectedKeys = new Set<string>();
+
+  const add = (question: LearnQuestion | undefined) => {
+    if (!question || selected.length >= windowSize || selectedKeys.has(question.exposureKey)) return;
+    selected.push(question);
+    selectedKeys.add(question.exposureKey);
+  };
+
+  // Guarantee that presentation richness survives bounded composition.
+  for (const stimulusKind of ["diagram", "passage", "table"] as const) {
+    add(questions.find((question) => question.stimulus?.kind === stimulusKind));
+  }
+
+  // Guarantee that constructed and interactive response formats are represented
+  // when they exist in the source pool.
+  for (const kind of ["fill", "short", "multi", "numeric", "single", "boolean"] as const) {
+    add(questions.find((question) => question.kind === kind));
+  }
+
+  // Round-robin generator families so source order cannot crowd out later
+  // families (for example, primary-math text items hiding diagram questions).
+  const groups = new Map<string, LearnQuestion[]>();
+  for (const question of questions) {
+    const family = question.generationFamily ?? "no-family";
+    const group = groups.get(family) ?? [];
+    group.push(question);
+    groups.set(family, group);
+  }
+
+  const cursors = new Map<string, number>();
+  const families = Array.from(groups.keys());
+  let madeProgress = true;
+  while (selected.length < windowSize && madeProgress) {
+    madeProgress = false;
+    for (const family of families) {
+      if (selected.length >= windowSize) break;
+      const group = groups.get(family) ?? [];
+      let cursor = cursors.get(family) ?? 0;
+      while (cursor < group.length && selectedKeys.has(group[cursor].exposureKey)) cursor += 1;
+      if (cursor >= group.length) {
+        cursors.set(family, cursor);
+        continue;
+      }
+      add(group[cursor]);
+      cursors.set(family, cursor + 1);
+      madeProgress = true;
+    }
+  }
+
+  if (selected.length < windowSize) {
+    for (const question of questions) {
+      add(question);
+      if (selected.length >= windowSize) break;
+    }
+  }
+
+  const remaining = questions.filter((question) => !selectedKeys.has(question.exposureKey));
+  return { selected, remaining };
+}
+
+function limitFamilyRuns(questions: LearnQuestion[], maxRun = 2) {
+  const output = [...questions];
+
+  for (let index = maxRun; index < output.length; index += 1) {
+    const family = output[index].generationFamily ?? "no-family";
+    let runLength = 1;
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      if ((output[cursor].generationFamily ?? "no-family") !== family) break;
+      runLength += 1;
+    }
+    if (runLength <= maxRun) continue;
+
+    const swapIndex = output.findIndex(
+      (candidate, candidateIndex) =>
+        candidateIndex > index
+        && (candidate.generationFamily ?? "no-family") !== family,
+    );
+    if (swapIndex < 0) continue;
+
+    [output[index], output[swapIndex]] = [output[swapIndex], output[index]];
+  }
+
+  return output;
+}
+
+function composeCandidateWindow(
+  questions: LearnQuestion[],
+  config: SessionConfig,
+  seed: number,
+  requested: number,
+) {
+  if (config.mode === "weakness" || questions.length <= 1) return questions;
+  const windowSize = Math.min(
+    questions.length,
+    Math.max(24, Math.min(MAX_SESSION_SIZE * 2, requested * 2)),
+  );
+  const { selected, remaining } = selectCompositionWindow(questions, windowSize);
+  const head = limitFamilyRuns(
+    composeIntelligentOrder(selected, config, seed),
+  );
+  if (!remaining.length) return head;
+  return [...head, ...remaining];
+}
+
 function stableRank(seed: number, value: string) {
   let hash = (2166136261 ^ seed) >>> 0;
   for (let index = 0; index < value.length; index += 1) {
@@ -135,9 +247,8 @@ function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: numb
   return questions;
 }
 
-function diversifyPool(questions: LearnQuestion[], config: SessionConfig, seed: number) {
-  if (config.mode === "weakness") return questions;
-  return composeIntelligentOrder(questions, config, seed);
+function diversifyPool(questions: LearnQuestion[], config: SessionConfig, seed: number, requested: number) {
+  return composeCandidateWindow(questions, config, seed, requested);
 }
 
 /**
@@ -170,12 +281,12 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const reviewedQuestions = verifiedStandardQuestionsForAudience(config);
   const specializedQuestions = specializedQuestionsForSelection(config);
   const broadQuestions = broadPracticeQuestionsForSelection(config);
-  const intelligentQuestions = buildIntelligentQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
-  const primaryMathQuestions = buildPrimaryMathQuestions(config, Math.max(requested * 5, MAX_SESSION_SIZE * 2), seed);
-  const languageQuestions = buildSchoolLanguageQuestions(config, Math.max(requested * 6, MAX_SESSION_SIZE * 2), seed);
-  const richStimulusQuestions = buildRichStimulusQuestions(config, Math.max(requested * 5, MAX_SESSION_SIZE * 2), seed);
+  const intelligentQuestions = buildIntelligentQuestions(config, candidateCount(requested, 4), seed);
+  const primaryMathQuestions = buildPrimaryMathQuestions(config, candidateCount(requested, 5), seed);
+  const languageQuestions = buildSchoolLanguageQuestions(config, candidateCount(requested, 6), seed);
+  const richStimulusQuestions = buildRichStimulusQuestions(config, candidateCount(requested, 5), seed);
   const examBankQuestions = examBankQuestionsForSelection(config);
-  const coverageQuestions = buildCoverageQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
+  const coverageQuestions = buildCoverageQuestions(config, candidateCount(requested, 4), seed);
 
   function absorb(questions: LearnQuestion[], priority = 2) {
     for (const sourceQuestion of questions) {
@@ -216,7 +327,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   absorb(languageQuestions, 1);
   absorb(richStimulusQuestions, 1);
   absorb(intelligentQuestions, 2);
-  absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed), 3);
+  absorb(buildVariantQuestions(config, candidateCount(requested, 2), seed), 3);
   absorb(coverageQuestions, 4);
 
   if (!strictSelection && fresh.length < requested) {
@@ -226,20 +337,26 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
 
   for (let attempt = 0; fresh.length < requested && attempt < BROADENING_ATTEMPTS; attempt += 1) {
     const nextSeed = derivedSeed(seed, attempt);
-    absorb(buildPrimaryMathQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
-    absorb(buildSchoolLanguageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
-    absorb(buildRichStimulusQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
-    absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed), 3);
-    absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 2);
-    absorb(buildCoverageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 4);
+    const expandedCount = candidateCount(requested, 3);
+    absorb(buildPrimaryMathQuestions(config, expandedCount, nextSeed), 1);
+    absorb(buildSchoolLanguageQuestions(config, expandedCount, nextSeed), 1);
+    absorb(buildRichStimulusQuestions(config, expandedCount, nextSeed), 1);
+    absorb(buildVariantQuestions(config, expandedCount, nextSeed), 3);
+    absorb(buildIntelligentQuestions(config, expandedCount, nextSeed), 2);
+    absorb(buildCoverageQuestions(config, expandedCount, nextSeed), 4);
   }
 
-  const orderedFresh = diversifyPool(orderPool(fresh, config, seed, selection), config, seed);
-  const orderedRecycled = diversifyPool(
-    orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection),
-    config,
-    derivedSeed(seed, BROADENING_ATTEMPTS),
-  );
+  const orderedFresh = config.mode === "topic"
+    ? orderPool(fresh, config, seed, selection)
+    : diversifyPool(orderPool(fresh, config, seed, selection), config, seed, requested);
+  const orderedRecycled = config.mode === "topic"
+    ? orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection)
+    : diversifyPool(
+        orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection),
+        config,
+        derivedSeed(seed, BROADENING_ATTEMPTS),
+        requested,
+      );
 
   const evidenceFirst = (questions: LearnQuestion[]) => {
     if (config.mode !== "topic") return questions;
@@ -264,7 +381,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
         );
       }
 
-      return composeIntelligentOrder(bucket, config, seed + priority * 97);
+      return composeCandidateWindow(bucket, config, seed + priority * 97, requested);
     });
   };
 
