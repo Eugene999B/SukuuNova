@@ -73,22 +73,85 @@ export type SessionConfig = {
   streak?: number;
 };
 
-const expandingTopic: CatalogTopic = {
-  id: "coverage-expanding",
-  label: "Curriculum coverage expanding",
-  availability: "expanding",
-};
+function slugTopic(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function subjectTopicLabels(id: string, label: string) {
+  const value = `${id} ${label}`.toLowerCase();
+
+  if (/math|numeracy/.test(value)) {
+    return ["Number & operations", "Algebra & relationships", "Geometry & measurement", "Statistics & probability", "Financial mathematics"];
+  }
+  if (/english|language|french|arabic|literature|communication/.test(value)) {
+    return ["Listening & speaking", "Vocabulary & grammar", "Reading & interpretation", "Writing & composition", "Culture & literature"];
+  }
+  if (/comput|ict|digital|robotic/.test(value)) {
+    return ["Computer systems", "Programming & algorithms", "Data & information", "Networks & internet", "Digital safety & ethics"];
+  }
+  if (/biology|biomedical|human biology/.test(value)) {
+    return ["Cells & organisation", "Body systems & physiology", "Genetics & inheritance", "Ecology & environment", "Scientific investigation"];
+  }
+  if (/chemistry/.test(value)) {
+    return ["Quantitative chemistry & reactions", "Atomic structure & bonding", "Acids, bases & solutions", "Organic chemistry", "Laboratory analysis"];
+  }
+  if (/physics/.test(value)) {
+    return ["Mechanics & motion", "Electricity & circuits", "Waves & optics", "Energy & thermal physics", "Practical measurement"];
+  }
+  if (/science/.test(value)) {
+    return ["Living things", "Matter & materials", "Force, energy & motion", "Earth & environment", "Scientific investigation"];
+  }
+  if (/account|business|economics|management|finance|cost/.test(value)) {
+    return ["Accounting & financial analysis", "Costs, pricing & break-even", "Markets & economic decisions", "Management & enterprise", "Business mathematics & data"];
+  }
+  if (/agricultur|crop|animal|fisher|forestry|soil|agribusiness/.test(value)) {
+    return ["Soil & plant production", "Animal production & health", "Farm tools & technology", "Natural resources & sustainability", "Agribusiness & farm management"];
+  }
+  if (/technical|engineering|electric|electronic|mechanic|construction|woodwork|metalwork|drawing|aviation|manufactur/.test(value)) {
+    return ["Tools, safety & workshop practice", "Materials & structures", "Technical drawing & measurement", "Systems, machines & processes", "Design, maintenance & evaluation"];
+  }
+  if (/food|nutrition|clothing|textile|home economics|management in living/.test(value)) {
+    return ["Food, nutrition & health", "Textiles & clothing", "Family & resource management", "Practical production & safety", "Enterprise & consumer decisions"];
+  }
+  if (/art|design|music|drama|dance|performing|sculpt|ceramic|leather|basketry|picture/.test(value)) {
+    return ["Elements & principles", "Materials & techniques", "Creating & performing", "Interpretation & criticism", "Presentation & production"];
+  }
+  if (/government|social|history|geograph|citizen|rme|religious|moral/.test(value)) {
+    return ["Identity, culture & society", "Governance & citizenship", "People, place & environment", "History, change & development", "Values, evidence & participation"];
+  }
+  if (/career/.test(value)) {
+    return ["Design & problem solving", "Materials & tools", "Food & home technology", "Enterprise & careers", "Safety & sustainable practice"];
+  }
+  if (/pe|physical education|health/.test(value)) {
+    return ["Movement skills", "Fitness & conditioning", "Games & sport", "Health & safety", "Teamwork & wellbeing"];
+  }
+
+  return [
+    `${label} essentials`,
+    `${label} methods & processes`,
+    `${label} application & problem solving`,
+    `${label} evidence & interpretation`,
+    `${label} review & practice`,
+  ];
+}
 
 function expandingSubject(id: string, label: string): CatalogSubject {
-  return { id, label, availability: "expanding", topics: [expandingTopic] };
+  return {
+    id,
+    label,
+    topics: subjectTopicLabels(id, label).map((topic) => ({ id: slugTopic(topic), label: topic })),
+  };
 }
 
 function expandingDetailedSubject(id: string, label: string, topics: CatalogTopic[]): CatalogSubject {
   return {
     id,
     label,
-    availability: "expanding",
-    topics: topics.map((topic) => ({ ...topic, availability: "expanding" })),
+    topics: topics.map((topic) => ({ id: topic.id, label: topic.label })),
   };
 }
 
@@ -99,8 +162,8 @@ function readyDetailedSubject(id: string, label: string, topics: CatalogTopic[])
 function markSubjectExpanding(subject: CatalogSubject): CatalogSubject {
   return {
     ...subject,
-    availability: "expanding",
-    topics: subject.topics.map((topic) => ({ ...topic, availability: "expanding" })),
+    availability: undefined,
+    topics: subject.topics.map((topic) => ({ ...topic, availability: undefined })),
   };
 }
 
