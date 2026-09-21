@@ -584,19 +584,19 @@ function QuestionPlayer({
       </div>
       <h3 id="learn-question" tabIndex={-1}>{question.prompt}</h3>
 
-      {question.kind === "single" && <div className={styles.optionGrid}>{question.options?.map((option) => {
+      {question.kind === "single" && <div className={styles.optionGrid}>{question.options?.map((option, optionIndex) => {
         const selected = response === option.id;
         const correctOption = submitted && option.id === question.answer;
         const wrong = submitted && selected && option.id !== question.answer;
-        return <button data-testid="learning-option" key={option.id} disabled={submitted} className={`${styles.optionButton} ${selected ? styles.optionSelected : ""} ${correctOption ? styles.optionCorrect : ""} ${wrong ? styles.optionWrong : ""}`} onClick={() => setResponse(option.id)}><span>{option.label}</span>{correctOption ? <Check size={17} /> : wrong ? <X size={17} /> : null}</button>;
+        return <button data-testid="learning-option" key={option.id} disabled={submitted} className={`${styles.optionButton} ${selected ? styles.optionSelected : ""} ${correctOption ? styles.optionCorrect : ""} ${wrong ? styles.optionWrong : ""}`} onClick={() => setResponse(option.id)}><span className={styles.optionChoice}><b className={styles.optionLetter}>{String.fromCharCode(65 + optionIndex)}</b><span className={styles.optionText}>{option.label}</span></span>{correctOption ? <Check size={19} /> : wrong ? <X size={19} /> : <ChevronRight size={17} className={styles.optionArrow} />}</button>;
       })}</div>}
 
-      {question.kind === "multi" && <div className={styles.optionGrid}>{question.options?.map((option) => {
+      {question.kind === "multi" && <div className={styles.optionGrid}>{question.options?.map((option, optionIndex) => {
         const selected = selectedMulti.includes(option.id);
         const expected = Array.isArray(question.answer) && question.answer.includes(option.id);
         const correctOption = submitted && expected;
         const wrong = submitted && selected && !expected;
-        return <button data-testid="learning-option" key={option.id} disabled={submitted} className={`${styles.optionButton} ${selected ? styles.optionSelected : ""} ${correctOption ? styles.optionCorrect : ""} ${wrong ? styles.optionWrong : ""}`} onClick={() => toggleMulti(option.id)}><span>{option.label}</span>{selected && !submitted ? <CheckCircle2 size={17} /> : correctOption ? <Check size={17} /> : wrong ? <X size={17} /> : null}</button>;
+        return <button data-testid="learning-option" key={option.id} disabled={submitted} className={`${styles.optionButton} ${selected ? styles.optionSelected : ""} ${correctOption ? styles.optionCorrect : ""} ${wrong ? styles.optionWrong : ""}`} onClick={() => toggleMulti(option.id)}><span className={styles.optionChoice}><b className={styles.optionLetter}>{String.fromCharCode(65 + optionIndex)}</b><span className={styles.optionText}>{option.label}</span></span>{selected && !submitted ? <CheckCircle2 size={19} /> : correctOption ? <Check size={19} /> : wrong ? <X size={19} /> : <span className={styles.multiCue}>SELECT</span>}</button>;
       })}</div>}
 
       {question.kind === "boolean" && <div className={styles.booleanRow}>{[true, false].map((value) => <button data-testid="learning-option" key={String(value)} disabled={submitted} className={response === value ? styles.booleanActive : styles.booleanButton} onClick={() => setResponse(value)}>{value ? "True" : "False"}</button>)}</div>}
