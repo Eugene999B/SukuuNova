@@ -29,11 +29,11 @@ function defaultTopicsForCourse(label: string) {
   if (/mathematics|calculus|statistics|probability|algebra|econometrics|quantitative/.test(value)) {
     return ["Algebra & equations", "Functions & modelling", "Geometry & measurement", "Statistics, probability & data", "Percentages & financial mathematics"];
   }
-  if (/account|business|economics|finance|management|marketing|procurement|supply|entrepreneur|operations/.test(value)) {
-    return ["Accounting & financial analysis", "Cost-volume-profit", "Markets & economic decisions", "Management & operations", "Financial mathematics"];
-  }
   if (/research|methodology|project/.test(value)) {
     return ["Research design", "Sampling & evidence", "Variables & measurement", "Data interpretation", "Evaluation & conclusions"];
+  }
+  if (/account|business|economics|finance|management|marketing|procurement|supply|entrepreneur|operations/.test(value)) {
+    return ["Accounting & financial analysis", "Cost-volume-profit", "Markets & economic decisions", "Management & operations", "Financial mathematics"];
   }
   if (/english|literature|french|communication|writing|language/.test(value)) {
     return ["Language foundations", "Reading & interpretation", "Writing & communication", "Applied language", "Critical analysis"];
