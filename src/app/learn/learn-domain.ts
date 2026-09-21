@@ -161,9 +161,10 @@ function readyDetailedSubject(id: string, label: string, topics: CatalogTopic[])
 
 function markSubjectExpanding(subject: CatalogSubject): CatalogSubject {
   return {
-    ...subject,
-    availability: undefined,
-    topics: subject.topics.map((topic) => ({ ...topic, availability: undefined })),
+    id: subject.id,
+    label: subject.label,
+    ...(subject.contentLabel ? { contentLabel: subject.contentLabel } : {}),
+    topics: subject.topics.map((topic) => ({ id: topic.id, label: topic.label })),
   };
 }
 
