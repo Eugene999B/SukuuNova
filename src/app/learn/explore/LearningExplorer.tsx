@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
-  Flame,
   GraduationCap,
   Layers3,
   Medal,
@@ -22,7 +21,6 @@ import {
   Volume2,
   Zap,
   Target,
-  Trophy,
   X,
   XCircle,
 } from "lucide-react";
@@ -145,6 +143,7 @@ export function LearningExplorer() {
   const [launchNotice, setLaunchNotice] = useState("");
   const [programQuery, setProgramQuery] = useState("");
   const [showAllPrograms, setShowAllPrograms] = useState(false);
+  const [flowStep, setFlowStep] = useState(0);
 
   const program = catalog.programs.find((item) => item.id === programId) ?? catalog.programs[0];
   const level = program.levels.find((item) => item.id === levelId) ?? program.levels[0];
@@ -231,6 +230,7 @@ export function LearningExplorer() {
     setLaunchNotice("");
     setProgramQuery("");
     setShowAllPrograms(false);
+    setFlowStep(1);
   }
 
   function selectProgram(nextProgramId: string) {
@@ -242,6 +242,7 @@ export function LearningExplorer() {
     setSubjectId(nextSubject.id);
     setTopicId(firstReadyTopic(lane, nextProgram.id, nextLevel.id, nextSubject).id);
     setLaunchNotice("");
+    setFlowStep(2);
   }
 
   function selectLevel(nextLevelId: string) {
@@ -251,6 +252,7 @@ export function LearningExplorer() {
     setSubjectId(nextSubject.id);
     setTopicId(firstReadyTopic(lane, program.id, nextLevel.id, nextSubject).id);
     setLaunchNotice("");
+    setFlowStep(3);
   }
 
   function selectSubject(nextSubjectId: string) {
@@ -258,6 +260,7 @@ export function LearningExplorer() {
     setSubjectId(nextSubject.id);
     setTopicId(firstReadyTopic(lane, program.id, level.id, nextSubject).id);
     setLaunchNotice("");
+    setFlowStep(4);
   }
 
   function launchSession() {
@@ -384,76 +387,116 @@ export function LearningExplorer() {
           <p>School, SHS pathways, exams, university programmes and career skills live in one place. Build a quick drill or a focused session and get instant feedback.</p>
           <div className={styles.heroPromise}><span>🔊 action sounds</span><span>⚡ instant marking</span><span>🎯 focused sessions</span><span>🏆 local progress</span></div>
         </div>
-        <div className={styles.heroStats}>
-          <article><Brain size={20} /><strong>{percent(progress.correct, progress.answered)}%</strong><span>accuracy</span></article>
-          <article><Flame size={20} /><strong>{progress.streak}</strong><span>answer streak</span></article>
-          <article><Trophy size={20} /><strong>{progress.xp}</strong><span>XP earned</span></article>
+        <div className={styles.heroTrust}>
+          <article><CheckCircle2 size={22} /><strong>No learner account needed</strong><span>Start practising immediately. Nothing here pretends you are signed in.</span></article>
+          <article><Target size={22} /><strong>Progress stays on this browser</strong><span>Answered questions and XP are device-local and can disappear if browser data is cleared.</span></article>
+          <article><BarChart3 size={22} /><strong>{progress.answered ? `${progress.answered} answers on this device` : "Evidence starts with your first answer"}</strong><span>{progress.answered ? "Detailed accuracy lives in your practice map below — not as a fake account score." : "We do not show a meaningless 0% accuracy before you have practised."}</span></article>
         </div>
       </section>
 
       <fieldset className={styles.journey} disabled={session.length > 0 && !isComplete} aria-label="Build your learning session">
-        <section className={styles.laneDeck}>
-          <div className={styles.deckIntro}><span className={styles.stepLabel}>STEP 1</span><h2>Where are you learning?</h2><p>Switch paths any time. Your progress stays on this browser.</p></div>
+        <div className={styles.flowHeader}>
+          <div>
+            <span className={styles.stepLabel}>BUILD YOUR SESSION</span>
+            <h2>One choice at a time.</h2>
+            <p>No wall of dropdowns. Pick a path, then SukuuNova reveals only the next decision.</p>
+          </div>
+          <div className={styles.flowProgress} aria-label="Session setup progress">
+            {["Path","Programme","Level","Subject","Topic","Session"].map((label,index)=>(
+              <button
+                type="button"
+                key={label}
+                className={flowStep===index?styles.flowPillActive:index<flowStep?styles.flowPillDone:styles.flowPill}
+                disabled={index>flowStep}
+                onClick={()=>index<=flowStep&&setFlowStep(index)}
+              >
+                <span>{index+1}</span>{label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {flowStep===0&&<section className={`${styles.flowStage} ${styles.laneDeck}`}>
+          <div className={styles.stageTop}>
+            <div className={styles.deckIntro}><div><span className={styles.stepLabel}>STEP 1</span><h2>Where are you learning?</h2></div><p>Choose one learning world. We will build the rest from there.</p></div>
+          </div>
           <div className={styles.laneCards}>
             {lanes.map((item) => {
               const Icon = item.icon;
               return (
                 <button key={item.id} aria-pressed={lane===item.id} className={lane===item.id?styles.laneCardActive:styles.laneCard} onClick={()=>resetSelectionForLane(item.id)}>
-                  <span className={styles.laneIcon}><Icon size={22}/></span>
+                  <span className={styles.laneIcon}><Icon size={24}/></span>
                   <strong>{item.label}</strong>
                   <small>{item.copy}</small>
-                  <ChevronRight size={17}/>
+                  <ChevronRight size={19}/>
                 </button>
               );
             })}
           </div>
-        </section>
+        </section>}
 
-        <section className={styles.pathStudio}>
-          <div className={styles.studioHead}>
-            <div><span className={styles.stepLabel}>STEP 2</span><h2>{lane==="university"?"Choose your programme":lane==="school"?"Choose your school pathway":lane==="exam"?"Choose your exam":"Choose your skill track"}</h2><p>{program.description}</p></div>
-            <div className={styles.pathPreview}><span>{program.label}</span><ChevronRight size={13}/><span>{level.label}</span><ChevronRight size={13}/><span>{subject.label}</span><ChevronRight size={13}/><strong>{topic.label}</strong></div>
+        {flowStep===1&&<section className={styles.flowStage}>
+          <div className={styles.stageTop}>
+            <button type="button" className={styles.backStep} onClick={()=>setFlowStep(0)}><ArrowLeft size={17}/> Back</button>
+            <div><span className={styles.stepLabel}>STEP 2</span><h2>{lane==="university"?"Choose your programme":lane==="school"?"Choose your school pathway":lane==="exam"?"Choose your exam":"Choose your skill track"}</h2><p>Pick one. The next screen will ask only for the level or year.</p></div>
           </div>
-
-          {lane==="university"&&<div className={styles.institutionNote}><GraduationCap size={18}/><div><strong>Built to travel across universities</strong><span>Programme maps use common undergraduate course families. Exact course codes and semester order vary by institution.</span></div></div>}
+          {lane==="university"&&<div className={styles.institutionNote}><GraduationCap size={18}/><div><strong>Programme-first, institution-aware</strong><span>We use common programme structures without pretending every university uses the same course codes or semester order.</span></div></div>}
           {lane==="exam"&&<div className={styles.examNotice}><Medal size={18}/><div><strong>Practice, not a fake official mock.</strong><span>Paper-perfect mocks stay separate until structure, timing and marking are validated.</span></div></div>}
-
           <div className={styles.programSection}>
-            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>PROGRAMME / PATHWAY</span><strong>{catalog.programs.length} available paths</strong></div>{catalog.programs.length>8&&<label className={styles.searchBox}><Search size={15}/><input value={programQuery} onChange={e=>setProgramQuery(e.target.value)} placeholder={lane==="university"?"Search medicine, law, engineering…":"Search pathways…"}/></label>}</div>
-            <div className={styles.programGrid}>{visiblePrograms.map((item)=><button key={item.id} className={programId===item.id?styles.programCardActive:styles.programCard} onClick={()=>selectProgram(item.id)}><span>{item.label}</span><small>{item.levels.length} level{item.levels.length===1?"":"s"}</small><ChevronRight size={15}/></button>)}</div>
+            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>PROGRAMME / PATHWAY</span><strong>{catalog.programs.length} available paths</strong></div>{catalog.programs.length>8&&<label className={styles.searchBox}><Search size={17}/><input value={programQuery} onChange={e=>setProgramQuery(e.target.value)} placeholder={lane==="university"?"Search medicine, law, engineering…":"Search pathways…"}/></label>}</div>
+            <div className={styles.programGrid}>{visiblePrograms.map((item)=><button key={item.id} className={programId===item.id?styles.programCardActive:styles.programCard} onClick={()=>selectProgram(item.id)}><span>{item.label}</span><small>{item.levels.length} level{item.levels.length===1?"":"s"}</small><ChevronRight size={17}/></button>)}</div>
             {!programQuery&&catalog.programs.length>visiblePrograms.length&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllPrograms(true)}>Show all {catalog.programs.length} paths</button>}
           </div>
+        </section>}
 
-          <div className={styles.levelSection}>
-            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>LEVEL / YEAR</span><strong>{lane==="school"&&program.id.startsWith("shs-")?"Choose your SHS year":lane==="university"?"Choose your university level":"Choose your level"}</strong></div></div>
-            <div className={styles.levelTabs}>{program.levels.map(item=><button key={item.id} className={levelId===item.id?styles.levelTabActive:styles.levelTab} onClick={()=>selectLevel(item.id)}>{item.label}</button>)}</div>
+        {flowStep===2&&<section className={styles.flowStage}>
+          <div className={styles.stageTop}>
+            <button type="button" className={styles.backStep} onClick={()=>setFlowStep(1)}><ArrowLeft size={17}/> Back</button>
+            <div><span className={styles.stepLabel}>STEP 3</span><h2>{lane==="school"&&program.id.startsWith("shs-")?"Which SHS year?":lane==="university"?"Which university level?":"Choose your level"}</h2><p className={styles.selectionSummary}>{program.label}</p></div>
           </div>
+          <div className={styles.levelTabs}>{program.levels.map(item=><button key={item.id} className={levelId===item.id?styles.levelTabActive:styles.levelTab} onClick={()=>selectLevel(item.id)}>{item.label}<ChevronRight size={16}/></button>)}</div>
+        </section>}
 
-          <div className={styles.subjectSection}>
-            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>SUBJECT / COURSE</span><strong>{level.subjects.length} choices in {level.label}</strong></div><span className={practiceAvailable?styles.readyBadge:styles.mappedBadge}>{capability.stage==="massive"?`${compactCapacity(capability.intelligentCapacity + capability.variantCapacity)} generated variants`:practiceAvailable?"Practice ready":"Browse the course map"}</span></div>
-            <div className={styles.subjectGrid}>{level.subjects.map(item=>{const ready=subjectIsReady(lane,program.id,level.id,item);return <button key={item.id} className={subjectId===item.id?styles.subjectCardActive:styles.subjectCard} onClick={()=>selectSubject(item.id)}><BookOpen size={17}/><span><strong>{item.label}</strong><small>{ready?"Questions available":"Course map"}</small></span>{ready&&<span className={styles.readyDot}>●</span>}</button>;})}</div>
+        {flowStep===3&&<section className={styles.flowStage}>
+          <div className={styles.stageTop}>
+            <button type="button" className={styles.backStep} onClick={()=>setFlowStep(2)}><ArrowLeft size={17}/> Back</button>
+            <div><span className={styles.stepLabel}>STEP 4</span><h2>Choose a subject or course.</h2><p className={styles.selectionSummary}>{program.label} · {level.label}</p></div>
           </div>
+          <div className={styles.sectionLine}><div><strong>{level.subjects.length} choices</strong><span>Only content with real question coverage is marked ready.</span></div></div>
+          <div className={styles.subjectGrid}>{level.subjects.map(item=>{const ready=subjectIsReady(lane,program.id,level.id,item);return <button key={item.id} className={subjectId===item.id?styles.subjectCardActive:styles.subjectCard} onClick={()=>selectSubject(item.id)}><BookOpen size={20}/><span><strong>{item.label}</strong><small>{ready?"Practice available":"Course map — content expanding"}</small></span>{ready?<span className={styles.readyDot}>●</span>:<ChevronRight size={16}/>}</button>;})}</div>
+        </section>}
 
-          <div className={styles.topicSection}>
-            <div className={styles.sectionLine}><div><span className={styles.stepLabel}>TOPIC</span><strong>Pick one topic or mix the whole subject</strong></div></div>
-            <div className={styles.topicGrid}><button aria-pressed={topicId==="all"} className={topicId==="all"?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId("all");setMode("random");setLaunchNotice("");}}><Sparkles size={15}/><span>Mixed topics</span>{topicId==="all"&&<Check size={15}/>}</button>{(showAllTopics?subject.topics:subject.topics.slice(0,10)).map(item=>{const ready=topicIsReady(lane,program.id,level.id,subject,item.id);return <button key={item.id} aria-pressed={topicId===item.id} className={topicId===item.id?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId(item.id);setLaunchNotice("");}}><BookOpen size={15}/><span>{item.label}</span>{ready?<Check size={15}/>:<span className={styles.mapDot}>○</span>}</button>;})}</div>
-            {subject.topics.length>10&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllTopics(v=>!v)}>{showAllTopics?"Show fewer topics":`Show all ${subject.topics.length} topics`}</button>}
+        {flowStep===4&&<section className={styles.flowStage}>
+          <div className={styles.stageTop}>
+            <button type="button" className={styles.backStep} onClick={()=>setFlowStep(3)}><ArrowLeft size={17}/> Back</button>
+            <div><span className={styles.stepLabel}>STEP 5</span><h2>What do you want to practise?</h2><p className={styles.selectionSummary}>{program.label} · {level.label} · {subject.label}</p></div>
           </div>
+          <div className={styles.sectionLine}><div><strong>Pick one topic or mix the whole subject.</strong><span>Exact-topic sessions never silently widen into unrelated material.</span></div><span className={practiceAvailable?styles.readyBadge:styles.mappedBadge}>{capability.stage==="massive"?`${compactCapacity(capability.intelligentCapacity + capability.variantCapacity)} validated combinations`:practiceAvailable?"Practice ready":"Mapped — content expanding"}</span></div>
+          <div className={styles.topicGrid}>
+            <button aria-pressed={topicId==="all"} className={topicId==="all"?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId("all");setMode("random");setLaunchNotice("");setFlowStep(5);}}><Sparkles size={17}/><span>Mixed topics</span>{topicId==="all"&&<Check size={16}/>}</button>
+            {(showAllTopics?subject.topics:subject.topics.slice(0,12)).map(item=>{const ready=topicIsReady(lane,program.id,level.id,subject,item.id);return <button key={item.id} aria-pressed={topicId===item.id} className={topicId===item.id?styles.topicActive:styles.topicButton} onClick={()=>{setTopicId(item.id);setLaunchNotice("");setFlowStep(5);}}><BookOpen size={17}/><span>{item.label}</span>{ready?<Check size={16}/>:<span className={styles.mapDot}>○</span>}</button>;})}
+          </div>
+          {subject.topics.length>12&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllTopics(v=>!v)}>{showAllTopics?"Show fewer topics":`Show all ${subject.topics.length} topics`}</button>}
+        </section>}
 
+        {flowStep===5&&<section className={styles.flowStage}>
+          <div className={styles.stageTop}>
+            <button type="button" className={styles.backStep} onClick={()=>setFlowStep(4)}><ArrowLeft size={17}/> Back</button>
+            <div><span className={styles.stepLabel}>STEP 6</span><h2>Set the challenge, then play.</h2><p className={styles.selectionSummary}>{program.label} · {level.label} · {subject.label} · {topic.label}</p></div>
+          </div>
           <div className={styles.sessionComposer}>
             <div>
-              <span className={styles.stepLabel}>STEP 3 · BUILD THE SESSION</span>
-              <div className={styles.modeGrid}>{availableModes.map(item=><button key={item.id} className={mode===item.id?styles.modeActive:styles.modeButton} onClick={()=>setMode(item.id)}><span className={styles.modeDot}/><span><strong>{item.label}</strong><small>{item.description}</small></span>{mode===item.id&&<CheckCircle2 size={17}/>}</button>)}</div>
+              <span className={styles.stepLabel}>HOW SHOULD SUKUUNOVA ASK?</span>
+              <div className={styles.modeGrid}>{availableModes.map(item=><button key={item.id} className={mode===item.id?styles.modeActive:styles.modeButton} onClick={()=>setMode(item.id)}><span className={styles.modeDot}/><span><strong>{item.label}</strong><small>{item.description}</small></span>{mode===item.id&&<CheckCircle2 size={19}/>}</button>)}</div>
             </div>
             <div className={styles.launchPanel}>
-              <div><label>Questions</label><div className={styles.countGroup}>{[5,10,20,30,50].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>{setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Custom 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
-              <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Zap size={19}/>{practiceAvailable?(lane==="exam"?"Start practice":"Let's go!"):"Practice is being built"}<ArrowRight size={18}/></button>
-              <p>{practiceAvailable?(capability.stage==="massive"?"This path uses a large deterministic question foundry: fresh scenarios, mixed formats and adaptive difficulty without changing the learning objective.":"Your questions stay inside this exact path. Different sessions favour fresh questions."):"You can browse this full course map now. Question coverage for this exact selection is still being built."}</p>
+              <div><label>Questions</label><div className={styles.countGroup}>{[5,10,20,30,50,100].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>{setCount(value);setRequestedCount(String(value));}}>{value}</button>)}</div><label htmlFor="learn-count">Custom 1–100</label><input id="learn-count" type="number" min="1" max="100" value={requestedCount} onChange={e=>{setRequestedCount(e.target.value);setCount(sessionSize(Number(e.target.value)));}} onBlur={()=>setRequestedCount(String(count))}/></div>
+              <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Zap size={21}/>{practiceAvailable?(lane==="exam"?"Start practice":"Start my session"):"Questions for this topic are still being built"}<ArrowRight size={20}/></button>
+              <p>{practiceAvailable?(capability.stage==="massive"?"SukuuNova will build a fresh, quality-gated session from deterministic question families, mixed formats and adaptive ordering.":"This exact selection has usable practice. SukuuNova will favour fresh questions and never widen your topic silently."):"This course map is visible, but SukuuNova will not invent weak questions just to make the button work."}</p>
             </div>
           </div>
-
           {lane==="university"&&<div className={styles.institutionStrip}><span>Examples of universities this programme-first structure can serve:</span><div>{UNIVERSITY_INSTITUTION_EXAMPLES.slice(0,8).map(item=><b key={item}>{item}</b>)}</div></div>}
-        </section>
+        </section>}
       </fieldset>
 
       <section id="session-player" className={styles.playerSection}>
@@ -470,7 +513,7 @@ export function LearningExplorer() {
               <div className={styles.scoreRing}><strong>{sessionAccuracy}%</strong><span>{sessionCorrect}/{session.length}</span></div>
             </div>
             <div className={styles.completeStats}><article><BarChart3 size={18} /><span>Session accuracy</span><strong>{sessionAccuracy}%</strong></article><article><Clock3 size={18} /><span>Time</span><strong>{Math.floor(sessionSeconds / 60)}m {sessionSeconds % 60}s</strong></article><article><Brain size={18} /><span>Lifetime answered</span><strong>{progress.answered}</strong></article></div>
-            <div className={styles.completeActions}><button onClick={launchSession}><RotateCcw size={16} /> Practise again</button><button onClick={() => { setSession([]); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Change learning path</button></div>
+            <div className={styles.completeActions}><button onClick={launchSession}><RotateCcw size={16} /> Practise again</button><button onClick={() => { setSession([]); setFlowStep(0); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Change learning path</button></div>
           </div>
         ) : currentQuestion ? (
           <QuestionPlayer
