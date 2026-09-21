@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { buildRepairPlan, buildRepairSession } from "./repair-engine";
 import { normalizeLearnerProgress } from "./learner-progress";
+import { catalogFor } from "./learn-domain";
+
+function currentJhsGeometryLabel() {
+  return catalogFor("school").programs
+    .find((program) => program.id === "ghana")?.levels
+    .find((level) => level.id === "jhs-1")?.subjects
+    .find((subject) => subject.id === "mathematics")?.topics
+    .find((topic) => topic.id === "geometry")?.label ?? "Geometry";
+}
 
 describe("SukuuNova weakness repair intelligence", () => {
   it("uses a baseline session when there is not enough evidence", () => {
@@ -47,7 +56,7 @@ describe("SukuuNova weakness repair intelligence", () => {
     expect(first).toHaveLength(10);
     expect(second.map((question) => question.id)).toEqual(first.map((question) => question.id));
     expect(new Set(first.map((question) => question.exposureKey)).size).toBe(10);
-    expect(first[0].topic).toBe("Geometry");
+    expect(first[0].topic).toBe(currentJhsGeometryLabel());
   });
 
   it("keeps the repair target ahead of broader support and orders the target adaptively", () => {
@@ -57,13 +66,14 @@ describe("SukuuNova weakness repair intelligence", () => {
       mastery: { "Mathematics · Geometry": { answered: 5, correct: 1 } },
     });
     const session = buildRepairSession(progress, 20, 90);
-    const firstSupportIndex = session.findIndex((question) => question.topic !== "Geometry");
+    const targetLabel = currentJhsGeometryLabel();
+    const firstSupportIndex = session.findIndex((question) => question.topic !== targetLabel);
     const target = firstSupportIndex === -1 ? session : session.slice(0, firstSupportIndex);
     const support = firstSupportIndex === -1 ? [] : session.slice(firstSupportIndex);
     const targetDifficulties = target.map((question) => question.difficulty);
 
     expect(target.length).toBeGreaterThan(0);
-    expect(support.some((question) => question.topic === "Geometry")).toBe(false);
+    expect(support.some((question) => question.topic === targetLabel)).toBe(false);
     expect(targetDifficulties).toEqual([...targetDifficulties].sort((left, right) => left - right));
   });
 
