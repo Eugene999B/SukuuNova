@@ -760,10 +760,14 @@ function buildQuestion(
   }
 
   if (family === 1) {
+    const useName = Math.floor(position / 12) % 2 === 0;
     const name = pick(NAMES, local);
+    const presentation = useName
+      ? `${name}, aged ${age}, is being assessed ${setting}`
+      : `A ${age}-year-old patient is being assessed ${setting}`;
     const picked = optionSet(item.priorityAction, plausibleActions(concepts, item, local), local);
-    return baseQuestion(config, "named-vignette", position, seed,
-      `${name}, aged ${age}, is being assessed ${setting}. The nurse notes ${clueA} and ${clueB}. Which response is most appropriate now?`,
+    return baseQuestion(config, useName ? "named-vignette" : "anonymous-vignette", position, seed,
+      `${presentation}. The nurse notes ${clueA} and ${clueB}. Which response is most appropriate now?`,
       `Apply ${item.term} in a patient vignette`,
       {
         kind: "single",
