@@ -13,3 +13,16 @@
 .learn-audio-test:disabled{opacity:.55;cursor:not-allowed}
 .learn-audio-panel .learn-audio-range{display:grid;grid-template-columns:1fr;align-items:stretch;gap:7px}
 .learn-audio-panel .learn-audio-range input[type=range]{width:100%}
+
+
+@media(max-width:550px){
+  .learn-global-header{padding:8px 12px 0;gap:8px}
+  .learn-wordmark{min-height:44px}
+  .learn-wordmark>span{width:36px;height:36px}
+  .learn-school-link{min-height:44px;display:flex;align-items:center}
+  .learn-audio summary{min-width:44px;min-height:44px;justify-content:center;padding:0}
+  .learn-global-header nav{margin-inline:-12px;width:calc(100% + 24px);padding:4px 12px 8px;scroll-snap-type:x proximity}
+  .learn-global-header nav a{min-height:44px;display:flex;align-items:center;padding:0 13px;scroll-snap-align:start}
+  .learn-audio-panel{position:fixed;top:64px;right:10px;left:10px;width:auto;max-width:none;padding:16px;border-radius:16px}
+  .learn-audio-test{min-height:44px}
+}

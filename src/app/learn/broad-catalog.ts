@@ -8,8 +8,42 @@ function slug(value: string) {
     .replace(/^-|-$/g, "");
 }
 
+function defaultTopicsForCourse(label: string) {
+  const value = label.toLowerCase();
+
+  if (/law|contract|constitutional|criminal|tort|evidence|jurisprudence|legal/.test(value)) {
+    return ["Legal method & reasoning", "Contract formation", "Rights, duties & remedies", "Case analysis", "Legal research"];
+  }
+  if (/program|computer|software|web|network|cyber|database|cloud|information technology|artificial intelligence|machine learning|digital/.test(value)) {
+    return ["Programming & algorithms", "Data & databases", "Networks & cybersecurity", "Computer systems", "Software & web applications"];
+  }
+  if (/chemistry/.test(value)) {
+    return ["Quantitative chemistry & reactions", "Atomic structure & bonding", "Acids, bases & solutions", "Organic chemistry", "Laboratory analysis"];
+  }
+  if (/anatomy|physiology|nursing|health|medicine|pharmacy|biology|biomedical|biochemistry|microbiology|genetics|pathology|pharmacology/.test(value)) {
+    return ["Cells & body systems", "Physiology", "Genetics & inheritance", "Population health", "Clinical & research evidence"];
+  }
+  if (/physics|engineering|mechanics|circuit|electric|electronic|drawing|construction|survey|architecture|materials|robotics/.test(value)) {
+    return ["Mechanics & motion", "Electricity, circuits & power", "Materials & structures", "Engineering drawing & scale", "Systems & design"];
+  }
+  if (/mathematics|calculus|statistics|probability|algebra|econometrics|quantitative/.test(value)) {
+    return ["Algebra & equations", "Functions & modelling", "Geometry & measurement", "Statistics, probability & data", "Percentages & financial mathematics"];
+  }
+  if (/research|methodology|project/.test(value)) {
+    return ["Research design", "Sampling & evidence", "Variables & measurement", "Data interpretation", "Evaluation & conclusions"];
+  }
+  if (/account|business|economics|finance|management|marketing|procurement|supply|entrepreneur|operations/.test(value)) {
+    return ["Accounting & financial analysis", "Cost-volume-profit", "Markets & economic decisions", "Management & operations", "Financial mathematics"];
+  }
+  if (/english|literature|french|communication|writing|language/.test(value)) {
+    return ["Language foundations", "Reading & interpretation", "Writing & communication", "Applied language", "Critical analysis"];
+  }
+
+  return ["Foundations", "Core concepts", "Applications", "Problem solving", "Review & synthesis"];
+}
+
 function mappedCourse(label: string, topicLabels?: string[]): CatalogSubject {
-  const topics = (topicLabels?.length ? topicLabels : ["Core concepts", "Applications", "Problem solving"]).map(
+  const topics = (topicLabels?.length ? topicLabels : defaultTopicsForCourse(label)).map(
     (topic): CatalogTopic => ({ id: slug(topic), label: topic, availability: "expanding" }),
   );
   return { id: slug(label), label, availability: "expanding", topics };

@@ -13,6 +13,7 @@ describe("SukuuNova learner progress intelligence", () => {
       answered: 5,
       correct: 9,
       streak: -3,
+      xp: 245.9,
       exposures: ["a", "a", "b", 4],
       mastery: {
         "Science · Energy": { answered: 4, correct: 8 },
@@ -23,6 +24,7 @@ describe("SukuuNova learner progress intelligence", () => {
     expect(progress.sessions).toBe(4);
     expect(progress.correct).toBe(5);
     expect(progress.streak).toBe(0);
+    expect(progress.xp).toBe(245);
     expect(progress.exposures).toEqual(["a", "b"]);
     expect(progress.mastery["Science · Energy"]).toEqual({ answered: 4, correct: 4 });
     expect(progress.mastery.empty).toBeUndefined();

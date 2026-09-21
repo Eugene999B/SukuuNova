@@ -30,6 +30,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
   const [effectsVolume, setEffectsVolume] = useState(52);
   const [musicVolume, setMusicVolume] = useState(24);
   const [audioState, setAudioState] = useState<AudioState>("idle");
+  const [lastCue, setLastCue] = useState<Cue | null>(null);
   const [loaded, setLoaded] = useState(false);
   const audio = useRef<AudioContext | null>(null);
   const musicGain = useRef<GainNode | null>(null);
@@ -129,6 +130,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
     void (async () => {
       const ctx = await ensureAudio();
       if (!ctx) return;
+      setLastCue(cue);
       const notes: Record<Cue, number[]> = {
         tap: [587.33],
         start: [392, 523.25, 659.25],
@@ -298,7 +300,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
               <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>{label}</Link>
             ))}
           </nav>
-          <details className="learn-audio" data-audio-control data-audio-state={audioState}>
+          <details className="learn-audio" data-audio-control data-audio-state={audioState} data-last-cue={lastCue ?? ""}>
             <summary aria-label="Learning audio settings">
               {effects || music ? <Volume2 size={17} /> : <VolumeX size={17} />}
               <span>Sound</span>
