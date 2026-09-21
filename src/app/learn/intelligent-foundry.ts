@@ -1433,6 +1433,37 @@ export function intelligentCapacityForSelection(config: SessionConfig) {
   return intelligentTemplatesForSelection(config).reduce((total, template) => total + template.capacity, 0);
 }
 
+export function questionPassesFoundryQualityGate(question: LearnQuestion) {
+  const textFields = [question.subject, question.topic, question.skill, question.prompt, question.explanation];
+  if (textFields.some((value) => !value || value.trim().length < 3)) return false;
+  if (question.prompt.trim().length < 18 || question.explanation.trim().length < 18) return false;
+
+  const serialized = [
+    question.prompt,
+    question.explanation,
+    question.hint ?? "",
+    ...(question.options?.map((option) => option.label) ?? []),
+  ].join(" ");
+  if (/\b(?:undefined|null|nan|infinity)\b/i.test(serialized)) return false;
+
+  if (question.kind === "single") {
+    if (!question.options || question.options.length < 3) return false;
+    const ids = new Set(question.options.map((option) => option.id));
+    const labels = new Set(question.options.map((option) => option.label.trim().toLowerCase()));
+    if (ids.size !== question.options.length || labels.size !== question.options.length) return false;
+    if (!ids.has(String(question.answer))) return false;
+  }
+
+  if (question.kind === "numeric") {
+    const answer = typeof question.answer === "number" ? question.answer : Number(question.answer);
+    if (!Number.isFinite(answer)) return false;
+  }
+
+  if ((question.kind === "fill" || question.kind === "short") && !String(question.answer).trim()) return false;
+
+  return true;
+}
+
 export function buildIntelligentQuestions(
   config: SessionConfig,
   requestedCount = config.count,
@@ -1457,7 +1488,7 @@ export function buildIntelligentQuestions(
     if (position < Math.min(template.capacity, BLOCK_SIZE)) {
       const index = variantIndex(template, seed, position);
       const question = template.render(index, config);
-      if (!exposures.has(question.exposureKey)) {
+      if (questionPassesFoundryQualityGate(question) && !exposures.has(question.exposureKey)) {
         exposures.add(question.exposureKey);
         output.push(question);
       }
