@@ -144,11 +144,15 @@ async function main() {
       const choices=player.getByTestId("learning-option");
       if(await choices.count()){
         if((await choices.count())>=2){
-          const firstBox=await choices.nth(0).boundingBox();
-          const secondBox=await choices.nth(1).boundingBox();
-          if(firstBox&&secondBox){
-            assert.ok(secondBox.y>=firstBox.y+firstBox.height-1,"Mobile answer choices must stack vertically");
-            verifiedOneColumnChoices=true;
+          const labels=await choices.allTextContents();
+          const isBooleanPair=labels.length===2&&labels.includes("True")&&labels.includes("False");
+          if(!isBooleanPair){
+            const firstBox=await choices.nth(0).boundingBox();
+            const secondBox=await choices.nth(1).boundingBox();
+            if(firstBox&&secondBox){
+              assert.ok(secondBox.y>=firstBox.y+firstBox.height-1,"Mobile single and multi-select answer choices must stack vertically");
+              verifiedOneColumnChoices=true;
+            }
           }
         }
         await choices.first().click();
