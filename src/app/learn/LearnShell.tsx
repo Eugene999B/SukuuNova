@@ -341,6 +341,13 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
                     ? "This browser does not expose a usable Web Audio context. Learning remains fully usable without sound."
                     : "Use Test sound after opening this panel. Browsers may require that tap before audio can start or resume."}
               </small>
+              <button
+                type="button"
+                className="learn-audio-close"
+                onClick={(event) => event.currentTarget.closest("details")?.removeAttribute("open")}
+              >
+                Close audio settings
+              </button>
             </div>
           </details>
         </header>
