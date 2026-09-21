@@ -49,6 +49,210 @@ const MODERN_CONTEXTS = [
   "an agritech marketplace",
 ] as const;
 
+const TECHNOLOGY_CONTEXTS = [
+  "a school-management software team",
+  "a mobile-money engineering team",
+  "a cloud-platform operations team",
+  "a cybersecurity training lab",
+  "a university coding club",
+  "an e-commerce development team",
+  "a data-science bootcamp",
+  "a digital-learning platform",
+  "a fintech API team",
+  "a network-operations centre",
+  "a web-development studio",
+  "a database administration team",
+  "a mobile-app startup",
+  "an AI research group",
+  "a robotics programming lab",
+  "an internet-service provider",
+  "a software-testing team",
+  "a digital identity project",
+  "a smart-campus technology team",
+  "a computer-repair and networking lab",
+  "a logistics software platform",
+  "a health-information systems team",
+  "a public-sector digital service",
+  "an agricultural technology platform",
+] as const;
+
+const HEALTH_CONTEXTS = [
+  "a teaching hospital",
+  "a community health centre",
+  "a university physiology laboratory",
+  "a biomedical research laboratory",
+  "a public-health surveillance unit",
+  "a district hospital",
+  "a clinical-skills laboratory",
+  "a pharmacy training laboratory",
+  "a maternal-health clinic",
+  "a paediatric care unit",
+  "a medical-school teaching laboratory",
+  "a community nursing programme",
+  "a diagnostic laboratory",
+  "a rehabilitation clinic",
+  "an emergency-care training unit",
+  "a nutrition research programme",
+  "an infectious-disease surveillance team",
+  "a cardiovascular teaching laboratory",
+  "a primary-care clinic",
+  "a medical genetics laboratory",
+  "a university anatomy laboratory",
+  "a population-health research team",
+  "a hospital quality-improvement unit",
+  "a rural health outreach programme",
+] as const;
+
+const BUSINESS_CONTEXTS = [
+  "a retail spare-parts business",
+  "a mobile-money agency",
+  "a small manufacturing company",
+  "a supermarket chain",
+  "a transport company",
+  "a construction supplies business",
+  "an agricultural trading company",
+  "a local e-commerce business",
+  "a financial-services company",
+  "a hospitality business",
+  "a wholesale distribution company",
+  "a pharmacy retail business",
+  "a printing company",
+  "a logistics company",
+  "a food-processing business",
+  "a clothing retailer",
+  "a technology services company",
+  "a cooperative enterprise",
+  "a vehicle-parts dealership",
+  "a procurement department",
+  "a microfinance institution",
+  "an export business",
+  "a campus enterprise",
+  "a renewable-energy company",
+] as const;
+
+const ENGINEERING_CONTEXTS = [
+  "a bridge design project",
+  "a machine workshop",
+  "a solar installation project",
+  "a building construction site",
+  "an electrical maintenance workshop",
+  "a water-pumping system",
+  "a vehicle engineering workshop",
+  "a manufacturing plant",
+  "a civil-engineering laboratory",
+  "a renewable-energy microgrid",
+  "a structural design office",
+  "a road construction project",
+  "an electronics laboratory",
+  "a surveying field exercise",
+  "a mechanical design team",
+  "an industrial maintenance unit",
+  "a smart-building project",
+  "a power-distribution training lab",
+  "a materials-testing laboratory",
+  "a robotics hardware workshop",
+  "a technical drawing studio",
+  "a drainage design project",
+  "a fabrication workshop",
+  "an energy-systems laboratory",
+] as const;
+
+const LAW_CONTEXTS = [
+  "a commercial supply agreement",
+  "a residential tenancy agreement",
+  "an employment agreement",
+  "a vehicle sale transaction",
+  "a construction services contract",
+  "a land sale transaction",
+  "a business partnership agreement",
+  "a mobile-phone sale",
+  "a professional services agreement",
+  "a goods delivery contract",
+  "a school services agreement",
+  "an equipment hire agreement",
+  "a software services contract",
+  "a loan agreement",
+  "a retail purchase transaction",
+  "an insurance agreement",
+  "a transport services contract",
+  "a property management agreement",
+  "a procurement contract",
+  "a maintenance services agreement",
+  "a photography services contract",
+  "a farm produce sale",
+  "a consulting agreement",
+  "a warehouse lease",
+] as const;
+
+const MATHEMATICS_CONTEXTS = [
+  "a school canteen",
+  "a classroom survey",
+  "a football training session",
+  "a market stall",
+  "a savings club",
+  "a bus transport service",
+  "a water storage project",
+  "a farm harvest record",
+  "a phone-repair shop",
+  "a solar installation",
+  "a community library",
+  "a student enterprise",
+  "a school sports club",
+  "a building project",
+  "a delivery service",
+  "a household budget",
+  "a mobile-data plan",
+  "a small bakery",
+  "a taxi service",
+  "a school science fair",
+  "a community event",
+  "a bookshop",
+  "a tailoring business",
+  "a youth training programme",
+] as const;
+
+const SCIENCE_CONTEXTS = [
+  "a school science laboratory",
+  "a university chemistry laboratory",
+  "a water-quality testing laboratory",
+  "an environmental monitoring project",
+  "a food-science laboratory",
+  "a soil-testing laboratory",
+  "a renewable-energy experiment",
+  "a materials-science laboratory",
+  "a community water project",
+  "an agricultural research station",
+  "a laboratory safety exercise",
+  "a climate observation project",
+  "a quality-control laboratory",
+  "a pharmaceutical teaching laboratory",
+  "a science-fair experiment",
+  "a fisheries research station",
+  "a plant-science laboratory",
+  "a mineral analysis laboratory",
+  "a waste-treatment project",
+  "a laboratory calibration exercise",
+  "an air-quality monitoring team",
+  "a school practical lesson",
+  "a food-processing laboratory",
+  "a field science investigation",
+] as const;
+
+function contextFor(config: SessionConfig, index: number) {
+  const selection = `${config.programId} ${config.subjectId}`.toLowerCase();
+  let contexts: readonly string[] = MODERN_CONTEXTS;
+
+  if (/law|contract|constitutional|criminal|tort|legal|jurisprudence/.test(selection)) contexts = LAW_CONTEXTS;
+  else if (/anatomy|physiology|nursing|medicine|pharmacy|health|biology|biomedical|biochemistry|genetic|epidemiology/.test(selection)) contexts = HEALTH_CONTEXTS;
+  else if (/account|business|finance|econom|management|marketing|procurement|supply|hrm|human-resource/.test(selection)) contexts = BUSINESS_CONTEXTS;
+  else if (/engineering|mechanic|physics|circuit|electric|electronic|drawing|architecture|survey|construction|material/.test(selection)) contexts = ENGINEERING_CONTEXTS;
+  else if (/program|comput|network|software|web|cyber|database|cloud|information-technology|data/.test(selection)) contexts = TECHNOLOGY_CONTEXTS;
+  else if (/math|statistics|probability|calculus|algebra|actuarial/.test(selection)) contexts = MATHEMATICS_CONTEXTS;
+  else if (/chemistry|science|laboratory/.test(selection)) contexts = SCIENCE_CONTEXTS;
+
+  return contexts[index % contexts.length];
+}
+
 const PEOPLE = [
   "Ama", "Kojo", "Akosua", "Kwame", "Esi", "Kofi", "Adwoa", "Yaw",
   "Abena", "Kwaku", "Efua", "Kwesi", "Amina", "Ibrahim", "Zainab", "Fati",
@@ -248,7 +452,7 @@ function renderLinearModel(variant: number, config: SessionConfig) {
   const solution = solutionIndex - 80;
   const constant = constantIndex - 120;
   const total = coefficient * solution + constant;
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const challenge: CognitiveChallenge = style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer";
   const prompt = style === 0
     ? `Solve for x: ${coefficient}x ${constant >= 0 ? "+" : "-"} ${Math.abs(constant)} = ${total}`
@@ -287,7 +491,7 @@ function renderPercentageModel(variant: number, config: SessionConfig) {
   const rate = (rateIndex % 80) + 1;
   const change = Number((base * rate / 100).toFixed(2));
   const increased = Number((base + change).toFixed(2));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const decrease = style % 2 === 1;
   const answer = decrease ? Number((base - change).toFixed(2)) : increased;
   const operation = decrease ? "decreases" : "increases";
@@ -324,7 +528,7 @@ function renderKinematics(variant: number, config: SessionConfig) {
   const t = tIndex + 1;
   const v = u + a * t;
   const s = Number((u * t + 0.5 * a * t * t).toFixed(2));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const askDistance = style % 2 === 1;
   const answer = askDistance ? s : v;
   const prompt = askDistance
@@ -359,7 +563,7 @@ function renderCircuit(variant: number, config: SessionConfig) {
   const power = Number((voltage * current).toFixed(3));
   const askPower = style % 2 === 1;
   const answer = askPower ? power : current;
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return numericQuestion({
     id: "dc-circuit",
     config,
@@ -390,7 +594,7 @@ function renderChemistry(variant: number, config: SessionConfig) {
   const concentration = Number((moles / volume).toFixed(3));
   const askMoles = style % 3 === 2;
   const answer = askMoles ? moles : concentration;
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return numericQuestion({
     id: "solution-chemistry",
     config,
@@ -422,7 +626,7 @@ function renderStatistics(variant: number, config: SessionConfig) {
   const total = mean * sample;
   const missing = mean + spread;
   const partial = total - missing;
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const askMissing = style % 2 === 0;
   const answer = askMissing ? missing : mean;
   return numericQuestion({
@@ -454,7 +658,7 @@ function renderProgrammingTrace(variant: number, config: SessionConfig) {
   const step = stepIndex + 1;
   const count = countIndex + 1;
   const final = start + step * count;
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const askIterations = style % 3 === 2;
   const answer = askIterations ? count : final;
   const prompt = askIterations
@@ -487,7 +691,7 @@ function renderNetwork(variant: number, config: SessionConfig) {
   const sizeMB = sizeIndex + 1;
   const bandwidthMbps = BANDWIDTHS[bandwidthIndex];
   const seconds = Number(((sizeMB * 8) / bandwidthMbps).toFixed(3));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return numericQuestion({
     id: "network-throughput",
     config,
@@ -512,7 +716,7 @@ function renderAccounting(variant: number, config: SessionConfig) {
   const liabilities = (liabilityIndex + 1) * 10;
   const equity = (equityIndex + 1) * 10;
   const assets = liabilities + equity;
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const askEquity = style % 3 === 2;
   const answer = askEquity ? equity : assets;
   return numericQuestion({
@@ -546,7 +750,7 @@ function renderBreakEven(variant: number, config: SessionConfig) {
   const price = variableCost + priceIndex + 2;
   const contribution = price - variableCost;
   const units = Math.ceil(fixedCost / contribution);
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return numericQuestion({
     id: "break-even",
     config,
@@ -572,7 +776,7 @@ function renderElasticity(variant: number, config: SessionConfig) {
   const priceChange = (priceIndex % 45) + 1;
   const scale = scaleIndex + 1;
   const elasticity = Number((quantityChange / priceChange).toFixed(3));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const interpretation = elasticity > 1 ? "elastic" : elasticity < 1 ? "inelastic" : "unit elastic";
   const askInterpretation = style % 3 === 2;
   if (askInterpretation) {
@@ -615,7 +819,7 @@ function renderEpidemiology(variant: number, config: SessionConfig) {
   const population = populationIndex + 1_000;
   const cases = (caseIndex % Math.max(1, Math.min(population - 1, 50_000))) + 1;
   const rate = Number(((cases / population) * 1000).toFixed(3));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return numericQuestion({
     id: "incidence-rate",
     config,
@@ -640,7 +844,7 @@ function renderCardiacOutput(variant: number, config: SessionConfig) {
   const heartRate = heartIndex + 40;
   const strokeVolume = strokeIndex + 40;
   const output = Number(((heartRate * strokeVolume) / 1000).toFixed(3));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return numericQuestion({
     id: "cardiac-output",
     config,
@@ -665,7 +869,7 @@ function renderEngineeringStress(variant: number, config: SessionConfig) {
   const forceKN = Number(((forceIndex + 10) / 10).toFixed(1));
   const areaMM2 = areaIndex + 10;
   const stressMPa = Number(((forceKN * 1000) / areaMM2).toFixed(3));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return numericQuestion({
     id: "engineering-stress",
     config,
@@ -713,7 +917,7 @@ function renderContractReasoning(variant: number, config: SessionConfig) {
   const a = PEOPLE[personA];
   const b = PEOPLE[(personB + personA + 1) % PEOPLE.length];
   const good = GOODS[goodIndex];
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return singleQuestion({
     id: "contract-reasoning",
     config,
@@ -746,7 +950,7 @@ function renderManagementScenario(variant: number, config: SessionConfig) {
   const [personIndex, contextIndex, conceptIndex, style, rotation] = decode(variant, managementDimensions);
   const [answer, action, explanation] = MANAGEMENT_CONCEPTS[conceptIndex];
   const person = PEOPLE[personIndex];
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return singleQuestion({
     id: "management-scenario",
     config,
@@ -775,7 +979,7 @@ function renderCompoundGrowth(variant: number, config: SessionConfig) {
   const factor = 1 + rate / 100;
   const future = Number((principal * factor ** years).toFixed(2));
   const growth = Number((future - principal).toFixed(2));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const askGrowth = style % 3 === 2;
   return numericQuestion({
     id: "compound-growth",
@@ -809,7 +1013,7 @@ function renderProbability(variant: number, config: SessionConfig) {
   const total = successCount + failureCount;
   const probability = Number((successCount / total).toFixed(3));
   const percent = Number((probability * 100).toFixed(1));
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const askPercent = style % 2 === 1;
   return numericQuestion({
     id: "probability-model",
@@ -853,7 +1057,7 @@ function renderGenetics(variant: number, config: SessionConfig) {
   const [personIndex, contextIndex, chanceIndex, traitIndex] = decode(variant, geneticsDimensions);
   const dominantChance = [0, 25, 50, 75, 100][chanceIndex];
   const person = PEOPLE[personIndex];
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const trait = GENETICS_TRAITS[traitIndex];
   const answer = `${dominantChance}%`;
   return singleQuestion({
@@ -885,7 +1089,7 @@ function renderDesignScale(variant: number, config: SessionConfig) {
   const actualWidth = Number((drawingWidth * scale).toFixed(1));
   const askArea = style % 2 === 1;
   const answer = askArea ? Number((actualLength * actualWidth).toFixed(2)) : actualLength;
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   return numericQuestion({
     id: "design-scale",
     config,
@@ -921,7 +1125,7 @@ function renderResearchDesign(variant: number, config: SessionConfig) {
   const [personIndex, contextIndex, conceptIndex] = decode(variant, researchDimensions);
   const [answer, description, explanation] = RESEARCH_CONCEPTS[conceptIndex];
   const person = PEOPLE[personIndex];
-  const context = MODERN_CONTEXTS[contextIndex];
+  const context = contextFor(config, contextIndex);
   const distractorOffset = variant % 3;
   return singleQuestion({
     id: "research-design",
