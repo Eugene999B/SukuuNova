@@ -2450,3 +2450,79 @@
     font-size: 15px;
   }
 }
+
+
+/* answer-choice interaction pass */
+.optionChoice {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.optionLetter {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ex-line-strong);
+  border-radius: 11px;
+  color: var(--ex-text-soft);
+  background: color-mix(in srgb, var(--ex-text) 4%, transparent);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.optionText {
+  min-width: 0;
+  color: inherit;
+}
+
+.optionArrow {
+  flex: 0 0 auto;
+  color: var(--ex-muted);
+  opacity: .55;
+}
+
+.multiCue {
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  border: 1px solid var(--ex-line);
+  border-radius: 8px;
+  color: var(--ex-muted);
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .08em;
+}
+
+.optionSelected .optionLetter {
+  border-color: color-mix(in srgb, var(--ex-accent) 60%, transparent);
+  color: var(--ex-bg);
+  background: var(--ex-accent);
+}
+
+.optionCorrect .optionLetter {
+  border-color: color-mix(in srgb, var(--ex-success) 65%, transparent);
+  color: var(--ex-bg);
+  background: var(--ex-success);
+}
+
+.optionWrong .optionLetter {
+  border-color: color-mix(in srgb, var(--ex-danger) 65%, transparent);
+  color: var(--ex-bg);
+  background: var(--ex-danger);
+}
+
+@media (max-width: 720px) {
+  .optionChoice {
+    gap: 11px;
+  }
+
+  .optionLetter {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+}
