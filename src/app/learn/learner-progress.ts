@@ -5,6 +5,13 @@ export type TopicMasteryRecord = {
   correct: number;
 };
 
+export type ConfidenceLevel = "low" | "medium" | "high";
+
+export type ConfidenceRecord = {
+  answered: number;
+  correct: number;
+};
+
 export type LearnerProgress = {
   sessions: number;
   answered: number;
@@ -13,6 +20,7 @@ export type LearnerProgress = {
   xp: number;
   exposures: string[];
   mastery: Record<string, TopicMasteryRecord>;
+  confidence: Record<ConfidenceLevel, ConfidenceRecord>;
 };
 
 export type MasteryBand = "repair" | "developing" | "secure" | "evidence";
@@ -35,6 +43,11 @@ export const EMPTY_LEARNER_PROGRESS: LearnerProgress = {
   xp: 0,
   exposures: [],
   mastery: {},
+  confidence: {
+    low: { answered: 0, correct: 0 },
+    medium: { answered: 0, correct: 0 },
+    high: { answered: 0, correct: 0 },
+  },
 };
 
 function finiteCount(value: unknown) {
@@ -48,6 +61,16 @@ function normalizeRecord(value: unknown): TopicMasteryRecord | null {
   const correct = Math.min(answered, finiteCount(candidate.correct));
   if (!answered) return null;
   return { answered, correct };
+}
+
+function normalizeConfidenceRecord(value: unknown): ConfidenceRecord {
+  if (!value || typeof value !== "object") return { answered: 0, correct: 0 };
+  const candidate = value as { answered?: unknown; correct?: unknown };
+  const answered = finiteCount(candidate.answered);
+  return {
+    answered,
+    correct: Math.min(answered, finiteCount(candidate.correct)),
+  };
 }
 
 export function normalizeLearnerProgress(value: unknown): LearnerProgress {
@@ -76,6 +99,11 @@ export function normalizeLearnerProgress(value: unknown): LearnerProgress {
     xp: finiteCount(candidate.xp),
     exposures,
     mastery,
+    confidence: {
+      low: normalizeConfidenceRecord(candidate.confidence?.low),
+      medium: normalizeConfidenceRecord(candidate.confidence?.medium),
+      high: normalizeConfidenceRecord(candidate.confidence?.high),
+    },
   };
 }
 
@@ -135,5 +163,13 @@ export function buildProgressSnapshot(progress: LearnerProgress) {
     secure,
     priority,
     uniqueExposureCount: progress.exposures.length,
+    confidenceCalibration: {
+      low: percentage(progress.confidence.low.correct, progress.confidence.low.answered),
+      medium: percentage(progress.confidence.medium.correct, progress.confidence.medium.answered),
+      high: percentage(progress.confidence.high.correct, progress.confidence.high.answered),
+      overconfidence:
+        progress.confidence.high.answered >= 3
+        && percentage(progress.confidence.high.correct, progress.confidence.high.answered) < 60,
+    },
   };
 }
