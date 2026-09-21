@@ -14,6 +14,9 @@ import { buildIntelligentQuestions } from "./intelligent-foundry";
 import { buildCoverageQuestions } from "./coverage-foundry";
 import { buildPrimaryMathQuestions } from "./primary-math-foundry";
 import { buildSchoolLanguageQuestions, isNativeLanguageQuestion } from "./school-language-foundry";
+import { buildRichStimulusQuestions } from "./rich-stimulus-foundry";
+import { examBankQuestionsForSelection } from "./exam-question-bank";
+import { composeIntelligentOrder, sessionIntelligenceDiagnostics } from "./intelligence-core";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -132,59 +135,9 @@ function orderPool(questions: LearnQuestion[], config: SessionConfig, seed: numb
   return questions;
 }
 
-function diversifyPool(questions: LearnQuestion[], seed: number) {
-  const pending = [...questions];
-  const output: LearnQuestion[] = [];
-
-  while (pending.length) {
-    const previous = output[output.length - 1];
-    const beforePrevious = output[output.length - 2];
-    let bestIndex = 0;
-    let bestScore = Number.POSITIVE_INFINITY;
-
-    pending.forEach((candidate, index) => {
-      // Preserve the original order softly, but search the whole pool so a
-      // massive generated family cannot crowd out other topics or formats.
-      let score = index * 0.03;
-
-      if (previous) {
-        score += Math.abs(candidate.difficulty - previous.difficulty) * 10;
-
-        if (
-          candidate.generationFamily &&
-          previous.generationFamily &&
-          candidate.generationFamily === previous.generationFamily
-        ) score += 85;
-
-        if (candidate.topic === previous.topic) score += 35;
-        if (candidate.kind === previous.kind) score += 12;
-        if (candidate.challenge && candidate.challenge === previous.challenge) score += 8;
-      }
-
-      if (
-        beforePrevious &&
-        candidate.generationFamily &&
-        candidate.generationFamily === previous?.generationFamily &&
-        candidate.generationFamily === beforePrevious.generationFamily
-      ) score += 180;
-
-      if (
-        beforePrevious &&
-        candidate.topic === previous?.topic &&
-        candidate.topic === beforePrevious.topic
-      ) score += 70;
-
-      score += (stableRank(seed + output.length, candidate.exposureKey) % 997) / 997;
-      if (score < bestScore) {
-        bestScore = score;
-        bestIndex = index;
-      }
-    });
-
-    output.push(pending.splice(bestIndex, 1)[0]);
-  }
-
-  return output;
+function diversifyPool(questions: LearnQuestion[], config: SessionConfig, seed: number) {
+  if (config.mode === "weakness") return questions;
+  return composeIntelligentOrder(questions, config, seed);
 }
 
 /**
@@ -220,6 +173,8 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const intelligentQuestions = buildIntelligentQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
   const primaryMathQuestions = buildPrimaryMathQuestions(config, Math.max(requested * 5, MAX_SESSION_SIZE * 2), seed);
   const languageQuestions = buildSchoolLanguageQuestions(config, Math.max(requested * 6, MAX_SESSION_SIZE * 2), seed);
+  const richStimulusQuestions = buildRichStimulusQuestions(config, Math.max(requested * 5, MAX_SESSION_SIZE * 2), seed);
+  const examBankQuestions = examBankQuestionsForSelection(config);
   const coverageQuestions = buildCoverageQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
 
   function absorb(questions: LearnQuestion[], priority = 2) {
@@ -253,11 +208,13 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   // Released Question Foundry content is the canonical first choice for exact
   // topic practice. Preserve its reviewed pack order before specialized/broad
   // material, then use generated families only to expand depth.
+  absorb(examBankQuestions, -1);
   absorb(reviewedQuestions.filter((question) => starterMatches(question, config, false, selection)), 0);
   absorb(specializedQuestions, 1);
   absorb(broadQuestions, 1);
   absorb(primaryMathQuestions, 1);
   absorb(languageQuestions, 1);
+  absorb(richStimulusQuestions, 1);
   absorb(intelligentQuestions, 2);
   absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed), 3);
   absorb(coverageQuestions, 4);
@@ -271,25 +228,43 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     const nextSeed = derivedSeed(seed, attempt);
     absorb(buildPrimaryMathQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
     absorb(buildSchoolLanguageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
+    absorb(buildRichStimulusQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 1);
     absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed), 3);
     absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 2);
     absorb(buildCoverageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 4);
   }
 
-  const orderedFresh = diversifyPool(orderPool(fresh, config, seed, selection), seed);
+  const orderedFresh = diversifyPool(orderPool(fresh, config, seed, selection), config, seed);
   const orderedRecycled = diversifyPool(
     orderPool(recycled, config, derivedSeed(seed, BROADENING_ATTEMPTS), selection),
+    config,
     derivedSeed(seed, BROADENING_ATTEMPTS),
   );
 
   const evidenceFirst = (questions: LearnQuestion[]) => {
     if (config.mode !== "topic") return questions;
-    return [...questions].sort((left, right) => {
-      const priorityDelta =
-        (sourcePriority.get(left.exposureKey) ?? 9) - (sourcePriority.get(right.exposureKey) ?? 9);
-      if (priorityDelta) return priorityDelta;
-      return (sourceOrdinal.get(left.exposureKey) ?? Number.MAX_SAFE_INTEGER)
-        - (sourceOrdinal.get(right.exposureKey) ?? Number.MAX_SAFE_INTEGER);
+
+    const priorities = Array.from(new Set(
+      questions.map((question) => sourcePriority.get(question.exposureKey) ?? 9),
+    )).sort((left, right) => left - right);
+
+    return priorities.flatMap((priority) => {
+      const bucket = questions.filter(
+        (question) => (sourcePriority.get(question.exposureKey) ?? 9) === priority,
+      );
+
+      // Cleared exam material and reviewed packs preserve canonical evidence
+      // order. Generated/specialized buckets are composed for maximum cognitive
+      // and format variety instead of exposing generator order to learners.
+      if (priority <= 0) {
+        return [...bucket].sort(
+          (left, right) =>
+            (sourceOrdinal.get(left.exposureKey) ?? Number.MAX_SAFE_INTEGER)
+            - (sourceOrdinal.get(right.exposureKey) ?? Number.MAX_SAFE_INTEGER),
+        );
+      }
+
+      return composeIntelligentOrder(bucket, config, seed + priority * 97);
     });
   };
 
@@ -332,6 +307,7 @@ export function sessionDiagnostics(questions: LearnQuestion[], seen: string[] = 
     recycledCount,
     freshCount: questions.length - recycledCount,
     formats,
+    intelligence: sessionIntelligenceDiagnostics(questions),
   };
 }
 

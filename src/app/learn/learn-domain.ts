@@ -6,6 +6,36 @@ export type PracticeMode = "topic" | "adaptive" | "random" | "timed" | "weakness
 export type QuestionKind = "single" | "multi" | "fill" | "numeric" | "boolean" | "short";
 export type CognitiveChallenge = "Recall" | "Apply" | "Analyse" | "Evaluate" | "Transfer";
 
+export type QuestionStimulus =
+  | {
+      kind: "passage";
+      title?: string;
+      text: string;
+    }
+  | {
+      kind: "diagram";
+      diagram: "triangle" | "rectangle" | "angle" | "coordinate-grid";
+      ariaLabel: string;
+      labels?: Record<string, string>;
+      values?: Record<string, number>;
+    }
+  | {
+      kind: "table";
+      title?: string;
+      columns: string[];
+      rows: string[][];
+    };
+
+export type QuestionProvenance = {
+  sourceType: "original" | "official-sample" | "licensed-past" | "user-supplied-past";
+  rightsStatus: "not-applicable" | "cleared";
+  examBoard?: string;
+  exam?: string;
+  year?: number;
+  paper?: string;
+  sourceRef?: string;
+};
+
 export type CatalogAvailability = "ready" | "expanding";
 
 export type CatalogTopic = {
@@ -58,6 +88,8 @@ export type LearnQuestion = {
   challenge?: CognitiveChallenge;
   mission?: string;
   generationFamily?: string;
+  stimulus?: QuestionStimulus;
+  provenance?: QuestionProvenance;
 };
 
 export type SessionConfig = {

@@ -1297,6 +1297,129 @@
   background: color-mix(in srgb, var(--ex-success) 7%, transparent);
 }
 
+.sourceTag {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--ex-accent) 24%, transparent);
+  border-radius: var(--radius-pill);
+  color: var(--ex-accent);
+  background: color-mix(in srgb, var(--ex-accent) 7%, transparent);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.passageStimulus,
+.tableStimulus,
+.diagramStimulus {
+  width: min(900px, 100%);
+  margin: 18px 0 4px;
+  border: 1px solid var(--ex-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--ex-text) 2.5%, transparent);
+}
+
+.passageStimulus {
+  padding: clamp(16px, 3vw, 24px);
+}
+
+.passageStimulus strong,
+.tableStimulus > strong {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--ex-accent-two);
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.passageStimulus p {
+  margin: 0;
+  color: var(--ex-text-soft);
+  font-size: clamp(12px, 1.8vw, 15px);
+  line-height: 1.8;
+}
+
+.tableStimulus {
+  padding: 16px;
+}
+
+.tableScroll {
+  overflow-x: auto;
+}
+
+.tableStimulus table {
+  width: 100%;
+  min-width: 360px;
+  border-collapse: collapse;
+  color: var(--ex-text-soft);
+  font-size: 10px;
+}
+
+.tableStimulus th,
+.tableStimulus td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ex-line);
+  text-align: left;
+}
+
+.tableStimulus th {
+  color: var(--ex-accent);
+  font-size: 9px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.diagramStimulus {
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  color: var(--ex-text-soft);
+}
+
+.diagramStimulus svg {
+  width: min(520px, 100%);
+  height: auto;
+}
+
+.diagramStimulus svg rect,
+.diagramStimulus svg polygon,
+.diagramStimulus svg line,
+.diagramStimulus svg circle {
+  fill: color-mix(in srgb, var(--ex-accent) 5%, transparent);
+  stroke: currentColor;
+  stroke-width: 2.2;
+  vector-effect: non-scaling-stroke;
+}
+
+.diagramStimulus svg line {
+  fill: none;
+}
+
+.diagramStimulus svg text {
+  fill: currentColor;
+  stroke: none;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.diagramStimulus svg .gridLine {
+  opacity: .18;
+  stroke-width: 1;
+}
+
+.diagramStimulus figcaption {
+  margin-top: 3px;
+  color: var(--ex-muted);
+  font-size: 8px;
+  line-height: 1.4;
+  text-align: center;
+}
+
 /* Mobile-first quality pass: larger touch targets, readable type, less cramped grids. */
 @media (max-width: 760px) {
   .page {
@@ -1571,6 +1694,30 @@
   .launchPanel p {
     font-size: 9px;
     line-height: 1.5;
+  }
+
+  .passageStimulus,
+  .tableStimulus,
+  .diagramStimulus {
+    margin-top: 14px;
+    border-radius: 15px;
+  }
+
+  .passageStimulus {
+    padding: 14px;
+  }
+
+  .passageStimulus p {
+    font-size: 12px;
+    line-height: 1.72;
+  }
+
+  .diagramStimulus {
+    padding: 10px;
+  }
+
+  .tableStimulus {
+    padding: 12px;
   }
 
   .sessionFocused {
