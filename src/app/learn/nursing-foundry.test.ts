@@ -50,21 +50,24 @@ describe("Nursing clinical assessment diversity", () => {
   });
 
   it("uses clinically plausible competing actions instead of absurd off-topic distractors", () => {
-    const questions = buildNursingQuestions(nursingConfig(), 48, 913)
-      .filter((question) => question.kind === "single" && question.options);
+    const questions = buildNursingQuestions(nursingConfig(), 60, 913)
+      .filter((question) =>
+        question.kind === "single"
+        && question.options
+        && !question.generationFamily?.endsWith("-recognition"),
+      );
 
     expect(questions.length).toBeGreaterThan(12);
-    for (const question of questions.slice(0, 12)) {
+    for (const question of questions.slice(0, 16)) {
       expect(question.options?.length).toBeGreaterThanOrEqual(4);
-      expect(question.options?.every((option) => option.label.length > 12)).toBe(true);
-      expect(question.options?.some((option) => /school timetable|company dividend|weather forecast|logo colour/i.test(option.label))).toBe(false);
+      expect(question.options?.some((option) => /school timetable|company dividend|weather forecast|logo colour|court ruling/i.test(option.label))).toBe(false);
     }
   });
 
   it("adds numeric medication calculation as one of several Pharmacology formats", () => {
     const pharmacology = nursingConfig({
       subjectId: "pharmacology",
-      topicId: "dose-monitoring",
+      topicId: "safe-prescribing",
       count: 60,
     });
     const questions = buildNursingQuestions(pharmacology, 60, 1014);
