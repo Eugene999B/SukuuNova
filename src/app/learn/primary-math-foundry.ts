@@ -309,7 +309,7 @@ function renderFractions(target: Target, config: SessionConfig, seed: number, po
       id: String(seed), target, config, family: "compare-fractions", skill: "Compare fractions with a common denominator",
       prompt: `Compare ${numerator}/${denominator} and ${other}/${denominator}. What is the numerator of the larger fraction?`,
       answer, explanation: `With the same denominator, the fraction with the larger numerator is larger.`,
-      hint: "The equal denominators mean the pieces are the same size.", challenge: "Understand" as CognitiveChallenge, seed, multipleChoice: true,
+      hint: "The equal denominators mean the pieces are the same size.", challenge: "Recall", seed, multipleChoice: true,
     });
   }
 
@@ -405,7 +405,7 @@ function renderGeometry(target: Target, config: SessionConfig, seed: number, pos
     return numericQuestion({
       id:String(seed),target,config,family:"angle-classification",skill:"Classify angles",
       prompt:`An angle measures ${angle}°. Use 1 for acute, 2 for right, or 3 for obtuse. Which number classifies the angle correctly?`,
-      answer:category,explanation:`${angle}° is ${angle<90?"less than 90°, so it is acute":angle===90?"exactly 90°, so it is a right angle":"between 90° and 180°, so it is obtuse"}.`,hint:"Compare the angle with 90°.",challenge:"Understand" as CognitiveChallenge,seed,multipleChoice:false
+      answer:category,explanation:`${angle}° is ${angle<90?"less than 90°, so it is acute":angle===90?"exactly 90°, so it is a right angle":"between 90° and 180°, so it is obtuse"}.`,hint:"Compare the angle with 90°.",challenge:"Recall",seed,multipleChoice:false
     });
   }
   if (family === 3) {
@@ -490,7 +490,7 @@ function renderData(target: Target, config: SessionConfig, seed: number, positio
     return numericQuestion({
       id:String(seed),target,config,family:"read-table",skill:"Read and compare data",
       prompt:`A class survey records four groups with ${a}, ${b}, ${c} and ${d} responses. What is the largest frequency?`,
-      answer,explanation:`The greatest of the four frequencies is ${answer}.`,hint:"Compare all four values.",challenge:"Understand" as CognitiveChallenge,seed,multipleChoice:true
+      answer,explanation:`The greatest of the four frequencies is ${answer}.`,hint:"Compare all four values.",challenge:"Recall",seed,multipleChoice:true
     });
   }
   if (family === 1) {
@@ -516,7 +516,7 @@ function renderData(target: Target, config: SessionConfig, seed: number, positio
     return numericQuestion({
       id:String(seed),target,config,family:"chance",skill:"Reason about simple probability",
       prompt:`A bag has ${total} equal counters, ${favourable} of which are red. If one counter is chosen at random, how many favourable outcomes give red?`,
-      answer,explanation:`There are ${favourable} red counters, so there are ${favourable} favourable outcomes.`,hint:"Count the outcomes that match the event.",challenge:"Understand" as CognitiveChallenge,seed,multipleChoice:true
+      answer,explanation:`There are ${favourable} red counters, so there are ${favourable} favourable outcomes.`,hint:"Count the outcomes that match the event.",challenge:"Recall",seed,multipleChoice:true
     });
   }
   const doubled = [a,a,b,c];
