@@ -1,4 +1,4 @@
-import { catalogFor, resolveCatalogSelection, type CognitiveChallenge, type LearnQuestion, type SessionConfig } from "./learn-domain";
+import { resolveCatalogSelection, type CognitiveChallenge, type LearnQuestion, type SessionConfig } from "./learn-domain";
 
 type Concept = {
   term: string;
