@@ -311,8 +311,10 @@ function clampDifficulty(value: number): 1 | 2 | 3 | 4 | 5 {
 }
 
 function levelDifficulty(levelId: string) {
-  if (levelId === "shs-1" || levelId === "level-100") return 2;
-  if (levelId === "shs-2" || levelId === "level-200") return 3;
+  if (levelId === "kg-1" || levelId === "kg-2" || levelId === "basic-1" || levelId === "basic-2") return 1;
+  if (levelId === "basic-3" || levelId === "basic-4" || levelId === "basic-5" || levelId === "basic-6" || levelId === "jhs-1") return 2;
+  if (levelId === "jhs-2" || levelId === "shs-1" || levelId === "level-100") return 2;
+  if (levelId === "jhs-3" || levelId === "shs-2" || levelId === "level-200") return 3;
   if (levelId === "shs-3" || levelId === "level-300") return 4;
   if (levelId === "level-400" || levelId === "level-500" || levelId === "level-600") return 5;
   return 3;
@@ -442,6 +444,87 @@ function singleQuestion(args: {
 }
 
 const genericTopics = ["core-concepts", "applications", "problem-solving"] as const;
+
+const jhsArithmeticDimensions = [900, 900, 90, MODERN_CONTEXTS.length, 6] as const;
+const jhsArithmeticCapacity = product(jhsArithmeticDimensions);
+
+function renderJhsArithmetic(variant: number, config: SessionConfig) {
+  const [firstIndex, secondIndex, percentIndex, contextIndex, style] = decode(variant, jhsArithmeticDimensions);
+  const first = firstIndex + 20;
+  const second = secondIndex + 10;
+  const percentage = percentIndex + 1;
+  const context = contextFor(config, contextIndex);
+
+  const items = [
+    {
+      prompt: `At ${context}, ${first} items are combined with ${second} more. How many items are there altogether?`,
+      answer: first + second,
+      explanation: `Add the two quantities: ${first} + ${second} = ${first + second}.`,
+      skill: "Add whole numbers in context",
+      challenge: "Apply" as const,
+      hint: "Combine both quantities.",
+    },
+    {
+      prompt: `A record at ${context} starts with ${first + second} items and ${second} are removed. How many remain?`,
+      answer: first,
+      explanation: `Subtract the removed quantity: ${first + second} − ${second} = ${first}.`,
+      skill: "Subtract whole numbers in context",
+      challenge: "Apply" as const,
+      hint: "Subtract what was removed from the starting total.",
+    },
+    {
+      prompt: `At ${context}, ${first} equal groups each contain ${second} units. How many units are there in total?`,
+      answer: first * second,
+      explanation: `Equal groups use multiplication: ${first} × ${second} = ${first * second}.`,
+      skill: "Use multiplication for equal groups",
+      challenge: "Apply" as const,
+      hint: "Multiply the number of groups by the number in each group.",
+    },
+    {
+      prompt: `${first * second} units at ${context} are shared equally among ${first} groups. How many units does each group receive?`,
+      answer: second,
+      explanation: `Equal sharing uses division: ${first * second} ÷ ${first} = ${second}.`,
+      skill: "Use division for equal sharing",
+      challenge: "Apply" as const,
+      hint: "Divide the total by the number of equal groups.",
+    },
+    {
+      prompt: `A ${context} target is ${first * 10} units. What is ${percentage}% of that target?`,
+      answer: Number(((first * 10 * percentage) / 100).toFixed(2)),
+      explanation: `${percentage}% of ${first * 10} = (${percentage}/100) × ${first * 10}.`,
+      skill: "Calculate a percentage of a quantity",
+      challenge: "Analyse" as const,
+      hint: "Convert the percentage to a fraction over 100, then multiply.",
+    },
+    {
+      prompt: `At ${context}, the ratio of group A to group B is ${first}:${second}. If both parts are scaled by ${percentage}, what number represents group A in the equivalent ratio?`,
+      answer: first * percentage,
+      explanation: `Equivalent ratios multiply both parts by the same factor. ${first} × ${percentage} = ${first * percentage}.`,
+      skill: "Build equivalent ratios",
+      challenge: "Transfer" as const,
+      hint: "Multiply the first part by the same scale factor.",
+    },
+  ];
+
+  const item = items[style];
+  return numericQuestion({
+    id: "jhs-arithmetic",
+    config,
+    variant,
+    skill: item.skill,
+    challenge: item.challenge,
+    mission: style < 4 ? "Work confidently with quantities" : "Connect number ideas to a real situation",
+    prompt: item.prompt,
+    answer: item.answer,
+    explanation: item.explanation,
+    hint: item.hint,
+    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    formatIndex: variant % 3,
+    topic: topicLabel(config, "Number & operations"),
+    optionStep: Math.max(1, Math.round(Math.abs(item.answer) * 0.1)),
+  });
+}
+
 
 const geometryDimensions = [480, 480, MODERN_CONTEXTS.length, 6] as const;
 const geometryCapacity = product(geometryDimensions);
@@ -1236,6 +1319,46 @@ function renderResearchDesign(variant: number, config: SessionConfig) {
 }
 
 const SMART_TEMPLATES: readonly SmartTemplate[] = [
+  {
+    id: "jhs-arithmetic",
+    lanes: ["school"],
+    subjectIds: ["mathematics"],
+    programIds: ["ghana"],
+    levelIds: ["jhs-1", "jhs-2", "jhs-3"],
+    topicIds: ["number"],
+    capacity: jhsArithmeticCapacity,
+    render: renderJhsArithmetic,
+  },
+  {
+    id: "jhs-algebra",
+    lanes: ["school"],
+    subjectIds: ["mathematics"],
+    programIds: ["ghana"],
+    levelIds: ["jhs-1", "jhs-2", "jhs-3"],
+    topicIds: ["algebra"],
+    capacity: linearCapacity,
+    render: renderLinearModel,
+  },
+  {
+    id: "jhs-geometry",
+    lanes: ["school"],
+    subjectIds: ["mathematics"],
+    programIds: ["ghana"],
+    levelIds: ["jhs-1", "jhs-2", "jhs-3"],
+    topicIds: ["geometry"],
+    capacity: geometryCapacity,
+    render: renderGeometryMeasurement,
+  },
+  {
+    id: "jhs-statistics",
+    lanes: ["school"],
+    subjectIds: ["mathematics"],
+    programIds: ["ghana"],
+    levelIds: ["jhs-1", "jhs-2", "jhs-3"],
+    topicIds: ["statistics"],
+    capacity: probabilityCapacity,
+    render: renderProbability,
+  },
   {
     id: "linear-model",
     lanes: ["school", "university"],
