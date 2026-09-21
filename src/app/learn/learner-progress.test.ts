@@ -62,6 +62,24 @@ describe("SukuuNova learner progress intelligence", () => {
     expect(snapshot.secure).toHaveLength(1);
   });
 
+  it("normalizes confidence calibration and detects repeated overconfidence", () => {
+    const progress = normalizeLearnerProgress({
+      answered: 8,
+      correct: 4,
+      confidence: {
+        low: { answered: 2, correct: 1 },
+        medium: { answered: 1, correct: 1 },
+        high: { answered: 5, correct: 2 },
+      },
+    });
+    const snapshot = buildProgressSnapshot(progress);
+
+    expect(progress.confidence.high).toEqual({ answered: 5, correct: 2 });
+    expect(snapshot.confidenceCalibration.low).toBe(50);
+    expect(snapshot.confidenceCalibration.high).toBe(40);
+    expect(snapshot.confidenceCalibration.overconfidence).toBe(true);
+  });
+
   it("calculates percentages safely", () => {
     expect(percentage(0, 0)).toBe(0);
     expect(percentage(7, 9)).toBe(78);
