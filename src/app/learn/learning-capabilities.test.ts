@@ -22,22 +22,17 @@ describe("SukuuNova learning capability registry", () => {
     expect(capability.reviewedStandardQuestions).toBeGreaterThanOrEqual(2);
   });
 
-  it("does not treat JHS reviewed questions as SHS content", () => {
-    const capability = learningCapabilityForSelection(config({ levelId: "shs-2" }));
-    expect(capability.reviewedStandardQuestions).toBe(0);
-    expect(capability.ready).toBe(false);
-  });
-
-  it("does not promote generic JHS generators into SHS readiness", () => {
+  it("keeps JHS reviewed content separated while giving SHS its own massive generated coverage", () => {
     const capability = learningCapabilityForSelection(config({
+      programId: "shs-general-science",
       levelId: "shs-2",
-      subjectId: "mathematics",
-      topicId: "algebra",
+      subjectId: "core-mathematics",
+      topicId: "algebra-and-equations",
     }));
     expect(capability.reviewedStandardQuestions).toBe(0);
-    expect(capability.variantCapacity).toBe(0);
-    expect(capability.ready).toBe(false);
-    expect(capability.stage).toBe("mapped");
+    expect(capability.ready).toBe(true);
+    expect(capability.coverageCapacity).toBeGreaterThanOrEqual(1_000_000);
+    expect(capability.stage).toBe("massive");
   });
 
   it("gives KG a million-scale age-specific numeracy path", () => {
@@ -50,7 +45,7 @@ describe("SukuuNova learning capability registry", () => {
     expect(capability.variantCapacity).toBeGreaterThanOrEqual(1_000_000);
   });
 
-  it("does not repurpose school foundation content as exam preparation", () => {
+  it("gives BECE and WASSCE subject topics massive exam-practice coverage without borrowing JHS fixed questions", () => {
     for (const programId of ["bece", "wassce"] as const) {
       const capability = learningCapabilityForSelection(config({
         lane: "exam",
@@ -60,8 +55,9 @@ describe("SukuuNova learning capability registry", () => {
         topicId: "governance",
       }));
       expect(capability.reviewedStandardQuestions).toBe(0);
-      expect(capability.variantCapacity).toBe(0);
-      expect(capability.ready).toBe(false);
+      expect(capability.ready).toBe(true);
+      expect(capability.coverageCapacity).toBeGreaterThanOrEqual(1_000_000);
+      expect(capability.stage).toBe("massive");
     }
   });
 });

@@ -47,28 +47,18 @@ describe("SukuuNova curriculum-aware catalogue", () => {
     ]));
   });
 
-  it("keeps current basic-school readiness boundaries", () => {
-    for (const id of ["kg-1", "kg-2", "basic-1", "basic-2", "basic-3", "basic-4", "jhs-1"]) {
+  it("publishes every basic-school level without partial or expanding subjects", () => {
+    for (const id of ["kg-1", "kg-2", "basic-1", "basic-2", "basic-3", "basic-4", "basic-5", "basic-6", "jhs-1", "jhs-2", "jhs-3"]) {
       const level = basicSchoolLevel(id);
       expect(level, id).toBeDefined();
-      expect(
-        level?.subjects.some(
-          (subject) =>
-            subject.availability !== "expanding" &&
-            subject.topics.some((topic) => topic.availability !== "expanding"),
-        ),
-        id,
-      ).toBe(true);
-    }
-
-    for (const id of ["basic-5", "basic-6", "jhs-2", "jhs-3"]) {
-      const level = basicSchoolLevel(id);
-      expect(level, id).toBeDefined();
-      expect(level?.subjects.every((subject) => subject.availability === "expanding"), id).toBe(true);
+      expect(level?.subjects.length, id).toBeGreaterThan(0);
+      expect(level?.subjects.every((subject) => subject.availability !== "expanding"), id).toBe(true);
+      expect(level?.subjects.every((subject) => subject.topics.length > 0), id).toBe(true);
+      expect(level?.subjects.every((subject) => subject.topics.every((topic) => topic.availability !== "expanding")), id).toBe(true);
     }
   });
 
-  it("maps all eleven current BECE subjects while distinguishing expanding coverage", () => {
+  it("maps all eleven current BECE subjects as published practice", () => {
     const bece = catalogFor("exam").programs.find((program) => program.id === "bece");
     const subjects = bece?.levels[0].subjects ?? [];
     expect(subjects.map((subject) => subject.label).sort()).toEqual([
@@ -84,7 +74,9 @@ describe("SukuuNova curriculum-aware catalogue", () => {
       "Science",
       "Social Studies",
     ].sort());
-    expect(subjects.filter((subject) => subject.availability !== "expanding")).toHaveLength(0);
+    expect(subjects.every((subject) => subject.availability !== "expanding")).toBe(true);
+    expect(subjects.every((subject) => subject.topics.length > 0)).toBe(true);
+    expect(subjects.every((subject) => subject.topics.every((topic) => topic.availability !== "expanding"))).toBe(true);
   });
 
   it("models WASSCE core separately from its growing elective catalogue", () => {
