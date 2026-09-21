@@ -123,6 +123,16 @@ async function main() {
     assert.equal(await page.getByTestId("question-diagram").count(),1,"Basic 4 geometry must render an actual diagram stimulus");
     assert.ok(await page.getByTestId("question-diagram").locator("svg").count(),"Geometry stimulus must contain a rendered SVG diagram");
 
+    await page.goto("/learn/explore?entry=basic");
+    await page.getByRole("button",{name:"Basic 5",exact:true}).click();
+    await page.getByRole("button",{name:/English Language/}).first().click();
+    await page.getByRole("button",{name:/Reading inference & comprehension/}).click();
+    await page.getByRole("button",{name:"5",exact:true}).click();
+    await page.getByRole("button",{name:"Start",exact:true}).click();
+    await page.getByTestId("learning-question").waitFor();
+    assert.equal(await page.getByTestId("question-passage").count(),1,"English reading practice must render a passage stimulus");
+    assert.ok((await page.getByTestId("question-passage").innerText()).length>120,"Reading comprehension must use a substantive passage, not a one-line cue");
+
     await page.goto("/learn/explore?entry=shs");
     await page.getByRole("heading",{name:"Your SHS programme",exact:true}).waitFor();
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning setup overflows at 360px");
