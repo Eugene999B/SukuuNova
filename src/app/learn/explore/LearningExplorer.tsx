@@ -32,31 +32,11 @@ import {
 import { learningCapabilityForSelection } from "../learning-capabilities";
 import { buildLearningSession, isCorrectAnswer, rebalanceAdaptiveSession } from "../learning-engine";
 import styles from "./explore.module.css";
-import { normalizeLearnerProgress } from "../learner-progress";
+import { EMPTY_LEARNER_PROGRESS, normalizeLearnerProgress, type ConfidenceLevel, type LearnerProgress } from "../learner-progress";
 import { useLearningSound } from "../LearnShell";
 import { hasLearningAnswer } from "../session-controls";
 
-type LearnerProgress = {
-  sessions: number;
-  answered: number;
-  correct: number;
-  streak: number;
-  xp: number;
-  exposures: string[];
-  mastery: Record<string, { answered: number; correct: number }>;
-};
-
 type ResponseValue = string | string[] | number | boolean;
-
-const EMPTY_PROGRESS: LearnerProgress = {
-  sessions: 0,
-  answered: 0,
-  correct: 0,
-  streak: 0,
-  xp: 0,
-  exposures: [],
-  mastery: {},
-};
 
 type LearnEntry = "basic" | "shs" | "exam" | "university" | "skills";
 
@@ -120,13 +100,14 @@ export function LearningExplorer() {
   const [topicId, setTopicId] = useState(catalog.programs[0].levels[0].subjects[0].topics[0].id);
   const [mode, setMode] = useState<PracticeMode>("adaptive");
   const [count, setCount] = useState(10);
-  const [progress, setProgress] = useState<LearnerProgress>(EMPTY_PROGRESS);
+  const [progress, setProgress] = useState<LearnerProgress>(EMPTY_LEARNER_PROGRESS);
   const [session, setSession] = useState<LearnQuestion[]>([]);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [response, setResponse] = useState<ResponseValue>("");
   const [submitted, setSubmitted] = useState(false);
   const [lastCorrect, setLastCorrect] = useState(false);
   const [sessionCorrect, setSessionCorrect] = useState(0);
+  const [confidence, setConfidence] = useState<ConfidenceLevel | null>(null);
   const [launchNotice, setLaunchNotice] = useState("");
   const [programQuery, setProgramQuery] = useState("");
   const [showAllPrograms, setShowAllPrograms] = useState(false);
@@ -169,7 +150,7 @@ export function LearningExplorer() {
       const stored = window.localStorage.getItem("sukuunova-learn-progress-v1");
       if (stored) setProgress(normalizeLearnerProgress(JSON.parse(stored)));
     } catch {
-      setProgress(EMPTY_PROGRESS);
+      setProgress(EMPTY_LEARNER_PROGRESS);
     }
   }, []);
 
@@ -310,7 +291,9 @@ export function LearningExplorer() {
     setResponse("");
     setSubmitted(false);
     setLastCorrect(false);
+    setConfidence(null);
     setSessionCorrect(0);
+    setConfidence(null);
     window.setTimeout(() => document.getElementById("session-player")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   }
 
@@ -325,6 +308,8 @@ export function LearningExplorer() {
     const previousMastery = progress.mastery[key] ?? { answered: 0, correct: 0 };
     const exposures = [currentQuestion.exposureKey, ...progress.exposures.filter((item) => item !== currentQuestion.exposureKey)].slice(0, 200);
     const earnedXp = correct ? 10 + currentQuestion.difficulty * 2 : 0;
+    const confidenceKey = confidence ?? "medium";
+    const previousConfidence = progress.confidence[confidenceKey];
     const nextProgress: LearnerProgress = {
       ...progress,
       answered: progress.answered + 1,
@@ -339,6 +324,13 @@ export function LearningExplorer() {
           correct: previousMastery.correct + (correct ? 1 : 0),
         },
       },
+      confidence: {
+        ...progress.confidence,
+        [confidenceKey]: {
+          answered: previousConfidence.answered + 1,
+          correct: previousConfidence.correct + (correct ? 1 : 0),
+        },
+      },
     };
     persist(nextProgress);
     if (mode === "adaptive") {
@@ -349,6 +341,7 @@ export function LearningExplorer() {
           correct,
           nextProgress.streak,
           nextProgress.answered * 7_919 + questionIndex,
+          confidence ?? undefined,
         ),
       );
     }
@@ -548,6 +541,8 @@ export function LearningExplorer() {
             toggleMulti={toggleMulti}
             submitted={submitted}
             correct={lastCorrect}
+            confidence={confidence}
+            setConfidence={setConfidence}
             submit={submitAnswer}
             next={nextQuestion}
           />
