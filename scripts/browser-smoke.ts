@@ -114,6 +114,14 @@ async function main() {
     await page.goto("/learn/explore?entry=basic");
     await page.getByRole("heading",{name:"Your class / level",exact:true}).waitFor();
     assert.equal(await page.getByRole("heading",{name:"Your school pathway",exact:true}).count(),0,"Basic School must skip the SHS/pathway screen");
+    await page.getByRole("button",{name:"Basic 4",exact:true}).click();
+    await page.getByRole("button",{name:/Mathematics/}).first().click();
+    await page.getByRole("button",{name:/Shape, angles & spatial reasoning/}).click();
+    await page.getByRole("button",{name:"5",exact:true}).click();
+    await page.getByRole("button",{name:"Start",exact:true}).click();
+    await page.getByTestId("learning-question").waitFor();
+    assert.equal(await page.getByTestId("question-diagram").count(),1,"Basic 4 geometry must render an actual diagram stimulus");
+    assert.ok(await page.getByTestId("question-diagram").locator("svg").count(),"Geometry stimulus must contain a rendered SVG diagram");
 
     await page.goto("/learn/explore?entry=shs");
     await page.getByRole("heading",{name:"Your SHS programme",exact:true}).waitFor();
