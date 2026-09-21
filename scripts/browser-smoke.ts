@@ -96,20 +96,24 @@ async function main() {
     await page.getByLabel("Learning audio settings").click();
 
     await page.goto("/learn/explore?lane=exam");
-    await page.getByRole("button",{name:/Exam Centre/}).waitFor();
-    await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("Exam Centre"));
-    assert.equal(await page.getByRole("button",{name:"Practice is being built",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
+    await page.getByRole("heading",{name:"Choose your exam",exact:true}).waitFor();
+    await page.getByText("Evidence starts with your first answer",{exact:true}).waitFor();
+    assert.equal(await page.getByText("0% accuracy",{exact:true}).count(),0,"Anonymous learners must not see a fake 0% account score");
+    await page.getByRole("button",{name:/BECE/}).click();
+    await page.getByRole("button",{name:"BECE practice",exact:true}).click();
+    await page.getByRole("button",{name:/Mathematics/}).first().click();
+    await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
+    assert.equal(await page.getByRole("button",{name:"Questions for this topic are still being built",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
 
     await page.goto("/learn/explore?lane=school");
-    await page.getByRole("button",{name:/School/}).waitFor();
-    await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("School"));
+    await page.getByRole("heading",{name:"Choose your school pathway",exact:true}).waitFor();
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning setup overflows at 360px");
     await page.getByRole("button",{name:/General Science/}).click();
-    await page.getByRole("button",{name:"SHS 1",exact:true}).waitFor();
+    await page.getByRole("button",{name:"SHS 1",exact:true}).click();
     await page.getByRole("button",{name:/Core Mathematics/}).click();
-    await page.getByRole("button",{name:"Topic focus",exact:true}).click();
+    await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
     await page.getByLabel("Custom 1–100").fill("3");
-    await page.getByRole("button",{name:/Let's go!/}).click();
+    await page.getByRole("button",{name:"Start my session",exact:true}).click();
     await page.waitForFunction(()=>document.querySelector("main[data-session-active=\"true\"]"));
     assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Active learning must use the focused session surface");
     assert.equal(await page.locator("main").evaluate(el=>getComputedStyle(el).position),"fixed","Focused session must own the mobile viewport");
@@ -158,26 +162,25 @@ async function main() {
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on mobile");
 
     await page.goto("/learn/explore?lane=university");
-    await page.getByRole("button",{name:/University/}).waitFor();
-    await page.waitForFunction(()=>document.querySelector('button[aria-pressed="true"]')?.textContent?.includes("University"));
+    await page.getByRole("heading",{name:"Choose your programme",exact:true}).waitFor();
     const programmeSearch=page.getByPlaceholder("Search medicine, law, engineering…");
     await programmeSearch.waitFor();
     await programmeSearch.fill("law");
     await page.getByRole("button",{name:/Law \(LLB\)/}).waitFor();
     await programmeSearch.fill("medicine");
     await page.getByRole("button",{name:/Medicine \(MBChB\)/}).click();
-    await page.getByRole("button",{name:"Level 100",exact:true}).waitFor();
+    await page.getByRole("button",{name:"Level 100",exact:true}).click();
     await page.getByRole("button",{name:/Human Anatomy/}).click();
     await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
     await page.getByLabel("Custom 1–100").fill("3");
-    await page.getByRole("button",{name:/Let's go!/}).click();
+    await page.getByRole("button",{name:"Start my session",exact:true}).click();
     await page.getByTestId("learning-question").waitFor();
     assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Medicine practice must launch a focused session");
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"University session overflows at mobile width");
 
     await page.setViewportSize({width:1366,height:768});
     await page.goto("/learn/explore?lane=university");
-    await page.getByRole("button",{name:/University/}).waitFor();
+    await page.getByRole("heading",{name:"Choose your programme",exact:true}).waitFor();
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on desktop");
     const desktopCards=page.locator('button').filter({hasText:"Computer Science"});
     assert.ok(await desktopCards.count()>0,"Desktop programme cards must remain available after mobile redesign");
