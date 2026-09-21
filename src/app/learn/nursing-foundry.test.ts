@@ -12,7 +12,7 @@ function nursingConfig(overrides: Partial<SessionConfig> = {}): SessionConfig {
     programId: "nursing",
     levelId: "level-200",
     subjectId: "medical-surgical-nursing-i",
-    topicId: "assessment-care-planning",
+    topicId: "assessment-and-care-planning",
     mode: "topic",
     count: 48,
     seed: 20260921,
@@ -88,7 +88,7 @@ describe("Nursing clinical assessment diversity", () => {
     const level300 = buildNursingQuestions(nursingConfig({
       levelId: "level-300",
       subjectId: "mental-health-nursing",
-      topicId: "assessment-care-planning",
+      topicId: "assessment-and-care-planning",
       count: 24,
     }), 24, 1116);
 
