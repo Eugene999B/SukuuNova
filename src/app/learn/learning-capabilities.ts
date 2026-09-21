@@ -5,6 +5,7 @@ import { specializedQuestionsForSelection } from "./specialized-content";
 import { broadPracticeQuestionsForSelection } from "./broad-practice";
 import { intelligentCapacityForSelection } from "./intelligent-foundry";
 import { coverageCapacityForSelection } from "./coverage-foundry";
+import { primaryMathCapacityForSelection } from "./primary-math-foundry";
 import { verifiedStandardEntriesForAudience } from "./verified-content";
 
 export type LearningCapabilityStage = "mapped" | "starter" | "deep" | "massive";
@@ -17,6 +18,7 @@ export type LearningCapability = {
   variantCapacity: number;
   intelligentCapacity: number;
   coverageCapacity: number;
+  primaryMathCapacity: number;
   estimatedStandardSupply: number;
 };
 
@@ -63,15 +65,16 @@ export function learningCapabilityForSelection(config: SessionConfig): LearningC
   const variantCapacity = variantCapacityForSelection(config);
   const intelligentCapacity = intelligentCapacityForSelection(config);
   const coverageCapacity = coverageCapacityForSelection(config);
+  const primaryMathCapacity = primaryMathCapacityForSelection(config);
   const specializedQuestions = specializedQuestionsForSelection(config);
   const broadQuestions = broadPracticeQuestionsForSelection(config);
   const reviewedStandardQuestions = standardEntries.length + specializedQuestions.length + broadQuestions.length;
   const richInteractions = richEntries.length;
-  const ready = reviewedStandardQuestions > 0 || variantCapacity > 0 || intelligentCapacity > 0 || coverageCapacity > 0;
+  const ready = reviewedStandardQuestions > 0 || variantCapacity > 0 || intelligentCapacity > 0 || coverageCapacity > 0 || primaryMathCapacity > 0;
   const evidenceDepth = reviewedStandardQuestions + richInteractions;
 
   let stage: LearningCapabilityStage = "mapped";
-  if (variantCapacity + intelligentCapacity + coverageCapacity >= 1_000_000) stage = "massive";
+  if (variantCapacity + intelligentCapacity + coverageCapacity + primaryMathCapacity >= 1_000_000) stage = "massive";
   else if (ready && (variantCapacity >= 10_000 || evidenceDepth >= 10)) stage = "deep";
   else if (ready) stage = "starter";
 
@@ -83,7 +86,8 @@ export function learningCapabilityForSelection(config: SessionConfig): LearningC
     variantCapacity,
     intelligentCapacity,
     coverageCapacity,
-    estimatedStandardSupply: variantCapacity + intelligentCapacity + coverageCapacity + reviewedStandardQuestions,
+    primaryMathCapacity,
+    estimatedStandardSupply: variantCapacity + intelligentCapacity + coverageCapacity + primaryMathCapacity + reviewedStandardQuestions,
   };
 }
 
