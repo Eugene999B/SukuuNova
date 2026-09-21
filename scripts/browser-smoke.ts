@@ -103,8 +103,7 @@ async function main() {
     await page.getByRole("button",{name:/BECE/}).click();
     await page.getByRole("button",{name:"BECE practice",exact:true}).click();
     await page.getByRole("button",{name:/Mathematics/}).first().click();
-    await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
-    assert.equal(await page.getByRole("button",{name:"Not ready yet",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
+    assert.equal(await page.getByRole("button",{name:"Mixed topics",exact:true}).isDisabled(),true,"Mapped exam topics must stop before session setup when practice is not ready");
 
     await page.goto("/learn/explore?lane=school");
     await page.getByRole("heading",{name:"Your school pathway",exact:true}).waitFor();
