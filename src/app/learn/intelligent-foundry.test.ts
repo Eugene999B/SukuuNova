@@ -36,7 +36,12 @@ describe("SukuuNova intelligent question foundry", () => {
 
   it("only releases massive generators on concept-compatible topics", () => {
     expect(intelligentCapacityForSelection({ ...shsMath, topicId: "algebra-and-equations" })).toBeGreaterThan(1_000_000);
-    expect(intelligentCapacityForSelection({ ...shsMath, topicId: "geometry-and-measurement" })).toBe(0);
+    expect(intelligentCapacityForSelection({ ...shsMath, topicId: "geometry-and-measurement" })).toBeGreaterThan(1_000_000);
+
+    const geometry = buildIntelligentQuestions({ ...shsMath, topicId: "geometry-and-measurement" }, 40, 20260923);
+    expect(geometry).toHaveLength(40);
+    expect(new Set(geometry.map((question) => question.prompt)).size).toBe(40);
+    expect(geometry.every((question) => question.generationFamily === "geometry-measurement")).toBe(true);
 
     expect(intelligentCapacityForSelection({
       lane: "university",
