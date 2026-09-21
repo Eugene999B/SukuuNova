@@ -718,11 +718,9 @@ function buildQuestion(
   const clueB = item.clues[(local + 1) % item.clues.length];
 
   if (family === 11 && domain === "pharmacology") {
-    const prescribed = 250 + (local % 5) * 125;
-    const available = 125 + (local % 3) * 125;
-    const tablets = prescribed / available;
-    const safeAvailable = prescribed % available === 0 ? available : prescribed;
-    const safeTablets = prescribed / safeAvailable;
+    const safeAvailable = local % 2 === 0 ? 125 : 250;
+    const safeTablets = 1 + (local % 4);
+    const prescribed = safeAvailable * safeTablets;
     return baseQuestion(config, "dose-calculation", position, seed,
       "Use the medication information shown. How many tablets are required for one prescribed dose?",
       "Calculate a medication dose from prescribed and available strengths",
