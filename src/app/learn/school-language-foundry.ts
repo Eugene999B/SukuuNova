@@ -285,6 +285,14 @@ function twi(config: SessionConfig, family: Family, position: number, seed: numb
 }
 
 function families(config: SessionConfig): readonly Family[] {
+  if (config.topicId !== "all") {
+    if (/vocabulary/.test(config.topicId)) return ["vocabulary", "translation", "meaning"];
+    if (/grammar/.test(config.topicId)) return ["grammar", "editing"];
+    if (/reading/.test(config.topicId)) return ["reading", "meaning"];
+    if (/writing/.test(config.topicId)) return ["editing", "translation", "transfer", "grammar"];
+    if (/oral|listening-speaking/.test(config.topicId)) return ["dialogue", "meaning", "vocabulary"];
+    if (/culture/.test(config.topicId)) return ["reading", "dialogue", "vocabulary", "meaning"];
+  }
   if (/basic-[12]/.test(config.levelId)) return ["vocabulary", "translation", "dialogue", "meaning"];
   if (/basic-[34]/.test(config.levelId)) return ["vocabulary", "translation", "grammar", "dialogue", "reading", "meaning"];
   return ["vocabulary", "translation", "grammar", "dialogue", "reading", "editing", "meaning", "transfer"];
