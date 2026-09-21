@@ -428,7 +428,7 @@ export function LearningExplorer() {
             </div>
           </div>
 
-          {visiblePrograms.length>=8&&<label className={styles.searchBox}>
+          {(lane==="university"||entryChoice==="shs")&&<label className={styles.searchBox}>
             <Search size={18}/>
             <input value={programQuery} onChange={e=>setProgramQuery(e.target.value)} placeholder={lane==="university"?"Search programmes…":"Search…"} />
           </label>}
