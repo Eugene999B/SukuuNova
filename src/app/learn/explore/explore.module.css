@@ -2526,3 +2526,122 @@
     flex-basis: 32px;
   }
 }
+
+
+/* learner readability floor */
+.page {
+  font-size: 16px;
+}
+
+.playerMeta > div:first-child {
+  gap: 6px;
+}
+
+.playerMeta span,
+.playerMeta strong,
+.difficulty {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.questionSignals {
+  gap: 8px;
+}
+
+.formatTag,
+.challengeTag,
+.missionTag {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.textAnswer input {
+  min-height: 62px;
+  padding: 16px 18px;
+  font-size: 16px;
+}
+
+.answerFooter > span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.correctFeedback strong,
+.wrongFeedback strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.correctFeedback p,
+.wrongFeedback p {
+  margin-top: 7px;
+  color: var(--ex-text-soft);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.wrongFeedback div:nth-child(2) > span {
+  margin-top: 9px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.correctFeedback button,
+.wrongFeedback button {
+  min-height: 50px;
+  font-size: 13px;
+}
+
+.completeTop p {
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.completeStats span {
+  font-size: 11px;
+}
+
+.noMastery strong {
+  font-size: 14px;
+}
+
+.noMastery span {
+  font-size: 12px;
+}
+
+.institutionNote strong,
+.examNotice strong {
+  font-size: 13px;
+}
+
+.institutionNote span,
+.examNotice span {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.heroPromise span {
+  font-size: 11px;
+}
+
+@media (max-width: 520px) {
+  .playerMeta span,
+  .playerMeta strong,
+  .difficulty {
+    font-size: 11px;
+  }
+
+  .formatTag,
+  .challengeTag,
+  .missionTag {
+    font-size: 10px;
+  }
+
+  .correctFeedback p,
+  .wrongFeedback p {
+    font-size: 13px;
+  }
+}
