@@ -555,9 +555,6 @@ function renderBinary(variant: number): LearnQuestion {
 
 export const VARIANT_TEMPLATES: readonly VariantTemplate[] = [
   kgNumberStories,
-  basicOneNumberStories,
-  basicTwoNumberStories,
-  basicThreeNumberStories,
   {
     id: "math-number-operations",
     subjectId: "mathematics",
