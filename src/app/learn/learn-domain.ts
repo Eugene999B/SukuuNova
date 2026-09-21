@@ -489,19 +489,19 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       {
         id: "bece",
         label: "BECE",
-        description: "The current Ghana BECE subject map is visible, but exam-specific practice is held back until paper-aligned question packs are validated.",
+        description: "BECE practice organised by subject and topic, with generated drills for every published selection.",
         levels: [{ id: "practice", label: "BECE practice", subjects: beceSubjects }],
       },
       {
         id: "wassce",
         label: "WASSCE",
-        description: "The current WASSCE structure is mapped, but trusted paper-specific practice is still expanding and is not exposed as ready.",
+        description: "WASSCE core and elective practice organised by subject and topic, with generated drills for every published selection.",
         levels: [{ id: "practice", label: "WASSCE practice", subjects: [...wassceCoreSubjects, ...wassceElectives] }],
       },
       {
         id: "ielts",
         label: "IELTS",
-        description: "Academic and General Training structures are mapped separately; reviewed interactive task coverage is expanding.",
+        description: "Academic and General Training practice are organised separately across reading, listening, writing and speaking skills.",
         levels: [
           { id: "academic", label: "Academic", subjects: ieltsAcademicSubjects },
           { id: "general", label: "General Training", subjects: ieltsGeneralSubjects },
