@@ -274,6 +274,8 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
     audio.current = null;
   }, []);
 
+  const explorerFocused = pathname === "/learn/explore";
+
   const links = [
     ["Home", "/learn"],
     ["Practice", "/learn/explore"],
@@ -292,7 +294,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
     <SoundContext.Provider value={play}>
       <div className="learn-frame">
         <a className="learn-skip" href="#learning-content">Skip to learning</a>
-        <header className="learn-global-header">
+        {!explorerFocused && <header className="learn-global-header">
           <Link href="/learn" className="learn-wordmark"><span>✦</span><strong>SukuuNova <b>Learn</b></strong></Link>
           <Link className="learn-school-link" href="/">School management ↗</Link>
           <nav aria-label="Learning navigation">
@@ -350,7 +352,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </details>
-        </header>
+        </header>}
         <div id="learning-content">{children}</div>
       </div>
     </SoundContext.Provider>
