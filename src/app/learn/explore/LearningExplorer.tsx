@@ -58,10 +58,13 @@ const EMPTY_PROGRESS: LearnerProgress = {
   mastery: {},
 };
 
-const lanes: Array<{ id: LearnLane; label: string; copy: string; icon: typeof School }> = [
-  { id: "school", label: "School", copy: "KG to SHS", icon: School },
-  { id: "exam", label: "Exam Centre", copy: "BECE, WASSCE, IELTS", icon: Medal },
-  { id: "university", label: "University", copy: "Courses and modules", icon: GraduationCap },
+type LearnEntry = "basic" | "shs" | "exam" | "university" | "skills";
+
+const entries: Array<{ id: LearnEntry; label: string; copy: string; icon: typeof School }> = [
+  { id: "basic", label: "Basic School", copy: "KG · Primary · JHS", icon: School },
+  { id: "shs", label: "SHS", copy: "Choose your programme", icon: BookOpen },
+  { id: "exam", label: "Exam Centre", copy: "BECE · WASSCE · IELTS", icon: Medal },
+  { id: "university", label: "University", copy: "Degree programmes", icon: GraduationCap },
   { id: "skills", label: "Skills", copy: "Career and aptitude", icon: Layers3 },
 ];
 
@@ -128,6 +131,7 @@ export function LearningExplorer() {
   const [programQuery, setProgramQuery] = useState("");
   const [showAllPrograms, setShowAllPrograms] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
+  const [entryChoice, setEntryChoice] = useState<LearnEntry | null>(null);
 
   const program = catalog.programs.find((item) => item.id === programId) ?? catalog.programs[0];
   const level = program.levels.find((item) => item.id === levelId) ?? program.levels[0];
@@ -144,14 +148,17 @@ export function LearningExplorer() {
   }), [lane, programId, levelId, subjectId, topicId, mode, count]);
   const practiceAvailable = capability.ready;
   const visiblePrograms = useMemo(() => {
+    const programPool = lane === "school" && entryChoice === "shs"
+      ? catalog.programs.filter((item) => item.id.startsWith("shs-"))
+      : catalog.programs;
     const query = programQuery.trim().toLowerCase();
     const matches = query
-      ? catalog.programs.filter((item) =>
+      ? programPool.filter((item) =>
           item.label.toLowerCase().includes(query) || item.description.toLowerCase().includes(query),
         )
-      : catalog.programs;
+      : programPool;
     return showAllPrograms || query ? matches : matches.slice(0, 8);
-  }, [catalog.programs, lane, programQuery, showAllPrograms]);
+  }, [catalog.programs, entryChoice, lane, programQuery, showAllPrograms]);
   const availableModes = lane === "exam" ? modes.filter((item) => item.id !== "adaptive") : modes;
   const currentQuestion = session[questionIndex];
   const sessionInProgress = session.length > 0 && questionIndex < session.length;
@@ -177,8 +184,19 @@ export function LearningExplorer() {
   }, [sessionInProgress]);
 
   useEffect(() => {
-    const choice = new URLSearchParams(window.location.search).get("lane");
-    if (choice && ["school","exam","university","skills"].includes(choice)) resetSelectionForLane(choice as LearnLane);
+    const params = new URLSearchParams(window.location.search);
+    const entry = params.get("entry");
+    if (entry && ["basic","shs","exam","university","skills"].includes(entry)) {
+      selectEntry(entry as LearnEntry);
+      return;
+    }
+    const choice = params.get("lane");
+    if (choice === "school") {
+      setEntryChoice(null);
+      setFlowStep(0);
+      return;
+    }
+    if (choice && ["exam","university","skills"].includes(choice)) resetSelectionForLane(choice as LearnLane);
   }, []);
 
   function persist(next: LearnerProgress) {
@@ -188,6 +206,33 @@ export function LearningExplorer() {
     } catch {
       // Local progress is a convenience layer; practice must still work if storage is blocked.
     }
+  }
+
+  function selectEntry(nextEntry: LearnEntry) {
+    if (nextEntry === "basic" || nextEntry === "shs") {
+      const nextCatalog = catalogFor("school");
+      const nextProgram = nextEntry === "basic"
+        ? nextCatalog.programs.find((item) => item.id === "ghana") ?? nextCatalog.programs[0]
+        : nextCatalog.programs.find((item) => item.id.startsWith("shs-")) ?? nextCatalog.programs[0];
+      const nextLevel = nextProgram.levels[0];
+      const nextSubject = firstReadySubject("school", nextProgram.id, nextLevel);
+      setEntryChoice(nextEntry);
+      setLane("school");
+      setProgramId(nextProgram.id);
+      setLevelId(nextLevel.id);
+      setSubjectId(nextSubject.id);
+      setTopicId(firstReadyTopic("school", nextProgram.id, nextLevel.id, nextSubject).id);
+      setMode("adaptive");
+      setSession([]);
+      setLaunchNotice("");
+      setProgramQuery("");
+      setShowAllPrograms(false);
+      setFlowStep(nextEntry === "basic" ? 2 : 1);
+      return;
+    }
+
+    setEntryChoice(nextEntry);
+    resetSelectionForLane(nextEntry);
   }
 
   function resetSelectionForLane(nextLane: LearnLane) {
@@ -205,6 +250,7 @@ export function LearningExplorer() {
     setLaunchNotice("");
     setProgramQuery("");
     setShowAllPrograms(false);
+    if (nextLane !== "school") setEntryChoice(nextLane as Exclude<LearnEntry, "basic" | "shs">);
     setFlowStep(1);
   }
 
@@ -335,18 +381,20 @@ export function LearningExplorer() {
   }
 
   const isComplete = session.length > 0 && questionIndex >= session.length;
+  const displayedStep = entryChoice === "basic" && flowStep >= 2 ? flowStep : flowStep + 1;
+  const displayedTotal = entryChoice === "basic" ? 5 : 6;
 
   return (
     <main className={`${styles.page} ${sessionFocused ? styles.sessionFocused : styles.setupFocused}`} data-session-active={sessionInProgress ? "true" : "false"}>
       <header className={styles.topbar}>
         <Link href="/learn" className={styles.backLink}><ArrowLeft size={17} /> Exit</Link>
         <strong className={styles.compactBrand}>SukuuNova Learn</strong>
-        <span className={styles.stepCounter}>{sessionFocused ? "Practice" : `${flowStep + 1}/6`}</span>
+        <span className={styles.stepCounter}>{sessionFocused ? "Practice" : `${displayedStep}/${displayedTotal}`}</span>
       </header>
 
       <fieldset className={styles.journey} disabled={session.length > 0 && !isComplete} aria-label="Build your learning session">
-        <div className={styles.flowTrack} aria-label={`Step ${flowStep + 1} of 6`}>
-          <span style={{ width: `${((flowStep + 1) / 6) * 100}%` }} />
+        <div className={styles.flowTrack} aria-label={`Step ${displayedStep} of ${displayedTotal}`}>
+          <span style={{ width: `${(displayedStep / displayedTotal) * 100}%` }} />
         </div>
 
         {flowStep===0&&<section className={styles.flowStage}>
@@ -358,10 +406,10 @@ export function LearningExplorer() {
             </div>
           </div>
           <div className={styles.laneCards}>
-            {lanes.map((item) => {
+            {entries.map((item) => {
               const Icon = item.icon;
               return (
-                <button key={item.id} className={styles.laneCard} onClick={()=>resetSelectionForLane(item.id)}>
+                <button key={item.id} className={styles.laneCard} onClick={()=>selectEntry(item.id)}>
                   <span className={styles.laneIcon}><Icon size={24}/></span>
                   <span className={styles.choiceCopy}><strong>{item.label}</strong><small>{item.copy}</small></span>
                   <ChevronRight size={19}/>
@@ -376,11 +424,11 @@ export function LearningExplorer() {
             <button type="button" className={styles.backStep} onClick={()=>setFlowStep(0)}><ArrowLeft size={17}/> Back</button>
             <div>
               <span className={styles.stepLabel}>CHOOSE ONE</span>
-              <h2>{lane==="university"?"Your programme":lane==="school"?"Your school pathway":lane==="exam"?"Your exam":"Your skill track"}</h2>
+              <h2>{lane==="university"?"Your programme":entryChoice==="shs"?"Your SHS programme":lane==="school"?"Your school pathway":lane==="exam"?"Your exam":"Your skill track"}</h2>
             </div>
           </div>
 
-          {catalog.programs.length>8&&<label className={styles.searchBox}>
+          {visiblePrograms.length>=8&&<label className={styles.searchBox}>
             <Search size={18}/>
             <input value={programQuery} onChange={e=>setProgramQuery(e.target.value)} placeholder={lane==="university"?"Search programmes…":"Search…"} />
           </label>}
@@ -391,12 +439,12 @@ export function LearningExplorer() {
             </button>)}
           </div>
 
-          {!programQuery&&catalog.programs.length>visiblePrograms.length&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllPrograms(true)}>Show all {catalog.programs.length}</button>}
+          {!programQuery&&!showAllPrograms&&((entryChoice==="shs"&&catalog.programs.filter(item=>item.id.startsWith("shs-")).length>visiblePrograms.length)||(entryChoice!=="shs"&&catalog.programs.length>visiblePrograms.length))&&<button type="button" className={styles.moreButton} onClick={()=>setShowAllPrograms(true)}>Show all</button>}
         </section>}
 
         {flowStep===2&&<section className={styles.flowStage}>
           <div className={styles.stageTop}>
-            <button type="button" className={styles.backStep} onClick={()=>setFlowStep(1)}><ArrowLeft size={17}/> Back</button>
+            <button type="button" className={styles.backStep} onClick={()=>setFlowStep(entryChoice==="basic"?0:1)}><ArrowLeft size={17}/> Back</button>
             <div>
               <span className={styles.stepLabel}>CHOOSE ONE</span>
               <h2>{lane==="school"&&program.id.startsWith("shs-")?"Your SHS year":lane==="university"?"Your level":"Your class / level"}</h2>
