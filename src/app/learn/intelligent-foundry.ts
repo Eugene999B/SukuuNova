@@ -243,12 +243,12 @@ function contextFor(config: SessionConfig, index: number) {
   let contexts: readonly string[] = MODERN_CONTEXTS;
 
   if (/law|contract|constitutional|criminal|tort|legal|jurisprudence/.test(selection)) contexts = LAW_CONTEXTS;
-  else if (/anatomy|physiology|nursing|medicine|pharmacy|health|biology|biomedical|biochemistry|genetic|epidemiology/.test(selection)) contexts = HEALTH_CONTEXTS;
+  else if (/anatomy|physiology|nursing|medicine|medical|pharmacy|health|biomedical|epidemiology/.test(selection)) contexts = HEALTH_CONTEXTS;
   else if (/account|business|finance|econom|management|marketing|procurement|supply|hrm|human-resource/.test(selection)) contexts = BUSINESS_CONTEXTS;
   else if (/engineering|mechanic|physics|circuit|electric|electronic|drawing|architecture|survey|construction|material/.test(selection)) contexts = ENGINEERING_CONTEXTS;
   else if (/program|comput|network|software|web|cyber|database|cloud|information-technology|data/.test(selection)) contexts = TECHNOLOGY_CONTEXTS;
   else if (/math|statistics|probability|calculus|algebra|actuarial/.test(selection)) contexts = MATHEMATICS_CONTEXTS;
-  else if (/chemistry|science|laboratory/.test(selection)) contexts = SCIENCE_CONTEXTS;
+  else if (/chemistry|science|laboratory|biology|genetic|biochemistry|agricultur/.test(selection)) contexts = SCIENCE_CONTEXTS;
 
   return contexts[index % contexts.length];
 }
