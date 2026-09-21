@@ -443,6 +443,95 @@ function singleQuestion(args: {
 
 const genericTopics = ["core-concepts", "applications", "problem-solving"] as const;
 
+const geometryDimensions = [480, 480, MODERN_CONTEXTS.length, 6] as const;
+const geometryCapacity = product(geometryDimensions);
+
+function renderGeometryMeasurement(variant: number, config: SessionConfig) {
+  const [lengthIndex, widthIndex, contextIndex, style] = decode(variant, geometryDimensions);
+  const length = Number(((lengthIndex + 10) / 10).toFixed(1));
+  const width = Number(((widthIndex + 10) / 10).toFixed(1));
+  const area = Number((length * width).toFixed(2));
+  const perimeter = Number((2 * (length + width)).toFixed(2));
+  const triangleArea = Number((length * width / 2).toFixed(2));
+  const borderArea = Number((((length + 2) * (width + 2)) - area).toFixed(2));
+  const context = contextFor(config, contextIndex);
+
+  const prompts = [
+    {
+      skill: "Calculate rectangular area from dimensions",
+      challenge: "Apply" as const,
+      mission: "Measure the space accurately",
+      prompt: `For ${context}, a rectangular surface measures ${length} m by ${width} m. What is its area in m²?`,
+      answer: area,
+      explanation: `Area of a rectangle = length × width = ${length} × ${width} = ${area} m².`,
+      hint: "Multiply the two perpendicular dimensions.",
+    },
+    {
+      skill: "Calculate perimeter from dimensions",
+      challenge: "Apply" as const,
+      mission: "Trace the full boundary",
+      prompt: `A rectangular working area at ${context} is ${length} m long and ${width} m wide. What is its perimeter in metres?`,
+      answer: perimeter,
+      explanation: `Perimeter = 2(length + width) = 2(${length} + ${width}) = ${perimeter} m.`,
+      hint: "Add length and width, then double the result.",
+    },
+    {
+      skill: "Calculate triangle area from base and height",
+      challenge: "Apply" as const,
+      mission: "Use the right area model",
+      prompt: `A triangular section in ${context} has base ${length} m and perpendicular height ${width} m. What is its area in m²?`,
+      answer: triangleArea,
+      explanation: `Triangle area = ½ × base × height = ½ × ${length} × ${width} = ${triangleArea} m².`,
+      hint: "Use half of base multiplied by perpendicular height.",
+    },
+    {
+      skill: "Recover a missing rectangle dimension from area",
+      challenge: "Analyse" as const,
+      mission: "Work backwards from area",
+      prompt: `A rectangle used by ${context} has area ${area} m² and width ${width} m. What is its length in metres?`,
+      answer: length,
+      explanation: `Length = area ÷ width = ${area} ÷ ${width} = ${length} m.`,
+      hint: "Divide the area by the known width.",
+    },
+    {
+      skill: "Use area to estimate one-square-metre coverage",
+      challenge: "Transfer" as const,
+      mission: "Turn dimensions into material coverage",
+      prompt: `At ${context}, a rectangular floor measures ${length} m by ${width} m. Ignoring waste, how many square metres of covering are needed?`,
+      answer: area,
+      explanation: `Required coverage is the floor area: ${length} × ${width} = ${area} m².`,
+      hint: "Coverage in square metres is the rectangular area.",
+    },
+    {
+      skill: "Calculate the area of a one-metre border around a rectangle",
+      challenge: "Transfer" as const,
+      mission: "Separate the border from the centre",
+      prompt: `A ${length} m by ${width} m rectangular zone at ${context} receives a 1 m border all around the outside. What area in m² is occupied by the border alone?`,
+      answer: borderArea,
+      explanation: `Outer dimensions are ${length + 2} m by ${width + 2} m. Border area = outer area − inner area = ${borderArea} m².`,
+      hint: "Add 2 m to each original dimension, find both areas, then subtract.",
+    },
+  ];
+
+  const item = prompts[style];
+  return numericQuestion({
+    id: "geometry-measurement",
+    config,
+    variant,
+    skill: item.skill,
+    challenge: item.challenge,
+    mission: item.mission,
+    prompt: item.prompt,
+    answer: item.answer,
+    explanation: item.explanation,
+    hint: item.hint,
+    difficulty: levelDifficulty(config.levelId) + (style >= 3 ? 1 : 0),
+    formatIndex: variant % 3,
+    topic: topicLabel(config, "Geometry & measurement"),
+    optionStep: Math.max(0.1, Number((item.answer * 0.1).toFixed(2))),
+  });
+}
+
 const linearDimensions = [37, 161, 241, MODERN_CONTEXTS.length, 6, 3] as const;
 const linearCapacity = product(linearDimensions);
 
@@ -1155,6 +1244,15 @@ const SMART_TEMPLATES: readonly SmartTemplate[] = [
     capacity: linearCapacity,
     render: renderLinearModel,
   },
+  {
+    id: "geometry-measurement",
+    lanes: ["school", "university"],
+    subjectIds: ["core-mathematics", "elective-mathematics", "additional-mathematics", "engineering-mathematics"],
+    topicIds: ["geometry-and-measurement"],
+    capacity: geometryCapacity,
+    render: renderGeometryMeasurement,
+  },
+
   {
     id: "percentage-model",
     lanes: ["school", "university"],
