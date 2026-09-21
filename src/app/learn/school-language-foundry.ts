@@ -187,7 +187,7 @@ function french(config: SessionConfig, family: Family, position: number, seed: n
   }
 
   if (family === "grammar") {
-    const item = FRENCH_VERBS[index % FRENCH_VERBS.length];
+    const item = FRENCH_VERBS[(position + seed) % FRENCH_VERBS.length];
     return make(config, family, position, seed,
       "Complète correctement : « " + item.subject + " ___ ». Utilise le verbe « " + item.infinitive + " » au présent.",
       item.answer, item.wrong, "Avec « " + item.subject + " », la forme correcte est « " + item.answer + " ».", "Accorder un verbe au présent");
@@ -212,7 +212,7 @@ function french(config: SessionConfig, family: Family, position: number, seed: n
       person, people.filter((value) => value !== person), "Le texte décrit ce que " + person + " fait.", "Lire un court texte et repérer une information");
   }
 
-  const item = FRENCH_SENTENCES[index % FRENCH_SENTENCES.length];
+  const item = FRENCH_SENTENCES[(position + seed) % FRENCH_SENTENCES.length];
   if (family === "editing") {
     const wrong = [item.target.replace(" à ", " a "), item.target.replace(/\.$/, ""), item.target.replace(/^./u, (letter) => letter.toLowerCase())].filter((value) => value !== item.target);
     return make(config, family, position, seed, "Quelle phrase est écrite correctement ?", item.target, wrong,
@@ -245,7 +245,7 @@ function twi(config: SessionConfig, family: Family, position: number, seed: numb
   }
 
   if (family === "grammar") {
-    const item = TWI_COMPLETIONS[index % TWI_COMPLETIONS.length];
+    const item = TWI_COMPLETIONS[(position + seed) % TWI_COMPLETIONS.length];
     return make(config, family, position, seed, "Asɛmfua bɛn na ɛfata baabi a wɔagyaw no hɔ? « " + item.prompt + " »", item.answer, item.wrong,
       "Mmuae a ɛfata ne « " + item.answer + " ».", "Fa asɛmfua a ɛfata wie kasamu");
   }
@@ -268,7 +268,7 @@ function twi(config: SessionConfig, family: Family, position: number, seed: numb
       item.a, item.wrong, "Mmuae no fi asɛm no mu pɛɛ.", "Kenkan asɛm na yi nsɛm titiriw");
   }
 
-  const item = TWI_SENTENCES[index % TWI_SENTENCES.length];
+  const item = TWI_SENTENCES[(position + seed) % TWI_SENTENCES.length];
   if (family === "editing") {
     const wrong = [item.target.replace(/\.$/, ""), item.target.replace("ɔ", "o"), item.target.replace("ɛ", "e")].filter((value) => value !== item.target);
     return make(config, family, position, seed, "Paw kasamu a wɔatwerɛ no yiye.", item.target, wrong,
