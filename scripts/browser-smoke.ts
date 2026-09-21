@@ -149,7 +149,7 @@ async function main() {
     assert.equal(await page.getByTestId("session-tools").evaluate(el=>getComputedStyle(el).position),"sticky","Mobile session controls must stay reachable");
     const prompts=new Set<string>();
     let sawIntelligentMission=false;
-    let verifiedOneColumnChoices=false;
+    let verifiedMobileAnswerLayout=false;
     for(let question=0;question<5;question++){
       const player=page.getByTestId("learning-question");
       await player.waitFor();
@@ -169,13 +169,20 @@ async function main() {
             const secondBox=await choices.nth(1).boundingBox();
             if(firstBox&&secondBox){
               assert.ok(secondBox.y>=firstBox.y+firstBox.height-1,"Mobile single and multi-select answer choices must stack vertically");
-              verifiedOneColumnChoices=true;
+              verifiedMobileAnswerLayout=true;
             }
           }
         }
         await choices.first().click();
       } else {
-        await player.getByLabel("Your answer").fill("0");
+        const answerInput=player.getByLabel("Your answer");
+        await answerInput.waitFor();
+        const inputBox=await answerInput.boundingBox();
+        const playerBox=await player.boundingBox();
+        assert.ok(inputBox&&playerBox&&inputBox.width<=playerBox.width+1,"Constructed-response input must stay inside the mobile question card");
+        assert.ok(inputBox.height>=48,"Constructed-response input must remain a usable mobile touch target");
+        verifiedMobileAnswerLayout=true;
+        await answerInput.fill("0");
       }
       await checkButton.click();
       const feedback=player.getByRole("status");
@@ -190,7 +197,7 @@ async function main() {
     }
     await page.getByText("SESSION COMPLETE",{exact:true}).waitFor();
     assert.equal(prompts.size,5,"SHS session must not repeat a question");
-    assert.equal(verifiedOneColumnChoices,true,"Browser smoke must verify one-column mobile answer layout");
+    assert.equal(verifiedMobileAnswerLayout,true,"Browser smoke must verify at least one valid mobile answer layout");
     assert.equal(sawIntelligentMission,true,"SHS session must surface at least one intelligent mission");
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on mobile");
 
