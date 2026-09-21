@@ -639,4 +639,95 @@ function QuestionPlayer({
   setConfidence,
   submit,
   next,
+}: {
+  question: LearnQuestion;
+  index: number;
+  total: number;
+  response: ResponseValue;
+  setResponse: (value: ResponseValue) => void;
+  toggleMulti: (optionId: string) => void;
+  submitted: boolean;
+  correct: boolean;
+  confidence: ConfidenceLevel | null;
+  setConfidence: (value: ConfidenceLevel | null) => void;
+  submit: () => void;
+  next: () => void;
+}) {
+  useEffect(()=>{document.getElementById("learn-question")?.focus({preventScroll:true});},[index]);
+  const selectedMulti = Array.isArray(response) ? response : [];
+  const move = thinkingMove(question);
+  const calibration = confidenceMessage(confidence, correct);
+
+  return (
+    <div className={styles.playerCard} data-testid="learning-question">
+      <div className={styles.playerMeta}>
+        <div><span>Question {index + 1} / {total}</span><strong>{question.subject} · {question.topic}</strong></div>
+        <div className={styles.difficulty}>Difficulty {question.difficulty}/5</div>
+      </div>
+      <div className={styles.playerProgress}><span style={{ width: `${percent(index + (submitted ? 1 : 0), total)}%` }} /></div>
+
+      <div className={styles.playerContent}>
+        <div className={styles.questionSignals} data-testid="question-signals">
+          <span className={styles.formatTag}>{question.kind.replace("single", "single choice").replace("multi", "multi-select")}</span>
+          {question.challenge && <span className={styles.challengeTag} data-testid="question-challenge">{question.challenge}</span>}
+          <span className={styles.thinkingTag} data-testid="thinking-move"><Brain size={12}/>{move.label}</span>
+          {question.mission && <span className={styles.missionTag} data-testid="question-mission"><Zap size={12}/>{question.mission}</span>}
+          {question.provenance && question.provenance.sourceType !== "original" && <span className={styles.sourceTag} data-testid="question-source">
+            {question.provenance.sourceType === "official-sample" ? "Official sample" : "Past paper"}
+            {question.provenance.year ? ` · ${question.provenance.year}` : ""}
+          </span>}
+        </div>
+
+        <div className={styles.thinkingCue}><strong>{move.label}</strong><span>{move.copy}</span></div>
+        {question.stimulus && <QuestionStimulusView stimulus={question.stimulus} />}
+        <h3 id="learn-question" tabIndex={-1}>{question.prompt}</h3>
+
+        {question.kind === "single" && <div className={styles.optionGrid}>{question.options?.map((option, optionIndex) => {
+          const selected = response === option.id;
+          const correctOption = submitted && option.id === question.answer;
+          const wrong = submitted && selected && option.id !== question.answer;
+          return <button data-testid="learning-option" key={option.id} disabled={submitted} className={`${styles.optionButton} ${selected ? styles.optionSelected : ""} ${correctOption ? styles.optionCorrect : ""} ${wrong ? styles.optionWrong : ""}`} onClick={() => setResponse(option.id)}><span className={styles.optionChoice}><b className={styles.optionLetter}>{String.fromCharCode(65 + optionIndex)}</b><span className={styles.optionText}>{option.label}</span></span>{correctOption ? <Check size={19} /> : wrong ? <X size={19} /> : <ChevronRight size={17} className={styles.optionArrow} />}</button>;
+        })}</div>}
+
+        {question.kind === "multi" && <div className={styles.optionGrid}>{question.options?.map((option, optionIndex) => {
+          const selected = selectedMulti.includes(option.id);
+          const expected = Array.isArray(question.answer) && question.answer.includes(option.id);
+          const correctOption = submitted && expected;
+          const wrong = submitted && selected && !expected;
+          return <button data-testid="learning-option" key={option.id} disabled={submitted} className={`${styles.optionButton} ${selected ? styles.optionSelected : ""} ${correctOption ? styles.optionCorrect : ""} ${wrong ? styles.optionWrong : ""}`} onClick={() => toggleMulti(option.id)}><span className={styles.optionChoice}><b className={styles.optionLetter}>{String.fromCharCode(65 + optionIndex)}</b><span className={styles.optionText}>{option.label}</span></span>{selected && !submitted ? <CheckCircle2 size={19} /> : correctOption ? <Check size={19} /> : wrong ? <X size={19} /> : <span className={styles.multiCue}>SELECT</span>}</button>;
+        })}</div>}
+
+        {question.kind === "boolean" && <div className={styles.booleanRow}>{[true, false].map((value) => <button data-testid="learning-option" key={String(value)} disabled={submitted} className={response === value ? styles.booleanActive : styles.booleanButton} onClick={() => setResponse(value)}>{value ? "True" : "False"}</button>)}</div>}
+
+        {["fill", "short"].includes(question.kind) && <div className={styles.textAnswer}><input aria-label="Your answer" disabled={submitted} value={typeof response === "string" ? response : ""} onChange={(event) => setResponse(event.target.value)} placeholder={question.kind === "short" ? "Type your short answer" : "Fill in the answer"} onKeyDown={(event) => { if (event.key === "Enter") submit(); }} /></div>}
+
+        {question.kind === "numeric" && <div className={styles.textAnswer}><input aria-label="Your answer" disabled={submitted} inputMode="decimal" value={typeof response === "number" || typeof response === "string" ? response : ""} onChange={(event) => setResponse(event.target.value)} placeholder="Enter your numerical answer" onKeyDown={(event) => { if (event.key === "Enter") submit(); }} /></div>}
+      </div>
+
+      <div className={styles.playerDock}>
+        {!submitted ? <>
+          <div className={styles.confidenceStrip} data-testid="confidence-calibration">
+            <span>How sure are you?</span>
+            <div>
+              {([
+                ["low", "Guessing"],
+                ["medium", "Unsure"],
+                ["high", "Confident"],
+              ] as const).map(([value,label])=><button key={value} type="button" aria-pressed={confidence===value} className={confidence===value?styles.confidenceActive:styles.confidenceButton} onClick={()=>setConfidence(confidence===value?null:value)}>{label}</button>)}
+            </div>
+          </div>
+          <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div>
+        </> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}>
+          <div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div>
+          <div>
+            <strong>{correct ? `Yes! +${10 + question.difficulty * 2} XP` : "Almost — learn it and go again."}</strong>
+            {calibration && <span className={styles.calibrationNote}>{calibration}</span>}
+            <p>{question.explanation}</p>
+            {question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}
+          </div>
+          <button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button>
+        </div>}
+      </div>
+    </div>
+  );
 }
