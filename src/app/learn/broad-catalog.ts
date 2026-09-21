@@ -31,7 +31,7 @@ function defaultTopicsForCourse(label: string) {
   if (/web|mobile application|digital transformation|enterprise systems/.test(value)) return ["Application architecture", "User interfaces", "Data & APIs", "Security & deployment", "Testing & maintenance"];
   if (/artificial intelligence|machine learning|data mining/.test(value)) return ["Problem representation", "Learning & inference", "Data preparation", "Model evaluation", "Ethics & deployment"];
   if (/cloud|distributed/.test(value)) return ["Distributed architecture", "Virtualisation & containers", "Storage & networking", "Scalability & reliability", "Security & operations"];
-  if (/computer|information technology|digital/.test(value)) return ["Programming & algorithms", "Data & databases", "Networks & cybersecurity", "Computer systems", "Software & digital services"];
+  if (/computing|computer|information technology|digital/.test(value)) return ["Programming & algorithms", "Data & databases", "Networks & cybersecurity", "Computer systems", "Digital safety & ethics"];
 
   if (/calculus/.test(value)) return ["Functions & limits", "Differentiation", "Applications of derivatives", "Integration", "Applications of integration"];
   if (/linear algebra/.test(value)) return ["Vectors", "Matrices & systems", "Determinants", "Vector spaces", "Linear transformations"];
