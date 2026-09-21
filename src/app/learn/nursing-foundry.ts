@@ -704,6 +704,7 @@ function clinicalTable(item: NursingConcept, seed: number): QuestionStimulus {
 
 function buildQuestion(
   config: SessionConfig,
+  domain: NursingDomain,
   concepts: readonly NursingConcept[],
   item: NursingConcept,
   position: number,
@@ -715,6 +716,35 @@ function buildQuestion(
   const age = pick(AGES, local, 2);
   const clueA = item.clues[local % item.clues.length];
   const clueB = item.clues[(local + 1) % item.clues.length];
+
+  if (family === 11 && domain === "pharmacology") {
+    const prescribed = 250 + (local % 5) * 125;
+    const available = 125 + (local % 3) * 125;
+    const tablets = prescribed / available;
+    const safeAvailable = prescribed % available === 0 ? available : prescribed;
+    const safeTablets = prescribed / safeAvailable;
+    return baseQuestion(config, "dose-calculation", position, seed,
+      "Use the medication information shown. How many tablets are required for one prescribed dose?",
+      "Calculate a medication dose from prescribed and available strengths",
+      {
+        kind: "numeric",
+        answer: safeTablets,
+        acceptedAnswers: [String(safeTablets)],
+        explanation: `Required tablets = prescribed dose ÷ strength per tablet = ${prescribed} mg ÷ ${safeAvailable} mg = ${safeTablets}.`,
+        stimulus: {
+          kind: "table",
+          title: "Medication label check",
+          columns: ["Item", "Value"],
+          rows: [
+            ["Prescribed dose", `${prescribed} mg`],
+            ["Available strength", `${safeAvailable} mg per tablet`],
+            ["Route", "Oral"],
+          ],
+        },
+        hint: "Make sure the dose and stock strength use the same unit before dividing.",
+      },
+    );
+  }
 
   if (family === 0) {
     const picked = optionSet(item.term, plausibleTerms(concepts, item, local), local);
@@ -973,7 +1003,7 @@ export function buildNursingQuestions(
       topicId: target.topic.id,
     };
 
-    const question = buildQuestion(localConfig, concepts, item, position, seed);
+    const question = buildQuestion(localConfig, domain, concepts, item, position, seed);
     if (seenPrompts.has(question.prompt)) continue;
     seenPrompts.add(question.prompt);
     output.push(question);
