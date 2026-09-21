@@ -308,8 +308,15 @@ export function LearningExplorer() {
     const previousMastery = progress.mastery[key] ?? { answered: 0, correct: 0 };
     const exposures = [currentQuestion.exposureKey, ...progress.exposures.filter((item) => item !== currentQuestion.exposureKey)].slice(0, 200);
     const earnedXp = correct ? 10 + currentQuestion.difficulty * 2 : 0;
-    const confidenceKey = confidence ?? "medium";
-    const previousConfidence = progress.confidence[confidenceKey];
+    const nextConfidence = confidence
+      ? {
+          ...progress.confidence,
+          [confidence]: {
+            answered: progress.confidence[confidence].answered + 1,
+            correct: progress.confidence[confidence].correct + (correct ? 1 : 0),
+          },
+        }
+      : progress.confidence;
     const nextProgress: LearnerProgress = {
       ...progress,
       answered: progress.answered + 1,
@@ -324,13 +331,7 @@ export function LearningExplorer() {
           correct: previousMastery.correct + (correct ? 1 : 0),
         },
       },
-      confidence: {
-        ...progress.confidence,
-        [confidenceKey]: {
-          answered: previousConfidence.answered + 1,
-          correct: previousConfidence.correct + (correct ? 1 : 0),
-        },
-      },
+      confidence: nextConfidence,
     };
     persist(nextProgress);
     if (mode === "adaptive") {
