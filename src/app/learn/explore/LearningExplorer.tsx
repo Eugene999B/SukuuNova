@@ -467,7 +467,7 @@ export function LearningExplorer() {
             const ready=subjectIsReady(lane,program.id,level.id,item);
             return <button key={item.id} className={styles.subjectCard} onClick={()=>selectSubject(item.id)}>
               <BookOpen size={19}/>
-              <span><strong>{item.label}</strong><small>{ready?"Ready":"Content expanding"}</small></span>
+              <span><strong>{item.label}</strong><small>{ready?"Practice ready":"Practice"}</small></span>
               <ChevronRight size={16}/>
             </button>;
           })}</div>
@@ -488,8 +488,8 @@ export function LearningExplorer() {
             </button>
             {subject.topics.map(item=>{
               const ready=topicIsReady(lane,program.id,level.id,subject,item.id);
-              return <button key={item.id} disabled={!ready} className={styles.topicButton} onClick={()=>{setTopicId(item.id);setLaunchNotice("");setFlowStep(5);}}>
-                <BookOpen size={17}/><span>{item.label}</span>{ready?<ChevronRight size={16}/>:<small>Soon</small>}
+              return <button key={item.id} className={styles.topicButton} onClick={()=>{setTopicId(item.id);setLaunchNotice("");setFlowStep(5);}}>
+                <BookOpen size={17}/><span>{item.label}</span>{ready?<ChevronRight size={16}/>:<ChevronRight size={16}/>}
               </button>;
             })}
           </div>
