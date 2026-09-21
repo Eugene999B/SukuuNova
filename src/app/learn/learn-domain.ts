@@ -478,7 +478,7 @@ function publishCatalog(catalog: LearningCatalog): LearningCatalog {
   };
 }
 
-export const LEARNING_CATALOGS: LearningCatalog[] = [
+export const LEARNING_CATALOGS: LearningCatalog[] = ([
   {
     id: "school",
     label: "School",
@@ -569,7 +569,8 @@ export const LEARNING_CATALOGS: LearningCatalog[] = [
       },
     ],
   },
-].map(publishCatalog);
+] as LearningCatalog[]).map(publishCatalog);
+
 function hashText(text: string) {
   let hash = 2166136261;
   for (let index = 0; index < text.length; index += 1) {
