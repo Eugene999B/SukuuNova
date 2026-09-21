@@ -124,8 +124,6 @@ export function LearningExplorer() {
   const [submitted, setSubmitted] = useState(false);
   const [lastCorrect, setLastCorrect] = useState(false);
   const [sessionCorrect, setSessionCorrect] = useState(0);
-  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
-  const [sessionSeconds, setSessionSeconds] = useState(0);
   const [launchNotice, setLaunchNotice] = useState("");
   const [programQuery, setProgramQuery] = useState("");
   const [showAllPrograms, setShowAllPrograms] = useState(false);
@@ -167,14 +165,6 @@ export function LearningExplorer() {
       setProgress(EMPTY_PROGRESS);
     }
   }, []);
-
-  useEffect(() => {
-    if (!sessionStartedAt || !session.length) return;
-    const update = () => setSessionSeconds(Math.max(0, Math.floor((Date.now() - sessionStartedAt) / 1000)));
-    update();
-    const timer = window.setInterval(update, 1000);
-    return () => window.clearInterval(timer);
-  }, [sessionStartedAt, session.length]);
 
   useEffect(() => {
     if (!sessionInProgress) return;
@@ -275,8 +265,6 @@ export function LearningExplorer() {
     setSubmitted(false);
     setLastCorrect(false);
     setSessionCorrect(0);
-    setSessionStartedAt(Date.now());
-    setSessionSeconds(0);
     window.setTimeout(() => document.getElementById("session-player")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   }
 
@@ -330,7 +318,6 @@ export function LearningExplorer() {
       const next = { ...progress, sessions: progress.sessions + 1 };
       persist(next);
       setQuestionIndex(session.length);
-      setSessionStartedAt(null);
       playSound("complete");
       return;
     }
@@ -489,7 +476,7 @@ export function LearningExplorer() {
       </fieldset>
 
       {session.length>0&&<section id="session-player" className={styles.playerSection}>
-        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>{subject.label}</strong><span>{topic.label}</span><small>{questionIndex + 1}/{session.length}</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup?"))return;setSession([]);setSessionStartedAt(null);setLaunchNotice("");setFlowStep(5);answerLock.current=false;}}>Exit session</button></div>}
+        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>{subject.label}</strong><span>{topic.label}</span><small>{questionIndex + 1}/{session.length}</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup?"))return;setSession([]);setLaunchNotice("");setFlowStep(5);answerLock.current=false;}}>Exit session</button></div>}
         {launchNotice&&session.length>0&&<p role="status" className={styles.engineNote}>{launchNotice}</p>}
 
         {isComplete ? (
