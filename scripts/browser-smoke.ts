@@ -104,7 +104,7 @@ async function main() {
     await page.getByRole("button",{name:"BECE practice",exact:true}).click();
     await page.getByRole("button",{name:/Mathematics/}).first().click();
     await page.getByRole("button",{name:"Mixed topics",exact:true}).click();
-    assert.equal(await page.getByRole("button",{name:"Questions for this topic are still being built",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
+    assert.equal(await page.getByRole("button",{name:"Not ready yet",exact:true}).isDisabled(),true,"Mapped exams must not launch generic school questions");
 
     await page.goto("/learn/explore?lane=school");
     await page.getByRole("heading",{name:"Your school pathway",exact:true}).waitFor();
@@ -165,7 +165,7 @@ async function main() {
 
     await page.goto("/learn/explore?lane=university");
     await page.getByRole("heading",{name:"Your programme",exact:true}).waitFor();
-    const programmeSearch=page.getByPlaceholder("Search medicine, law, engineering…");
+    const programmeSearch=page.getByPlaceholder("Search programmes…");
     await programmeSearch.waitFor();
     await programmeSearch.fill("law");
     await page.getByRole("button",{name:/Law \(LLB\)/}).waitFor();
