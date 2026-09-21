@@ -146,7 +146,10 @@ async function main() {
     await page.waitForFunction(()=>document.querySelector("main[data-session-active=\"true\"]"));
     assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Active learning must use the focused session surface");
     assert.equal(await page.locator("main").evaluate(el=>getComputedStyle(el).position),"fixed","Focused session must own the mobile viewport");
+    assert.ok(await page.locator("body").evaluate(body=>body.scrollHeight<=window.innerHeight+1),"Active Learn practice must not make the mobile page scroll");
     assert.equal(await page.getByTestId("session-tools").evaluate(el=>getComputedStyle(el).position),"sticky","Mobile session controls must stay reachable");
+    const activePlayerBox=await page.getByTestId("learning-question").boundingBox();
+    assert.ok(activePlayerBox&&activePlayerBox.y>=0&&activePlayerBox.y+activePlayerBox.height<=800.5,"Question player must fit inside the active mobile viewport");
     const prompts=new Set<string>();
     let sawIntelligentMission=false;
     let verifiedMobileAnswerLayout=false;
@@ -155,7 +158,10 @@ async function main() {
       await player.waitFor();
       prompts.add(await player.locator("h3").innerText());
       await page.getByTestId("question-signals").waitFor();
+      await page.getByTestId("thinking-move").waitFor();
       if(await page.getByTestId("question-mission").count()) sawIntelligentMission=true;
+      await page.getByTestId("confidence-calibration").waitFor();
+      if(question===0) await player.getByRole("button",{name:"Confident",exact:true}).click();
       assert.equal(await player.getByRole("button",{name:"Check answer",exact:true}).isDisabled(),true,"Blank answers must not be marked");
       const checkButton=player.getByRole("button",{name:"Check answer",exact:true});
       assert.ok((await checkButton.boundingBox())!.height>=48,"Mobile Check answer target must be at least 48px high");
@@ -188,6 +194,7 @@ async function main() {
       const feedback=player.getByRole("status");
       await feedback.waitFor();
       const feedbackText=await feedback.innerText();
+      if(question===0) assert.ok(/calibration/i.test(feedbackText),"Confidence choice must produce calibration feedback after answering");
       const expectedCue=feedbackText.includes("Yes!")?"correct":"retry";
       await page.waitForFunction(
         (cue)=>document.querySelector("[data-audio-root]")?.getAttribute("data-last-cue")===cue,
