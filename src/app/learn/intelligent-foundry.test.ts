@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isCorrectAnswer } from "./learn-domain";
+import { catalogFor, isCorrectAnswer } from "./learn-domain";
 import {
   buildIntelligentQuestions,
   intelligentCapacityForSelection,
@@ -21,6 +21,32 @@ describe("SukuuNova intelligent question foundry", () => {
   it("exposes genuinely massive deterministic capacity for a broad SHS subject", () => {
     expect(intelligentCapacityForSelection(shsMath)).toBeGreaterThan(10_000_000);
     expect(intelligentTemplatesForSelection(shsMath).length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("maps broad courses to real domain topics instead of three generic buckets", () => {
+    const school = catalogFor("school");
+    const programme = school.programs.find((item) => item.id === "shs-general-science");
+    const level = programme?.levels.find((item) => item.id === "shs-1");
+    const mathematics = level?.subjects.find((item) => item.id === "core-mathematics");
+
+    expect(mathematics?.topics.map((topic) => topic.id)).toContain("algebra-and-equations");
+    expect(mathematics?.topics.map((topic) => topic.id)).toContain("statistics-probability-and-data");
+    expect(mathematics?.topics.map((topic) => topic.id)).not.toEqual(["core-concepts", "applications", "problem-solving"]);
+  });
+
+  it("only releases massive generators on concept-compatible topics", () => {
+    expect(intelligentCapacityForSelection({ ...shsMath, topicId: "algebra-and-equations" })).toBeGreaterThan(1_000_000);
+    expect(intelligentCapacityForSelection({ ...shsMath, topicId: "geometry-and-measurement" })).toBe(0);
+
+    expect(intelligentCapacityForSelection({
+      lane: "university",
+      programId: "law",
+      levelId: "level-100",
+      subjectId: "law-of-contract-i",
+      topicId: "contract-formation",
+      mode: "topic",
+      count: 10,
+    })).toBeGreaterThan(0);
   });
 
   it("creates 100 unique mixed-form questions without storing 100 rows", () => {
