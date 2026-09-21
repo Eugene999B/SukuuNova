@@ -109,7 +109,6 @@ function firstReadyTopic(lane: LearnLane, programId: string, levelId: string, su
 export function LearningExplorer() {
   const playSound=useLearningSound();
   const answerLock=useRef(false);
-  const [showAllTopics,setShowAllTopics]=useState(false);
   const [lane, setLane] = useState<LearnLane>("school");
   const catalog = useMemo(() => catalogFor(lane), [lane]);
   const [programId, setProgramId] = useState(catalog.programs[0].id);
@@ -206,7 +205,6 @@ export function LearningExplorer() {
     const nextProgram = nextCatalog.programs[0];
     const nextLevel = nextProgram.levels[0];
     const nextSubject = firstReadySubject(nextLane, nextProgram.id, nextLevel);
-    setShowAllTopics(false);
     setLane(nextLane);
     setProgramId(nextProgram.id);
     setLevelId(nextLevel.id);
@@ -350,7 +348,6 @@ export function LearningExplorer() {
   }
 
   const isComplete = session.length > 0 && questionIndex >= session.length;
-  const sessionAccuracy = percent(sessionCorrect, session.length);
 
   return (
     <main className={`${styles.page} ${sessionFocused ? styles.sessionFocused : styles.setupFocused}`} data-session-active={sessionInProgress ? "true" : "false"}>
