@@ -4,11 +4,17 @@ const { releaseCheckState } = createRequire(import.meta.url)("../scripts/verify-
 describe("production release gate", () => {
   const run = { id: 1, head_sha: "current", head_branch: "main", event: "push", path: ".github/workflows/build.yml", status: "completed", conclusion: "success" };
   it("requires the successful main build for exactly the deployed commit", () => {
-    expect(releaseCheckState([run], "current")).toBe("passed");
-    expect(releaseCheckState([run], "other")).toBe("pending");
-    expect(releaseCheckState([{ ...run, event: "pull_request" }], "current")).toBe("pending");
-    expect(releaseCheckState([{ ...run, path: "unrelated.yml" }], "current")).toBe("pending");
-    expect(releaseCheckState([{ ...run, conclusion: "failure" }], "current")).toBe("failed");
-    expect(releaseCheckState([run, { ...run, id: 2, status: "in_progress" }], "current")).toBe("pending");
+    expect(releaseCheckState([run], "current")).toEqual({ state: "passed", run });
+    expect(releaseCheckState([run], "other")).toEqual({ state: "pending", run: null });
+    expect(releaseCheckState([{ ...run, event: "pull_request" }], "current")).toEqual({ state: "pending", run: null });
+    expect(releaseCheckState([{ ...run, path: "unrelated.yml" }], "current")).toEqual({ state: "pending", run: null });
+    expect(releaseCheckState([{ ...run, conclusion: "failure" }], "current")).toEqual({
+      state: "failed",
+      run: { ...run, conclusion: "failure" },
+    });
+    expect(releaseCheckState([run, { ...run, id: 2, status: "in_progress" }], "current")).toEqual({
+      state: "pending",
+      run: { ...run, id: 2, status: "in_progress" },
+    });
   });
 });
