@@ -71,7 +71,7 @@ describe("Learn intelligence core", () => {
   });
 
   it("recognizes prompt patterns even when only numbers change", () => {
-    const first = q(1,"math","numeric","Apply");
+    const first = { ...q(1,"math","numeric","Apply"), prompt: "Calculate the value shown in question 12." };
     const second = { ...q(2,"math","numeric","Apply"), prompt: "Calculate the value shown in question 999." };
     expect(questionPatternSignature(first)).toBe(questionPatternSignature(second));
   });
