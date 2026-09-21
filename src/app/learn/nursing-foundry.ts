@@ -656,13 +656,39 @@ function baseQuestion(
 }
 
 function clinicalTable(item: NursingConcept, seed: number): QuestionStimulus {
+  const physiological = [
+    "shock",
+    "postoperative-deterioration",
+    "deterioration",
+    "asthma-deterioration",
+    "heart-failure",
+    "pneumonia",
+    "dehydration",
+    "hypoglycaemia",
+    "postpartum-haemorrhage",
+    "preeclampsia-warning",
+  ].includes(item.id);
+
+  if (!physiological) {
+    return {
+      kind: "table",
+      title: "Clinical safety review",
+      columns: ["Review item", "Finding"],
+      rows: [
+        ["Relevant cue", item.clues[seed % item.clues.length]],
+        ["Additional cue", item.clues[(seed + 1) % item.clues.length]],
+        ["Current practice", item.unsafeAction],
+        ["Required follow-up", "Not yet completed"],
+      ],
+    };
+  }
+
   const basePulse = 72 + (seed % 12);
   const baseResp = 16 + (seed % 4);
   const baseSbp = 118 + (seed % 10);
-  const deterioration = item.id === "shock" || item.id === "postoperative-deterioration" || item.id === "deterioration";
-  const currentPulse = deterioration ? basePulse + 34 : basePulse + 6;
-  const currentResp = deterioration ? baseResp + 12 : baseResp + 2;
-  const currentSbp = deterioration ? baseSbp - 32 : baseSbp - 5;
+  const currentPulse = basePulse + 28 + (seed % 9);
+  const currentResp = baseResp + 8 + (seed % 5);
+  const currentSbp = baseSbp - 22 - (seed % 11);
   return {
     kind: "table",
     title: "Observation trend",
@@ -671,7 +697,7 @@ function clinicalTable(item: NursingConcept, seed: number): QuestionStimulus {
       ["Pulse", `${basePulse}/min`, `${currentPulse}/min`],
       ["Respiratory rate", `${baseResp}/min`, `${currentResp}/min`],
       ["Systolic BP", `${baseSbp} mmHg`, `${currentSbp} mmHg`],
-      ["Mental status", "Alert", deterioration ? "New confusion" : "Alert"],
+      ["Mental status", "Alert", "New concern / change"],
     ],
   };
 }
