@@ -11,42 +11,94 @@ function slug(value: string) {
 function defaultTopicsForCourse(label: string) {
   const value = label.toLowerCase();
 
-  if (/law|contract|constitutional|criminal|tort|evidence|jurisprudence|legal/.test(value)) {
-    return ["Legal method & reasoning", "Contract formation", "Rights, duties & remedies", "Case analysis", "Legal research"];
-  }
-  if (/program|computer|software|web|network|cyber|database|cloud|information technology|artificial intelligence|machine learning|digital/.test(value)) {
-    return ["Programming & algorithms", "Data & databases", "Networks & cybersecurity", "Computer systems", "Software & web applications"];
-  }
-  if (/chemistry/.test(value)) {
-    return ["Quantitative chemistry & reactions", "Atomic structure & bonding", "Acids, bases & solutions", "Organic chemistry", "Laboratory analysis"];
-  }
-  if (/anatomy|physiology|nursing|health|medicine|pharmacy|biology|biomedical|biochemistry|microbiology|genetics|pathology|pharmacology/.test(value)) {
-    return ["Cells & body systems", "Physiology", "Genetics & inheritance", "Population health", "Clinical & research evidence"];
-  }
-  if (/physics|engineering|mechanics|circuit|electric|electronic|drawing|construction|survey|architecture|materials|robotics/.test(value)) {
-    return ["Mechanics & motion", "Electricity, circuits & power", "Materials & structures", "Engineering drawing & scale", "Systems & design"];
-  }
-  if (/mathematics|calculus|statistics|probability|algebra|econometrics|quantitative/.test(value)) {
-    return ["Algebra & equations", "Functions & modelling", "Geometry & measurement", "Statistics, probability & data", "Percentages & financial mathematics"];
-  }
-  if (/research|methodology|project/.test(value)) {
-    return ["Research design", "Sampling & evidence", "Variables & measurement", "Data interpretation", "Evaluation & conclusions"];
-  }
-  if (/account|business|economics|finance|management|marketing|procurement|supply|entrepreneur|operations/.test(value)) {
-    return ["Accounting & financial analysis", "Cost-volume-profit", "Markets & economic decisions", "Management & operations", "Financial mathematics"];
-  }
-  if (/english|literature|french|communication|writing|language/.test(value)) {
-    return ["Language foundations", "Reading & interpretation", "Writing & communication", "Applied language", "Critical analysis"];
-  }
+  if (/contract/.test(value)) return ["Offer & acceptance", "Consideration & intention", "Terms & interpretation", "Breach & discharge", "Remedies & case analysis"];
+  if (/constitutional/.test(value)) return ["Constitutional structure", "Separation of powers", "Fundamental rights", "Judicial review", "Constitutional interpretation"];
+  if (/criminal/.test(value)) return ["Elements of offences", "Actus reus & mens rea", "Defences", "Participation & liability", "Criminal case analysis"];
+  if (/tort/.test(value)) return ["Duty of care", "Breach & standard of care", "Causation & remoteness", "Defences", "Damages & remedies"];
+  if (/land law|property/.test(value)) return ["Interests in land", "Title & ownership", "Transfers & registration", "Land use & obligations", "Disputes & remedies"];
+  if (/company|commercial law|business law/.test(value)) return ["Legal personality & formation", "Governance & duties", "Commercial transactions", "Liability & compliance", "Disputes & remedies"];
+  if (/evidence|procedure|jurisprudence|legal systems|legal research/.test(value)) return ["Legal method & reasoning", "Authority & precedent", "Procedure & proof", "Case analysis", "Legal research & writing"];
+  if (/law/.test(value)) return ["Legal method & reasoning", "Rights, duties & liability", "Procedure & proof", "Case analysis", "Remedies & legal research"];
 
-  return ["Foundations", "Core concepts", "Applications", "Problem solving", "Review & synthesis"];
+  if (/data structures|algorithm/.test(value)) return ["Arrays, lists & sequences", "Stacks, queues & hashing", "Trees & graphs", "Searching & sorting", "Complexity & algorithm design"];
+  if (/object-oriented/.test(value)) return ["Classes & objects", "Encapsulation", "Inheritance", "Polymorphism", "Design & testing"];
+  if (/programming|coding/.test(value)) return ["Variables & data types", "Control flow", "Functions & modularity", "Data structures", "Debugging & testing"];
+  if (/database/.test(value)) return ["Data modelling", "Relational design", "SQL queries", "Transactions & integrity", "Database security & optimisation"];
+  if (/operating system/.test(value)) return ["Processes & threads", "Memory management", "File systems", "Scheduling & concurrency", "Security & resource management"];
+  if (/computer architecture|computer systems|hardware|microprocessor|embedded/.test(value)) return ["Digital representation", "CPU & instruction execution", "Memory & storage", "Input/output & interfaces", "Embedded systems & performance"];
+  if (/network|data communication/.test(value)) return ["Network models & protocols", "Addressing & subnetting", "Routing & switching", "Performance & troubleshooting", "Network security"];
+  if (/cyber|information security/.test(value)) return ["Security principles", "Authentication & access control", "Cryptography", "Network & application security", "Risk, incidents & governance"];
+  if (/web|mobile application|digital transformation|enterprise systems/.test(value)) return ["Application architecture", "User interfaces", "Data & APIs", "Security & deployment", "Testing & maintenance"];
+  if (/artificial intelligence|machine learning|data mining/.test(value)) return ["Problem representation", "Learning & inference", "Data preparation", "Model evaluation", "Ethics & deployment"];
+  if (/cloud|distributed/.test(value)) return ["Distributed architecture", "Virtualisation & containers", "Storage & networking", "Scalability & reliability", "Security & operations"];
+  if (/computer|information technology|digital/.test(value)) return ["Programming & algorithms", "Data & databases", "Networks & cybersecurity", "Computer systems", "Software & digital services"];
+
+  if (/calculus/.test(value)) return ["Functions & limits", "Differentiation", "Applications of derivatives", "Integration", "Applications of integration"];
+  if (/linear algebra/.test(value)) return ["Vectors", "Matrices & systems", "Determinants", "Vector spaces", "Linear transformations"];
+  if (/probability/.test(value)) return ["Probability rules", "Random variables", "Probability distributions", "Expectation & variance", "Conditional probability"];
+  if (/statistics|regression|econometrics|biostatistics/.test(value)) return ["Descriptive statistics", "Probability & distributions", "Sampling & estimation", "Hypothesis testing", "Regression & data interpretation"];
+  if (/mathematics|quantitative/.test(value)) return ["Algebra & equations", "Functions & modelling", "Geometry & measurement", "Statistics, probability & data", "Percentages & financial mathematics"];
+
+  if (/anatomy/.test(value)) return ["Anatomical terminology", "Cells, tissues & organisation", "Musculoskeletal system", "Organ systems", "Applied anatomy"];
+  if (/physiology/.test(value)) return ["Cell physiology", "Cardiovascular physiology", "Respiratory physiology", "Renal & endocrine regulation", "Homeostasis & integration"];
+  if (/biochemistry/.test(value)) return ["Biomolecules", "Enzymes", "Metabolism", "Molecular biology", "Biochemical analysis"];
+  if (/microbiology/.test(value)) return ["Microbial structure", "Growth & genetics", "Pathogenesis", "Host defence", "Laboratory identification"];
+  if (/immunology/.test(value)) return ["Innate immunity", "Adaptive immunity", "Antibodies & lymphocytes", "Immune disorders", "Vaccines & immunological tests"];
+  if (/pathology/.test(value)) return ["Cell injury & adaptation", "Inflammation & repair", "Haemodynamic disorders", "Neoplasia", "Systemic pathology"];
+  if (/pharmacology/.test(value)) return ["Pharmacokinetics", "Pharmacodynamics", "Drug classes & mechanisms", "Adverse effects & interactions", "Safe prescribing"];
+  if (/therapeutic/.test(value)) return ["Clinical assessment", "Treatment selection", "Dose & monitoring", "Adverse effects & interactions", "Evidence-based therapeutics"];
+  if (/nursing/.test(value)) return ["Assessment & care planning", "Patient safety", "Clinical procedures", "Communication & ethics", "Evaluation of care"];
+  if (/public health|epidemiology|community health|health policy|global health|occupational health/.test(value)) return ["Population health measures", "Study designs & surveillance", "Prevention & health promotion", "Health systems & policy", "Data interpretation & evaluation"];
+  if (/medicine|surgery|paediatric|obstetric|gynaecology|psychiatry|clinical|emergency|family medicine/.test(value)) return ["Clinical assessment", "Diagnosis & differential reasoning", "Investigations", "Management & treatment", "Safety, ethics & follow-up"];
+  if (/pharmacy|pharmaceutic|pharmacognosy|medicinal chemistry/.test(value)) return ["Medicines & formulation", "Drug action & disposition", "Quality & safety", "Patient-centred use", "Pharmacy practice & regulation"];
+  if (/biology|genetic|molecular biology|cell biology|human biology/.test(value)) return ["Cells & organisation", "Physiology", "Genetics & inheritance", "Ecology & evolution", "Scientific investigation"];
+  if (/chemistry/.test(value)) return ["Quantitative chemistry & reactions", "Atomic structure & bonding", "Acids, bases & solutions", "Organic chemistry", "Laboratory analysis"];
+
+  if (/thermodynamic|heat transfer|energy systems/.test(value)) return ["Properties & state", "Energy balances", "First & second laws", "Heat transfer processes", "Engineering applications"];
+  if (/fluid|hydraulic|water resource/.test(value)) return ["Fluid properties", "Pressure & statics", "Flow & continuity", "Energy & momentum", "Pipes, channels & applications"];
+  if (/mechanic|dynamics|mechanics of materials/.test(value)) return ["Forces & equilibrium", "Motion & dynamics", "Stress & strain", "Energy & momentum", "Engineering problem solving"];
+  if (/circuit|electric|electronic|power|signal|control/.test(value)) return ["Circuit quantities", "DC & AC analysis", "Signals & systems", "Control & feedback", "Power, safety & applications"];
+  if (/structural|concrete|foundation|soil|geotechnical/.test(value)) return ["Loads & equilibrium", "Materials & stress", "Structural analysis", "Design & safety", "Construction & field application"];
+  if (/survey|transportation|highway|construction/.test(value)) return ["Measurement & field data", "Planning & design", "Materials & methods", "Analysis & safety", "Project delivery"];
+  if (/drawing|architecture|design studio|building/.test(value)) return ["Technical drawing & scale", "Materials & construction", "Design principles", "Systems & services", "Project evaluation"];
+  if (/engineering|robotic|mechatronic|manufactur/.test(value)) return ["Mechanics & motion", "Electricity, circuits & power", "Materials & structures", "Engineering drawing & scale", "Systems & design"];
+
+  if (/financial accounting|financial reporting|accounting/.test(value)) return ["Accounting equation & double entry", "Adjustments & accruals", "Financial statements", "Analysis & interpretation", "Controls, ethics & reporting"];
+  if (/audit/.test(value)) return ["Audit planning", "Risk & internal control", "Audit evidence", "Testing & procedures", "Reporting & ethics"];
+  if (/tax/.test(value)) return ["Tax principles", "Taxable income", "Computation & rates", "Compliance & administration", "Planning & ethics"];
+  if (/finance|investment|bank|portfolio|derivative|risk/.test(value)) return ["Time value of money", "Risk & return", "Valuation", "Financing & capital structure", "Investment & portfolio decisions"];
+  if (/economics|microeconom|macroeconom|monetary|international economics|labour economics|development economics/.test(value)) return ["Scarcity & opportunity cost", "Demand, supply & markets", "Elasticity & incentives", "Macroeconomic indicators", "Policy & economic analysis"];
+  if (/marketing|consumer|advertising|brand|retail|sales/.test(value)) return ["Customers & markets", "Segmentation & positioning", "Marketing mix", "Research & analytics", "Strategy & digital channels"];
+  if (/human resource|organisational behaviour|leadership|change management|talent|performance management/.test(value)) return ["People & organisations", "Recruitment & development", "Performance & reward", "Leadership & change", "Employment relations & analytics"];
+  if (/procurement|logistics|inventory|supply chain|purchasing|sourcing/.test(value)) return ["Procurement cycle", "Supplier & contract management", "Inventory & logistics", "Operations & supply networks", "Risk, sustainability & analytics"];
+  if (/management|entrepreneur|operations|strategy|project management/.test(value)) return ["Planning & decision making", "Organising & operations", "Leadership & people", "Control & performance", "Strategy & enterprise"];
+  if (/business/.test(value)) return ["Accounting & financial analysis", "Markets & economic decisions", "Management & operations", "Customers & marketing", "Strategy & enterprise"];
+
+  if (/psycholog|cognitive|personality|counsell|neuropsych/.test(value)) return ["Biological & cognitive processes", "Learning & development", "Personality & individual differences", "Social & clinical behaviour", "Research methods & ethics"];
+  if (/politic|governance|international relation|public policy|public administration|security studies|foreign policy/.test(value)) return ["Political ideas & institutions", "Governance & public administration", "Comparative & national politics", "International relations", "Policy, participation & evidence"];
+  if (/sociolog|social theory|population|gender|criminology/.test(value)) return ["Social theory", "Institutions & culture", "Inequality & stratification", "Population & social change", "Research & applied sociology"];
+  if (/journalism|media|communication|public relations|broadcast|advertising/.test(value)) return ["Communication theory", "Writing & storytelling", "Media production", "Audiences, law & ethics", "Digital strategy & research"];
+  if (/education|teaching|curriculum|pedagogy|classroom|assessment/.test(value)) return ["Learning & development", "Curriculum & planning", "Teaching & inclusion", "Assessment & feedback", "Professional practice & research"];
+  if (/agricultur|crop|animal|soil|farm|fisher|agribusiness/.test(value)) return ["Soil & crop systems", "Animal systems", "Farm technology & operations", "Agribusiness & economics", "Sustainability & research"];
+  if (/hospitality|tourism|hotel|food production|event|destination/.test(value)) return ["Guest & service operations", "Food safety & production", "Tourism & destinations", "Revenue, marketing & events", "Quality, sustainability & management"];
+  if (/art|design|music|drama|dance|textile|sculpt|visual/.test(value)) return ["Elements & principles", "Materials & techniques", "Creation & performance", "Interpretation & criticism", "Production & presentation"];
+  if (/english|literature|french|communication|writing|language|academic writing/.test(value)) return ["Language foundations", "Reading & interpretation", "Writing & communication", "Applied language", "Critical analysis"];
+  if (/research|methodology|project|capstone|thesis/.test(value)) return ["Research design", "Sampling & evidence", "Variables & measurement", "Data interpretation", "Evaluation & conclusions"];
+
+  return [
+    `${label}: key ideas`,
+    `${label}: methods & processes`,
+    `${label}: application & problem solving`,
+    `${label}: evidence & interpretation`,
+    `${label}: review & professional practice`,
+  ];
 }
 
 function mappedCourse(label: string, topicLabels?: string[]): CatalogSubject {
   const topics = (topicLabels?.length ? topicLabels : defaultTopicsForCourse(label)).map(
-    (topic): CatalogTopic => ({ id: slug(topic), label: topic, availability: "expanding" }),
+    (topic): CatalogTopic => ({ id: slug(topic), label: topic }),
   );
-  return { id: slug(label), label, availability: "expanding", topics };
+  return { id: slug(label), label, topics };
 }
 
 function readyCourse(id: string, label: string, topics: Array<[string, string]>): CatalogSubject {
