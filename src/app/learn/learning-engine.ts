@@ -73,7 +73,7 @@ function composeCandidateWindow(
   if (config.mode === "weakness" || questions.length <= 1) return questions;
   const windowSize = Math.min(
     questions.length,
-    Math.max(24, Math.min(MAX_SESSION_SIZE, requested * 8)),
+    Math.max(24, Math.min(MAX_SESSION_SIZE * 2, requested * 2)),
   );
   const head = limitFamilyRuns(
     composeIntelligentOrder(questions.slice(0, windowSize), config, seed),
