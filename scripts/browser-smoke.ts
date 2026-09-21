@@ -95,7 +95,7 @@ async function main() {
     await page.getByLabel("Gentle focus music",{exact:true}).uncheck();
     await page.getByLabel("Learning audio settings").click();
 
-    await page.goto("/learn/explore?lane=exam");
+    await page.goto("/learn/explore?entry=exam");
     await page.getByRole("heading",{name:"Your exam",exact:true}).waitFor();
     assert.equal(await page.getByText("0% accuracy",{exact:true}).count(),0,"Learning setup must not show a fake accuracy dashboard");
     assert.equal(await page.getByText("answer streak",{exact:true}).count(),0,"Learning setup must not show an empty streak dashboard");
@@ -105,8 +105,12 @@ async function main() {
     await page.getByRole("button",{name:/Mathematics/}).first().click();
     assert.equal(await page.getByRole("button",{name:"Mixed topics",exact:true}).isDisabled(),true,"Mapped exam topics must stop before session setup when practice is not ready");
 
-    await page.goto("/learn/explore?lane=school");
-    await page.getByRole("heading",{name:"Your school pathway",exact:true}).waitFor();
+    await page.goto("/learn/explore?entry=basic");
+    await page.getByRole("heading",{name:"Your class / level",exact:true}).waitFor();
+    assert.equal(await page.getByRole("heading",{name:"Your school pathway",exact:true}).count(),0,"Basic School must skip the SHS/pathway screen");
+
+    await page.goto("/learn/explore?entry=shs");
+    await page.getByRole("heading",{name:"Your SHS programme",exact:true}).waitFor();
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning setup overflows at 360px");
     assert.ok(await page.locator("body").evaluate(body=>body.scrollHeight<=window.innerHeight+1),"School setup must stay inside one mobile viewport");
     await page.getByRole("button",{name:/General Science/}).click();
@@ -162,7 +166,7 @@ async function main() {
     assert.equal(sawIntelligentMission,true,"SHS session must surface at least one intelligent mission");
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on mobile");
 
-    await page.goto("/learn/explore?lane=university");
+    await page.goto("/learn/explore?entry=university");
     await page.getByRole("heading",{name:"Your programme",exact:true}).waitFor();
     const programmeSearch=page.getByPlaceholder("Search programmes…");
     await programmeSearch.waitFor();
@@ -180,7 +184,7 @@ async function main() {
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"University session overflows at mobile width");
 
     await page.setViewportSize({width:1366,height:768});
-    await page.goto("/learn/explore?lane=university");
+    await page.goto("/learn/explore?entry=university");
     await page.getByRole("heading",{name:"Your programme",exact:true}).waitFor();
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on desktop");
     const desktopCards=page.locator('button').filter({hasText:"Computer Science"});
