@@ -9,6 +9,7 @@ import { buildVariantQuestions } from "./variant-engine";
 import { specializedQuestionsForSelection } from "./specialized-content";
 import { broadPracticeQuestionsForSelection } from "./broad-practice";
 import { buildIntelligentQuestions } from "./intelligent-foundry";
+import { buildCoverageQuestions } from "./coverage-foundry";
 
 const MAX_SESSION_SIZE = 100;
 const BROADENING_ATTEMPTS = 12;
@@ -204,6 +205,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const specializedQuestions = specializedQuestionsForSelection(config);
   const broadQuestions = broadPracticeQuestionsForSelection(config);
   const intelligentQuestions = buildIntelligentQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
+  const coverageQuestions = buildCoverageQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
 
   function absorb(questions: LearnQuestion[], priority = 2) {
     for (const question of questions) {
@@ -232,6 +234,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   absorb(broadQuestions, 1);
   absorb(intelligentQuestions, 2);
   absorb(buildVariantQuestions(config, Math.max(requested * 2, MAX_SESSION_SIZE), seed), 3);
+  absorb(coverageQuestions, 4);
 
   if (!strictSelection && fresh.length < requested) {
     absorb(reviewedQuestions.filter((question) => starterMatches(question, config, true, selection)), 0);
@@ -242,6 +245,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     const nextSeed = derivedSeed(seed, attempt);
     absorb(buildVariantQuestions(config, MAX_SESSION_SIZE, nextSeed), 3);
     absorb(buildIntelligentQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 2);
+    absorb(buildCoverageQuestions(config, MAX_SESSION_SIZE * 2, nextSeed), 4);
   }
 
   const orderedFresh = diversifyPool(orderPool(fresh, config, seed, selection), seed);
