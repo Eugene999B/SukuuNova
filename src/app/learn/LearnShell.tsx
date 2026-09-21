@@ -292,7 +292,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SoundContext.Provider value={play}>
-      <div className="learn-frame">
+      <div className="learn-frame" data-audio-root data-audio-state={audioState} data-last-cue={lastCue ?? ""}>
         <a className="learn-skip" href="#learning-content">Skip to learning</a>
         {!explorerFocused && <header className="learn-global-header">
           <Link href="/learn" className="learn-wordmark"><span>✦</span><strong>SukuuNova <b>Learn</b></strong></Link>
