@@ -68,7 +68,7 @@ describe("SukuuNova curriculum-aware catalogue", () => {
       "Creative Art & Design",
       "English Language",
       "French",
-      "Ghanaian Language",
+      "Asante Twi (Ghanaian Language)",
       "Mathematics",
       "Religious and Moral Education",
       "Science",
