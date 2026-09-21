@@ -39,6 +39,70 @@ function candidateCount(requested: number, factor = 4, floor = 24) {
   return Math.min(MAX_SESSION_SIZE * 2, Math.max(floor, requested * factor));
 }
 
+function selectCompositionWindow(questions: LearnQuestion[], windowSize: number) {
+  if (questions.length <= windowSize) return { selected: [...questions], remaining: [] as LearnQuestion[] };
+
+  const selected: LearnQuestion[] = [];
+  const selectedKeys = new Set<string>();
+
+  const add = (question: LearnQuestion | undefined) => {
+    if (!question || selected.length >= windowSize || selectedKeys.has(question.exposureKey)) return;
+    selected.push(question);
+    selectedKeys.add(question.exposureKey);
+  };
+
+  // Guarantee that presentation richness survives bounded composition.
+  for (const stimulusKind of ["diagram", "passage", "table"] as const) {
+    add(questions.find((question) => question.stimulus?.kind === stimulusKind));
+  }
+
+  // Guarantee that constructed and interactive response formats are represented
+  // when they exist in the source pool.
+  for (const kind of ["fill", "short", "multi", "numeric", "single", "boolean"] as const) {
+    add(questions.find((question) => question.kind === kind));
+  }
+
+  // Round-robin generator families so source order cannot crowd out later
+  // families (for example, primary-math text items hiding diagram questions).
+  const groups = new Map<string, LearnQuestion[]>();
+  for (const question of questions) {
+    const family = question.generationFamily ?? "no-family";
+    const group = groups.get(family) ?? [];
+    group.push(question);
+    groups.set(family, group);
+  }
+
+  const cursors = new Map<string, number>();
+  const families = Array.from(groups.keys());
+  let madeProgress = true;
+  while (selected.length < windowSize && madeProgress) {
+    madeProgress = false;
+    for (const family of families) {
+      if (selected.length >= windowSize) break;
+      const group = groups.get(family) ?? [];
+      let cursor = cursors.get(family) ?? 0;
+      while (cursor < group.length && selectedKeys.has(group[cursor].exposureKey)) cursor += 1;
+      if (cursor >= group.length) {
+        cursors.set(family, cursor);
+        continue;
+      }
+      add(group[cursor]);
+      cursors.set(family, cursor + 1);
+      madeProgress = true;
+    }
+  }
+
+  if (selected.length < windowSize) {
+    for (const question of questions) {
+      add(question);
+      if (selected.length >= windowSize) break;
+    }
+  }
+
+  const remaining = questions.filter((question) => !selectedKeys.has(question.exposureKey));
+  return { selected, remaining };
+}
+
 function limitFamilyRuns(questions: LearnQuestion[], maxRun = 2) {
   const output = [...questions];
 
@@ -75,11 +139,12 @@ function composeCandidateWindow(
     questions.length,
     Math.max(24, Math.min(MAX_SESSION_SIZE * 2, requested * 2)),
   );
+  const { selected, remaining } = selectCompositionWindow(questions, windowSize);
   const head = limitFamilyRuns(
-    composeIntelligentOrder(questions.slice(0, windowSize), config, seed),
+    composeIntelligentOrder(selected, config, seed),
   );
-  if (windowSize >= questions.length) return head;
-  return [...head, ...questions.slice(windowSize)];
+  if (!remaining.length) return head;
+  return [...head, ...remaining];
 }
 
 function stableRank(seed: number, value: string) {
