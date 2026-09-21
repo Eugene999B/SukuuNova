@@ -1,6 +1,8 @@
 import {
   catalogFor,
   isCorrectAnswer,
+  resolveCatalogSelection,
+  reviewedTopicLabelsForSelection,
   type LearnQuestion,
   type SessionConfig,
 } from "./learn-domain";
@@ -48,11 +50,7 @@ function normalizedLabel(value: string) {
 }
 
 function resolveSelectionLabels(config: SessionConfig): SelectionLabels {
-  const catalog = catalogFor(config.lane);
-  const program = catalog.programs.find((item) => item.id === config.programId);
-  const level = program?.levels.find((item) => item.id === config.levelId);
-  const subject = level?.subjects.find((item) => item.id === config.subjectId);
-  const topic = subject?.topics.find((item) => item.id === config.topicId);
+  const { subject, topic } = resolveCatalogSelection(config);
   return { subject: subject?.contentLabel ?? subject?.label, topic: topic?.label };
 }
 
@@ -72,7 +70,10 @@ function starterMatches(
   selection = resolveSelectionLabels(config),
 ) {
   const subjectMatches = selectionMatches(question.subject, config.subjectId, selection.subject);
-  const topicMatches = includeAnyTopic || selectionMatches(question.topic, config.topicId, selection.topic);
+  const reviewedLabels = reviewedTopicLabelsForSelection(config);
+  const topicMatches = includeAnyTopic
+    || selectionMatches(question.topic, config.topicId, selection.topic)
+    || reviewedLabels.some((label) => normalizedLabel(question.topic) === normalizedLabel(label));
   return subjectMatches && topicMatches;
 }
 
@@ -220,7 +221,12 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const coverageQuestions = buildCoverageQuestions(config, Math.max(requested * 4, MAX_SESSION_SIZE * 2), seed);
 
   function absorb(questions: LearnQuestion[], priority = 2) {
-    for (const question of questions) {
+    for (const sourceQuestion of questions) {
+      const question: LearnQuestion = {
+        ...sourceQuestion,
+        ...(config.subjectId !== "all" && selection.subject ? { subject: selection.subject } : {}),
+        ...(config.topicId !== "all" && selection.topic ? { topic: selection.topic } : {}),
+      };
       if (unique.has(question.exposureKey)) continue;
       if (question.exposureKey.startsWith("variant:")) {
         const family = `${question.subject}|${question.topic}|${question.skill}`;
