@@ -1,5 +1,5 @@
 import type { TenantDb } from "./db";
-import { calculateSubjectResult, gradeForPercentage, rankTotals, type AssessmentRules } from "./assessment-engine";
+import { calculateAvailableSubjectResult, calculateSubjectResult, gradeForPercentage, rankTotals, type AssessmentRules } from "./assessment-engine";
 import { resolveTermRoster } from "./student-term-context";
 
 export type PerformanceRow = {
@@ -18,6 +18,9 @@ type RankingInput = {
   termId: string;
   rules: AssessmentRules;
   scope?: "class" | "year_group";
+  /** Report cards can rank the marks recorded so far without changing the
+   * stricter completion semantics used by the ordinary gradebook. */
+  useAvailableMarks?: boolean;
 };
 
 export async function getClassSubjectIntelligence(tx: TenantDb, input: RankingInput) {
@@ -37,10 +40,11 @@ export async function getClassSubjectIntelligence(tx: TenantDb, input: RankingIn
     })
   ]);
   const students = roster.filter((student) => student.termClassId && classIds.includes(student.termClassId));
+  const calculate = input.useAvailableMarks ? calculateAvailableSubjectResult : calculateSubjectResult;
 
   const rows: PerformanceRow[] = students.map((student) => {
     const studentAssessments = assessments.filter((assessment) => assessment.classId === student.termClassId);
-    const result = calculateSubjectResult(
+    const result = calculate(
       studentAssessments.map((assessment) => {
         const hit = assessment.scores.find((score) => score.studentId === student.id);
         return {
