@@ -1,24 +1,53 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Building2, Compass, Brain, Check } from "lucide-react";
+import { ArrowRight, BookOpen, Building2, Compass, MessageCircle } from "lucide-react";
 import { HomeHeader } from "@/components/HomeHeader";
-import { ContactOptions } from "@/components/ContactOptions";
 import "./home.css";
 import "./home-experience.css";
 import "./nova-public.css";
+import "./gateway.css";
 
-export const metadata={title:"SukuuNova | Learn, discover and manage your school",description:"Practise a subject, explore free hands-on challenges, remember what you learn, and keep your school day organised."};
-export default function HomePage(){
- return <main className="nova-public"><div className="nova-wrap"><HomeHeader/>
-  <section className="nova-hero">
-   <div><span className="nova-eyebrow">FOR THE CURIOUS. FOR THE WHOLE SCHOOL.</span><h1>A little less school stress.<br/><em>A lot more learning.</em></h1><p>Get unstuck on a topic, try something new, or keep your school day organised. Find your next step with SukuuNova.</p><div className="nova-actions"><Link className="nova-button" href="/learn">Start learning <ArrowRight size={18}/></Link><Link className="nova-button secondary" href="/for-schools">Explore tools for schools</Link></div><p className="nova-small">Try public activities without an account. Already part of a school? <Link href="/login/school">Sign in here.</Link></p></div>
-   <Link className="nova-hero-demo" href="/explore?activity=market" aria-label="Try the market challenge"><span className="nova-eyebrow">YOUR FIRST DISCOVERY</span><h2>Could you run a busy little shop?</h2><div className="nova-shop" aria-hidden="true"><span>🍊</span><span>🥭</span><span>🍍</span></div><div className="nova-receipt"><span>Stock. Set a price. Make a prediction.</span><strong>Will you make a profit?</strong><span>One decision can change the whole day.</span></div><span className="nova-demo-link">Try the free market challenge <ArrowRight size={20}/></span></Link>
-  </section>
-  <section className="nova-section" aria-labelledby="start-heading"><span className="nova-eyebrow">START WHERE YOU ARE</span><h2 id="start-heading">What would you like to work on?</h2><div className="nova-paths">{[["Basic school","KG, primary and JHS","basic"],["SHS","Your programme and subjects","shs"],["Exams","Find your exam and topic","exam"],["University","Find your programme and course","university"]].map(([title,detail,entry])=><Link key={entry} href={"/learn/explore?entry="+entry}><BookOpen size={23}/><h3>{title}</h3><p>{detail}</p><span>Choose a subject ↗</span></Link>)}</div><p className="nova-small">Practice depth varies by topic. Exam activities are independent preparation, not an official exam or a predicted grade.</p></section>
-  <section className="nova-section nova-feature"><div><span className="nova-eyebrow">LEARN BY DOING</span><h2>Make a prediction.<br/>See what happens.</h2><p>Run a market stall. Power a community. Solve a mystery using evidence. Discovery Studio gives you something to think about—and something to try.</p><Link className="nova-button" href="/explore"><Compass size={18}/> Open Discovery Studio</Link></div><div className="nova-feature-list"><article><strong>01 / TRY</strong><h3>Your decisions change the outcome.</h3><p>Adjust a price or an energy plan and test your thinking.</p></article><article><strong>02 / UNDERSTAND</strong><h3>Look beyond the score.</h3><p>See where the result came from and explain what you would change.</p></article><article><strong>03 / REMEMBER</strong><h3>Come back to what matters.</h3><p>Save useful ideas and revisit your practice with <Link href="/learn/remember">Remember</Link>.</p></article></div></section>
-  <section className="nova-section"><span className="nova-eyebrow">FOR YOUR SCHOOL DAY</span><h2>Less hunting for records.<br/>More time for people.</h2><div className="nova-paths three">{[["Start the day","Keep student details and attendance together, so your team knows where to begin.","/features/attendance-safety"],["Follow the money","Track fees, payments and balances. Give families clear receipts.","/features/fees-finance"],["Keep learning connected","Organise lessons, marks and reports without rebuilding the same information.","/features/academics"]].map(([title,copy,href])=><Link key={href} href={href}><Building2 size={23}/><h3>{title}</h3><p>{copy}</p><span>See how it works ↗</span></Link>)}</div><div className="nova-actions"><Link className="nova-button secondary" href="/for-schools">Meet SukuuNova for schools</Link><Link href="/contact">Talk to us about your school <ArrowRight size={17}/></Link></div></section>
-  <section className="nova-band"><Brain size={32}/><div><h2>A small step is still a step.</h2><p>Review an idea from yesterday, finish a project, or try one question. You choose the pace.</p></div><Link className="nova-button" href="/learn/remember">Open Remember</Link></section>
-  <section className="nova-section"><h2>A few things you might be wondering</h2><div className="nova-faq"><details><summary>Can I try it without a school account?</summary><p>Yes. Public learning, Discovery Studio and Remember work without signing in. School records require your school’s login.</p></details><details><summary>Is Discovery Studio free?</summary><p>Yes. The activities and personal project notebook are free to use.</p></details><details><summary>Will my progress follow me to another device?</summary><p>Public learning and projects are currently saved in this browser. Use the project export before changing devices or clearing browser data.</p></details></div></section>
-  <ContactOptions/>
-  <footer className="nova-footer"><span>© 2026 SukuuNova · Keep moving forward.</span><nav aria-label="Footer"><Link href="/about">About</Link><Link href="/contact">Contact</Link><Link href="/login/platform">Platform access</Link></nav><span><Check size={15}/> Built for learning and the people around it.</span></footer>
- </div></main>;
+export const metadata = {
+  title: "SukuuNova | Learn, discover and manage your school",
+  description: "Choose your next step: practise a subject, try a discovery challenge, manage your school or talk to SukuuNova.",
+};
+
+const destinations = [
+  { title: "Learn & practise", detail: "Subjects, courses and exam practice.", href: "/learn", icon: BookOpen, tone: "learn" },
+  { title: "Discover & create", detail: "Free challenges and your own projects.", href: "/explore", icon: Compass, tone: "discover" },
+  { title: "For your school", detail: "Explore tools for your school day.", href: "/for-schools", icon: Building2, tone: "school" },
+  { title: "Talk to us", detail: "Message, WhatsApp, call or email.", href: "/contact", icon: MessageCircle, tone: "contact" },
+] as const;
+
+export default function HomePage() {
+  return (
+    <div className="nova-public nova-gateway">
+      <div className="nova-wrap gateway-shell">
+        <HomeHeader />
+        <main id="home-content" className="gateway-main">
+          <div className="gateway-intro">
+            <span className="nova-eyebrow">WELCOME TO SUKUUNOVA</span>
+            <h1>What brings you here today?</h1>
+            <p>Pick a place to start. We’ll take it from there.</p>
+          </div>
+          <nav className="gateway-choices" aria-label="Choose your next step">
+            {destinations.map(({ title, detail, href, icon: Icon, tone }) => (
+              <Link key={href} href={href} className={`gateway-choice gateway-choice-${tone}`}>
+                <span className="gateway-icon"><Icon size={25} aria-hidden="true" /></span>
+                <span className="gateway-choice-copy"><strong>{title}</strong><span>{detail}</span></span>
+                <ArrowRight className="gateway-arrow" size={20} aria-hidden="true" />
+              </Link>
+            ))}
+          </nav>
+          <p className="gateway-signin">Already part of a school? <Link href="/login/school">Sign in <ArrowRight size={16} aria-hidden="true" /></Link></p>
+        </main>
+        <footer className="gateway-footer">
+          <span>© 2026 SukuuNova</span>
+          <nav aria-label="More from SukuuNova">
+            <Link href="/learn/remember">Remember</Link>
+            <Link href="/about">About us</Link>
+          </nav>
+        </footer>
+      </div>
+    </div>
+  );
 }

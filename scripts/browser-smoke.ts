@@ -237,8 +237,21 @@ async function main() {
     await page.goto("/");
     const loginColors=await page.getByRole("link",{name:"School login",exact:true}).evaluate(el=>({text:getComputedStyle(el).color,background:getComputedStyle(el).backgroundColor}));
     assert.notEqual(loginColors.text,loginColors.background,"School login text must remain visible against its button");
+    await page.getByRole("heading",{name:"What brings you here today?"}).waitFor();
+    const homeChoices=page.getByRole("navigation",{name:"Choose your next step"}).getByRole("link");
+    assert.equal(await homeChoices.count(),4);
+    for(const viewport of [{width:1366,height:768},{width:390,height:844},{width:375,height:667}]){
+      await page.setViewportSize(viewport);
+      assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Homepage overflows horizontally");
+      assert.ok(await page.locator("body").evaluate(body=>body.scrollHeight<=window.innerHeight+2),"Homepage should fit the standard viewport");
+      for(const choice of await homeChoices.all()){
+        const box=await choice.boundingBox();
+        assert.ok(box && box.y>=0 && box.y+box.height<=viewport.height,"Every starting choice must be visible without scrolling");
+      }
+    }
     await page.setViewportSize({width:390,height:844});
-    await page.getByRole("heading",{name:/A little less school stress/}).waitFor();
+    await page.getByRole("link",{name:"Talk to us Message, WhatsApp, call or email."}).click();
+    await page.waitForURL("**/contact");
     assert.equal(await page.locator('a[href="https://wa.me/233559529261"]').count(),1);
     assert.equal(await page.locator('a[href="mailto:sukuunova@gmail.com"]').count(),1);
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Homepage overflows on mobile");

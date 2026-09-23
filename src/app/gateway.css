@@ -1,0 +1,46 @@
+/* A starting screen, with details one click away. Allow natural scrolling
+   on short screens and with enlarged text instead of clipping any controls. */
+.nova-gateway .gateway-shell{min-height:100vh;min-height:100svh;display:flex;flex-direction:column}
+.gateway-main{width:min(100%,920px);margin:auto;flex:1;display:flex;flex-direction:column;justify-content:center;padding:30px 0 18px}
+.gateway-intro{text-align:center;margin-bottom:28px}
+.gateway-intro h1{font-size:clamp(30px,3.8vw,48px);font-weight:800;line-height:1.13;letter-spacing:-.045em;margin:12px 0}
+.nova-public .gateway-intro p{font-size:16px;line-height:1.5;margin:0}
+.gateway-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.gateway-choice{display:grid;grid-template-columns:52px 1fr 20px;align-items:center;gap:18px;min-width:0;min-height:142px;padding:24px;border:1px solid var(--color-border);border-radius:22px;background:var(--color-surface-soft);text-decoration:none;transition:border-color .18s,transform .18s,box-shadow .18s}
+.gateway-choice:hover{border-color:var(--color-brand);transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+.gateway-choice-learn{background:var(--color-brand-soft);border-color:var(--color-brand-border)}
+.gateway-icon{width:52px;height:52px;display:grid;place-items:center;border-radius:16px;background:var(--color-surface);color:var(--color-brand);border:1px solid var(--color-border)}
+.gateway-choice-copy{display:grid;gap:8px;min-width:0}
+.gateway-choice-copy strong{font-size:21px;line-height:1.2;letter-spacing:-.025em}
+.gateway-choice-copy>span{font-size:14px;line-height:1.5;color:var(--color-text-secondary)}
+.gateway-arrow{color:var(--color-brand)}
+.nova-public .gateway-signin{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:5px 9px;margin:18px 0 0;font-size:14px;line-height:1.4}
+.gateway-signin a{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:var(--color-brand);font-weight:750;text-decoration:underline;text-underline-offset:4px}
+.gateway-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:14px 0;border-top:1px solid var(--color-border);font-size:12px;color:var(--color-text-secondary)}
+.gateway-footer nav{display:flex;gap:20px}
+.gateway-footer a{display:inline-flex;align-items:center;min-height:32px;text-decoration:none}
+.gateway-footer a:hover{text-decoration:underline}
+@media(max-width:650px){
+  .nova-gateway .home-header{min-height:64px;padding-top:8px;padding-bottom:8px}
+  .gateway-main{padding:20px 0 10px}
+  .gateway-intro{margin-bottom:18px}
+  .gateway-intro h1{font-size:30px;margin:9px auto;max-width:340px}
+  .gateway-intro .nova-eyebrow{font-size:10px}
+  .nova-public .gateway-intro p{font-size:14px}
+  .gateway-choices{grid-template-columns:1fr;gap:9px}
+  .gateway-choice{grid-template-columns:40px 1fr 18px;gap:12px;min-height:82px;padding:13px 16px;border-radius:16px}
+  .gateway-icon{width:40px;height:40px;border-radius:12px}
+  .gateway-icon svg{width:21px;height:21px}
+  .gateway-choice-copy{gap:4px}
+  .gateway-choice-copy strong{font-size:17px}
+  .gateway-choice-copy>span{font-size:13px;line-height:1.35}
+  .nova-public .gateway-signin{margin-top:10px;font-size:13px}
+  .gateway-footer{padding:8px 0;font-size:11px;gap:8px}
+  .gateway-footer nav{gap:16px}
+}
+@media(max-width:650px) and (max-height:720px){
+  .gateway-main{padding-top:12px}
+  .gateway-intro{margin-bottom:12px}
+  .gateway-intro h1{font-size:27px;max-width:310px}
+  .gateway-choice{min-height:76px;padding-top:10px;padding-bottom:10px}
+}
