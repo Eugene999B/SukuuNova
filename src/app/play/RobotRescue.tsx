@@ -182,7 +182,7 @@ export function RobotRescue(){
  }
  const totalStars=progress.best.reduce((a,b)=>a+b,0);
  return <div ref={shellRef} className={"rr-shell"+(started?" is-playing":"")+(phase==="flying"?" is-flying":"")}>
-  <header className="rr-header">
+  <header className="rr-header" inert={phase==="rescued"||phase==="missed"}>
    <Link href="/" className="rr-home" aria-label="Back to SukuuNova"><ArrowLeft size={18}/><span>SukuuNova</span></Link>
    <div className="rr-wordmark"><Rocket size={18}/><strong>ROBOT RESCUE</strong><span>Signal Isles</span></div>
    <div className="rr-toolbar">
@@ -211,10 +211,17 @@ export function RobotRescue(){
      <span className="rr-title-note">Free to play · No account needed</span>
     </div>}
     {started&&paused&&phase==="flying"&&<div className="rr-overlay"><div className="rr-result"><span className="rr-kicker">FLIGHT PAUSED</span><h2>Take your time.</h2><p>Your pod is exactly where you left it.</p><button className="rr-primary" onClick={togglePause}><Play size={18}/>Resume flight</button></div></div>}
-    {(phase==="rescued"||phase==="missed")&&<div className="rr-overlay rr-finish" role="region" aria-label="Flight result">
+    {(phase==="rescued"||phase==="missed")&&<div className="rr-overlay rr-finish" role="dialog" aria-modal="true" aria-labelledby="rescue-result-heading" onKeyDown={e=>{
+     if(e.key==="Escape"){e.preventDefault();resetMission();canvasRef.current?.focus();return;}
+     if(e.key!=="Tab")return;
+     const controls=e.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled]),summary,a[href]");
+     const first=controls[0],last=controls[controls.length-1];
+     if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
+     else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
+    }}>
      <div className="rr-result">
       <span className="rr-kicker">{phase==="rescued"?(index===5?"THE ISLANDS ARE CONNECTED":"RESCUE COMPLETE"):"POD SAFELY RECOVERED"}</span>
-      <h2>{phase==="rescued"?(index===5?"Every light is back.":level.robot+" is coming home."):"A new plan, not a dead end."}</h2>
+      <h2 id="rescue-result-heading">{phase==="rescued"?(index===5?"Every light is back.":level.robot+" is coming home."):"A new plan, not a dead end."}</h2>
       {phase==="rescued"&&<div className="rr-stars" aria-label={flightStars(telemetry)+" of 3 stars"}>{[1,2,3].map(n=><Star key={n} size={27} className={n<=flightStars(telemetry)?"earned":""}/>)}</div>}
       <p>{telemetry.reason}</p>
       <div className="rr-result-data"><span><b>{telemetry.time.toFixed(1)} s</b>flight time</span><span><b>{telemetry.impact.toFixed(1)} m/s</b>final speed</span><span><b>{telemetry.collected.length}/{level.orbs.length}</b>energy cells</span><span><b>{Math.floor(telemetry.fuel)}%</b>brake fuel left</span></div>
@@ -228,7 +235,7 @@ export function RobotRescue(){
      </div>
     </div>}
    </section>
-   <aside className="rr-console" aria-label="Flight workshop">
+   <aside className="rr-console" aria-label="Flight workshop" inert={phase==="rescued"||phase==="missed"}>
     <div className="rr-console-head"><span className="rr-kicker">{started?"FLIGHT WORKSHOP":"YOUR RESCUE CHAPTER"}</span><span className="rr-progress"><Star size={13}/>{totalStars}/18</span></div>
     {!started?<div className="rr-welcome">
      <h2>Small pod.<br/>Big responsibility.</h2><p>Plan a trajectory, read the wind and ease onto the landing pad. Every island asks you to think a little differently.</p>
@@ -251,7 +258,7 @@ export function RobotRescue(){
       <p className="rr-forecast">{mode==="explorer"?(forecast.state.status==="rescued"?"Preview: a safe landing is possible. Try collecting the gold cell too.":"Preview: this path needs an adjustment. Watch where the dotted line ends."):"Manual flight: hold Brake on descent. The orange line will show your previous attempt."}</p>
       <button className="rr-primary rr-launch" onClick={launchPod}><Rocket size={20}/>Launch pod<span>Space</span></button>
      </>:<div className="rr-flight-controls">
-      <div className="rr-fuel"><Battery size={16}/><span>Brake fuel</span><progress max={100} value={telemetry.fuel}/><b>{Math.ceil(telemetry.fuel)}%</b></div>
+      <div className="rr-fuel"><Battery size={16}/><span>Brake fuel</span><progress max={100} value={telemetry.fuel}/><b>{Math.floor(telemetry.fuel)}%</b></div>
       <button type="button" className={"rr-brake"+(braking?" is-active":"")} disabled={phase!=="flying"||paused||telemetry.fuel<=0}
        onPointerDown={e=>{e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);brakeRef.current=true;setBraking(true);}}
        onPointerUp={releaseBrake} onPointerCancel={releaseBrake} onLostPointerCapture={releaseBrake}

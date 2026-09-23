@@ -1,5 +1,6 @@
 .rr-shell{min-height:100vh;min-height:100svh;background:var(--arcade-canvas);color:var(--arcade-text);font-family:var(--sn-font-family),system-ui,sans-serif;isolation:isolate}
 .rr-shell *{box-sizing:border-box}
+.rr-shell strong,.rr-shell b{color:inherit}
 .rr-shell button,.rr-shell a,.rr-shell input{font:inherit}
 .rr-shell button,.rr-shell a{-webkit-tap-highlight-color:transparent}
 .rr-shell button{cursor:pointer;color:var(--arcade-text);border:1px solid var(--arcade-line);background:var(--arcade-surface-raised);border-radius:12px}

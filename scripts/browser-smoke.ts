@@ -262,6 +262,16 @@ async function main() {
     assert.equal(blankInquiry.status(),400,"Whitespace-only inquiries must be rejected");
     // Robot Rescue: real simulation, pause, completion and durable unlocks.
     await page.goto("/play");
+    const gameContrast=await page.locator(".rr-wordmark strong,.rr-mode-options strong").evaluateAll(nodes=>{
+      const luminance=(color:string)=>{
+        const channels=(color.match(/[0-9.]+/g)||[]).slice(0,3).map(Number).map(n=>n/255).map(n=>n<=.04045?n/12.92:((n+.055)/1.055)**2.4);
+        return channels[0]*.2126+channels[1]*.7152+channels[2]*.0722;
+      };
+      const bg=luminance(getComputedStyle(document.querySelector(".rr-shell")!).backgroundColor);
+      return nodes.map(node=>{const fg=luminance(getComputedStyle(node).color);return(Math.max(fg,bg)+.05)/(Math.min(fg,bg)+.05);});
+    });
+    assert.equal(gameContrast.length,3);
+    assert.ok(gameContrast.every(ratio=>ratio>=4.5),"Game labels must remain readable despite shared site typography");
     await page.getByRole("button",{name:"Start rescue",exact:true}).click();
     await page.getByRole("button",{name:/Launch pod/}).click();
     await page.getByTestId("rescue-status").filter({hasText:"Flight in progress"}).waitFor();
@@ -272,6 +282,10 @@ async function main() {
     assert.equal(await page.getByTestId("rescue-clock").innerText(),pausedClock,"Pause must freeze physics time");
     await page.getByRole("button",{name:"Resume flight",exact:true}).click();
     await page.getByRole("heading",{name:"Pip is coming home.",exact:true}).waitFor({timeout:15000});
+    const rescueResult=page.getByRole("dialog",{name:"Pip is coming home."});
+    await rescueResult.getByText("What this flight teaches",{exact:true}).focus();
+    await page.keyboard.press("Tab");
+    assert.equal(await page.evaluate(()=>document.activeElement?.textContent?.trim()),"Next rescue","Result focus must stay within its available actions");
     await page.getByRole("button",{name:"Next rescue",exact:true}).click();
     await page.getByRole("heading",{name:"Higher ground",exact:true}).waitFor();
     await page.reload();
