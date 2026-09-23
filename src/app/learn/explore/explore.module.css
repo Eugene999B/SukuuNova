@@ -3401,3 +3401,6 @@
     font-size: 10px;
   }
 }
+
+.customCount{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;color:var(--color-text-secondary)}.customCount input{width:80px;min-height:44px;border:1px solid var(--color-border-strong);border-radius:10px;padding:8px;background:var(--color-surface);color:var(--color-text-primary);font:inherit}
+@media(max-width:600px){.setupFocused .subjectCard strong,.setupFocused .programCard span,.setupFocused .topicButton>span,.setupFocused .levelTab,.setupFocused .modeButton strong,.setupFocused .modeActive strong{font-size:13px}.setupFocused .subjectCard small{font-size:11px}.setupFocused .topicGrid,.setupFocused .subjectGrid{grid-template-columns:1fr}}

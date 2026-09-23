@@ -23,9 +23,9 @@ function configFor(
   };
 }
 
-describe("complete curriculum coverage foundry", () => {
-  it("guarantees a million-plus deterministic capacity for every published exact topic", () => {
-    expect(MINIMUM_TOPIC_GENERATED_CAPACITY).toBeGreaterThanOrEqual(1_000_000);
+describe("foundation question variety", () => {
+  it("counts meaningful task families rather than names and decorative contexts", () => {
+    expect(MINIMUM_TOPIC_GENERATED_CAPACITY).toBeGreaterThan(0);
 
     let publishedTopics = 0;
     for (const catalog of LEARNING_CATALOGS) {
@@ -47,9 +47,9 @@ describe("complete curriculum coverage foundry", () => {
 
               expect(topic.label.toLowerCase(), location).not.toMatch(/coming soon|coverage expanding/);
               expect(topic.availability, location).not.toBe("expanding");
-              expect(capacity, location).toBeGreaterThanOrEqual(1_000_000);
+              expect(capacity, location).toBeGreaterThan(0);
               expect(capability.ready, location).toBe(true);
-              expect(capability.stage, location).toBe("massive");
+              expect(capacity, location).toBeLessThan(1000);
             }
           }
         }
@@ -88,8 +88,18 @@ describe("complete curriculum coverage foundry", () => {
     const questions = buildCoverageQuestions(config, 40, 42);
 
     expect(targets.length).toBeGreaterThanOrEqual(5);
-    expect(targets.every((target) => target.capacity >= 1_000_000)).toBe(true);
+    expect(targets.every((target) => target.capacity > 0 && target.capacity < 1000)).toBe(true);
     expect(new Set(questions.map((question) => question.topic)).size).toBeGreaterThanOrEqual(4);
-    expect(new Set(questions.map((question) => question.prompt)).size).toBe(40);
+    expect(new Set(questions.map((question) => question.exposureKey)).size).toBe(questions.length);
   });
+});
+
+it("keeps foundation identities stable across cosmetic variations and aligns cognitive labels",()=>{
+ const config=configFor("university","computer-science","level-200","operating-systems","all",42);
+ const questions=Array.from({length:8},(_,seed)=>buildCoverageQuestions(config,40,seed)).flat();
+ const definitions=questions.filter(q=>q.prompt.startsWith("Which term best matches"));
+ expect(definitions.length).toBeGreaterThan(0);
+ expect(definitions.every(q=>q.challenge==="Recall")).toBe(true);
+ const byPrompt=new Map<string,string>();
+ for(const q of definitions){const prior=byPrompt.get(q.prompt);if(prior)expect(q.exposureKey).toBe(prior);byPrompt.set(q.prompt,q.exposureKey);}
 });

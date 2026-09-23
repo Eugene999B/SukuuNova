@@ -35,6 +35,7 @@ import styles from "./explore.module.css";
 import { normalizeLearnerProgress } from "../learner-progress";
 import { useLearningSound } from "../LearnShell";
 import { hasLearningAnswer } from "../session-controls";
+import { captureReview } from "../remember/review-model";
 
 type LearnerProgress = {
   sessions: number;
@@ -320,6 +321,7 @@ export function LearningExplorer() {
     answerLock.current=true;
 
     const correct = isCorrectAnswer(currentQuestion, response);
+    captureReview(currentQuestion, correct);
     playSound(correct ? "correct" : "retry");
     const key = masteryKey(currentQuestion);
     const previousMastery = progress.mastery[key] ?? { answered: 0, correct: 0 };
@@ -402,7 +404,7 @@ export function LearningExplorer() {
             <div>
               <span className={styles.stepLabel}>START</span>
               <h2>Where do you want to learn?</h2>
-              <p>Choose one. The next screen replaces this one.</p>
+              <p>Choose a path. We’ll help you find your subject.</p>
             </div>
           </div>
           <div className={styles.laneCards}>
@@ -514,8 +516,8 @@ export function LearningExplorer() {
             </div>
 
             <div className={styles.launchPanel}>
-              <span className={styles.miniLabel}>Questions</span>
-              <div className={styles.countGroup}>{[5,10,20,30,50,100].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>setCount(value)}>{value}</button>)}</div>
+              <p className={styles.engineNote}>{availableModes.find(item=>item.id===mode)?.description} {lane==="exam"?"This is topic practice, not a full official mock exam.":""}</p><span className={styles.miniLabel}>Questions</span>
+              <label className={styles.customCount}>Your number of questions<input aria-label="Number of questions" type="number" min="1" max="100" value={count} onChange={e=>setCount(Math.max(1,Math.min(100,Math.floor(Number(e.target.value)||1))))}/></label><div className={styles.countGroup}>{[5,10,20,30,50,100].map(value=><button key={value} className={count===value?styles.countActive:styles.countButton} aria-pressed={count===value} onClick={()=>setCount(value)}>{value}</button>)}</div>
               <button className={styles.launch} disabled={!practiceAvailable} onClick={launchSession}><Zap size={21}/>{practiceAvailable?"Start":"Not ready yet"}<ArrowRight size={20}/></button>
               {launchNotice&&<p role="status" className={styles.engineNote}>{launchNotice}</p>}
             </div>
@@ -533,7 +535,7 @@ export function LearningExplorer() {
               <div>
                 <span className={styles.kicker}>SESSION COMPLETE</span>
                 <h3>{sessionCorrect} of {session.length} correct</h3>
-                <p>Review another set or change your learning path.</p>
+                <p>Take a moment to remember what you learned. Your text-only practice questions are saved for later review.</p><Link href="/learn/remember">Review with Remember →</Link>
               </div>
             </div>
             <div className={styles.completeActions}><button onClick={launchSession}><RotateCcw size={16} /> Practise again</button><button onClick={() => { setSession([]); setFlowStep(0); }}>Change learning path</button></div>
@@ -679,7 +681,7 @@ function QuestionPlayer({
 
       {question.kind === "numeric" && <div className={styles.textAnswer}><input aria-label="Your answer" disabled={submitted} inputMode="decimal" value={typeof response === "number" || typeof response === "string" ? response : ""} onChange={(event) => setResponse(event.target.value)} placeholder="Enter your numerical answer" onKeyDown={(event) => { if (event.key === "Enter") submit(); }} /></div>}
 
-      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? `Yes! +${10 + question.difficulty * 2} XP` : "Almost — learn it and go again."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
+      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? `Yes! +${10 + question.difficulty * 2} XP` : "Not this time. Here’s how it works."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
     </div>
   );
 }

@@ -570,7 +570,7 @@ function product(values: readonly number[]) {
 const DIMENSION_BASE = [ACTORS.length, MOMENTS.length, STEMS.length, 8, 8, 32] as const;
 
 function profileCapacity(profile: Profile) {
-  return product([profile.concepts.length, profile.contexts.length, ...DIMENSION_BASE]);
+  return profile.concepts.length * 9;
 }
 
 export const MINIMUM_TOPIC_GENERATED_CAPACITY = Math.min(...[...PROFILES, ...PRIMARY_PROFILES].map(profileCapacity));
@@ -709,15 +709,17 @@ function renderQuestion(target: Target, profile: Profile, variant: number, confi
   const context = contexts[contextIndex];
   const moment = MOMENTS[momentIndex];
   const stem = STEMS[stemIndex];
-  const challenge: CognitiveChallenge = angleIndex < 2 ? "Recall" : angleIndex < 4 ? "Apply" : angleIndex < 6 ? "Analyse" : "Transfer";
+  // Classification follows the task, never an unused random dimension.
+  void angleIndex;
+  const challenge: CognitiveChallenge = formIndex === 0 || formIndex === 4 ? "Recall" : formIndex === 2 || formIndex === 3 ? "Evaluate" : formIndex === 5 ? "Analyse" : "Apply";
   const base = {
     id: `coverage-${profile.id}-${target.subjectId}-${target.topicId}-${variant}`,
-    exposureKey: `coverage:${config.lane}:${config.programId}:${config.levelId}:${target.subjectId}:${target.topicId}:${variant}`,
+    exposureKey: `coverage:${config.lane}:${config.programId}:${config.levelId}:${profile.id}:${item.term}:${formIndex}:${formIndex === 2 ? caseIndex % 2 : 0}`,
     subject: target.subjectLabel,
     topic: target.topicLabel,
     difficulty: clampDifficulty(levelDifficulty(config.levelId) + (challenge === "Analyse" || challenge === "Transfer" ? 1 : 0)),
     challenge,
-    mission: profile.mission,
+    mission: `Foundation review · ${profile.mission}`,
     generationFamily: `coverage-${profile.id}-${target.topicId}-${item.term.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}-${formIndex}`,
   } as const;
 
@@ -790,7 +792,8 @@ export function coverageCapacityForSelection(config: SessionConfig) {
     const profile = profileForTarget(target, config);
     const concepts = conceptsForLevel(profile, config);
     const contexts = contextsForLevel(profile, config);
-    return total + product([concepts.length, contexts.length, ...DIMENSION_BASE]);
+    void contexts;
+    return total + concepts.length * 9;
   }, 0);
 }
 
@@ -798,7 +801,7 @@ export function coverageCapacityPerTarget(config: SessionConfig) {
   return targetsFor(config).map((target) => ({
     ...target,
     profile: profileForTarget(target, config).id,
-    capacity: (() => { const profile = profileForTarget(target, config); return product([conceptsForLevel(profile, config).length, contextsForLevel(profile, config).length, ...DIMENSION_BASE]); })(),
+    capacity: (() => { const profile = profileForTarget(target, config); return conceptsForLevel(profile, config).length * 9; })(),
   }));
 }
 

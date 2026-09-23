@@ -272,6 +272,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const seed = config.seed ?? Date.now();
   const recent = new Set(config.seen ?? []);
   const unique = new Set<string>();
+  const promptKeys = new Set<string>();
   const generatedPerSkill = new Map<string, number>();
   const sourcePriority = new Map<string, number>();
   const sourceOrdinal = new Map<string, number>();
@@ -304,7 +305,9 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
         ...(config.subjectId !== "all" && selection.subject ? { subject: selection.subject } : {}),
         ...(config.topicId !== "all" && selection.topic ? { topic: selection.topic } : {}),
       };
-      if (unique.has(question.exposureKey)) continue;
+      const promptKey = question.prompt.toLowerCase().replace(/\s+/g, " ").trim() + "|" + JSON.stringify(question.stimulus ?? null);
+      if (unique.has(question.exposureKey) || promptKeys.has(promptKey)) continue;
+      promptKeys.add(promptKey);
       if (question.exposureKey.startsWith("variant:")) {
         const family = `${question.subject}|${question.topic}|${question.skill}`;
         const familyCount = generatedPerSkill.get(family) ?? 0;

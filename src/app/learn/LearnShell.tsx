@@ -90,7 +90,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
       const legacyVolume = clampVolume(stored.volume, 52);
       const nextEffects = stored.effects !== false;
       const nextMusic = stored.music === true;
-      const nextEffectsVolume = clampVolume(stored.effectsVolume, legacyVolume, 80);
+      const nextEffectsVolume = clampVolume(stored.effectsVolume, legacyVolume, 70);
       const nextMusicVolume = clampVolume(stored.musicVolume, Math.min(24, legacyVolume), 50);
       setEffects(nextEffects);
       setMusic(nextMusic);
@@ -279,7 +279,8 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
   const links = [
     ["Home", "/learn"],
     ["Practice", "/learn/explore"],
-    ["Daily challenge", "/learn/today"],
+    ["Remember", "/learn/remember"],
+    ["Discover", "/explore"],
     ["My progress", "/learn/progress"],
   ];
 
@@ -294,7 +295,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
     <SoundContext.Provider value={play}>
       <div className="learn-frame" data-audio-root data-audio-state={audioState} data-last-cue={lastCue ?? ""}>
         <a className="learn-skip" href="#learning-content">Skip to learning</a>
-        {!explorerFocused && <header className="learn-global-header">
+        <header className={explorerFocused ? "learn-global-header learn-session-audio" : "learn-global-header"}>
           <Link href="/learn" className="learn-wordmark"><span>✦</span><strong>SukuuNova <b>Learn</b></strong></Link>
           <Link className="learn-school-link" href="/">School management ↗</Link>
           <nav aria-label="Learning navigation">
@@ -352,7 +353,7 @@ export function LearnShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </details>
-        </header>}
+        </header>
         <div id="learning-content">{children}</div>
       </div>
     </SoundContext.Provider>

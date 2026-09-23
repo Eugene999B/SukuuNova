@@ -1,6 +1,7 @@
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowRight } from "lucide-react";
-import { HomeLeadChat } from "@/components/HomeLeadChat";
+import { HomeHeader } from "@/components/HomeHeader";
+import { ContactOptions } from "@/components/ContactOptions";
 import "../home.css";
-export default function ContactPage(){return <main className="home-shell"><div className="home-wrap"><header className="topbar"><Link href="/" className="brand"><Image className="brand-logo" src="/brand/sukuunova-logo.svg" alt="SukuuNova" width={190} height={54}/></Link><nav className="topnav"><Link href="/about">About</Link><Link href="/features">Features</Link><Link href="/for-schools">For schools</Link></nav><Link className="top-button" href="/login/school">Enter your school <ArrowRight size={14} aria-hidden="true"/></Link></header><section className="hero"><div className="hero-copy-wrap"><div className="eyebrow"><span className="eyebrow-dot"/> We would love to hear from you</div><h1>Have a question? <span>Let's talk.</span></h1><p className="hero-copy">Tell us what you are trying to solve, what kind of school you run, or simply what you would like to know. Leave an email or phone number and someone can get back to you.</p><HomeLeadChat /></div></section><section className="closing-cta"><div><span className="section-kicker">PREFER A DIRECT MESSAGE?</span><h2>Use the contact details on the homepage.</h2><p>SukuuNova can show your WhatsApp, phone, email and social channels there once the platform administrator adds them.</p></div><Link className="primary-cta" href="/">Back home <ArrowRight size={16} aria-hidden="true"/></Link></section><footer className="footer"><span>© 2026 SukuuNova</span><span>Built with care by humans.</span><Link href="/login/platform">Platform access</Link></footer></div></main>}
+import "../home-experience.css";
+import "../nova-public.css";
+export default function ContactPage(){return <main className="nova-public"><div className="nova-wrap"><HomeHeader/><ContactOptions/><footer className="nova-footer"><Link href="/">Back to SukuuNova</Link><span>© 2026 SukuuNova</span></footer></div></main>;}

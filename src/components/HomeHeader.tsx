@@ -8,10 +8,8 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
 
 const links = [
   ["Learn", "/learn"],
-  ["Practice", "/learn/explore"],
+  ["Explore", "/explore"],
   ["For schools", "/for-schools"],
-  ["School features", "/features"],
-  ["About", "/about"],
   ["Contact", "/contact"],
 ] as const;
 
@@ -37,7 +35,7 @@ export function HomeHeader() {
     <header className="home-header">
       <Link href="/" className="home-brand" aria-label="SukuuNova home" onClick={() => setOpen(false)}>
         <Image src="/brand/sukuunova-favicon.svg" alt="" width={40} height={40} priority />
-        <span><strong>SukuuNova</strong><small>School + learning</small></span>
+        <span><strong>SukuuNova</strong><small>Learn. Discover. Grow.</small></span>
       </Link>
 
       <nav className="home-desktop-nav" aria-label="Primary navigation">
@@ -68,7 +66,7 @@ export function HomeHeader() {
             <Link href="/login/school" onClick={() => setOpen(false)}>Open school login <ArrowRight size={16} /></Link>
             <Link href="/login/platform" onClick={() => setOpen(false)}>Platform access <LogIn size={15} /></Link>
           </div>
-          <div className="home-mobile-menu-note"><strong>Two products, one SukuuNova.</strong><span>Open Learn without an account, or enter the secure school-management workspace.</span></div>
+          <div className="home-mobile-menu-note"><strong>Find your next step.</strong><span>Try a learning activity, explore a project, or sign in to your school.</span></div>
         </div>
       </> : null}
     </header>

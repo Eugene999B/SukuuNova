@@ -224,6 +224,47 @@ async function main() {
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Learning explorer overflows on desktop");
     const desktopCards=page.locator('button').filter({hasText:"Computer Science"});
     assert.ok(await desktopCards.count()>0,"Desktop programme cards must remain available after mobile redesign");
+
+    // Public discovery: decisions affect outcomes, evidence produces a saved project,
+    // and spaced review survives a page reload.
+    await page.setViewportSize({width:390,height:844});
+    await page.goto("/");
+    await page.getByRole("heading",{name:/A little less school stress/}).waitFor();
+    assert.equal(await page.locator('a[href="https://wa.me/233559529261"]').count(),1);
+    assert.equal(await page.locator('a[href="mailto:sukuunova@gmail.com"]').count(),1);
+    assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Homepage overflows on mobile");
+    await page.goto("/explore?activity=market&challenge=0");
+    await page.getByLabel("Your prediction").selectOption({label:"I expect a profit."});
+    await page.getByRole("button",{name:"Open the stall",exact:true}).click();
+    await page.getByTestId("market-result").waitFor();
+    await page.getByLabel("What caused your result, and what will you change next time?").fill("I sold my stock. Next I will compare a lower price.");
+    await page.getByRole("button",{name:"Save to My projects",exact:true}).click();
+    await page.getByRole("button",{name:"My projects",exact:true}).click();
+    await page.getByRole("button",{name:/My market experiment/}).click();
+    await page.getByLabel("What will you try next?").fill("Try the rainy day.");
+    await page.getByRole("button",{name:"Save project",exact:true}).click();
+    await page.reload();
+    await page.getByRole("button",{name:/My market experiment/}).click();
+    assert.equal(await page.getByLabel("What will you try next?").inputValue(),"Try the rainy day.");
+    await page.goto("/explore?activity=energy");
+    await page.getByRole("button",{name:"Test the energy plan",exact:true}).click();
+    await page.getByTestId("energy-result").waitFor();
+    await page.goto("/explore?activity=evidence&challenge=0");
+    await page.getByRole("button",{name:"Inspect the kitchen pipe for a leak.",exact:true}).click();
+    await page.getByRole("button",{name:"Check the evidence",exact:true}).click();
+    await page.getByText("Your conclusion follows the evidence.",{exact:true}).waitFor();
+    assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Discovery overflows on mobile");
+    await page.goto("/learn/remember");
+    await page.getByRole("button",{name:"Add an idea to remember",exact:true}).click();
+    await page.getByLabel("Question or prompt",{exact:true}).fill("What is our review test?");
+    await page.getByLabel("Answer to remember",{exact:true}).fill("Recall first, reveal second.");
+    await page.getByRole("button",{name:"Save idea",exact:true}).click();
+    assert.ok(await page.getByTestId("remember-card").isVisible());
+    await page.getByRole("button",{name:"Show the answer",exact:true}).click();
+    await page.getByRole("button",{name:"I remembered clearly",exact:true}).click();
+    await page.reload();
+    assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Remember overflows on mobile");
+
     assert.deepEqual(pageErrors, [], "Browser emitted JavaScript errors");
     console.log("Browser smoke passed: login, mobile dashboard, labeled device tabs, Unicode learner import, confirmed enrollment, payroll plan denial desktop learner directory, legacy invoice collection, retry protection, overpayment denial and complete finance totals.");
   } finally { await browser.close(); await rawDb.$disconnect(); }

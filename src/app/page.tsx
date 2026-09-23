@@ -1,93 +1,23 @@
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowRight, BookOpen, Medal, BrainCircuit, Building2, GraduationCap, LogIn, ShieldCheck, Sparkles, Users, WalletCards } from "lucide-react";
-import "./home.css";
-import "./home-photos.css";
-import "./home-experience.css";
-import { HomeLeadChat } from "@/components/HomeLeadChat";
-import { HomeHelpBar } from "@/components/HomeHelpBar";
-import { HomeProductPreview } from "@/components/HomeProductPreview";
+import { ArrowRight, BookOpen, Building2, Compass, Brain, Check } from "lucide-react";
 import { HomeHeader } from "@/components/HomeHeader";
+import { ContactOptions } from "@/components/ContactOptions";
+import "./home.css";
+import "./home-experience.css";
+import "./nova-public.css";
 
-const modules = [
-  ["Students & families", "Keep admissions, learner records and family details together.", Users, "/features/students-families"],
-  ["Teaching & learning", "Plan classes, lessons, marks, homework and reports in one place.", GraduationCap, "/features/academics"],
-  ["Attendance & safety", "Record attendance, follow absences and keep families informed.", ShieldCheck, "/features/attendance-safety"],
-  ["Fees & finance", "Track fees, invoices, payments, balances and receipts clearly.", WalletCards, "/features/fees-finance"],
-] as const;
-
-export default function HomePage() {
-  return (
-    <main className="home-shell home-shell-next">
-      <div className="home-ambient home-ambient-one" aria-hidden="true" />
-      <div className="home-ambient home-ambient-two" aria-hidden="true" />
-      <div className="home-wrap">
-        <HomeHeader />
-
-        <section className="hero hero-reframed" id="platform">
-          <div className="hero-copy-wrap">
-            <div className="eyebrow"><Sparkles size={13} aria-hidden="true" /> School management + independent learning</div>
-            <h1>Run schools. <span>Power learning.</span></h1>
-            <p className="hero-copy">A learning space for curious minds. A connected workspace for schools. Practise a subject, prepare for an exam, or manage the school day—all from SukuuNova.</p>
-            <div className="hero-actions"><Link className="primary-cta" href="/learn">Start learning <ArrowRight size={16} aria-hidden="true" /></Link><Link className="secondary-cta" href="/login/school">Open school management <ArrowRight size={16} aria-hidden="true" /></Link></div>
-            <div className="hero-proof"><Image className="proof-logo" src="/icon.svg" alt="" width={36} height={36} /><div><strong>One SukuuNova. Two distinct experiences.</strong><span>Learning practice works without a sign-in; school operations keep their secure role-based access.</span></div></div>
-          </div>
-
-          <div className="home-learn-stage" aria-label="Find your learning path">
-            <div className="home-learn-stage-title"><span>✦ SUKUUNOVA LEARN</span><strong>What are you curious about today?</strong><p>A class, a course, a big exam. Start where you are.</p></div>
-            <div className="home-learn-paths">
-             <Link href="/learn/explore?lane=school"><BookOpen size={22}/><span><strong>School subjects</strong><small>KG · Primary · JHS · 9 SHS pathways</small></span><ArrowRight size={17}/></Link>
-             <Link href="/learn/explore?lane=exam"><Medal size={22}/><span><strong>Exam preparation</strong><small>BECE · WASSCE · IELTS mapped</small></span><ArrowRight size={17}/></Link>
-             <Link href="/learn/explore?lane=university"><GraduationCap size={22}/><span><strong>University courses</strong><small>25+ popular programmes · Levels 100–600</small></span><ArrowRight size={17}/></Link>
-             <Link href="/learn/explore?lane=skills"><Sparkles size={22}/><span><strong>Skills for what’s next</strong><small>Digital · Career · Aptitude</small></span><ArrowRight size={17}/></Link>
-            </div><div className="home-learn-stage-note">Choose a topic. Set your pace. Understand each answer.</div>
-          </div>
-        </section>
-
-
-        <section className="home-product-doors" aria-label="Choose a SukuuNova product">
-          <Link className="home-product-door home-product-door-learn" href="/learn">
-            <span className="home-product-door-icon"><BrainCircuit size={24} aria-hidden="true" /></span>
-            <span className="section-kicker">SUKUUNOVA LEARN</span>
-            <h2>Questions that adapt to what you want to learn.</h2>
-            <p>Choose a school pathway, exam, university programme or skill track. Search broad course maps, build a focused session, hear action feedback, get instant marking and keep browser-local progress.</p>
-            <div className="home-product-door-tags"><span>9 SHS pathways</span><span>25+ degree programmes</span><span>Sound + instant feedback</span></div>
-            <span className="home-product-door-link">Open the learning system <ArrowRight size={16} /></span>
-          </Link>
-          <Link className="home-product-door home-product-door-manage" href="/for-schools">
-            <span className="home-product-door-icon"><Building2 size={24} aria-hidden="true" /></span>
-            <span className="section-kicker">SCHOOL MANAGEMENT</span>
-            <h2>Run the people, records and work behind the school day.</h2>
-            <p>Manage students, families, teaching, attendance, fees, communication, reporting and role-aware school operations from one secure workspace.</p>
-            <div className="home-product-door-tags"><span>Students & families</span><span>Academics</span><span>Finance</span></div>
-            <span className="home-product-door-link">Explore school management <ArrowRight size={16} /></span>
-          </Link>
-        </section>
-
-        <section className="home-confidence-strip" aria-label="SukuuNova product principles">
-          <div><span>01</span><strong>One working record</strong><small>Stop rebuilding the same school information in separate places.</small></div>
-          <div><span>02</span><strong>Role-aware access</strong><small>People get the tools and information that belong to their work.</small></div>
-          <div><span>03</span><strong>Made for daily use</strong><small>Fast paths, clear actions and less hunting through software.</small></div>
-        </section>
-
-        <HomeHelpBar />
-
-        <section className="product-story" aria-label="How SukuuNova brings school work together">
-          <div className="product-story-head"><div><span className="section-kicker">THE PRODUCT, IN CONTEXT</span><h2>Move through school work without losing the thread.</h2></div><p>Choose a workstream below. The interface changes around the job, while the underlying school record stays connected.</p></div>
-          <HomeProductPreview />
-        </section>
-
-        <section className="intent-grid" id="how-it-works" aria-label="Who SukuuNova is for">
-          <Link className="intent-card intent-school" href="/for-schools"><span className="intent-icon"><Building2 size={20} aria-hidden="true" /></span><span className="section-kicker">SCHOOL LEADERS</span><h2>See what needs attention across the school.</h2><p>Bring people, academics, attendance and finance into one working view.</p><span className="intent-link">For schools <ArrowRight size={15} /></span></Link>
-          <Link className="intent-card intent-users" href="/login/school"><span className="intent-icon"><LogIn size={20} aria-hidden="true" /></span><span className="section-kicker">STAFF &amp; FAMILIES</span><h2>Go straight to the work that belongs to you.</h2><p>Each person sees the tools and school records they need, without the clutter.</p><span className="intent-link">Go to school login <ArrowRight size={15} /></span></Link>
-          <Link className="intent-card intent-network" href="/about"><span className="intent-icon"><ShieldCheck size={20} aria-hidden="true" /></span><span className="section-kicker">BUILT FOR TRUST</span><h2>Keep the right work with the right people.</h2><p>Clear roles and permissions help teams work confidently around shared school records.</p><span className="intent-link">About SukuuNova <ArrowRight size={15} /></span></Link>
-        </section>
-
-        <section className="modules" id="modules"><div className="section-kicker">WHAT YOU CAN RUN</div><div className="section-head"><div><h2>The school day, without the clutter.</h2><p>Start with the part of school you manage. Follow the link to see the work and the tools behind it.</p></div></div><div className="module-grid">{modules.map(([title, copy, Icon, href], index) => <Link className="module-card" href={href} key={title}><span className="module-index">0{index + 1}</span><span className="module-icon"><Icon size={20} aria-hidden="true" /></span><h3>{title}</h3><p>{copy}</p><span className="module-arrow"><ArrowRight size={16} aria-hidden="true" /></span></Link>)}</div></section>
-
-        <section className="closing-cta"><div><span className="section-kicker">READY WHEN YOUR SCHOOL IS</span><h2>Put the school in one place.</h2><p>Give your team one system for the records and work they already manage every day.</p></div><div className="closing-cta-actions"><Link className="primary-cta" href="/for-schools">See SukuuNova for schools <ArrowRight size={16} aria-hidden="true" /></Link><HomeLeadChat /></div></section>
-        <footer className="footer"><span>© 2026 SukuuNova</span><span>School work, kept together.</span><span><Link href="/about">About</Link> · <Link href="/contact">Contact</Link> · <Link href="/login/platform">Platform access</Link></span></footer>
-      </div>
-    </main>
-  );
+export default function HomePage(){
+ return <main className="nova-public"><div className="nova-wrap"><HomeHeader/>
+  <section className="nova-hero">
+   <div><span className="nova-eyebrow">FOR THE CURIOUS. FOR THE WHOLE SCHOOL.</span><h1>A little less school stress.<br/><em>A lot more learning.</em></h1><p>Get unstuck on a topic, try something new, or keep your school day organised. Find your next step with SukuuNova.</p><div className="nova-actions"><Link className="nova-button" href="/learn">Start learning <ArrowRight size={18}/></Link><Link className="nova-button secondary" href="/for-schools">Explore tools for schools</Link></div><p className="nova-small">Try public activities without an account. Already part of a school? <Link href="/login/school">Sign in here.</Link></p></div>
+   <Link className="nova-hero-demo" href="/explore?activity=market" aria-label="Try the market challenge"><span className="nova-eyebrow">YOUR FIRST DISCOVERY</span><h2>Could you run a busy little shop?</h2><div className="nova-shop" aria-hidden="true"><span>🍊</span><span>🥭</span><span>🍍</span></div><div className="nova-receipt"><span>Stock. Set a price. Make a prediction.</span><strong>Will you make a profit?</strong><span>One decision can change the whole day.</span></div><span className="nova-demo-link">Try the free market challenge <ArrowRight size={20}/></span></Link>
+  </section>
+  <section className="nova-section" aria-labelledby="start-heading"><span className="nova-eyebrow">START WHERE YOU ARE</span><h2 id="start-heading">What would you like to work on?</h2><div className="nova-paths">{[["Basic school","KG, primary and JHS","basic"],["SHS","Your programme and subjects","shs"],["Exams","Find your exam and topic","exam"],["University","Find your programme and course","university"]].map(([title,detail,entry])=><Link key={entry} href={"/learn/explore?entry="+entry}><BookOpen size={23}/><h3>{title}</h3><p>{detail}</p><span>Choose a subject ↗</span></Link>)}</div><p className="nova-small">Practice depth varies by topic. Exam activities are independent preparation, not an official exam or a predicted grade.</p></section>
+  <section className="nova-section nova-feature"><div><span className="nova-eyebrow">LEARN BY DOING</span><h2>Make a prediction.<br/>See what happens.</h2><p>Run a market stall. Power a community. Solve a mystery using evidence. Discovery Studio gives you something to think about—and something to try.</p><Link className="nova-button" href="/explore"><Compass size={18}/> Open Discovery Studio</Link></div><div className="nova-feature-list"><article><strong>01 / TRY</strong><h3>Your decisions change the outcome.</h3><p>Adjust a price or an energy plan and test your thinking.</p></article><article><strong>02 / UNDERSTAND</strong><h3>Look beyond the score.</h3><p>See where the result came from and explain what you would change.</p></article><article><strong>03 / REMEMBER</strong><h3>Come back to what matters.</h3><p>Save useful ideas and revisit your practice with <Link href="/learn/remember">Remember</Link>.</p></article></div></section>
+  <section className="nova-section"><span className="nova-eyebrow">FOR YOUR SCHOOL DAY</span><h2>Less hunting for records.<br/>More time for people.</h2><div className="nova-paths three">{[["Start the day","Keep student details and attendance together, so your team knows where to begin.","/features/attendance-safety"],["Follow the money","Track fees, payments and balances. Give families clear receipts.","/features/fees-finance"],["Keep learning connected","Organise lessons, marks and reports without rebuilding the same information.","/features/academics"]].map(([title,copy,href])=><Link key={href} href={href}><Building2 size={23}/><h3>{title}</h3><p>{copy}</p><span>See how it works ↗</span></Link>)}</div><div className="nova-actions"><Link className="nova-button secondary" href="/for-schools">Meet SukuuNova for schools</Link><Link href="/contact">Talk to us about your school <ArrowRight size={17}/></Link></div></section>
+  <section className="nova-band"><Brain size={32}/><div><h2>A small step is still a step.</h2><p>Review an idea from yesterday, finish a project, or try one question. You choose the pace.</p></div><Link className="nova-button" href="/learn/remember">Open Remember</Link></section>
+  <section className="nova-section"><h2>A few things you might be wondering</h2><div className="nova-faq"><details><summary>Can I try it without a school account?</summary><p>Yes. Public learning, Discovery Studio and Remember work without signing in. School records require your school's login.</p></details><details><summary>Is Discovery Studio free?</summary><p>Yes. The activities and personal project notebook are free to use.</p></details><details><summary>Will my progress follow me to another device?</summary><p>Public learning and projects are currently saved in this browser. Use the project export before changing devices or clearing browser data.</p></details></div></section>
+  <ContactOptions/>
+  <footer className="nova-footer"><span>© 2026 SukuuNova · Keep moving forward.</span><nav aria-label="Footer"><Link href="/about">About</Link><Link href="/contact">Contact</Link><Link href="/login/platform">Platform access</Link></nav><span><Check size={15}/> Built for learning and the people around it.</span></footer>
+ </div></main>;
 }

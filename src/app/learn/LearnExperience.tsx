@@ -3,7 +3,7 @@ import { ArrowRight, BookOpen, GraduationCap, Medal, Sparkles, Compass, Calendar
 import styles from "./hub.module.css";
 
 const paths = [
-  { title:"Basic School", detail:"KG · Primary · JHS", copy:"Choose your class, subject and topic without passing through SHS programme lists.", href:"/learn/explore?entry=basic", icon:BookOpen, tone:"violet" },
+  { title:"Basic School", detail:"KG · Primary · JHS", copy:"Find your class, then take one topic at a time.", href:"/learn/explore?entry=basic", icon:BookOpen, tone:"violet" },
   { title:"SHS", detail:"9 study pathways · SHS 1–3", copy:"Choose General Science, General Arts, Business, Technical, STEM and other SHS programmes.", href:"/learn/explore?entry=shs", icon:Sparkles, tone:"violet" },
   { title:"Exam preparation", detail:"BECE · WASSCE · IELTS", copy:"Choose an exam and practise only where reviewed coverage is ready.", href:"/learn/explore?entry=exam", icon:Medal, tone:"blue" },
   { title:"University", detail:"25+ popular programmes", copy:"Choose a degree programme, level, course and topic.", href:"/learn/explore?entry=university", icon:GraduationCap, tone:"orange" },
@@ -14,9 +14,9 @@ export function LearnExperience(){
   <section className={styles.hero}>
    <div><span className={styles.eyebrow}><Sparkles size={16}/> A little practice. A clearer mind.</span>
     <h1>Your next<br/><em>“I get it”</em><br/>starts here.</h1>
-    <p>From KG to SHS pathways, university programmes and career skills. Pick a path, hear every action, answer at your pace, and understand the why.</p>
+    <p>From KG to SHS pathways, university programmes and career skills. Pick a path, answer at your pace, and understand the why.</p>
     <div className={styles.actions}><Link className={styles.primary} href="/learn/explore">Start practice <ArrowRight size={18}/></Link><Link href="/learn/today">Try today’s challenge <ArrowRight size={16}/></Link></div>
-    <div className={styles.trust}><span>🔊 Sound on by default</span><span>⚡ Instant feedback</span><span>🎯 Focused practice</span></div>
+    <div className={styles.trust}><span>✓ Optional sound</span><span>⚡ Instant feedback</span><span>🎯 Focused practice</span></div>
    </div>
    <div className={styles.preview} aria-label="Your learning journey">
     <div className={styles.previewHead}><span className={styles.spark}>✦</span><span>SMALL STEPS. REAL UNDERSTANDING.</span></div>
@@ -29,7 +29,7 @@ export function LearnExperience(){
   <section className={styles.discover} aria-labelledby="learn-paths"><div className={styles.sectionHead}><div><span className={styles.eyebrow}>YOUR LEARNING, YOUR WAY</span><h2 id="learn-paths">Where would you like to begin?</h2></div><p>Choose a path. You can change it any time.</p></div>
    <div className={styles.cards}>{paths.map(({title,detail,copy,href,icon:Icon,tone})=><Link key={href} href={href} className={styles.card} data-tone={tone}><span className={styles.cardIcon}><Icon size={25}/></span><small>{detail}</small><h3>{title}</h3><p>{copy}</p><span className={styles.cardLink}>Explore subjects <ArrowRight size={17}/></span></Link>)}</div>
   </section>
-  <section className={styles.continue}><div><CalendarDays size={24}/><h3>Build a small daily habit</h3><p>A short challenge helps you return, even on a busy day.</p><Link href="/learn/today">Today’s challenge <ArrowRight size={16}/></Link></div><div><BarChart3 size={24}/><h3>See what is getting stronger</h3><p>Your answers build a topic-by-topic picture of your progress on this browser.</p><Link href="/learn/progress">See my progress <ArrowRight size={16}/></Link></div></section>
+  <section className={styles.continue}><div><Compass size={24}/><h3>Try an idea. See what happens.</h3><p>Run a market, power a community or solve an evidence mystery.</p><Link href="/explore">Discovery Studio <ArrowRight size={16}/></Link></div><div><BookOpen size={24}/><h3>Keep what you learn.</h3><p>Short reviews bring useful ideas back when you need them.</p><Link href="/learn/remember">Open Remember <ArrowRight size={16}/></Link></div></section><section className={styles.continue}><div><CalendarDays size={24}/><h3>Build a small daily habit</h3><p>A short challenge helps you return, even on a busy day.</p><Link href="/learn/today">Today’s challenge <ArrowRight size={16}/></Link></div><div><BarChart3 size={24}/><h3>See what is getting stronger</h3><p>Your answers build a topic-by-topic picture of your progress on this browser.</p><Link href="/learn/progress">See my progress <ArrowRight size={16}/></Link></div></section>
   <footer className={styles.footer}><p>Practice availability varies by subject and topic. Paths without published questions are labelled clearly instead of blocking the whole learning area. Exam practice is independent preparation, not an official exam or score prediction.</p><Link href="/for-schools">Looking for school management? <ArrowRight size={15}/></Link></footer>
  </main>;
 }
