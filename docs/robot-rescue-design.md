@@ -11,7 +11,7 @@ A free, single-player, illustrated 2D physics game: plan a rescue flight, launch
 5. Precious cargo / Coral — greater mass at the same launch energy reduces speed.
 6. Light the chain / Sol — combine clearance, distance, wind and braking.
 
-Every mission has a regression-tested feasible landing. Later default settings intentionally need adjustment. Alternative solutions remain possible. Optional mastery stars reward an energy pickup and a landing at 5 m/s or slower; neither is required to progress.
+Every mission has a regression-tested feasible landing and three-star solution. Later default settings intentionally need adjustment. Alternative solutions remain possible. Optional mastery stars reward an energy pickup and keeping at least half the brake fuel; neither is required to progress.
 
 ## Physics contract
 - Units are metres, seconds, kilograms, joules and newtons.

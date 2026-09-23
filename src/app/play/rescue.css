@@ -182,3 +182,6 @@
  .rr-shell.is-flying .rr-controls,.rr-shell.is-flying .rr-mode-switch,.rr-shell.is-flying .rr-hint,.rr-shell.is-flying .rr-log{display:none}
  .rr-shell.is-flying .rr-console{position:sticky;bottom:0;z-index:4}
 }
+
+.rr-result-data{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:740px){.rr-result-data{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:14px}}

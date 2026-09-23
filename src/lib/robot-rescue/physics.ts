@@ -94,7 +94,7 @@ export function predict(level:Level,angle:number,energy:number,assist:boolean) {
  return {points,state};
 }
 export function flightStars(state:Flight) {
- return state.status!=="rescued"?0:1+Number(state.collected.length>0)+Number(state.impact<=5);
+ return state.status!=="rescued"?0:1+Number(state.collected.length>0)+Number(state.fuel>=50);
 }
 export function readProgress(raw:string|null):Progress {
  const clean:Progress={version:1,best:Array(LEVELS.length).fill(0),mode:"explorer"};

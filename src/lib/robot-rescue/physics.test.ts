@@ -102,8 +102,8 @@ describe("Robot Rescue physical model",()=>{
   for(const value of [state.x,state.y,state.vx,state.vy,state.time])expect(Number.isFinite(value)).toBe(true);
  });
  it("awards optional mastery stars without making pickups mandatory",()=>{
-  expect(flightStars(flying({status:"rescued",impact:8}))).toBe(1);
-  expect(flightStars(flying({status:"rescued",impact:4,collected:[0]}))).toBe(3);
+  expect(flightStars(flying({status:"rescued",impact:8,fuel:30}))).toBe(1);
+  expect(flightStars(flying({status:"rescued",impact:4,collected:[0],fuel:70}))).toBe(3);
   expect(flightStars(flying({status:"missed",impact:0,collected:[0]}))).toBe(0);
  });
 });
@@ -129,5 +129,17 @@ describe("Robot Rescue camera continuity",()=>{
   const before=cameraFor(390,300,scene);
   const after=cameraFor(390,300,{...scene,flight:{...scene.flight,y:19.01}});
   expect(Math.abs(after.bottom-before.bottom)).toBeLessThan(.03);
+ });
+});
+
+describe("Robot Rescue mastery rewards",()=>{
+ it("has an attainable three-star flight on every island, including heavy cargo",()=>{
+  const mastery=[[29,260],[47,225],[47,325],[18,350],[34,365],[52,235]];
+  LEVELS.forEach((level,i)=>{
+   const result=predict(level,mastery[i][0],mastery[i][1],true).state;
+   expect(flightStars(result),level.name).toBe(3);
+   expect(result.fuel).toBeGreaterThanOrEqual(50);
+   expect(result.collected).toContain(0);
+  });
  });
 });

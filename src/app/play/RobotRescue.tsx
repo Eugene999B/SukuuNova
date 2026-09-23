@@ -201,14 +201,14 @@ export function RobotRescue(){
       <h2>{phase==="rescued"?(index===5?"Every light is back.":level.robot+" is coming home."):"A new plan, not a dead end."}</h2>
       {phase==="rescued"&&<div className="rr-stars" aria-label={flightStars(telemetry)+" of 3 stars"}>{[1,2,3].map(n=><Star key={n} size={27} className={n<=flightStars(telemetry)?"earned":""}/>)}</div>}
       <p>{telemetry.reason}</p>
-      <div className="rr-result-data"><span><b>{telemetry.time.toFixed(1)} s</b>flight time</span><span><b>{telemetry.impact.toFixed(1)} m/s</b>final speed</span><span><b>{telemetry.collected.length}/{level.orbs.length}</b>energy cells</span></div>
+      <div className="rr-result-data"><span><b>{telemetry.time.toFixed(1)} s</b>flight time</span><span><b>{telemetry.impact.toFixed(1)} m/s</b>final speed</span><span><b>{telemetry.collected.length}/{level.orbs.length}</b>energy cells</span><span><b>{Math.floor(telemetry.fuel)}%</b>brake fuel left</span></div>
       <div className="rr-result-actions">
        {phase==="rescued"&&index<5?<button ref={resultButtonRef} className="rr-primary" onClick={()=>chooseMission(index+1)}>Next rescue<ArrowRight size={18}/></button>
         :<button ref={resultButtonRef} className="rr-primary" onClick={()=>{resetMission();canvasRef.current?.focus();}}><RotateCcw size={17}/>{phase==="rescued"?"Fly again":"Adjust & retry"}</button>}
        {phase==="rescued"&&index<5&&<button className="rr-secondary" onClick={()=>resetMission()}>Improve this flight</button>}
        {phase==="rescued"&&index===5&&<button className="rr-secondary" onClick={()=>openDialog("missions")}>Replay the islands</button>}
       </div>
-      <details><summary>What this flight teaches</summary><p>{level.lesson}</p><p>One star for rescue, one for collecting the cell, one for landing at 5 m/s or slower.</p></details>
+      <details><summary>What this flight teaches</summary><p>{level.lesson}</p><p>One star for rescue, one for collecting the cell, one for keeping at least 50% brake fuel.</p></details>
      </div>
     </div>}
    </section>
