@@ -39,7 +39,7 @@ Explorer uses the same simulator for prediction and automatically brakes on desc
 - Small-screen flight mode prioritizes the scene and reachable brake controls.
 
 ## Persistence and scope
-Validated, versioned browser-local progress only. No server account, school-record access or cross-device sync. Storage failure does not block play. The former Discovery Studio and saved projects remain at /explore; the homepage now points Play & learn to /play.
+Validated, versioned browser-local progress only. No server account, school-record access or cross-device sync. Storage failure does not block play. Writes and cross-tab storage events merge the best result per mission, so an older tab cannot erase a better rescue. The former Discovery Studio and saved projects remain at /explore; the homepage now points Play & learn to /play.
 
 ## Validation
 Analytical trajectory comparison, energy/mass invariants, wind direction, fuel depletion, swept collisions, landing-surface and speed constraints, preview/flight agreement, mission solvability, challenge defaults and malformed save recovery. Browser smoke covers launch, pause, resume, rescue, progression and persistence.

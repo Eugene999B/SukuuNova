@@ -1,6 +1,6 @@
 import { cameraFor, type Scene } from "./renderer";
 import { describe, it, expect } from "vitest";
-import { LEVELS, STEP, GRAVITY, RADIUS, launch, stepFlight, predict, sweepBox, flightStars, readProgress, unlockedThrough, type Level, type Flight } from "./physics";
+import { LEVELS, STEP, GRAVITY, RADIUS, launch, stepFlight, predict, sweepBox, flightStars, readProgress, mergeProgress, unlockedThrough, type Level, type Flight } from "./physics";
 
 const air:Level={...LEVELS[0],goal:{x:200,y:0,w:10,h:4},blocks:[],orbs:[]};
 function flying(overrides:Partial<Flight>={}):Flight{return {...launch(air,45,170),x:12,y:22,vx:10,vy:0,...overrides};}
@@ -141,5 +141,15 @@ describe("Robot Rescue mastery rewards",()=>{
    expect(result.fuel).toBeGreaterThanOrEqual(50);
    expect(result.collected).toContain(0);
   });
+ });
+});
+
+describe("Robot Rescue progress merging",()=>{
+ it("preserves the best result from either tab without changing the active flight mode",()=>{
+  const current={version:1,best:[2,1,0,0,0,0],mode:"precision" as const};
+  const incoming={version:1,best:[3,0,2,0,0,0],mode:"explorer" as const};
+  expect(mergeProgress(current,incoming)).toEqual({version:1,best:[3,1,2,0,0,0],mode:"precision"});
+  expect(mergeProgress(current,readProgress(null))).toEqual(current);
+  expect(current.best).toEqual([2,1,0,0,0,0]);
  });
 });

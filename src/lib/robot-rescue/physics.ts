@@ -111,3 +111,7 @@ export function unlockedThrough(best:number[]) {
  while(index<LEVELS.length-1&&best[index]>0)index++;
  return index;
 }
+
+export function mergeProgress(current:Progress,incoming:Progress):Progress{
+ return {...current,best:LEVELS.map((_,i)=>Math.max(current.best[i]||0,incoming.best[i]||0))};
+}

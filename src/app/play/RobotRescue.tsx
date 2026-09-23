@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Volume2, VolumeX, Maximize2, Pause, Play, RotateCcw, Map, HelpCircle, Lock, Star, Rocket, Wind, Battery, Crosshair, ChevronRight } from "lucide-react";
-import { LEVELS, STEP, SAVE_KEY, launch, stepFlight, predict, flightStars, readProgress, unlockedThrough, clamp, type Flight, type Point, type Progress } from "@/lib/robot-rescue/physics";
+import { LEVELS, STEP, SAVE_KEY, launch, stepFlight, predict, flightStars, readProgress, mergeProgress, unlockedThrough, clamp, type Flight, type Point, type Progress } from "@/lib/robot-rescue/physics";
 import { drawScene, worldPoint, type Camera } from "@/lib/robot-rescue/renderer";
 import { RescueAudio } from "@/lib/robot-rescue/audio";
 
@@ -96,9 +96,25 @@ export function RobotRescue(){
  },[]);
  useEffect(()=>{
   if(!loaded)return;
-  try{localStorage.setItem(SAVE_KEY,JSON.stringify({...progress,mode}));}
+  try{
+   const merged=mergeProgress({...progress,mode},readProgress(localStorage.getItem(SAVE_KEY)));
+   localStorage.setItem(SAVE_KEY,JSON.stringify(merged));
+   if(merged.best.some((n,i)=>n!==progress.best[i]))setProgress(current=>mergeProgress(current,merged));
+  }
   catch{setSaveNotice("Progress could not be saved on this device. Keep this tab open to continue.");}
  },[progress,mode,loaded]);
+ useEffect(()=>{
+  const receive=(event:StorageEvent)=>{
+   if(event.key!==SAVE_KEY)return;
+   const incoming=readProgress(event.newValue);
+   setProgress(current=>{
+    const merged=mergeProgress(current,incoming);
+    return merged.best.some((n,i)=>n!==current.best[i])?merged:current;
+   });
+  };
+  window.addEventListener("storage",receive);
+  return ()=>window.removeEventListener("storage",receive);
+ },[]);
  useEffect(()=>{
   const d=dialogRef.current;if(!d)return;
   if(dialog&&!d.open)d.showModal();
