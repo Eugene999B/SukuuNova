@@ -233,8 +233,11 @@ async function main() {
 
     // Public discovery: decisions affect outcomes, evidence produces a saved project,
     // and spaced review survives a page reload.
-    await page.setViewportSize({width:390,height:844});
+    await page.setViewportSize({width:1366,height:768});
     await page.goto("/");
+    const loginColors=await page.getByRole("link",{name:"School login",exact:true}).evaluate(el=>({text:getComputedStyle(el).color,background:getComputedStyle(el).backgroundColor}));
+    assert.notEqual(loginColors.text,loginColors.background,"School login text must remain visible against its button");
+    await page.setViewportSize({width:390,height:844});
     await page.getByRole("heading",{name:/A little less school stress/}).waitFor();
     assert.equal(await page.locator('a[href="https://wa.me/233559529261"]').count(),1);
     assert.equal(await page.locator('a[href="mailto:sukuunova@gmail.com"]').count(),1);
