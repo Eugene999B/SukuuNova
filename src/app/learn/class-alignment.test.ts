@@ -94,7 +94,9 @@ describe("class-aligned Ghana basic-school assessment", () => {
     expect(questions).toHaveLength(48);
     expect(new Set(questions.map((question) => question.generationFamily)).size).toBeGreaterThanOrEqual(10);
     expect(new Set(questions.map((question) => question.prompt.slice(0, 28))).size).toBeGreaterThanOrEqual(8);
-    expect(questions.every((question) => question.difficulty >= 3)).toBe(true);
+    expect(questions.filter(question=>question.challenge==="Recall").every(question=>question.difficulty===1)).toBe(true);
+    expect(questions.some(question=>question.challenge==="Recall")).toBe(true);
+    expect(questions.some(question=>question.challenge==="Analyse"||question.challenge==="Evaluate")).toBe(true);
     for (const question of questions) {
       expect(question.prompt.toLowerCase()).not.toMatch(/university|startup|portfolio|corporate|clinical trial|data centre/);
     }
