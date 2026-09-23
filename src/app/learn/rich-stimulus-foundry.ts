@@ -1,6 +1,5 @@
 import {
   resolveCatalogSelection,
-  type CognitiveChallenge,
   type LearnQuestion,
   type QuestionStimulus,
   type SessionConfig,
@@ -17,7 +16,10 @@ const NAMES = ["Ama","Kojo","Akosua","Yaw","Esi","Kofi","Abena","Kwame","Mansa",
 const PLACES = ["the school garden","the library","the community centre","the science club","the market survey","the reading room"] as const;
 const QUALITIES = ["careful","patient","curious","responsible","resourceful","thoughtful"] as const;
 
-export const RICH_STIMULUS_TOPIC_CAPACITY = 12_000_000;
+// Count distinct task families, not cosmetic names or numeric permutations.
+export const RICH_STIMULUS_TOPIC_CAPACITY = 6;
+const READING_TASK_CAPACITY = 24;
+const DATA_TASK_CAPACITY = 4;
 
 function hash(value: string) {
   let result = 2166136261;
@@ -30,10 +32,6 @@ function hash(value: string) {
 
 function pick<T>(items: readonly T[], seed: number, offset = 0) {
   return items[(seed + offset) % items.length];
-}
-
-function clampDifficulty(value: number): 1 | 2 | 3 | 4 | 5 {
-  return Math.max(1, Math.min(5, Math.round(value))) as 1 | 2 | 3 | 4 | 5;
 }
 
 function baseDifficulty(levelId: string) {
@@ -97,7 +95,7 @@ function geometryQuestion(config: SessionConfig, target: Target, seed: number, p
       subject: target.subject,
       topic: target.topic,
       skill: "Reason from a geometry diagram",
-      difficulty: clampDifficulty(level),
+      difficulty: 2,
       prompt: "Study the rectangle. What is its perimeter in centimetres?",
       answer,
       acceptedAnswers: [String(answer)],
@@ -120,7 +118,7 @@ function geometryQuestion(config: SessionConfig, target: Target, seed: number, p
       subject: target.subject,
       topic: target.topic,
       skill: "Calculate area from a diagram",
-      difficulty: clampDifficulty(level),
+      difficulty: 2,
       prompt: "The shaded rectangular board has the dimensions shown. What is its area in square centimetres?",
       answer,
       acceptedAnswers: [String(answer)],
@@ -151,7 +149,7 @@ function geometryQuestion(config: SessionConfig, target: Target, seed: number, p
       subject: target.subject,
       topic: target.topic,
       skill: "Use the angle sum of a triangle",
-      difficulty: clampDifficulty(level + 1),
+      difficulty: 3,
       prompt: "Two interior angles of the triangle are labelled. Find the missing angle x.",
       answer,
       acceptedAnswers: [String(answer), `${answer}°`],
@@ -181,7 +179,7 @@ function geometryQuestion(config: SessionConfig, target: Target, seed: number, p
       subject: target.subject,
       topic: target.topic,
       skill: "Find a missing dimension",
-      difficulty: clampDifficulty(level + 1),
+      difficulty: 3,
       prompt: `The rectangle has area ${area} cm² and width ${width} cm. Fill in the missing length.`,
       answer,
       acceptedAnswers: [String(answer), `${answer} cm`],
@@ -211,7 +209,7 @@ function geometryQuestion(config: SessionConfig, target: Target, seed: number, p
       subject: target.subject,
       topic: target.topic,
       skill: "Reason about angles on a straight line",
-      difficulty: clampDifficulty(level + 1),
+      difficulty: 2,
       prompt: "The two adjacent angles form a straight line. What is x?",
       options: picked.options,
       answer: picked.answer,
@@ -233,7 +231,8 @@ function geometryQuestion(config: SessionConfig, target: Target, seed: number, p
 
   const sideA = 3 + (hash(`${seed}:ta:${position}`) % 30);
   const sideB = 4 + (hash(`${seed}:tb:${position}`) % 30);
-  const sideC = 5 + (hash(`${seed}:tc:${position}`) % 30);
+  // Strict triangle inequality: |a − b| < c < a + b.
+  const sideC = Math.abs(sideA - sideB) + 1 + (hash(`${seed}:tc:${position}`) % (2 * Math.min(sideA, sideB) - 1));
   const answer = sideA + sideB + sideC;
   return {
     id: `rich-geometry-triangle-perimeter-${seed}-${position}`,
@@ -242,7 +241,7 @@ function geometryQuestion(config: SessionConfig, target: Target, seed: number, p
     subject: target.subject,
     topic: target.topic,
     skill: "Interpret side labels on a triangle",
-    difficulty: clampDifficulty(level),
+    difficulty: 1,
     prompt: "Use the side lengths shown to calculate the perimeter of the triangle.",
     answer,
     acceptedAnswers: [String(answer)],
@@ -285,7 +284,7 @@ function readingPassage(seed: number, level: number) {
   ][seed % 4];
 
   const text = level <= 2
-    ? `${name} was working at ${place}. ${name} ${challenge}. Being ${quality}, ${name} ${response}. ${result}`
+    ? `${name} was working at ${place}. ${name} ${challenge}. Being ${quality}, ${name} ${response}. ${result} The decision was guided by evidence.`
     : `While working at ${place}, ${name} ${challenge}. Instead of accepting the problem as normal, ${name} took a ${quality} approach: ${response}. ${result} The experience showed that a small decision, when guided by evidence, can change how a whole group works.`;
 
   return { name, text, challenge, response, result };
@@ -311,7 +310,7 @@ function englishReadingQuestion(config: SessionConfig, target: Target, seed: num
       id: `rich-reading-main-${seed}-${position}`,
       exposureKey: `rich:reading:main:${config.levelId}:${seed}:${position}`,
       kind: "single", subject: target.subject, topic: target.topic,
-      skill: "Identify the main idea", difficulty: clampDifficulty(level),
+      skill: "Identify the main idea", difficulty: 2,
       prompt: "Which statement best expresses the main idea of the passage?",
       options: rotated.map((label,index)=>({id:String(index),label})),
       answer: String(rotated.indexOf(correct)),
@@ -328,7 +327,7 @@ function englishReadingQuestion(config: SessionConfig, target: Target, seed: num
       id: `rich-reading-fill-${seed}-${position}`,
       exposureKey: `rich:reading:fill:${config.levelId}:${seed}:${position}`,
       kind: "fill", subject: target.subject, topic: target.topic,
-      skill: "Use context to complete meaning", difficulty: clampDifficulty(level),
+      skill: "Use context to complete meaning", difficulty: 1,
       prompt: "Complete the idea from the passage: the decision was guided by ______.",
       answer, acceptedAnswers: ["evidence", "evidence from the situation"],
       explanation: "The final sentence explicitly says the decision was guided by evidence.",
@@ -343,10 +342,10 @@ function englishReadingQuestion(config: SessionConfig, target: Target, seed: num
       id: `rich-reading-inference-${seed}-${position}`,
       exposureKey: `rich:reading:inference:${config.levelId}:${seed}:${position}`,
       kind: "short", subject: target.subject, topic: target.topic,
-      skill: "Make a supported inference", difficulty: clampDifficulty(level + 1),
+      skill: "Make a supported inference", difficulty: 3,
       prompt: `What quality of ${passage.name} is most strongly shown by the response to the problem? Give one word.`,
       answer: "resourceful",
-      acceptedAnswers: ["resourceful","thoughtful","careful","responsible","curious","proactive"],
+      acceptedAnswers: ["resourceful","thoughtful","careful","responsible","curious","proactive","patient"],
       explanation: "The response shows initiative and thoughtful problem solving. Several closely related descriptions are acceptable.",
       hint: "Describe the character shown by the action, not the action itself.",
       challenge: "Analyse", mission: "Infer character from evidence",
@@ -355,7 +354,7 @@ function englishReadingQuestion(config: SessionConfig, target: Target, seed: num
   }
 
   if (family === 3) {
-    const correct = "The action addressed the cause of the problem and checked whether the change worked.";
+    const correct = "The action addressed the problem and led to the improvement described.";
     const options = [
       correct,
       "The action ignored the problem until somebody else solved it.",
@@ -368,7 +367,7 @@ function englishReadingQuestion(config: SessionConfig, target: Target, seed: num
       id: `rich-reading-evaluate-${seed}-${position}`,
       exposureKey: `rich:reading:evaluate:${config.levelId}:${seed}:${position}`,
       kind: "single", subject: target.subject, topic: target.topic,
-      skill: "Evaluate an action using textual evidence", difficulty: clampDifficulty(level + 1),
+      skill: "Evaluate an action using textual evidence", difficulty: 3,
       prompt: "Why was the response in the passage effective?",
       options: rotated.map((label,index)=>({id:String(index),label})),
       answer: String(rotated.indexOf(correct)),
@@ -385,7 +384,7 @@ function englishReadingQuestion(config: SessionConfig, target: Target, seed: num
       id: `rich-reading-detail-${seed}-${position}`,
       exposureKey: `rich:reading:detail:${config.levelId}:${seed}:${position}`,
       kind: "fill", subject: target.subject, topic: target.topic,
-      skill: "Retrieve a detail accurately", difficulty: clampDifficulty(level),
+      skill: "Retrieve a detail accurately", difficulty: 1,
       prompt: "Who took action to address the problem described in the passage?",
       answer, acceptedAnswers: [answer, answer.toLowerCase()],
       explanation: `${answer} is the person who notices the problem and takes action.`,
@@ -408,7 +407,7 @@ function englishReadingQuestion(config: SessionConfig, target: Target, seed: num
     id: `rich-reading-title-${seed}-${position}`,
     exposureKey: `rich:reading:title:${config.levelId}:${seed}:${position}`,
     kind: "single", subject: target.subject, topic: target.topic,
-    skill: "Select an appropriate title", difficulty: clampDifficulty(level),
+    skill: "Select an appropriate title", difficulty: 2,
     prompt: "Which title best fits the passage?",
     options: rotated.map((label,index)=>({id:String(index),label})),
     answer: String(rotated.indexOf(correct)),
@@ -436,7 +435,7 @@ function dataQuestion(config: SessionConfig, target: Target, seed: number, posit
     return {
       id:`rich-table-total-${seed}-${position}`, exposureKey:`rich:table:total:${seed}:${position}`,
       kind:"numeric", subject:target.subject, topic:target.topic, skill:"Calculate a total from a table",
-      difficulty:clampDifficulty(level), prompt:"How many books were borrowed altogether across the four days?",
+      difficulty:2, prompt:"How many books were borrowed altogether across the four days?",
       answer, acceptedAnswers:[String(answer)], explanation:`Add the four table values to get ${answer}.`,
       hint:"Use every row once.", challenge:"Apply", mission:"Turn organised data into a calculation",
       generationFamily:"rich-data-table-total", stimulus, provenance:provenance(),
@@ -448,7 +447,7 @@ function dataQuestion(config: SessionConfig, target: Target, seed: number, posit
     return {
       id:`rich-table-range-${seed}-${position}`, exposureKey:`rich:table:range:${seed}:${position}`,
       kind:"fill", subject:target.subject, topic:target.topic, skill:"Find the range from a table",
-      difficulty:clampDifficulty(level+1), prompt:"Fill in the range of the four daily values.",
+      difficulty:2, prompt:"Fill in the range of the four daily values.",
       answer, acceptedAnswers:[String(answer)], explanation:`Range = ${Math.max(...values)} − ${Math.min(...values)} = ${answer}.`,
       hint:"Subtract the smallest value from the largest.", challenge:"Analyse", mission:"Compare values before calculating",
       generationFamily:"rich-data-table-range", stimulus, provenance:provenance(),
@@ -456,13 +455,14 @@ function dataQuestion(config: SessionConfig, target: Target, seed: number, posit
   }
 
   const max = Math.max(...values);
-  const day = labels[values.indexOf(max)];
+  const days = labels.filter((_, index) => values[index] === max);
+  const day = days[0];
   if (family === 2) {
     return {
       id:`rich-table-max-${seed}-${position}`, exposureKey:`rich:table:max:${seed}:${position}`,
       kind:"short", subject:target.subject, topic:target.topic, skill:"Interpret a data table",
-      difficulty:clampDifficulty(level), prompt:"On which day was the greatest number of books borrowed?",
-      answer:day, acceptedAnswers:[day,day.toLowerCase()], explanation:`${day} has the largest value, ${max}.`,
+      difficulty:1, prompt:"Name one day on which the greatest number of books was borrowed.",
+      answer:day, acceptedAnswers:days, explanation:`The largest value is ${max}, recorded on ${days.join(" and ")}. Any one of these days is correct.`,
       hint:"Scan the Books column for the greatest number.", challenge:"Recall", mission:"Read organised data accurately",
       generationFamily:"rich-data-table-maximum", stimulus, provenance:provenance(),
     };
@@ -473,7 +473,7 @@ function dataQuestion(config: SessionConfig, target: Target, seed: number, posit
   return {
     id:`rich-table-change-${seed}-${position}`, exposureKey:`rich:table:change:${seed}:${position}`,
     kind:"numeric", subject:target.subject, topic:target.topic, skill:"Compare two entries in a table",
-    difficulty:clampDifficulty(level+1), prompt:"What is Thursday's value minus Monday's value? A negative answer is allowed.",
+    difficulty:2, prompt:"What is Thursday's value minus Monday's value? A negative answer is allowed.",
     answer, acceptedAnswers:[String(answer)], explanation:`${last} − ${first} = ${answer}.`,
     hint:"Use the two named rows, in the order stated.", challenge:"Analyse", mission:"Compare data rather than guessing a trend",
     generationFamily:"rich-data-table-change", stimulus, provenance:provenance(),
@@ -492,14 +492,32 @@ function isData(target: Target) {
   return /math/.test(target.subjectId) && /data|statistics|probability/.test(target.topicId);
 }
 
+type RichMode = "geometry" | "reading" | "data";
+
+function modesForSelection(config: SessionConfig, target: Target): RichMode[] {
+  // These are school foundations. Do not relabel them as degree-level or
+  // IELTS material merely because a course name contains "math" or "reading".
+  if (config.lane === "university" || config.lane === "skills"
+    || (config.lane === "exam" && config.programId === "ielts")) return [];
+  if (config.lane === "school" && /^(kg-[12]|basic-[123])$/.test(config.levelId)) return [];
+  const modes: RichMode[] = [];
+  if (config.topicId === "all") {
+    if (/math/.test(target.subjectId)) modes.push("geometry", "data");
+    if (/english|literature/.test(target.subjectId)) modes.push("reading");
+  } else {
+    if (isGeometry(target)) modes.push("geometry");
+    if (isReading(target)) modes.push("reading");
+    if (isData(target)) modes.push("data");
+  }
+  return modes;
+}
+
 export function richStimulusCapacityForSelection(config: SessionConfig) {
   const target = selectedTarget(config);
   if (!target) return 0;
-  if (config.topicId === "all") {
-    if (/math/.test(target.subjectId) || /english|literature/.test(target.subjectId)) return RICH_STIMULUS_TOPIC_CAPACITY * 2;
-    return 0;
-  }
-  return isGeometry(target) || isReading(target) || isData(target) ? RICH_STIMULUS_TOPIC_CAPACITY : 0;
+  return modesForSelection(config, target).reduce((total, mode) =>
+    total + (mode === "geometry" ? RICH_STIMULUS_TOPIC_CAPACITY
+      : mode === "reading" ? READING_TASK_CAPACITY : DATA_TASK_CAPACITY), 0);
 }
 
 export function buildRichStimulusQuestions(
@@ -512,28 +530,29 @@ export function buildRichStimulusQuestions(
   const target = selectedTarget(config);
   if (!target) return [];
 
-  const modes: Array<"geometry"|"reading"|"data"> = [];
-  if (config.topicId === "all") {
-    if (/math/.test(target.subjectId)) modes.push("geometry","data");
-    if (/english|literature/.test(target.subjectId)) modes.push("reading");
-  } else {
-    if (isGeometry(target)) modes.push("geometry");
-    if (isReading(target)) modes.push("reading");
-    if (isData(target)) modes.push("data");
-  }
+  const modes = modesForSelection(config, target);
   if (!modes.length) return [];
 
   const output: LearnQuestion[] = [];
   const prompts = new Set<string>();
   for (let position=0; output.length<requested && position<requested*12; position+=1) {
     const mode = modes[position % modes.length];
+    const familyPosition = Math.floor(position / modes.length);
     const localSeed = hash(`${seed}:${target.subjectId}:${target.topicId}:${position}`);
     const question = mode === "geometry"
-      ? geometryQuestion(config,target,localSeed,position)
+      ? geometryQuestion(config,target,localSeed,familyPosition)
       : mode === "reading"
-        ? englishReadingQuestion(config,target,localSeed,position)
-        : dataQuestion(config,target,localSeed,position);
-    const promptKey = `${question.prompt}|${question.stimulus?.kind === "passage" ? question.stimulus.text : question.exposureKey}`;
+        ? englishReadingQuestion(config,target,localSeed,familyPosition)
+        : dataQuestion(config,target,localSeed,familyPosition);
+    let promptKey = JSON.stringify([question.prompt, question.stimulus]);
+    if (mode === "reading") {
+      // A renamed character or location is not a new comprehension task.
+      for (const cosmetic of [...NAMES, ...PLACES, ...QUALITIES]) {
+        promptKey = promptKey.replaceAll(cosmetic, "{context}");
+      }
+    }
+    // The same visible problem has the same identity across fresh session seeds.
+    question.exposureKey = `rich:${question.generationFamily}:${config.levelId}:${hash(promptKey)}`;
     if (prompts.has(promptKey)) continue;
     prompts.add(promptKey);
     output.push(question);
