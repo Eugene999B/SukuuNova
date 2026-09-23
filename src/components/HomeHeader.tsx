@@ -8,7 +8,7 @@ import { ThemeSwitcher } from "./ThemeSwitcher";
 
 const links = [
   ["Learn", "/learn"],
-  ["Explore", "/explore"],
+  ["Play", "/play"],
   ["For schools", "/for-schools"],
   ["Contact", "/contact"],
 ] as const;

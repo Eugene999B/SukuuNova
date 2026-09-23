@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Building2, Compass, MessageCircle } from "lucide-react";
+import { ArrowRight, BookOpen, Building2, Gamepad2, MessageCircle } from "lucide-react";
 import { HomeHeader } from "@/components/HomeHeader";
 import "./home.css";
 import "./home-experience.css";
@@ -8,12 +8,12 @@ import "./gateway.css";
 
 export const metadata = {
   title: "SukuuNova | Learn, discover and manage your school",
-  description: "Choose your next step: practise a subject, try a discovery challenge, manage your school or talk to SukuuNova.",
+  description: "Choose your next step: practise a subject, play a physics adventure, manage your school or talk to SukuuNova.",
 };
 
 const destinations = [
   { title: "Learn & practise", detail: "Subjects, courses and exam practice.", href: "/learn", icon: BookOpen, tone: "learn" },
-  { title: "Discover & create", detail: "Free challenges and your own projects.", href: "/explore", icon: Compass, tone: "discover" },
+  { title: "Play & learn", detail: "Robot Rescue: a physics adventure.", href: "/play", icon: Gamepad2, tone: "discover" },
   { title: "For your school", detail: "Explore tools for your school day.", href: "/for-schools", icon: Building2, tone: "school" },
   { title: "Talk to us", detail: "Message, WhatsApp, call or email.", href: "/contact", icon: MessageCircle, tone: "contact" },
 ] as const;

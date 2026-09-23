@@ -260,6 +260,26 @@ async function main() {
     assert.equal(typeof (await inquiryResponse.json()).reference,"string");
     const blankInquiry=await context.request.post("/api/public/inquiries",{data:{name:"  ",email:"test@example.com",message:"     "}});
     assert.equal(blankInquiry.status(),400,"Whitespace-only inquiries must be rejected");
+    // Robot Rescue: real simulation, pause, completion and durable unlocks.
+    await page.goto("/play");
+    await page.getByRole("button",{name:"Start rescue",exact:true}).click();
+    await page.getByRole("button",{name:/Launch pod/}).click();
+    await page.getByTestId("rescue-status").filter({hasText:"Flight in progress"}).waitFor();
+    await page.getByRole("button",{name:"Pause",exact:true}).click();
+    await page.getByTestId("rescue-status").filter({hasText:"Flight paused"}).waitFor();
+    const pausedClock=await page.getByTestId("rescue-clock").innerText();
+    await page.waitForTimeout(300);
+    assert.equal(await page.getByTestId("rescue-clock").innerText(),pausedClock,"Pause must freeze physics time");
+    await page.getByRole("button",{name:"Resume flight",exact:true}).click();
+    await page.getByRole("heading",{name:"Pip is coming home.",exact:true}).waitFor({timeout:15000});
+    await page.getByRole("button",{name:"Next rescue",exact:true}).click();
+    await page.getByRole("heading",{name:"Higher ground",exact:true}).waitFor();
+    await page.reload();
+    await page.getByRole("button",{name:"Continue rescue",exact:true}).waitFor();
+    await page.getByRole("button",{name:"Open mission map",exact:true}).click();
+    assert.equal(await page.getByRole("button").filter({hasText:"Higher ground"}).isEnabled(),true);
+    assert.equal(await page.getByRole("button").filter({hasText:"Against the wind"}).isEnabled(),false);
+    await page.getByRole("button",{name:"Close dialog",exact:true}).click();
     await page.goto("/explore?activity=market&challenge=0");
     await page.getByLabel("Your prediction").selectOption({label:"I expect a profit."});
     await page.getByRole("button",{name:"Open the stall",exact:true}).click();
