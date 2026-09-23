@@ -1,3 +1,4 @@
+import { cameraFor, type Scene } from "./renderer";
 import { describe, it, expect } from "vitest";
 import { LEVELS, STEP, GRAVITY, RADIUS, launch, stepFlight, predict, sweepBox, flightStars, readProgress, unlockedThrough, type Level, type Flight } from "./physics";
 
@@ -119,5 +120,14 @@ describe("Robot Rescue local campaign progress",()=>{
   expect(unlockedThrough([0,3,3,3,3,3])).toBe(0);
   expect(unlockedThrough([2,1,0,0,0,0])).toBe(2);
   expect(unlockedThrough([3,3,3,3,3,3])).toBe(5);
+ });
+});
+
+describe("Robot Rescue camera continuity",()=>{
+ it("tracks a high flight without jumping at the vertical follow threshold",()=>{
+  const scene:Scene={level:LEVELS[0],flight:flying({y:18.99}),phase:"flying",angle:42,energy:170,preview:[],trail:[],ghost:[],survey:false,reduced:false,time:0,started:true};
+  const before=cameraFor(390,300,scene);
+  const after=cameraFor(390,300,{...scene,flight:{...scene.flight,y:19.01}});
+  expect(Math.abs(after.bottom-before.bottom)).toBeLessThan(.03);
  });
 });

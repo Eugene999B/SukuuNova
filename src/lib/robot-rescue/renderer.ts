@@ -11,7 +11,7 @@ export function cameraFor(width:number,height:number,scene:Scene):Camera{
  const scale=Math.min(width/span,height/24);
  const visible=width/scale;
  const left=wide?-1:Math.max(-1,Math.min(51-visible,scene.phase==="aiming"?-1:scene.flight.x-visible*.38));
- const bottom=Math.max(-3,scene.flight.y>19&&!wide?scene.flight.y-19:-3);
+ const bottom=wide?-3:Math.max(-3,scene.flight.y-22);
  return {scale,left,bottom,width,height};
 }
 export function worldPoint(camera:Camera,x:number,y:number):Point{
