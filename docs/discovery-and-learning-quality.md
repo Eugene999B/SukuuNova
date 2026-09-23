@@ -13,3 +13,7 @@ Run full CI and browser smoke; verify touch layout, project reload, direct conta
 Subject specialists must review university depth and official exam blueprints before claims of full preparation. Large numerical variant capacities elsewhere in the engine are not counts of independently reviewed problems.
 ## Data boundaries
 Public progress/projects are browser-local. They are not automatically published or linked to school records. Cross-device accounts, classroom assignment integration and AI voice coaching need a separate permissions/data design.
+
+## Verified behavior changes
+Cosmetic deduplication deliberately returns fewer than a requested 100 questions when a source pool lacks distinct tasks. The old exact-length test was replaced with bounded-size and unique-prompt assertions; padding with duplicates is not allowed.
+Adaptive history in the explorer is now scoped by lane, programme and level. Unscoped legacy history remains visible in progress, but does not steer a new level. Foundation recall retains an introductory difficulty even in a later university year.

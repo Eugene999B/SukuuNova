@@ -103,3 +103,9 @@ it("keeps foundation identities stable across cosmetic variations and aligns cog
  const byPrompt=new Map<string,string>();
  for(const q of definitions){const prior=byPrompt.get(q.prompt);if(prior)expect(q.exposureKey).toBe(prior);byPrompt.set(q.prompt,q.exposureKey);}
 });
+
+it("does not turn definition recall into an advanced task by changing the year",()=>{
+ const config=configFor("university","computer-science","level-200","operating-systems","all",42);
+ const questions=buildCoverageQuestions(config,50,42);
+ expect(questions.filter(q=>q.challenge==="Recall").every(q=>q.difficulty===1)).toBe(true);
+});

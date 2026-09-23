@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, LifeBuoy, MessageCircle, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const EMPTY_FORM = { name: "", email: "", phone: "", subject: "Help from SukuuNova", message: "" };
 
@@ -12,6 +12,8 @@ export function HomeHelpBar() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
+
+  useEffect(()=>{const question=new URLSearchParams(window.location.search).get("question");if(question){setOpen(true);setForm(current=>({...current,subject:"Question quality report",message:"Please review this question:\n"+question.slice(0,2500)+"\n\nWhat seems wrong: "}));}},[]);
 
   async function send() {
     setBusy(true);

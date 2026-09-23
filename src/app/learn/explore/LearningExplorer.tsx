@@ -36,6 +36,7 @@ import { normalizeLearnerProgress } from "../learner-progress";
 import { useLearningSound } from "../LearnShell";
 import { hasLearningAnswer } from "../session-controls";
 import { captureReview } from "../remember/review-model";
+import { learningPathKey, scopedMasteryKey, masteryForPath } from "../path-mastery";
 import { SESSION_DRAFT_KEY, normalizeDraft, type SessionDraft } from "../session-draft";
 
 type LearnerProgress = {
@@ -81,8 +82,8 @@ function percent(value: number, total: number) {
   return total ? Math.round((value / total) * 100) : 0;
 }
 
-function masteryKey(question: LearnQuestion) {
-  return `${question.subject} · ${question.topic}`;
+function masteryKey(question: LearnQuestion, path: string) {
+  return scopedMasteryKey(path, question.subject, question.topic);
 }
 
 function capabilityConfig(
@@ -114,6 +115,7 @@ function firstReadyTopic(lane: LearnLane, programId: string, levelId: string, su
 export function LearningExplorer() {
   const playSound=useLearningSound();
   const answerLock=useRef(false);
+  const sessionStreak=useRef(0);
   const [lane, setLane] = useState<LearnLane>("school");
   const catalog = useMemo(() => catalogFor(lane), [lane]);
   const [programId, setProgramId] = useState(catalog.programs[0].id);
@@ -218,7 +220,7 @@ export function LearningExplorer() {
     const subject=level?.subjects.find(s=>s.id===d.config.subjectId);
     if(!subject){setResumeDraft(null);setLaunchNotice("That course has changed. Please start a fresh session.");return;}
     setLane(d.config.lane);setProgramId(d.config.programId);setLevelId(d.config.levelId);setSubjectId(d.config.subjectId);setTopicId(d.config.topicId);setMode(d.config.mode);setCount(d.config.count);
-    setSession(d.questions);setQuestionIndex(d.index);setResponse(d.response);setSubmitted(d.submitted);setLastCorrect(d.lastCorrect);setSessionCorrect(d.correct);answerLock.current=d.submitted;setFlowStep(5);setResumeDraft(null);playSound("start");
+    sessionStreak.current=0;setSession(d.questions);setQuestionIndex(d.index);setResponse(d.response);setSubmitted(d.submitted);setLastCorrect(d.lastCorrect);setSessionCorrect(d.correct);answerLock.current=d.submitted;setFlowStep(5);setResumeDraft(null);playSound("start");
   }
 
   function persist(next: LearnerProgress) {
@@ -314,6 +316,7 @@ export function LearningExplorer() {
     }
     playSound("start");
     answerLock.current=false;
+    sessionStreak.current=0;
     const nextSession = buildLearningSession({
       lane,
       programId,
@@ -323,8 +326,8 @@ export function LearningExplorer() {
       mode,
       count,
       seen: progress.exposures,
-      mastery: progress.mastery,
-      streak: progress.streak,
+      mastery: masteryForPath(progress.mastery, learningPathKey(lane,programId,levelId)),
+      streak: 0,
     });
     setResumeDraft(null);
     setSession(nextSession);
@@ -345,7 +348,8 @@ export function LearningExplorer() {
     const correct = isCorrectAnswer(currentQuestion, response);
     captureReview(currentQuestion, correct);
     playSound(correct ? "correct" : "retry");
-    const key = masteryKey(currentQuestion);
+    const key = masteryKey(currentQuestion, learningPathKey(lane,programId,levelId));
+    sessionStreak.current=correct?sessionStreak.current+1:0;
     const previousMastery = progress.mastery[key] ?? { answered: 0, correct: 0 };
     const exposures = [currentQuestion.exposureKey, ...progress.exposures.filter((item) => item !== currentQuestion.exposureKey)].slice(0, 200);
     const earnedXp = correct ? 10 + currentQuestion.difficulty * 2 : 0;
@@ -371,7 +375,7 @@ export function LearningExplorer() {
           current,
           questionIndex,
           correct,
-          nextProgress.streak,
+          sessionStreak.current,
           nextProgress.answered * 7_919 + questionIndex,
         ),
       );
@@ -526,7 +530,7 @@ export function LearningExplorer() {
             <div>
               <span className={styles.stepLabel}>READY</span>
               <h2>Start your session</h2>
-              <p className={styles.selectionSummary}>{subject.label} · {topic.label}</p>
+              <p className={styles.selectionSummary}>{subject.label} · {topic.label}</p>{lane==="university"&&<p className={styles.engineNote}>Use this to practise and review foundations alongside your course materials. Available questions do not represent a complete university syllabus.</p>}
             </div>
           </div>
 
@@ -666,7 +670,7 @@ function QuestionPlayer({
 
   return (
     <div className={styles.playerCard} data-testid="learning-question">
-      <div className={styles.playerMeta}>
+      <a className={styles.questionReport} href={"/contact?question="+encodeURIComponent(question.id+" | "+question.subject+" | "+question.topic+" | "+question.prompt)} target="_blank" rel="noreferrer">Report a question ↗</a><div className={styles.playerMeta}>
         <div><span>Question {index + 1} / {total}</span><strong>{question.subject} · {question.topic}</strong></div>
         <div className={styles.difficulty}>Difficulty {question.difficulty}/5</div>
       </div>

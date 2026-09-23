@@ -91,10 +91,12 @@ export function masteryBand(answered: number, accuracy: number): MasteryBand {
 }
 
 function splitMasteryKey(key: string) {
-  const [subject, ...topicParts] = key.split(" · ");
+  const scope = key.match(/^\[([^\]]+)\] /);
+  const label = scope ? key.slice(scope[0].length) : key;
+  const [subject, ...topicParts] = label.split(" · ");
   return {
     subject: subject?.trim() || "Learning",
-    topic: topicParts.join(" · ").trim() || "General practice",
+    topic: (topicParts.join(" · ").trim() || "General practice") + (scope ? " (" + scope[1].split("/").slice(1).join(" · ").replaceAll("-", " ") + ")" : ""),
   };
 }
 

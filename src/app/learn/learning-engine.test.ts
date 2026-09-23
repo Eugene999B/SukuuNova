@@ -146,7 +146,9 @@ describe("SukuuNova Learn session engine", () => {
         return counts;
       }, {});
 
-    expect(session).toHaveLength(100);
+    expect(session.length).toBeGreaterThan(0);
+    expect(session.length).toBeLessThanOrEqual(100);
+    expect(new Set(session.map(q=>q.prompt.toLowerCase().replace(/\s+/g," ").trim())).size).toBe(session.length);
     expect(diagnostics.uniqueExposureCount).toBe(session.length);
     expect(Object.values(generatedBySkill).every((count) => count <= 4)).toBe(true);
   });

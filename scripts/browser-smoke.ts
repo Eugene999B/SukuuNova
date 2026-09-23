@@ -237,6 +237,11 @@ async function main() {
     assert.equal(await page.locator('a[href="https://wa.me/233559529261"]').count(),1);
     assert.equal(await page.locator('a[href="mailto:sukuunova@gmail.com"]').count(),1);
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Homepage overflows on mobile");
+    const inquiryResponse=await context.request.post("/api/public/inquiries",{data:{name:"Browser Test",email:"test@example.com",subject:"CI contact flow",message:"Automated test in the isolated CI database."}});
+    assert.equal(inquiryResponse.status(),201);
+    assert.equal(typeof (await inquiryResponse.json()).reference,"string");
+    const blankInquiry=await context.request.post("/api/public/inquiries",{data:{name:"  ",email:"test@example.com",message:"     "}});
+    assert.equal(blankInquiry.status(),400,"Whitespace-only inquiries must be rejected");
     await page.goto("/explore?activity=market&challenge=0");
     await page.getByLabel("Your prediction").selectOption({label:"I expect a profit."});
     await page.getByRole("button",{name:"Open the stall",exact:true}).click();

@@ -599,18 +599,6 @@ function decode(index: number, dimensions: readonly number[]) {
   });
 }
 
-function clampDifficulty(value: number): 1 | 2 | 3 | 4 | 5 {
-  return Math.max(1, Math.min(5, Math.round(value))) as 1 | 2 | 3 | 4 | 5;
-}
-
-function levelDifficulty(levelId: string) {
-  if (/kg-|basic-1/.test(levelId)) return 1;
-  if (/basic-[23]/.test(levelId)) return 2;
-  if (/basic-[45]|jhs-1|shs-1|level-100/.test(levelId)) return 3;
-  if (/basic-6|jhs-[23]|shs-2|level-[23]00/.test(levelId)) return 4;
-  if (/shs-3|level-[456]00/.test(levelId)) return 5;
-  return 3;
-}
 
 
 function conceptsForLevel(profile: Profile, config: SessionConfig) {
@@ -717,7 +705,8 @@ function renderQuestion(target: Target, profile: Profile, variant: number, confi
     exposureKey: `coverage:${config.lane}:${config.programId}:${config.levelId}:${profile.id}:${item.term}:${formIndex}:${formIndex === 2 ? caseIndex % 2 : 0}`,
     subject: target.subjectLabel,
     topic: target.topicLabel,
-    difficulty: clampDifficulty(levelDifficulty(config.levelId) + (challenge === "Analyse" || challenge === "Evaluate" ? 1 : 0)),
+    // Foundation items keep their task difficulty across course levels.
+    difficulty: (challenge === "Recall" ? 1 : challenge === "Apply" ? 2 : 3) as 1 | 2 | 3,
     challenge,
     mission: `Foundation review · ${profile.mission}`,
     generationFamily: `coverage-${profile.id}-${target.topicId}-${item.term.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}-${formIndex}`,

@@ -1,0 +1,3 @@
+import {it,expect} from "vitest";
+import {learningPathKey,scopedMasteryKey,masteryForPath} from "./path-mastery";
+it("does not let one level or legacy unscoped results drive another level",()=>{const a=learningPathKey("school","ghana","basic-1"),b=learningPathKey("school","ghana","jhs-3");const mastery={[scopedMasteryKey(a,"Maths","Numbers")]:{answered:20,correct:20},[scopedMasteryKey(b,"Maths","Numbers")]:{answered:4,correct:1},"Maths · Numbers":{answered:100,correct:100}};expect(masteryForPath(mastery,b)).toEqual({"Maths · Numbers":{answered:4,correct:1}});expect(masteryForPath(mastery,"university/maths/level-100")).toEqual({});});
