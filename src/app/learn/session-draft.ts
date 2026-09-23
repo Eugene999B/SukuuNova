@@ -15,7 +15,7 @@ const question=z.custom<LearnQuestion>(value=>{
 });
 const schema=z.object({
  config:z.object({lane:z.enum(["school","exam","university","skills"]),programId:z.string(),levelId:z.string(),subjectId:z.string(),topicId:z.string(),mode:z.enum(["topic","adaptive","random","timed","weakness"]),count:z.number().int().min(1).max(100)}),
- questions:z.array(question).min(1).max(100),index:z.number().int().min(0),response:z.union([z.string(),z.array(z.string()),z.number().finite(),z.boolean()]),submitted:z.boolean(),lastCorrect:z.boolean(),correct:z.number().int().min(0),savedAt:z.number().finite(),
+ questions:z.array(question).min(1).max(100),index:z.number().int().min(0),response:z.union([z.string(),z.array(z.string()),z.number().finite(),z.boolean()]),submitted:z.boolean(),lastCorrect:z.boolean(),correct:z.number().int().min(0),savedAt:z.number().finite(),startedAt:z.number().finite().nonnegative().optional(),
 });
 export type SessionDraft=z.infer<typeof schema>;
 export function normalizeDraft(value:unknown,now=Date.now()):SessionDraft|null{

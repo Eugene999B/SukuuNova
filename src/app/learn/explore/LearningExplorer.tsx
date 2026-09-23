@@ -131,6 +131,8 @@ export function LearningExplorer() {
   const [submitted, setSubmitted] = useState(false);
   const [lastCorrect, setLastCorrect] = useState(false);
   const [sessionCorrect, setSessionCorrect] = useState(0);
+  const [startedAt,setStartedAt]=useState(0);
+  const [sessionClock,setSessionClock]=useState(0);
   const [launchNotice, setLaunchNotice] = useState("");
   const [programQuery, setProgramQuery] = useState("");
   const [showAllPrograms, setShowAllPrograms] = useState(false);
@@ -168,6 +170,8 @@ export function LearningExplorer() {
   const currentQuestion = session[questionIndex];
   const sessionInProgress = session.length > 0 && questionIndex < session.length;
   const sessionFocused = session.length > 0;
+  const elapsedSeconds=Math.max(0,Math.floor((sessionClock-startedAt)/1000));
+  useEffect(()=>{if(!sessionInProgress||mode!=="timed")return;setSessionClock(Date.now());const timer=window.setInterval(()=>setSessionClock(Date.now()),1000);return()=>clearInterval(timer);},[sessionInProgress,mode]);
 
   useEffect(() => {
     try {
@@ -209,10 +213,10 @@ export function LearningExplorer() {
     if(!session.length)return;
     try{
       if(questionIndex>=session.length){sessionStorage.removeItem(SESSION_DRAFT_KEY);return;}
-      const draft:SessionDraft={config:{lane,programId,levelId,subjectId,topicId,mode,count},questions:session,index:questionIndex,response,submitted,lastCorrect,correct:sessionCorrect,savedAt:Date.now()};
+      const draft:SessionDraft={config:{lane,programId,levelId,subjectId,topicId,mode,count},questions:session,index:questionIndex,response,submitted,lastCorrect,correct:sessionCorrect,savedAt:Date.now(),startedAt};
       sessionStorage.setItem(SESSION_DRAFT_KEY,JSON.stringify(draft));
     }catch{/* An unavailable recovery store must not interrupt an answer. */}
-  },[session,questionIndex,response,submitted,lastCorrect,sessionCorrect,lane,programId,levelId,subjectId,topicId,mode,count]);
+  },[session,questionIndex,response,submitted,lastCorrect,sessionCorrect,lane,programId,levelId,subjectId,topicId,mode,count,startedAt]);
   function resumeSession(){
     if(!resumeDraft)return;const d=resumeDraft;
     const program=catalogFor(d.config.lane).programs.find(p=>p.id===d.config.programId);
@@ -220,7 +224,7 @@ export function LearningExplorer() {
     const subject=level?.subjects.find(s=>s.id===d.config.subjectId);
     if(!subject){setResumeDraft(null);setLaunchNotice("That course has changed. Please start a fresh session.");return;}
     setLane(d.config.lane);setProgramId(d.config.programId);setLevelId(d.config.levelId);setSubjectId(d.config.subjectId);setTopicId(d.config.topicId);setMode(d.config.mode);setCount(d.config.count);
-    sessionStreak.current=0;setSession(d.questions);setQuestionIndex(d.index);setResponse(d.response);setSubmitted(d.submitted);setLastCorrect(d.lastCorrect);setSessionCorrect(d.correct);answerLock.current=d.submitted;setFlowStep(5);setResumeDraft(null);playSound("start");
+    sessionStreak.current=0;setSession(d.questions);setQuestionIndex(d.index);setResponse(d.response);setSubmitted(d.submitted);setLastCorrect(d.lastCorrect);setSessionCorrect(d.correct);setStartedAt(d.startedAt??d.savedAt);setSessionClock(Date.now());answerLock.current=d.submitted;setFlowStep(5);setResumeDraft(null);playSound("start");
   }
 
   function persist(next: LearnerProgress) {
@@ -337,6 +341,7 @@ export function LearningExplorer() {
     setSubmitted(false);
     setLastCorrect(false);
     setSessionCorrect(0);
+    setStartedAt(Date.now());setSessionClock(Date.now());
     window.setTimeout(() => document.getElementById("session-player")?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   }
 
@@ -553,7 +558,7 @@ export function LearningExplorer() {
       </fieldset>
 
       {session.length>0&&<section id="session-player" className={styles.playerSection}>
-        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>{subject.label}</strong><span>{topic.label}</span><small>{questionIndex + 1}/{session.length}</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup?"))return;try{sessionStorage.removeItem(SESSION_DRAFT_KEY);}catch{}setSession([]);setResumeDraft(null);setLaunchNotice("");setFlowStep(5);answerLock.current=false;}}>Exit session</button></div>}
+        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>{subject.label}</strong><span>{topic.label}</span><small>{questionIndex + 1}/{session.length}</small>{mode==="timed"&&<span role="timer" aria-label="Elapsed practice time" data-testid="practice-timer">{Math.floor(elapsedSeconds/60)}:{String(elapsedSeconds%60).padStart(2,"0")} elapsed</span>}</div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup?"))return;try{sessionStorage.removeItem(SESSION_DRAFT_KEY);}catch{}setSession([]);setResumeDraft(null);setLaunchNotice("");setFlowStep(5);answerLock.current=false;}}>Exit session</button></div>}
         {launchNotice&&session.length>0&&<p role="status" className={styles.engineNote}>{launchNotice}</p>}
 
         {isComplete ? (

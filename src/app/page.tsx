@@ -6,6 +6,7 @@ import "./home.css";
 import "./home-experience.css";
 import "./nova-public.css";
 
+export const metadata={title:"SukuuNova | Learn, discover and manage your school",description:"Practise a subject, explore free hands-on challenges, remember what you learn, and keep your school day organised."};
 export default function HomePage(){
  return <main className="nova-public"><div className="nova-wrap"><HomeHeader/>
   <section className="nova-hero">
