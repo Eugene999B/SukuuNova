@@ -215,6 +215,10 @@ async function main() {
     await page.getByRole("button",{name:"5",exact:true}).click();
     await page.getByRole("button",{name:"Start",exact:true}).click();
     await page.getByTestId("learning-question").waitFor();
+    const recoveryPrompt=await page.getByTestId("learning-question").locator("h3").innerText();
+    await page.reload();
+    await page.getByRole("button",{name:"Resume practice",exact:true}).click();
+    assert.equal(await page.getByTestId("learning-question").locator("h3").innerText(),recoveryPrompt,"Reload must restore the same question");
     assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Medicine practice must launch a focused session");
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"University session overflows at mobile width");
 

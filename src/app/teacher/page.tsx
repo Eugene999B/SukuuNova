@@ -62,11 +62,11 @@ export default async function TeacherPortalPage({ searchParams }: Props) {
     ...(led.length ? [{ label: "Class-teacher duties", detail: `${led.map((item) => item.name).slice(0, 2).join(", ")}${led.length > 2 ? " and more" : ""}.`, value: `${led.length} classes`, href: "/teacher/attendance" }] : []),
   ];
 
-  return <AppShell universe="teacher" title="Teacher intelligence" subtitle={`${data.school?.name ?? "School Workspace"} · your teaching day`} active="Teacher Home" userName={data.name} schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} role={roleLabel}>
+  return <AppShell universe="teacher" title="Your teaching day" subtitle={`${data.school?.name ?? "School Workspace"} · your teaching day`} active="Teacher Home" userName={data.name} schoolName={data.school?.name ?? "School Workspace"} schoolCode={data.school?.uniqueCode ?? ""} role={roleLabel}>
     <RoleIntelligenceHome
-      eyebrow={`Teacher intelligence · ${roleLabel}`}
-      title={`Good morning, ${data.name.split(/\s+/)[0]}. Your teaching day is already organised.`}
-      description="Your home prioritises today’s lessons, classes in scope, learner responsibility, messages and the connected teaching workflows you actually use."
+      eyebrow={`Your classroom · ${roleLabel}`}
+      title={`Welcome back, ${data.name.split(/\s+/)[0]}.`}
+      description="Start with today’s lessons, take attendance, or pick up where you left off with marking."
       identity={`${data.school?.name ?? "School Workspace"} · ${data.school?.uniqueCode ?? ""}`}
       primaryAction={{ label: "Take attendance", href: "/teacher/attendance" }}
       secondaryAction={{ label: "Open gradebook", href: "/teacher/gradebook" }}
@@ -81,9 +81,10 @@ export default async function TeacherPortalPage({ searchParams }: Props) {
       focusDescription="The next teaching responsibilities from your published timetable."
       focus={focus}
       actions={[
+        { label: "Discovery projects", detail: "Choose a practical challenge and share its link in homework.", href: "/explore" },
         { label: "Take attendance", detail: "Open the class register for learners in your scope.", href: "/teacher/attendance" },
-        { label: "Enter marks", detail: "Use the atomic gradebook for your assigned classes.", href: "/teacher/gradebook" },
-        { label: "Homework", detail: "Create connected learner work and publish submissions.", href: "/teacher/homework" },
+        { label: "Enter marks", detail: "Record marks for the classes you teach.", href: "/teacher/gradebook" },
+        { label: "Homework", detail: "Set an assignment and review learners’ work.", href: "/teacher/homework" },
         { label: "My timetable", detail: "See all assigned teaching periods.", href: "/teacher/timetable" },
       ]}
     />

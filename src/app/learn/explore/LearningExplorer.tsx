@@ -36,6 +36,7 @@ import { normalizeLearnerProgress } from "../learner-progress";
 import { useLearningSound } from "../LearnShell";
 import { hasLearningAnswer } from "../session-controls";
 import { captureReview } from "../remember/review-model";
+import { SESSION_DRAFT_KEY, normalizeDraft, type SessionDraft } from "../session-draft";
 
 type LearnerProgress = {
   sessions: number;
@@ -132,6 +133,7 @@ export function LearningExplorer() {
   const [programQuery, setProgramQuery] = useState("");
   const [showAllPrograms, setShowAllPrograms] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
+  const [resumeDraft,setResumeDraft]=useState<SessionDraft|null>(null);
   const [entryChoice, setEntryChoice] = useState<LearnEntry | null>(null);
 
   const program = catalog.programs.find((item) => item.id === programId) ?? catalog.programs[0];
@@ -199,6 +201,25 @@ export function LearningExplorer() {
     }
     if (choice && ["exam","university","skills"].includes(choice)) resetSelectionForLane(choice as LearnLane);
   }, []);
+
+  useEffect(()=>{try{setResumeDraft(normalizeDraft(JSON.parse(sessionStorage.getItem(SESSION_DRAFT_KEY)||"null")));}catch{/* Malformed drafts never block learning. */}},[]);
+  useEffect(()=>{
+    if(!session.length)return;
+    try{
+      if(questionIndex>=session.length){sessionStorage.removeItem(SESSION_DRAFT_KEY);return;}
+      const draft:SessionDraft={config:{lane,programId,levelId,subjectId,topicId,mode,count},questions:session,index:questionIndex,response,submitted,lastCorrect,correct:sessionCorrect,savedAt:Date.now()};
+      sessionStorage.setItem(SESSION_DRAFT_KEY,JSON.stringify(draft));
+    }catch{/* An unavailable recovery store must not interrupt an answer. */}
+  },[session,questionIndex,response,submitted,lastCorrect,sessionCorrect,lane,programId,levelId,subjectId,topicId,mode,count]);
+  function resumeSession(){
+    if(!resumeDraft)return;const d=resumeDraft;
+    const program=catalogFor(d.config.lane).programs.find(p=>p.id===d.config.programId);
+    const level=program?.levels.find(l=>l.id===d.config.levelId);
+    const subject=level?.subjects.find(s=>s.id===d.config.subjectId);
+    if(!subject){setResumeDraft(null);setLaunchNotice("That course has changed. Please start a fresh session.");return;}
+    setLane(d.config.lane);setProgramId(d.config.programId);setLevelId(d.config.levelId);setSubjectId(d.config.subjectId);setTopicId(d.config.topicId);setMode(d.config.mode);setCount(d.config.count);
+    setSession(d.questions);setQuestionIndex(d.index);setResponse(d.response);setSubmitted(d.submitted);setLastCorrect(d.lastCorrect);setSessionCorrect(d.correct);answerLock.current=d.submitted;setFlowStep(5);setResumeDraft(null);playSound("start");
+  }
 
   function persist(next: LearnerProgress) {
     setProgress(next);
@@ -305,6 +326,7 @@ export function LearningExplorer() {
       mastery: progress.mastery,
       streak: progress.streak,
     });
+    setResumeDraft(null);
     setSession(nextSession);
     setLaunchNotice(nextSession.length ? (nextSession.length < count ? `This topic has ${nextSession.length} different questions available for this session. Your score uses that total.` : "") : "This selection does not have enough distinct questions for a useful session yet. Choose another available topic.");
     setQuestionIndex(0);
@@ -395,6 +417,7 @@ export function LearningExplorer() {
       </header>
 
       <fieldset className={styles.journey} disabled={session.length > 0 && !isComplete} aria-label="Build your learning session">
+        {resumeDraft&&!sessionFocused&&<aside className={styles.resumeNotice}><div><strong>Your practice is still here.</strong><p>Question {resumeDraft.index+1} of {resumeDraft.questions.length}. Saved in this tab for up to one day.</p></div><button type="button" onClick={resumeSession}>Resume practice</button><button type="button" onClick={()=>{setResumeDraft(null);try{sessionStorage.removeItem(SESSION_DRAFT_KEY);}catch{}}}>Start fresh</button></aside>}
         <div className={styles.flowTrack} aria-label={`Step ${displayedStep} of ${displayedTotal}`}>
           <span style={{ width: `${(displayedStep / displayedTotal) * 100}%` }} />
         </div>
@@ -526,7 +549,7 @@ export function LearningExplorer() {
       </fieldset>
 
       {session.length>0&&<section id="session-player" className={styles.playerSection}>
-        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>{subject.label}</strong><span>{topic.label}</span><small>{questionIndex + 1}/{session.length}</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup?"))return;setSession([]);setLaunchNotice("");setFlowStep(5);answerLock.current=false;}}>Exit session</button></div>}
+        {session.length>0&&!isComplete&&<div className={styles.sessionTools} data-testid="session-tools"><div><strong>{subject.label}</strong><span>{topic.label}</span><small>{questionIndex + 1}/{session.length}</small></div><button type="button" onClick={()=>{if(!window.confirm("End this session and return to setup?"))return;try{sessionStorage.removeItem(SESSION_DRAFT_KEY);}catch{}setSession([]);setResumeDraft(null);setLaunchNotice("");setFlowStep(5);answerLock.current=false;}}>Exit session</button></div>}
         {launchNotice&&session.length>0&&<p role="status" className={styles.engineNote}>{launchNotice}</p>}
 
         {isComplete ? (

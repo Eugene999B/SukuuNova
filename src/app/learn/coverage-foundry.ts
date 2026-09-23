@@ -717,7 +717,7 @@ function renderQuestion(target: Target, profile: Profile, variant: number, confi
     exposureKey: `coverage:${config.lane}:${config.programId}:${config.levelId}:${profile.id}:${item.term}:${formIndex}:${formIndex === 2 ? caseIndex % 2 : 0}`,
     subject: target.subjectLabel,
     topic: target.topicLabel,
-    difficulty: clampDifficulty(levelDifficulty(config.levelId) + (challenge === "Analyse" || challenge === "Transfer" ? 1 : 0)),
+    difficulty: clampDifficulty(levelDifficulty(config.levelId) + (challenge === "Analyse" || challenge === "Evaluate" ? 1 : 0)),
     challenge,
     mission: `Foundation review · ${profile.mission}`,
     generationFamily: `coverage-${profile.id}-${target.topicId}-${item.term.replace(/[^a-z0-9]+/gi,"-").toLowerCase()}-${formIndex}`,

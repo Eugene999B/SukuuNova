@@ -6,17 +6,19 @@ import { RateLimitError } from "@/lib/errors";
 import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 
 const schema = z.object({
-  name: z.string().min(2).max(120),
-  email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().min(7).max(40).optional().or(z.literal("")),
-  subject: z.string().max(180).optional(),
-  message: z.string().min(5).max(5000),
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().email().optional().or(z.literal("")),
+  phone: z.string().trim().min(7).max(40).optional().or(z.literal("")),
+  subject: z.string().trim().max(180).optional(),
+  message: z.string().trim().min(5).max(5000),
   channel: z.string().max(30).default("website"),
 });
 
 export async function POST(request: Request) {
   try {
-    const input = schema.parse(await request.json());
+    let body: unknown;
+    try { body = await request.json(); } catch { return NextResponse.json({error:"INVALID_INPUT",message:"Please send a valid message."},{status:400}); }
+    const input = schema.parse(body);
     const ip = requestIp(request.headers);
     await recordLoginAttempt("public-inquiry", ip, ip);
     if (!input.email && !input.phone) return NextResponse.json({ error: "INVALID_INPUT", message: "Please provide an email address or phone number so we can reply." }, { status: 400 });
@@ -31,10 +33,10 @@ export async function POST(request: Request) {
       // not a caller validation problem.
       return NextResponse.json({ error: "INTERNAL_ERROR", message: "We could not send that message. Please try again." }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, message: "Thanks. Your message is in our inbox and a real person can follow up from here." }, { status: 201 });
+    return NextResponse.json({ ok: true, reference: id, message: "Thanks. Your message is in our inbox and a real person can follow up from here." }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return NextResponse.json({ error: "INVALID_INPUT", message: "Please check the highlighted fields and try again." }, { status: 400 });
+      return NextResponse.json({ error: "INVALID_INPUT", message: error.issues.map(issue => `${String(issue.path[0] ?? "Message")}: ${issue.message}`).join(" ") }, { status: 400 });
     }
     if (error instanceof RateLimitError) {
       return NextResponse.json(
