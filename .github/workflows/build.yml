@@ -89,6 +89,7 @@ jobs:
           npm run test:seed-eugene
       - name: Complete and verify Eugene academic demonstration twice
         env:
+          NODE_ENV: production
           ALLOW_EUGENE_ACADEMY_ACADEMIC_DEMO: EUGENE_ACADEMY_ONLY
         run: |
           npx tsx scripts/complete-eugene-academic-demo.ts

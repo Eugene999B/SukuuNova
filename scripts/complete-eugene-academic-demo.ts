@@ -5,6 +5,7 @@ import { getReportCardPrintData } from "../src/lib/report-card-print-data";
 import { buildReportCardPdf } from "../src/lib/report-card-pdf";
 import { signaturesForReport } from "../src/lib/report-card-signatures";
 import { PDFDocument } from "pdf-lib";
+import { reportCardTraits, replaceReportCardTraits } from "../src/lib/report-card-v2";
 
 const REVISION = "2026-09-25-complete-academic-demo-v1";
 const id = (...parts: string[]) => "demo-" + createHash("sha256").update(parts.join(":")).digest("hex").slice(0,28);
@@ -98,6 +99,14 @@ async function main() {
           create:{schoolId,studentId:s.id,termId:term.id,templateId:preflight.settings.reportCardTemplateId ?? "preset-classic-blue",remarks:remark,headRemark:"Keep building on your strengths. A regular study routine and support from home will help you make further progress.",calculationSnapshot:{classId:s.termClassId,demoRevision:REVISION}},
           update:{remarks:remark,headRemark:"Keep building on your strengths. A regular study routine and support from home will help you make further progress.",calculationSnapshot:{classId:s.termClassId,demoRevision:REVISION},pdfData:null}});
         await tx.reportCard.update({where:{id:report.id},data:{generatedPdfUrl:"/api/mvp/report-cards/"+report.id+"/pdf"}});
+        if(!(await reportCardTraits(tx,schoolId,report.id)).length) await replaceReportCardTraits(tx,{
+          schoolId,actorId:preflight.owner.id,reportCardId:report.id,
+          values:[
+            {fieldKey:"participation",label:"Class participation",value:number(s.id)%2?"Good":"Very good",displayOrder:0},
+            {fieldKey:"collaboration",label:"Working with others",value:"Good",displayOrder:1},
+            {fieldKey:"study_habits",label:"Independent study",value:number(s.id)%3?"Developing well":"Needs encouragement",displayOrder:2}
+          ]
+        });
       }
       return {termId:term.id,term:term.name,learners:learners.length,preservedIssuedReports:frozen.size,insertedScores,checkedClasses};
     });
