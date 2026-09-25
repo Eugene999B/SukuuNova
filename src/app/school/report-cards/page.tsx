@@ -6,14 +6,15 @@ import { ReportCardGenerateButton } from "@/components/ReportCardGenerateButton"
 import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/rbac";
-import { submitReportCard } from "@/lib/report-card-service";
+import { submitReportCardForWorkflow } from "@/lib/report-card-workflow-operations";
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 import { getReportCardPrintData } from "@/lib/report-card-print-data";
-import { readManualPromotionDecision, setReportPromotionDecision } from "@/lib/report-card-promotion";
+import { setReportPromotionDecision } from "@/lib/report-card-promotion";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
 import { reportSnapshotClassId, resolveTermRoster } from "@/lib/student-term-context";
 import { reportClassAccess } from "@/lib/report-card-access";
 import { ReportContextPicker } from "@/components/ReportContextPicker";
+import { resolveYearEndAuthority } from "@/lib/academic-session-authority";
 import { selectAcademicTerm } from "@/lib/term-date";
 import "./report-cards.css";
 
@@ -48,27 +49,7 @@ async function runReportCardAction(formData: FormData) {
     }
 
     if (action === "submit") {
-      const report = await tx.reportCard.findFirst({
-        where: { id: reportCardId, schoolId: session.schoolId },
-        select: { termId: true, calculationSnapshot: true, term: { select: { academicYearId: true } } },
-      });
-      const settings = await tx.schoolSettings.findUnique({
-        where: { schoolId: session.schoolId },
-        select: { reportCardConfig: true, reportCardTemplateId: true },
-      });
-      if (report && settings) {
-        const workflow = readReportWorkflowConfig(settings.reportCardConfig, settings.reportCardTemplateId);
-        const yearTerms = await tx.term.findMany({
-          where: { schoolId: session.schoolId, academicYearId: report.term.academicYearId },
-          orderBy: [{ startDate: "asc" }, { endDate: "asc" }],
-          select: { id: true },
-        });
-        const isFinal = yearTerms[workflow.finalTermNumber - 1]?.id === report.termId;
-        if (isFinal && !readManualPromotionDecision(report.calculationSnapshot)) {
-          throw new Error("The class teacher must choose Promote or Do not promote before submitting the final-term report.");
-        }
-      }
-      await submitReportCard(tx, { schoolId: session.schoolId, actorId: session.userId, reportCardId });
+      await submitReportCardForWorkflow(tx, { schoolId: session.schoolId, actorId: session.userId, reportCardId });
       notice = "Report submitted for approval.";
     } else if (action === "approve") {
       await approveAndQueuePublicReportCard(tx, {
@@ -90,7 +71,7 @@ async function runReportCardAction(formData: FormData) {
     } else {
       throw new Error("Unsupported report-card action.");
     }
-  });
+  }, { timeout: 20_000 });
 
   revalidatePath("/school/report-cards");
   redirect(`/school/report-cards?${academicYearId ? `year=${encodeURIComponent(academicYearId)}&` : ""}term=${encodeURIComponent(termId)}&classId=${encodeURIComponent(classId)}${studentId ? `&studentId=${encodeURIComponent(studentId)}` : ""}${notice ? `&notice=${encodeURIComponent(notice)}` : ""}`);
@@ -171,7 +152,7 @@ export default async function ReportCardsPage({
       };
     }
 
-    const [roster, allReports, yearTerms] = await Promise.all([
+    const [roster, allReports] = await Promise.all([
       resolveTermRoster(tx, { schoolId: session.schoolId, termId: term.id }),
       tx.reportCard.findMany({
         where: { schoolId: session.schoolId, termId: term.id },
@@ -184,11 +165,6 @@ export default async function ReportCardsPage({
           student: { select: { id: true, name: true, admissionNo: true } },
         },
         orderBy: { createdAt: "desc" },
-      }),
-      tx.term.findMany({
-        where: { schoolId: session.schoolId, academicYearId: selectedYear.id },
-        orderBy: [{ startDate: "asc" }, { endDate: "asc" }],
-        select: { id: true },
       }),
     ]);
 
@@ -217,7 +193,7 @@ export default async function ReportCardsPage({
       ? await getReportCardPrintData(tx, { schoolId: session.schoolId, reportId: selectedReport.id })
       : null;
     const workflow = readReportWorkflowConfig(settings?.reportCardConfig, settings?.reportCardTemplateId);
-    const isFinalTerm = yearTerms[workflow.finalTermNumber - 1]?.id === term.id;
+    const isFinalTerm = (await resolveYearEndAuthority(tx, { schoolId: session.schoolId, termId: term.id, legacyFinalTermNumber: workflow.finalTermNumber })).isYearEnd;
     return {
       school,
       academicYears,
@@ -410,8 +386,8 @@ export default async function ReportCardsPage({
           </section>
         ) : data.students.length ? (
           <section className="reports-empty">
-            <h2>No report card for this student yet</h2>
-            <p>Generate the class reports above, then open the learner.</p>
+            <h2>{params.studentId ? "No report card for this student yet" : "Choose a learner to view their report"}</h2>
+            <p>{params.studentId ? "Generate the class reports above, then open the learner." : "Use View report beside a learner, or Download PDF to save their report directly."}</p>
           </section>
         ) : null}
       </main>

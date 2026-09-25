@@ -8,7 +8,8 @@ import { parseJson } from "@/lib/http";
 import { reportClassAccess } from "@/lib/report-card-access";
 import { reportSnapshotClassId, resolveTermRoster } from "@/lib/student-term-context";
 import { hasPermission } from "@/lib/rbac";
-import { generateReportCard, submitReportCard } from "@/lib/report-card-service";
+import { generateReportCard } from "@/lib/report-card-service";
+import { submitReportCardForWorkflow } from "@/lib/report-card-workflow-operations";
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 
 const schema = z.discriminatedUnion("action", [
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
       const common = { schoolId: session.schoolId, actorId: session.userId };
       switch (input.action) {
         case "generate": return await generateReportCard(tx, { ...common, ...input });
-        case "submit": return await submitReportCard(tx, { ...common, ...input });
+        case "submit": return await submitReportCardForWorkflow(tx, { ...common, ...input });
         case "approve": return await approveAndQueuePublicReportCard(tx, { ...common, ...input, origin: appOrigin() });
         case "send": return await sendApprovedReportCardPublic(tx, { ...common, ...input, origin: appOrigin() });
       }

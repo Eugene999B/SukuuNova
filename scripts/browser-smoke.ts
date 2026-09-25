@@ -79,6 +79,66 @@ async function main() {
     assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Mobile report list overflows");
     await page.goto("/school/report-cards/"+learnerReport.id+"/print");
     await page.getByText("Pending",{exact:true}).first().waitFor();
+
+    // Authenticated academic workflow and account boundaries (isolated CI only).
+    const boundary = await withTenant(f.schoolId, async tx => {
+      await tx.user.update({where:{id:f.memberId},data:{passwordHash:await hash(password,4)}});
+      await tx.class.update({where:{id:placement.classId},data:{classTeacherId:f.memberId}});
+      const role=await tx.role.findFirstOrThrow({where:{schoolId:f.schoolId,key:"subject_teacher"}});
+      for(const permission of ["report_cards:view","report_cards:submit","report_cards:approve"]) {
+        await tx.rolePermission.create({data:{schoolId:f.schoolId,roleId:role.id,permissionId:f.permissionIds.get(permission)!}});
+      }
+      const exam=await tx.assessment.findFirstOrThrow({where:{schoolId:f.schoolId,termId:setup.term.id,type:"exam"}});
+      await tx.score.create({data:{schoolId:f.schoolId,studentId:student.id,subjectId:exam.subjectId,assessmentId:exam.id,value:80,enteredBy:f.memberId}});
+      const parent=await tx.user.create({data:{schoolId:f.schoolId,name:"Linked parent",email:"parent-"+f.uniqueCode+"@test.invalid",passwordHash:await hash(password,4)}});
+      const parentRole=await tx.role.create({data:{schoolId:f.schoolId,name:"Parent",key:"parent"}});
+      for(const permission of ["report_cards:view","parents:read_linked"]) await tx.rolePermission.create({data:{schoolId:f.schoolId,roleId:parentRole.id,permissionId:f.permissionIds.get(permission)!}});
+      await tx.userRole.create({data:{schoolId:f.schoolId,userId:parent.id,roleId:parentRole.id}});
+      const guardian=await tx.guardian.create({data:{schoolId:f.schoolId,userId:parent.id,name:"Linked parent"}});
+      await tx.studentGuardian.create({data:{schoolId:f.schoolId,studentId:student.id,guardianId:guardian.id,relationship:"parent"}});
+      await tx.term.create({data:{schoolId:f.schoolId,academicYearId:setup.year.id,name:"Term 2",startDate:new Date("2027-01-01"),endDate:new Date("2027-04-01")}});
+      const finalTerm=await tx.term.create({data:{schoolId:f.schoolId,academicYearId:setup.year.id,name:"Term 3",startDate:new Date("2027-04-02"),endDate:new Date("2027-07-31")}});
+      const finalReport=await tx.reportCard.create({data:{schoolId:f.schoolId,studentId:student.id,termId:finalTerm.id,calculationSnapshot:{classId:placement.classId}}});
+      return {parentEmail:parent.email!,finalReportId:finalReport.id};
+    });
+    const teacherContext=await browser.newContext({baseURL});
+    const parentContext=await browser.newContext({baseURL});
+    const foreignContext=await browser.newContext({baseURL});
+    const anonymousContext=await browser.newContext({baseURL});
+    try {
+      assert.equal((await teacherContext.request.post("/api/auth/school/login",{data:{uniqueCode:f.uniqueCode,identifier:f.memberId+"@test.invalid",password}})).status(),200);
+      assert.equal((await parentContext.request.post("/api/auth/school/login",{data:{uniqueCode:f.uniqueCode,identifier:boundary.parentEmail,password}})).status(),200);
+      const pdfPath="/api/mvp/report-cards/"+learnerReport.id+"/pdf";
+      assert.ok([401,403].includes((await anonymousContext.request.get(pdfPath)).status()),"Anonymous PDF access must be denied");
+      assert.equal((await parentContext.request.get(pdfPath)).status(),403,"Parents must not read a draft report");
+      assert.equal((await context.request.post("/api/mvp/report-cards",{data:{action:"submit",reportCardId:learnerReport.id}})).status(),403,"An owner who is not the class teacher cannot submit");
+      const finalSubmission=await teacherContext.request.post("/api/mvp/report-cards",{data:{action:"submit",reportCardId:boundary.finalReportId}});
+      assert.equal(finalSubmission.status(),409,"Final-term API submission must require a promotion recommendation");
+      const submitted=await teacherContext.request.post("/api/mvp/report-cards",{data:{action:"submit",reportCardId:learnerReport.id}});
+      assert.equal(submitted.status(),200,await submitted.text());
+      assert.equal((await teacherContext.request.post("/api/mvp/report-cards",{data:{action:"approve",reportCardId:learnerReport.id}})).status(),403,"A teacher cannot approve their own submission");
+      const approved=await context.request.post("/api/mvp/report-cards",{data:{action:"approve",reportCardId:learnerReport.id,headRemark:"Continue your steady progress."}});
+      assert.equal(approved.status(),200,await approved.text());
+      assert.equal((await parentContext.request.get(pdfPath)).status(),200,"Linked parent can download the approved report");
+      const parentReports=await parentContext.request.get("/api/mvp/report-cards");
+      assert.equal(parentReports.status(),200);
+      assert.deepEqual((await parentReports.json()).reports.map((r:{id:string})=>r.id),[learnerReport.id],"Parent list excludes the final-term draft");
+      const deniedRegeneration=await context.request.post("/api/mvp/report-cards",{data:{action:"generate",studentId:student.id,termId:setup.term.id}});
+      assert.equal(deniedRegeneration.status(),409,"Approved reports cannot be regenerated");
+      const release=await context.request.post("/api/mvp/report-cards",{data:{action:"send",reportCardId:learnerReport.id}});
+      assert.equal(release.status(),409,"Unconfigured family delivery must fail clearly");
+      assert.equal((await withTenant(f.schoolId,tx=>tx.reportCard.findUniqueOrThrow({where:{id:learnerReport.id}}))).status,"approved","A failed release must preserve approved status");
+      const other=await createTenantFixture();
+      // Set only this isolated fixture's login credential.
+      const foreignHash=await hash(password,4);
+      await withTenant(other.schoolId,tx=>tx.user.update({where:{id:other.ownerId},data:{passwordHash:foreignHash}}));
+      assert.equal((await foreignContext.request.post("/api/auth/school/login",{data:{uniqueCode:other.uniqueCode,identifier:other.ownerId+"@test.invalid",password}})).status(),200);
+      assert.equal((await foreignContext.request.get(pdfPath)).status(),404,"Another school cannot access a guessed report ID");
+      const unauthorizedParent=await parentContext.request.post("/api/mvp/report-cards",{data:{action:"approve",reportCardId:boundary.finalReportId}});
+      assert.equal(unauthorizedParent.status(),403,"Parent cannot approve reports");
+    } finally {
+      await teacherContext.close();await parentContext.close();await foreignContext.close();await anonymousContext.close();
+    }
     assert.equal((await context.request.get("/api/school/payroll-v2")).status(), 403, "Payroll must be unavailable without an entitlement");
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/school/students");
