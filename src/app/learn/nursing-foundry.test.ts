@@ -138,3 +138,23 @@ it("does not fabricate a universal abnormal blood-pressure trend",()=>{
  const qs=buildNursingQuestions(nursingConfig({levelId:"level-300",subjectId:"maternal-and-child-health",topicId:"all"}),80,7);
  expect(qs.filter(q=>q.generationFamily==="nursing-chart-trend").every(q=>JSON.stringify(q.stimulus).includes("Systolic BP")===false)).toBe(true);
 });
+
+it("matches chart-review wording to the actual stimulus", () => {
+  const questions=buildNursingQuestions(nursingConfig(),100,789).filter(q=>q.generationFamily==="nursing-chart-trend");
+  expect(questions.length).toBeGreaterThan(0);
+  for(const q of questions) {
+    expect(q.prompt).toContain("documented action");
+    expect(q.prompt).not.toContain("trend");
+    expect(JSON.stringify(q.stimulus)).toContain("Documented action");
+  }
+});
+it("retains distinct numeric exercises and their correct answer", () => {
+  const questions=buildNursingQuestions(nursingConfig({subjectId:"pharmacology",topicId:"safe-prescribing"}),100,1014).filter(q=>q.kind==="numeric");
+  expect(questions.length).toBeGreaterThan(1);
+  for(const q of questions) {
+    const rows=q.stimulus?.kind==="table"?q.stimulus.rows:[];
+    const prescribed=Number.parseFloat(rows[0][1]);
+    const stock=Number.parseFloat(rows[1][1]);
+    expect(q.answer).toBe(prescribed/stock);
+  }
+});

@@ -703,7 +703,7 @@ function buildQuestion(
     const safeTablets = 1 + (local % 4);
     const prescribed = safeAvailable * safeTablets;
     return baseQuestion(config, "dose-calculation", position, seed,
-      "Use the medication information shown. How many tablets are required for one prescribed dose?",
+      `A simulated prescription is for ${prescribed} mg and the supplied tablet contains ${safeAvailable} mg. How many tablets match the prescribed dose?`,
       "Calculate a medication dose from prescribed and available strengths",
       {
         kind: "numeric",
@@ -853,7 +853,7 @@ function buildQuestion(
     const stimulus = clinicalTable(item, local);
     const picked = optionSet(item.priorityAction, plausibleActions(concepts, item, local), local);
     return baseQuestion(config, "chart-trend", position, seed,
-      "Review the observation trend. Which nursing response is most appropriate based on the pattern shown?",
+      "Review the assessment findings and documented action. Which nursing response best corrects the care problem?",
       `Interpret observations in relation to ${item.term}`,
       {
         kind: "single",
@@ -861,7 +861,7 @@ function buildQuestion(
         answer: picked.answer,
         explanation: item.rationale,
         stimulus,
-        hint: "Compare the direction of change across observations instead of reading one value in isolation.",
+        hint: "Connect the findings to the unsafe documented action and identify the appropriate response.",
       },
     );
   }
@@ -994,7 +994,10 @@ export function buildNursingQuestions(
       topicId: target.topic.id,
     };
 
-    const question = buildQuestion(localConfig, domain, conceptsFor(domain), item, position, seed);
+    // Advance the format after each catalogue pass so a subject is not locked
+    // to one format when the number of selected topics shares a factor with 12.
+    const formatPosition = targets.length > 1 ? position + Math.floor(position / targets.length) : position;
+    const question = buildQuestion(localConfig, domain, conceptsFor(domain), item, formatPosition, seed);
     question.exposureKey = `nursing:${config.programId}:${config.levelId}:${target.subject.id}:${item.id}:${question.generationFamily}`;
     if(question.generationFamily==="nursing-dose-calculation") question.exposureKey += ":"+JSON.stringify(question.stimulus);
     if (seenPrompts.has(question.prompt) || exposures.has(question.exposureKey)) continue;

@@ -29,6 +29,15 @@ try {
   } else {
     console.log("[predeploy] Eugene Academy production refresh not requested.");
   }
+  if (process.env.ALLOW_EUGENE_ACADEMY_ACADEMIC_DEMO === "EUGENE_ACADEMY_ONLY") {
+    const child = spawnSync(process.execPath, [path.join(__dirname, "../node_modules/tsx/dist/cli.mjs"), path.join(__dirname, "complete-eugene-academic-demo.ts")], {stdio:"inherit",env:process.env});
+    if (child.error) throw child.error;
+    if (child.status !== 0) throw new Error("Academic demonstration completion failed.");
+  }
+  if (process.env.RUN_AUTHORIZED_OWNER_SMS_TEST === "2026-09-25-owner-handset-check") {
+    const child = spawnSync(process.execPath, [path.join(__dirname, "../node_modules/tsx/dist/cli.mjs"), path.join(__dirname, "verify-authorized-sms.ts")], {stdio:"inherit",env:process.env});
+    if (child.error || child.status !== 0) console.error("[predeploy] handset verification needs review; application deployment continues.");
+  }
 } catch (error) {
   console.error("[predeploy] failed:", error instanceof Error ? (error.stack || error.message) : String(error));
   process.exitCode = 1;
