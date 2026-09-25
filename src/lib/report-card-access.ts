@@ -7,7 +7,7 @@ import { reportSnapshotClassId, resolveStudentTermClass } from "./student-term-c
 export async function reportClassAccess(tx: TenantDb, actorId: string, permission = "report_cards:view") {
   await requirePermission(tx, actorId, permission);
   const access = await getSchoolAuthorization(tx, actorId);
-  if (access.isElevated || access.can("scores:write:all")) return { schoolId: access.user.schoolId, classIds: null as string[] | null };
+  if (access.isElevated || await access.can("scores:write:all")) return { schoolId: access.user.schoolId, classIds: null as string[] | null };
   if (!access.isTeacher) throw new ForbiddenError("Only academic staff may access school report cards.");
   const classes = await tx.class.findMany({
     where: { schoolId: access.user.schoolId, OR: [{ classTeacherId: actorId }, { subjectAssignments: { some: { teacherId: actorId } } }] },
