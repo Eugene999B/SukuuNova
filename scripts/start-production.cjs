@@ -78,14 +78,41 @@ async function main() {
     stdio: "inherit",
   });
 
+  let stopping = false;
+  let worker;
+  let restartTimer;
+  const startWorker = () => {
+    if (stopping) return;
+    worker = spawn(process.execPath, ["node_modules/tsx/dist/cli.mjs", "src/workers/sms-worker.ts"], {
+      env: childEnv, stdio: "inherit",
+    });
+    worker.on("error", error => console.error("[notification-worker] spawn failed:", error.message));
+    worker.on("exit", () => {
+      if (!stopping) {
+        console.error("[notification-worker] stopped; restarting in 5 seconds");
+        restartTimer = setTimeout(startWorker, 5000);
+      }
+    });
+  };
+  startWorker();
   const shutdown = (signal) => {
+    stopping = true;
+    clearTimeout(restartTimer);
+    worker?.kill(signal);
     next.kill(signal);
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
 
   next.on("exit", (code, signal) => {
-    process.exit(signal ? 1 : code ?? 1);
+    stopping = true;
+    clearTimeout(restartTimer);
+    worker?.kill("SIGTERM");
+    // Give claimed deliveries a short grace period to record their outcome.
+    const exitCode = signal ? 1 : code ?? 1;
+    if (!worker || worker.exitCode !== null) process.exit(exitCode);
+    worker.once("exit", () => process.exit(exitCode));
+    setTimeout(() => { worker?.kill("SIGKILL"); process.exit(exitCode); }, 20000);
   });
 
   console.log(`[production-db] application role ${ROLE} ${result.changedRole ? "provisioned/updated" : "already safe"}`);

@@ -7,7 +7,7 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { AppError, ForbiddenError, routeError } from "@/lib/errors";
 import { appendSchoolAudit } from "@/lib/audit";
-import { enqueueNotification } from "@/lib/message-outbox";
+import { enqueueNotificationBatch } from "@/lib/message-outbox";
 import { createCalendarEventTx } from "@/lib/calendar-service";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { estimateSmsSegments } from "@/lib/sms-segments";
@@ -90,10 +90,10 @@ async function recipientsFor(tx: Prisma.TransactionClient, schoolId: string, aud
     const user = userId ? await tx.user.findFirst({ where: { id: userId, schoolId, status: "active" }, select: { id: true, name: true, phone: true } }) : null;
     return user ? [user] : [];
   }
-  if (audience === "guardians") return tx.user.findMany({ where: { schoolId, status: "active", guardianProfiles: { some: { schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
-  if (audience === "teachers") return tx.user.findMany({ where: { schoolId, status: "active", userRoles: { some: { role: { key: { in: STAFF_ROLE_KEYS_MUTABLE.filter((key) => TEACHER_ROLE_KEYS.includes(key)) } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
-  if (audience === "staff") return tx.user.findMany({ where: { schoolId, status: "active", userRoles: { some: { role: { key: { in: STAFF_ROLE_KEYS_MUTABLE } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
-  return tx.user.findMany({ where: { schoolId, status: "active" }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS });
+  if (audience === "guardians") return tx.user.findMany({ where: { schoolId, status: "active", guardianProfiles: { some: { schoolId } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS + 1 });
+  if (audience === "teachers") return tx.user.findMany({ where: { schoolId, status: "active", userRoles: { some: { role: { key: { in: STAFF_ROLE_KEYS_MUTABLE.filter((key) => TEACHER_ROLE_KEYS.includes(key)) } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS + 1 });
+  if (audience === "staff") return tx.user.findMany({ where: { schoolId, status: "active", userRoles: { some: { role: { key: { in: STAFF_ROLE_KEYS_MUTABLE } } } } }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS + 1 });
+  return tx.user.findMany({ where: { schoolId, status: "active" }, select: { id: true, name: true, phone: true }, take: MAX_BROADCAST_RECIPIENTS + 1 });
 }
 
 async function wallet(tx: Prisma.TransactionClient, schoolId: string) {
@@ -170,7 +170,8 @@ export async function POST(request: Request) {
       return withTenant(session.schoolId, async (tx) => {
         const recipients = await recipientsFor(tx, session.schoolId, value.audience, value.userId) as Recipient[];
         if (!recipients.length) return NextResponse.json({ ok: true, message: "No recipients matched that audience." });
-        const capped = recipients.length >= MAX_BROADCAST_RECIPIENTS;
+        if (recipients.length > MAX_BROADCAST_RECIPIENTS) throw new AppError("This audience exceeds 1,000 recipients. Choose a smaller audience; no messages have been queued.", 400, "AUDIENCE_TOO_LARGE");
+        const capped = false;
         const deliverable = recipients.filter((recipient) => Boolean(recipient.phone));
         const messageBody = externalBody(value.title, value.body);
         const credits = value.channel === "in_app" ? null : await preflightCredits(tx, session.schoolId, value.channel, messageBody, deliverable.length);
@@ -178,7 +179,7 @@ export async function POST(request: Request) {
           const batchKey = `direct:${session.schoolId}:${Date.now()}`, now = new Date();
           await tx.message.createMany({ data: recipients.map((recipient) => ({ schoolId: session.schoolId, channel: "in_app", recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone || "", body: messageBody, templateKey: "direct_message", templateVariables: { title: value.title }, mediaUrl: value.mediaUrl || null, status: "delivered", attempts: 1, sentAt: now, nextAttemptAt: now, idempotencyKey: `${batchKey}:${recipient.id}:in_app` })) });
         } else {
-          for (const recipient of deliverable) await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone!, body: messageBody, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl, channels: value.channel });
+          await enqueueNotificationBatch(tx, deliverable.map(recipient => ({ schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone!, body: messageBody, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl, channels: value.channel as ExternalChannel })));
         }
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: "message.sent", entityType: "MessageBatch", entityId: `message-${Date.now()}`, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: value.channel === "in_app" ? recipients.length : deliverable.length, creditsRequired: credits?.required ?? 0 } });
         revalidatePath("/school/communications/messages");
@@ -199,15 +200,18 @@ export async function POST(request: Request) {
       return withTenant(session.schoolId, async (tx) => {
         const recipients = await recipientsFor(tx, session.schoolId, value.audience) as Recipient[];
         const deliverable = recipients.filter((recipient) => Boolean(recipient.phone));
-        const capped = recipients.length >= MAX_BROADCAST_RECIPIENTS;
+        if (recipients.length > MAX_BROADCAST_RECIPIENTS) throw new AppError("This audience exceeds 1,000 recipients. Choose a smaller audience; no messages have been queued.", 400, "AUDIENCE_TOO_LARGE");
+        const capped = false;
         const messageBody = externalBody(value.title, value.body);
         const credits = await preflightCredits(tx, session.schoolId, value.channel, messageBody, deliverable.length);
         const batchKey = `broadcast:${session.schoolId}:${Date.now()}:${crypto.randomUUID()}`;
-        let queued = 0;
-        for (const recipient of deliverable) {
-          const rows = await enqueueNotification(tx, { schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone!, body: messageBody, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined, templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl, scheduledAt: scheduledAt || undefined, channels: value.channel, idempotencyKey: batchKey });
-          queued += rows.length;
-        }
+        const queuedRows = await enqueueNotificationBatch(tx, deliverable.map(recipient => ({
+          schoolId: session.schoolId, recipientType: "user", recipientId: recipient.id, recipientPhone: recipient.phone!,
+          body: messageBody, templateKey: value.channel === "whatsapp" ? "school_announcement" : undefined,
+          templateVariables: { title: value.title, body: value.body }, mediaUrl: value.mediaUrl,
+          scheduledAt: scheduledAt || undefined, channels: value.channel, idempotencyKey: batchKey,
+        })));
+        const queued = queuedRows.length;
         await appendSchoolAudit(tx, { schoolId: session.schoolId, actorId: session.userId, action: scheduledAt ? "broadcast.scheduled" : "broadcast.queued", entityType: "Broadcast", entityId: batchKey, after: { title: value.title, audience: value.audience, channel: value.channel, recipientCount: queued, creditsRequired: credits.required, scheduleAt: scheduledAt?.toISOString() || null } });
         revalidatePath("/school/communications/messages");
         revalidatePath("/school/communications/broadcasts");

@@ -1,3 +1,4 @@
+import { isActiveSmsProviderConfigured } from "@/lib/sms-provider";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
@@ -150,8 +151,8 @@ function extractChannelConfig(value: Prisma.JsonValue | null | undefined) {
   return { config, channels, whatsappTemplateConfig };
 }
 
-function requireProviderConfiguration(channels: Channel[], whatsappTemplateConfig: Record<string, Prisma.JsonValue>) {
-  if (channels.includes("sms") && (!process.env.SMS_PROVIDER_URL || !process.env.SMS_PROVIDER_TOKEN)) {
+async function requireProviderConfiguration(channels: Channel[], whatsappTemplateConfig: Record<string, Prisma.JsonValue>) {
+  if (channels.includes("sms") && !(await isActiveSmsProviderConfigured())) {
     throw new AppError("SMS is enabled for report-card delivery but the SMS provider is not configured.", 503, "NOTIFICATION_PROVIDER_UNAVAILABLE");
   }
   if (channels.includes("whatsapp")) {
@@ -181,7 +182,7 @@ async function queuePublicRelease(tx: TenantDb, input: { schoolId: string; actor
     : ({ whatsappTemplateConfig: settings?.whatsappTemplateConfig ?? {} } as Record<string, Prisma.JsonValue>);
   const { channels, whatsappTemplateConfig } = extractChannelConfig(combined);
   if (!channels.length) throw new AppError("Select at least one enabled report-card delivery channel before releasing this report.", 409, "NO_NOTIFICATION_CHANNEL");
-  requireProviderConfiguration(channels, whatsappTemplateConfig);
+  await requireProviderConfiguration(channels, whatsappTemplateConfig);
   const publicUrl = publicReportPdfUrl(input.origin, createPublicReportPdfToken({ schoolId: input.schoolId, reportId: report.id }));
   const recipients = report.student.guardians.filter((link) => Boolean(link.guardian.phone));
   if (!recipients.length) throw new AppError("No linked guardian has a phone number for this release.", 409, "NO_GUARDIAN_PHONE");

@@ -205,7 +205,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     line.remark = remarkForLine(line.total, scale, line.position, rankedCount, policy);
   }
   const completeTotals = liveLines.map((l) => l.total).filter((t): t is number => t != null);
-  const average = completeTotals.length === results.length && completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
+  const average = completeTotals.length === liveLines.length && completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
   const passMark = passMarkForScale(scale);
   const promotionDecision = promotionForRule(policy.promotionRule, { overallPosition, rankedCount, cutoffPercent: policy.positionPromotionCutoffPercent, lines: liveLines, passMark });
   const frozen = asRecord(report.calculationSnapshot);

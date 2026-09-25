@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { enqueueNotification, processMessageBatchOnce } from "../src/lib/message-outbox";
+import { enqueueNotification, enqueueNotificationBatch, processMessageBatchOnce } from "../src/lib/message-outbox";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 
@@ -152,5 +152,34 @@ describe("message outbox", () => {
       const message = await tx.message.findFirst({ where: { recipientPhone: "+233290000000" } });
       expect(message?.status).toBe("sent"); expect(message?.attempts).toBe(2);
     });
+  });
+});
+
+describe("bulk notification queue",()=>{
+  it("queues a large audience atomically and repeating the same batch does not charge twice",async()=>{
+    const fixture=await createSmsFixture();
+    const inputs=Array.from({length:150},(_,i)=>({
+      schoolId:fixture.schoolId,recipientType:"user" as const,recipientId:"bulk-"+i,
+      recipientPhone:"+233240000000",body:"School notice",channels:"sms" as const,idempotencyKey:"repeatable-bulk",
+    }));
+    await withTenant(fixture.schoolId,async tx=>{
+      const first=await enqueueNotificationBatch(tx,inputs);
+      expect(first).toHaveLength(150);
+      const before=await tx.$queryRawUnsafe<Array<{smsBalance:number}>>('SELECT "smsBalance" FROM "PlatformMessagingWallet" WHERE "schoolId"=$1',fixture.schoolId);
+      expect(await enqueueNotificationBatch(tx,inputs)).toHaveLength(150);
+      const after=await tx.$queryRawUnsafe<Array<{smsBalance:number}>>('SELECT "smsBalance" FROM "PlatformMessagingWallet" WHERE "schoolId"=$1',fixture.schoolId);
+      expect(after[0].smsBalance).toBe(before[0].smsBalance);
+      expect(await tx.message.count({where:{idempotencyKey:{startsWith:"repeatable-bulk:"}}})).toBe(150);
+    },{timeout:20000});
+  });
+  it("does not consume unsupported channels when running an SMS-only worker",async()=>{
+    const fixture=await createSmsFixture();
+    await withTenant(fixture.schoolId,async tx=>{
+      await tx.message.create({data:{schoolId:fixture.schoolId,channel:"whatsapp",recipientType:"user",recipientId:fixture.memberId,recipientPhone:"+233240000000",body:"Future WhatsApp",status:"queued",nextAttemptAt:new Date(),idempotencyKey:"wa-only:"+fixture.schoolId}});
+    });
+    let calls=0;
+    expect(await processMessageBatchOnce({sms:async()=>{calls++;}},20,fixture.schoolId)).toBe(0);
+    expect(calls).toBe(0);
+    await withTenant(fixture.schoolId,async tx=>expect((await tx.message.findFirst({where:{idempotencyKey:"wa-only:"+fixture.schoolId}}))?.status).toBe("queued"));
   });
 });

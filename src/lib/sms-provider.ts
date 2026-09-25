@@ -117,7 +117,7 @@ export async function getArkeselBalanceDetails(): Promise<ArkeselBalanceDetails>
   const apiKey = process.env.ARKESEL_API_KEY;
   if (!apiKey) return { providerKey: "arkesel", configured: false, available: false, error: "Arkesel API key is not configured." };
   try {
-    const response = await fetch(arkeselBalanceUrl(), { method: "GET", headers: { "api-key": apiKey } });
+    const response = await fetch(arkeselBalanceUrl(), { signal: AbortSignal.timeout(15_000), method: "GET", headers: { "api-key": apiKey } });
     const body = await jsonResponse(response);
     if (!response.ok) return { providerKey: "arkesel", configured: true, available: false, error: `Arkesel balance HTTP ${response.status}` };
     const data = firstRecord(body.data);
@@ -152,6 +152,7 @@ export async function sendSmsThroughProvider(providerKey: SmsProviderKey, input:
     if (!apiKey) throw new Error("Arkesel SMS is not configured.");
     const callbackUrl = getArkeselSmsDeliveryCallbackUrl();
     const response = await fetch(process.env.ARKESEL_SMS_URL || "https://sms.arkesel.com/api/v2/sms/send", {
+      signal: AbortSignal.timeout(15_000),
       method: "POST",
       headers: { "content-type": "application/json", "api-key": apiKey },
       body: JSON.stringify({ sender, message: input.body, recipients: [input.phone], ...(callbackUrl ? { callback_url: callbackUrl } : {}) }),
@@ -170,6 +171,7 @@ export async function sendSmsThroughProvider(providerKey: SmsProviderKey, input:
     const apiKey = process.env.SAILUP_API_KEY;
     if (!apiKey) throw new Error("Sailup SMS is not configured.");
     const response = await fetch(process.env.SAILUP_SMS_URL || "https://api.sailup.io/v1/sms/", {
+      signal: AbortSignal.timeout(15_000),
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ from: sender, to: [input.phone], body: input.body }),
@@ -183,6 +185,7 @@ export async function sendSmsThroughProvider(providerKey: SmsProviderKey, input:
     const clientId = process.env.HUBTEL_CLIENT_ID, clientSecret = process.env.HUBTEL_CLIENT_SECRET;
     if (!clientId || !clientSecret) throw new Error("Hubtel SMS is not configured.");
     const response = await fetch(process.env.HUBTEL_SMS_URL || "https://smsc.hubtel.com/v1/messages/send", {
+      signal: AbortSignal.timeout(15_000),
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}` },
       body: JSON.stringify({ from: sender, to: input.phone, content: input.body }),
@@ -197,7 +200,7 @@ export async function sendSmsThroughProvider(providerKey: SmsProviderKey, input:
 
   const url = process.env.SMS_PROVIDER_URL, token = process.env.SMS_PROVIDER_TOKEN;
   if (!url || !token) throw new Error("Generic SMS provider is not configured.");
-  const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ to: input.phone, body: input.body, senderId: sender }) });
+  const response = await fetch(url, { signal: AbortSignal.timeout(15_000), method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify({ to: input.phone, body: input.body, senderId: sender }) });
   const body = await jsonResponse(response);
   if (!response.ok) throw new Error(`SMS provider HTTP ${response.status}`);
   return { providerKey, providerMessageId: firstString(body.id, body.messageId, body.message_id), creditsUsed: positiveInt(body.creditsUsed ?? body.credits_used ?? body.quantity) };

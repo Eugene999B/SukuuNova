@@ -60,7 +60,7 @@ export const twilioWhatsAppSender:WhatsAppSender=async({phone,contentSid:sid,var
   const accountSid=process.env.TWILIO_ACCOUNT_SID,authToken=process.env.TWILIO_AUTH_TOKEN,from=process.env.TWILIO_WHATSAPP_FROM;
   if(!accountSid||!authToken||!from)throw new Error("Twilio WhatsApp is not configured.");
   const form=new URLSearchParams({To:phone.startsWith("whatsapp:")?phone:"whatsapp:"+phone,From:from.startsWith("whatsapp:")?from:"whatsapp:"+from,ContentSid:sid,ContentVariables:JSON.stringify(variables)});
-  const response=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+encodeURIComponent(accountSid)+"/Messages.json",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded",authorization:"Basic "+Buffer.from(accountSid+":"+authToken).toString("base64"),},body:form});
+  const response=await fetch("https://api.twilio.com/2010-04-01/Accounts/"+encodeURIComponent(accountSid)+"/Messages.json",{signal:AbortSignal.timeout(15_000),method:"POST",headers:{"content-type":"application/x-www-form-urlencoded",authorization:"Basic "+Buffer.from(accountSid+":"+authToken).toString("base64"),},body:form});
   if(!response.ok)throw new Error(`Twilio WhatsApp HTTP ${response.status}`);
 };
 function variables(value:Prisma.JsonValue|null){ if(!value||Array.isArray(value)||typeof value!=="object")return{}; return Object.fromEntries(Object.entries(value).filter((entry):entry is [string,string]=>typeof entry[1]==="string")); }
@@ -146,20 +146,60 @@ export async function enqueueNotification(tx:Prisma.TransactionClient,input:Noti
   }
   return messages;
 }
+/** One settings read and one school read per audience, with bounded bulk inserts.
+ * Wallet reservations remain enforced by the database message triggers. */
+export async function enqueueNotificationBatch(tx: Prisma.TransactionClient, inputs: NotificationInput[]) {
+  if (!inputs.length) return [];
+  const schoolId = inputs[0].schoolId;
+  if (inputs.some(input => input.schoolId !== schoolId)) throw new Error("A notification batch must belong to one school.");
+  const [settings, school] = await Promise.all([
+    tx.schoolSettings.findUnique({where:{schoolId}}),
+    tx.school.findUnique({where:{id:schoolId},select:{name:true}}),
+  ]);
+  const jobs = new Map<string, Prisma.MessageCreateManyInput>();
+  for (const input of inputs) for (const channel of configuredChannels(settings?.notificationChannels,input.channels)) {
+    if (channel === "whatsapp" && !input.templateKey) continue;
+    const idempotencyKey = deterministicIdempotencyKey(input,channel);
+    jobs.set(idempotencyKey,{
+      schoolId,channel,recipientType:input.recipientType,recipientId:input.recipientId,
+      recipientPhone:input.recipientPhone,body:channel === "sms" ? withSchoolIdentity(school?.name,input.body) : input.body,
+      templateKey:input.templateKey,templateVariables:input.templateVariables,mediaUrl:input.mediaUrl,
+      status:"queued",attempts:0,nextAttemptAt:input.scheduledAt && input.scheduledAt > new Date() ? input.scheduledAt : new Date(),idempotencyKey,
+    });
+  }
+  const keys = [...jobs.keys()];
+  if (!keys.length) return [];
+  // Serialize duplicate requests before wallet-triggered INSERTs. Do not use
+  // skipDuplicates: BEFORE INSERT wallet triggers may run on a skipped conflict.
+  await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "notification-batch:" + schoolId);
+  const existing = await tx.message.findMany({where:{idempotencyKey:{in:keys}},select:{id:true,idempotencyKey:true,status:true}});
+  const existingKeys = new Set(existing.map(row => row.idempotencyKey));
+  const pending = [...jobs.values()].filter(row => !existingKeys.has(row.idempotencyKey ?? null));
+  for (let offset = 0; offset < pending.length; offset += 200)
+    await tx.message.createMany({data:pending.slice(offset,offset+200)});
+  return tx.message.findMany({where:{idempotencyKey:{in:keys}},select:{id:true,status:true}});
+}
+
 export const enqueueSms=enqueueNotification;
+
+let nextSchoolIndex = 0;
 
 export async function processMessageBatchOnce(senders:NotificationSenders={sms:httpSmsSender,whatsapp:twilioWhatsAppSender},batchSize=20,schoolIdFilter?:string){
   const directories=await db.schoolLoginDirectory.findMany({where:{status:"active",...(schoolIdFilter?{schoolId:schoolIdFilter}:{})}}); let processed=0;
-  for(const directory of directories){
+  const start = directories.length ? nextSchoolIndex % directories.length : 0;
+  const ordered = [...directories.slice(start), ...directories.slice(0,start)];
+  for(const directory of ordered){
+    nextSchoolIndex = (directories.indexOf(directory) + 1) % Math.max(1,directories.length);
     if(processed>=batchSize)break;
     const now=new Date();
-    const jobs=await withTenant(directory.schoolId,tx=>tx.message.findMany({where:{OR:[{status:"queued",nextAttemptAt:{lte:now}},{status:"sending",nextAttemptAt:{lte:now}}]},orderBy:[{nextAttemptAt:"asc"},{createdAt:"asc"}],take:batchSize-processed}));
-    for(const job of jobs){
+    const jobs=await withTenant(directory.schoolId,tx=>tx.message.findMany({where:{channel:{in:Object.keys(senders).filter(channel => channel === "sms" || channel === "whatsapp")},OR:[{status:"queued",nextAttemptAt:{lte:now}},{status:"sending",nextAttemptAt:{lte:now}}]},orderBy:[{nextAttemptAt:"asc"},{createdAt:"asc"}],take:batchSize-processed}));
+    const settings=jobs.length ? await withTenant(directory.schoolId,tx=>tx.schoolSettings.findUnique({where:{schoolId:directory.schoolId}})) : null;
+    for(let offset=0;offset<jobs.length;offset+=4){
+      await Promise.all(jobs.slice(offset,offset+4).map(async job=>{
       const leaseUntil=new Date(Date.now()+CLAIM_LEASE_MS);
       const claimableStatus=job.status==="queued" ? {status:"queued",nextAttemptAt:{lte:new Date()}} : {status:"sending",nextAttemptAt:{lte:new Date()}};
       const claimed=await withTenant(directory.schoolId,tx=>tx.message.updateMany({where:{id:job.id,...claimableStatus},data:{status:"sending",attempts:{increment:1},nextAttemptAt:leaseUntil}}));
-      if(claimed.count===0)continue;
-      const settings=await withTenant(directory.schoolId,tx=>tx.schoolSettings.findUnique({where:{schoolId:directory.schoolId}}));
+      if(claimed.count===0)return;
       const claimedJob={...job,schoolId:directory.schoolId,attempts:job.attempts+1};
       const claimedAttempt=claimedJob.attempts;
       try {
@@ -178,6 +218,7 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
         }
       }
       processed++;
+      }));
     }
   }
   return processed;
