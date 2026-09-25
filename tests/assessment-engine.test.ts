@@ -143,3 +143,17 @@ describe("assessment engine", () => {
     expect(() => validateAssessmentRules({ ...rules, categories: [{ name: "Exam", weight: 90 }] })).toThrow(/100%/i);
   });
 });
+
+it("treats recorded absence as zero while preserving unentered and excused work", () => {
+  const assessment={id:"ca",name:"CA",type:"ca",maxScore:100,weight:40};
+  const exam={id:"exam",name:"Exam",type:"exam",maxScore:100,weight:60,score:80};
+  const policy={...rules,caWeight:40,examWeight:60};
+  for(const score of [null,95]) {
+    const result=calculateSubjectResult([{...assessment,score,status:"absent"},exam],policy);
+    expect(result.complete).toBe(true);
+    expect(result.total).toBe(48);
+    expect(result.details[0].rawScore).toBe(0);
+  }
+  expect(calculateSubjectResult([{...assessment,score:null},exam],policy).total).toBeNull();
+  expect(calculateSubjectResult([{...assessment,score:95,status:"excused"},exam],policy).details[0].rawScore).toBeNull();
+});

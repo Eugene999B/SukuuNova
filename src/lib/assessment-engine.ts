@@ -169,7 +169,9 @@ export function calculateSubjectResult(assessments: AssessmentLike[], rules: Ass
     const maxScore = Number(assessment.maxScore);
     const status: ScoreStatus = assessment.status === "excused" || assessment.status === "absent" ? assessment.status : "present";
     const excused = status === "excused";
-    const rawScore = excused || assessment.score == null ? null : Number(assessment.score);
+    // An explicit unexcused absence is a recorded zero, even when an older
+    // import left a numeric value on the row. Unentered work stays null.
+    const rawScore = excused ? null : status === "absent" ? 0 : assessment.score == null ? null : Number(assessment.score);
     if (!Number.isFinite(maxScore) || maxScore <= 0) throw new AppError(`Assessment ${assessment.name} has an invalid maximum score.`, 409, "INVALID_MAX_SCORE");
     if (rawScore != null && (!Number.isFinite(rawScore) || rawScore < 0 || rawScore > maxScore)) throw new AppError(`Score for ${assessment.name} is outside the valid range.`, 409, "INVALID_SCORE");
     const type = normalizeAssessmentType(assessment.type);
