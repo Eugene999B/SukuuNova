@@ -1,3 +1,4 @@
+import { getSchoolAuthorization } from "@/lib/authorization";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/auth";
@@ -36,10 +37,12 @@ export async function GET() {
     const reports = await withTenant(session.schoolId, async (tx) => {
       const canView = await hasPermission(tx, session.userId, "report_cards:view");
       if (!canView) throw new ForbiddenError("Report-card access is not permitted.");
-      const parent = await hasPermission(tx, session.userId, "parents:read_linked");
+      const actor = await getSchoolAuthorization(tx, session.userId);
+      const academic = actor.isElevated || actor.isTeacher || await actor.can("scores:write:all");
+      const parent = !academic && await hasPermission(tx, session.userId, "parents:read_linked");
       const access = parent ? null : await reportClassAccess(tx, session.userId);
       const reports = await tx.reportCard.findMany({
-        where: parent ? { status: "sent", student: { guardians: { some: { guardian: { userId: session.userId } } } } } : {},
+        where: parent ? { status: { in: ["approved", "sent"] }, student: { guardians: { some: { guardian: { userId: session.userId } } } } } : {},
         select: { id: true, schoolId: true, studentId: true, termId: true, status: true, remarks: true, createdAt: true, generatedPdfUrl: true, calculationSnapshot: true, student: { select: { id: true, name: true, admissionNo: true } }, term: { select: { id: true, name: true, academicYearId: true } } },
         orderBy: { createdAt: "desc" }
       });

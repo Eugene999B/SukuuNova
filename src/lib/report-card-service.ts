@@ -118,11 +118,11 @@ export async function getVisibleReportDocument(tx: TenantDb, input: { actorId: s
   const report = await tx.reportCard.findUnique({ where: { id: input.reportCardId }, include: { student: { include: { guardians: { include: { guardian: true } } } } } });
   if (!report) throw new AppError("Report card not found.",404,"NOT_FOUND");
   if (!(await hasPermission(tx,input.actorId,"report_cards:view"))) throw new ForbiddenError("This report is not visible to this account.");
-  const isParent=await hasPermission(tx,input.actorId,"parents:read_linked");
-  if(isParent){
-    const linked=report.student.guardians.some(link=>link.guardian.userId===input.actorId);
-    if(!linked || !["approved","sent"].includes(report.status)) throw new ForbiddenError("This report is not visible to this account.");
-  }else await requireReportAccess(tx,input.actorId,input.reportCardId);
+  const linkedGuardian = report.student.guardians.some(link=>link.guardian.userId===input.actorId);
+  const canReadLinked = linkedGuardian && ["approved","sent"].includes(report.status) &&
+    await hasPermission(tx,input.actorId,"parents:read_linked");
+  // Broad administrative permissions do not turn an academic actor into a parent.
+  if (!canReadLinked) await requireReportAccess(tx,input.actorId,input.reportCardId);
   const [data,signatures]=await Promise.all([
     getReportCardPrintData(tx,{schoolId:report.schoolId,reportId:report.id}),
     signaturesForReport(tx,{schoolId:report.schoolId,reportId:report.id}),
