@@ -1,7 +1,7 @@
 # Launch verification — 25 September 2026
 
 ## Evidence included in this release
-- Authenticated HTTP/browser journey: import and confirmed enrolment; partial report generation and repeated Unicode PDF downloads; complete marks; assigned-teacher submission; separate owner approval; linked-parent approved PDF/list access; regeneration denial after approval; failed delivery leaves the report approved.
+- Authenticated HTTP/browser journey: import and confirmed enrolment; partial report generation and repeated Unicode PDF downloads; complete marks; assigned-teacher submission; separate owner approval; family-portal login and linked-parent approved PDF access; guardian denial from staff report-list and approval APIs; regeneration denial after approval; failed delivery leaves the report approved.
 - Denial checks: anonymous PDF, parent draft access, parent approval, owner submission without class-teacher assignment, self-approval, cross-school report ID, final-term submission without a progression recommendation.
 - Screen and API now use the academic calendar's year-end authority and the same submission guard. The class overview gives a learner-selection prompt instead of incorrectly saying that generated reports do not exist.
 - Persisted SMS delivery tests cover duplicated and out-of-order receipts, terminal failure followed by delivery, and invalid statuses without external sends.

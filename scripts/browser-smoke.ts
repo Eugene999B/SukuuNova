@@ -107,7 +107,7 @@ async function main() {
     const anonymousContext=await browser.newContext({baseURL});
     try {
       assert.equal((await teacherContext.request.post("/api/auth/school/login",{data:{uniqueCode:f.uniqueCode,identifier:f.memberId+"@test.invalid",password}})).status(),200);
-      assert.equal((await parentContext.request.post("/api/auth/school/login",{data:{uniqueCode:f.uniqueCode,identifier:boundary.parentEmail,password}})).status(),200);
+      assert.equal((await parentContext.request.post("/api/auth/guardian/login",{data:{schoolCode:f.uniqueCode,identifier:boundary.parentEmail,password}})).status(),200);
       const pdfPath="/api/mvp/report-cards/"+learnerReport.id+"/pdf";
       assert.ok([401,403].includes((await anonymousContext.request.get(pdfPath)).status()),"Anonymous PDF access must be denied");
       assert.equal((await parentContext.request.get(pdfPath)).status(),403,"Parents must not read a draft report");
@@ -121,8 +121,8 @@ async function main() {
       assert.equal(approved.status(),200,await approved.text());
       assert.equal((await parentContext.request.get(pdfPath)).status(),200,"Linked parent can download the approved report");
       const parentReports=await parentContext.request.get("/api/mvp/report-cards");
-      assert.equal(parentReports.status(),200);
-      assert.deepEqual((await parentReports.json()).reports.map((r:{id:string})=>r.id),[learnerReport.id],"Parent list excludes the final-term draft");
+      assert.equal(parentReports.status(),401,"Guardian sessions cannot enter the staff report-list API");
+      assert.equal((await parentContext.request.get("/api/mvp/report-cards/"+boundary.finalReportId+"/pdf")).status(),403,"Final-term drafts remain private to school staff");
       const deniedRegeneration=await context.request.post("/api/mvp/report-cards",{data:{action:"generate",studentId:student.id,termId:setup.term.id}});
       assert.equal(deniedRegeneration.status(),409,"Approved reports cannot be regenerated");
       const release=await context.request.post("/api/mvp/report-cards",{data:{action:"send",reportCardId:learnerReport.id}});
@@ -135,7 +135,7 @@ async function main() {
       assert.equal((await foreignContext.request.post("/api/auth/school/login",{data:{uniqueCode:other.uniqueCode,identifier:other.ownerId+"@test.invalid",password}})).status(),200);
       assert.equal((await foreignContext.request.get(pdfPath)).status(),404,"Another school cannot access a guessed report ID");
       const unauthorizedParent=await parentContext.request.post("/api/mvp/report-cards",{data:{action:"approve",reportCardId:boundary.finalReportId}});
-      assert.equal(unauthorizedParent.status(),403,"Parent cannot approve reports");
+      assert.equal(unauthorizedParent.status(),401,"Guardian sessions cannot enter staff approval actions");
     } finally {
       await teacherContext.close();await parentContext.close();await foreignContext.close();await anonymousContext.close();
     }
