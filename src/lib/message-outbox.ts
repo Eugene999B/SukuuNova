@@ -171,7 +171,7 @@ export async function enqueueNotificationBatch(tx: Prisma.TransactionClient, inp
   if (!keys.length) return [];
   // Serialize duplicate requests before wallet-triggered INSERTs. Do not use
   // skipDuplicates: BEFORE INSERT wallet triggers may run on a skipped conflict.
-  await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "notification-batch:" + schoolId);
+  await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", "notification-batch:" + schoolId);
   const existing = await tx.message.findMany({where:{idempotencyKey:{in:keys}},select:{id:true,idempotencyKey:true,status:true}});
   const existingKeys = new Set(existing.map(row => row.idempotencyKey));
   const pending = [...jobs.values()].filter(row => !existingKeys.has(row.idempotencyKey ?? null));

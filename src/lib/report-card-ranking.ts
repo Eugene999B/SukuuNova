@@ -85,7 +85,7 @@ export function promotionForRule(
   rule: "manual" | "pass_mark" | "overall_position",
   input: { overallPosition: number | null; rankedCount: number; cutoffPercent: number; lines: Array<{ total: number | null }>; passMark: number }
 ): PromotionDecision {
-  if (rule === "manual" || !input.lines.length || input.lines.some(line => line.total == null)) return "decision_required";
+  if (rule === "manual" || (rule === "pass_mark" && !input.lines.length) || input.lines.some(line => line.total == null)) return "decision_required";
   if (rule === "pass_mark") return input.lines.length > 0 && input.lines.every((line) => (line.total ?? -1) >= input.passMark) ? "promoted" : "not_promoted";
   const cutoff = Math.min(100, Math.max(1, Math.round(input.cutoffPercent)));
   return input.overallPosition != null && input.overallPosition <= Math.ceil((input.rankedCount * cutoff) / 100) ? "promoted" : "not_promoted";
