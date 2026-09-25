@@ -1,4 +1,3 @@
-import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib";
 import type { Prisma } from "@prisma/client";
 import type { TenantDb } from "@/lib/db";
 import { appendSchoolAudit } from "@/lib/audit";
@@ -8,13 +7,13 @@ import { calculateSubjectResult, gradeForPercentage } from "@/lib/assessment-eng
 import { overallTotalsForScope, passMarkForScale, promotionForRule, rankTotals, remarkForLine, rulesFor } from "@/lib/report-card-ranking";
 import { getClassSubjectIntelligence } from "@/lib/performance-intelligence";
 import { approveAndQueuePublicReportCard, readHeadRemark, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
+import { requireReportAccess, reportClassAccess } from "@/lib/report-card-access";
+import { getReportCardPrintData } from "@/lib/report-card-print-data";
+import { signaturesForReport } from "@/lib/report-card-signatures";
+import { buildReportCardPdf } from "@/lib/report-card-pdf";
 import { resolveStudentTermClass, resolveTermRoster } from "@/lib/student-term-context";
 
 type SubjectResult = { subject: string; ca: number | null; exam: number | null; total: number | null };
-type TemplateConfig = { style: string; primary: string; accent: string; watermark: string };
-function object(value: Prisma.JsonValue | null | undefined): Record<string, Prisma.JsonValue> { return value && !Array.isArray(value) && typeof value === "object" ? value as Record<string, Prisma.JsonValue> : {}; }
-function text(value: Prisma.JsonValue | undefined, fallback: string) { return typeof value === "string" ? value : fallback; }
-function hex(value: string) { const match = /^#?([0-9a-f]{6})$/i.exec(value); if (!match) return rgb(0.11, 0.3, 0.72); return rgb(parseInt(match[1].slice(0, 2), 16) / 255, parseInt(match[1].slice(2, 4), 16) / 255, parseInt(match[1].slice(4, 6), 16) / 255); }
 function appOrigin() { return (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/+$/g, ""); }
 
 async function reportData(tx: TenantDb, studentId: string, termId: string) {
@@ -58,25 +57,13 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
   return { student: reportStudent, term, termClass, settings, school, template, results, attendance, caWeight, examWeight };
 }
 
-async function makePdf(data: Awaited<ReturnType<typeof reportData>>, remarks?: string) {
-  if (data.results.length > 20) throw new AppError("This report renderer supports at most 20 subjects. Use the Report Card Print Studio for a full multi-page report.", 409, "PDF_LIMIT");
-  const raw = object(data.template.layoutConfig); const brand = object(data.school.brandColors);
-  const config: TemplateConfig = { style: text(raw.style, "classic"), primary: text(brand.primary, text(raw.primary, "#1d4ed8")), accent: text(brand.accent, text(raw.accent, "#dbeafe")), watermark: data.settings.reportCardWatermark || text(raw.watermark, "SUKUUNOVA") };
-  const pdf = await PDFDocument.create(); const page = pdf.addPage([595, 842]); const regular = await pdf.embedFont(StandardFonts.Helvetica); const bold = await pdf.embedFont(StandardFonts.HelveticaBold); const primary = hex(config.primary); const accent = hex(config.accent);
-  if (config.style === "modern") page.drawRectangle({ x: 0, y: 750, width: 595, height: 92, color: primary }); else if (config.style === "formal") page.drawRectangle({ x: 35, y: 35, width: 525, height: 772, borderColor: primary, borderWidth: 2 }); else page.drawRectangle({ x: 0, y: 770, width: 595, height: 72, color: accent });
-  if (data.school.logoUrl?.startsWith("data:image/")) { try { const separator = data.school.logoUrl.indexOf(","); if (separator < 1) throw new Error("Malformed school logo data URL."); const header = data.school.logoUrl.slice(0, separator); const bytes = Buffer.from(data.school.logoUrl.slice(separator + 1), "base64"); const logo = header.includes("png") ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes); const scale = Math.min(60 / logo.width, 48 / logo.height); page.drawImage(logo, { x: 475, y: 772, width: logo.width * scale, height: logo.height * scale }); } catch {} }
-  if (config.watermark) page.drawText(config.watermark.slice(0, 36), { x: 145, y: 390, size: 42, font: bold, color: accent, opacity: 0.18, rotate: degrees(35) });
-  const headerColor = config.style === "modern" ? rgb(1, 1, 1) : primary;
-  page.drawText(data.school.name, { x: 50, y: 798, size: 20, font: bold, color: headerColor }); page.drawText("SukuuNova Report Card · " + data.template.name, { x: 50, y: 774, size: 10, font: regular, color: headerColor }); page.drawText("Student: " + data.student.name, { x: 50, y: 730, size: 11, font: bold }); page.drawText("Class: " + data.student.class.name, { x: 320, y: 730, size: 11, font: regular }); page.drawText("Term: " + data.term.name, { x: 50, y: 710, size: 11, font: regular }); page.drawRectangle({ x: 45, y: 664, width: 500, height: 24, color: accent }); page.drawText("Subject", { x: 50, y: 675, size: 10, font: bold, color: primary }); page.drawText("CA", { x: 310, y: 675, size: 10, font: bold, color: primary }); page.drawText("Exam", { x: 380, y: 675, size: 10, font: bold, color: primary }); page.drawText("Total", { x: 465, y: 675, size: 10, font: bold, color: primary });
-  let y = 653; for (const row of data.results) { page.drawText(row.subject.slice(0, 36), { x: 50, y, size: 9, font: regular }); page.drawText(row.ca === null ? "-" : row.ca.toFixed(1), { x: 310, y, size: 9, font: regular }); page.drawText(row.exam === null ? "-" : row.exam.toFixed(1), { x: 380, y, size: 9, font: regular }); page.drawText(row.total === null ? "-" : row.total.toFixed(1), { x: 465, y, size: 9, font: bold }); y -= 21; }
-  const presentDays = new Set(data.attendance.map((row) => row.attendanceDate.toISOString().slice(0, 10))).size; const lateDays = data.attendance.filter((row) => row.isLate).length; page.drawText("Attendance: " + presentDays + " days present; " + lateDays + " late.", { x: 50, y: 190, size: 10, font: regular }); page.drawText("Remarks: " + (remarks?.trim() || "—"), { x: 50, y: 165, size: 10, font: regular }); page.drawText("Generated securely by SukuuNova", { x: 50, y: 60, size: 8, font: regular, color: rgb(0.4, 0.4, 0.4) }); return Buffer.from(await pdf.save());
-}
-
 export async function generateReportCard(tx: TenantDb, input: { schoolId: string; actorId: string; studentId: string; termId: string; remarks?: string }) {
-  await requirePermission(tx, input.actorId, "reports:generate");
+  const access = await reportClassAccess(tx, input.actorId, "reports:generate");
+  const context = await resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId });
+  if (access.classIds && !access.classIds.includes(context.classId)) throw new ForbiddenError("You may generate reports only for assigned classes.");
   const existing = await tx.reportCard.findUnique({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } } });
   if (existing && existing.status !== "draft") throw new AppError("A submitted report card cannot be regenerated.", 409, "REPORT_LOCKED");
-  const data = await reportData(tx, input.studentId, input.termId); const pdfData = await makePdf(data, input.remarks);
+  const data = await reportData(tx, input.studentId, input.termId);
   const presentDays = new Set(data.attendance.map((row) => row.attendanceDate.toISOString().slice(0, 10))).size;
   const lateDays = data.attendance.filter((row) => row.isLate).length;
   const completeTotals = data.results.map((row) => row.total).filter((t): t is number => t != null);
@@ -97,10 +84,13 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
     subjectPositions: [] as Array<{ subject: string; position: number | null; total: number | null; grade: string | null; remark: string | null }>,
     promotionRule: null as string | null, promotionDecision: "decision_required" as const,
   };
-  const report = await tx.reportCard.upsert({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } }, update: { pdfData, remarks: input.remarks, templateId: data.template.id, calculationSnapshot, calculationVersion: 4 }, create: { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, templateId: data.template.id, pdfData, remarks: input.remarks, calculationSnapshot, calculationVersion: 4, generatedPdfUrl: "/api/mvp/report-cards/pending/pdf" } });
-  const generatedPdfUrl = "/api/mvp/report-cards/" + report.id + "/pdf"; await tx.reportCard.update({ where: { id: report.id }, data: { generatedPdfUrl } });
+  const report = await tx.reportCard.upsert({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } }, update: { remarks: input.remarks, templateId: data.template.id, calculationSnapshot, calculationVersion: 4 }, create: { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, templateId: data.template.id, remarks: input.remarks, calculationSnapshot, calculationVersion: 4, generatedPdfUrl: "/api/mvp/report-cards/pending/pdf" } });
+  const generatedPdfUrl = "/api/mvp/report-cards/" + report.id + "/pdf";
+  const document = await getReportCardPrintData(tx, {schoolId:input.schoolId,reportId:report.id});
+  const pdfData = await buildReportCardPdf(document, await signaturesForReport(tx,{schoolId:input.schoolId,reportId:report.id}));
+  await tx.reportCard.update({ where: { id: report.id }, data: { generatedPdfUrl,pdfData } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.generated", entityType: "ReportCard", entityId: report.id, after: { studentId: input.studentId, termId: input.termId, classId: data.student.class.id, classSource: data.termClass.source, templateId: data.template.id, calculationVersion: 4 } });
-  return { ...report, generatedPdfUrl };
+  return { ...report, generatedPdfUrl, pdfData };
 }
 
 export async function submitReportCard(tx: TenantDb, input: { schoolId: string; actorId: string; reportCardId: string }) {
@@ -125,16 +115,25 @@ export async function sendReportCard(tx: TenantDb, input: { schoolId: string; ac
   return sendApprovedReportCardPublic(tx, { ...input, origin: appOrigin() });
 }
 
-export async function getVisibleReportPdf(tx: TenantDb, input: { actorId: string; reportCardId: string }) {
+export async function getVisibleReportDocument(tx: TenantDb, input: { actorId: string; reportCardId: string }) {
   const report = await tx.reportCard.findUnique({ where: { id: input.reportCardId }, include: { student: { include: { guardians: { include: { guardian: true } } } } } });
-  const pdfData = report?.pdfData; if (!report || !pdfData) throw new AppError("Report PDF not found.", 404, "NOT_FOUND");
-  if (await hasPermission(tx, input.actorId, "report_cards:view")) {
-    const isParent = await hasPermission(tx, input.actorId, "parents:read_linked");
-    if (!isParent) return { ...report, pdfData };
-    const linked = report.student.guardians.some((link) => link.guardian.userId === input.actorId);
-    if (linked && ["approved", "sent"].includes(report.status)) return { ...report, pdfData };
-  }
-  throw new ForbiddenError("This report card is not visible to this account.");
+  if (!report) throw new AppError("Report card not found.",404,"NOT_FOUND");
+  if (!(await hasPermission(tx,input.actorId,"report_cards:view"))) throw new ForbiddenError("This report is not visible to this account.");
+  const isParent=await hasPermission(tx,input.actorId,"parents:read_linked");
+  if(isParent){
+    const linked=report.student.guardians.some(link=>link.guardian.userId===input.actorId);
+    if(!linked || !["approved","sent"].includes(report.status)) throw new ForbiddenError("This report is not visible to this account.");
+  }else await requireReportAccess(tx,input.actorId,input.reportCardId);
+  const [data,signatures]=await Promise.all([
+    getReportCardPrintData(tx,{schoolId:report.schoolId,reportId:report.id}),
+    signaturesForReport(tx,{schoolId:report.schoolId,reportId:report.id}),
+  ]);
+  return { data,signatures };
+}
+
+export async function getVisibleReportPdf(tx: TenantDb, input: { actorId: string; reportCardId: string }) {
+  const document=await getVisibleReportDocument(tx,input);
+  return { id:input.reportCardId,pdfData:await buildReportCardPdf(document.data,document.signatures) };
 }
 
 export type ReportSubjectLine = { subject: string; subjectId: string | null; ca: number | null; exam: number | null; total: number | null; grade: string | null; position: number | null; remark: string | null };

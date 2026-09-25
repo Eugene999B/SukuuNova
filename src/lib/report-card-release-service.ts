@@ -5,7 +5,7 @@ import { appendSchoolAudit } from "@/lib/audit";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { enqueueSms } from "@/lib/message-outbox";
-import { calculateIntelligentReportCard } from "@/lib/report-card-intelligence";
+import { getReportCardPrintData } from "@/lib/report-card-print-data";
 import { applyApprovedPromotion, readManualPromotionDecision } from "@/lib/report-card-promotion";
 import { resolveCurrentReportSignatures } from "@/lib/report-card-signatures";
 
@@ -45,7 +45,7 @@ async function freezeIntelligentReportCard(tx: TenantDb, schoolId: string, repor
   if (!report) return;
 
   const [data, signatureSnapshot] = await Promise.all([
-    calculateIntelligentReportCard(tx, { schoolId, reportId }),
+    getReportCardPrintData(tx, { schoolId, reportId }),
     resolveCurrentReportSignatures(tx, schoolId, { documentType: "report_card", documentId: reportId }),
   ]);
   const previous = report.calculationSnapshot && typeof report.calculationSnapshot === "object" && !Array.isArray(report.calculationSnapshot)
@@ -55,8 +55,31 @@ async function freezeIntelligentReportCard(tx: TenantDb, schoolId: string, repor
   const promotionDecision = manualPromotion ?? data.promotionDecision;
   const snapshot = {
     ...previous,
-    calculationVersion: 5,
+    calculationVersion: 6,
     rankingFrozenAt: new Date().toISOString(),
+    schoolIdentity: JSON.parse(JSON.stringify(data.school)),
+    gradingScale: data.gradingScale,
+    classRoll: data.classRoll,
+    yearEndSession: data.yearEndSession,
+    calendar: JSON.parse(JSON.stringify(data.calendar)),
+    structuredPromotion: JSON.parse(JSON.stringify(data.structuredPromotion)),
+    reportTraits: data.reportTraits,
+    reportingPolicy: data.reportingPolicy,
+    reportPresentation: {
+      showOverallPosition:data.reportSettings.showOverallPosition,
+      showSubjectPosition:data.reportSettings.showSubjectPosition,
+      showAttendance:data.reportSettings.showAttendance,
+      showPromotion:data.reportSettings.showPromotion,
+      showStudentPhoto:data.reportSettings.showStudentPhoto,
+      showClassTeacherRemark:data.reportSettings.showClassTeacherRemark,
+      showHeadteacherRemark:data.reportSettings.showHeadteacherRemark,
+    },
+    watermark:data.watermark,
+    attendance:{
+      presentDays:data.attendance.present,lateDays:data.attendance.late,
+      expectedDays:data.attendance.expectedDays,absentDays:data.attendance.absent,
+      attendanceRate:data.attendance.attendanceRate,totalRecorded:data.attendance.totalRecorded,
+    },
     gradingWeights: data.gradingWeights,
     assessments: data.results.map((result) => ({ subject: result.subject, ca: result.ca, exam: result.exam, total: result.total, grade: result.grade })),
     overallTotal: data.summary.total,
@@ -79,7 +102,7 @@ async function freezeIntelligentReportCard(tx: TenantDb, schoolId: string, repor
     classLevel: data.student.level,
     classTeacherName: data.classTeacherName,
   } as Prisma.InputJsonObject;
-  await tx.reportCard.update({ where: { id: report.id }, data: { calculationSnapshot: snapshot, calculationVersion: 5 } });
+  await tx.reportCard.update({ where: { id: report.id }, data: { calculationSnapshot: snapshot, calculationVersion: 6 } });
 }
 
 function encode(value: string): string { return Buffer.from(value, "utf8").toString("base64url"); }

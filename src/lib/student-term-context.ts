@@ -136,33 +136,86 @@ export async function resolveStudentTermClass(
   };
 }
 
-export async function resolveTermRoster(
-  tx: TenantDb,
-  input: { schoolId: string; termId: string; studentIds?: string[]; requireOfficialEnrollment?: boolean },
-) {
-  const students = await tx.student.findMany({
-    where: { schoolId: input.schoolId, status: "active", ...(input.studentIds?.length ? { id: { in: input.studentIds } } : {}) },
-    select: { id: true, name: true, admissionNo: true, classId: true },
-    orderBy: { id: "asc" },
-  });
-  const rows = [];
-  const requireOfficialEnrollment = input.requireOfficialEnrollment ?? true;
-  for (const student of students) {
-    try {
-      const context = await resolveStudentTermClass(tx, {
-        schoolId: input.schoolId,
-        studentId: student.id,
-        termId: input.termId,
-        requireOfficialEnrollment,
-      });
-      rows.push({ ...student, termClassId: context.classId, classSource: context.source, enrollmentStatus: context.enrollmentStatus });
-    } catch (error) {
-      if (error instanceof AppError && ["TERM_CLASS_NOT_FOUND", "TERM_ENROLLMENT_REQUIRED", "TERM_ENROLLMENT_NOT_READY", "TERM_ENROLLMENT_WITHDRAWN"].includes(error.code)) {
-        rows.push({ ...student, termClassId: null, classSource: null, enrollmentStatus: null });
-      } else {
-        throw error;
-      }
-    }
+
+type RosterInput = { schoolId: string; termId: string; studentIds?: string[]; requireOfficialEnrollment?: boolean; includeInactive?: boolean };
+type RosterEvidence = { studentId: string; classId: string; source: "enrollment" | "score_history" | "report_snapshot" | "invoice_history"; status: string | null };
+
+async function loadTermRoster(tx: TenantDb, input: RosterInput) {
+  const [term, students] = await Promise.all([
+    tx.term.findFirst({ where: { id: input.termId, schoolId: input.schoolId }, select: { academicYearId: true } }),
+    tx.student.findMany({
+      where: { schoolId: input.schoolId, ...(!input.includeInactive ? { status: "active" } : {}), ...(input.studentIds ? { id: { in: input.studentIds } } : {}) },
+      select: { id: true, name: true, admissionNo: true, classId: true },
+      orderBy: { id: "asc" },
+    }),
+  ]);
+  if (!term) throw new AppError("The selected term does not belong to this school.", 404, "TERM_NOT_FOUND");
+  if (!students.length) return [];
+  // Three database reads regardless of roster size. Evidence precedence matches
+  // resolveStudentTermClass; never infer historical enrolment from today's class.
+  const evidence = await tx.$queryRawUnsafe<RosterEvidence[]>(
+    `SELECT "studentId", "classId", 'enrollment' AS source, status
+       FROM "Enrollment" WHERE "schoolId"=$1 AND "termId"=$2 AND "academicYearId"=$3
+     UNION ALL
+     SELECT DISTINCT s."studentId", a."classId", 'score_history', NULL
+       FROM "Score" s JOIN "Assessment" a ON a.id=s."assessmentId" AND a."schoolId"=s."schoolId"
+       WHERE s."schoolId"=$1 AND a."termId"=$2
+     UNION ALL
+     SELECT DISTINCT "studentId", "calculationSnapshot"->>'classId', 'report_snapshot', NULL
+       FROM "ReportCard" WHERE "schoolId"=$1 AND "termId"=$2 AND NULLIF("calculationSnapshot"->>'classId','') IS NOT NULL
+     UNION ALL
+     SELECT DISTINCT i."studentId", f."classId", 'invoice_history', NULL
+       FROM "Invoice" i JOIN "InvoiceLine" l ON l."invoiceId"=i.id AND l."schoolId"=i."schoolId"
+       JOIN "FeeItem" f ON f.id=l."feeItemId" AND f."schoolId"=l."schoolId"
+       WHERE i."schoolId"=$1 AND i."termId"=$2 AND f."classId" IS NOT NULL`,
+    input.schoolId, input.termId, term.academicYearId,
+  );
+  const byStudent = new Map<string, RosterEvidence[]>();
+  for (const row of evidence) {
+    const rows = byStudent.get(row.studentId) ?? [];
+    rows.push(row);
+    byStudent.set(row.studentId, rows);
   }
-  return rows;
+  return students.map(student => {
+    const rows = byStudent.get(student.id) ?? [];
+    const enrollment = rows.find(row => row.source === "enrollment");
+    const empty = { ...student, termClassId: null, classSource: null, enrollmentStatus: null };
+    if (enrollment && ["ready", "confirmed"].includes(enrollment.status ?? "")) {
+      return { ...student, termClassId: enrollment.classId, classSource: "enrollment" as EvidenceSource, enrollmentStatus: enrollment.status };
+    }
+    if ((input.requireOfficialEnrollment ?? true) && ["withdrawn", "draft"].includes(enrollment?.status ?? "")) return empty;
+    const sources = [
+      ["score_history", "AMBIGUOUS_SCORE_CLASS_HISTORY"],
+      ["report_snapshot", "AMBIGUOUS_REPORT_CLASS_HISTORY"],
+      ["invoice_history", "AMBIGUOUS_INVOICE_CLASS_HISTORY"],
+    ] as const;
+    for (const [source, code] of sources) {
+      const classId = oneClass(rows.filter(row => row.source === source), code);
+      if (classId) return { ...student, termClassId: classId, classSource: source as EvidenceSource, enrollmentStatus: enrollment?.status ?? null };
+    }
+    if (input.requireOfficialEnrollment === false && student.classId) {
+      return { ...student, termClassId: student.classId, classSource: "current_projection" as EvidenceSource, enrollmentStatus: enrollment?.status ?? null };
+    }
+    return empty;
+  });
+}
+
+// Share only simultaneous reads. Never retain results after a write can occur in
+// the same transaction, and never share a roster between tenant transactions.
+const pendingRosters = new WeakMap<TenantDb, Map<string, Promise<Awaited<ReturnType<typeof loadTermRoster>>>>>();
+export async function resolveTermRoster(tx: TenantDb, input: RosterInput) {
+  let pending = pendingRosters.get(tx);
+  if (!pending) { pending = new Map(); pendingRosters.set(tx, pending); }
+  const key = JSON.stringify([input.schoolId, input.termId, input.requireOfficialEnrollment ?? true, input.includeInactive ?? false, input.studentIds ? [...input.studentIds].sort() : null]);
+  const existing = pending.get(key);
+  if (existing) return existing;
+  const promise = loadTermRoster(tx, input);
+  pending.set(key, promise);
+  try { return await promise; } finally { pending.delete(key); }
+}
+
+export function reportSnapshotClassId(snapshot: unknown): string | null {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return null;
+  const value = (snapshot as Record<string, unknown>).classId;
+  return typeof value === "string" && value.trim() ? value : null;
 }

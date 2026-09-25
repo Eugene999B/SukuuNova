@@ -7,7 +7,7 @@ import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
 import { getSchoolAuthorization } from "@/lib/authorization";
 import { loadReportCardPrintPack } from "@/lib/report-card-print-pack";
-import { resolveStudentTermClass } from "@/lib/student-term-context";
+import { resolveTermRoster, reportSnapshotClassId } from "@/lib/student-term-context";
 
 function PrintMessage({ title, body, classId, termId }: { title: string; body: string; classId?: string; termId?: string }) {
   const reportsHref = classId && termId
@@ -58,14 +58,13 @@ export default async function ClassReportPrintPage({ searchParams }: { searchPar
 
     const candidates = await tx.reportCard.findMany({
       where: { schoolId: session.schoolId, termId },
-      select: { id: true, studentId: true, student: { select: { name: true } } },
+      select: { id: true, studentId: true, calculationSnapshot: true, student: { select: { name: true } } },
       orderBy: { student: { name: "asc" } },
     });
-    const reportIds: string[] = [];
-    for (const row of candidates) {
-      const termClass = await resolveStudentTermClass(tx, { schoolId: session.schoolId, studentId: row.studentId, termId });
-      if (termClass.classId === classId) reportIds.push(row.id);
-    }
+    const legacyIds = candidates.filter(row => !reportSnapshotClassId(row.calculationSnapshot)).map(row=>row.studentId);
+    const roster = legacyIds.length ? await resolveTermRoster(tx, { schoolId: session.schoolId, termId, studentIds: legacyIds, includeInactive: true }) : [];
+    const classByStudent = new Map(roster.map(row=>[row.id,row.termClassId]));
+    const reportIds = candidates.filter(row => (reportSnapshotClassId(row.calculationSnapshot) ?? classByStudent.get(row.studentId)) === classId).map(row=>row.id);
 
     return { kind: "ready" as const, selectedClass, term, reportIds };
   });

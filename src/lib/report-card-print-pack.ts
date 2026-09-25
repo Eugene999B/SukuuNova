@@ -30,7 +30,7 @@ async function loadOneReport(schoolId: string, reportId: string): Promise<Report
       signaturesForReport(tx, { schoolId, reportId }),
     ]);
     return { report, signatures };
-  });
+  }, { timeout: 20_000 });
 }
 
 export async function loadReportCardPrintPack(input: {

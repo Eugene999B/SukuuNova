@@ -3,6 +3,7 @@ import type { TenantDb } from "@/lib/db";
 import { AppError } from "@/lib/errors";
 import {
   calculateSubjectResult,
+  assessmentBucketWeights,
   gradeForPercentage,
   normalizeAssessmentType,
   rankTotals,
@@ -354,8 +355,7 @@ export async function calculateIntelligentReportCard(tx: TenantDb, input: { scho
   const themeId = frozen && typeof snapshot.themeId === "string" ? snapshot.themeId : workflow.themeId;
   const presentation = frozen ? jsonObject(snapshot.reportPresentation) : {};
   const show = (key: string, fallback: boolean) => typeof presentation[key] === "boolean" ? Boolean(presentation[key]) : fallback;
-  const canonicalCaWeight = rules.categories.filter((category) => !isExamCategory(category.name)).reduce((sum, category) => sum + category.weight, 0);
-  const canonicalExamWeight = rules.categories.filter((category) => isExamCategory(category.name)).reduce((sum, category) => sum + category.weight, 0);
+  const { ca: canonicalCaWeight, exam: canonicalExamWeight } = assessmentBucketWeights(rules);
 
   return {
     reportId: report.id,

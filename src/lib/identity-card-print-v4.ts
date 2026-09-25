@@ -1,7 +1,9 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import fontkit from "@pdf-lib/fontkit";
 import encodeQR from "qr";
 import {
   PDFDocument,
-  StandardFonts,
   rgb,
   type PDFImage,
   type PDFFont,
@@ -334,8 +336,9 @@ function drawBack(page: PDFPage, assets: PdfAssets, card: IdentityCardView, scho
 }
 
 async function prepareAssets(doc: PDFDocument, school: SchoolIdentityBrand, cards: IdentityCardView[], origin: string): Promise<PdfAssets> {
-  const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  doc.registerFontkit(fontkit);
+  const regular = await doc.embedFont(await readFile(path.join(process.cwd(), "public/fonts/NotoSans-Regular.ttf")), { subset:true });
+  const bold = regular;
   const logo = await embedImage(doc, school.logoUrl);
   const portraits = new Map<string, PDFImage>();
   const qr = new Map<string, unknown[][]>();

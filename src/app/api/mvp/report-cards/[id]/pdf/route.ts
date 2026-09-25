@@ -2,7 +2,8 @@ import { requireSchoolSession } from "@/lib/auth";
 import { requireGuardianSession } from "@/lib/guardian-auth";
 import { withTenant } from "@/lib/db";
 import { routeError } from "@/lib/errors";
-import { getVisibleReportPdf } from "@/lib/report-card-service";
+import { buildReportCardPdf } from "@/lib/report-card-pdf";
+import { getVisibleReportDocument } from "@/lib/report-card-service";
 
 export async function GET(
   request: Request,
@@ -20,9 +21,10 @@ export async function GET(
 
     const { id } = await context.params;
     const report = await withTenant(actor.schoolId, (tx) =>
-      getVisibleReportPdf(tx, { actorId: actor.userId, reportCardId: id })
+      getVisibleReportDocument(tx, { actorId: actor.userId, reportCardId: id }),
+      { timeout:20_000 }
     );
-    const bytes = Uint8Array.from(report.pdfData);
+    const bytes = Uint8Array.from(await buildReportCardPdf(report.data, report.signatures));
     const url = new URL(request.url);
     const download = url.searchParams.get("download") === "1" || url.searchParams.get("download") === "true";
     const filename = `sukuunova-report-card-${id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48)}.pdf`;

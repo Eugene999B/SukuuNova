@@ -4,7 +4,7 @@ import { AppError } from "@/lib/errors";
 import { reportAttendanceForTerm } from "@/lib/report-card-attendance";
 import { calculateIntelligentReportCard, readGradeScale, readReportCardConfig } from "@/lib/report-card-intelligence";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
-import { resolveStudentTermClass } from "@/lib/student-term-context";
+import { resolveStudentTermClass, reportSnapshotClassId } from "@/lib/student-term-context";
 import { liveReportDocumentContext, readSchoolDocumentIdentity, type SchoolDocumentIdentity, type ReportTraitValue, type StructuredPromotion } from "@/lib/report-card-v2";
 
 export type FrozenPromotionDecision = "promoted" | "not_promoted" | "decision_required";
@@ -130,7 +130,7 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
         promotionRule: true, positionPromotionCutoffPercent: true, reportCardWatermark: true,
       },
     }),
-    resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.student.id, termId: report.term.id }),
+    reportSnapshotClassId(snapshot) ? Promise.resolve({ classId: reportSnapshotClassId(snapshot)! }) : resolveStudentTermClass(tx, { schoolId: input.schoolId, studentId: report.student.id, termId: report.term.id }),
   ]);
   if (!settings) throw new AppError("Report-card configuration is incomplete.", 409, "REPORT_CONTEXT_INCOMPLETE");
   const termClass = await tx.class.findFirst({

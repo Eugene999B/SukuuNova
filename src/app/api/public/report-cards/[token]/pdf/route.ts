@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { rawDb } from "@/lib/db";
+import { withTenant } from "@/lib/db";
+import { getReportCardPrintData } from "@/lib/report-card-print-data";
+import { signaturesForReport } from "@/lib/report-card-signatures";
+import { buildReportCardPdf } from "@/lib/report-card-pdf";
 import { RateLimitError } from "@/lib/errors";
 import { recordLoginAttempt, requestIp } from "@/lib/rate-limit";
 import { verifyPublicReportPdfToken } from "@/lib/report-card-release-service";
@@ -24,15 +27,15 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
   if (!payload) return NextResponse.json({ ok: false, message: "The report-card link is invalid or expired." }, { status: 404 });
 
   try {
-    const result = await rawDb.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe("SELECT set_config('app.current_school_id', $1, true)", payload.schoolId);
-      const report = await tx.reportCard.findFirst({ where: { id: payload.reportId, schoolId: payload.schoolId }, select: { id: true, status: true, pdfData: true } });
-      if (!report || !report.pdfData || !["approved", "sent"].includes(report.status)) return null;
-      return { id: report.id, pdfData: report.pdfData };
-    });
+    const result = await withTenant(payload.schoolId, async (tx) => {
+      const report = await tx.reportCard.findFirst({ where: { id: payload.reportId, schoolId: payload.schoolId }, select: { id: true, status: true } });
+      if (!report || !["approved", "sent"].includes(report.status)) return null;
+      const [data, signatures] = await Promise.all([getReportCardPrintData(tx, {schoolId:payload.schoolId,reportId:report.id}), signaturesForReport(tx, {schoolId:payload.schoolId,reportId:report.id})]);
+      return { id:report.id, data, signatures };
+    }, { timeout:20_000 });
     if (!result) return NextResponse.json({ ok: false, message: "The report-card is not available." }, { status: 404 });
 
-    const bytes = Uint8Array.from(result.pdfData);
+    const bytes = Uint8Array.from(await buildReportCardPdf(result.data, result.signatures));
     const url = new URL(request.url);
     const download = url.searchParams.get("download") === "1" || url.searchParams.get("download") === "true";
     const safeId = result.id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 48);

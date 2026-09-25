@@ -4,9 +4,9 @@ import { requireSchoolSession } from "@/lib/school-auth";
 import { withTenant } from "@/lib/db";
 import { parseJson } from "@/lib/http";
 import { routeError, AppError } from "@/lib/errors";
-import { requirePermission } from "@/lib/rbac";
+import { reportClassAccess } from "@/lib/report-card-access";
 import { generateReportCard } from "@/lib/report-card-service";
-import { resolveStudentTermClass, resolveTermRoster } from "@/lib/student-term-context";
+import { resolveTermRoster } from "@/lib/student-term-context";
 
 const BATCH_SIZE = 3;
 const schema = z.object({
@@ -24,7 +24,8 @@ export async function POST(request: Request) {
     const skippedIds = new Set(input.skipStudentIds);
 
     const scope = await withTenant(session.schoolId, async (tx) => {
-      await requirePermission(tx, session.userId, "reports:generate");
+      const access = await reportClassAccess(tx, session.userId, "reports:generate");
+      if (access.classIds && !access.classIds.includes(input.classId)) throw new AppError("This class is not assigned to your account.", 403, "FORBIDDEN");
       const [term, classRow, roster, candidates] = await Promise.all([
         tx.term.findFirst({ where: { id: input.termId, schoolId: session.schoolId }, select: { id: true } }),
         tx.class.findFirst({ where: { id: input.classId, schoolId: session.schoolId }, select: { id: true } }),
@@ -40,11 +41,7 @@ export async function POST(request: Request) {
       const students = roster
         .filter((student) => student.termClassId === input.classId)
         .map((student) => ({ id: student.id, admissionNo: student.admissionNo, name: student.name }));
-      const existingIds = new Set<string>();
-      for (const report of candidates) {
-        const context = await resolveStudentTermClass(tx, { schoolId: session.schoolId, studentId: report.studentId, termId: input.termId });
-        if (context.classId === input.classId) existingIds.add(report.studentId);
-      }
+      const existingIds = new Set(candidates.map(report => report.studentId));
       const pending = students.filter((student) => !existingIds.has(student.id) && !skippedIds.has(student.id));
       return { batch: pending.slice(0, BATCH_SIZE), pendingCount: pending.length };
     });
@@ -64,6 +61,7 @@ export async function POST(request: Request) {
             studentId: student.id,
             termId: input.termId,
           }),
+          { timeout: 20_000 },
         );
         generated += 1;
       } catch (error) {

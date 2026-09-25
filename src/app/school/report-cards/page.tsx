@@ -11,7 +11,9 @@ import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@
 import { getReportCardPrintData } from "@/lib/report-card-print-data";
 import { readManualPromotionDecision, setReportPromotionDecision } from "@/lib/report-card-promotion";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
-import { resolveStudentTermClass, resolveTermRoster } from "@/lib/student-term-context";
+import { reportSnapshotClassId, resolveTermRoster } from "@/lib/student-term-context";
+import { reportClassAccess } from "@/lib/report-card-access";
+import { ReportContextPicker } from "@/components/ReportContextPicker";
 import { selectAcademicTerm } from "@/lib/term-date";
 import "./report-cards.css";
 
@@ -109,7 +111,7 @@ export default async function ReportCardsPage({
   const session = await requireSchoolSession();
   const params = await searchParams;
   const data = await withTenant(session.schoolId, async (tx) => {
-    await requirePermission(tx, session.userId, "report_cards:view");
+    const access = await reportClassAccess(tx, session.userId);
     const [school, academicYears, allTerms, classes, canGenerate, canSubmit, canApprove, settings] = await Promise.all([
       tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true } }),
       tx.academicYear.findMany({
@@ -123,7 +125,7 @@ export default async function ReportCardsPage({
         select: { id: true, name: true, startDate: true, endDate: true, academicYearId: true, isLocked: true },
       }),
       tx.class.findMany({
-        where: { schoolId: session.schoolId },
+        where: { schoolId: session.schoolId, ...(access.classIds ? { id: { in: access.classIds } } : {}) },
         orderBy: [{ level: "asc" }, { name: "asc" }],
         select: { id: true, name: true, level: true, classTeacherId: true, _count: { select: { students: true } } },
       }),
@@ -154,6 +156,7 @@ export default async function ReportCardsPage({
         academicYears,
         selectedYear,
         terms,
+        allTerms,
         classes,
         term,
         selectedClass,
@@ -193,11 +196,8 @@ export default async function ReportCardsPage({
       .filter((student) => student.termClassId === selectedClass.id)
       .map((student) => ({ id: student.id, name: student.name, admissionNo: student.admissionNo }))
       .sort((a, b) => a.name.localeCompare(b.name));
-    const reports = [] as typeof allReports;
-    for (const report of allReports) {
-      const context = await resolveStudentTermClass(tx, { schoolId: session.schoolId, studentId: report.studentId, termId: term.id });
-      if (context.classId === selectedClass.id) reports.push(report);
-    }
+    const classByStudent = new Map(roster.map(row => [row.id, row.termClassId]));
+    const reports = allReports.filter(report => (reportSnapshotClassId(report.calculationSnapshot) ?? classByStudent.get(report.studentId)) === selectedClass.id);
     const studentMap = new Map(termStudents.map((student) => [student.id, student]));
     for (const report of reports) {
       if (!studentMap.has(report.studentId)) {
@@ -211,7 +211,7 @@ export default async function ReportCardsPage({
     const students = [...studentMap.values()].sort((a, b) => a.name.localeCompare(b.name));
     const selectedStudentId = params.studentId && students.some((student) => student.id === params.studentId)
       ? params.studentId
-      : reports[0]?.studentId ?? students[0]?.id ?? "";
+      : "";
     const selectedReport = reports.find((candidate) => candidate.studentId === selectedStudentId) ?? null;
     const detail = selectedReport
       ? await getReportCardPrintData(tx, { schoolId: session.schoolId, reportId: selectedReport.id })
@@ -223,6 +223,7 @@ export default async function ReportCardsPage({
       academicYears,
       selectedYear,
       terms,
+      allTerms,
       classes,
       term,
       selectedClass,
@@ -240,12 +241,13 @@ export default async function ReportCardsPage({
   if (!data.school) return null;
   if (!data.selectedYear || !data.term || !data.selectedClass) {
     return (
-      <AppShell universe="school" title="Report Cards" subtitle="Create and print student reports." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
+      <AppShell universe="school" title="Report Cards" subtitle="Open a class, then view, print or download a learner’s term report." active="Report Cards" schoolName={data.school.name} schoolCode={data.school.uniqueCode} userName={session.name}>
         <main className="simple-reports">
           <section className="reports-empty">
             <h1>Choose an unambiguous academic reporting context</h1>
             <p>Report cards are attached to a specific academic year and term. If there is no single active period, select the year and term explicitly instead of relying on a guessed default.</p>
-            <Link className="report-action primary" href="/school/academics/setup">Open Academic Setup</Link>
+            <ReportContextPicker years={data.academicYears.map(({id,name})=>({id,name}))} terms={data.allTerms.map(({id,name,academicYearId})=>({id,name,academicYearId}))} classes={data.classes.map(({id,name})=>({id,name}))} yearId={data.selectedYear?.id ?? ""} termId={data.term?.id ?? ""} classId={data.selectedClass?.id ?? ""} />
+            <Link className="report-action" href="/school/academics/setup">Open Academic Setup</Link>
           </section>
         </main>
       </AppShell>
@@ -283,22 +285,14 @@ export default async function ReportCardsPage({
           <div className="result-print-actions">
             <Link className="report-action" href="/school/settings/reporting/intelligence">Report settings</Link>
             {data.reports.length ? (
-              <a className="report-action primary" href={`/school/report-cards/class-print?term=${encodeURIComponent(term.id)}&classId=${encodeURIComponent(selectedClass.id)}`}>Print class ({data.reports.length})</a>
+              <a className="report-action primary" href={`/school/report-cards/class-print?term=${encodeURIComponent(term.id)}&classId=${encodeURIComponent(selectedClass.id)}`}>Print / save class PDF ({data.reports.length})</a>
             ) : null}
             {data.permissions.canGenerate ? <ReportCardGenerateButton termId={term.id} classId={selectedClass.id} missing={missing} /> : null}
           </div>
         </section>
 
         <section className="reports-picker">
-          <form method="get">
-            <div>
-              <label>Academic year<select name="year" defaultValue={selectedYear.id}>{data.academicYears.map((item) => <option key={item.id} value={item.id}>{item.name}{item.isLocked ? " · Locked" : ""}</option>)}</select></label>
-              <label>Term<select name="term" defaultValue={term.id}>{data.terms.map((item) => <option key={item.id} value={item.id}>{item.name}{item.isLocked ? " · Locked" : ""}</option>)}</select></label>
-              <label>Class<select name="classId" defaultValue={selectedClass.id}>{data.classes.map((item) => <option key={item.id} value={item.id}>{item.level ? `${item.level} · ` : ""}{item.name}</option>)}</select></label>
-              <label>Student<select name="studentId" defaultValue={detail?.student.id ?? ""}><option value="">Choose student</option>{data.students.map((student) => <option key={student.id} value={student.id}>{student.name} · {student.admissionNo}</option>)}</select></label>
-            </div>
-            <button className="report-action primary" type="submit">Open reporting context</button>
-          </form>
+          <ReportContextPicker key={`${selectedYear.id}:${term.id}:${selectedClass.id}`} years={data.academicYears.map(({id,name})=>({id,name}))} terms={data.allTerms.map(({id,name,academicYearId})=>({id,name,academicYearId}))} classes={data.classes.map(({id,name,level})=>({id,name:level ? `${level} · ${name}` : name}))} yearId={selectedYear.id} termId={term.id} classId={selectedClass.id} />
           <p className="reports-context-note">The learner list comes from the selected term&apos;s enrolment context. Promotion or later class changes do not rewrite this historical roster.</p>
         </section>
 
@@ -323,7 +317,8 @@ export default async function ReportCardsPage({
                   <div><strong>{student.name}</strong><span>{student.admissionNo}</span></div>
                   <div className="report-row-status">
                     {item ? <span className={`status ${item.status}`}>{statusLabel[item.status] ?? item.status}</span> : <span className="status missing">Not generated</span>}
-                    {item ? <Link className="report-action small" href={`/school/report-cards?${contextHref}&studentId=${encodeURIComponent(student.id)}`}>Open</Link> : null}
+                    {item ? <Link className="report-action small" href={`/school/report-cards?${contextHref}&studentId=${encodeURIComponent(student.id)}`}>View report</Link> : null}
+                    {item ? <a className="report-action small" href={`/api/mvp/report-cards/${encodeURIComponent(item.id)}/pdf?download=1`}>Download PDF</a> : null}
                   </div>
                 </div>
               );
