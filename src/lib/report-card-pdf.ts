@@ -56,10 +56,10 @@ export async function buildReportCardPdf(data: ReportPdfData, signatures: Signat
     text(data.student.name+" · "+data.student.admissionNo,margin,y,9);y-=22;
   };
   const paragraph=(label:string,value:unknown)=>{
-    const lines=wrap(value || "Not recorded",10,content);
-    ensure(28);text(label.toUpperCase(),margin,y,8,primary);y-=16;
-    for(const line of lines){ensure(17);text(line,margin,y,10);y-=15;}
-    y-=10;
+    const lines=wrap(value || "Not recorded",9,content);
+    ensure(26);text(label.toUpperCase(),margin,y,8,primary);y-=14;
+    for(const line of lines){ensure(14);text(line,margin,y,9);y-=12;}
+    y-=6;
   };
   header();
   // Embedded assets only: PDF generation never makes arbitrary remote requests.
@@ -93,7 +93,7 @@ export async function buildReportCardPdf(data: ReportPdfData, signatures: Signat
   };
   tableHeader();
   for(const [index,row] of data.results.entries()){
-    const lines=wrap(row.subject,9,222),rowHeight=Math.max(theme.density==="compact"?24:29,lines.length*13+12);
+    const lines=wrap(row.subject,9,222),rowHeight=Math.max(theme.density==="compact"?21:24,lines.length*13+12);
     if(y-rowHeight<65){ensure(height);tableHeader();}
     if(index%2===0)page.drawRectangle({x:margin,y:y-rowHeight,width:content,height:rowHeight,color:accent});
     lines.forEach((line,i)=>text(line,xs[0],y-7-i*13,9));
@@ -113,9 +113,16 @@ export async function buildReportCardPdf(data: ReportPdfData, signatures: Signat
   const date=(v:Date|string|null|undefined)=>v?new Intl.DateTimeFormat("en-GH",{dateStyle:"medium",timeZone:"Africa/Accra"}).format(new Date(v)):"Not set";
   paragraph("School calendar","Vacation: "+date(data.calendar.vacationDate)+"   |   Reopening: "+date(data.calendar.reopeningDate));
   if(data.gradingScale.length)paragraph("Grading key",data.gradingScale.map(b=>b.grade+" "+b.min+"–"+b.max+(b.label?" ("+b.label+")":"")).join(" · "));
-  for(const signature of signatures){
-    ensure(80);await image(signature.signatureDataUrl,margin,y,130,37);y-=40;
-    text(signature.name,margin,y,10);y-=16;text(signature.role,margin,y,8);y-=23;
+  for(let offset=0;offset<signatures.length;offset+=3){
+    ensure(72);
+    const row=signatures.slice(offset,offset+3), column=content/row.length;
+    for(const [index,signature] of row.entries()){
+      const x=margin+index*column;
+      await image(signature.signatureDataUrl,x,y,column-16,30);
+      for(const [lineIndex,line] of wrap(signature.name,9,column-16).slice(0,2).entries())text(line,x,y-33-lineIndex*12,9);
+      text(signature.role,x,y-58,8);
+    }
+    y-=76;
   }
   if(data.school.documentFooter)paragraph("School note",data.school.documentFooter);
   const pages=pdf.getPages();

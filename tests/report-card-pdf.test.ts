@@ -35,3 +35,14 @@ describe("repeatable official report PDF",()=>{
     }
   });
 });
+
+it("keeps a standard eight-subject report with two signatories on one A4 sheet",async()=>{
+ const data=sample(REPORT_CARD_THEMES[0].id,8);
+ data.school.motto="Learning with purpose";
+ data.school.physicalAddress="Accra, Ghana";
+ const pdf=await PDFDocument.load(await buildReportCardPdf(data,[
+   {userId:"teacher",name:"Class Teacher",role:"Class teacher"},
+   {userId:"head",name:"Headteacher",role:"Headteacher"},
+ ]));
+ expect(pdf.getPageCount()).toBe(1);
+});
