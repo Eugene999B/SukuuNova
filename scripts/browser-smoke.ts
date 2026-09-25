@@ -52,11 +52,13 @@ async function main() {
     await withTenant(f.schoolId, async tx => {
       const template=await tx.reportCardTemplate.create({data:{schoolId:f.schoolId,name:"Browser report",layoutConfig:{}}});
       await tx.schoolSettings.update({where:{schoolId:f.schoolId},data:{reportCardTemplateId:template.id,allowPartialReportCards:false}});
+      const teacherRole=await tx.role.create({data:{schoolId:f.schoolId,name:"Subject Teacher",key:"subject_teacher"}});
+      await tx.userRole.create({data:{schoolId:f.schoolId,userId:f.memberId,roleId:teacherRole.id}});
       const subject=await tx.subject.create({data:{schoolId:f.schoolId,name:"Mathematics"}});
-      await tx.classSubjectTeacher.create({data:{schoolId:f.schoolId,classId:placement.classId,subjectId:subject.id,teacherId:f.ownerId}});
+      await tx.classSubjectTeacher.create({data:{schoolId:f.schoolId,classId:placement.classId,subjectId:subject.id,teacherId:f.memberId}});
       const ca=await tx.assessment.create({data:{schoolId:f.schoolId,classId:placement.classId,termId:setup.term.id,subjectId:subject.id,name:"Class work",type:"ca",weight:30,maxScore:100}});
       await tx.assessment.create({data:{schoolId:f.schoolId,classId:placement.classId,termId:setup.term.id,subjectId:subject.id,name:"Exam",type:"exam",weight:70,maxScore:100}});
-      await tx.score.create({data:{schoolId:f.schoolId,studentId:student.id,subjectId:subject.id,assessmentId:ca.id,value:80,enteredBy:f.ownerId}});
+      await tx.score.create({data:{schoolId:f.schoolId,studentId:student.id,subjectId:subject.id,assessmentId:ca.id,value:80,enteredBy:f.memberId}});
     });
     const generated=await context.request.post("/api/school/report-cards/generate-batch",{data:{termId:setup.term.id,classId:placement.classId}});
     assert.equal(generated.status(),200,await generated.text());
