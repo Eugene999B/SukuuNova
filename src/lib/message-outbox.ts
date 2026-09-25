@@ -192,8 +192,8 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
     // The permanent demonstration fixture contains invented phone numbers.
     // Its lifecycle rows must never reach a real carrier.
     if (directory.uniqueCode.toLowerCase() === "eug123") continue;
-    nextSchoolIndex = (directories.indexOf(directory) + 1) % Math.max(1,directories.length);
     if(processed>=batchSize)break;
+    nextSchoolIndex = (directories.indexOf(directory) + 1) % Math.max(1,directories.length);
     const now=new Date();
     const jobs=await withTenant(directory.schoolId,tx=>tx.message.findMany({where:{channel:{in:Object.keys(senders).filter(channel => channel === "sms" || channel === "whatsapp")},OR:[{status:"queued",nextAttemptAt:{lte:now}},{status:"sending",nextAttemptAt:{lte:now}}]},orderBy:[{nextAttemptAt:"asc"},{createdAt:"asc"}],take:batchSize-processed}));
     const settings=jobs.length ? await withTenant(directory.schoolId,tx=>tx.schoolSettings.findUnique({where:{schoolId:directory.schoolId}})) : null;
