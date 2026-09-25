@@ -148,7 +148,7 @@ export default function OfficialReportCard({ data, signatures, embedded = false 
         <section className="rc-lower-grid">
           <div className="rc-grading-box">
             <div className="rc-box-title">Grading System</div>
-            <div className="rc-grade-list">{(data.gradingScale ?? []).map((band, index) => <div key={`${band.grade}-${index}`}><span>{formatNumber(band.min)}–{formatNumber(band.max)}</span><b>{band.grade}</b><em>{band.remark || band.label || "—"}</em></div>)}</div>
+            <div className="rc-grade-list">{(data.gradingScale ?? []).map((band, index) => <div key={`${band.grade}-${index}`}><span>{band.min}–{band.max}</span><b>{band.grade}</b><em>{band.remark || band.label || "—"}</em></div>)}</div>
           </div>
 
           <div className="rc-life-box">

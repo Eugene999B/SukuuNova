@@ -54,14 +54,17 @@ export async function reportAttendanceForTerm(tx: TenantDb, input: {
   studentId: string;
   startDate: Date;
   endDate: Date;
+  asOf?: Date;
 }): Promise<ReportAttendanceSummary> {
+  const asOf = input.asOf ?? new Date();
+  const reportingEnd = input.endDate < asOf ? input.endDate : asOf;
   const [attendanceRows, blockedRanges] = await Promise.all([
     tx.attendanceEvent.findMany({
       where: {
         schoolId: input.schoolId,
         studentId: input.studentId,
         type: "in",
-        attendanceDate: { gte: input.startDate, lte: input.endDate },
+        attendanceDate: { gte: input.startDate, lte: reportingEnd },
       },
       select: { attendanceDate: true, isLate: true },
     }),
@@ -69,7 +72,7 @@ export async function reportAttendanceForTerm(tx: TenantDb, input: {
       where: {
         schoolId: input.schoolId,
         affectsAttendance: true,
-        startDate: { lte: input.endDate },
+        startDate: { lte: reportingEnd },
         endDate: { gte: input.startDate },
       },
       select: { startDate: true, endDate: true },
@@ -78,7 +81,7 @@ export async function reportAttendanceForTerm(tx: TenantDb, input: {
 
   const presentDates = new Set(attendanceRows.map((row) => dayKey(row.attendanceDate)));
   const lateDates = new Set(attendanceRows.filter((row) => row.isLate).map((row) => dayKey(row.attendanceDate)));
-  const expectedDays = expectedSchoolDays(input.startDate, input.endDate, blockedRanges);
+  const expectedDays = expectedSchoolDays(input.startDate, reportingEnd, blockedRanges);
   const present = Math.min(presentDates.size, expectedDays || presentDates.size);
   const absent = Math.max(0, expectedDays - present);
   const attendanceRate = expectedDays > 0 ? Math.round((present / expectedDays) * 1000) / 10 : null;

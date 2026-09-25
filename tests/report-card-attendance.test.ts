@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { expectedSchoolDays } from "../src/lib/report-card-attendance";
+import type { TenantDb } from "../src/lib/db";
+import { describe, expect, it, vi } from "vitest";
+import { expectedSchoolDays, reportAttendanceForTerm } from "../src/lib/report-card-attendance";
 
 const day = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
@@ -26,4 +27,13 @@ describe("report-card expected school days", () => {
       { startDate: day("2026-09-09"), endDate: day("2026-09-11") },
     ])).toBe(1);
   });
+});
+
+it("does not count future term dates as absences on an interim report",async()=>{
+ const attendance=vi.fn(async()=>[{attendanceDate:day("2026-09-07"),isLate:false}]);
+ const tx={attendanceEvent:{findMany:attendance},calendarEvent:{findMany:vi.fn(async()=>[])}} as unknown as TenantDb;
+ const result=await reportAttendanceForTerm(tx,{schoolId:"s",studentId:"learner",startDate:day("2026-09-07"),endDate:day("2026-12-18"),asOf:day("2026-09-09")});
+ expect(result.expectedDays).toBe(3);
+ expect(result.absent).toBe(2);
+
 });
