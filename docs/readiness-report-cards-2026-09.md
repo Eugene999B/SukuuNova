@@ -20,7 +20,7 @@
 ## Verification boundaries
 CI includes tenant isolation, device HMAC authentication, browser face positioning, lesson review jurisdiction, calculations, queue concurrency and PDF regression tests. Browser smoke generates a partial report and downloads it twice at a mobile viewport.
 No physical biometric terminal has been supplied; actual enrollment, scan matching, model-specific connector operation and offline recovery require the chosen device.
-No test SMS recipient has been authorised; live carrier delivery must be checked with an authorised recipient.
+The permanent synthetic Eugene Academy tenant is excluded from external worker delivery because its fixture contains invented recipient numbers. No test SMS recipient has been authorised; live carrier delivery must be checked through a separate controlled test with an authorised recipient.
 New nursing pathway maps reflect common Ghana training areas, not accreditation or a claim that every institution teaches identical year-by-year modules. Course banks still require expansion and qualified educator review. Millions of substantive reviewed questions have not been created.
 Older approved snapshots may lack identity/calendar fields that were never stored; these cannot be reconstructed as historical facts.
 

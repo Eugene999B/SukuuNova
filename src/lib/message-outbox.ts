@@ -189,6 +189,9 @@ export async function processMessageBatchOnce(senders:NotificationSenders={sms:h
   const start = directories.length ? nextSchoolIndex % directories.length : 0;
   const ordered = [...directories.slice(start), ...directories.slice(0,start)];
   for(const directory of ordered){
+    // The permanent demonstration fixture contains invented phone numbers.
+    // Its lifecycle rows must never reach a real carrier.
+    if (directory.uniqueCode.toLowerCase() === "eug123") continue;
     nextSchoolIndex = (directories.indexOf(directory) + 1) % Math.max(1,directories.length);
     if(processed>=batchSize)break;
     const now=new Date();
