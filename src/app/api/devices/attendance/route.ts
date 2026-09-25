@@ -1,3 +1,4 @@
+import { claimDeviceAttendanceReceipt } from "@/lib/device-attendance-receipt";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db, withTenant } from "@/lib/db";
@@ -106,34 +107,10 @@ export async function POST(request: Request) {
         throw new AppError("Invalid device capture timestamp.", 400, "INVALID_ATTENDANCE_TIMESTAMP");
       }
 
-      try {
-        await tx.deviceAttendanceReceipt.create({
-          data: {
-            schoolId: directory.schoolId,
-            deviceId: device.id,
-            idempotencyKey: input.idempotencyKey,
-            nonce,
-            capturedAt
-          }
-        });
-      } catch (error) {
-        if ((error as { code?: string }).code === "P2002") {
-          const sameOperation = await tx.deviceAttendanceReceipt.findFirst({
-            where: { deviceId: device.id, idempotencyKey: input.idempotencyKey },
-            select: { id: true }
-          });
-          if (sameOperation) return { status: "duplicate" as const };
-
-          const reusedNonce = await tx.deviceAttendanceReceipt.findFirst({
-            where: { deviceId: device.id, nonce },
-            select: { id: true }
-          });
-          if (reusedNonce) {
-            throw new AppError("Device nonce has already been used.", 401, "REPLAY_DETECTED");
-          }
-        }
-        throw error;
-      }
+      const receiptClaim=await claimDeviceAttendanceReceipt(tx,{
+        schoolId:directory.schoolId,deviceId:device.id,idempotencyKey:input.idempotencyKey,nonce,capturedAt,
+      });
+      if(receiptClaim==="duplicate")return {status:"duplicate" as const};
 
       const serverReceivedAt = new Date();
       await tx.device.update({
