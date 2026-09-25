@@ -182,10 +182,10 @@ async function queuePublicRelease(tx: TenantDb, input: { schoolId: string; actor
     : ({ whatsappTemplateConfig: settings?.whatsappTemplateConfig ?? {} } as Record<string, Prisma.JsonValue>);
   const { channels, whatsappTemplateConfig } = extractChannelConfig(combined);
   if (!channels.length) throw new AppError("Select at least one enabled report-card delivery channel before releasing this report.", 409, "NO_NOTIFICATION_CHANNEL");
-  await requireProviderConfiguration(channels, whatsappTemplateConfig);
-  const publicUrl = publicReportPdfUrl(input.origin, createPublicReportPdfToken({ schoolId: input.schoolId, reportId: report.id }));
   const recipients = report.student.guardians.filter((link) => Boolean(link.guardian.phone));
   if (!recipients.length) throw new AppError("No linked guardian has a phone number for this release.", 409, "NO_GUARDIAN_PHONE");
+  await requireProviderConfiguration(channels, whatsappTemplateConfig);
+  const publicUrl = publicReportPdfUrl(input.origin, createPublicReportPdfToken({ schoolId: input.schoolId, reportId: report.id }));
   let queued = 0;
   for (const link of recipients) {
     const result = await enqueueSms(tx, {

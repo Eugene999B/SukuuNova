@@ -338,16 +338,16 @@ export default async function ReportCardsPage({
             </div>
 
             <div className="result-summary">
-              <div><span>Average</span><strong>{detail.summary.average ?? "—"}</strong></div>
-              <div><span>Overall grade</span><strong>{detail.summary.grade ?? "—"}</strong></div>
-              <div><span>Position</span><strong>{detail.position ?? "—"}{detail.position && detail.classSize ? ` / ${detail.classSize}` : ""}</strong></div>
+              <div><span>Average</span><strong>{detail.summary.average ?? "Pending"}</strong></div>
+              <div><span>Overall grade</span><strong>{detail.summary.grade ?? "Pending"}</strong></div>
+              <div><span>Position</span><strong>{detail.position ?? "Pending"}{detail.position && detail.classSize ? ` / ${detail.classSize}` : ""}</strong></div>
               <div><span>Attendance</span><strong>{detail.attendance.present}{detail.attendance.totalRecorded ? ` / ${detail.attendance.totalRecorded}` : ""}</strong></div>
             </div>
 
             <div className="result-table-wrap">
               <table>
                 <thead><tr><th>Subject</th><th>CA</th><th>Exam</th><th>Total</th><th>Grade</th><th>Position</th></tr></thead>
-                <tbody>{detail.results.map((row) => <tr key={row.subjectId}><td>{row.subject}</td><td>{row.ca ?? "—"}</td><td>{row.exam ?? "—"}</td><td>{row.total ?? "—"}</td><td>{row.grade ?? "—"}</td><td>{row.position ?? "—"}</td></tr>)}</tbody>
+                <tbody>{detail.results.map((row) => <tr key={row.subjectId}><td>{row.subject}</td><td>{row.ca ?? "Pending"}</td><td>{row.exam ?? "Pending"}</td><td>{row.total ?? "Pending"}</td><td>{row.grade ?? "Pending"}</td><td>{row.position ?? "Pending"}</td></tr>)}</tbody>
               </table>
             </div>
 

@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireSchoolSession } from "@/lib/school-auth";
@@ -73,6 +74,7 @@ export async function POST(request: Request) {
       }
     }
 
+    if (generated) revalidatePath("/school/report-cards");
     return NextResponse.json(
       {
         generated,

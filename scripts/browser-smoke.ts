@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { PDFDocument } from "pdf-lib";
 import { randomBytes } from "node:crypto";
 import { hash } from "bcryptjs";
 import { chromium } from "playwright";
@@ -47,6 +48,35 @@ async function main() {
     const student = await withTenant(f.schoolId, (tx) => tx.student.findFirstOrThrow({ where: { admissionNo: "BROWSER-001" } }));
     const placement = await withTenant(f.schoolId, (tx) => resolveStudentTermClass(tx, { schoolId: f.schoolId, studentId: student.id, termId: setup.term.id }));
     assert.equal(placement.enrollmentStatus, "confirmed");
+    // Reports must remain downloadable while exam marks are pending.
+    await withTenant(f.schoolId, async tx => {
+      const template=await tx.reportCardTemplate.create({data:{schoolId:f.schoolId,name:"Browser report",layoutConfig:{}}});
+      await tx.schoolSettings.update({where:{schoolId:f.schoolId},data:{reportCardTemplateId:template.id,allowPartialReportCards:false}});
+      const subject=await tx.subject.create({data:{schoolId:f.schoolId,name:"Mathematics"}});
+      await tx.classSubjectTeacher.create({data:{schoolId:f.schoolId,classId:placement.classId,subjectId:subject.id,teacherId:f.ownerId}});
+      const ca=await tx.assessment.create({data:{schoolId:f.schoolId,classId:placement.classId,termId:setup.term.id,subjectId:subject.id,name:"Class work",type:"ca",weight:30,maxScore:100}});
+      await tx.assessment.create({data:{schoolId:f.schoolId,classId:placement.classId,termId:setup.term.id,subjectId:subject.id,name:"Exam",type:"exam",weight:70,maxScore:100}});
+      await tx.score.create({data:{schoolId:f.schoolId,studentId:student.id,subjectId:subject.id,assessmentId:ca.id,value:80,enteredBy:f.ownerId}});
+    });
+    const generated=await context.request.post("/api/school/report-cards/generate-batch",{data:{termId:setup.term.id,classId:placement.classId}});
+    assert.equal(generated.status(),200,await generated.text());
+    const generatedBody=await generated.json();
+    assert.equal(generatedBody.generated,1,JSON.stringify(generatedBody));
+    const learnerReport=await withTenant(f.schoolId,tx=>tx.reportCard.findFirstOrThrow({where:{studentId:student.id,termId:setup.term.id}}));
+    for(let attempt=0;attempt<2;attempt++){
+      const download=await context.request.get("/api/mvp/report-cards/"+learnerReport.id+"/pdf");
+      assert.equal(download.status(),200,"Repeated PDF download must succeed");
+      assert.match(download.headers()["content-type"],/application\/pdf/);
+      const document=await PDFDocument.load(await download.body());
+      assert.ok(document.getPageCount()>=1);
+      assert.ok(document.getTitle()?.includes("Ɛsi Ɔpoku"),"Unicode learner identity must survive PDF rendering");
+    }
+    await page.goto("/school/report-cards?year="+setup.year.id+"&term="+setup.term.id+"&classId="+placement.classId);
+    await page.getByRole("button",{name:"Open class reports",exact:true}).waitFor();
+    await page.getByRole("link",{name:"Download PDF",exact:true}).first().waitFor();
+    assert.ok(await page.locator("body").evaluate(body=>body.scrollWidth<=window.innerWidth+1),"Mobile report list overflows");
+    await page.goto("/school/report-cards/"+learnerReport.id+"/print");
+    await page.getByText("Pending",{exact:true}).first().waitFor();
     assert.equal((await context.request.get("/api/school/payroll-v2")).status(), 403, "Payroll must be unavailable without an entitlement");
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/school/students");
