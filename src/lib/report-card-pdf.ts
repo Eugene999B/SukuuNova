@@ -8,7 +8,7 @@ import type { SignatureSnapshot } from "./report-card-signatures";
 
 export type ReportPdfData = Awaited<ReturnType<typeof getReportCardPrintData>>;
 const color = (hex: string) => rgb(parseInt(hex.slice(1,3),16)/255,parseInt(hex.slice(3,5),16)/255,parseInt(hex.slice(5,7),16)/255);
-const number = (value: number | null | undefined) => value == null ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(2);
+const number = (value: number | null | undefined) => value == null ? "Pending" : Number.isInteger(value) ? String(value) : value.toFixed(2);
 const clean = (value: unknown) => String(value ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,"");
 
 export async function buildReportCardPdf(data: ReportPdfData, signatures: SignatureSnapshot[] = []) {
@@ -101,7 +101,7 @@ export async function buildReportCardPdf(data: ReportPdfData, signatures: Signat
     y-=rowHeight;
   }
   y-=18;
-  paragraph("Summary","Average: "+number(data.summary.average)+"%   |   Grade: "+(data.summary.grade??"—")+"   |   Total: "+number(data.summary.total)+(data.reportSettings.showOverallPosition?"   |   Position: "+number(data.position)+" of "+data.classSize:""));
+  paragraph("Summary","Average: "+(data.summary.average == null ? "Pending" : number(data.summary.average)+"%")+"   |   Grade: "+(data.summary.grade??"—")+"   |   Total: "+number(data.summary.total)+(data.reportSettings.showOverallPosition?"   |   Position: "+number(data.position)+" of "+data.classSize:""));
   if(data.reportSettings.showAttendance)paragraph("Attendance","Present: "+data.attendance.present+"   |   Expected school days: "+data.attendance.expectedDays+"   |   Absent: "+data.attendance.absent+"   |   Late: "+data.attendance.late);
   if(data.reportSettings.showClassTeacherRemark)paragraph("Class teacher's remark",data.remarks);
   if(data.reportSettings.showHeadteacherRemark)paragraph("Headteacher's remark",data.headRemark);

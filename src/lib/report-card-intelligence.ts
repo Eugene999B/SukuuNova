@@ -14,7 +14,7 @@ import {
   overallTotalsForScope,
   passMarkForScale,
   promotionForRule,
-  rulesFor,
+  reportRulesFor,
 } from "@/lib/report-card-ranking";
 import { readManualPromotionDecision } from "@/lib/report-card-promotion";
 import { readReportWorkflowConfig } from "@/lib/report-card-workflow-config";
@@ -141,7 +141,7 @@ function componentContribution(
   return round(scored.reduce((sum, bucket) => sum + bucket.contribution, 0), rounding);
 }
 
-function subjectResult(assessments: CanonicalAssessment[], rules: ReturnType<typeof rulesFor>) {
+function subjectResult(assessments: CanonicalAssessment[], rules: ReturnType<typeof reportRulesFor>) {
   const result = calculateSubjectResult(
     assessments.map((assessment) => ({
       id: assessment.id,
@@ -221,7 +221,7 @@ export async function calculateIntelligentReportCard(tx: TenantDb, input: { scho
 
   const legacy = readReportCardConfig(settings.reportCardConfig, Number(settings.gradeCaWeight), Number(settings.gradeExamWeight));
   const workflow = readReportWorkflowConfig(settings.reportCardConfig, settings.reportCardTemplateId);
-  const baseRules = rulesFor(settings);
+  const baseRules = reportRulesFor(settings);
   const effectiveScale = baseRules.gradingScale?.length ? baseRules.gradingScale : DEFAULT_SCALE;
   const rules = { ...baseRules, gradingScale: effectiveScale };
   const visibleSubjects = assignments.map((assignment) => ({ id: assignment.subjectId, name: assignment.subject.name }));

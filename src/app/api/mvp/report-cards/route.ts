@@ -4,6 +4,8 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { ForbiddenError, routeError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
+import { reportClassAccess } from "@/lib/report-card-access";
+import { reportSnapshotClassId, resolveTermRoster } from "@/lib/student-term-context";
 import { hasPermission } from "@/lib/rbac";
 import { generateReportCard, submitReportCard } from "@/lib/report-card-service";
 import { approveAndQueuePublicReportCard, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
@@ -35,13 +37,24 @@ export async function GET() {
       const canView = await hasPermission(tx, session.userId, "report_cards:view");
       if (!canView) throw new ForbiddenError("Report-card access is not permitted.");
       const parent = await hasPermission(tx, session.userId, "parents:read_linked");
-      return tx.reportCard.findMany({
+      const access = parent ? null : await reportClassAccess(tx, session.userId);
+      const reports = await tx.reportCard.findMany({
         where: parent ? { status: "sent", student: { guardians: { some: { guardian: { userId: session.userId } } } } } : {},
-        include: { student: true, term: true },
+        select: { id: true, schoolId: true, studentId: true, termId: true, status: true, remarks: true, createdAt: true, generatedPdfUrl: true, calculationSnapshot: true, student: { select: { id: true, name: true, admissionNo: true } }, term: { select: { id: true, name: true, academicYearId: true } } },
         orderBy: { createdAt: "desc" }
       });
-    });
-    return NextResponse.json({ reports });
+      if (!access || access.classIds === null) return reports;
+      const legacyClass = new Map<string,string>();
+      for (const termId of new Set(reports.filter(report => !reportSnapshotClassId(report.calculationSnapshot)).map(report => report.termId))) {
+        const roster = await resolveTermRoster(tx, { schoolId: session.schoolId, termId, includeInactive: true });
+        for (const student of roster) if (student.termClassId) legacyClass.set(termId + ":" + student.id, student.termClassId);
+      }
+      return reports.filter(report => {
+        const classId = reportSnapshotClassId(report.calculationSnapshot) ?? legacyClass.get(report.termId + ":" + report.studentId);
+        return classId != null && access.classIds!.includes(classId);
+      });
+    }, { timeout: 20_000 });
+    return NextResponse.json({ reports }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) { return routeError(error); }
 }
 
@@ -57,7 +70,7 @@ export async function POST(request: Request) {
         case "approve": return await approveAndQueuePublicReportCard(tx, { ...common, ...input, origin: appOrigin() });
         case "send": return await sendApprovedReportCardPublic(tx, { ...common, ...input, origin: appOrigin() });
       }
-    });
+    }, { timeout: 20_000 });
     return NextResponse.json({ ok: true, result });
   } catch (error) { return routeError(error); }
 }

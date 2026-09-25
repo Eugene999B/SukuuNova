@@ -42,6 +42,12 @@ export function rulesFor(settings: { gradeCaWeight: Prisma.Decimal | number; gra
   };
 }
 
+/** Report drafts preserve unentered marks as pending, even when an operational
+ * gradebook is configured to preview missing work as zero. Recorded zeroes count. */
+export function reportRulesFor(settings: Parameters<typeof rulesFor>[0]): AssessmentRules {
+  return { ...rulesFor(settings), missingScorePolicy: "blank" };
+}
+
 export type PromotionDecision = "promoted" | "not_promoted" | "decision_required";
 export type RemarkPolicy = { remarkSource: "grade_band" | "position_band"; positionBandLabels: unknown };
 
@@ -79,7 +85,7 @@ export function promotionForRule(
   rule: "manual" | "pass_mark" | "overall_position",
   input: { overallPosition: number | null; rankedCount: number; cutoffPercent: number; lines: Array<{ total: number | null }>; passMark: number }
 ): PromotionDecision {
-  if (rule === "manual") return "decision_required";
+  if (rule === "manual" || !input.lines.length || input.lines.some(line => line.total == null)) return "decision_required";
   if (rule === "pass_mark") return input.lines.length > 0 && input.lines.every((line) => (line.total ?? -1) >= input.passMark) ? "promoted" : "not_promoted";
   const cutoff = Math.min(100, Math.max(1, Math.round(input.cutoffPercent)));
   return input.overallPosition != null && input.overallPosition <= Math.ceil((input.rankedCount * cutoff) / 100) ? "promoted" : "not_promoted";
@@ -104,6 +110,10 @@ export async function overallTotalsForScope(
 ): Promise<ScopeTotals> {
   const roster = (await resolveTermRoster(tx, { schoolId: input.schoolId, termId: input.termId })).filter((student) => student.termClassId && input.classIds.includes(student.termClassId));
   const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: input.termId, classId: { in: input.classIds } }, select: { id: true, classId: true, subjectId: true, type: true, maxScore: true, weight: true, scores: { select: { studentId: true, value: true, status: true } }, subject: { select: { id: true, name: true } } } });
+  const assignments = await tx.classSubjectTeacher.findMany({
+    where: { schoolId: input.schoolId, classId: { in: input.classIds } },
+    select: { classId: true, subjectId: true },
+  });
   const totals = new Map<string, number>();
   const names = new Map<string, string>();
   for (const student of roster) {
@@ -115,15 +125,18 @@ export async function overallTotalsForScope(
       rows.push(assessment);
       subjects.set(assessment.subjectId, rows);
     }
+    const required = new Set(assignments.filter(row => row.classId === student.termClassId).map(row => row.subjectId));
+    // Only assigned subjects contribute to the report summary.
+    for (const id of subjects.keys()) if (!required.has(id)) subjects.delete(id);
     const subjectTotals: number[] = [];
     for (const rows of subjects.values()) {
       const result = calculateSubjectResult(rows.map((assessment) => {
         const hit = assessment.scores.find((score) => score.studentId === student.id);
         return { id: assessment.id, name: assessment.subject.name, type: assessment.type, maxScore: assessment.maxScore, weight: assessment.weight, score: hit?.value ?? null, status: hit?.status ?? null };
       }), input.rules);
-      if (result.total != null) subjectTotals.push(result.total);
+      if (result.complete && result.total != null) subjectTotals.push(result.total);
     }
-    if (subjectTotals.length) totals.set(student.id, subjectTotals.reduce((sum, value) => sum + value, 0) / subjectTotals.length);
+    if (required.size > 0 && subjectTotals.length === required.size) totals.set(student.id, subjectTotals.reduce((sum, value) => sum + value, 0) / subjectTotals.length);
   }
   return { totals, names };
 }
@@ -148,7 +161,7 @@ export async function freezeReportCardRanking(tx: TenantDb, input: { schoolId: s
   const positionScope = settings.positionScope === "year_group" ? "year_group" : "class";
   const classIds = positionScope === "year_group" && historicalClass.level ? (await tx.class.findMany({ where: { schoolId: input.schoolId, level: historicalClass.level }, select: { id: true } })).map((row) => row.id) : [historicalClass.id];
   const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: report.termId, classId: historicalClass.id }, select: { classId: true, subjectId: true, subject: { select: { id: true, name: true } } } });
-  const rules = rulesFor(settings);
+  const rules = reportRulesFor(settings);
   const { totals, names } = await overallTotalsForScope(tx, { schoolId: input.schoolId, termId: report.termId, classIds, rules });
   const rankedPositions = rankTotals(
     [...totals.entries()].map(([id, total]) => ({ id, name: names.get(id) ?? "", total }))

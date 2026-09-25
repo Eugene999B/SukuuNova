@@ -28,7 +28,7 @@ describe("broad usable learning practice", () => {
     expect(university.programs.length).toBeGreaterThanOrEqual(25);
     for (const program of university.programs) {
       expect(program.levels[0]?.id).toBe("level-100");
-      expect(program.levels[0]?.label).toBe("Level 100");
+      expect(program.levels[0]?.label).toBe(program.id === "nursing" ? "Year 1 · BSc" : program.id === "nursing-diploma" ? "Year 1 · Diploma" : "Level 100");
       const firstLevel = program.levels[0];
       const readySubjects = firstLevel.subjects.filter((subject) =>
         learningCapabilityForSelection(config("university", program.id, firstLevel.id, subject.id, "all")).ready,

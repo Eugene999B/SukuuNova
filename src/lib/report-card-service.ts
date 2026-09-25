@@ -4,7 +4,7 @@ import { appendSchoolAudit } from "@/lib/audit";
 import { AppError, ForbiddenError } from "@/lib/errors";
 import { hasPermission, requirePermission } from "@/lib/rbac";
 import { calculateSubjectResult, gradeForPercentage } from "@/lib/assessment-engine";
-import { overallTotalsForScope, passMarkForScale, promotionForRule, rankTotals, remarkForLine, rulesFor } from "@/lib/report-card-ranking";
+import { overallTotalsForScope, passMarkForScale, promotionForRule, rankTotals, remarkForLine, reportRulesFor } from "@/lib/report-card-ranking";
 import { getClassSubjectIntelligence } from "@/lib/performance-intelligence";
 import { approveAndQueuePublicReportCard, readHeadRemark, sendApprovedReportCardPublic } from "@/lib/report-card-release-service";
 import { requireReportAccess, reportClassAccess } from "@/lib/report-card-access";
@@ -33,14 +33,13 @@ async function reportData(tx: TenantDb, studentId: string, termId: string) {
   if (!template) throw new AppError("Select a valid report-card template.", 409, "TEMPLATE_REQUIRED");
   const assessments = await tx.assessment.findMany({ where: { termId, classId: historicalClass.id }, include: { subject: true, scores: { where: { studentId } } }, orderBy: [{ subject: { name: "asc" } }, { type: "asc" }] });
   if (!assessments.length) throw new AppError("No assessments exist for this report card.", 409, "NO_ASSESSMENTS");
-  const missing = assessments.filter((assessment) => assessment.scores.length === 0);
-  if (missing.length > 0 && !settings.allowPartialReportCards) throw new AppError("Missing scores block report-card generation. Enable partial reports to override.", 409, "MISSING_SCORES");
+  // Draft reports remain available while teachers finish entering marks.
   const grouped = new Map<string, typeof assessments>();
   for (const assessment of assessments) grouped.set(assessment.subject.name, [...(grouped.get(assessment.subject.name) ?? []), assessment]);
   const caWeight = Number(settings.gradeCaWeight); const examWeight = Number(settings.gradeExamWeight);
   if (!Number.isFinite(caWeight) || caWeight < 0 || !Number.isFinite(examWeight) || examWeight < 0 || caWeight + examWeight <= 0) throw new AppError("The school's grading weights are invalid.", 409, "INVALID_GRADING_CONFIGURATION");
   const results: SubjectResult[] = [];
-  const rules = rulesFor(settings);
+  const rules = reportRulesFor(settings);
   for (const [subject, rows] of grouped) {
     const result = calculateSubjectResult(
       rows.map((row) => ({ id: row.id, name: row.name, type: row.type, maxScore: row.maxScore, weight: row.weight, score: row.scores[0]?.value ?? null, status: (row.scores[0] as { status?: string } | undefined)?.status ?? null })),
@@ -67,8 +66,8 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
   const presentDays = new Set(data.attendance.map((row) => row.attendanceDate.toISOString().slice(0, 10))).size;
   const lateDays = data.attendance.filter((row) => row.isLate).length;
   const completeTotals = data.results.map((row) => row.total).filter((t): t is number => t != null);
-  const average = completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
-  const rules = rulesFor(data.settings);
+  const average = completeTotals.length === data.results.length && completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
+  const rules = reportRulesFor(data.settings);
   const scale = rules.gradingScale?.length ? rules.gradingScale : undefined;
   const calculationSnapshot = {
     calculationVersion: 4, calculatedAt: new Date().toISOString(),
@@ -77,7 +76,7 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
     classSource: data.termClass.source,
     gradingWeights: { ca: data.caWeight, exam: data.examWeight },
     assessmentCategories: rules.categories, rounding: rules.rounding, missingScorePolicy: rules.missingScorePolicy,
-    partialReportsAllowed: data.settings.allowPartialReportCards,
+    partialReportsAllowed: true,
     assessments: data.results.map((row) => ({ subject: row.subject, ca: row.ca, exam: row.exam, total: row.total, grade: gradeForPercentage(row.total, scale) })),
     average, attendance: { presentDays, lateDays },
     positionScope: null as string | null, overallPosition: null as number | null, classSize: null as number | null, rankedCount: null as number | null,
@@ -176,7 +175,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     promotionRule: row?.promotionRule === "pass_mark" || row?.promotionRule === "overall_position" ? row.promotionRule : "manual",
     positionPromotionCutoffPercent: row?.positionPromotionCutoffPercent != null && Number.isFinite(Number(row.positionPromotionCutoffPercent)) ? Math.min(100, Math.max(1, Math.round(Number(row.positionPromotionCutoffPercent)))) : 50,
   };
-  const rules = rulesFor(settings);
+  const rules = reportRulesFor(settings);
   const scale = (rules.gradingScale?.length ? rules.gradingScale : []) as Array<{ min: number; max: number; grade: string; remark?: string; label?: string }>;
   const assessments = await tx.assessment.findMany({ where: { schoolId: input.schoolId, termId: report.termId, classId: historicalClass.id }, include: { subject: true, scores: { where: { studentId: report.studentId } } }, orderBy: [{ subject: { name: "asc" } }, { type: "asc" }] });
   const grouped = new Map<string, typeof assessments>();
@@ -206,7 +205,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     line.remark = remarkForLine(line.total, scale, line.position, rankedCount, policy);
   }
   const completeTotals = liveLines.map((l) => l.total).filter((t): t is number => t != null);
-  const average = completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
+  const average = completeTotals.length === results.length && completeTotals.length ? completeTotals.reduce((a, b) => a + b, 0) / completeTotals.length : null;
   const passMark = passMarkForScale(scale);
   const promotionDecision = promotionForRule(policy.promotionRule, { overallPosition, rankedCount, cutoffPercent: policy.positionPromotionCutoffPercent, lines: liveLines, passMark });
   const frozen = asRecord(report.calculationSnapshot);
@@ -262,7 +261,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
           className: historicalClass.name,
           classSource: termClass.source,
           gradingWeights: weights,
-          partialReportsAllowed: settings.allowPartialReportCards,
+          partialReportsAllowed: true,
           assessments: results.map((r) => ({ subject: r.subject, ca: r.ca, exam: r.exam, total: r.total, grade: r.grade })),
           average: frozenAverage,
           attendance: attendanceSummary, positionScope: policy.positionScope, overallPosition, classSize: scopeStudents.length, rankedCount,
@@ -284,7 +283,7 @@ export async function calculateReportCard(tx: TenantDb, input: { schoolId: strin
     results,
     gradingScale: scale,
     gradingWeights: weights,
-    summary: { average: frozenAverage, grade: frozenAverage == null ? null : gradeForPercentage(frozenAverage, scale.length ? scale : undefined), total: results.reduce((a, b) => a + (b.total ?? 0), 0) },
+    summary: { average: frozenAverage, grade: frozenAverage == null ? null : gradeForPercentage(frozenAverage, scale.length ? scale : undefined), total: results.length && results.every(row => row.total != null) ? results.reduce((a, b) => a + (b.total ?? 0), 0) : null },
     attendance: { present: attendanceSummary.presentDays, late: attendanceSummary.lateDays, totalRecorded: attendanceSummary.totalRecorded },
     position: policy.showOverallPosition ? frozenOverall : null,
     showSubjectPosition: policy.showSubjectPosition,

@@ -48,11 +48,11 @@ type Data = {
 };
 
 const ordinal = (value: number | null) => {
-  if (value == null) return "—";
+  if (value == null) return "Pending";
   const mod100 = value % 100;
   return `${value}${mod100 >= 11 && mod100 <= 13 ? "th" : value % 10 === 1 ? "st" : value % 10 === 2 ? "nd" : value % 10 === 3 ? "rd" : "th"}`;
 };
-const formatNumber = (value: number | null) => value == null ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(1);
+const formatNumber = (value: number | null) => value == null ? "Pending" : Number.isInteger(value) ? String(value) : value.toFixed(1);
 const formatDate = (value: Date | string | null | undefined) => value ? new Intl.DateTimeFormat("en-GH", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)) : "—";
 const initials = (value: string) => value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "ST";
 const cleanParts = (values: Array<string | null | undefined>) => values.filter((value): value is string => Boolean(value?.trim()));
@@ -125,7 +125,7 @@ export default function OfficialReportCard({ data, signatures, embedded = false 
           <Field label="Number on Roll" value={classRoll ? String(classRoll) : "—"} />
           <Field label="Academic Year" value={data.term.academicYear} />
           <Field label="Term / Session" value={data.term.name} />
-          {data.reportSettings.showOverallPosition ? <Field label={`${data.reportSettings.positionScope === "year_group" ? "Year-group" : "Class"} Position`} value={data.position == null ? "—" : `${ordinal(data.position)} of ${positionDenominator || "—"}`} /> : null}
+          {data.reportSettings.showOverallPosition ? <Field label={`${data.reportSettings.positionScope === "year_group" ? "Year-group" : "Class"} Position`} value={data.position == null ? "Pending" : `${ordinal(data.position)} of ${positionDenominator || "—"}`} /> : null}
         </section>
 
         <section className="rc-calendar-strip">
@@ -139,8 +139,8 @@ export default function OfficialReportCard({ data, signatures, embedded = false 
           <table className="rc-results">
             <thead><tr><th>Subject</th><th>Class Score<br/><span>({formatNumber(data.gradingWeights.ca)}%)</span></th><th>Exam Score<br/><span>({formatNumber(data.gradingWeights.exam)}%)</span></th><th>Total<br/><span>(100%)</span></th><th>Grade</th>{data.reportSettings.showSubjectPosition ? <th>Position</th> : null}<th>Remarks</th></tr></thead>
             <tbody>
-              {data.results.map((result) => <tr key={result.subjectId}><td>{result.subject}</td><td>{formatNumber(result.ca)}</td><td>{formatNumber(result.exam)}</td><td><b>{formatNumber(result.total)}</b></td><td><b>{result.grade ?? "—"}</b></td>{data.reportSettings.showSubjectPosition ? <td>{ordinal(result.position)}</td> : null}<td>{gradeDescriptor(result.total, result.grade, data.gradingScale) ?? "—"}</td></tr>)}
-              <tr className="rc-total-row"><td colSpan={3}>TERM TOTAL / SUMMARY</td><td><b>{formatNumber(data.summary.total)}</b></td><td><b>{data.summary.grade ?? "—"}</b></td>{data.reportSettings.showSubjectPosition ? <td>{data.position == null ? "—" : ordinal(data.position)}</td> : null}<td>Average: {formatNumber(data.summary.average)}%</td></tr>
+              {data.results.map((result) => <tr key={result.subjectId}><td>{result.subject}</td><td>{formatNumber(result.ca)}</td><td>{formatNumber(result.exam)}</td><td><b>{formatNumber(result.total)}</b></td><td><b>{result.grade ?? "—"}</b></td>{data.reportSettings.showSubjectPosition ? <td>{ordinal(result.position)}</td> : null}<td>{result.total == null ? "Marks pending" : gradeDescriptor(result.total, result.grade, data.gradingScale) ?? "—"}</td></tr>)}
+              <tr className="rc-total-row"><td colSpan={3}>TERM TOTAL / SUMMARY</td><td><b>{formatNumber(data.summary.total)}</b></td><td><b>{data.summary.grade ?? "—"}</b></td>{data.reportSettings.showSubjectPosition ? <td>{data.position == null ? "Pending" : ordinal(data.position)}</td> : null}<td>Average: {data.summary.average == null ? "Pending" : `${formatNumber(data.summary.average)}%`}</td></tr>
             </tbody>
           </table>
         </section>

@@ -98,7 +98,8 @@ describe("SukuuNova curriculum-aware catalogue", () => {
     expect(university.programs.map((program) => program.label)).toEqual(expect.arrayContaining([
       "Computer Science",
       "Medicine (MBChB)",
-      "Nursing",
+      "Nursing — BSc degree (4 years)",
+      "Nursing — RGN diploma (3 years)",
       "Pharmacy (PharmD)",
       "Law (LLB)",
       "Economics",
