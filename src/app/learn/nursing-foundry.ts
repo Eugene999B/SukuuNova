@@ -43,7 +43,8 @@ const SETTINGS = [
   "during a handover review",
 ] as const;
 
-export const NURSING_TOPIC_CAPACITY = 36_000_000;
+// Capacity counts learning tasks, never cosmetic name/age combinations.
+export const NURSING_TOPIC_CAPACITY = 12;
 
 const FOUNDATIONS: readonly NursingConcept[] = [
   {
@@ -533,7 +534,8 @@ const ANATOMY_PHYSIOLOGY: readonly NursingConcept[] = [
 ];
 
 function domainFor(subject: string, topic: string): NursingDomain {
-  const text = `${subject} ${topic}`.toLowerCase();
+  const text = subject.toLowerCase();
+  void topic;
   if (/anatomy|physiology/.test(text)) return "anatomy-physiology";
   if (/pharmac/.test(text)) return "pharmacology";
   if (/microbiol|infection/.test(text)) return "microbiology";
@@ -559,8 +561,19 @@ function conceptsFor(domain: NursingDomain): readonly NursingConcept[] {
     case "critical-care": return CRITICAL;
     case "leadership": return LEADERSHIP;
     case "anatomy-physiology": return ANATOMY_PHYSIOLOGY;
-    default: return [...FOUNDATIONS, ...MED_SURG, ...PHARMACOLOGY, ...COMMUNITY, ...MENTAL_HEALTH, ...CRITICAL];
+    default: return [];
   }
+}
+
+function nursingConceptsForTopic(subject:string,topic:string):readonly NursingConcept[]{
+  const concepts=conceptsFor(domainFor(subject,topic));
+  const label=topic.toLowerCase();
+  // Narrow specific science topics; broad clinical tasks use the subject domain.
+  if(/cardiovascular|cardiac/.test(label))return concepts.filter(item=>item.id==="cardiac-output");
+  if(/respiratory|gas exchange/.test(label))return concepts.filter(item=>["gas-exchange","asthma-deterioration","pneumonia","airway"].includes(item.id));
+  if(/renal|urinary/.test(label))return concepts.filter(item=>item.id==="renal-filtration");
+  if(/homeostasis/.test(label))return concepts.filter(item=>item.id==="homeostasis");
+  return concepts;
 }
 
 function hash(value: string) {
@@ -656,48 +669,16 @@ function baseQuestion(
 }
 
 function clinicalTable(item: NursingConcept, seed: number): QuestionStimulus {
-  const physiological = [
-    "shock",
-    "postoperative-deterioration",
-    "deterioration",
-    "asthma-deterioration",
-    "heart-failure",
-    "pneumonia",
-    "dehydration",
-    "hypoglycaemia",
-    "postpartum-haemorrhage",
-    "preeclampsia-warning",
-  ].includes(item.id);
-
-  if (!physiological) {
-    return {
-      kind: "table",
-      title: "Clinical safety review",
-      columns: ["Review item", "Finding"],
-      rows: [
-        ["Relevant cue", item.clues[seed % item.clues.length]],
-        ["Additional cue", item.clues[(seed + 1) % item.clues.length]],
-        ["Current practice", item.unsafeAction],
-        ["Required follow-up", "Not yet completed"],
-      ],
-    };
-  }
-
-  const basePulse = 72 + (seed % 12);
-  const baseResp = 16 + (seed % 4);
-  const baseSbp = 118 + (seed % 10);
-  const currentPulse = basePulse + 28 + (seed % 9);
-  const currentResp = baseResp + 8 + (seed % 5);
-  const currentSbp = baseSbp - 22 - (seed % 11);
+  // A shared deterioration vital-sign template is not valid for every condition
+  // (for example, falling BP must not be invented for pre-eclampsia).
   return {
-    kind: "table",
-    title: "Observation trend",
-    columns: ["Observation", "Earlier", "Current"],
-    rows: [
-      ["Pulse", `${basePulse}/min`, `${currentPulse}/min`],
-      ["Respiratory rate", `${baseResp}/min`, `${currentResp}/min`],
-      ["Systolic BP", `${baseSbp} mmHg`, `${currentSbp} mmHg`],
-      ["Mental status", "Alert", "New concern / change"],
+    kind:"table", title:"Assessment and care review",
+    columns:["Review item","Finding"],
+    rows:[
+      ["First finding",item.clues[seed % item.clues.length]],
+      ["Additional finding",item.clues[(seed+1) % item.clues.length]],
+      ["Documented action",item.unsafeAction],
+      ["Reassessment","Required"],
     ],
   };
 }
@@ -938,10 +919,10 @@ function buildQuestion(
 
   const distractors = rotate(concepts.filter((entry) => entry.id !== item.id), local).slice(0, 3);
   const correct = `${clueA} → ${item.term} → ${item.priorityAction}`;
-  const wrong = distractors.map((entry) => `${pick(entry.clues, local)} → ${entry.term} → ${entry.priorityAction}`);
+  const wrong = distractors.map((entry) => `${clueA} → ${entry.term} → ${entry.priorityAction}`);
   const picked = optionSet(correct, wrong, local);
   return baseQuestion(config, "reasoning-chain", position, seed,
-    "Which finding → interpretation → nursing-action chain is internally consistent?",
+    `For the finding “${clueA}”, which interpretation and action are appropriate?`,
     `Connect findings to action for ${item.term}`,
     {
       kind: "single",
@@ -954,18 +935,24 @@ function buildQuestion(
 }
 
 export function nursingCapacityForSelection(config: SessionConfig) {
-  if (config.lane !== "university" || config.programId !== "nursing") return 0;
+  if (config.lane !== "university" || !["nursing","nursing-diploma"].includes(config.programId)) return 0;
   const { level, subject, topic } = resolveCatalogSelection(config);
   if (!level) return 0;
   if (config.subjectId !== "all" && !subject) return 0;
 
   if (config.topicId !== "all" && !topic) return 0;
   const subjects = config.subjectId === "all" ? level.subjects : subject ? [subject] : [];
-  const topicCount = subjects.reduce(
-    (total, current) => total + (config.topicId === "all" ? current.topics.length : current.topics.filter((entry) => entry.id === config.topicId).length),
-    0,
-  );
-  return topicCount * NURSING_TOPIC_CAPACITY;
+  const tasks = new Set<string>();
+  for(const current of subjects){
+    const topics=config.topicId==="all"?current.topics:current.topics.filter(entry=>entry.id===config.topicId);
+    for(const selectedTopic of topics){
+      for(const item of nursingConceptsForTopic(current.label,selectedTopic.label)){
+        for(let family=0;family<12;family++)tasks.add(current.id+":"+item.id+":"+family);
+      }
+    }
+  }
+  return tasks.size;
+
 }
 
 export function buildNursingQuestions(
@@ -973,7 +960,7 @@ export function buildNursingQuestions(
   requestedCount = config.count,
   seed = config.seed ?? Date.now(),
 ): LearnQuestion[] {
-  if (config.lane !== "university" || config.programId !== "nursing") return [];
+  if (config.lane !== "university" || !["nursing","nursing-diploma"].includes(config.programId)) return [];
 
   const requested = Math.max(0, Math.min(500, Math.floor(requestedCount)));
   if (!requested) return [];
@@ -991,11 +978,13 @@ export function buildNursingQuestions(
 
   const output: LearnQuestion[] = [];
   const seenPrompts = new Set<string>();
+  const exposures = new Set<string>();
 
   for (let position = 0; output.length < requested && position < requested * 30; position += 1) {
     const target = targets[position % targets.length];
     const domain = domainFor(target.subject.label, target.topic.label);
-    const concepts = conceptsFor(domain);
+    const concepts = nursingConceptsForTopic(target.subject.label,target.topic.label);
+    if(!concepts.length)continue;
     const local = hash(`${seed}:${target.subject.id}:${target.topic.id}:${position}`);
     const item = concepts[local % concepts.length];
 
@@ -1005,8 +994,11 @@ export function buildNursingQuestions(
       topicId: target.topic.id,
     };
 
-    const question = buildQuestion(localConfig, domain, concepts, item, position, seed);
-    if (seenPrompts.has(question.prompt)) continue;
+    const question = buildQuestion(localConfig, domain, conceptsFor(domain), item, position, seed);
+    question.exposureKey = `nursing:${config.programId}:${config.levelId}:${target.subject.id}:${item.id}:${question.generationFamily}`;
+    if(question.generationFamily==="nursing-dose-calculation") question.exposureKey += ":"+JSON.stringify(question.stimulus);
+    if (seenPrompts.has(question.prompt) || exposures.has(question.exposureKey)) continue;
+    exposures.add(question.exposureKey);
     seenPrompts.add(question.prompt);
     output.push(question);
   }

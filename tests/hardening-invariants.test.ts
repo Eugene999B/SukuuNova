@@ -17,8 +17,13 @@ vi.mock("../src/lib/report-card-ranking", () => ({
   freezeReportCardRanking: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("../src/lib/report-card-intelligence", () => ({
-  calculateIntelligentReportCard: vi.fn().mockResolvedValue({
+vi.mock("../src/lib/report-card-print-data", () => ({
+  getReportCardPrintData: vi.fn().mockResolvedValue({
+    school: {name:"Test school",uniqueCode:"TEST",logoUrl:null,brandColors:null},
+    gradingScale: [], classRoll:1, yearEndSession:false,
+    calendar:{vacationDate:null,reopeningDate:null}, structuredPromotion:null,
+    reportTraits:[],reportingPolicy:null,watermark:"",
+    attendance:{present:0,late:0,expectedDays:0,absent:0,attendanceRate:null,totalRecorded:0},
     gradingWeights: { ca: 40, exam: 60 },
     results: [],
     summary: { total: null, average: null, grade: null },
@@ -33,7 +38,7 @@ vi.mock("../src/lib/report-card-intelligence", () => ({
 }));
 
 vi.mock("../src/lib/report-card-signatures", () => ({
-  resolveCurrentReportSignatures: vi.fn().mockResolvedValue({}),
+  resolveCurrentReportSignatures: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("../src/lib/report-card-promotion", () => ({

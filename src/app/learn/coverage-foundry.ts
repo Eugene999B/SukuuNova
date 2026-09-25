@@ -525,7 +525,8 @@ function normalize(value: string) {
 }
 
 function profileFor(subject: string, topic: string, config?: SessionConfig, subjectId?: string): Profile {
-  const text = normalize(subject + " " + topic);
+  const discipline = normalize(subject);
+  const text = /math|numeracy|science|computing|physics/i.test(subject) ? normalize(subject+" "+topic) : discipline;
   const pick = (id: string) => [...PROFILES, ...PRIMARY_PROFILES].find((profile) => profile.id === id)!;
 
   if (config?.lane === "school" && /^(kg-|basic-)/.test(config.levelId)) {
@@ -536,13 +537,14 @@ function profileFor(subject: string, topic: string, config?: SessionConfig, subj
     if (subjectId === "history") return pick("primary-history");
   }
 
+  if (/^government$|political science/.test(discipline)) return pick("social");
   if (/statistics|probability|regression|sampling|data handling|data interpretation|biostatistics|econometrics/.test(text)) return pick("statistics");
   if (/algebra|equation|function|calculus|linear|mathematics for|business mathematics|financial mathematics/.test(text)) return pick("algebra");
   if (/geometry|measurement|drawing|scale|survey|shape|angle/.test(text)) return pick("geometry");
   if (/number|numeracy|ratio|percentage|fraction|arithmetic/.test(text)) return pick("number");
   if (/network|internet|cyber|security|cloud|protocol|data communication/.test(text)) return pick("networks");
   if (/program|software|web|mobile|algorithm|computer|digital|database|information technology|artificial intelligence|machine learning/.test(text)) return pick("computing");
-  if (/law|contract|constitutional|criminal|tort|jurisprudence|legal|evidence|procedure|intellectual property/.test(text)) return pick("law");
+  if (/law|contract|constitutional|criminal|tort|jurisprudence|legal|intellectual property/.test(text)) return pick("law");
   if (/account|audit|tax|financial reporting|double entry/.test(text)) return pick("accounting");
   if (/finance|investment|bank|portfolio|derivative|risk management|money|financial economics/.test(text)) return pick("finance");
   if (/economics|microeconom|macroeconom|market|development economics|economic history|labour economics/.test(text)) return pick("economics");

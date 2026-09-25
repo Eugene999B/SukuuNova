@@ -291,7 +291,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   const examBankQuestions = examBankQuestionsForSelection(config);
   const coverageQuestions = buildCoverageQuestions(config, candidateCount(requested, 4), seed);
 
-  const nursingFocused = config.lane === "university" && config.programId === "nursing";
+  const nursingFocused = config.lane === "university" && ["nursing","nursing-diploma"].includes(config.programId);
 
   function absorb(questions: LearnQuestion[], priority = 2) {
     for (const sourceQuestion of questions) {

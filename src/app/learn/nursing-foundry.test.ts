@@ -80,8 +80,8 @@ describe("Nursing clinical assessment diversity", () => {
   it("raises cognitive demand across programme levels", () => {
     const level100 = buildNursingQuestions(nursingConfig({
       levelId: "level-100",
-      subjectId: "fundamentals-of-nursing",
-      topicId: "patient-safety",
+      subjectId: "fundamentals",
+      topicId: "patient-care",
       count: 24,
     }), 24, 1115);
 
@@ -92,6 +92,8 @@ describe("Nursing clinical assessment diversity", () => {
       count: 24,
     }), 24, 1116);
 
+    expect(level100.length).toBeGreaterThan(0);
+    expect(level300.length).toBeGreaterThan(0);
     expect(level100.every((question) => question.difficulty === 3)).toBe(true);
     expect(level300.every((question) => question.difficulty === 5)).toBe(true);
     expect(level300.some((question) => ["Analyse", "Evaluate", "Transfer"].includes(question.challenge ?? ""))).toBe(true);
@@ -113,7 +115,26 @@ describe("Nursing clinical assessment diversity", () => {
     expect(diagnostics.intelligence.higherOrderCount).toBeGreaterThanOrEqual(6);
   });
 
-  it("provides million-scale deterministic capacity without claiming those are stored hand-written rows", () => {
-    expect(nursingCapacityForSelection(nursingConfig())).toBeGreaterThanOrEqual(1_000_000);
+  it("counts concept tasks without inflating names and ages into millions", () => {
+    expect(nursingCapacityForSelection(nursingConfig())).toBeGreaterThan(0);
+    expect(nursingCapacityForSelection(nursingConfig())).toBeLessThan(1000);
   });
+});
+
+it("keeps conceptual exposure stable across new seeds",()=>{
+ const config=nursingConfig({count:100});
+ const a=buildNursingQuestions(config,100,1),b=buildNursingQuestions(config,100,2);
+ expect(new Set(a.map(q=>q.exposureKey)).size).toBe(a.length);
+ expect(a.some(q=>b.some(other=>other.exposureKey===q.exposureKey))).toBe(true);
+});
+it("provides a separate diploma route and rejects unsupported subject substitution",()=>{
+ const diploma=buildNursingQuestions(nursingConfig({programId:"nursing-diploma"}),10,1);
+ expect(diploma.length).toBeGreaterThan(0);
+ expect(diploma.every(q=>q.exposureKey.startsWith("nursing:nursing-diploma:"))).toBe(true);
+ expect(buildNursingQuestions(nursingConfig({levelId:"level-400",programId:"nursing-diploma"}),10,1)).toEqual([]);
+ expect(buildNursingQuestions(nursingConfig({levelId:"level-100",subjectId:"biochemistry",topicId:"all"}),10,1)).toEqual([]);
+});
+it("does not fabricate a universal abnormal blood-pressure trend",()=>{
+ const qs=buildNursingQuestions(nursingConfig({levelId:"level-300",subjectId:"maternal-and-child-health",topicId:"all"}),80,7);
+ expect(qs.filter(q=>q.generationFamily==="nursing-chart-trend").every(q=>JSON.stringify(q.stimulus).includes("Systolic BP")===false)).toBe(true);
 });

@@ -234,8 +234,18 @@ const UNIVERSITY_SPECS: UniversitySpec[] = [
     },
   },
   {
+    id: "nursing-diploma",
+    label: "Nursing — RGN diploma (3 years)",
+    description: "Ghana RGN diploma study pathway, combining foundational sciences, nursing practice and supervised clinical learning.",
+    levels: {
+      "level-100": ["Anatomy & Physiology", "Fundamentals of Nursing", "Microbiology", "Nutrition", "Psychology for Health", "Communication in Healthcare"],
+      "level-200": ["Medical-Surgical Nursing I", "Pharmacology", "Community Health Nursing I", "Maternal & Child Health", "Mental Health Nursing"],
+      "level-300": ["Medical-Surgical Nursing II", "Community Health Nursing II", "Emergency & Critical Care", "Nursing Leadership", "Research Methods", "Clinical Practicum"],
+    },
+  },
+  {
     id: "nursing",
-    label: "Nursing",
+    label: "Nursing — BSc degree (4 years)",
     description: "Anatomy, physiology, nursing practice, pharmacology, medical-surgical care and community health.",
     levels: {
       "level-100": ["Anatomy & Physiology", "Fundamentals of Nursing", "Biochemistry", "Psychology for Health", "Communication in Healthcare"],
@@ -575,7 +585,7 @@ const existingReadyLevel100: Record<string, CatalogSubject[]> = {
 };
 
 export const UNIVERSITY_PROGRAMS: CatalogProgram[] = UNIVERSITY_SPECS.map((spec) => {
-  const levels = makeUniversityLevels(spec);
+  const levels = makeUniversityLevels(spec).map((level,index)=>spec.id.startsWith("nursing") ? {...level,label:`Year ${index+1} · ${spec.id==="nursing-diploma"?"Diploma":"BSc"}`} : level);
   const ready = existingReadyLevel100[spec.id];
   if (ready && levels[0]) {
     const mapped = levels[0].subjects.filter(

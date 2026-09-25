@@ -48,7 +48,8 @@ describe("foundation question variety", () => {
               expect(topic.label.toLowerCase(), location).not.toMatch(/coming soon|coverage expanding/);
               expect(topic.availability, location).not.toBe("expanding");
               expect(capacity, location).toBeGreaterThan(0);
-              expect(capability.ready, location).toBe(true);
+              if (!program.id.startsWith("nursing")) expect(capability.ready, location).toBe(true);
+              else expect(capability.ready, location).toBe(capability.nursingCapacity > 0);
               expect(capacity, location).toBeLessThan(1000);
             }
           }
@@ -108,4 +109,13 @@ it("does not turn definition recall into an advanced task by changing the year",
  const config=configFor("university","computer-science","level-200","operating-systems","all",42);
  const questions=buildCoverageQuestions(config,50,42);
  expect(questions.filter(q=>q.challenge==="Recall").every(q=>q.difficulty===1)).toBe(true);
+});
+
+it("does not route Government evidence topics into a Law question pool",()=>{
+ const config=configFor("school","shs-general-arts","shs-2","government","all",13);
+ const targets=coverageCapacityPerTarget(config);
+ expect(targets.length).toBeGreaterThan(0);
+ expect(targets.every(t=>t.profile==="social")).toBe(true);
+ const questions=buildCoverageQuestions(config,50,13);
+ expect(questions.some(q=>/consideration|duty of care|contract-law/.test(q.prompt))).toBe(false);
 });
