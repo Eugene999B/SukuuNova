@@ -1,5 +1,6 @@
 import {
   catalogFor,
+  formattedLearningAnswer,
   type CognitiveChallenge,
   type LearnLane,
   type LearnQuestion,
@@ -806,7 +807,7 @@ function renderStatistics(variant: number, config: SessionConfig) {
     config,
     variant,
     skill: askMissing ? "Recover a missing value from a mean" : "Interpret sample summaries",
-    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    challenge: askMissing ? "Analyse" : "Apply",
     mission: "Interrogate the data",
     prompt: askMissing
       ? `A ${sample}-value dataset from ${context} has mean ${mean}. The sum of ${sample - 1} known values is ${partial}. What is the missing value?`
@@ -816,7 +817,7 @@ function renderStatistics(variant: number, config: SessionConfig) {
       ? `Required total = ${mean}×${sample} = ${total}. Missing value = ${total} - ${partial} = ${missing}.`
       : `Mean = total/count = ${total}/${sample} = ${mean}.`,
     hint: askMissing ? "Use mean × count to recover the required total." : "Divide the total by the number of observations.",
-    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    difficulty: askMissing ? 3 : 2,
     formatIndex: format,
   });
 }
@@ -834,22 +835,22 @@ function renderProgrammingTrace(variant: number, config: SessionConfig) {
   const askIterations = style % 3 === 2;
   const answer = askIterations ? count : final;
   const prompt = askIterations
-    ? `In ${context}, pseudocode sets x = ${start} and repeats “x = x + ${step}” exactly ${count} times. How many loop-body executions occur?`
+    ? `In ${context}, pseudocode starts with x = ${start}. Each loop adds ${step} to x. The loop stops when x reaches ${final}. How many iterations are needed?`
     : `Trace this pseudocode used in ${context}: x = ${start}; repeat ${count} times { x = x + ${step} }. What is the final value of x?`;
   return numericQuestion({
     id: "program-trace",
     config,
     variant,
     skill: askIterations ? "Reason about loop execution" : "Trace state changes through a loop",
-    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    challenge: askIterations ? "Analyse" : "Apply",
     mission: "Run the code in your head",
     prompt,
     answer,
     explanation: askIterations
-      ? `The body is specified to repeat exactly ${count} times.`
+      ? `Required change = ${final} − (${start}) = ${step * count}. Each iteration adds ${step}, so ${step * count} ÷ ${step} = ${count} iterations.`
       : `Each iteration adds ${step}; after ${count} iterations the total change is ${step * count}, so x = ${start} + ${step * count} = ${final}.`,
     hint: "Track the variable after each iteration or use start + step × iterations.",
-    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    difficulty: 2,
     formatIndex: format,
   });
 }
@@ -859,7 +860,7 @@ const networkCapacity = product(networkDimensions);
 const BANDWIDTHS = [1, 2, 4, 5, 8, 10, 16, 20, 25, 32, 40, 50, 64, 80, 100, 125, 160, 200, 250, 320, 400, 500, 640, 800, 1000, 1250, 1600, 2000, 2500, 3200, 4000, 5000] as const;
 
 function renderNetwork(variant: number, config: SessionConfig) {
-  const [sizeIndex, bandwidthIndex, contextIndex, style, format] = decode(variant, networkDimensions);
+  const [sizeIndex, bandwidthIndex, contextIndex, , format] = decode(variant, networkDimensions);
   const sizeMB = sizeIndex + 1;
   const bandwidthMbps = BANDWIDTHS[bandwidthIndex];
   const seconds = Number(((sizeMB * 8) / bandwidthMbps).toFixed(3));
@@ -869,13 +870,13 @@ function renderNetwork(variant: number, config: SessionConfig) {
     config,
     variant,
     skill: "Relate data size, bandwidth and transfer time",
-    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    challenge: "Apply",
     mission: "Size the network",
-    prompt: `Ignoring overhead, ${context} must transfer a ${sizeMB} MB file over a ${bandwidthMbps} Mb/s link. Approximately how many seconds does the transfer take?`,
+    prompt: `Ignoring overhead, ${context} must transfer a ${sizeMB} MB file over a ${bandwidthMbps} Mb/s link. How many seconds does the transfer take? Round to 3 decimal places.`,
     answer: seconds,
     explanation: `${sizeMB} MB = ${sizeMB * 8} Mb. Time = data/bandwidth = ${sizeMB * 8}/${bandwidthMbps} = ${seconds} s.`,
     hint: "Convert megabytes to megabits by multiplying by 8, then divide by Mb/s.",
-    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    difficulty: 2,
     formatIndex: format,
   });
 }
@@ -1084,10 +1085,10 @@ const CONTRACT_CONCEPTS = [
 ] as const;
 
 function renderContractReasoning(variant: number, config: SessionConfig) {
-  const [personA, personB, goodIndex, contextIndex, conceptIndex, style, rotation] = decode(variant, lawDimensions);
+  const [personA, personB, goodIndex, contextIndex, conceptIndex] = decode(variant, lawDimensions);
   const concept = CONTRACT_CONCEPTS[conceptIndex];
   const a = PEOPLE[personA];
-  const b = PEOPLE[(personB + personA + 1) % PEOPLE.length];
+  const b = PEOPLE[(personA + 1 + personB % (PEOPLE.length - 1)) % PEOPLE.length];
   const good = GOODS[goodIndex];
   const context = contextFor(config, contextIndex);
   return singleQuestion({
@@ -1095,14 +1096,14 @@ function renderContractReasoning(variant: number, config: SessionConfig) {
     config,
     variant,
     skill: "Identify contract-law concepts from facts",
-    challenge: style < 2 ? "Analyse" : style < 4 ? "Evaluate" : "Transfer",
+    challenge: "Apply",
     mission: "Spot the legal issue in the facts",
     prompt: `${concept.stem(a, b, good, context)} Which contract-law concept is most directly illustrated?`,
     answer: concept.label,
     distractors: CONTRACT_CONCEPTS.filter((_, index) => index !== conceptIndex).map((item) => item.label),
     explanation: concept.explanation,
     hint: "Focus on what the parties communicated or exchanged, not on the technology or item involved.",
-    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0) + (rotation % 2),
+    difficulty: 2,
     topic: topicLabel(config, "Contract reasoning"),
   });
 }
@@ -1119,7 +1120,7 @@ const MANAGEMENT_CONCEPTS = [
 ] as const;
 
 function renderManagementScenario(variant: number, config: SessionConfig) {
-  const [personIndex, contextIndex, conceptIndex, style, rotation] = decode(variant, managementDimensions);
+  const [personIndex, contextIndex, conceptIndex] = decode(variant, managementDimensions);
   const [answer, action, explanation] = MANAGEMENT_CONCEPTS[conceptIndex];
   const person = PEOPLE[personIndex];
   const context = contextFor(config, contextIndex);
@@ -1128,14 +1129,14 @@ function renderManagementScenario(variant: number, config: SessionConfig) {
     config,
     variant,
     skill: "Classify management decisions from realistic scenarios",
-    challenge: style < 2 ? "Apply" : style < 5 ? "Analyse" : "Transfer",
+    challenge: "Apply",
     mission: "Read the decision behind the action",
     prompt: `At ${context}, ${person} ${action}. Which management concept is most directly demonstrated?`,
     answer,
     distractors: MANAGEMENT_CONCEPTS.filter((_, index) => index !== conceptIndex).slice(0, 3).map((item) => item[0]),
     explanation,
     hint: "Identify the purpose of the manager's action.",
-    difficulty: levelDifficulty(config.levelId) + (style >= 5 ? 1 : 0) + (rotation % 2),
+    difficulty: 2,
   });
 }
 
@@ -1192,17 +1193,17 @@ function renderProbability(variant: number, config: SessionConfig) {
     config,
     variant,
     skill: askPercent ? "Translate probability into percentage risk" : "Model empirical probability",
-    challenge: style < 2 ? "Apply" : style < 4 ? "Analyse" : "Transfer",
+    challenge: "Apply",
     mission: "Quantify uncertainty",
     prompt: askPercent
-      ? `In a simulation for ${context}, ${successCount} of ${total} trials meet the target condition. What percentage of trials meet the condition?`
-      : `In a simulation for ${context}, ${successCount} of ${total} trials meet the target condition. Estimate the empirical probability as a decimal.`,
+      ? `In a simulation for ${context}, ${successCount} of ${total} trials meet the target condition. What percentage of trials meet the condition? Round to 1 decimal place.`
+      : `In a simulation for ${context}, ${successCount} of ${total} trials meet the target condition. Estimate the empirical probability as a decimal. Round to 3 decimal places.`,
     answer: askPercent ? percent : probability,
     explanation: askPercent
       ? `Percentage = (${successCount}/${total})×100 = ${percent}%.`
       : `Empirical probability = ${successCount}/${total} = ${probability}.`,
     hint: askPercent ? "Divide successful trials by total trials, then multiply by 100." : "Divide successful trials by total trials.",
-    difficulty: levelDifficulty(config.levelId) + (style >= 4 ? 1 : 0),
+    difficulty: 2,
     formatIndex: format,
     optionStep: askPercent ? 1 : 0.01,
   });
@@ -1335,7 +1336,7 @@ const SMART_TEMPLATES: readonly SmartTemplate[] = [
     subjectIds: ["mathematics"],
     programIds: ["ghana"],
     levelIds: ["jhs-1", "jhs-2", "jhs-3"],
-    topicIds: ["algebra"],
+    topicIds: ["algebra", "variables-equations"],
     capacity: linearCapacity,
     render: renderLinearModel,
   },
@@ -1355,7 +1356,7 @@ const SMART_TEMPLATES: readonly SmartTemplate[] = [
     subjectIds: ["mathematics"],
     programIds: ["ghana"],
     levelIds: ["jhs-1", "jhs-2", "jhs-3"],
-    topicIds: ["statistics"],
+    topicIds: ["statistics", "probability"],
     capacity: probabilityCapacity,
     render: renderProbability,
   },
@@ -1540,6 +1541,7 @@ const SMART_TEMPLATES: readonly SmartTemplate[] = [
 
 function templateMatches(template: SmartTemplate, config: SessionConfig) {
   if (!template.lanes.includes(config.lane)) return false;
+  if (config.lane === "school" && /^(kg-|basic-)/.test(config.levelId)) return false;
   if (config.subjectId !== "all" && !template.subjectIds.includes(config.subjectId)) return false;
   if (template.topicIds && config.topicId !== "all" && !template.topicIds.includes(config.topicId)) return false;
   if (template.programIds && !template.programIds.includes(config.programId)) return false;
@@ -1548,12 +1550,24 @@ function templateMatches(template: SmartTemplate, config: SessionConfig) {
   return true;
 }
 
+function templateSelections(template: SmartTemplate, config: SessionConfig): SessionConfig[] {
+  if (config.subjectId !== "all") return templateMatches(template, config) ? [config] : [];
+  const level = catalogFor(config.lane).programs.find(p => p.id === config.programId)?.levels.find(l => l.id === config.levelId);
+  if (!level) return [];
+  return level.subjects
+    .filter(subject => template.subjectIds.includes(subject.id))
+    .map(subject => ({...config, subjectId: subject.id}))
+    .filter(selection => templateMatches(template, selection));
+}
+
 export function intelligentTemplatesForSelection(config: SessionConfig) {
-  return SMART_TEMPLATES.filter((template) => templateMatches(template, config));
+  return SMART_TEMPLATES.filter(template => templateSelections(template, config).length > 0);
 }
 
 export function intelligentCapacityForSelection(config: SessionConfig) {
-  return intelligentTemplatesForSelection(config).reduce((total, template) => total + template.capacity, 0);
+  return intelligentTemplatesForSelection(config).reduce((total, template) => total
+    + (template.id === "contract-reasoning" ? 4 : template.id === "management-scenario" ? 5 : template.capacity)
+      * templateSelections(template, config).length, 0);
 }
 
 export function questionPassesFoundryQualityGate(question: LearnQuestion) {
@@ -1587,6 +1601,19 @@ export function questionPassesFoundryQualityGate(question: LearnQuestion) {
   return true;
 }
 
+
+/** Cosmetic actors, settings and answer order do not define a new learning task. */
+function semanticExposureKey(question: LearnQuestion) {
+  let prompt = question.prompt;
+  const cosmetics = [...MODERN_CONTEXTS, ...TECHNOLOGY_CONTEXTS, ...HEALTH_CONTEXTS,
+    ...BUSINESS_CONTEXTS, ...ENGINEERING_CONTEXTS, ...LAW_CONTEXTS, ...MATHEMATICS_CONTEXTS,
+    ...SCIENCE_CONTEXTS, ...PEOPLE, ...GOODS].sort((a,b)=>b.length-a.length);
+  for (const value of cosmetics) prompt = prompt.replaceAll(value, "{context}");
+  return "foundry:" + question.generationFamily + ":" + hash(JSON.stringify([
+    prompt, question.stimulus ?? null, formattedLearningAnswer(question),
+  ]));
+}
+
 export function buildIntelligentQuestions(
   config: SessionConfig,
   requestedCount = config.count,
@@ -1595,7 +1622,8 @@ export function buildIntelligentQuestions(
   const requested = Math.max(0, Math.min(MAX_POOL, Math.floor(requestedCount)));
   if (!requested) return [] as LearnQuestion[];
 
-  const templates = intelligentTemplatesForSelection(config);
+  const templates = intelligentTemplatesForSelection(config).flatMap(template =>
+    templateSelections(template, config).map(selection => ({template, selection})));
   if (!templates.length) return [] as LearnQuestion[];
 
   const positions = new Map<string, number>();
@@ -1606,16 +1634,18 @@ export function buildIntelligentQuestions(
   const attemptLimit = requested * Math.max(8, templates.length * 4);
 
   while (output.length < requested && attempts < attemptLimit) {
-    const template = templates[cursor % templates.length];
-    const position = positions.get(template.id) ?? 0;
+    const {template, selection} = templates[cursor % templates.length];
+    const selectionKey = template.id + ":" + selection.subjectId;
+    const position = positions.get(selectionKey) ?? 0;
     if (position < Math.min(template.capacity, BLOCK_SIZE)) {
       const index = variantIndex(template, seed, position);
-      const question = template.render(index, config);
+      const question = template.render(index, selection);
+      question.exposureKey = semanticExposureKey(question);
       if (questionPassesFoundryQualityGate(question) && !exposures.has(question.exposureKey)) {
         exposures.add(question.exposureKey);
         output.push(question);
       }
-      positions.set(template.id, position + 1);
+      positions.set(selectionKey, position + 1);
     }
     cursor += 1;
     attempts += 1;
