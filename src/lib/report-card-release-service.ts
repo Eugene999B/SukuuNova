@@ -263,14 +263,10 @@ export async function sendApprovedReportCardPublic(tx: TenantDb, input: { school
   const claimedAt = new Date();
   const claim = await tx.reportCard.updateMany({ where: { id: input.reportCardId, schoolId: input.schoolId, status: "approved" }, data: { status: "sent", sentAt: claimedAt } });
   if (claim.count !== 1) throw new AppError("This report card was released by another request. Refresh and try again.", 409, "RELEASE_ALREADY_CLAIMED");
-  let queued;
-  try {
-    queued = await queuePublicRelease(tx, input);
-  } catch (error) {
-    await tx.reportCard.updateMany({ where: { id: current.id, schoolId: input.schoolId, status: "sent" }, data: { status: "approved", sentAt: null } });
-    await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.release_failed", entityType: "ReportCard", entityId: current.id, before: { status: "sent" }, after: { status: "approved", error: error instanceof Error ? error.message.slice(0, 300) : "release failed" } });
-    throw error;
-  }
+  // Let the owning transaction roll back the claim and any queued messages.
+  // A manual sent -> approved update is forbidden by the database workflow
+  // guard and would replace the actionable delivery error with a server error.
+  const queued = await queuePublicRelease(tx, input);
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.released", entityType: "ReportCard", entityId: current.id, before: { status: current.status, sentAt: current.sentAt }, after: { status: "sent", sentAt: claimedAt, recipientCount: queued.recipientCount, queued: queued.queued, channels: queued.channels, publicPdf: true } });
   return { ...queued.report, status: "sent", sentAt: claimedAt, queued: queued.queued, recipientCount: queued.recipientCount, publicPdfUrl: queued.publicUrl };
 }
