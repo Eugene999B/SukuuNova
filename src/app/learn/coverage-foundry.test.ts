@@ -48,8 +48,9 @@ describe("foundation question variety", () => {
               expect(topic.label.toLowerCase(), location).not.toMatch(/coming soon|coverage expanding/);
               expect(topic.availability, location).not.toBe("expanding");
               expect(capacity, location).toBeGreaterThan(0);
-              if (!program.id.startsWith("nursing")) expect(capability.ready, location).toBe(true);
-              else expect(capability.ready, location).toBe(capability.nursingCapacity > 0);
+              if (["nursing", "nursing-diploma", "midwifery-diploma", "paediatric-nursing"].includes(program.id)) {
+                expect(capability.ready, location).toBe(capability.nursingCapacity + capability.languageCapacity > 0);
+              } else expect(capability.ready, location).toBe(true);
               expect(capacity, location).toBeLessThan(1000);
             }
           }

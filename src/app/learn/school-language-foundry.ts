@@ -280,7 +280,7 @@ const TWI_COMPLETIONS = [
 
 const TWI_READINGS = [
   {
-    "text": "Ama ne ne nnamfo huu sɛ efie a wɔte mu no anim ayɛ fi. Wɔboaboaa wɔn ho ano na wɔsesaa hɔ. Akyiri yi, wɔde afidie bi sii hɔ ma nkurɔfo de nwura gu mu. Wɔka kyerɛɛ mmofra no sɛ wɔmmfa nwura ngu fam.",
+    "text": "Ama ne ne nnamfo huu sɛ efie a wɔte mu no anim ayɛ fi. Wɔboaboaa wɔn ho ano na wɔsesaa hɔ. Akyiri yi, wɔde nwura adaka bi sii hɔ ma nkurɔfo de nwura gu mu. Wɔka kyerɛɛ mmofra no sɛ wɔmmfa nwura ngu fam.",
     "questions": [
       [
         "Dɛn nti na Ama ne ne nnamfo sesaa hɔ?",
@@ -436,7 +436,7 @@ function make(
   const constructed = family === "grammar" && hash(prompt + seed) % 2 === 0;
   return {
     id: "language-" + config.subjectId + "-" + config.levelId + "-" + family + "-" + seed + "-" + position,
-    exposureKey: "language:" + config.lane + ":" + config.programId + ":" + config.levelId + ":" + config.subjectId + ":" + ":" + family + ":" + hash(prompt + "|" + answer),
+    exposureKey: "language:" + config.lane + ":" + config.programId + ":" + config.levelId + ":" + config.subjectId + ":" + family + ":" + hash(prompt + "|" + answer),
     kind: constructed ? "fill" : "single",
     subject: selected.subject,
     topic: selected.topic,

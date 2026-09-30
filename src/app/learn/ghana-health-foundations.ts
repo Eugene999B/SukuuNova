@@ -247,7 +247,7 @@ const ROWS = [
     "microbiology",
     "organisms",
     "bacterium",
-    "a cellular microorganism without a membrane-bound nucleus",
+    "a single-celled organism belonging to the domain Bacteria",
     "A laboratory teaching example describes a single-celled prokaryote.",
     "Classify it as a bacterium.",
     "Classify it as a human tissue cell.",
@@ -258,7 +258,7 @@ const ROWS = [
     "organisms",
     "virus",
     "an infectious agent that depends on a host cell to reproduce",
-    "A teaching example describes replication only within living host cells.",
+    "A teaching example describes a non-cellular infectious agent that replicates only within living host cells.",
     "Identify the agent as a virus.",
     "Assume that the agent reproduces independently on its own.",
     "Viruses depend on cellular machinery in a host for replication."
