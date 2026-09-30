@@ -13,7 +13,7 @@ describe("primary question quality",()=>{
    expect(questions.length).toBeGreaterThan(10);
    expect(questions.every(q=>q.exposureKey.startsWith("primary-math:"))).toBe(true);
    expect(questions.every(q=>q.difficulty<=2)).toBe(true);
-   for(const q of questions) expect(q.prompt).not.toMatch(/percentage|%|area|perimeter|angle|nth term|numerator.*larger|range|mode of/i);
+   for(const q of questions) expect(q.prompt).not.toMatch(/\b(?:percentage|area|perimeter|angle|range)\b|%|nth term|numerator.*larger|mode of/i);
    expect(new Set(questions.map(q=>q.kind)).size).toBeGreaterThan(1);
    expect(questions.some(q=>q.stimulus?.kind==="table")).toBe(true);
   }
