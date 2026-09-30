@@ -7,26 +7,30 @@ const GUARDIAN_COOKIE = "sukuunova_guardian_session";
 
 type SessionKind = "school" | "platform" | "guardian";
 
-function authSecret(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET" | "GUARDIAN_AUTH_SECRET") {
+function authSecrets(name: "SCHOOL_AUTH_SECRET" | "PLATFORM_AUTH_SECRET" | "GUARDIAN_AUTH_SECRET") {
   const value = process.env[name];
-  if (!value || value.length < 32) return null;
-  return new TextEncoder().encode(value);
+  if (!value || value.length < 32) return [];
+  const previous = process.env[name + "_PREVIOUS"];
+  return [value, ...(previous && previous.length >= 32 && previous !== value ? [previous] : [])]
+    .map((candidate) => new TextEncoder().encode(candidate));
 }
 
 async function hasLiveSession(cookieValue: string | undefined, kind: SessionKind) {
   if (!cookieValue) return false;
   const config = kind === "platform"
-    ? { secret: authSecret("PLATFORM_AUTH_SECRET"), issuer: "sukuunova-platform", audience: "sukuunova-platform" }
+    ? { secrets: authSecrets("PLATFORM_AUTH_SECRET"), issuer: "sukuunova-platform", audience: "sukuunova-platform" }
     : kind === "guardian"
-      ? { secret: authSecret("GUARDIAN_AUTH_SECRET"), issuer: "sukuunova-guardian", audience: "sukuunova-guardian" }
-      : { secret: authSecret("SCHOOL_AUTH_SECRET"), issuer: "sukuunova-school", audience: "sukuunova-school" };
-  if (!config.secret) return false;
-  try {
-    const { payload } = await jwtVerify(cookieValue, config.secret, { issuer: config.issuer, audience: config.audience });
-    return payload.kind === kind && typeof payload.sub === "string" && typeof payload.exp === "number" && payload.exp > Math.floor(Date.now() / 1000);
-  } catch {
-    return false;
+      ? { secrets: authSecrets("GUARDIAN_AUTH_SECRET"), issuer: "sukuunova-guardian", audience: "sukuunova-guardian" }
+      : { secrets: authSecrets("SCHOOL_AUTH_SECRET"), issuer: "sukuunova-school", audience: "sukuunova-school" };
+  for (const secret of config.secrets) {
+    try {
+      const { payload } = await jwtVerify(cookieValue, secret, { issuer: config.issuer, audience: config.audience });
+      return payload.kind === kind && typeof payload.sub === "string" && typeof payload.exp === "number" && payload.exp > Math.floor(Date.now() / 1000);
+    } catch {
+      // Accept an explicitly configured previous key during a rotation window.
+    }
   }
+  return false;
 }
 
 function protectedApiKind(pathname: string): SessionKind | null {
