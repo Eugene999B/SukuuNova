@@ -7,7 +7,7 @@ type Period={period:number;start:string;end:string};
 type Day={dayOfWeek:number;name:string;enabled:boolean;start:string;end:string;periods?:Period[]};
 type Break={name:string;start:string;end:string};
 type Assessment={name:string;weight:number};
-type Data={timetable:{days:Day[];periodMinutes:number;breaks:Break[];periodsPerDay:number;periods?:Period[];published:boolean};assessment:{categories:Assessment[];rounding:"nearest"|"down"|"up";missingScorePolicy:"blank"|"zero";allowTeacherOverride:boolean};reportCard:Record<string,boolean|string>;classes?:Array<{id:string;name:string;level:string|null}>};
+type Data={timetable:{days:Day[];periodMinutes:number;breaks:Break[];periodsPerDay:number;periods?:Period[];published:boolean};assessment:{categories:Assessment[];rounding:"nearest"|"down"|"up";missingScorePolicy:"blank"|"zero";allowTeacherOverride:boolean;caWeight?:number;examWeight?:number};reportCard:Record<string,boolean|string>;classes?:Array<{id:string;name:string;level:string|null}>};
 
 const dayNames=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 const defaultAssessmentCategories:Assessment[]=[{name:"Classwork",weight:20},{name:"Homework",weight:10},{name:"Exercises",weight:10},{name:"Quizzes",weight:10},{name:"Project",weight:10},{name:"Exam",weight:40}];
@@ -24,7 +24,7 @@ function normalizeSetupPayload(value:unknown):Data{
  const categories=Array.isArray(assessment?.categories)&&assessment.categories.length?assessment.categories:defaultAssessmentCategories.map(item=>({...item}));
  return {
   timetable:{...timetable,days:timetable.days,breaks:Array.isArray(timetable.breaks)?timetable.breaks:[]},
-  assessment:{categories,rounding:assessment?.rounding==="down"||assessment?.rounding==="up"?assessment.rounding:"nearest",missingScorePolicy:assessment?.missingScorePolicy==="zero"?"zero":"blank",allowTeacherOverride:Boolean(assessment?.allowTeacherOverride)},
+  assessment:{categories,caWeight:assessment?.caWeight,examWeight:assessment?.examWeight,rounding:assessment?.rounding==="down"||assessment?.rounding==="up"?assessment.rounding:"nearest",missingScorePolicy:assessment?.missingScorePolicy==="zero"?"zero":"blank",allowTeacherOverride:Boolean(assessment?.allowTeacherOverride)},
   reportCard:raw.reportCard??{},
   classes:Array.isArray(raw.classes)?raw.classes:[],
  };
@@ -74,15 +74,10 @@ export function AcademicSetupConsole(){
      </div>
    </section>}
    {activeSection==="assessment"&&<section className="academic-section-grid">
-     <div className="academic-card academic-card-wide"><div className="academic-card-heading"><div><span className="academic-kicker">05 · ASSESSMENT ENGINE</span><h3>How a term result is calculated</h3><p>Define the school-wide assessment categories and their contribution to the final result. These rules keep grading consistent across classes.</p></div><span className={`weight-total ${Math.abs(totalWeight-100)<0.01?"good":"bad"}`}>{totalWeight}%</span></div>
-       <div className="assessment-list">{data.assessment.categories.map((c,i)=><div className="assessment-row" key={i}><div className="assessment-number">{String(i+1).padStart(2,"0")}</div><input value={c.name} onChange={e=>setData({...data,assessment:{...data.assessment,categories:data.assessment.categories.map((x,j)=>j===i?{...x,name:e.target.value}:x)}})} /><div className="weight-control"><input type="number" min="0" max="100" value={c.weight} onChange={e=>setData({...data,assessment:{...data.assessment,categories:data.assessment.categories.map((x,j)=>j===i?{...x,weight:clamp(Number(e.target.value),0,100)}:x)}})}/><span>%</span></div><button className="icon-delete" onClick={()=>setData({...data,assessment:{...data.assessment,categories:data.assessment.categories.filter((_,j)=>j!==i)}})} aria-label={`Remove ${c.name}`}>×</button></div>)}</div>
-       <button className="academic-btn academic-btn-soft add-wide" onClick={()=>setData({...data,assessment:{...data.assessment,categories:[...data.assessment.categories,{name:"New category",weight:0}]}})}>+ Add assessment category</button>
-       <div className="assessment-progress"><div><span>Assessment distribution</span><b>{totalWeight}% / 100%</b></div><div className="progress-track"><i style={{width:`${Math.min(100,totalWeight)}%`}}/></div></div>
-     </div>
-     <div className="academic-card"><div className="academic-card-heading"><div><span className="academic-kicker">06 · SCORE BEHAVIOUR</span><h3>Consistent score handling</h3><p>Decide how SukuuNova rounds results and handles assessments that have no score.</p></div></div>
-       <label className="full-control">Rounding<select value={data.assessment.rounding} onChange={e=>setData({...data,assessment:{...data.assessment,rounding:e.target.value as Data["assessment"]["rounding"]}})}><option value="nearest">Nearest whole number</option><option value="down">Always round down</option><option value="up">Always round up</option></select></label>
-       <label className="full-control">Missing score policy<select value={data.assessment.missingScorePolicy} onChange={e=>setData({...data,assessment:{...data.assessment,missingScorePolicy:e.target.value as Data["assessment"]["missingScorePolicy"]}})}><option value="blank">Leave blank</option><option value="zero">Treat as zero</option></select></label>
-       <label className="switch-row"><input type="checkbox" checked={data.assessment.allowTeacherOverride} onChange={e=>setData({...data,assessment:{...data.assessment,allowTeacherOverride:e.target.checked}})}/><span><b>Allow teacher override</b><small>Permit authorised teachers to override centrally configured weighting where allowed.</small></span></label>
+     <div className="academic-card academic-card-wide"><div className="academic-card-heading"><div><span className="academic-kicker">05 · ASSESSMENT ENGINE</span><h3>How a term result is calculated</h3><p>CA combines earned points across non-exam work, divided by its possible points. The reporting policy then applies the school’s CA and examination percentages. Individual category weights do not change that calculation.</p></div><span className={`weight-total ${Math.abs(totalWeight-100)<0.01?"good":"bad"}`}>{totalWeight}%</span></div>
+       <div className="setup-note"><b>CA {data.assessment.caWeight ?? "—"}% · Examination {data.assessment.examWeight ?? "—"}%</b><span>Example: 33 points earned from 50 possible CA points gives 66% before applying the CA weight.</span><Link href="/school/settings/reporting/intelligence">Edit grading categories, weights and grade boundaries</Link></div>
+       <div className="assessment-list">{data.assessment.categories.map((c,i)=><div className="assessment-row" key={i}><div className="assessment-number">{String(i+1).padStart(2,"0")}</div><strong>{c.name}</strong></div>)}</div>
+       <p>All teachers follow the school reporting policy. Marks remain subject to class assignments, term locks and report approval.</p>
      </div>
    </section>}
    {activeSection==="reports"&&<section className="academic-section-grid">

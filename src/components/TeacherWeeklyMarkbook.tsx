@@ -101,6 +101,8 @@ export default function TeacherWeeklyMarkbook({
   const [savingKeys, setSavingKeys] = useState<Set<string>>(() => new Set());
   const [offlineKeys, setOfflineKeys] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState("");
+  const [conflicts, setConflicts] = useState<Record<string, Snapshot>>({});
+  const conflictsRef = useRef<Record<string, Snapshot>>({});
   const [message, setMessage] = useState("");
   const [showNewWork, setShowNewWork] = useState(works.length === 0);
   const [newWorkDate, setNewWorkDate] = useState("");
@@ -212,6 +214,7 @@ export default function TeacherWeeklyMarkbook({
   async function saveCell(workId: string, studentId: string) {
     if (locked) return;
     const key = cellKey(workId, studentId);
+    if (Object.prototype.hasOwnProperty.call(conflictsRef.current,key)) return;
     if (inFlight.current.has(key)) {
       scheduleSave(workId, studentId, 250);
       return;
@@ -362,11 +365,15 @@ export default function TeacherWeeklyMarkbook({
         const cell = pending[row.student.id];
         if (!cell) continue;
         next[cellKey(work.id, row.student.id)] = cell;
-        snapshotsRef.current[cellKey(work.id, row.student.id)] = cell.expected;
+        const key = cellKey(work.id,row.student.id);
+        const latest = snapshotsRef.current[key] ?? null;
+        if (JSON.stringify(latest) !== JSON.stringify(cell.expected)) conflictsRef.current[key] = latest;
+        snapshotsRef.current[key] = cell.expected;
         recovered += 1;
       }
     }
     if (!recovered) return;
+    setConflicts({ ...conflictsRef.current });
     setSnapshots({ ...snapshotsRef.current });
     cellsRef.current = next;
     setCells(next);
@@ -401,7 +408,7 @@ export default function TeacherWeeklyMarkbook({
     for (const timer of Object.values(timers.current)) window.clearTimeout(timer);
   }, []);
 
-  const saveLabel = error ? "Review unsaved marks" : offlineKeys.size
+  const saveLabel = Object.keys(conflicts).length ? "Review recovered marks" : error ? "Review unsaved marks" : offlineKeys.size
     ? `${offlineKeys.size} waiting for connection`
     : savingKeys.size || dirtyKeys.length
       ? "Saving automatically…"
@@ -409,6 +416,23 @@ export default function TeacherWeeklyMarkbook({
 
   return (
     <div className="markbook-shell">
+      {Object.keys(conflicts).length > 0 ? <section role="alert" className="gradebook-entry-status is-error">
+        <strong>Newer marks were saved while this device was offline.</strong>
+        {Object.entries(conflicts).map(([key,latest])=>{
+          const [workId,studentId]=key.split("::");
+          const student=rows.find(row=>row.student.id===studentId);
+          const resolve=(keepDraft:boolean)=>{
+            snapshotsRef.current={...snapshotsRef.current,[key]:latest};
+            setSnapshots(snapshotsRef.current);
+            if(!keepDraft){cellsRef.current={...cellsRef.current,[key]:fromSnapshot(latest)};setCells(cellsRef.current);writePending(workId,studentId,null);}
+            else writePending(workId,studentId,cellsRef.current[key]);
+            delete conflictsRef.current[key];setConflicts({...conflictsRef.current});
+            if(keepDraft)scheduleSave(workId,studentId,0);
+          };
+          return <div key={key}><p>{student?.student.name}: saved {inputValue(fromSnapshot(latest))||"blank"} · your draft {inputValue(cells[key])||"blank"}</p>
+          <button type="button" onClick={()=>resolve(false)}>Use saved mark</button> <button type="button" onClick={()=>resolve(true)}>Save my draft instead</button></div>;
+        })}
+      </section> : null}
       <div className="markbook-toolbar">
         <div className="markbook-toolbar-left">
           <label className="markbook-search">

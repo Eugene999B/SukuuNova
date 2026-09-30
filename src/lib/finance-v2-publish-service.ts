@@ -34,7 +34,7 @@ function equalMoney(left: Prisma.Decimal | string | number, right: Prisma.Decima
 
 export async function publishFeeStructureV2Safe(
   tx: TenantDb,
-  input: { schoolId: string; actorId: string; structureId: string },
+  input: { schoolId: string; actorId: string; structureId: string; applyMissing?: boolean },
 ) {
   await requirePermission(tx, input.actorId, "finance:fee_structures_manage");
 
@@ -48,8 +48,8 @@ export async function publishFeeStructureV2Safe(
   );
   const structure = structures[0];
   if (!structure) throw new AppError("Fee structure not found.", 404, "NOT_FOUND");
-  if (structure.status === "published") return { id: structure.id, alreadyPublished: true };
-  if (structure.status !== "draft") throw new AppError("Only a draft fee structure can be published.", 409, "STRUCTURE_NOT_DRAFT");
+  if (structure.status === "published" && !input.applyMissing) return { id: structure.id, alreadyPublished: true };
+  if (structure.status !== "draft" && !(structure.status === "published" && input.applyMissing)) throw new AppError("Only a draft fee structure can be published.", 409, "STRUCTURE_NOT_DRAFT");
 
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`publish-fees-class:${input.schoolId}:${structure.termId}:${structure.classId}`}))`;
   const published = await tx.$queryRawUnsafe<Array<{ id: string }>>(
@@ -86,6 +86,10 @@ export async function publishFeeStructureV2Safe(
 
   let assigned = 0;
   for (const student of students) {
+    if (input.applyMissing) {
+      const existingCharges = await tx.$queryRawUnsafe<Array<{id:string}>>(`SELECT "id" FROM "FinanceStudentCharge" WHERE "schoolId"=$1 AND "studentId"=$2 AND "structureId"=$3 LIMIT 1`,input.schoolId,student.id,structure.id);
+      if (existingCharges.length) continue;
+    }
     let invoice = await tx.invoice.findFirst({
       where: { schoolId: input.schoolId, studentId: student.id, termId: structure.termId },
       select: { id: true },
@@ -182,7 +186,7 @@ export async function publishFeeStructureV2Safe(
   await appendSchoolAudit(tx, {
     schoolId: input.schoolId,
     actorId: input.actorId,
-    action: "finance_v2.fee_structure_published",
+    action: input.applyMissing ? "finance_v2.fees_applied_to_new_enrolments" : "finance_v2.fee_structure_published",
     entityType: "FinanceFeeStructure",
     entityId: structure.id,
     after: { students: students.length, charges: assigned, immutableLedger: true },

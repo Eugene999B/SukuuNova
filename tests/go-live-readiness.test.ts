@@ -16,6 +16,8 @@ const ready: GoLiveMetrics = {
   staffWithoutRole: 0,
   staffNeedingPasswordChange: 0,
   teachingAssignments: 18,
+  requiredTeachingPairs: 18,
+  unassignedTeachingPairs: 0,
   activeStudents: 240,
   studentsWithoutClass: 0,
   studentsWithoutGuardian: 0,
@@ -66,4 +68,10 @@ describe("school go-live readiness", () => {
     expect(result.blockerCount).toBe(0);
     expect(result.readyToLaunch).toBe(false);
   });
+});
+
+it("does not certify incomplete class-subject coverage",()=>{
+ const result=evaluateGoLiveReadiness({...ready,requiredTeachingPairs:30,unassignedTeachingPairs:12});
+ expect(result.steps.find(step=>step.key==="teaching")?.status).toBe("attention");
+ expect(result.readyToLaunch).toBe(false);
 });

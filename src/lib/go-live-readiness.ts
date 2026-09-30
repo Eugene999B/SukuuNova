@@ -30,6 +30,8 @@ export type GoLiveMetrics = {
   staffWithoutRole: number;
   staffNeedingPasswordChange: number;
   teachingAssignments: number;
+  requiredTeachingPairs?: number;
+  unassignedTeachingPairs?: number;
   activeStudents: number;
   studentsWithoutClass: number;
   studentsWithoutGuardian: number;
@@ -77,9 +79,9 @@ export function evaluateGoLiveReadiness(metrics: GoLiveMetrics): GoLiveReadiness
     .filter(Boolean).length / 4;
   const academicCompletion = [metrics.hasCurrentAcademicYear, metrics.hasCurrentTerm].filter(Boolean).length / 2;
   const staffCompletion = metrics.activeStaff > 0 ? (staffRoleCoverage * 0.7 + firstLoginCoverage * 0.3) : 0;
-  const teachingCompletion = metrics.classCount > 0 && metrics.subjectCount > 0
-    ? Math.min(1, metrics.teachingAssignments / Math.max(1, Math.min(metrics.classCount, metrics.subjectCount)))
-    : 0;
+  const requiredPairs = metrics.requiredTeachingPairs ?? 0;
+  const missingPairs = metrics.unassignedTeachingPairs ?? requiredPairs;
+  const teachingCompletion = requiredPairs > 0 ? (requiredPairs - missingPairs) / requiredPairs : 0;
 
   const steps: GoLiveStep[] = [
     step({
@@ -141,10 +143,10 @@ export function evaluateGoLiveReadiness(metrics: GoLiveMetrics): GoLiveReadiness
       key: "teaching",
       title: "Teacher-class-subject connections",
       description: "Connect teachers to the classes and subjects they actually teach.",
-      status: metrics.teachingAssignments > 0 ? "complete" : "blocked",
+      status: requiredPairs === 0 ? "blocked" : missingPairs === 0 ? "complete" : "attention",
       completion: teachingCompletion,
       weight: 10,
-      detail: metrics.teachingAssignments > 0 ? `${metrics.teachingAssignments} teaching assignment${metrics.teachingAssignments === 1 ? "" : "s"} configured.` : "No teaching assignments exist yet.",
+      detail: requiredPairs > 0 ? `${requiredPairs - missingPairs} of ${requiredPairs} class-subject offerings have an active teacher.` : "Define class-subject offerings before teacher coverage can be verified.",
       actionLabel: "Open academic setup",
       href: "/school/academics/setup",
     }),
@@ -200,7 +202,7 @@ export function evaluateGoLiveReadiness(metrics: GoLiveMetrics): GoLiveReadiness
   return {
     generatedAt: new Date().toISOString(),
     score,
-    readyToLaunch: score >= 90 && blockerCount === 0 && metrics.communicationConfigured,
+    readyToLaunch: score >= 90 && blockerCount === 0 && teachingCompletion === 1 && metrics.communicationConfigured,
     blockerCount,
     attentionCount,
     steps,
@@ -247,6 +249,7 @@ export async function getSchoolGoLiveReadiness(tx: TenantDb, schoolId: string): 
     tx.student.count({ where: { status: "active", guardians: { none: {} } } }),
   ]);
 
+  const coverage = await tx.$queryRawUnsafe<Array<{required:string;missing:string}>>(`SELECT COUNT(*)::text AS required, COUNT(*) FILTER(WHERE NOT EXISTS(SELECT 1 FROM "ClassSubjectTeacher" t JOIN "User" u ON u."id"=t."teacherId" AND u."schoolId"=t."schoolId" WHERE t."schoolId"=o."schoolId" AND t."classId"=o."classId" AND t."subjectId"=o."subjectId" AND u."status"='active'))::text AS missing FROM "ClassSubjectOffering" o WHERE o."schoolId"=$1`,schoolId);
   const feeItemCount = currentTerm
     ? await tx.feeItem.count({ where: { termId: currentTerm.id } })
     : 0;
@@ -269,6 +272,8 @@ export async function getSchoolGoLiveReadiness(tx: TenantDb, schoolId: string): 
     staffWithoutRole,
     staffNeedingPasswordChange,
     teachingAssignments,
+    requiredTeachingPairs:Number(coverage[0]?.required ?? 0),
+    unassignedTeachingPairs:Number(coverage[0]?.missing ?? 0),
     activeStudents,
     studentsWithoutClass,
     studentsWithoutGuardian,

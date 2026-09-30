@@ -50,11 +50,12 @@ const schema = z.object({
   }
   for (let index = 0; index < sorted.length; index += 1) {
     const current = sorted[index];
+    if (Math.abs(current.min * 100 - Math.round(current.min * 100)) > 0.000001 || Math.abs(current.max * 100 - Math.round(current.max * 100)) > 0.000001) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Grade boundaries must use at most two decimal places." });
     if (current.max < current.min) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Grade ${current.grade} has an invalid range.` });
     const next = sorted[index + 1];
     if (!next) continue;
     if (next.min <= current.max) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Grade ranges ${current.grade} and ${next.grade} overlap.` });
-    if (next.min - current.max > 1.01) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `There is a gap between grades ${current.grade} and ${next.grade}.` });
+    if (Math.round(next.min * 100) - Math.round(current.max * 100) > 1) ctx.addIssue({ code: z.ZodIssueCode.custom, message: `There is an uncovered decimal mark between grades ${current.grade} and ${next.grade}. For example, use 79.99 followed by 80.` });
   }
 });
 

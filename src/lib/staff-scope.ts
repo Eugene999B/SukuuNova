@@ -1,8 +1,9 @@
 import type { Prisma } from "@prisma/client";
-// A person may be both a teacher and a parent; any non-family role qualifies.
+// Include dual staff/family accounts. A nullable legacy role key must not
+// make SQL's three-valued NOT logic hide a legitimate Owner or Teacher.
 export const staffUserWhere: Prisma.UserWhereInput = {
-  userRoles: { some: { role: { NOT: { OR: [
-    { key: { in: ["parent", "guardian", "student"], mode: "insensitive" } },
-    { name: { in: ["parent", "guardian", "student"], mode: "insensitive" } },
-  ] } } } },
+  userRoles: { some: { role: { AND: [
+    { OR: [{ key: null }, { key: { notIn: ["parent", "guardian", "student"], mode: "insensitive" } }] },
+    { name: { notIn: ["parent", "guardian", "student"], mode: "insensitive" } },
+  ] } } },
 };

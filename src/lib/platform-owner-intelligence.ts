@@ -1,5 +1,5 @@
 import { db, withTenant } from "@/lib/db";
-import { isAttendanceBlocked } from "@/lib/attendance-service";
+import { getAttendanceCalendarState } from "@/lib/attendance-service";
 
 export type PlatformIssueSeverity = "critical" | "warning" | "info";
 export type PlatformIssueCategory = "access" | "setup" | "academics" | "attendance" | "family" | "commercial";
@@ -315,7 +315,6 @@ async function inspectSchool(schoolId: string, directoryStatus: string): Promise
   try {
     const data = await withTenant(schoolId, async (tx) => {
       const today = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00.000Z");
-      const weekday = today.getUTCDay();
       const [
         school,
         settings,
@@ -377,7 +376,8 @@ async function inspectSchool(schoolId: string, directoryStatus: string): Promise
         tx.$queryRawUnsafe<Array<{ status: string }>>(`SELECT "status" FROM "PlatformInvoice" WHERE "schoolId"=$1`, schoolId),
       ]);
       if (!school) throw new Error("School record not found");
-      const blocked = weekday === 0 || weekday === 6 ? true : await isAttendanceBlocked(tx, schoolId, today);
+      const calendarDay = await getAttendanceCalendarState(tx, schoolId, today);
+      const blocked = calendarDay.calendarBlocked || !calendarDay.schoolDay;
       const assessmentsInCurrentTerm = currentTerm ? await tx.assessment.count({ where: { termId: currentTerm.id } }) : 0;
       const reportsInCurrentTerm = currentTerm ? await tx.reportCard.count({ where: { termId: currentTerm.id } }) : 0;
       const metrics: PlatformSchoolMetrics = {
@@ -469,7 +469,11 @@ export async function getPlatformOwnerIntelligence(input?: { schoolIds?: string[
     orderBy: { createdAt: "desc" },
     select: { schoolId: true, status: true },
   });
-  const schools = await Promise.all(directories.map((directory) => inspectSchool(directory.schoolId, directory.status)));
+  const schools: PlatformSchoolIntelligence[] = [];
+  // Bound concurrent tenant transactions so a large portfolio cannot exhaust the pool.
+  for (let offset = 0; offset < directories.length; offset += 4) {
+    schools.push(...await Promise.all(directories.slice(offset, offset + 4).map(directory => inspectSchool(directory.schoolId,directory.status))));
+  }
   schools.sort((a, b) => b.attentionScore - a.attentionScore || a.name.localeCompare(b.name));
 
   const categoryCounts: Record<PlatformIssueCategory, number> = { access: 0, setup: 0, academics: 0, attendance: 0, family: 0, commercial: 0 };
