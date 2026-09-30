@@ -74,6 +74,14 @@ export async function middleware(request: NextRequest) {
   const cookieName = kind === "platform" ? PLATFORM_COOKIE : kind === "guardian" ? GUARDIAN_COOKIE : SCHOOL_COOKIE;
   if (await hasLiveSession(request.cookies.get(cookieName)?.value, kind)) return NextResponse.next();
 
+  // Report PDFs are shared with linked families. Keep all other staff APIs
+  // school-only; the PDF handler checks the live account, child link and release status.
+  const sharedReportPdf = request.method === "GET" &&
+    /^\/api\/mvp\/report-cards\/[^/]+\/pdf\/?$/.test(pathname);
+  if (sharedReportPdf && await hasLiveSession(request.cookies.get(GUARDIAN_COOKIE)?.value, "guardian")) {
+    return NextResponse.next();
+  }
+
   if (apiKind) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const loginPath = protectedPlatform ? "/login/platform" : protectedGuardian ? "/login/guardian" : "/login/school";
