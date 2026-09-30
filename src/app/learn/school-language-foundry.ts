@@ -8,7 +8,6 @@ import {
 type Family = "vocabulary" | "translation" | "grammar" | "dialogue" | "reading" | "editing" | "meaning" | "transfer";
 type Pair = { target: string; english: string };
 
-const TOPIC_CAPACITY = 48_000_000;
 
 const FRENCH_VOCAB: readonly Pair[] = [
   { target: "l'école", english: "school" }, { target: "la maison", english: "home" },
@@ -35,6 +34,193 @@ const FRENCH_SENTENCES: readonly Pair[] = [
   { target: "Nous devons respecter les autres.", english: "We must respect other people." },
   { target: "La classe commence à huit heures.", english: "The class starts at eight o'clock." },
 ];
+
+const FRENCH_READINGS = [
+  {
+    "upper": false,
+    "text": "Ama habite à Kumasi. Chaque matin, elle va à l'école avec sa sœur. Les cours commencent à huit heures. Après les cours, Ama lit à la bibliothèque avant de rentrer chez elle.",
+    "questions": [
+      [
+        "Où Ama habite-t-elle ?",
+        "À Kumasi.",
+        [
+          "À Accra.",
+          "À Tamale.",
+          "À Cape Coast."
+        ],
+        "La première phrase situe le domicile d'Ama à Kumasi."
+      ],
+      [
+        "Avec qui Ama va-t-elle à l'école ?",
+        "Avec sa sœur.",
+        [
+          "Avec son frère.",
+          "Avec son professeur.",
+          "Toute seule."
+        ],
+        "Le texte dit qu'elle va à l'école avec sa sœur."
+      ],
+      [
+        "À quelle heure les cours commencent-ils ?",
+        "À huit heures.",
+        [
+          "À sept heures.",
+          "À neuf heures.",
+          "À dix heures."
+        ],
+        "Le texte indique huit heures pour le début des cours."
+      ],
+      [
+        "Que fait Ama avant de rentrer chez elle ?",
+        "Elle lit à la bibliothèque.",
+        [
+          "Elle achète des fruits.",
+          "Elle joue au football.",
+          "Elle prépare le dîner."
+        ],
+        "La dernière phrase donne l'activité qui précède son retour."
+      ]
+    ]
+  },
+  {
+    "upper": false,
+    "text": "Le samedi, Kojo accompagne sa mère au marché. Ils achètent des tomates et du riz. Kojo porte le petit sac. Sa mère paie les achats, puis ils rentrent à la maison.",
+    "questions": [
+      [
+        "Quel jour Kojo va-t-il au marché ?",
+        "Le samedi.",
+        [
+          "Le lundi.",
+          "Le mercredi.",
+          "Le vendredi."
+        ],
+        "Le jour est donné au début du texte."
+      ],
+      [
+        "Quels produits achètent-ils ?",
+        "Des tomates et du riz.",
+        [
+          "Du pain et du lait.",
+          "Des livres et des cahiers.",
+          "Des mangues et du poisson."
+        ],
+        "Le texte nomme les deux produits achetés."
+      ],
+      [
+        "Qui porte le petit sac ?",
+        "Kojo.",
+        [
+          "Sa mère.",
+          "Le vendeur.",
+          "Son frère."
+        ],
+        "Kojo est le sujet de la phrase sur le sac."
+      ],
+      [
+        "Qui paie les achats ?",
+        "La mère de Kojo.",
+        [
+          "Kojo.",
+          "Un professeur.",
+          "La sœur de Kojo."
+        ],
+        "Le texte attribue le paiement à sa mère."
+      ]
+    ]
+  },
+  {
+    "upper": true,
+    "text": "Les élèves d'un collège à Accra ont constaté que la cour était souvent sale après la récréation. Ils ont installé des poubelles et organisé une équipe de nettoyage. Une semaine plus tard, la cour était plus propre, mais quelques élèves jetaient encore des sachets par terre. Le conseil des élèves a donc proposé une campagne pour expliquer pourquoi chacun devait participer.",
+    "questions": [
+      [
+        "Pourquoi les élèves ont-ils installé des poubelles ?",
+        "Pour réduire les déchets dans la cour.",
+        [
+          "Pour agrandir la cour.",
+          "Pour remplacer les salles de classe.",
+          "Pour raccourcir la récréation."
+        ],
+        "Les poubelles répondent au problème des déchets observés après la récréation."
+      ],
+      [
+        "Quel problème persistait après une semaine ?",
+        "Certains élèves jetaient encore des sachets par terre.",
+        [
+          "Toutes les poubelles avaient disparu.",
+          "Les cours avaient été annulés.",
+          "Personne ne nettoyait la cour."
+        ],
+        "Le texte précise qu'une partie des élèves continuait à jeter des sachets."
+      ],
+      [
+        "Que peut-on déduire de la proposition du conseil ?",
+        "Les équipements seuls ne suffisent pas sans la participation des élèves.",
+        [
+          "Le nettoyage est devenu inutile.",
+          "Les sachets ne salissent pas la cour.",
+          "La cour était déjà parfaitement propre."
+        ],
+        "La campagne vise les comportements, en complément des poubelles déjà installées."
+      ],
+      [
+        "Dans ce texte, que signifie « pourtant » si l'on écrit : « La cour était plus propre ; pourtant, des sachets restaient par terre » ?",
+        "Une opposition entre deux constats.",
+        [
+          "Une indication de lieu.",
+          "Une liste de produits.",
+          "Une date précise."
+        ],
+        "Le connecteur oppose l'amélioration générale au problème qui persiste."
+      ]
+    ]
+  },
+  {
+    "upper": true,
+    "text": "Esi voulait acheter un nouveau sac, mais elle a décidé de garder son argent pour les livres dont elle avait besoin. Son ancien sac était encore utilisable. Elle a comparé les prix dans deux librairies avant de choisir. Grâce à cette décision, elle a acheté tous ses livres et conservé une petite somme pour le transport.",
+    "questions": [
+      [
+        "Pourquoi Esi n'a-t-elle pas acheté un nouveau sac ?",
+        "Elle a donné la priorité aux livres nécessaires.",
+        [
+          "Son école interdisait les sacs.",
+          "Toutes les librairies étaient fermées.",
+          "Elle avait perdu tout son argent."
+        ],
+        "Esi réserve son argent aux livres et peut encore utiliser son ancien sac."
+      ],
+      [
+        "Quelle action montre qu'Esi cherche à maîtriser ses dépenses ?",
+        "Elle compare les prix dans deux librairies.",
+        [
+          "Elle achète deux nouveaux sacs.",
+          "Elle ignore le coût du transport.",
+          "Elle choisit sans regarder les prix."
+        ],
+        "Comparer les prix permet de choisir en tenant compte de son budget."
+      ],
+      [
+        "À quoi servira la somme conservée ?",
+        "Au transport.",
+        [
+          "À un nouveau téléphone.",
+          "À un repas de fête.",
+          "À une inscription sportive."
+        ],
+        "La dernière phrase précise l'usage de l'argent restant."
+      ],
+      [
+        "Quelle idée résume le mieux le texte ?",
+        "Prévoir ses besoins aide à organiser ses dépenses.",
+        [
+          "Il faut remplacer chaque objet ancien.",
+          "Les livres sont toujours gratuits.",
+          "Comparer les prix est impossible."
+        ],
+        "Les choix d'Esi illustrent la priorité donnée aux besoins et la gestion d'un budget."
+      ]
+    ]
+  }
+] as const;
 
 const FRENCH_DIALOGUES = [
   { prompt: "Bonjour !", answer: "Bonjour !", wrong: ["Bonne nuit !", "Merci beaucoup.", "Je ne sais pas."] },
@@ -90,6 +276,99 @@ const TWI_COMPLETIONS = [
   { prompt: "Yɛka ___ bere nyinaa.", answer: "nokware", wrong: ["nsuo", "sika", "dua"] },
   { prompt: "Meda wo ___.", answer: "ase", wrong: ["fie", "sukuu", "dua"] },
   { prompt: "Mepa wo ___.", answer: "kyɛw", wrong: ["ase", "nsuo", "adwuma"] },
+] as const;
+
+const TWI_READINGS = [
+  {
+    "text": "Ama ne ne nnamfo huu sɛ efie a wɔte mu no anim ayɛ fi. Wɔboaboaa wɔn ho ano na wɔsesaa hɔ. Akyiri yi, wɔde afidie bi sii hɔ ma nkurɔfo de nwura gu mu. Wɔka kyerɛɛ mmofra no sɛ wɔmmfa nwura ngu fam.",
+    "questions": [
+      [
+        "Dɛn nti na Ama ne ne nnamfo sesaa hɔ?",
+        "Na hɔ ayɛ fi.",
+        [
+          "Na osu retɔ.",
+          "Na wɔrekɔ sukuu.",
+          "Na wɔretɔ aduan."
+        ],
+        "Asɛm no mfiase kyerɛ sɛ na efie no anim ayɛ fi."
+      ],
+      [
+        "Dɛn na wɔka kyerɛɛ mmofra no?",
+        "Wɔmmfa nwura ngu fam.",
+        [
+          "Wɔmmra gua so.",
+          "Wɔnkenkan nwoma.",
+          "Wɔnkɔda."
+        ],
+        "Asɛm no awiei kyerɛ nea wɔka kyerɛɛ mmofra no."
+      ],
+      [
+        "Suban pa bɛn na Ama ne ne nnamfo daa no adi?",
+        "Wɔboaa wɔn ho wɔn ho.",
+        [
+          "Wɔkoo wɔn ho wɔn ho.",
+          "Wɔkaa atoro.",
+          "Wɔsɛee nneɛma."
+        ],
+        "Wɔboaboaa wɔn ho ano yɛɛ adwuma no."
+      ],
+      [
+        "Asɛm no fa dɛn ho titiriw?",
+        "Ahoteɛ ne biakoyɛ.",
+        [
+          "Bɔɔlobɔ.",
+          "Akwantu.",
+          "Adidi."
+        ],
+        "Nkurɔfo no yɛɛ adwuma boom ma hɔ tee."
+      ]
+    ]
+  },
+  {
+    "text": "Kojo pɛɛ sɛ ɔtɔ bɔɔlo foforo. Nanso na ohia nwoma a ɔde bɛyɛ n'adwuma wɔ sukuu. Ɔhwɛɛ ne sika na ɔtɔɔ nwoma no kan. Ɔde sika a aka no siee sɛ ɔde bɛtɔ bɔɔlo no akyiri yi.",
+    "questions": [
+      [
+        "Dɛn na Kojo tɔɔ kan?",
+        "Nwoma.",
+        [
+          "Bɔɔlo.",
+          "Mpaboa.",
+          "Aduan."
+        ],
+        "Kojo tɔɔ nwoma no kan efisɛ na ohia no wɔ sukuu."
+      ],
+      [
+        "Dɛn na Kojo de sika a aka no yɛe?",
+        "Ɔde siee.",
+        [
+          "Ɔtow kyenee.",
+          "Ɔde tɔɔ aduan.",
+          "Ɔde maa obi."
+        ],
+        "Asɛm no ka sɛ ɔde sika a aka no siee."
+      ],
+      [
+        "Dɛn nti na Kojo tɔɔ nwoma no kan?",
+        "Na ohia no de ayɛ sukuu adwuma.",
+        [
+          "Na ɔmpɛ bɔɔlo bio.",
+          "Na nwoma no yɛ aduan.",
+          "Na onni sika biara."
+        ],
+        "Kojo de nea ohia wɔ sukuu no dii kan."
+      ],
+      [
+        "Adesua bɛn na yenya fi asɛm no mu?",
+        "Ɛsɛ sɛ yɛde nea yehia di kan.",
+        [
+          "Ɛsɛ sɛ yɛsɛe sika nyinaa.",
+          "Ɛnsɛ sɛ yɛkɔ sukuu.",
+          "Ɛsɛ sɛ yɛtɔ bɔɔlo daa."
+        ],
+        "Kojo susuw nea ohia ho ansa na ɔretɔ nea ɔpɛ."
+      ]
+    ]
+  }
 ] as const;
 
 const TWI_DIALOGUES = [
@@ -153,10 +432,11 @@ function make(
   const selected = labels(config);
   const picked = options(answer, wrong, seed + position);
   const challenges: CognitiveChallenge[] = ["Recall", "Apply", "Analyse", "Transfer"];
+  const constructed = family === "grammar" && hash(prompt + seed) % 2 === 0;
   return {
     id: "language-" + config.subjectId + "-" + config.levelId + "-" + family + "-" + seed + "-" + position,
-    exposureKey: "language:" + config.lane + ":" + config.programId + ":" + config.levelId + ":" + config.subjectId + ":" + config.topicId + ":" + family + ":" + seed + ":" + position,
-    kind: "single",
+    exposureKey: "language:" + config.lane + ":" + config.programId + ":" + config.levelId + ":" + config.subjectId + ":" + ":" + family + ":" + hash(prompt + "|" + answer),
+    kind: constructed ? "fill" : "single",
     subject: selected.subject,
     topic: selected.topic,
     skill,
@@ -165,8 +445,9 @@ function make(
     mission: config.subjectId === "french" ? "Communiquer naturellement en français" : "Sua Asante Twi kasa ne nkyerɛwee yiye",
     generationFamily: "language-" + config.subjectId + "-" + family,
     prompt,
-    options: picked.options,
-    answer: picked.answer,
+    options: constructed ? undefined : picked.options,
+    answer: constructed ? answer : picked.answer,
+    acceptedAnswers: constructed ? [answer] : undefined,
     explanation,
   };
 }
@@ -187,7 +468,7 @@ function french(config: SessionConfig, family: Family, position: number, seed: n
   }
 
   if (family === "grammar") {
-    const item = FRENCH_VERBS[(position + seed) % FRENCH_VERBS.length];
+    const item = FRENCH_VERBS[index % FRENCH_VERBS.length];
     return make(config, family, position, seed,
       "Complète correctement : « " + item.subject + " ___ ». Utilise le verbe « " + item.infinitive + " » au présent.",
       item.answer, item.wrong, "Avec « " + item.subject + " », la forme correcte est « " + item.answer + " ».", "Accorder un verbe au présent");
@@ -201,18 +482,15 @@ function french(config: SessionConfig, family: Family, position: number, seed: n
   }
 
   if (family === "reading") {
-    const people = ["Ama", "Kojo", "Esi", "Yaw"] as const;
-    const places = ["à l'école", "à la bibliothèque", "au marché", "au terrain de sport"] as const;
-    const activities = ["lit un livre", "travaille avec ses amis", "achète des fruits", "joue au football"] as const;
-    const person = people[index % people.length];
-    const place = places[Math.floor(index / 4) % places.length];
-    const activity = activities[Math.floor(index / 16) % activities.length];
-    const passage = person + " va " + place + ". " + person + " " + activity + ".";
-    return make(config, family, position, seed, "Lis ce petit texte : « " + passage + " » Qui est le personnage principal ?",
-      person, people.filter((value) => value !== person), "Le texte décrit ce que " + person + " fait.", "Lire un court texte et repérer une information");
+    const upper=/jhs-|shs-|practice/.test(config.levelId);
+    const pool=FRENCH_READINGS.filter(item=>item.upper===upper);
+    const passage=pool[index%pool.length];
+    const item=passage.questions[Math.floor(index/pool.length)%passage.questions.length];
+    return {...make(config,family,position,seed,"Lis le texte puis réponds : "+item[0],item[1],item[2],item[3],"Lire, relever des indices et justifier une réponse"),
+      stimulus:{kind:"passage" as const,title:upper?"Compréhension et raisonnement":"Lecture guidée",text:passage.text}};
   }
 
-  const item = FRENCH_SENTENCES[(position + seed) % FRENCH_SENTENCES.length];
+  const item = FRENCH_SENTENCES[index % FRENCH_SENTENCES.length];
   if (family === "editing") {
     const wrong = [item.target.replace(" à ", " a "), item.target.replace(/\.$/, ""), item.target.replace(/^./u, (letter) => letter.toLowerCase())].filter((value) => value !== item.target);
     return make(config, family, position, seed, "Choisis la phrase française correctement écrite pour exprimer : « " + item.english + " ».", item.target, wrong,
@@ -245,7 +523,7 @@ function twi(config: SessionConfig, family: Family, position: number, seed: numb
   }
 
   if (family === "grammar") {
-    const item = TWI_COMPLETIONS[(position + seed) % TWI_COMPLETIONS.length];
+    const item = TWI_COMPLETIONS[index % TWI_COMPLETIONS.length];
     return make(config, family, position, seed, "Asɛmfua bɛn na ɛfata baabi a wɔagyaw no hɔ? « " + item.prompt + " »", item.answer, item.wrong,
       "Mmuae a ɛfata ne « " + item.answer + " ».", "Fa asɛmfua a ɛfata wie kasamu");
   }
@@ -256,6 +534,12 @@ function twi(config: SessionConfig, family: Family, position: number, seed: numb
       "Wɔ saa tebea yi mu no, mmuae a ɛfata ne « " + item.answer + " ».", "Bua nkɔmmɔ wɔ ɔkwan a ɛfata so");
   }
 
+  if (family === "reading" && /jhs-|shs-|practice/.test(config.levelId)) {
+    const passage=TWI_READINGS[index%TWI_READINGS.length];
+    const item=passage.questions[Math.floor(index/TWI_READINGS.length)%passage.questions.length];
+    return {...make(config,family,position,seed,"Kenkan asɛm no na bua: "+item[0],item[1],item[2],item[3],"Kenkan asɛm na kyerɛ emu adwene"),
+      stimulus:{kind:"passage" as const,title:"Asante Twi akenkan",text:passage.text}};
+  }
   if (family === "reading") {
     const passages = [
       { text: "Ama yɛ suani. Ɔkɔ sukuu anɔpa biara. Ɔpɛ sɛ ɔkenkan nwoma.", q: "Hena na ɔkɔ sukuu anɔpa biara?", a: "Ama", wrong: ["Kojo", "Agya", "Ɔkyerɛkyerɛfo"] },
@@ -268,7 +552,7 @@ function twi(config: SessionConfig, family: Family, position: number, seed: numb
       item.a, item.wrong, "Mmuae no fi asɛm no mu pɛɛ.", "Kenkan asɛm na yi nsɛm titiriw");
   }
 
-  const item = TWI_SENTENCES[(position + seed) % TWI_SENTENCES.length];
+  const item = TWI_SENTENCES[index % TWI_SENTENCES.length];
   if (family === "editing") {
     const wrong = [item.target.replace(/\.$/, ""), item.target.replace("ɔ", "o"), item.target.replace("ɛ", "e")].filter((value) => value !== item.target);
     return make(config, family, position, seed, "Paw Asante Twi kasamu a wɔatwerɛ no yiye a ɛkyerɛ « " + item.english + " ».", item.target, wrong,
@@ -309,10 +593,15 @@ export function languageCapacityForSelection(config: SessionConfig) {
   const subjects = config.subjectId === "all"
     ? selection.level.subjects.filter((subject) => languageSubject(subject.id))
     : selection.level.subjects.filter((subject) => subject.id === config.subjectId);
-  const count = config.topicId === "all"
-    ? subjects.reduce((total, subject) => total + subject.topics.length, 0)
-    : subjects.reduce((total, subject) => total + subject.topics.filter((topic) => topic.id === config.topicId).length, 0);
-  return count * TOPIC_CAPACITY;
+  // Count authored task families, not random seeds, names or option order.
+  return subjects.reduce((total, subject) => {
+    if(config.topicId!=="all"&&!subject.topics.some(topic=>topic.id===config.topicId))return total;
+    const available=families({...config,subjectId:subject.id});
+    const counts:Record<Family,number>=subject.id==="french"
+      ? {vocabulary:FRENCH_VOCAB.length,translation:FRENCH_VOCAB.length,grammar:FRENCH_VERBS.length,dialogue:FRENCH_DIALOGUES.length,reading:FRENCH_READINGS.filter(item=>item.upper===/jhs-|shs-|practice/.test(config.levelId)).reduce((sum,item)=>sum+item.questions.length,0),editing:FRENCH_SENTENCES.length,meaning:FRENCH_SENTENCES.length,transfer:FRENCH_SENTENCES.length}
+      : {vocabulary:TWI_VOCAB.length,translation:TWI_VOCAB.length,grammar:TWI_COMPLETIONS.length,dialogue:TWI_DIALOGUES.length,reading:/jhs-|shs-|practice/.test(config.levelId)?TWI_READINGS.reduce((sum,item)=>sum+item.questions.length,0):4,editing:TWI_SENTENCES.length,meaning:TWI_SENTENCES.length,transfer:TWI_SENTENCES.length};
+    return total+available.reduce((sum,family)=>sum+counts[family],0);
+  },0);
 }
 
 export function isNativeLanguageQuestion(question: LearnQuestion) {
@@ -338,6 +627,8 @@ export function buildSchoolLanguageQuestions(
   const selection = resolveCatalogSelection(config);
   if (!selection.level) return [];
 
+  if(config.topicId!=="all" && !selection.topic)return [];
+  if(config.subjectId!=="all" && !selection.subject)return [];
   const ids = config.subjectId === "all"
     ? selection.level.subjects.filter((subject) => languageSubject(subject.id)).map((subject) => subject.id)
     : languageSubject(config.subjectId) ? [config.subjectId] : [];
@@ -346,13 +637,15 @@ export function buildSchoolLanguageQuestions(
   const available = families(config);
   const output: LearnQuestion[] = [];
   const prompts = new Set<string>();
+  const exposures = new Set<string>();
 
   for (let position = 0; output.length < requested && position < requested * 24; position += 1) {
     const subjectId = ids[position % ids.length];
     const local = { ...config, subjectId };
     const family = available[(position + hash(String(seed) + ":family")) % available.length];
     const question = subjectId === "french" ? french(local, family, position, seed) : twi(local, family, position, seed);
-    if (!isNativeLanguageQuestion(question) || prompts.has(question.prompt)) continue;
+    if (!isNativeLanguageQuestion(question) || prompts.has(question.prompt) || exposures.has(question.exposureKey)) continue;
+    exposures.add(question.exposureKey);
     prompts.add(question.prompt);
     output.push(question);
   }

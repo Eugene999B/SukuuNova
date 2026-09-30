@@ -62,9 +62,9 @@ describe("native school-language practice", () => {
     }
   });
 
-  it("keeps each language topic on million-scale deterministic capacity", () => {
-    expect(languageCapacityForSelection(config("french", "reading"))).toBeGreaterThanOrEqual(1_000_000);
-    expect(languageCapacityForSelection(config("ghanaian-language", "reading"))).toBeGreaterThanOrEqual(1_000_000);
+  it("reports finite authored task capacity rather than cosmetic millions", () => {
+    expect(languageCapacityForSelection(config("french", "reading"))).toBeGreaterThan(0);
+    expect(languageCapacityForSelection(config("ghanaian-language", "reading"))).toBeGreaterThan(0);
   });
 
   it("keeps grammar practice inside grammar/editing families instead of mixing unrelated reading drills", () => {
@@ -76,4 +76,14 @@ describe("native school-language practice", () => {
       expect(questions.every((question) => /-(grammar|editing)$/.test(question.generationFamily ?? ""))).toBe(true);
     }
   });
+});
+
+it("remembers language tasks across seeds and supports typed grammar answers",()=>{
+ const c=config("french","grammar","jhs-2");
+ const a=buildSchoolLanguageQuestions(c,100,11), b=buildSchoolLanguageQuestions(c,100,12);
+ expect(a.some(q=>q.kind==="fill")).toBe(true);
+ expect(a.filter(q=>q.generationFamily?.endsWith("-grammar")).length).toBeGreaterThan(3);
+ expect(a.some(q=>b.some(other=>other.exposureKey===q.exposureKey))).toBe(true);
+ expect(languageCapacityForSelection(c)).toBeLessThan(1000);
+ expect(buildSchoolLanguageQuestions({...c,topicId:"unknown"},10,1)).toEqual([]);
 });

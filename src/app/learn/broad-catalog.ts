@@ -1,3 +1,4 @@
+import { ghanaHealthCourseTopics } from "./ghana-health-foundations";
 import type { CatalogLevel, CatalogProgram, CatalogSubject, CatalogTopic } from "./learn-domain";
 
 function slug(value: string) {
@@ -10,6 +11,8 @@ function slug(value: string) {
 
 function defaultTopicsForCourse(label: string) {
   const value = label.toLowerCase();
+  const healthTopics = ghanaHealthCourseTopics(label);
+  if (healthTopics) return healthTopics;
 
   if (/contract/.test(value)) return ["Offer & acceptance", "Consideration & intention", "Terms & interpretation", "Breach & discharge", "Remedies & case analysis"];
   if (/constitutional/.test(value)) return ["Constitutional structure", "Separation of powers", "Fundamental rights", "Judicial review", "Constitutional interpretation"];
@@ -234,18 +237,118 @@ const UNIVERSITY_SPECS: UniversitySpec[] = [
     },
   },
   {
-    id: "nursing-diploma",
-    label: "Nursing — RGN diploma (3 years)",
-    description: "Ghana RGN diploma study pathway, combining foundational sciences, nursing practice and supervised clinical learning.",
-    levels: {
-      "level-100": ["Anatomy & Physiology", "Fundamentals of Nursing", "Microbiology", "Nutrition", "Psychology for Health", "Communication in Healthcare"],
-      "level-200": ["Medical-Surgical Nursing I", "Pharmacology", "Community Health Nursing I", "Maternal & Child Health", "Mental Health Nursing"],
-      "level-300": ["Medical-Surgical Nursing II", "Community Health Nursing II", "Emergency & Critical Care", "Nursing Leadership", "Research Methods", "Clinical Practicum"],
-    },
-  },
+  "id": "nursing-diploma",
+  "label": "General Nursing — RGN diploma (3 years)",
+  "description": "Ghanaian general nursing course map. Basic Nursing is listed as Fundamentals of Nursing; shared foundations are followed by adult, community and child care.",
+  "levels": {
+    "level-100": [
+      "Anatomy & Physiology",
+      "Fundamentals of Nursing",
+      "Microbiology",
+      "Therapeutic Communication",
+      "Professional Adjustment",
+      "Nursing Informatics",
+      "First Aid, Emergency Preparedness & Disaster Management",
+      "Nutrition & Dietetics",
+      "Behavioural Sciences",
+      "Nursing Process",
+      "French",
+      "Sign Language",
+      "Clinical Practicum"
+    ],
+    "level-200": [
+      "Medical-Surgical Nursing I",
+      "Pharmacology",
+      "Community Health Nursing I",
+      "Mental Health Nursing",
+      "Nursing Leadership",
+      "Research Methods",
+      "Statistics",
+      "Clinical Practicum"
+    ],
+    "level-300": [
+      "Medical-Surgical Nursing II",
+      "Paediatric Nursing",
+      "Obstetric Nursing",
+      "Public Health Nursing",
+      "Gerontology & Home Nursing",
+      "Patient & Family Centred Care Study",
+      "Traditional & Complementary Medicine",
+      "Marketing & Entrepreneurship",
+      "Clinical Practicum"
+    ]
+  }
+},
+  {
+  "id": "midwifery-diploma",
+  "label": "Midwifery — RM diploma (3 years)",
+  "description": "Ghanaian midwifery pathway, with shared first-year foundations and distinct reproductive, maternal and newborn courses. Includes the subjects in the supplied Kumasi RM timetable.",
+  "levels": {
+    "level-100": [
+      "Anatomy & Physiology",
+      "Fundamentals of Nursing",
+      "Microbiology",
+      "Therapeutic Communication",
+      "Professional Adjustment",
+      "Nursing Informatics",
+      "First Aid, Emergency Preparedness & Disaster Management",
+      "Nutrition & Dietetics",
+      "Behavioural Sciences",
+      "Nursing Process",
+      "French",
+      "Sign Language",
+      "Clinical Practicum"
+    ],
+    "level-200": [
+      "Reproductive Anatomy & Foetal Development",
+      "Normal Pregnancy",
+      "Normal Labour",
+      "Puerperium & Newborn Care",
+      "Medical-Surgical Nursing I",
+      "Pharmacology",
+      "Paediatric Nursing",
+      "Mental Health Nursing",
+      "Research Methods",
+      "Statistics",
+      "Clinical Practicum"
+    ],
+    "level-300": [
+      "Abnormal Pregnancy",
+      "Abnormal Labour",
+      "High Risk Neonate",
+      "Family Planning",
+      "Community Midwifery",
+      "Gynaecological Conditions & STIs",
+      "Advanced Midwifery & Theatre Nursing",
+      "Management & Administration in Midwifery",
+      "Family Centred Maternity Care Study",
+      "Public Health Nursing",
+      "Marketing & Entrepreneurship",
+      "Clinical Practicum"
+    ]
+  }
+},
+  {
+  "id": "paediatric-nursing",
+  "label": "Paediatric Nursing — specialist study",
+  "description": "Child and adolescent nursing study pathway informed by Ghanaian specialist training. This is post-basic learning, not an entry-level RGN diploma or a substitute for supervised specialist training.",
+  "levels": {
+    "level-100": [
+      "Primary Care of Children & Adolescents",
+      "Managing the Sick Child in the Community",
+      "Foundations & Trends in Paediatric Care",
+      "Child Psychology & Mental Health"
+    ],
+    "level-200": [
+      "Advanced Paediatric Pharmacology",
+      "Applied Diagnostics & Child Assessment",
+      "Care of the Sick Child in Hospital"
+    ]
+  }
+},
   {
     id: "nursing",
-    label: "Nursing — BSc degree (4 years)",
+    label: "General Nursing — BSc degree (4 years)",
     description: "Anatomy, physiology, nursing practice, pharmacology, medical-surgical care and community health.",
     levels: {
       "level-100": ["Anatomy & Physiology", "Fundamentals of Nursing", "Biochemistry", "Psychology for Health", "Communication in Healthcare"],
@@ -585,7 +688,7 @@ const existingReadyLevel100: Record<string, CatalogSubject[]> = {
 };
 
 export const UNIVERSITY_PROGRAMS: CatalogProgram[] = UNIVERSITY_SPECS.map((spec) => {
-  const levels = makeUniversityLevels(spec).map((level,index)=>spec.id.startsWith("nursing") ? {...level,label:`Year ${index+1} · ${spec.id==="nursing-diploma"?"Diploma":"BSc"}`} : level);
+  const levels = makeUniversityLevels(spec).map((level,index)=>["nursing","nursing-diploma","midwifery-diploma","paediatric-nursing"].includes(spec.id) ? {...level,label:`${spec.id==="paediatric-nursing"?"Stage":"Year"} ${index+1} · ${spec.id==="nursing"?"BSc":spec.id==="paediatric-nursing"?"Specialist":"Diploma"}`} : level);
   const ready = existingReadyLevel100[spec.id];
   if (ready && levels[0]) {
     const mapped = levels[0].subjects.filter(

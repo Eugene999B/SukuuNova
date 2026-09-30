@@ -861,7 +861,7 @@ export function buildSession(config: SessionConfig): LearnQuestion[] {
 }
 
 function normalizeText(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
+  return value.normalize("NFC").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 export function isCorrectAnswer(question: LearnQuestion, response: string | string[] | number | boolean) {
@@ -875,6 +875,7 @@ export function isCorrectAnswer(question: LearnQuestion, response: string | stri
   if (question.kind === "boolean") return response === question.answer;
 
   if (question.kind === "numeric") {
+    if (typeof response !== "number" && (typeof response !== "string" || response.trim() === "")) return false;
     const actual = typeof response === "number" ? response : Number(response);
     const expected = typeof question.answer === "number" ? question.answer : Number(question.answer);
     return Number.isFinite(actual) && Math.abs(actual - expected) < 0.000001;
@@ -887,4 +888,12 @@ export function isCorrectAnswer(question: LearnQuestion, response: string | stri
 
 export function catalogFor(lane: LearnLane) {
   return LEARNING_CATALOGS.find((catalog) => catalog.id === lane) ?? LEARNING_CATALOGS[0];
+}
+
+export function formattedLearningAnswer(question: LearnQuestion): string {
+  const label=(id:string)=>question.options?.find(option=>option.id===id)?.label ?? id;
+  if(question.kind==="single")return label(String(question.answer));
+  if(question.kind==="multi"&&Array.isArray(question.answer))return question.answer.map(label).join("; ");
+  if(question.kind==="boolean")return question.answer===true?"True":"False";
+  return String(question.answer);
 }

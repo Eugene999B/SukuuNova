@@ -76,7 +76,7 @@ export function learningCapabilityForSelection(config: SessionConfig): LearningC
   const richStimulusCapacity = richStimulusCapacityForSelection(config);
   const authenticExamQuestions = examBankQuestionsForSelection(config).length;
   const nursingCapacity = nursingCapacityForSelection(config);
-  if(config.lane==="university" && ["nursing","nursing-diploma"].includes(config.programId)){
+  if(config.lane==="university" && ["nursing","nursing-diploma","midwifery-diploma","paediatric-nursing"].includes(config.programId)){
     return {ready:nursingCapacity>0,stage:nursingCapacity>0?"starter":"mapped",reviewedStandardQuestions:0,richInteractions:0,variantCapacity:0,intelligentCapacity:0,coverageCapacity:0,primaryMathCapacity:0,languageCapacity:0,richStimulusCapacity:0,authenticExamQuestions:0,nursingCapacity,estimatedStandardSupply:nursingCapacity};
   }
 

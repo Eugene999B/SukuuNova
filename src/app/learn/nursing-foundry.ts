@@ -1,3 +1,4 @@
+import { healthFoundationQuestions, healthCourseKey } from "./ghana-health-foundations";
 import {
   resolveCatalogSelection,
   type CognitiveChallenge,
@@ -31,7 +32,6 @@ type NursingDomain =
   | "general";
 
 const NAMES = ["Adwoa", "Yaw", "Akosua", "Kofi", "Esi", "Kwame", "Abena", "Sena"] as const;
-const AGES = [19, 24, 31, 42, 55, 63, 71, 78] as const;
 const SETTINGS = [
   "during morning assessment",
   "during an evening shift",
@@ -694,7 +694,6 @@ function buildQuestion(
   const family = position % 12;
   const local = hash(`${seed}:${position}:${item.id}`);
   const setting = pick(SETTINGS, local);
-  const age = pick(AGES, local, 2);
   const clueA = item.clues[local % item.clues.length];
   const clueB = item.clues[(local + 1) % item.clues.length];
 
@@ -744,8 +743,8 @@ function buildQuestion(
     const useName = Math.floor(position / 12) % 2 === 0;
     const name = pick(NAMES, local);
     const presentation = useName
-      ? `${name}, aged ${age}, is being assessed ${setting}`
-      : `A ${age}-year-old patient is being assessed ${setting}`;
+      ? `${name} is being assessed ${setting}`
+      : `A patient is being assessed ${setting}`;
     const picked = optionSet(item.priorityAction, plausibleActions(concepts, item, local), local);
     return baseQuestion(config, useName ? "named-vignette" : "anonymous-vignette", position, seed,
       `${presentation}. The nurse notes ${clueA} and ${clueB}. Which response is most appropriate now?`,
@@ -766,7 +765,7 @@ function buildQuestion(
       ...rotate(item.relatedActions, local).slice(0, 2),
     ], local);
     return baseQuestion(config, "priority-first", position, seed,
-      `A ${age}-year-old patient has ${clueA} together with ${clueB}. Which nursing action should receive priority?`,
+      `A patient has ${clueA} together with ${clueB}. Which nursing action should receive priority?`,
       `Prioritise care for ${item.term}`,
       {
         kind: "single",
@@ -935,15 +934,18 @@ function buildQuestion(
 }
 
 export function nursingCapacityForSelection(config: SessionConfig) {
-  if (config.lane !== "university" || !["nursing","nursing-diploma"].includes(config.programId)) return 0;
+  if (config.lane !== "university" || !["nursing","nursing-diploma","midwifery-diploma","paediatric-nursing"].includes(config.programId)) return 0;
   const { level, subject, topic } = resolveCatalogSelection(config);
   if (!level) return 0;
   if (config.subjectId !== "all" && !subject) return 0;
 
   if (config.topicId !== "all" && !topic) return 0;
   const subjects = config.subjectId === "all" ? level.subjects : subject ? [subject] : [];
-  const tasks = new Set<string>();
+  const tasks = new Set(healthFoundationQuestions(config,level,0).map(question=>question.exposureKey));
   for(const current of subjects){
+    if(healthCourseKey(current.label))continue;
+    if(config.programId==="paediatric-nursing")continue;
+    if(config.programId==="midwifery-diploma" && !["Anatomy & Physiology","Fundamentals of Nursing","Medical-Surgical Nursing I","Pharmacology","Mental Health Nursing","Public Health Nursing"].includes(current.label))continue;
     const topics=config.topicId==="all"?current.topics:current.topics.filter(entry=>entry.id===config.topicId);
     for(const selectedTopic of topics){
       for(const item of nursingConceptsForTopic(current.label,selectedTopic.label)){
@@ -960,7 +962,7 @@ export function buildNursingQuestions(
   requestedCount = config.count,
   seed = config.seed ?? Date.now(),
 ): LearnQuestion[] {
-  if (config.lane !== "university" || !["nursing","nursing-diploma"].includes(config.programId)) return [];
+  if (config.lane !== "university" || !["nursing","nursing-diploma","midwifery-diploma","paediatric-nursing"].includes(config.programId)) return [];
 
   const requested = Math.max(0, Math.min(500, Math.floor(requestedCount)));
   if (!requested) return [];
@@ -968,13 +970,17 @@ export function buildNursingQuestions(
   const { level, subject: selectedSubject, topic: selectedTopic } = resolveCatalogSelection(config);
   if (!level) return [];
 
+  const foundations = healthFoundationQuestions(config,level,seed);
   const targets = (config.subjectId === "all" ? level.subjects : selectedSubject ? [selectedSubject] : []).flatMap((subject) => {
+    if(healthCourseKey(subject.label))return [];
+    if(config.programId==="paediatric-nursing")return [];
+    if(config.programId==="midwifery-diploma" && !["Anatomy & Physiology","Fundamentals of Nursing","Medical-Surgical Nursing I","Pharmacology","Mental Health Nursing","Public Health Nursing"].includes(subject.label))return [];
     const topics = config.topicId === "all"
       ? subject.topics
       : selectedTopic && selectedSubject?.id === subject.id ? [selectedTopic] : [];
     return topics.map((topic) => ({ subject, topic }));
   });
-  if (!targets.length) return [];
+  if (!targets.length) return foundations.slice(0,requested);
 
   const output: LearnQuestion[] = [];
   const seenPrompts = new Set<string>();
@@ -1006,5 +1012,5 @@ export function buildNursingQuestions(
     output.push(question);
   }
 
-  return output;
+  return [...foundations,...output].sort((a,b)=>hash(a.exposureKey+seed)-hash(b.exposureKey+seed)).slice(0,requested);
 }

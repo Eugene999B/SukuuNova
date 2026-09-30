@@ -23,6 +23,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   catalogFor,
+  formattedLearningAnswer,
   type CatalogLevel,
   type CatalogSubject,
   type LearnLane,
@@ -67,7 +68,7 @@ const entries: Array<{ id: LearnEntry; label: string; copy: string; icon: typeof
   { id: "basic", label: "Basic School", copy: "KG · Primary · JHS", icon: School },
   { id: "shs", label: "SHS", copy: "Choose your programme", icon: BookOpen },
   { id: "exam", label: "Exam Centre", copy: "BECE · WASSCE · IELTS", icon: Medal },
-  { id: "university", label: "University", copy: "Degree programmes", icon: GraduationCap },
+  { id: "university", label: "University", copy: "Diploma, degree and specialist study", icon: GraduationCap },
   { id: "skills", label: "Skills", copy: "Career and aptitude", icon: Layers3 },
 ];
 
@@ -713,7 +714,7 @@ function QuestionPlayer({
 
       {question.kind === "numeric" && <div className={styles.textAnswer}><input aria-label="Your answer" disabled={submitted} inputMode="decimal" value={typeof response === "number" || typeof response === "string" ? response : ""} onChange={(event) => setResponse(event.target.value)} placeholder="Enter your numerical answer" onKeyDown={(event) => { if (event.key === "Enter") submit(); }} /></div>}
 
-      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? `Yes! +${10 + question.difficulty * 2} XP` : "Not this time. Here’s how it works."}</strong><p>{question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
+      {!submitted ? <div className={styles.answerFooter}><span><Brain size={15} /> Skill: {question.skill}</span><button disabled={!hasLearningAnswer(question.kind,response)} onClick={submit}>Check answer <ArrowRight size={16} /></button></div> : <div role="status" className={correct ? styles.correctFeedback : styles.wrongFeedback}><div className={styles.feedbackSymbol}>{correct ? <CheckCircle2 size={22} /> : <XCircle size={22} />}</div><div><strong>{correct ? `Yes! +${10 + question.difficulty * 2} XP` : "Not this time. Here’s how it works."}</strong><p><strong>Correct answer:</strong> {formattedLearningAnswer(question)}</p><p><strong>Explanation:</strong> {question.explanation}</p>{question.hint && !correct && <span>Hint for the next variant: {question.hint}</span>}</div><button onClick={next}>{index + 1 === total ? "View results" : "Next question"} <ArrowRight size={16} /></button></div>}
     </div>
   );
 }
