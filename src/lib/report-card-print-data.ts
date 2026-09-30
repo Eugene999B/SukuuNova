@@ -171,7 +171,10 @@ export async function getReportCardPrintData(tx: TenantDb, input: { schoolId: st
   const behaviorRatingFields = snapshot.behaviorRatingFields !== undefined ? snapshot.behaviorRatingFields : settings.behaviorRatingFields;
   const watermark = typeof snapshot.watermark === "string" ? snapshot.watermark : settings.reportCardWatermark ?? "";
 
-  const calendarAttendance = await reportAttendanceForTerm(tx, { schoolId: input.schoolId, studentId: report.student.id, startDate: report.term.startDate, endDate: report.term.endDate });
+  const frozenAt = typeof snapshot.rankingFrozenAt === "string" ? new Date(snapshot.rankingFrozenAt) : report.term.endDate;
+  const calendarAttendance = frozenAttendance.expectedDays != null && frozenAttendance.presentDays != null && frozenAttendance.lateDays != null
+    ? {present:Number(frozenAttendance.presentDays),late:Number(frozenAttendance.lateDays),expectedDays:Number(frozenAttendance.expectedDays),totalRecorded:Number(frozenAttendance.totalRecorded ?? frozenAttendance.presentDays)}
+    : await reportAttendanceForTerm(tx, { schoolId: input.schoolId, studentId: report.student.id, startDate: report.term.startDate, endDate: report.term.endDate, asOf:Number.isFinite(frozenAt.getTime()) ? frozenAt : report.term.endDate });
   const present = numberOrNull(frozenAttendance.presentDays) ?? calendarAttendance.present;
   const late = numberOrNull(frozenAttendance.lateDays) ?? calendarAttendance.late;
   const expectedDays = numberOrNull(frozenAttendance.expectedDays) ?? calendarAttendance.expectedDays;

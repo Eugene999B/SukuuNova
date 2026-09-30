@@ -8,14 +8,16 @@ process.on("SIGINT", () => { stopped = true; });
 
 async function run() {
   console.info("SukuuNova notification outbox worker started.");
+  let idleDelay = pollMs;
   while (!stopped) {
     try {
       const processed = await processMessageBatchOnce();
-      if (processed) continue;
+      if (processed) { idleDelay = pollMs; continue; }
     } catch (error) {
       console.error("Notification worker will retry after a batch failure", error instanceof Error ? error.message : "Unknown error");
     }
-    await new Promise(resolve => setTimeout(resolve, pollMs));
+    await new Promise(resolve => setTimeout(resolve, idleDelay));
+    idleDelay = Math.min(15_000, Math.max(pollMs, idleDelay * 1.5));
   }
 }
 run().catch(error => {

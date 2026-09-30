@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { REPORT_CARD_THEMES, reportCardThemeById } from "@/lib/report-card-themes";
 import { OFFICIAL_REPORT_CARD_STYLES } from "@/lib/official-report-card-styles";
 
@@ -76,6 +76,20 @@ function promotionText(data: Data) {
 }
 
 export default function OfficialReportCard({ data, signatures, embedded = false }: { data: Data; signatures: Signature[]; embedded?: boolean }) {
+  const paperRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const paper = paperRef.current;
+    const shell = paper?.parentElement;
+    if (!paper || !shell) return;
+    const resize = () => {
+      const available = shell.clientWidth - 24;
+      paper.style.setProperty("--preview-scale", String(Math.min(1, Math.max(.25, available / 794))));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(shell);
+    resize();
+    return () => observer.disconnect();
+  }, []);
   const [previewThemeId, setPreviewThemeId] = useState(data.reportSettings.themeId);
   const theme = reportCardThemeById(previewThemeId);
   const positionDenominator = data.rankedCount || data.classRoll || data.classSize;
@@ -102,7 +116,7 @@ export default function OfficialReportCard({ data, signatures, embedded = false 
         </header>
       ) : null}
 
-      <article className={`official-v2-paper font-${theme.fontMode}`} style={vars}>
+      <article ref={paperRef} className={`official-v2-paper font-${theme.fontMode}`} style={vars}>
         {data.status !== "approved" ? <div className="rc-watermark">DRAFT · FOR REVIEW</div> : data.watermark ? <div className="rc-watermark">{data.watermark}</div> : null}
         <header className="rc-letterhead">
           <div className="rc-logo">{data.school.logoUrl ? <img src={data.school.logoUrl} alt={`${data.school.name} crest`} /> : <span>{data.school.name.slice(0, 1)}</span>}</div>

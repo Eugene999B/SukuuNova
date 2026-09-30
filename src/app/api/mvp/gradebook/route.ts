@@ -6,6 +6,7 @@ import { requireSchoolSession } from "@/lib/auth";
 import { withTenant } from "@/lib/db";
 import { hasPermission } from "@/lib/rbac";
 import { clearScore, createAssessment, enterScore, saveGradebookChanges } from "@/lib/gradebook-service";
+import { resolveTermRoster } from "@/lib/student-term-context";
 import { visibleStudents } from "@/lib/sis-service";
 import { getAcademicEngineConfig, getClassSubjectPerformance } from "@/lib/academic-engine";
 import { z } from "zod";
@@ -13,8 +14,8 @@ import { z } from "zod";
 const schema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("batch"), changes: gradebookChangesSchema }),
   z.object({ action: z.literal("assessment"), termId: z.string().min(1).max(100), classId: z.string().min(1).max(100), subjectId: z.string().min(1).max(100), name: z.string().trim().min(1).max(160), type: z.string().trim().min(1).max(40), weight: z.number().finite().positive().max(100), maxScore: z.number().finite().positive().max(1_000_000) }),
-  z.object({ action: z.literal("score"), studentId: z.string().min(1).max(100), assessmentId: z.string().min(1).max(100), value: z.number().finite().nonnegative().max(1_000_000), status: z.enum(["present", "absent", "excused"]).optional(), expected: scoreExpectationSchema.optional() }),
-  z.object({ action: z.literal("clearScore"), expected: scoreExpectationSchema.optional(), studentId: z.string().min(1).max(100), assessmentId: z.string().min(1).max(100) })
+  z.object({ action: z.literal("score"), studentId: z.string().min(1).max(100), assessmentId: z.string().min(1).max(100), value: z.number().finite().nonnegative().max(1_000_000), status: z.enum(["present", "absent", "excused"]).optional(), expected: scoreExpectationSchema }),
+  z.object({ action: z.literal("clearScore"), expected: scoreExpectationSchema, studentId: z.string().min(1).max(100), assessmentId: z.string().min(1).max(100) })
 ]);
 
 export async function GET(request: Request) {
@@ -31,7 +32,12 @@ export async function GET(request: Request) {
       ]);
       if (!canWriteAll && !canWriteAssigned) throw new ForbiddenError("You do not have gradebook access.");
 
-      const visible = await visibleStudents(tx, session.userId);
+      const assignments = canWriteAll ? [] : await tx.classSubjectTeacher.findMany({where:{schoolId:session.schoolId,teacherId:session.userId},select:{classId:true}});
+      const taughtClasses = canWriteAll ? [] : await tx.class.findMany({where:{schoolId:session.schoolId,classTeacherId:session.userId},select:{id:true}});
+      const allowed = new Set([...assignments.map(row=>row.classId),...taughtClasses.map(row=>row.id)]);
+      const visible = termId
+        ? (await resolveTermRoster(tx,{schoolId:session.schoolId,termId,includeInactive:true})).filter(row=>row.termClassId && (canWriteAll || allowed.has(row.termClassId))).map(row=>({...row,classId:row.termClassId}))
+        : await visibleStudents(tx, session.userId);
       const requestedClass = classId;
       const classTeacher = requestedClass ? await tx.class.findFirst({ where: { id: requestedClass, schoolId: session.schoolId, classTeacherId: session.userId }, select: { id: true } }) : null;
       if (!canWriteAll && !requestedClass) throw new ForbiddenError("Choose a class before viewing an assigned gradebook.");

@@ -81,16 +81,20 @@ async function main() {
   let stopping = false;
   let worker;
   let restartTimer;
+  let workerFailures = 0;
   const startWorker = () => {
     if (stopping) return;
+    const startedAt = Date.now();
     worker = spawn(process.execPath, ["node_modules/tsx/dist/cli.mjs", "src/workers/sms-worker.ts"], {
       env: childEnv, stdio: "inherit",
     });
     worker.on("error", error => console.error("[notification-worker] spawn failed:", error.message));
     worker.on("exit", () => {
       if (!stopping) {
-        console.error("[notification-worker] stopped; restarting in 5 seconds");
-        restartTimer = setTimeout(startWorker, 5000);
+        if (Date.now() - startedAt > 60_000) workerFailures = 0;
+        const delay = Math.min(60_000, 5000 * 2 ** Math.min(workerFailures++, 4));
+        console.error(`[notification-worker] stopped; restarting in ${delay / 1000} seconds`);
+        restartTimer = setTimeout(startWorker, delay);
       }
     });
   };

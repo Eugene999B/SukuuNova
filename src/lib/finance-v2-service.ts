@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
@@ -56,6 +57,10 @@ export async function financeV2Snapshot(tx: TenantDb, schoolId: string, actorId:
       JOIN "AcademicYear" ay ON ay."id"=t."academicYearId" AND ay."schoolId"=t."schoolId"
       WHERE i."schoolId"=$1 ORDER BY ay."startDate" DESC,t."startDate" DESC,s."name"`,schoolId),
   ]);
+  const expenseTotals = await tx.$queryRawUnsafe<Array<{total:string;count:string}>>(`SELECT COALESCE(SUM("amount") FILTER (WHERE "status"<>'reversed'),0)::text AS total, COUNT(*)::text AS count FROM "FinanceExpense" WHERE "schoolId"=$1`,schoolId);
+  const paymentTotals = await tx.payment.count({where:{schoolId}});
+  const historyWindow = { expenses: { shown: expenses.length, total: Number(expenseTotals[0]?.count ?? 0) }, payments: { shown: recentPayments.length, total: paymentTotals } };
+  const totals = { recordedExpenses: expenseTotals[0]?.total ?? "0" };
   const capabilities = {
     canManageFees: await hasPermission(tx, actorId, "finance:fee_structures_manage"),
     canRecordPayment: await hasPermission(tx, actorId, "payments:record"),
@@ -65,7 +70,7 @@ export async function financeV2Snapshot(tx: TenantDb, schoolId: string, actorId:
     canApproveExpense: await hasPermission(tx, actorId, "finance:expenses_approve"),
     canExport: await hasPermission(tx, actorId, "finance:export"),
   };
-  return { categories, structures, structureLines, students, terms, classes, charges, expenses, programs, awards, recentPayments, invoiceBalances, capabilities };
+  return { totals, historyWindow, categories, structures, structureLines, students, terms, classes, charges, expenses, programs, awards, recentPayments, invoiceBalances, capabilities };
 }
 
 export async function createFinanceCategory(tx: TenantDb, input: {schoolId:string;actorId:string;name:string;code:string;kind:string;required:boolean}) {
@@ -163,6 +168,16 @@ export async function awardScholarshipV2(tx:TenantDb,input:{schoolId:string;acto
   await refreshInvoiceFinancialProjection(tx,input.schoolId,invoiceId);await syncChargeStatuses(tx,input.schoolId,invoiceId);await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:"finance_v2.scholarship_awarded",entityType:"FinanceScholarshipAward",entityId:awardId,after:{studentId:input.studentId,termId:input.termId,categoryId:input.categoryId||null,reduction:reduction.toFixed(2),invoiceId}});return{id:awardId,reduction:reduction.toFixed(2)};
 }
 
-export async function createExpenseV2(tx:TenantDb,input:{schoolId:string;actorId:string;expenseDate:string;category:string;vendor:string;amount:number;paymentMethod:string;reference?:string|null;description?:string|null;evidenceUrl?:string|null}){await requirePermission(tx,input.actorId,"finance:expenses_write");const amount=money(input.amount);if(amount.lte(0))throw new AppError("Expense amount must be greater than zero.",400,"INVALID_AMOUNT");const id=createId();await tx.$executeRawUnsafe(`INSERT INTO "FinanceExpense" ("id","schoolId","expenseDate","category","vendor","amount","paymentMethod","reference","description","evidenceUrl","enteredBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,id,input.schoolId,new Date(input.expenseDate),input.category,input.vendor.trim(),amount,input.paymentMethod,input.reference?.trim()||null,input.description?.trim()||null,input.evidenceUrl?.trim()||null,input.actorId);await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:"finance_v2.expense_recorded",entityType:"FinanceExpense",entityId:id,after:{category:input.category,vendor:input.vendor,amount:amount.toFixed(2),date:input.expenseDate}});return{id};}
+export async function createExpenseV2(tx:TenantDb,input:{schoolId:string;actorId:string;operationId?:string;expenseDate:string;category:string;vendor:string;amount:number;paymentMethod:string;reference?:string|null;description?:string|null;evidenceUrl?:string|null}){await requirePermission(tx,input.actorId,"finance:expenses_write");const amount=money(input.amount);if(amount.lte(0))throw new AppError("Expense amount must be greater than zero.",400,"INVALID_AMOUNT");const id=input.operationId ? "expense_" + createHash("sha256").update(input.schoolId + ":" + input.operationId).digest("hex").slice(0,40) : createId();
+const expenseDate=new Date(input.expenseDate);
+if(!Number.isFinite(expenseDate.getTime()))throw new AppError("Choose a valid expense date.",400,"INVALID_EXPENSE_DATE");
+await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`expense-operation:${input.schoolId}:${id}`}))`;
+const prior=await tx.$queryRawUnsafe<Array<{id:string;expenseDate:Date;category:string;vendor:string;amount:Prisma.Decimal;paymentMethod:string;reference:string|null;description:string|null;evidenceUrl:string|null}>>(`SELECT * FROM "FinanceExpense" WHERE "schoolId"=$1 AND "id"=$2`,input.schoolId,id);
+if(prior[0]){
+ const p=prior[0];
+ if(p.expenseDate.toISOString().slice(0,10)!==expenseDate.toISOString().slice(0,10)||p.category!==input.category||p.vendor!==input.vendor.trim()||!money(p.amount).equals(amount)||p.paymentMethod!==input.paymentMethod||p.reference!==(input.reference?.trim()||null)||p.description!==(input.description?.trim()||null)||p.evidenceUrl!==(input.evidenceUrl?.trim()||null))throw new AppError("This operation was already used for different expense details.",409,"IDEMPOTENCY_CONFLICT");
+ return{id:p.id};
+}
+await tx.$executeRawUnsafe(`INSERT INTO "FinanceExpense" ("id","schoolId","expenseDate","category","vendor","amount","paymentMethod","reference","description","evidenceUrl","enteredBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,id,input.schoolId,new Date(input.expenseDate),input.category,input.vendor.trim(),amount,input.paymentMethod,input.reference?.trim()||null,input.description?.trim()||null,input.evidenceUrl?.trim()||null,input.actorId);await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:"finance_v2.expense_recorded",entityType:"FinanceExpense",entityId:id,after:{category:input.category,vendor:input.vendor,amount:amount.toFixed(2),date:input.expenseDate}});return{id};}
 
 export async function decideExpenseV2(tx:TenantDb,input:{schoolId:string;actorId:string;expenseId:string;decision:'approve'|'reverse';reason?:string|null}){await requirePermission(tx,input.actorId,"finance:expenses_approve");const rows=await tx.$queryRawUnsafe<any[]>(`SELECT * FROM "FinanceExpense" WHERE "schoolId"=$1 AND "id"=$2 FOR UPDATE`,input.schoolId,input.expenseId);const expense=rows[0];if(!expense)throw new AppError("Expense not found.",404,"NOT_FOUND");if(input.decision==='approve'){if(expense.status!=='recorded')throw new AppError("Only recorded expenses can be approved.",409,"EXPENSE_CLOSED");if(expense.enteredBy===input.actorId)throw new AppError("The person who entered an expense cannot approve the same expense.",403,"SELF_APPROVAL_BLOCKED");await tx.$executeRawUnsafe(`UPDATE "FinanceExpense" SET "status"='approved',"approvedBy"=$1,"approvedAt"=CURRENT_TIMESTAMP,"updatedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$2 AND "id"=$3`,input.actorId,input.schoolId,input.expenseId);}else{if(expense.status==='reversed')throw new AppError("Expense is already reversed.",409,"EXPENSE_CLOSED");if(!input.reason?.trim())throw new AppError("A reversal reason is required.",400,"REVERSAL_REASON_REQUIRED");await tx.$executeRawUnsafe(`UPDATE "FinanceExpense" SET "status"='reversed',"reversedBy"=$1,"reversedAt"=CURRENT_TIMESTAMP,"reversalReason"=$2,"updatedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$3 AND "id"=$4`,input.actorId,input.reason.trim(),input.schoolId,input.expenseId);}await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:`finance_v2.expense_${input.decision==='approve'?'approved':'reversed'}`,entityType:"FinanceExpense",entityId:input.expenseId,before:{status:expense.status},after:{status:input.decision==='approve'?'approved':'reversed',reason:input.reason||null}});return{id:input.expenseId};}

@@ -30,7 +30,21 @@ export function formatStorageBytes(bytes: number) {
   return `${value.toFixed(decimals)} ${units[index]}`;
 }
 
+const estimates = new Map<string, {expiresAt:number; value:Promise<SchoolStorageEstimate>}>();
 export async function getSchoolStorageEstimate(schoolId: string): Promise<SchoolStorageEstimate> {
+  const existing = estimates.get(schoolId);
+  if (existing && existing.expiresAt > Date.now()) return existing.value;
+  // Only aggregate counts are cached, keyed by tenant. Keep memory bounded.
+  if (estimates.size >= 500) estimates.delete(estimates.keys().next().value!);
+  const value = computeSchoolStorageEstimate(schoolId).catch(error => {
+    estimates.delete(schoolId);
+    throw error;
+  });
+  estimates.set(schoolId,{expiresAt:Date.now()+15*60_000,value});
+  return value;
+}
+
+async function computeSchoolStorageEstimate(schoolId: string): Promise<SchoolStorageEstimate> {
   return withTenant(schoolId, async (tx) => {
     const tables = await tx.$queryRawUnsafe<Array<{ tableName: string }>>(
       `SELECT DISTINCT c.table_name AS "tableName"

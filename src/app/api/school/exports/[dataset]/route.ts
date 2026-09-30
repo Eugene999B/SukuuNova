@@ -1,3 +1,4 @@
+import { staffUserWhere } from "@/lib/staff-scope";
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireSchoolSession } from "@/lib/school-auth";
@@ -92,6 +93,7 @@ export async function GET(
 
       if (dataset === "students") {
         const rows = await tx.student.findMany({
+          where: { schoolId: session.schoolId, ...(url.searchParams.get("classId") ? { classId: url.searchParams.get("classId")! } : {}), ...(url.searchParams.get("status") ? { status: url.searchParams.get("status")! } : {}) },
           orderBy: { name: "asc" },
           take: MAX_EXPORT_ROWS + 1,
           select: {
@@ -113,6 +115,7 @@ export async function GET(
 
       if (dataset === "staff") {
         const rows = await tx.user.findMany({
+          where: staffUserWhere,
           orderBy: { name: "asc" },
           take: MAX_EXPORT_ROWS + 1,
           select: {
@@ -125,15 +128,7 @@ export async function GET(
             },
           },
         });
-        const staff = rows.filter(
-          (row) =>
-            !row.userRoles.some((assignment) =>
-              ["parent", "guardian", "student"].includes(
-                assignment.role.key?.trim() ||
-                  assignment.role.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_"),
-              ),
-            ),
-        );
+        const staff = rows;
         assertWithinExportLimit(staff.length);
         return {
           filename: `${school.uniqueCode}-staff.csv`,

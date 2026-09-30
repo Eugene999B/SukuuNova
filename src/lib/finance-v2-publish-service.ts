@@ -1,3 +1,4 @@
+import { resolveTermRoster } from "./student-term-context";
 import { createId } from "@paralleldrive/cuid2";
 import { Prisma } from "@prisma/client";
 import type { TenantDb } from "./db";
@@ -80,10 +81,8 @@ export async function publishFeeStructureV2Safe(
     throw new AppError("Published fee amounts must be greater than zero.", 400, "INVALID_AMOUNT");
   }
 
-  const students = await tx.student.findMany({
-    where: { schoolId: input.schoolId, classId: structure.classId, status: "active" },
-    select: { id: true },
-  });
+  const students = (await resolveTermRoster(tx, {schoolId:input.schoolId,termId:structure.termId})).filter(row => row.termClassId === structure.classId);
+  if (!students.length) throw new AppError("No confirmed learners belong to this class for the selected term. Confirm enrolment before publishing fees.",409,"TERM_ENROLLMENT_REQUIRED");
 
   let assigned = 0;
   for (const student of students) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshCw, RotateCcw, ShieldCheck } from "lucide-react";
 
 type Payment={id:string;studentName:string;amount:number|string;reversedAmount:number|string;method:string;reference:string|null;createdAt:string};
@@ -12,12 +12,27 @@ export default function FinanceV2PaymentCorrections(){
   const[data,setData]=useState<Snapshot|null>(null);const[loading,setLoading]=useState(true);const[error,setError]=useState("");const[notice,setNotice]=useState("");
   const load=useCallback(async()=>{setLoading(true);setError("");try{const response=await fetch("/api/school/finance-v2",{cache:"no-store"});const json=await response.json();if(!response.ok)throw new Error(json.message||json.error||"Payment history could not be loaded.");setData(json);}catch(error){setError(error instanceof Error?error.message:"Payment history could not be loaded.");}finally{setLoading(false);}},[]);
   useEffect(()=>{void load();},[load]);
+  const pending = useRef<{ fingerprint: string; operationId: string } | null>(null);
+  const busy = useRef(false);
   async function reverse(payment:Payment){
+    if (busy.current) return;
     const available=Math.max(0,Number(payment.amount)-Number(payment.reversedAmount||0));
     const amountText=window.prompt(`Amount to reverse (maximum ${money(available)})`,available.toFixed(2));if(!amountText)return;
     const amount=Number(amountText);if(!Number.isFinite(amount)||amount<=0||amount>available){setError("Enter a reversal amount greater than zero and not above the unreversed receipt value.");return;}
     const reason=window.prompt("Reason for this payment correction / reversal?");if(!reason?.trim())return;
-    setError("");setNotice("");const response=await fetch("/api/school/finance-v2",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"payment.reverse",paymentId:payment.id,amount,reason:reason.trim()})});const json=await response.json();if(!response.ok){setError(json.message||json.error||"Payment could not be reversed.");return;}setNotice("Payment correction recorded. The original receipt remains in the audit trail.");await load();
+    const fingerprint = JSON.stringify([payment.id, amount, reason.trim()]);
+    if (!pending.current || pending.current.fingerprint !== fingerprint) pending.current = { fingerprint, operationId: crypto.randomUUID() };
+    busy.current = true;
+    setError(""); setNotice("");
+    try {
+      const response = await fetch("/api/school/finance-v2", {method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"payment.reverse",paymentId:payment.id,amount,reason:reason.trim(),operationId:pending.current.operationId})});
+      const json=await response.json();
+      if (!response.ok) throw new Error(json.message||json.error||"Payment could not be reversed.");
+      pending.current = null;
+      setNotice("Payment correction recorded. The original receipt remains in the audit trail.");
+      await load();
+    } catch (error) { setError(error instanceof Error ? error.message : "Connection interrupted. Retry the same details safely."); }
+    finally { busy.current = false; }
   }
   return <section className="fv2-card"><header><h3>Payment controls</h3><p>Every new payment needs a receipt or transaction reference. Posted payments are corrected by reversal, never by silently editing or deleting cash history.</p></header>
     <div className="fv2-alert"><ShieldCheck size={16}/> Use a unique reference such as a MoMo transaction ID, bank reference, cheque number or cashier receipt number. Retrying the same payment with the same details is safe.</div>

@@ -31,9 +31,18 @@ describe("report-card expected school days", () => {
 
 it("does not count future term dates as absences on an interim report",async()=>{
  const attendance=vi.fn(async()=>[{attendanceDate:day("2026-09-07"),isLate:false}]);
- const tx={attendanceEvent:{findMany:attendance},calendarEvent:{findMany:vi.fn(async()=>[])}} as unknown as TenantDb;
+ const tx={$queryRawUnsafe:vi.fn(async()=>[]),attendanceEvent:{findMany:attendance},calendarEvent:{findMany:vi.fn(async()=>[])}} as unknown as TenantDb;
  const result=await reportAttendanceForTerm(tx,{schoolId:"s",studentId:"learner",startDate:day("2026-09-07"),endDate:day("2026-12-18"),asOf:day("2026-09-09")});
  expect(result.expectedDays).toBe(3);
  expect(result.absent).toBe(2);
 
+});
+
+it("uses a manual Saturday lesson and a weekday closure over legacy events", () => {
+ expect(expectedSchoolDays(day("2026-09-07"),day("2026-09-13"),[
+ {startDate:day("2026-09-12"),endDate:day("2026-09-12")}
+ ],[
+ {calendarDate:day("2026-09-12"),isInstructional:true,affectsAttendance:false},
+ {calendarDate:day("2026-09-08"),isInstructional:false,affectsAttendance:true}
+ ])).toBe(5);
 });

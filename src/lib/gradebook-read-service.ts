@@ -1,3 +1,5 @@
+import { resolveTermRoster } from "./student-term-context";
+import { AppError } from "./errors";
 import type { TenantDb } from "./db";
 import { calculateSubjectResult, validateAssessmentRules, type AssessmentRules } from "./assessment-engine";
 
@@ -64,12 +66,10 @@ export async function getClassSubjectPerformanceForRuntime(
   termId: string,
   rules: AssessmentRules,
 ) {
+  const term = await tx.term.findFirst({ where: { id: termId }, select: { schoolId: true } });
+  if (!term) throw new AppError("Term not found.", 404, "TERM_NOT_FOUND");
   const [students, assessments] = await Promise.all([
-    tx.student.findMany({
-      where: { classId, status: "active" },
-      select: { id: true, name: true, admissionNo: true },
-      orderBy: { name: "asc" },
-    }),
+    resolveTermRoster(tx, {schoolId:term.schoolId,termId,includeInactive:true}).then(rows => rows.filter(row => row.termClassId === classId).sort((a,b) => a.name.localeCompare(b.name))),
     tx.assessment.findMany({
       where: { classId, subjectId, termId },
       select: {

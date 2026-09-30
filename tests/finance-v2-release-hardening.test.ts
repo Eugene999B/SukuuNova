@@ -14,6 +14,9 @@ describe("Finance V2 release hardening",()=>{
       const classroom=await tx.class.create({data:{schoolId:fixture.schoolId,name:`Hardening Class ${fixture.schoolId}`}});
       const student=await tx.student.create({data:{schoolId:fixture.schoolId,admissionNo:`HARD-${fixture.schoolId}`,name:"Hardening Learner",classId:classroom.id,status:"active"}});
 
+      await tx.$executeRawUnsafe(
+        `INSERT INTO "Enrollment" ("id","schoolId","studentId","academicYearId","termId","classId","status","entryType","guardianVerified","documentsReady","feeReady","createdBy") VALUES ($1,$2,$3,$4,$5,$6,'confirmed','returning',true,true,true,$7)`,
+        "hard-enrol-"+student.id,fixture.schoolId,student.id,year.id,term.id,classroom.id,fixture.ownerId);
       await ensureDefaultFinanceCategories(tx,fixture.schoolId);
       const categories=await tx.$queryRawUnsafe<Array<{id:string;code:string}>>(`SELECT "id","code" FROM "FinanceFeeCategory" WHERE "schoolId"=$1`,fixture.schoolId);
       const tuition=categories.find(row=>row.code==="TUITION");

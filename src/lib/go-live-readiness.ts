@@ -1,3 +1,4 @@
+import { staffUserWhere } from "@/lib/staff-scope";
 import type { TenantDb } from "@/lib/db";
 
 export type GoLiveStepStatus = "complete" | "attention" | "blocked";
@@ -237,9 +238,9 @@ export async function getSchoolGoLiveReadiness(tx: TenantDb, schoolId: string): 
     tx.term.findFirst({ where: { startDate: { lte: today }, endDate: { gte: today } }, select: { id: true } }),
     tx.class.count(),
     tx.subject.count(),
-    tx.user.count({ where: { status: "active" } }),
+    tx.user.count({ where: { ...staffUserWhere, status: "active" } }),
     tx.user.count({ where: { status: "active", userRoles: { none: {} } } }),
-    tx.user.count({ where: { status: "active", needsPasswordChange: true } }),
+    tx.user.count({ where: { ...staffUserWhere, status: "active", needsPasswordChange: true } }),
     tx.classSubjectTeacher.count(),
     tx.student.count({ where: { status: "active" } }),
     tx.student.count({ where: { status: "active", classId: null } }),

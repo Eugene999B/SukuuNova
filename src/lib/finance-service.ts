@@ -328,8 +328,12 @@ export async function reversePayment(tx: TenantDb, input: { schoolId: string; ac
   if (reason.length < 2) throw new AppError("A reason is required when reversing a payment.", 400, "REVERSAL_REASON_REQUIRED");
   const key = input.idempotencyKey?.trim().slice(0, 100) || null;
   if (key) {
-    const prior = await tx.paymentReversal.findFirst({ where: { schoolId: input.schoolId, idempotencyKey: key }, select: { id: true, paymentId: true, amount: true } });
-    if (prior) return prior;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reversal-operation:${input.schoolId}:${key}`}))`;
+    const prior = await tx.paymentReversal.findFirst({ where: { schoolId: input.schoolId, idempotencyKey: key }, select: { id: true, paymentId: true, amount: true, reason: true } });
+    if (prior) {
+      if (prior.paymentId !== input.paymentId || !prior.amount.equals(toMoney(input.amount)) || prior.reason !== reason) throw new AppError("This operation was already used for different reversal details.", 409, "IDEMPOTENCY_CONFLICT");
+      return prior;
+    }
   }
   const payment = await tx.payment.findFirst({ where: { id: input.paymentId, schoolId: input.schoolId }, include: { reversals: true } });
   if (!payment) throw new AppError("Payment not found.", 404, "NOT_FOUND");

@@ -1,5 +1,6 @@
 import type { TenantDb } from "@/lib/db";
 
+export type CalendarDayOverride = { calendarDate: Date; isInstructional: boolean; affectsAttendance: boolean };
 export type AttendanceBlockingRange = { startDate: Date; endDate: Date };
 export type ReportAttendanceSummary = {
   present: number;
@@ -24,7 +25,7 @@ function nextDay(value: Date) {
   return next;
 }
 
-export function expectedSchoolDays(startDate: Date, endDate: Date, blockedRanges: AttendanceBlockingRange[] = []) {
+export function expectedSchoolDays(startDate: Date, endDate: Date, blockedRanges: AttendanceBlockingRange[] = [], overrides: CalendarDayOverride[] = []) {
   const start = utcDay(startDate);
   const end = utcDay(endDate);
   if (end < start) return 0;
@@ -39,11 +40,15 @@ export function expectedSchoolDays(startDate: Date, endDate: Date, blockedRanges
     }
   }
 
+  const calendar = new Map(overrides.map(row => [dayKey(row.calendarDate), row]));
   let count = 0;
   for (let cursor = start; cursor <= end; cursor = nextDay(cursor)) {
+    const override = calendar.get(dayKey(cursor));
+    if (override?.isInstructional) { count += 1; continue; }
+    if (override?.affectsAttendance) continue;
     const weekday = cursor.getUTCDay();
     if (weekday === 0 || weekday === 6) continue;
-    if (blocked.has(dayKey(cursor))) continue;
+    if (!override && blocked.has(dayKey(cursor))) continue;
     count += 1;
   }
   return count;
@@ -58,7 +63,7 @@ export async function reportAttendanceForTerm(tx: TenantDb, input: {
 }): Promise<ReportAttendanceSummary> {
   const asOf = input.asOf ?? new Date();
   const reportingEnd = input.endDate < asOf ? input.endDate : asOf;
-  const [attendanceRows, blockedRanges] = await Promise.all([
+  const [attendanceRows, blockedRanges, calendarDays] = await Promise.all([
     tx.attendanceEvent.findMany({
       where: {
         schoolId: input.schoolId,
@@ -77,12 +82,14 @@ export async function reportAttendanceForTerm(tx: TenantDb, input: {
       },
       select: { startDate: true, endDate: true },
     }),
+    tx.$queryRawUnsafe<CalendarDayOverride[]>(`SELECT DISTINCT ON ("calendarDate") "calendarDate","isInstructional","affectsAttendance" FROM "SchoolCalendarDay" WHERE "schoolId"=$1 AND "calendarDate">=$2::date AND "calendarDate"<=$3::date ORDER BY "calendarDate", CASE WHEN "source"=\'manual\' THEN 0 ELSE 1 END, "updatedAt" DESC`,input.schoolId,input.startDate,reportingEnd),
   ]);
 
-  const presentDates = new Set(attendanceRows.map((row) => dayKey(row.attendanceDate)));
-  const lateDates = new Set(attendanceRows.filter((row) => row.isLate).map((row) => dayKey(row.attendanceDate)));
-  const expectedDays = expectedSchoolDays(input.startDate, reportingEnd, blockedRanges);
-  const present = Math.min(presentDates.size, expectedDays || presentDates.size);
+  const instructionalRows = attendanceRows.filter(row => expectedSchoolDays(row.attendanceDate, row.attendanceDate, blockedRanges, calendarDays) > 0);
+  const presentDates = new Set(instructionalRows.map((row) => dayKey(row.attendanceDate)));
+  const lateDates = new Set(instructionalRows.filter((row) => row.isLate).map((row) => dayKey(row.attendanceDate)));
+  const expectedDays = expectedSchoolDays(input.startDate, reportingEnd, blockedRanges, calendarDays);
+  const present = Math.min(presentDates.size, expectedDays);
   const absent = Math.max(0, expectedDays - present);
   const attendanceRate = expectedDays > 0 ? Math.round((present / expectedDays) * 1000) / 10 : null;
 
