@@ -168,12 +168,23 @@ export default async function ReportCardsPage({
       }),
     ]);
 
+    // Open a populated class on first arrival, using this term's roster and
+    // saved report identities rather than learners' present-day class placement.
+    const populatedClassIds = new Set(roster.map((student) => student.termClassId));
+    for (const report of allReports) {
+      const snapshotClassId = reportSnapshotClassId(report.calculationSnapshot);
+      if (snapshotClassId) populatedClassIds.add(snapshotClassId);
+    }
+    const reportingClass = params.classId
+      ? selectedClass
+      : classes.find((candidate) => populatedClassIds.has(candidate.id)) ?? selectedClass;
+
     const termStudents = roster
-      .filter((student) => student.termClassId === selectedClass.id)
+      .filter((student) => student.termClassId === reportingClass.id)
       .map((student) => ({ id: student.id, name: student.name, admissionNo: student.admissionNo }))
       .sort((a, b) => a.name.localeCompare(b.name));
     const classByStudent = new Map(roster.map(row => [row.id, row.termClassId]));
-    const reports = allReports.filter(report => (reportSnapshotClassId(report.calculationSnapshot) ?? classByStudent.get(report.studentId)) === selectedClass.id);
+    const reports = allReports.filter(report => (reportSnapshotClassId(report.calculationSnapshot) ?? classByStudent.get(report.studentId)) === reportingClass.id);
     const studentMap = new Map(termStudents.map((student) => [student.id, student]));
     for (const report of reports) {
       if (!studentMap.has(report.studentId)) {
@@ -202,7 +213,7 @@ export default async function ReportCardsPage({
       allTerms,
       classes,
       term,
-      selectedClass,
+      selectedClass: reportingClass,
       students,
       termStudents,
       reports,
@@ -210,7 +221,7 @@ export default async function ReportCardsPage({
       detail,
       permissions,
       isFinalTerm,
-      isClassTeacher: selectedClass.classTeacherId === session.userId,
+      isClassTeacher: reportingClass.classTeacherId === session.userId,
     };
   });
 
@@ -263,7 +274,7 @@ export default async function ReportCardsPage({
             {data.reports.length ? (
               <a className="report-action primary" href={`/school/report-cards/class-print?term=${encodeURIComponent(term.id)}&classId=${encodeURIComponent(selectedClass.id)}`}>Print / save class PDF ({data.reports.length})</a>
             ) : null}
-            {data.permissions.canGenerate ? <ReportCardGenerateButton termId={term.id} classId={selectedClass.id} missing={missing} /> : null}
+            {data.permissions.canGenerate && data.termStudents.length > 0 ? <ReportCardGenerateButton termId={term.id} classId={selectedClass.id} missing={missing} /> : null}
           </div>
         </section>
 
