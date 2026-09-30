@@ -46,3 +46,15 @@ it("keeps a standard eight-subject report with two signatories on one A4 sheet",
  ]));
  expect(pdf.getPageCount()).toBe(1);
 });
+
+it("reuses identical approved artifacts without sharing mutable buffers or stale identities", async () => {
+  const data = sample(REPORT_CARD_THEMES[0].id);
+  const first = await buildReportCardPdf(data);
+  const expected = Buffer.from(first);
+  first.fill(0);
+  expect(await buildReportCardPdf(data)).toEqual(expected);
+  const changed = { ...data, student: { ...data.student, name: "Changed learner" } };
+  const updated = await PDFDocument.load(await buildReportCardPdf(changed));
+  expect(updated.getTitle()).toContain("Changed learner");
+  expect(updated.getTitle()).not.toContain("Akɔsua");
+});

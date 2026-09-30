@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
@@ -20,7 +21,7 @@ function loadRegularFont() {
   return regularFontBytes;
 }
 
-export async function buildReportCardPdf(data: ReportPdfData, signatures: SignatureSnapshot[] = []) {
+async function renderReportCardPdf(data: ReportPdfData, signatures: SignatureSnapshot[] = []) {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(await loadRegularFont(), {subset:true});
@@ -140,4 +141,40 @@ export async function buildReportCardPdf(data: ReportPdfData, signatures: Signat
     sheet.drawText("SukuuNova · "+data.reportId+" · "+(index+1)+"/"+pages.length,{x:margin,y:28,size:7,font,color:ink});
   }
   return Buffer.from(await pdf.save());
+}
+
+const approvedArtifacts = new Map<string, Buffer>();
+let approvedArtifactBytes = 0;
+const ARTIFACT_BYTE_LIMIT = 10 * 1024 * 1024;
+const ARTIFACT_ENTRY_LIMIT = 32;
+
+/** Callers must authorize and load the document before invoking the renderer.
+ * Hash the entire loaded document and signatures: a reopened report or changed
+ * identity can never reuse a stale artifact. Bounded, process-local storage only.
+ */
+export async function buildReportCardPdf(data: ReportPdfData, signatures: SignatureSnapshot[] = []) {
+  const cacheable = data.status === "approved" || data.status === "sent";
+  if (!cacheable) return renderReportCardPdf(data, signatures);
+  const key = createHash("sha256").update(JSON.stringify({ renderer: 1, data, signatures })).digest("hex");
+  const cached = approvedArtifacts.get(key);
+  if (cached) {
+    approvedArtifacts.delete(key);
+    approvedArtifacts.set(key, cached);
+    return Buffer.from(cached);
+  }
+  const bytes = await renderReportCardPdf(data, signatures);
+  if (bytes.byteLength <= ARTIFACT_BYTE_LIMIT) {
+    const existing = approvedArtifacts.get(key);
+    if (existing) approvedArtifactBytes -= existing.byteLength;
+    approvedArtifacts.delete(key);
+    while (approvedArtifacts.size >= ARTIFACT_ENTRY_LIMIT || approvedArtifactBytes + bytes.byteLength > ARTIFACT_BYTE_LIMIT) {
+      const oldest = approvedArtifacts.keys().next().value;
+      if (oldest == null) break;
+      approvedArtifactBytes -= approvedArtifacts.get(oldest)!.byteLength;
+      approvedArtifacts.delete(oldest);
+    }
+    approvedArtifacts.set(key, Buffer.from(bytes));
+    approvedArtifactBytes += bytes.byteLength;
+  }
+  return bytes;
 }
