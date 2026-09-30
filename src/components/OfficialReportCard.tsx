@@ -117,7 +117,7 @@ export default function OfficialReportCard({ data, signatures, embedded = false 
       ) : null}
 
       <article ref={paperRef} className={`official-v2-paper font-${theme.fontMode}`} style={vars}>
-        {data.status !== "approved" ? <div className="rc-watermark">DRAFT · FOR REVIEW</div> : data.watermark ? <div className="rc-watermark">{data.watermark}</div> : null}
+        {data.status !== "approved" && data.status !== "sent" ? <div className="rc-watermark">DRAFT · FOR REVIEW</div> : data.watermark ? <div className="rc-watermark">{data.watermark}</div> : null}
         <header className="rc-letterhead">
           <div className="rc-logo">{data.school.logoUrl ? <img src={data.school.logoUrl} alt={`${data.school.name} crest`} /> : <span>{data.school.name.slice(0, 1)}</span>}</div>
           <div className="rc-school-copy">

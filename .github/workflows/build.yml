@@ -46,16 +46,19 @@ jobs:
           psql -v ON_ERROR_STOP=1 -c "CREATE ROLE sukuunova_test LOGIN NOSUPERUSER NOBYPASSRLS;"
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_test OWNER sukuunova_test;"
           psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_upgrade OWNER sukuunova_test;"
+          psql -v ON_ERROR_STOP=1 -c "CREATE DATABASE sukuunova_restore_drill OWNER sukuunova_test;"
       - name: Install dependencies from lockfile
         run: npm ci --include=dev --ignore-scripts --no-audit --no-fund
       - name: Generate ephemeral secrets
         run: |
-          echo "SCHOOL_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "GUARDIAN_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "QR_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "PLATFORM_AUTH_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "FACE_EMBEDDING_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
-          echo "WHATSAPP_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          for name in SCHOOL_AUTH_SECRET GUARDIAN_AUTH_SECRET QR_AUTH_SECRET PLATFORM_AUTH_SECRET WHATSAPP_WEBHOOK_SECRET BACKUP_ENCRYPTION_KEY; do
+            value="$(openssl rand -hex 32)"
+            echo "::add-mask::$value"
+            echo "$name=$value" >> "$GITHUB_ENV"
+          done
+          value="$(openssl rand -base64 32)"
+          echo "::add-mask::$value"
+          echo "FACE_EMBEDDING_ENCRYPTION_KEY=$value" >> "$GITHUB_ENV"
       - name: Generate Prisma client
         run: npx prisma generate
       - name: Validate Prisma schema
@@ -94,6 +97,22 @@ jobs:
         run: |
           npx tsx scripts/complete-eugene-academic-demo.ts
           npx tsx scripts/complete-eugene-academic-demo.ts
+      - name: Encrypted backup and isolated restore drill
+        env:
+          DATABASE_URL: postgresql://postgres@localhost:5432/sukuunova_test
+          RESTORE_DATABASE_URL: postgresql://postgres@localhost:5432/sukuunova_restore_drill
+          BACKUP_DIR: /tmp/sukuunova-ci-backup
+        run: |
+          npx tsx scripts/db-backup.ts
+          manifests=("$BACKUP_DIR"/*.manifest.json)
+          test "${#manifests[@]}" -eq 1
+          BACKUP_MANIFEST="${manifests[0]}" npx tsx scripts/db-restore-verify.ts
+          for table in School Student ReportCard Payment; do
+            source_count=$(psql "$DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM \"$table\";")
+            restored_count=$(psql "$RESTORE_DATABASE_URL" -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM \"$table\";")
+            test "$source_count" = "$restored_count"
+            echo "$table: restored $restored_count records"
+          done
       - name: Clean-state reset rehearsal
         env:
           RESET_DATABASE_URL: postgresql://sukuunova_test@localhost:5432/sukuunova_test

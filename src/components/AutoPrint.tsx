@@ -20,8 +20,9 @@ async function waitForOutstandingImages() {
   })));
 }
 
-export default function AutoPrint({ children }: { children: ReactNode }) {
+export default function AutoPrint({ children, automatic = true }: { children: ReactNode; automatic?: boolean }) {
   useEffect(() => {
+    if (!automatic) return;
     let cancelled = false;
 
     void (async () => {
@@ -38,7 +39,7 @@ export default function AutoPrint({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [automatic]);
 
-  return <>{children}</>;
+  return <>{!automatic ? <div className="print-pack-actions"><button type="button" onClick={() => window.print()}>Print available reports</button></div> : null}{children}<style>{`@media print { .print-pack-actions, .print-pack-warning { display: none !important; } }`}</style></>;
 }

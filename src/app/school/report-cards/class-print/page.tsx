@@ -66,7 +66,7 @@ export default async function ClassReportPrintPage({ searchParams }: { searchPar
     const classByStudent = new Map(roster.map(row=>[row.id,row.termClassId]));
     const reportIds = candidates.filter(row => (reportSnapshotClassId(row.calculationSnapshot) ?? classByStudent.get(row.studentId)) === classId).map(row=>row.id);
 
-    return { kind: "ready" as const, selectedClass, term, reportIds };
+    return { kind: "ready" as const, selectedClass, term, reportIds, learners: candidates.map(row => ({ reportId: row.id, studentId: row.studentId, name: row.student.name })) };
   });
 
   if (context.kind === "missing") notFound();
@@ -83,7 +83,7 @@ export default async function ClassReportPrintPage({ searchParams }: { searchPar
     batchSize: 3,
   });
 
-  if (pack.failures.length) {
+  if (pack.failures.length && !pack.reports.length) {
     console.error("Class report print pack could not be prepared completely", {
       schoolId: session.schoolId,
       classId,
@@ -102,7 +102,13 @@ export default async function ClassReportPrintPage({ searchParams }: { searchPar
   }
 
   return (
-    <AutoPrint>
+    <AutoPrint automatic={pack.failures.length === 0}>
+      {pack.failures.length > 0 ? <section className="print-pack-warning" role="alert" style={{ maxWidth: 760, margin: "24px auto", padding: 20 }}>
+        <h1>{pack.reports.length} reports ready · {pack.failures.length} need attention</h1>
+        <p>This is an incomplete class pack. You can print the available reports, then retry the class pack or open the affected learners below. Failed reports are not silently included as blank pages.</p>
+        <Link href={`/school/report-cards/class-print?term=${encodeURIComponent(termId)}&classId=${encodeURIComponent(classId)}`}>Retry class pack</Link>
+        <ul>{pack.failures.map((failure) => <li key={failure.reportId}><Link href={`/school/report-cards?term=${encodeURIComponent(termId)}&classId=${encodeURIComponent(classId)}&studentId=${encodeURIComponent(context.learners.find(row => row.reportId === failure.reportId)?.studentId ?? "")}`}>{context.learners.find(row => row.reportId === failure.reportId)?.name ?? "Open learner report"}</Link></li>)}</ul>
+      </section> : null}
       <div className="class-report-batch">
         {pack.reports.map(({ report, signatures }) => <OfficialReportCard key={report.reportId} data={report} signatures={signatures} embedded />)}
       </div>
