@@ -27,7 +27,9 @@ const CONTEXTS = [
   "a transport count","a savings activity","a reading club","a school shop","a farming project","a health club",
 ] as const;
 
-export const PRIMARY_MATH_TOPIC_CAPACITY = 80_000_000;
+// Conservative task-family counts; numeric permutations are not authored questions.
+export const PRIMARY_MATH_TOPIC_CAPACITY = 5;
+const FAMILY_COUNTS: Record<string,number> = {number:5,operations:6,"multiplication-division":4,fractions:5,"fractions-decimals":4,"fractions-decimals-percentages":5,patterns:4,geometry:5,measurement:5,data:5,"data-chance":5,"ratio-proportion":4};
 
 function hash(value: string) {
   let result = 2166136261;
@@ -54,10 +56,13 @@ function options(answer: number, seed: number, step = 1) {
   const values = Array.from(new Set([
     answer,
     answer + step,
-    answer - step,
+    Math.max(0, answer - step),
     answer + 2 * step,
     Math.max(0, answer - 2 * step),
   ])).slice(0, 4);
+  for (let candidate = 0; values.length < 4; candidate += Math.max(1, step)) {
+    if (!values.includes(candidate)) values.push(candidate);
+  }
   const shift = seed % values.length;
   const rotated = [...values.slice(shift), ...values.slice(0, shift)];
   return {
@@ -85,7 +90,7 @@ function numericQuestion(input: {
   const profile = LEVELS[input.config.levelId];
   const common = {
     id: `primary-math-${input.config.levelId}-${input.target.id}-${input.family}-${input.id}`,
-    exposureKey: `primary-math:${input.config.levelId}:${input.target.id}:${input.family}:${input.id}`,
+    exposureKey: `primary-math:${input.config.levelId}:${input.target.id}:${input.family}:${hash(JSON.stringify([input.prompt.match(/\d+(?:[.,]\d+)*/g), input.answer]))}`,
     subject: "Mathematics",
     topic: input.target.label,
     skill: input.skill,
@@ -117,7 +122,7 @@ function renderNumber(target: Target, config: SessionConfig, seed: number, posit
   const style = hash(`${seed}:style:${position}`) % 6;
   const a = whole(profile, seed, position * 3 + 1);
   const placeOptions = config.levelId === "basic-1" ? [1,10] : config.levelId === "basic-2" ? [1,10,100] : config.levelId === "basic-3" ? [1,10,100,1000] : [1,10,100,1000,10000];
-  const place = pick(placeOptions, seed, position);
+  const place = pick(placeOptions.filter(value => value <= a), seed, position);
   const digit = Math.floor(a / place) % 10;
 
   if (family === 0) {
@@ -125,9 +130,9 @@ function renderNumber(target: Target, config: SessionConfig, seed: number, posit
     return numericQuestion({
       id: String(seed), target, config, family: "place-value", skill: "Interpret place value",
       prompt: directOrStory(style,
-        `In the number ${a.toLocaleString("en-GH")}, what value does the digit ${digit} represent?`,
+        `In the number ${a.toLocaleString("en-GH")}, what is the value of the digit in the ${place.toLocaleString("en-GH")}s place?`,
         `${name} writes ${a.toLocaleString("en-GH")} on the board and circles the digit ${digit} in the ${place.toLocaleString("en-GH")}s place. What is the value of the circled digit?`,
-        `A learner says the digit ${digit} in ${a.toLocaleString("en-GH")} is worth only ${digit}. What value should the learner use instead?`
+        `What value does the digit ${digit} in the ${place.toLocaleString("en-GH")}s place of ${a.toLocaleString("en-GH")} represent?`
       ),
       answer, explanation: `The digit ${digit} is in the ${place.toLocaleString("en-GH")}s place, so its value is ${answer.toLocaleString("en-GH")}.`,
       hint: "Use the position of the digit, not only the digit itself.", challenge: style >= 2 ? "Analyse" : "Apply", seed, multipleChoice: style % 2 === 0,
@@ -282,7 +287,7 @@ function renderOperations(target: Target, config: SessionConfig, seed: number, p
 
 function renderFractions(target: Target, config: SessionConfig, seed: number, position: number): LearnQuestion {
   const profile = LEVELS[config.levelId];
-  const family = position % 5;
+  const family = position % (config.levelId === "basic-4" ? 4 : 5);
   const style = hash(`${seed}:fraction-style:${position}`) % 4;
   const denominator = 2 + (hash(`${seed}:den`) % (config.levelId === "basic-1" ? 2 : 10));
   const numerator = 1 + (hash(`${seed}:num`) % Math.max(1, denominator - 1));
@@ -310,7 +315,7 @@ function renderFractions(target: Target, config: SessionConfig, seed: number, po
   }
 
   if (family === 2) {
-    const other = Math.min(denominator - 1, numerator + 1);
+    const other = numerator === denominator - 1 ? numerator - 1 : numerator + 1;
     const answer = other > numerator ? other : numerator;
     return numericQuestion({
       id: String(seed), target, config, family: "compare-fractions", skill: "Compare fractions with a common denominator",
@@ -526,7 +531,9 @@ function renderData(target: Target, config: SessionConfig, seed: number, positio
       answer,explanation:`There are ${favourable} red counters, so there are ${favourable} favourable outcomes.`,hint:"Count the outcomes that match the event.",challenge:"Recall",seed,multipleChoice:true
     });
   }
-  const doubled = [a,a,b,c];
+  const otherB = b === a ? a + 1 : b;
+  const otherC = c === a || c === otherB ? Math.max(a, otherB) + 1 : c;
+  const doubled = [a,a,otherB,otherC];
   const answer = a;
   return numericQuestion({
     id:String(seed),target,config,family:"mode",skill:"Identify the mode",
@@ -575,7 +582,115 @@ function renderRatio(target: Target, config: SessionConfig, seed: number, positi
   });
 }
 
+
+/** Conservative lower-primary tasks; each topic has its own bounded families. */
+function renderLowerPrimary(target: Target, config: SessionConfig, seed: number, position: number): LearnQuestion {
+  const year = Number(config.levelId.slice(-1));
+  const limit = year === 1 ? 100 : year === 2 ? 1000 : 10000;
+  const value = (tag: string, max: number, min = 1) => min + hash(seed + ":" + tag) % (max - min + 1);
+  const small = year === 1 ? 10 : 20;
+  const family = position % 4;
+  const a = value("a", small), b = value("b", small);
+  const make = (family: string, prompt: string, answer: number, explanation: string, challenge: CognitiveChallenge = "Apply", stimulus?: LearnQuestion["stimulus"]): LearnQuestion => ({
+    ...numericQuestion({id: String(seed),target,config,family,skill:family.replaceAll("-", " "),
+      prompt,answer,explanation,challenge,difficulty:challenge === "Recall" ? 1 : 2,seed,
+      multipleChoice:position % 3 === 0,optionStep:1}), stimulus,
+  });
+  if (target.id === "number") {
+    const n = value("number", limit - 1);
+    if (family === 0) return make("next-number", "What number comes after " + n + "?", n+1, "Count one more: " + n + " + 1 = " + (n+1) + ".", "Recall");
+    if (family === 1) return make("previous-number", "What number comes before " + n + "?", n-1, "Count one back: " + n + " − 1 = " + (n-1) + ".", "Recall");
+    const places = [1,10,100,1000].filter(p=>p<=n);
+    const place = places[value("place",places.length-1,0)];
+    const digit = Math.floor(n/place)%10;
+    if (family === 2) return make("place-value", "In " + n + ", what is the value of the digit in the " + place + "s place?", digit*place,
+      "The digit is " + digit + ". Its value is " + digit + " × " + place + " = " + digit*place + ".");
+    const other = n === limit-1 ? n-1 : n+1;
+    return make("compare-numbers", "Which number is greater: " + n + " or " + other + "?", Math.max(n,other),
+      Math.max(n,other) + " comes after " + Math.min(n,other) + " when counting.", "Recall");
+  }
+  if (target.id === "operations") {
+    const left = value("left",limit-2);
+    const right = value("right",Math.min(limit-left,year===1?20:year===2?100:1000));
+    const total = left+right;
+    const op = position%3;
+    if (op===0) return make("addition", "There are " + left + " books. " + right + " more books arrive. How many books are there now?",total,
+      "Add the two groups: " + left + " + " + right + " = " + total + ".");
+    if (op===1) return make("subtraction", "There are " + total + " pencils. " + right + " are given out. How many remain?",left,
+      "Take away the pencils given out: " + total + " − " + right + " = " + left + ".");
+    return make("missing-addend", left + " + □ = " + total + ". What number goes in the box?",right,
+      "Subtract the known part from the total: " + total + " − " + left + " = " + right + ".");
+  }
+  if (target.id === "multiplication-division") {
+    const groups=value("groups",5,2), each=value("each",10,2), total=groups*each;
+    if(family%2===0) return make("equal-groups", groups+" plates each hold "+each+" oranges. How many oranges are there?",total,
+      "Add "+each+" for each of the "+groups+" plates: "+groups+" × "+each+" = "+total+".");
+    return make("equal-sharing", "Share "+total+" oranges equally among "+groups+" children. How many does each child get?",each,
+      total+" ÷ "+groups+" = "+each+". Check: "+groups+" × "+each+" = "+total+".");
+  }
+  if (target.id === "fractions") {
+    const denominator=value("denominator",year===2?4:8,2);
+    const numerator=value("numerator",denominator-1);
+    if(family===0) return make("equal-parts", "A whole is split into "+denominator+" equal parts. How many of these parts make the whole?",denominator,
+      "All "+denominator+" equal parts together make one whole.","Recall");
+    if(family===1) return make("fraction-numerator", numerator+" of "+denominator+" equal parts are shaded. In "+numerator+"/"+denominator+", what is the numerator?",numerator,
+      "The numerator counts shaded parts, so it is "+numerator+".","Recall");
+    if(family===2) return make("fraction-denominator", numerator+" of "+denominator+" equal parts are shaded. In "+numerator+"/"+denominator+", what is the denominator?",denominator,
+      "The denominator counts all equal parts in the whole: "+denominator+".","Recall");
+    const each=value("share",5,2), total=each*denominator;
+    return make("unit-fraction-sharing", "Share "+total+" counters into "+denominator+" equal groups. How many counters are in one group?",each,
+      "One of the "+denominator+" equal groups is 1/"+denominator+" of the counters. "+total+" ÷ "+denominator+" = "+each+".");
+  }
+  if (target.id === "patterns") {
+    const step=year===1?1:value("step",5,1), start=value("start",year===1?20:50);
+    if(family===0) return make("continue-pattern", "What comes next: "+[start,start+step,start+2*step,start+3*step].join(", ")+", □?",start+4*step,
+      "Add "+step+" each time. The next number is "+(start+4*step)+".");
+    if(family===1) return make("missing-pattern", "Find the missing number: "+start+", □, "+(start+2*step)+", "+(start+3*step)+".",start+step,
+      "Each step adds "+step+". The missing number is "+(start+step)+".");
+    if(family===2) return make("decreasing-pattern", "What comes next: "+[start+4*step,start+3*step,start+2*step,start+step].join(", ")+", □?",start,
+      "Subtract "+step+" each time. The next number is "+start+".");
+    return make("pattern-step", "The pattern is "+[start,start+step,start+2*step,start+3*step].join(", ")+". How much is added each time?",step,
+      (start+step)+" − "+start+" = "+step+". This is the same for each step.");
+  }
+  if (target.id === "geometry") {
+    const shapes = year===3 ? [["triangle",3],["square",4],["rectangle",4],["pentagon",5],["hexagon",6]] as const
+      : [["triangle",3],["square",4],["rectangle",4]] as const;
+    const [shape,sides]=shapes[value("shape",shapes.length-1,0)];
+    if(family===0) return make("shape-sides","How many straight sides does a "+shape+" have?",sides,"A "+shape+" has "+sides+" straight sides.","Recall");
+    if(family===1) return make("shape-corners","How many corners does a "+shape+" have?",sides,"A "+shape+" has "+sides+" corners where its sides meet.","Recall");
+    if(family===2 && year===3) return make("solid-faces","A cube has square faces. How many faces does it have?",6,"A cube has a top, bottom, front, back, left and right face: 6 faces.","Recall");
+    const row=value("row",8,3), index=value("index",row-1);
+    return make("position-in-row",row+" children stand in a row. A child is number "+index+" from the front. How many children stand before that child?",index-1,
+      "Positions 1 to "+(index-1)+" come before position "+index+", so "+(index-1)+" children are before the child.");
+  }
+  if (target.id === "measurement") {
+    if(family===0) return make("compare-lengths","A red ribbon is "+a+" cm long. A blue ribbon is "+(a+b)+" cm long. How many centimetres longer is the blue ribbon?",b,
+      "Compare using the same unit: "+(a+b)+" − "+a+" = "+b+" cm.");
+    if(family===1) return make("money-change","A pencil costs GH₵"+a+". You pay GH₵"+(a+b)+". How many cedis change do you get?",b,
+      "Amount paid − cost = "+(a+b)+" − "+a+" = GH₵"+b+".");
+    if(family===2) {
+      const hour=value("hour",9,1), duration=value("hours",3,1);
+      return make("whole-hour-time","An activity starts at "+hour+":00 and ends at "+(hour+duration)+":00 on the same morning. How many hours does it last?",duration,
+        "Count the hours: "+(hour+duration)+" − "+hour+" = "+duration+".");
+    }
+    return make("equal-length-units","A desk is "+a+" equal blocks long. A shelf is "+(a+b)+" of the same blocks long. How many more blocks long is the shelf?",b,
+      "Use the same-sized blocks for both objects. "+(a+b)+" − "+a+" = "+b+".");
+  }
+  // Data tasks require reading the displayed evidence, not naming statistical formulas.
+  const values=[a,a+b,a+b+1];
+  const stimulus: LearnQuestion["stimulus"]={kind:"table",title:"Fruit chosen by children",columns:["Fruit","Children"],
+    rows:[["Mango",String(values[0])],["Orange",String(values[1])],["Banana",String(values[2])]]};
+  if(family===0) return make("read-table","How many children chose oranges?",values[1],"The Orange row shows "+values[1]+" children.","Recall",stimulus);
+  if(family===1) return make("table-total","How many children chose mangoes or oranges altogether?",values[0]+values[1],
+    "Add only the Mango and Orange rows: "+values[0]+" + "+values[1]+" = "+(values[0]+values[1])+".","Apply",stimulus);
+  if(family===2) return make("table-difference","How many more children chose oranges than mangoes?",b,
+    "Orange − Mango = "+values[1]+" − "+values[0]+" = "+b+".","Apply",stimulus);
+  return make("table-maximum","What is the greatest number in the Children column?",values[2],
+    "Compare all three values. The greatest is "+values[2]+".","Recall",stimulus);
+}
+
 function renderTarget(target: Target, config: SessionConfig, seed: number, position: number) {
+  if (/^basic-[123]$/.test(config.levelId)) return renderLowerPrimary(target, config, seed, position);
   const id = target.id;
   if (id === "number") return renderNumber(target, config, seed, position);
   if (id === "operations") return renderOperations(target, config, seed, position, false);
@@ -601,7 +716,9 @@ function targets(config: SessionConfig): Target[] {
 }
 
 export function primaryMathCapacityForSelection(config: SessionConfig) {
-  return targets(config).length * PRIMARY_MATH_TOPIC_CAPACITY;
+  return targets(config).reduce((sum, target) => sum + (/^basic-[123]$/.test(config.levelId)
+    ? target.id === "operations" ? 3 : target.id === "multiplication-division" ? 2 : 4
+    : FAMILY_COUNTS[target.id] ?? 0), 0);
 }
 
 export function buildPrimaryMathQuestions(config: SessionConfig, requestedCount = config.count, seed = config.seed ?? Date.now()): LearnQuestion[] {
@@ -614,7 +731,7 @@ export function buildPrimaryMathQuestions(config: SessionConfig, requestedCount 
   for (let position=0; result.length<requested && position<requested*8; position+=1) {
     const target = selected[(position + hash(`${seed}:target`)) % selected.length];
     const localSeed = hash(`${seed}:${config.levelId}:${target.id}:${position}`);
-    const question = renderTarget(target, config, localSeed, position);
+    const question = renderTarget(target, config, localSeed, Math.floor(position / selected.length));
     if (seen.has(question.exposureKey)) continue;
     seen.add(question.exposureKey);
     result.push(question);

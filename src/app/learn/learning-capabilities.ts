@@ -76,6 +76,9 @@ export function learningCapabilityForSelection(config: SessionConfig): LearningC
   const richStimulusCapacity = richStimulusCapacityForSelection(config);
   const authenticExamQuestions = examBankQuestionsForSelection(config).length;
   const nursingCapacity = nursingCapacityForSelection(config);
+  if(config.lane==="school" && config.programId==="ghana" && /^basic-[123]$/.test(config.levelId) && config.subjectId==="mathematics") {
+    return {ready:primaryMathCapacity>0,stage:primaryMathCapacity>0?"starter":"mapped",reviewedStandardQuestions:0,richInteractions:0,variantCapacity:0,intelligentCapacity:0,coverageCapacity:0,primaryMathCapacity,languageCapacity:0,richStimulusCapacity:0,authenticExamQuestions:0,nursingCapacity:0,estimatedStandardSupply:primaryMathCapacity};
+  }
   if(["french","ghanaian-language"].includes(config.subjectId)){
     return {ready:languageCapacity>0,stage:languageCapacity>0?"starter":"mapped",reviewedStandardQuestions:0,richInteractions:0,variantCapacity:0,intelligentCapacity:0,coverageCapacity:0,primaryMathCapacity:0,languageCapacity,richStimulusCapacity:0,authenticExamQuestions:0,nursingCapacity:0,estimatedStandardSupply:languageCapacity};
   }

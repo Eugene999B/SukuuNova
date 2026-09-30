@@ -68,13 +68,14 @@ describe("class-aligned Ghana basic-school assessment", () => {
     expect(new Set(questions.map((question) => question.generationFamily)).size).toBe(3);
   });
 
-  it("gives upper-primary topics genuine million-scale class-specific capacity", () => {
+  it("counts upper-primary task families without treating every numeric permutation as authored content", () => {
     for (const [levelId, topicId] of [
       ["basic-4", "operations"],
       ["basic-5", "fractions-decimals-percentages"],
       ["basic-6", "ratio-proportion"],
     ] as const) {
-      expect(primaryMathCapacityForSelection(cfg(levelId, topicId))).toBeGreaterThanOrEqual(1_000_000);
+      expect(primaryMathCapacityForSelection(cfg(levelId, topicId))).toBeGreaterThan(0);
+      expect(primaryMathCapacityForSelection(cfg(levelId, topicId))).toBeLessThan(10);
       expect(buildPrimaryMathQuestions(cfg(levelId, topicId, 50), 50, 1001)).toHaveLength(50);
     }
   });

@@ -296,6 +296,10 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
   function absorb(questions: LearnQuestion[], priority = 2) {
     for (const sourceQuestion of questions) {
       if (nursingFocused && priority > 0.5 && !sourceQuestion.exposureKey.startsWith("nursing:") && !sourceQuestion.exposureKey.startsWith("language:")) continue;
+      // Lower-primary maths uses its bounded class-specific generator; generic
+      // foundations must not reintroduce percentages, formula work or adult wording.
+      if (config.lane === "school" && config.programId === "ghana" && /^basic-[123]$/.test(config.levelId)
+        && sourceQuestion.subject === "Mathematics" && !sourceQuestion.exposureKey.startsWith("primary-math:")) continue;
       const isLanguageSubject = /french|twi|ghanaian language/i.test(sourceQuestion.subject);
       if (isLanguageSubject && !sourceQuestion.exposureKey.startsWith("language:")) continue;
       if (sourceQuestion.exposureKey.startsWith("language:") && !isNativeLanguageQuestion(sourceQuestion)) continue;

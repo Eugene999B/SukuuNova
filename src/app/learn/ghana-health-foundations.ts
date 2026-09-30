@@ -395,7 +395,7 @@ function task(row:Row, config:SessionConfig, subject:string, family:number, seed
   const key=`nursing:${config.programId}:${config.levelId}:${course}:${slug(term)}:${family}`;
   const q:LearnQuestion={
     id:key+":"+seed,exposureKey:key,subject,topic:TOPICS[course][topic],
-    difficulty:config.levelId==="level-100"?3:4,challenge:family===0?"Recall":family===3?"Analyse":"Apply",
+    difficulty:family===0||family===2?1:2,challenge:family===0||family===2?"Recall":family===3?"Analyse":"Apply",
     kind:"single",prompt:"",answer:"",explanation:rationale,skill:term,
     generationFamily:"nursing-foundation-"+["concept","scenario","recall","practice-review"][family],
     provenance:{sourceType:"original",rightsStatus:"not-applicable"},
