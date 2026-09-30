@@ -159,6 +159,8 @@ export default async function TeacherGradebookContextPage({ params, searchParams
             </nav>
 
             <TeacherWeeklyMarkbook
+              schoolId={session.schoolId}
+              userId={session.userId}
               weekNumber={selectedWeek}
               classId={classId}
               subjectId={subjectId}

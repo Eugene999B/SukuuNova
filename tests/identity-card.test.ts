@@ -4,6 +4,7 @@ import { upsertStaffProfile } from "../src/lib/staff-profile-service";
 import { withTenant } from "../src/lib/db";
 import {
   ensureIdentityCardsForSchool,
+  revokeIdentityCard,
   getIdentityCardSettings,
   getIdentityCardsByScope,
   listIdentityCards,
@@ -81,19 +82,16 @@ describe("school identity cards", () => {
     });
   });
 
-  it("uses five years by default and lets the school change the validity for every active card", async () => {
+  it("uses five years by default and applies changed validity only to future cards", async () => {
     await withTenant(fixture.schoolId, async (tx) => {
       const settings = await getIdentityCardSettings(tx, fixture.schoolId);
       expect(settings.validityMonths).toBe(60);
       const before = await tx.$queryRawUnsafe<Array<{ version: number; issuedAt: Date; expiresAt: Date }>>(`SELECT "version","issuedAt","expiresAt" FROM "IdentityCard" WHERE "schoolId"=$1 AND "status"='active' ORDER BY "createdAt" ASC`, fixture.schoolId);
       const result = await updateIdentityCardSettings(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, validityMonths: 36 });
       expect(result.validityMonths).toBe(36);
-      expect(result.updatedCards).toBeGreaterThan(0);
+      expect(result.updatedCards).toBe(0);
       const after = await tx.$queryRawUnsafe<Array<{ version: number; issuedAt: Date; expiresAt: Date }>>(`SELECT "version","issuedAt","expiresAt" FROM "IdentityCard" WHERE "schoolId"=$1 AND "status"='active' ORDER BY "createdAt" ASC`, fixture.schoolId);
-      expect(after[0]?.version).toBe((before[0]?.version ?? 0) + 1);
-      const expected = new Date(after[0]!.issuedAt);
-      expected.setUTCMonth(expected.getUTCMonth() + 36);
-      expect(after[0]!.expiresAt.toISOString()).toBe(expected.toISOString());
+      expect(after).toEqual(before);
       await updateIdentityCardSettings(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, validityMonths: 60 });
     });
   });
@@ -174,5 +172,18 @@ describe("school identity cards", () => {
       expect(after.filter((card) => card.staffId === staffId && card.status === "active")).toHaveLength(0);
       expect(after.filter((card) => card.staffId === staffId)).toHaveLength(1);
     });
+  });
+});
+it("never recreates a revoked card during listing or first-card issuance", async () => {
+  const fixture = await createTenantFixture();
+  await withTenant(fixture.schoolId, async tx => {
+    await ensureIdentityCardsForSchool(tx, fixture.schoolId, fixture.uniqueCode, fixture.ownerId);
+    const before = await listIdentityCards(tx, fixture.schoolId, fixture.uniqueCode, fixture.ownerId);
+    const card = before[0]!;
+    await revokeIdentityCard(tx, { schoolId: fixture.schoolId, actorId: fixture.ownerId, cardId: card.id });
+    await ensureIdentityCardsForSchool(tx, fixture.schoolId, fixture.uniqueCode, fixture.ownerId);
+    const after = await listIdentityCards(tx, fixture.schoolId, fixture.uniqueCode, fixture.ownerId);
+    expect(after).toHaveLength(before.length);
+    expect(after.find(row => row.id === card.id)?.status).toBe("revoked");
   });
 });

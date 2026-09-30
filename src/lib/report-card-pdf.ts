@@ -11,10 +11,19 @@ const color = (hex: string) => rgb(parseInt(hex.slice(1,3),16)/255,parseInt(hex.
 const number = (value: number | null | undefined) => value == null ? "Pending" : Number.isInteger(value) ? String(value) : value.toFixed(2);
 const clean = (value: unknown) => String(value ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g,"");
 
+let regularFontBytes: Promise<Buffer> | undefined;
+function loadRegularFont() {
+  regularFontBytes ??= readFile(path.join(process.cwd(), "public/fonts/NotoSans-Regular.ttf")).catch((error) => {
+    regularFontBytes = undefined;
+    throw error;
+  });
+  return regularFontBytes;
+}
+
 export async function buildReportCardPdf(data: ReportPdfData, signatures: SignatureSnapshot[] = []) {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
-  const font = await pdf.embedFont(await readFile(path.join(process.cwd(),"public/fonts/NotoSans-Regular.ttf")), {subset:true});
+  const font = await pdf.embedFont(await loadRegularFont(), {subset:true});
   const theme = reportCardThemeById(data.reportSettings.themeId);
   const primary = color(theme.primary), ink = color(theme.ink), accent = color(theme.accent);
   const width=595.28, height=841.89, margin=40, content=width-2*margin;

@@ -1,5 +1,6 @@
 "use client";
 
+import { markDraftKey, validMarkDraft, type MarkDraft } from "@/lib/mark-draft";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { CheckCircle2, CloudOff, Loader2, Plus, Search, Users, X } from "lucide-react";
@@ -11,6 +12,8 @@ type Cell = { value: string; status: MarkStatus };
 type Work = { id: string; workNumber: number; workDate: string; maxScore: number; recorded: number };
 type Row = { student: { id: string; name: string; admissionNo: string }; scores: Record<string, Snapshot> };
 type Props = {
+  schoolId: string;
+  userId: string;
   weekNumber: number;
   classId: string;
   subjectId: string;
@@ -53,11 +56,6 @@ function parseInput(value: string): Cell {
   return { value, status: "present" };
 }
 
-function storedCell(value: unknown): value is Cell {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as { value?: unknown; status?: unknown };
-  return typeof candidate.value === "string" && (candidate.status === "present" || candidate.status === "absent" || candidate.status === "excused");
-}
 
 function prettyDate(value: string) {
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -66,6 +64,8 @@ function prettyDate(value: string) {
 }
 
 export default function TeacherWeeklyMarkbook({
+  schoolId,
+  userId,
   weekNumber,
   classId,
   subjectId,
@@ -131,14 +131,14 @@ export default function TeacherWeeklyMarkbook({
   const allVisibleSelected = visibleRows.length > 0 && visibleRows.every((row) => selected.has(row.student.id));
 
   function storageKey(workId: string) {
-    return `sukuunova:mark-sheet:${workId}`;
+    return markDraftKey(schoolId, userId, workId);
   }
 
-  function readPending(workId: string): Record<string, Cell> {
+  function readPending(workId: string): Record<string, MarkDraft> {
     if (typeof window === "undefined") return {};
     try {
       const parsed = JSON.parse(window.localStorage.getItem(storageKey(workId)) || "{}") as Record<string, unknown>;
-      return Object.fromEntries(Object.entries(parsed).filter(([, value]) => storedCell(value))) as Record<string, Cell>;
+      return Object.fromEntries(Object.entries(parsed).filter(([, value]) => validMarkDraft(value))) as Record<string, MarkDraft>;
     } catch {
       return {};
     }
@@ -148,7 +148,7 @@ export default function TeacherWeeklyMarkbook({
     if (typeof window === "undefined") return;
     try {
       const pending = readPending(workId);
-      if (cell) pending[studentId] = cell;
+      if (cell) pending[studentId] = { ...cell, version: 2, expected: snapshotsRef.current[cellKey(workId, studentId)] ?? null };
       else delete pending[studentId];
       if (Object.keys(pending).length) window.localStorage.setItem(storageKey(workId), JSON.stringify(pending));
       else window.localStorage.removeItem(storageKey(workId));
@@ -270,6 +270,7 @@ export default function TeacherWeeklyMarkbook({
         setCells(nextCells);
         writePending(workId, studentId, null);
       } else {
+        writePending(workId, studentId, cellsRef.current[key]);
         scheduleSave(workId, studentId, 160);
       }
       setError("");
@@ -361,10 +362,12 @@ export default function TeacherWeeklyMarkbook({
         const cell = pending[row.student.id];
         if (!cell) continue;
         next[cellKey(work.id, row.student.id)] = cell;
+        snapshotsRef.current[cellKey(work.id, row.student.id)] = cell.expected;
         recovered += 1;
       }
     }
     if (!recovered) return;
+    setSnapshots({ ...snapshotsRef.current });
     cellsRef.current = next;
     setCells(next);
     setMessage(`${recovered} unsaved mark${recovered === 1 ? " was" : "s were"} recovered from this device and will sync automatically.`);
@@ -398,7 +401,7 @@ export default function TeacherWeeklyMarkbook({
     for (const timer of Object.values(timers.current)) window.clearTimeout(timer);
   }, []);
 
-  const saveLabel = offlineKeys.size
+  const saveLabel = error ? "Review unsaved marks" : offlineKeys.size
     ? `${offlineKeys.size} waiting for connection`
     : savingKeys.size || dirtyKeys.length
       ? "Saving automatically…"

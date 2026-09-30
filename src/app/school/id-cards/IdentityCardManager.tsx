@@ -331,7 +331,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
       });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || body.error || "Unable to save ID card validity.");
-      setMessage(`ID card validity updated to ${validityMonths / 12} year${validityMonths === 12 ? "" : "s"}. Reprint active cards so the expiry date printed on each card matches the live verification record.`);
+      setMessage(`ID card validity updated to ${validityMonths / 12} year${validityMonths === 12 ? "" : "s"}. This applies to newly issued cards. Existing printed cards keep their expiry date.`);
       setSelected(new Set());
       await load();
     } catch (reason) {
@@ -339,6 +339,20 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
     } finally {
       setBusy("");
     }
+  }
+
+  async function issueMissing() {
+    if (busy) return;
+    setBusy("issue-missing");
+    setError("");
+    try {
+      const response = await fetch("/api/school/identity-cards", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "issue-missing" }) });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || body.error || "Unable to issue cards.");
+      setMessage(`${body.result.created} new cards issued. Previously revoked cards require an explicit reissue.`);
+      await load();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to issue cards."); }
+    finally { setBusy(""); }
   }
 
   async function mutate(action: "reissue" | "revoke", cardId: string) {
@@ -384,10 +398,11 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
     <section className="identity-manager-command">
       <div><span className="app-eyebrow">SCHOOL IDENTITY</span><h2>Professional student & staff ID cards</h2><p>Find a student or staff member, check their details and portrait, then print an individual card or a complete school pack.</p></div>
       <button type="button" className="app-pill" onClick={() => void load()} disabled={loading || Boolean(busy)}><RefreshCw size={14}/> Refresh</button>
+      <button type="button" className="app-pill" onClick={() => void issueMissing()} disabled={loading || Boolean(busy)}>Issue first cards</button>
     </section>
 
     <section className="identity-manager-settings">
-      <div><SlidersHorizontal size={18}/><span><strong>Card validity</strong><small>One school-wide period for student and staff credentials. Default: 5 years.</small></span></div>
+      <div><SlidersHorizontal size={18}/><span><strong>Card validity</strong><small>Validity for newly issued student and staff cards. Existing cards remain unchanged.</small></span></div>
       <label><span>Validity period</span><select value={validityMonths} onChange={(event) => setValidityMonths(Number(event.target.value))}>{Array.from({ length: 10 }, (_, index) => (index + 1) * 12).map((months) => <option value={months} key={months}>{months / 12} year{months === 12 ? "" : "s"}</option>)}</select></label>
       <button type="button" className="button primary" disabled={Boolean(busy)} onClick={() => void saveValidity()}>{busy === "validity" ? <><LoaderCircle className="identity-spin" size={14}/> Saving…</> : "Save validity"}</button>
     </section>
@@ -449,7 +464,7 @@ export default function IdentityCardManager({ schoolName }: { schoolName: string
             <td><code>{card.serial}</code></td>
             <td>{new Date(card.expiresAt).toLocaleDateString("en-GB")}</td>
             <td><span className={current ? "identity-card-state is-current" : "identity-card-state is-invalid"}>{current ? "Current" : card.status === "revoked" ? "Revoked" : "Expired"}</span></td>
-            <td><div className="identity-row-actions">{current ? <button type="button" disabled={Boolean(busy)} onClick={() => void downloadSingle(card)}>{printingThis ? <LoaderCircle className="identity-spin" size={13}/> : <Printer size={13}/>} {printingThis ? "Preparing…" : "Print ID"}</button> : null}<Link href={profileHref}><ShieldCheck size={13}/> Profile</Link><button type="button" disabled={Boolean(busy) || card.status === "revoked"} onClick={() => void mutate("reissue", card.id)}>{card.status === "active" && card.isExpired ? "Renew" : "Reissue"}</button>{card.status === "active" ? <button type="button" className="is-danger" disabled={Boolean(busy)} onClick={() => void mutate("revoke", card.id)}>Revoke</button> : null}</div></td>
+            <td><div className="identity-row-actions">{current ? <button type="button" disabled={Boolean(busy)} onClick={() => void downloadSingle(card)}>{printingThis ? <LoaderCircle className="identity-spin" size={13}/> : <Printer size={13}/>} {printingThis ? "Preparing…" : "Print ID"}</button> : null}<Link href={profileHref}><ShieldCheck size={13}/> Profile</Link><button type="button" disabled={Boolean(busy)} onClick={() => void mutate("reissue", card.id)}>{card.status === "active" && card.isExpired ? "Renew" : "Reissue"}</button>{card.status === "active" ? <button type="button" className="is-danger" disabled={Boolean(busy)} onClick={() => void mutate("revoke", card.id)}>Revoke</button> : null}</div></td>
           </tr>;
         })}</tbody></table>
       </div>}

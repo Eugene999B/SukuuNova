@@ -85,7 +85,7 @@ export async function getScopedPlatformOverview(session: PlatformSession): Promi
   return {
     totals: {
       schools: schools.length,
-      activeSchools: schools.filter((school) => school.status !== "suspended").length,
+      activeSchools: schools.filter((school) => school.status === "active").length,
       suspendedSchools: schools.filter((school) => school.status === "suspended").length,
       students: schools.reduce((sum, school) => sum + school.studentCount, 0),
       users: schools.reduce((sum, school) => sum + school.userCount, 0),

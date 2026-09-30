@@ -52,7 +52,7 @@ const ordinal = (value: number | null) => {
   const mod100 = value % 100;
   return `${value}${mod100 >= 11 && mod100 <= 13 ? "th" : value % 10 === 1 ? "st" : value % 10 === 2 ? "nd" : value % 10 === 3 ? "rd" : "th"}`;
 };
-const formatNumber = (value: number | null) => value == null ? "Pending" : Number.isInteger(value) ? String(value) : value.toFixed(1);
+const formatNumber = (value: number | null) => value == null ? "Pending" : Number.isInteger(value) ? String(value) : value.toFixed(2);
 const formatDate = (value: Date | string | null | undefined) => value ? new Intl.DateTimeFormat("en-GH", { weekday: "short", day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)) : "—";
 const initials = (value: string) => value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "ST";
 const cleanParts = (values: Array<string | null | undefined>) => values.filter((value): value is string => Boolean(value?.trim()));
@@ -96,14 +96,14 @@ export default function OfficialReportCard({ data, signatures, embedded = false 
       <style>{OFFICIAL_REPORT_CARD_STYLES}</style>
       {!embedded ? (
         <header className="official-v2-toolbar">
-          <div><span>OFFICIAL REPORT CARD · V2</span><strong>{data.student.name} · {data.term.name}</strong><small>Institutional print preview. Approved reports preserve the identity and policy used when they were issued.</small></div>
+          <div><span>TERM REPORT CARD</span><strong>{data.student.name} · {data.term.name}</strong><small>Institutional print preview. Approved reports preserve the identity and policy used when they were issued.</small></div>
           <label><span>Document style</span><select value={previewThemeId} onChange={(event) => setPreviewThemeId(event.target.value)}>{REPORT_CARD_THEMES.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-          <div className="toolbar-actions"><button type="button" onClick={() => window.print()}>Print / Save PDF</button><a href={`/api/mvp/report-cards/${encodeURIComponent(data.reportId)}/pdf?download=1`}>Archive PDF</a><Link href="/school/settings/identity">School identity</Link></div>
+          <div className="toolbar-actions"><button type="button" onClick={() => window.print()}>Print / Save PDF</button><a href={`/api/mvp/report-cards/${encodeURIComponent(data.reportId)}/pdf?download=1`}>Download PDF</a><Link href="/school/settings/identity">School identity</Link></div>
         </header>
       ) : null}
 
       <article className={`official-v2-paper font-${theme.fontMode}`} style={vars}>
-        {data.watermark ? <div className="rc-watermark">{data.watermark}</div> : null}
+        {data.status !== "approved" ? <div className="rc-watermark">DRAFT · FOR REVIEW</div> : data.watermark ? <div className="rc-watermark">{data.watermark}</div> : null}
         <header className="rc-letterhead">
           <div className="rc-logo">{data.school.logoUrl ? <img src={data.school.logoUrl} alt={`${data.school.name} crest`} /> : <span>{data.school.name.slice(0, 1)}</span>}</div>
           <div className="rc-school-copy">

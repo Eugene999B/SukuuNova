@@ -4,7 +4,6 @@ import { withTenant } from "./db";
 import { appendSchoolAudit } from "./audit";
 import { AppError } from "./errors";
 import { requirePermission } from "./rbac";
-import { alignActiveIdentityCardValidity } from "./identity-card-policy";
 import encodeQR from "qr";
 import {
   PDFDocument,
@@ -150,7 +149,8 @@ export async function updateIdentityCardSettings(tx: TenantDb, input: { schoolId
     validityMonths,
   );
   if (!changed) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
-  const updatedCards = await alignActiveIdentityCardValidity(tx, input.schoolId, validityMonths);
+  // Issued credentials are immutable; changed validity applies to future issues only.
+  const updatedCards = 0;
   await appendSchoolAudit(tx, {
     schoolId: input.schoolId,
     actorId: input.actorId,
@@ -220,7 +220,7 @@ async function staffPeople(tx: TenantDb, schoolId: string) {
        AND EXISTS (
          SELECT 1 FROM "UserRole" ur
          JOIN "Role" r ON r."id"=ur."roleId" AND r."schoolId"=ur."schoolId"
-         WHERE ur."schoolId"=$1 AND ur."userId"=u."id" AND r."name" NOT IN ('Parent','Student')
+         WHERE ur."schoolId"=$1 AND ur."userId"=u."id" AND LOWER(COALESCE(NULLIF(r."key",''),r."name")) NOT IN ('parent','guardian','student')
        )
      ORDER BY u."name" COLLATE "C"`,
     schoolId,
@@ -230,12 +230,12 @@ async function staffPeople(tx: TenantDb, schoolId: string) {
 export async function ensureIdentityCardsForSchool(tx: TenantDb, schoolId: string, schoolCode: string, actorId = "system") {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`identity-cards:${schoolId}`}))`;
   const settings = await getIdentityCardSettings(tx, schoolId);
-  const validityRealigned = await alignActiveIdentityCardValidity(tx, schoolId, settings.validityMonths);
+  const validityRealigned = 0;
   const [students, staff, existing] = await Promise.all([
     tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "Student" WHERE "schoolId"=$1 AND "status"='active'`, schoolId),
     staffPeople(tx, schoolId),
     tx.$queryRawUnsafe<Array<{ id: string; personType: IdentityCardKind; studentId: string | null; staffId: string | null }>>(
-      `SELECT "id","personType","studentId","staffId" FROM "IdentityCard" WHERE "schoolId"=$1 AND "status"='active'`,
+      `SELECT "id","personType","studentId","staffId" FROM "IdentityCard" WHERE "schoolId"=$1`,
       schoolId,
     ),
   ]);
@@ -292,7 +292,9 @@ export async function ensureIdentityCardsForSchool(tx: TenantDb, schoolId: strin
 }
 
 export async function listIdentityCards(tx: TenantDb, schoolId: string, schoolCode: string, actorId: string): Promise<IdentityCardView[]> {
-  await ensureIdentityCardsForSchool(tx, schoolId, schoolCode, actorId);
+  // Listing must never issue, revoke or change a printed credential.
+  void schoolCode;
+  void actorId;
   const rows = await tx.$queryRawUnsafe<CardRow[]>(
     `SELECT c."id",c."schoolId",c."personType",c."studentId",c."staffId",c."serial",c."issuedAt",c."expiresAt",c."status",c."version",
             COALESCE(s."name",u."name") AS "personName",
@@ -746,6 +748,7 @@ export async function buildIdentityCardPdf(cards: CardRow[], school: SchoolCardB
 
 export async function reissueIdentityCard(tx: TenantDb, input: { schoolId: string; actorId: string; cardId: string }) {
   await requirePermission(tx, input.actorId, "identity_cards:manage");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`identity-cards:${input.schoolId}`}))`;
   const rows = await tx.$queryRawUnsafe<Array<{ id: string; personType: IdentityCardKind; studentId: string | null; staffId: string | null; serial: string }>>(
     `SELECT "id","personType","studentId","staffId","serial" FROM "IdentityCard" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`,
     input.schoolId,
@@ -791,6 +794,7 @@ export async function reissueIdentityCard(tx: TenantDb, input: { schoolId: strin
 
 export async function revokeIdentityCard(tx: TenantDb, input: { schoolId: string; actorId: string; cardId: string }) {
   await requirePermission(tx, input.actorId, "identity_cards:manage");
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`identity-cards:${input.schoolId}`}))`;
   const rows = await tx.$queryRawUnsafe<Array<{ status: string; version: number; serial: string }>>(
     `SELECT "status","version","serial" FROM "IdentityCard" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`,
     input.schoolId,

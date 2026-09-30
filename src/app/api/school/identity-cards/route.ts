@@ -6,8 +6,8 @@ import { routeError, AppError } from "@/lib/errors";
 import { parseJson } from "@/lib/http";
 import { requirePermission } from "@/lib/rbac";
 import { appendSchoolAudit } from "@/lib/audit";
-import { alignActiveIdentityCardValidity } from "@/lib/identity-card-policy";
 import {
+  ensureIdentityCardsForSchool,
   getIdentityCardSettings,
   getIdentityCardsByScope,
   listIdentityCards,
@@ -24,6 +24,7 @@ import { buildIdentityCardBulkPdfV4, ID_CARD_PACK_LIMIT } from "@/lib/identity-c
 import { identityCardPublicOrigin } from "@/lib/identity-card-public-origin";
 
 const schema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("issue-missing") }),
   z.object({
     action: z.literal("download"),
     scope: z.enum(["all", "students", "staff", "class", "selected"]),
@@ -49,7 +50,6 @@ export async function GET() {
         getIdentityCardSettings(tx, session.schoolId),
       ]);
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
-      await alignActiveIdentityCardValidity(tx, session.schoolId, validitySettings.validityMonths);
       return {
         school,
         classes,
@@ -105,6 +105,7 @@ export async function POST(request: Request) {
 
       const school = await tx.school.findUnique({ where: { id: session.schoolId }, select: { name: true, uniqueCode: true, logoUrl: true, brandColors: true } });
       if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
+      if (input.action === "issue-missing") return { kind: "json" as const, value: await ensureIdentityCardsForSchool(tx, session.schoolId, school.uniqueCode, session.userId) };
       if (input.action === "reissue") return { kind: "json" as const, value: await reissueIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
       if (input.action === "revoke") return { kind: "json" as const, value: await revokeIdentityCard(tx, { schoolId: session.schoolId, actorId: session.userId, cardId: input.cardId }) };
 

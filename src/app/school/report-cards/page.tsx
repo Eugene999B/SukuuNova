@@ -328,7 +328,7 @@ export default async function ReportCardsPage({
               <div><span>Average</span><strong>{detail.summary.average ?? "Pending"}</strong></div>
               <div><span>Overall grade</span><strong>{detail.summary.grade ?? "Pending"}</strong></div>
               <div><span>Position</span><strong>{detail.position ?? "Pending"}{detail.position && detail.classSize ? ` / ${detail.classSize}` : ""}</strong></div>
-              <div><span>Attendance</span><strong>{detail.attendance.present}{detail.attendance.totalRecorded ? ` / ${detail.attendance.totalRecorded}` : ""}</strong></div>
+              <div><span>Attendance</span><strong>{detail.attendance.present}{detail.attendance.totalRecorded ? ` / ${detail.attendance.expectedDays ?? detail.attendance.totalRecorded}` : ""}</strong></div>
             </div>
 
             <div className="result-table-wrap">

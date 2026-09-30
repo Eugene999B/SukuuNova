@@ -76,7 +76,8 @@ export async function getPlatformOverview() {
       });
       if (!stats.school) continue;
       schools++;
-      if (stats.school.status === "suspended") suspendedSchools++; else activeSchools++;
+      if (stats.school.status === "suspended") suspendedSchools++;
+      if (stats.school.status === "active") activeSchools++;
       students += stats.studentCount; users += stats.userCount; classes += stats.classCount;
       invoices += stats.invoices; unpaidInvoices += stats.unpaidInvoices; collected += stats.collected;
       schoolStats.push({ ...stats.school, ...stats });

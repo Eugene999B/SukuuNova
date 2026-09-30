@@ -1,5 +1,6 @@
 "use client";
 
+import { markDraftKey, validMarkDraft, type MarkDraft } from "@/lib/mark-draft";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, CloudOff, Loader2, Search } from "lucide-react";
 import { parseMarkSheetPaste, type MarkStatus } from "@/lib/mark-sheet-input";
@@ -9,6 +10,8 @@ type Snapshot = { id: string; value: number; status: string; enteredAt: string }
 type Cell = { value: string; status: MarkStatus };
 type Row = { student: { id: string; name: string; admissionNo: string }; expected: Snapshot };
 type Props = {
+  schoolId: string;
+  userId: string;
   assessment: { id: string; name: string; type: string; maxScore: number };
   rows: Row[];
   locked?: boolean;
@@ -24,13 +27,8 @@ function sameCell(a: Cell, b: Cell) {
   return Number(a.value) === Number(b.value);
 }
 
-function validStoredCell(value: unknown): value is Cell {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as { value?: unknown; status?: unknown };
-  return typeof candidate.value === "string" && (candidate.status === "present" || candidate.status === "absent" || candidate.status === "excused");
-}
 
-export default function TeacherAssessmentMarkSheet({ assessment, rows, locked = false }: Props) {
+export default function TeacherAssessmentMarkSheet({ schoolId, userId, assessment, rows, locked = false }: Props) {
   const initialSnapshots = useMemo(() => Object.fromEntries(rows.map((row) => [row.student.id, row.expected])) as Record<string, Snapshot>, [rows]);
   const [snapshots, setSnapshots] = useState<Record<string, Snapshot>>(initialSnapshots);
   const [cells, setCells] = useState<Record<string, Cell>>(() => Object.fromEntries(rows.map((row) => [row.student.id, fromSnapshot(row.expected)])));
@@ -44,7 +42,7 @@ export default function TeacherAssessmentMarkSheet({ assessment, rows, locked = 
   const inFlight = useRef(new Set<string>());
   const cellsRef = useRef(cells);
   const snapshotsRef = useRef(snapshots);
-  const storageKey = `sukuunova:mark-sheet:${assessment.id}`;
+  const storageKey = markDraftKey(schoolId, userId, assessment.id);
 
   const dirty = useMemo(() => rows.map((row) => row.student.id).filter((studentId) => !sameCell(cells[studentId], fromSnapshot(snapshots[studentId] ?? null))), [cells, rows, snapshots]);
   const dirtySet = useMemo(() => new Set(dirty), [dirty]);
@@ -67,11 +65,11 @@ export default function TeacherAssessmentMarkSheet({ assessment, rows, locked = 
     });
   }
 
-  function readPending(): Record<string, Cell> {
+  function readPending(): Record<string, MarkDraft> {
     if (typeof window === "undefined") return {};
     try {
       const parsed = JSON.parse(window.localStorage.getItem(storageKey) || "{}") as Record<string, unknown>;
-      return Object.fromEntries(Object.entries(parsed).filter(([, value]) => validStoredCell(value))) as Record<string, Cell>;
+      return Object.fromEntries(Object.entries(parsed).filter(([, value]) => validMarkDraft(value))) as Record<string, MarkDraft>;
     } catch {
       return {};
     }
@@ -81,7 +79,7 @@ export default function TeacherAssessmentMarkSheet({ assessment, rows, locked = 
     if (typeof window === "undefined") return;
     try {
       const pending = readPending();
-      if (cell) pending[studentId] = cell; else delete pending[studentId];
+      if (cell) pending[studentId] = { ...cell, version: 2, expected: snapshotsRef.current[studentId] ?? null }; else delete pending[studentId];
       if (Object.keys(pending).length) window.localStorage.setItem(storageKey, JSON.stringify(pending));
       else window.localStorage.removeItem(storageKey);
     } catch {
@@ -173,6 +171,7 @@ export default function TeacherAssessmentMarkSheet({ assessment, rows, locked = 
         setCells(nextCells);
         writePending(studentId, null);
       } else {
+        writePending(studentId, cellsRef.current[studentId]);
         scheduleSave(studentId, 250);
       }
       setError("");
@@ -203,7 +202,11 @@ export default function TeacherAssessmentMarkSheet({ assessment, rows, locked = 
     const recovered = Object.entries(pending).filter(([studentId]) => validIds.has(studentId));
     if (!recovered.length) return;
     const next = { ...cellsRef.current };
-    for (const [studentId, cell] of recovered) next[studentId] = cell;
+    for (const [studentId, cell] of recovered) {
+      next[studentId] = cell;
+      snapshotsRef.current[studentId] = cell.expected;
+    }
+    setSnapshots({ ...snapshotsRef.current });
     cellsRef.current = next;
     setCells(next);
     setMessage(`${recovered.length} unsaved mark${recovered.length === 1 ? " was" : "s were"} recovered from this device and will sync automatically.`);
