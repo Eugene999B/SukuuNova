@@ -1,3 +1,6 @@
+import { loadFinanceRegister } from "../src/lib/finance-register";
+import { reverseFinanceV2Payment } from "../src/lib/finance-v2-reversal";
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
@@ -37,6 +40,18 @@ describe("Finance V2 release hardening",()=>{
       const payment=await recordAllocatedPaymentV2Safe(tx,{schoolId:fixture.schoolId,actorId:fixture.ownerId,studentId:student.id,invoiceId:chargeRows[0]!.invoiceId,method:"bank",reference:"HARD-BANK-001",allocations:[{chargeId:chargeRows[0]!.id,amount:100}]});
       expect(payment.amount.toFixed(2)).toBe("100.00");
       expect((await tx.payment.findFirst({where:{id:payment.id,schoolId:fixture.schoolId},select:{method:true}}))?.method).toBe("bank");
+      const correction={schoolId:fixture.schoolId,actorId:fixture.ownerId,paymentId:payment.id,amount:10,reason:"Partial refund",operationId:randomUUID()};
+      const reversed=await reverseFinanceV2Payment(tx,correction);
+      expect((await reverseFinanceV2Payment(tx,correction)).id).toBe(reversed.id);
+      const another=await reverseFinanceV2Payment(tx,{...correction,operationId:randomUUID()});
+      expect(another.id).not.toBe(reversed.id);
+      await tx.paymentReversal.create({data:{schoolId:fixture.schoolId,paymentId:payment.id,amount:5,reason:"Later refund",reversedBy:fixture.ownerId,createdAt:new Date("2030-01-01T12:00:00Z")}});
+      const originalPeriod=await loadFinanceRegister(tx,fixture.schoolId,null,new Date("2029-12-31T23:59:59Z"));
+      expect(Number(originalPeriod.find(row=>row.id===payment.id)?.amount)).toBe(100);
+      const laterPeriod=await loadFinanceRegister(tx,fixture.schoolId,new Date("2030-01-01"),new Date("2030-01-02"));
+      expect(laterPeriod).toHaveLength(1);
+      expect(Number(laterPeriod[0].amount)).toBe(-5);
+
     });
   });
 });

@@ -1,3 +1,4 @@
+import { publishFeeStructureV2Safe } from "./finance-v2-publish-service";
 import { createHash } from "node:crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { Prisma } from "@prisma/client";
@@ -101,38 +102,8 @@ export async function createFeeStructureV2(tx: TenantDb, input: {schoolId:string
   return {id:structureId,version};
 }
 
-type PublishLine={id:string;categoryId:string;amount:Prisma.Decimal;dueDate:Date|null;optional:boolean;categoryName:string;categoryCode:string};
-export async function publishFeeStructureV2(tx: TenantDb,input:{schoolId:string;actorId:string;structureId:string}){
-  await requirePermission(tx,input.actorId,"finance:fee_structures_manage");
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`publish-fees:${input.schoolId}:${input.structureId}`}))`;
-  const structures=await tx.$queryRawUnsafe<any[]>(`SELECT * FROM "FinanceFeeStructure" WHERE "schoolId"=$1 AND "id"=$2 FOR UPDATE`,input.schoolId,input.structureId);const structure=structures[0];
-  if(!structure)throw new AppError("Fee structure not found.",404,"NOT_FOUND");
-  if(structure.status==='published')return {id:structure.id,alreadyPublished:true};
-  if(structure.status!=='draft')throw new AppError("Only a draft fee structure can be published.",409,"STRUCTURE_NOT_DRAFT");
-  const term=await tx.term.findFirst({where:{id:structure.termId,schoolId:input.schoolId},select:{isLocked:true}});if(!term||term.isLocked)throw new AppError("The selected term is locked or unavailable.",409,"TERM_LOCKED");
-  const lines=await tx.$queryRawUnsafe<PublishLine[]>(`SELECT l."id",l."categoryId",l."amount",l."dueDate",l."optional",c."name" AS "categoryName",c."code" AS "categoryCode" FROM "FinanceFeeStructureLine" l JOIN "FinanceFeeCategory" c ON c."id"=l."categoryId" AND c."schoolId"=l."schoolId" WHERE l."schoolId"=$1 AND l."structureId"=$2 ORDER BY l."sortOrder"`,input.schoolId,input.structureId);
-  if(!lines.length)throw new AppError("The fee structure has no lines.",409,"FEE_LINES_REQUIRED");
-  const students=await tx.student.findMany({where:{schoolId:input.schoolId,classId:structure.classId,status:'active'},select:{id:true}});
-  let assigned=0;
-  for(const student of students){
-    let invoice=await tx.invoice.findFirst({where:{schoolId:input.schoolId,studentId:student.id,termId:structure.termId},select:{id:true}});
-    if(!invoice){invoice=await tx.invoice.create({data:{schoolId:input.schoolId,studentId:student.id,termId:structure.termId,totalAmount:new Prisma.Decimal(0),status:'unpaid'},select:{id:true}});}
-    for(const line of lines){
-      if(line.optional) continue;
-      const feeName=`${line.categoryName} · ${structure.name}`;
-      const items=await tx.$queryRawUnsafe<Array<{id:string}>>(`INSERT INTO "FeeItem" ("id","schoolId","name","amount","termId","classId") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("schoolId","termId","classId","name") DO UPDATE SET "amount"=EXCLUDED."amount" RETURNING "id"`,createId(),input.schoolId,feeName,line.amount,structure.termId,structure.classId);
-      const feeItemId=items[0]?.id;if(!feeItemId)throw new AppError("Fee item could not be materialized.",500,"FEE_ITEM_CREATE_FAILED");
-      await tx.$executeRawUnsafe(`INSERT INTO "InvoiceLine" ("schoolId","invoiceId","feeItemId","amount") VALUES ($1,$2,$3,$4) ON CONFLICT ("invoiceId","feeItemId") DO UPDATE SET "amount"=EXCLUDED."amount"`,input.schoolId,invoice.id,feeItemId,line.amount);
-      await tx.$executeRawUnsafe(`INSERT INTO "FinanceStudentCharge" ("id","schoolId","studentId","termId","structureId","structureLineId","categoryId","invoiceId","feeItemId","originalAmount","netAmount","dueDate") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,$11) ON CONFLICT ("schoolId","studentId","structureLineId") DO NOTHING`,createId(),input.schoolId,student.id,structure.termId,structure.id,line.id,line.categoryId,invoice.id,feeItemId,line.amount,line.dueDate);
-      assigned+=1;
-    }
-    await tx.$executeRawUnsafe(`UPDATE "Invoice" i SET "totalAmount"=(SELECT COALESCE(SUM(il."amount"),0) FROM "InvoiceLine" il WHERE il."schoolId"=i."schoolId" AND il."invoiceId"=i."id") WHERE i."schoolId"=$1 AND i."id"=$2`,input.schoolId,invoice.id);
-    await refreshInvoiceFinancialProjection(tx,input.schoolId,invoice.id);
-  }
-  await tx.$executeRawUnsafe(`UPDATE "FinanceFeeStructure" SET "status"='published',"publishedAt"=CURRENT_TIMESTAMP,"publishedBy"=$1,"updatedAt"=CURRENT_TIMESTAMP WHERE "schoolId"=$2 AND "id"=$3`,input.actorId,input.schoolId,input.structureId);
-  await appendSchoolAudit(tx,{schoolId:input.schoolId,actorId:input.actorId,action:"finance_v2.fee_structure_published",entityType:"FinanceFeeStructure",entityId:input.structureId,after:{students:students.length,charges:assigned}});
-  return {id:input.structureId,students:students.length,charges:assigned};
-}
+// Compatibility entry point shares the immutable, term-aware publisher.
+export const publishFeeStructureV2 = publishFeeStructureV2Safe;
 
 export async function recordAllocatedPaymentV2(tx: TenantDb,input:{schoolId:string;actorId:string;studentId:string;invoiceId:string;method:string;reference?:string|null;allocations:Array<{chargeId:string;amount:number}>}){
   await requirePermission(tx,input.actorId,"payments:record");

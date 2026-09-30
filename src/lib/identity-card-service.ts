@@ -48,6 +48,7 @@ type CardRow = {
   guardianPhone: string | null;
   contactPhone: string | null;
   contactEmail: string | null;
+  ownerActive?: boolean;
 };
 
 export type IdentityCardKind = "student" | "staff";
@@ -234,14 +235,14 @@ export async function ensureIdentityCardsForSchool(tx: TenantDb, schoolId: strin
   const [students, staff, existing] = await Promise.all([
     tx.$queryRawUnsafe<Array<{ id: string }>>(`SELECT "id" FROM "Student" WHERE "schoolId"=$1 AND "status"='active'`, schoolId),
     staffPeople(tx, schoolId),
-    tx.$queryRawUnsafe<Array<{ id: string; personType: IdentityCardKind; studentId: string | null; staffId: string | null }>>(
-      `SELECT "id","personType","studentId","staffId" FROM "IdentityCard" WHERE "schoolId"=$1`,
+    tx.$queryRawUnsafe<Array<{ id: string; status: string; personType: IdentityCardKind; studentId: string | null; staffId: string | null }>>(
+      `SELECT "id","status","personType","studentId","staffId" FROM "IdentityCard" WHERE "schoolId"=$1`,
       schoolId,
     ),
   ]);
   const studentSet = new Set(students.map((row) => row.id));
   const staffSet = new Set(staff.map((row) => row.id));
-  const stale = existing.filter((row) => row.personType === "student"
+  const stale = existing.filter(row=>row.status==="active").filter((row) => row.personType === "student"
     ? (!row.studentId || !studentSet.has(row.studentId))
     : (!row.staffId || !staffSet.has(row.staffId)));
   const now = new Date();
@@ -298,6 +299,7 @@ export async function listIdentityCards(tx: TenantDb, schoolId: string, schoolCo
   const rows = await tx.$queryRawUnsafe<CardRow[]>(
     `SELECT c."id",c."schoolId",c."personType",c."studentId",c."staffId",c."serial",c."issuedAt",c."expiresAt",c."status",c."version",
             COALESCE(s."name",u."name") AS "personName",
+            CASE WHEN c."personType"=\'student\' THEN s."status"=\'active\' ELSE u."status"=\'active\' AND EXISTS(SELECT 1 FROM "UserRole" sr JOIN "Role" rr ON rr."id"=sr."roleId" AND rr."schoolId"=sr."schoolId" WHERE sr."schoolId"=c."schoolId" AND sr."userId"=u."id" AND LOWER(COALESCE(NULLIF(rr."key",\'\'),rr."name")) NOT IN (\'parent\',\'guardian\',\'student\')) END AS "ownerActive",
             CASE WHEN c."personType"='student' THEN COALESCE(s."admissionNo",c."serial")
                  ELSE COALESCE((SELECT sp."staffNumber" FROM "StaffProfile" sp WHERE sp."schoolId"=c."schoolId" AND sp."userId"=u."id"), 'STF-' || UPPER(RIGHT(REPLACE(COALESCE(u."id",c."staffId",c."serial"),'-',''),8))) END AS "personNumber",
             s."admissionNo",s."classId",cl."name" AS "className",h."name" AS "houseName",
@@ -333,7 +335,7 @@ export async function listIdentityCards(tx: TenantDb, schoolId: string, schoolCo
   const now = Date.now();
   return rows.map((row) => ({
     ...row,
-    isExpired: row.expiresAt.getTime() <= now || row.status !== "active",
+    isExpired: row.expiresAt.getTime() <= now || row.status !== "active" || row.ownerActive === false,
     photoReady: Boolean(photoData(row.photoUrl)),
   }));
 }
@@ -762,6 +764,7 @@ export async function reissueIdentityCard(tx: TenantDb, input: { schoolId: strin
     ? await tx.$queryRawUnsafe<Array<{ status: string }>>(`SELECT "status" FROM "Student" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, input.schoolId, personId)
     : await tx.$queryRawUnsafe<Array<{ status: string }>>(`SELECT "status" FROM "User" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, input.schoolId, personId);
   if (status[0]?.status !== "active") throw new AppError("Inactive people cannot receive a new identity card.", 409, "PERSON_INACTIVE");
+  if (card.personType === "staff" && !(await staffPeople(tx,input.schoolId)).some(person=>person.id===personId)) throw new AppError("This account no longer has a staff role.",409,"PERSON_INACTIVE");
   const school = await tx.school.findUnique({ where: { id: input.schoolId }, select: { uniqueCode: true } });
   if (!school) throw new AppError("School not found.", 404, "SCHOOL_NOT_FOUND");
   const column = card.personType === "student" ? "studentId" : "staffId";
@@ -854,11 +857,12 @@ export async function publicIdentityCardBySerial(schoolId: string, serialValue: 
     const active = card.personType === "student"
       ? await tx.$queryRawUnsafe<Array<{ status: string }>>(`SELECT "status" FROM "Student" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, schoolId, card.studentId)
       : await tx.$queryRawUnsafe<Array<{ status: string }>>(`SELECT "status" FROM "User" WHERE "schoolId"=$1 AND "id"=$2 LIMIT 1`, schoolId, card.staffId);
+    const staffEligible = card.personType !== "staff" || (await staffPeople(tx,schoolId)).some(person=>person.id===card.staffId);
     const state = card.status === "revoked"
       ? "revoked"
       : card.expiresAt.getTime() <= Date.now()
         ? "expired"
-        : active[0]?.status !== "active"
+        : (active[0]?.status !== "active" || !staffEligible)
           ? "inactive"
           : "verified";
     return { card, school, state } as const;

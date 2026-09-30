@@ -7,6 +7,7 @@ type Dataset = { key: string; title: string; detail: string; scope: string };
 type TermOption = { id: string; name: string };
 type ClassOption = { id: string; name: string; level: string | null };
 type Props = {
+  allowedDatasets?: string[];
   schoolName: string;
   logoUrl?: string | null;
   schoolCode: string;
@@ -101,17 +102,18 @@ function showPrintError(printWindow: Window, message: string) {
   printWindow.document.close();
 }
 
-export default function DownloadsExportCentre({ schoolName, logoUrl, schoolCode, terms = [], classes = [] }: Props) {
+export default function DownloadsExportCentre({ schoolName, logoUrl, schoolCode, terms = [], classes = [], allowedDatasets = [] }: Props) {
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [history, setHistory] = useState<Array<{ id: string; title: string; format: string; at: string }>>([]);
   const [query, setQuery] = useState("");
   const [termId, setTermId] = useState(terms[0]?.id ?? "");
+  const [studentExportClassId, setStudentExportClassId] = useState("");
   const [classId, setClassId] = useState(classes[0]?.id ?? "");
 
   const filtered = useMemo(
-    () => datasets.filter((item) => `${item.title} ${item.detail} ${item.scope}`.toLowerCase().includes(query.toLowerCase())),
-    [query],
+    () => datasets.filter((item) => allowedDatasets.includes(item.key)).filter((item) => `${item.title} ${item.detail} ${item.scope}`.toLowerCase().includes(query.toLowerCase())),
+    [query, allowedDatasets],
   );
 
   async function exportDataset(dataset: Dataset, format: OutputKey) {
@@ -127,7 +129,8 @@ export default function DownloadsExportCentre({ schoolName, logoUrl, schoolCode,
     setBusy(id);
     setNotice("");
     try {
-      const response = await fetch(`/api/school/exports/${dataset.key}`, { cache: "no-store", credentials: "same-origin" });
+      const exportQuery = new URLSearchParams(dataset.key === "students" && studentExportClassId ? {classId:studentExportClassId} : {});
+      const response = await fetch(`/api/school/exports/${dataset.key}?${exportQuery}`, { cache: "no-store", credentials: "same-origin" });
       const source = await response.text();
       if (!response.ok) {
         let message = "This export is not available for your current school permissions.";
@@ -249,6 +252,7 @@ export default function DownloadsExportCentre({ schoolName, logoUrl, schoolCode,
                   <span className="rounded-full bg-white px-2.5 py-1 text-[8px] font-black uppercase tracking-[.1em] text-slate-500">{dataset.scope}</span>
                   <h3 className="mt-2 text-sm font-black text-slate-900">{dataset.title}</h3>
                   <p className="mt-1 text-[11px] text-slate-500">{dataset.detail}</p>
+                  {dataset.key==="students"?<label>Student directory class<select value={studentExportClassId} onChange={event=>setStudentExportClassId(event.target.value)}><option value="">All classes</option>{classes.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>:null}
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   {outputOptions.map((option) => {

@@ -85,9 +85,10 @@ export async function generateReportCard(tx: TenantDb, input: { schoolId: string
   };
   const report = await tx.reportCard.upsert({ where: { studentId_termId: { studentId: input.studentId, termId: input.termId } }, update: { remarks: input.remarks, templateId: data.template.id, calculationSnapshot, calculationVersion: 4 }, create: { schoolId: input.schoolId, studentId: input.studentId, termId: input.termId, templateId: data.template.id, remarks: input.remarks, calculationSnapshot, calculationVersion: 4, generatedPdfUrl: "/api/mvp/report-cards/pending/pdf" } });
   const generatedPdfUrl = "/api/mvp/report-cards/" + report.id + "/pdf";
-  const document = await getReportCardPrintData(tx, {schoolId:input.schoolId,reportId:report.id});
-  const pdfData = await buildReportCardPdf(document, await signaturesForReport(tx,{schoolId:input.schoolId,reportId:report.id}));
-  await tx.reportCard.update({ where: { id: report.id }, data: { generatedPdfUrl,pdfData } });
+  // Render at the download endpoint after its database transaction closes.
+  // Keeping font embedding out of this write transaction prevents bulk timeout failures.
+  const pdfData = null;
+  await tx.reportCard.update({ where: { id: report.id }, data: { generatedPdfUrl, pdfData } });
   await appendSchoolAudit(tx, { schoolId: input.schoolId, actorId: input.actorId, action: "report_card.generated", entityType: "ReportCard", entityId: report.id, after: { studentId: input.studentId, termId: input.termId, classId: data.student.class.id, classSource: data.termClass.source, templateId: data.template.id, calculationVersion: 4 } });
   return { ...report, generatedPdfUrl, pdfData };
 }
