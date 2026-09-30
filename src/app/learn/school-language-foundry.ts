@@ -388,6 +388,7 @@ function hash(value: string) {
 }
 
 function difficulty(levelId: string): 1 | 2 | 3 | 4 | 5 {
+  if (levelId==="level-100") return 3;
   if (/basic-[12]/.test(levelId)) return 1;
   if (/basic-[34]/.test(levelId)) return 2;
   if (/basic-[56]|jhs-1/.test(levelId)) return 3;

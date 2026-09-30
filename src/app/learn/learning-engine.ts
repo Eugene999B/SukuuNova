@@ -295,7 +295,7 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
 
   function absorb(questions: LearnQuestion[], priority = 2) {
     for (const sourceQuestion of questions) {
-      if (nursingFocused && priority > 0.5 && !sourceQuestion.exposureKey.startsWith("nursing:")) continue;
+      if (nursingFocused && priority > 0.5 && !sourceQuestion.exposureKey.startsWith("nursing:") && !sourceQuestion.exposureKey.startsWith("language:")) continue;
       const isLanguageSubject = /french|twi|ghanaian language/i.test(sourceQuestion.subject);
       if (isLanguageSubject && !sourceQuestion.exposureKey.startsWith("language:")) continue;
       if (sourceQuestion.exposureKey.startsWith("language:") && !isNativeLanguageQuestion(sourceQuestion)) continue;
