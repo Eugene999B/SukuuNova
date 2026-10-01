@@ -1,0 +1,215 @@
+.shell {
+  min-height: 100vh;
+  background: var(--arcade-canvas);
+  color: var(--arcade-text);
+  padding: var(--space-6);
+  font-family: var(--sn-font-family);
+}
+
+.frame {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: var(--space-5);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--arcade-accent);
+  font-size: var(--sn-font-xs);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.6rem);
+  line-height: 1.05;
+}
+
+.subtitle {
+  margin: var(--space-2) 0 0;
+  color: var(--arcade-muted);
+  max-width: 760px;
+  line-height: 1.6;
+}
+
+.modeBar,
+.actions,
+.touchControls {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.button {
+  border: 1px solid var(--arcade-line);
+  border-radius: var(--radius-md);
+  background: var(--arcade-surface-raised);
+  color: var(--arcade-text-soft);
+  min-height: 42px;
+  padding: 0 var(--space-4);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.button:hover {
+  border-color: var(--arcade-line-strong);
+  background: var(--arcade-surface-soft);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.buttonActive {
+  border-color: var(--arcade-accent);
+  color: var(--arcade-accent);
+  box-shadow: 0 0 0 1px var(--arcade-accent);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--space-4);
+}
+
+.stageCard,
+.panel {
+  border: 1px solid var(--arcade-line);
+  border-radius: var(--radius-xl);
+  background: var(--arcade-surface);
+  overflow: hidden;
+}
+
+.stageCard {
+  position: relative;
+  min-width: 0;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 360px;
+  outline: none;
+  touch-action: none;
+}
+
+.canvas:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--arcade-accent);
+}
+
+.stageFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--arcade-line);
+  background: var(--arcade-surface-raised);
+  color: var(--arcade-muted);
+  font-size: var(--sn-font-sm);
+  flex-wrap: wrap;
+}
+
+.panel {
+  padding: var(--space-4);
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.panel h2,
+.panel h3 {
+  margin: 0;
+}
+
+.metrics {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--arcade-line);
+  color: var(--arcade-muted);
+}
+
+.metric strong {
+  color: var(--arcade-text);
+  font-family: var(--sn-font-mono);
+}
+
+.note {
+  margin: 0;
+  color: var(--arcade-muted);
+  font-size: var(--sn-font-sm);
+  line-height: 1.55;
+}
+
+.touchControls {
+  justify-content: center;
+}
+
+.touchButton {
+  min-width: 64px;
+  min-height: 48px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border: 1px solid var(--arcade-line);
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
+  color: var(--arcade-accent);
+  background: var(--arcade-option-bg);
+  font-size: var(--sn-font-xs);
+  font-weight: 800;
+}
+
+@media (max-width: 860px) {
+  .shell {
+    padding: var(--space-3);
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .canvas {
+    min-height: 300px;
+  }
+
+  .panel {
+    grid-template-columns: 1fr;
+  }
+
+  .touchButton {
+    flex: 1 1 58px;
+  }
+}
