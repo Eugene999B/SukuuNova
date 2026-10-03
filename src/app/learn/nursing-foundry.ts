@@ -757,7 +757,7 @@ function buildQuestion(
     const safeTablets = 1 + (local % 4);
     const prescribed = safeAvailable * safeTablets;
     return baseQuestion(config, "dose-calculation", position, seed,
-      `A simulated prescription is for ${prescribed} mg and the supplied tablet contains ${safeAvailable} mg. How many tablets match the prescribed dose?`,
+      `${caseFrame} A simulated prescription is for ${prescribed} mg and the supplied tablet contains ${safeAvailable} mg. How many tablets match the prescribed dose?`,
       "Calculate a medication dose from prescribed and available strengths",
       {
         kind: "numeric",
@@ -968,12 +968,12 @@ function buildQuestion(
 
   if (family === 8) {
     const passage = pick([
-      `At shift handover, the outgoing nurse reports ${clueA}. A later review identifies ${clueB}. The planned reassessment is still outstanding.`,
-      `While accepting care of a patient, the receiving nurse is told about ${clueA}. The record then shows ${clueB}, and a reassessment has not yet been completed.`,
-      `During bedside transfer of care, the team highlights ${clueA}. New information shows ${clueB}. The receiving nurse notices that follow-up assessment remains pending.`,
-      `A structured handover includes ${clueA}. Before taking responsibility for care, the next nurse also finds ${clueB} and sees that reassessment is overdue.`,
-      `Responsibility for the patient is changing between nurses. The first report mentions ${clueA}; the latest review adds ${clueB}. No documented reassessment has yet followed.`,
-      `The receiving nurse reviews a handover note describing ${clueA}. A subsequent entry records ${clueB}, but the expected reassessment is still incomplete.`,
+      `${caseFrame} At shift handover, the outgoing nurse reports ${clueA}. A later review identifies ${clueB}. The planned reassessment is still outstanding.`,
+      `${caseFrame} While accepting care of a patient, the receiving nurse is told about ${clueA}. The record then shows ${clueB}, and a reassessment has not yet been completed.`,
+      `${caseFrame} During bedside transfer of care, the team highlights ${clueA}. New information shows ${clueB}. The receiving nurse notices that follow-up assessment remains pending.`,
+      `${caseFrame} A structured handover includes ${clueA}. Before taking responsibility for care, the next nurse also finds ${clueB} and sees that reassessment is overdue.`,
+      `${caseFrame} Responsibility for the patient is changing between nurses. The first report mentions ${clueA}; the latest review adds ${clueB}. No documented reassessment has yet followed.`,
+      `${caseFrame} The receiving nurse reviews a handover note describing ${clueA}. A subsequent entry records ${clueB}, but the expected reassessment is still incomplete.`,
     ], local, 37);
     const picked = optionSet(item.priorityAction, [
       item.unsafeAction,
