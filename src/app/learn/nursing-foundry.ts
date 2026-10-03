@@ -63,12 +63,33 @@ const CLINICAL_CONTEXTS = [
   "after a patient or relative raises a concern",
   "while comparing the current assessment with the previous review",
 ] as const;
+const DECISION_CONTEXTS = [
+  "reviews what requires attention",
+  "checks the safest next step",
+  "compares possible nursing responses",
+  "plans the next nursing action",
+  "verifies the immediate care priority",
+  "decides what should be escalated",
+  "reviews how to reduce avoidable risk",
+  "checks whether the current response is appropriate",
+] as const;
+const REVIEW_PHASES = [
+  "before acting",
+  "before documenting the plan",
+  "before handing over responsibility",
+  "before the next observation round",
+  "before discussing the case with a senior nurse",
+  "before updating the care plan",
+  "before continuing routine care",
+  "before closing the review",
+] as const;
 
-// Each clinically meaningful task can be rendered through a large deterministic
-// variant space. We generate only the handful needed for a session, never all of
-// them in memory. 2^20 variants per task gives millions of possible questions
-// while keeping every variant anchored to reviewed concept facts.
-export const NURSING_VARIANTS_PER_TASK = 1_048_576;
+// The visible prompt is composed from independent setting, context, decision,
+// review-phase, clue, wording and option-order axes. Even conservative counting
+// gives tens of thousands of rendered variants for each concept/format task and
+// millions for a normal subject/topic selection. Only the requested session is
+// generated, so this does not create a huge in-memory question bank.
+export const NURSING_VARIANTS_PER_TASK = 32_768;
 export const NURSING_TOPIC_CAPACITY = 12 * NURSING_VARIANTS_PER_TASK;
 
 const FOUNDATIONS: readonly NursingConcept[] = [
@@ -720,6 +741,14 @@ function buildQuestion(
   const local = hash(`${seed}:${position}:${item.id}`);
   const setting = pick(SETTINGS, local);
   const context = pick(CLINICAL_CONTEXTS, local, 3);
+  const decision = pick(DECISION_CONTEXTS, local, 5);
+  const reviewPhase = pick(REVIEW_PHASES, local, 7);
+  const caseFrame = pick([
+    `A nurse is working ${setting}. In this case, ${context}, the nurse ${decision} ${reviewPhase}.`,
+    `A supervised clinical review is taking place ${setting}. In this situation, ${context}, the nurse ${decision} ${reviewPhase}.`,
+    `The care team is reviewing a patient ${setting}. At this point, ${context}, the nurse ${decision} ${reviewPhase}.`,
+    `Clinical practice is underway ${setting}. As the case develops, ${context}, the nurse ${decision} ${reviewPhase}.`,
+  ], local, 9);
   const clueA = item.clues[local % item.clues.length];
   const clueB = item.clues[(local + 1) % item.clues.length];
 
@@ -754,12 +783,12 @@ function buildQuestion(
     const picked = optionSet(item.term, plausibleTerms(concepts, item, local), local);
     return baseQuestion(config, "recognition", position, seed,
       pick([
-        `Which nursing concept is most directly represented by this finding: ${clueA}?`,
-        `The finding “${clueA}” most strongly points to which nursing concept?`,
-        `A nurse encounters ${clueA}. Which concept best explains the safety issue being assessed?`,
-        `Identify the nursing concept that is most relevant to: ${clueA}.`,
-        `Which principle should the nurse connect with the finding “${clueA}”?`,
-        `When ${clueA} is noted, which nursing concept is being tested?`,
+        `${caseFrame} Which nursing concept is most directly represented by this finding: ${clueA}?`,
+        `${caseFrame} The finding “${clueA}” most strongly points to which nursing concept?`,
+        `${caseFrame} The nurse encounters ${clueA}. Which concept best explains the safety issue being assessed?`,
+        `${caseFrame} Identify the nursing concept that is most relevant to: ${clueA}.`,
+        `${caseFrame} Which principle should the nurse connect with the finding “${clueA}”?`,
+        `${caseFrame} When ${clueA} is noted, which nursing concept is being tested?`,
       ], local, 7),
       `Recognise ${item.term}`,
       {
@@ -805,11 +834,11 @@ function buildQuestion(
     ], local);
     return baseQuestion(config, "priority-first", position, seed,
       pick([
-        `A patient has ${clueA} together with ${clueB}. Which nursing action should receive priority?`,
-        `The nurse identifies ${clueA} and ${clueB}. What should be prioritised first?`,
-        `Given ${clueA} plus ${clueB}, which action has the highest immediate priority?`,
-        `During reassessment, ${clueA} and ${clueB} are present. Which nursing response comes first?`,
-        `Which action should take precedence when the findings are ${clueA} and ${clueB}?`,
+        `${caseFrame} A patient has ${clueA} together with ${clueB}. Which nursing action should receive priority?`,
+        `${caseFrame} The nurse identifies ${clueA} and ${clueB}. What should be prioritised first?`,
+        `${caseFrame} Given ${clueA} plus ${clueB}, which action has the highest immediate priority?`,
+        `${caseFrame} During reassessment, ${clueA} and ${clueB} are present. Which nursing response comes first?`,
+        `${caseFrame} Which action should take precedence when the findings are ${clueA} and ${clueB}?`,
       ], local, 13),
       `Prioritise care for ${item.term}`,
       {
@@ -831,10 +860,10 @@ function buildQuestion(
     const picked = multiSet(correct, wrong, local);
     return baseQuestion(config, "select-all", position, seed,
       pick([
-        `Select all actions that are appropriate when applying the principle of ${item.term}.`,
-        `Which actions are consistent with safe ${item.term}? Select all that apply.`,
-        `Choose every nursing action that correctly applies ${item.term}.`,
-        `More than one response is appropriate. Which actions support ${item.term}?`,
+        `${caseFrame} Select all actions that are appropriate when applying the principle of ${item.term}.`,
+        `${caseFrame} Which actions are consistent with safe ${item.term}? Select all that apply.`,
+        `${caseFrame} Choose every nursing action that correctly applies ${item.term}.`,
+        `${caseFrame} More than one response is appropriate. Which actions support ${item.term}?`,
       ], local, 17),
       `Select safe actions for ${item.term}`,
       {
@@ -850,10 +879,10 @@ function buildQuestion(
   if (family === 4) {
     return baseQuestion(config, "fill-term", position, seed,
       pick([
-        `Fill in the nursing term: ______ is defined as ${item.definition}.`,
-        `Name the nursing concept described by this definition: ${item.definition}.`,
-        `Which term completes this definition? “_____ means ${item.definition}.”`,
-        `Write the nursing term that means ${item.definition}.`,
+        `${caseFrame} Fill in the nursing term: ______ is defined as ${item.definition}.`,
+        `${caseFrame} Name the nursing concept described by this definition: ${item.definition}.`,
+        `${caseFrame} Which term completes this definition? “_____ means ${item.definition}.”`,
+        `${caseFrame} Write the nursing term that means ${item.definition}.`,
       ], local, 19),
       `Recall the term ${item.term}`,
       {
@@ -873,11 +902,11 @@ function buildQuestion(
     ], local);
     return baseQuestion(config, "error-spotting", position, seed,
       pick([
-        `During a review of care related to ${item.term}, which action requires correction?`,
-        `Which action is unsafe or inconsistent with ${item.term}?`,
-        `A nurse audits care involving ${item.term}. Which documented action should be corrected?`,
-        `Identify the response that does not safely apply ${item.term}.`,
-        `Which action would require the nurse to intervene because it conflicts with ${item.term}?`,
+        `${caseFrame} During a review of care related to ${item.term}, which action requires correction?`,
+        `${caseFrame} Which action is unsafe or inconsistent with ${item.term}?`,
+        `${caseFrame} A nurse audits care involving ${item.term}. Which documented action should be corrected?`,
+        `${caseFrame} Identify the response that does not safely apply ${item.term}.`,
+        `${caseFrame} Which action would require the nurse to intervene because it conflicts with ${item.term}?`,
       ], local, 23),
       `Detect unsafe practice in ${item.term}`,
       {
@@ -898,11 +927,11 @@ function buildQuestion(
     const picked = optionSet(correct, wrong, local);
     return baseQuestion(config, "rationale", position, seed,
       pick([
-        `Why is the following nursing action important: “${item.priorityAction}”?`,
-        `What is the best rationale for this action: “${item.priorityAction}”?`,
-        `Which explanation best justifies the nursing action “${item.priorityAction}”?`,
-        `The nurse plans to ${item.priorityAction}. Why is this appropriate?`,
-        `Which clinical rationale supports the decision to ${item.priorityAction}?`,
+        `${caseFrame} Why is the following nursing action important: “${item.priorityAction}”?`,
+        `${caseFrame} What is the best rationale for this action: “${item.priorityAction}”?`,
+        `${caseFrame} Which explanation best justifies the nursing action “${item.priorityAction}”?`,
+        `${caseFrame} The nurse plans to ${item.priorityAction}. Why is this appropriate?`,
+        `${caseFrame} Which clinical rationale supports the decision to ${item.priorityAction}?`,
       ], local, 29),
       `Explain the rationale for ${item.term}`,
       {
@@ -920,10 +949,10 @@ function buildQuestion(
     const picked = optionSet(item.priorityAction, plausibleActions(concepts, item, local), local);
     return baseQuestion(config, "chart-trend", position, seed,
       pick([
-        "Review the assessment findings and documented action. Which nursing response best corrects the care problem?",
-        "Use the assessment table to identify the safest corrective nursing response.",
-        "Which action best addresses the problem shown in the assessment and care review?",
-        "After reviewing the findings and documented action, what should the nurse do next?",
+        `${caseFrame} Review the assessment findings and documented action. Which nursing response best corrects the care problem?`,
+        `${caseFrame} Use the assessment table to identify the safest corrective nursing response.`,
+        `${caseFrame} Which action best addresses the problem shown in the assessment and care review?`,
+        `${caseFrame} After reviewing the findings and documented action, what should the nurse do next?`,
       ], local, 31),
       `Interpret observations in relation to ${item.term}`,
       {
@@ -973,10 +1002,10 @@ function buildQuestion(
   if (family === 9) {
     return baseQuestion(config, "short-response", position, seed,
       pick([
-        `In one short phrase, name the nursing principle most relevant when a patient presents with ${clueA} and ${clueB}.`,
-        `What nursing concept best fits the combined findings ${clueA} and ${clueB}?`,
-        `Name the principle a nurse should apply when ${clueA} occurs together with ${clueB}.`,
-        `Give the nursing term most relevant to ${clueA} plus ${clueB}.`,
+        `${caseFrame} In one short phrase, name the nursing principle most relevant when a patient presents with ${clueA} and ${clueB}.`,
+        `${caseFrame} What nursing concept best fits the combined findings ${clueA} and ${clueB}?`,
+        `${caseFrame} Name the principle a nurse should apply when ${clueA} occurs together with ${clueB}.`,
+        `${caseFrame} Give the nursing term most relevant to ${clueA} plus ${clueB}.`,
       ], local, 43),
       `Generate the concept ${item.term}`,
       {
@@ -996,10 +1025,10 @@ function buildQuestion(
     const answer = local % 2 === 0;
     return baseQuestion(config, "evaluate-claim", position, seed,
       pick([
-        `Evaluate this clinical statement: “${assertion}”`,
-        `True or false: “${assertion}”`,
-        `Decide whether this statement reflects safe nursing practice: “${assertion}”`,
-        `Is the following clinical reasoning appropriate? “${assertion}”`,
+        `${caseFrame} Evaluate this clinical statement: “${assertion}”`,
+        `${caseFrame} True or false: “${assertion}”`,
+        `${caseFrame} Decide whether this statement reflects safe nursing practice: “${assertion}”`,
+        `${caseFrame} Is the following clinical reasoning appropriate? “${assertion}”`,
       ], local, 47),
       `Evaluate reasoning about ${item.term}`,
       {
@@ -1017,10 +1046,10 @@ function buildQuestion(
   const picked = optionSet(correct, wrong, local);
   return baseQuestion(config, "reasoning-chain", position, seed,
     pick([
-      `For the finding “${clueA}”, which interpretation and action are appropriate?`,
-      `Which reasoning chain correctly links “${clueA}” to a nursing concept and action?`,
-      `Starting from the finding “${clueA}”, choose the most coherent interpretation-to-action pathway.`,
-      `Which option correctly connects “${clueA}” with the relevant concept and safe response?`,
+      `${caseFrame} For the finding “${clueA}”, which interpretation and action are appropriate?`,
+      `${caseFrame} Which reasoning chain correctly links “${clueA}” to a nursing concept and action?`,
+      `${caseFrame} Starting from the finding “${clueA}”, choose the most coherent interpretation-to-action pathway.`,
+      `${caseFrame} Which option correctly connects “${clueA}” with the relevant concept and safe response?`,
     ], local, 53),
     `Connect findings to action for ${item.term}`,
     {
@@ -1106,18 +1135,18 @@ export function buildNursingQuestions(
     // through all families. This prevents a fixed "first question" shell.
     const formatPosition = familyOffset + position + (targets.length > 1 ? Math.floor(position / targets.length) : 0);
     const question = buildQuestion(localConfig, domain, conceptsFor(domain), item, formatPosition, seed);
-    const variantOrdinal = hash([
-      seed,
-      position,
+    const variantFingerprint = hash([
       target.subject.id,
       target.topic.id,
       item.id,
       question.generationFamily ?? "nursing",
       question.prompt,
       JSON.stringify(question.stimulus ?? null),
-    ].join(":")) % NURSING_VARIANTS_PER_TASK;
-    question.id = `nursing-${target.subject.id}-${item.id}-${question.generationFamily}-${variantOrdinal}`;
-    question.exposureKey = `nursing:${config.programId}:${config.levelId}:${target.subject.id}:${target.topic.id}:${item.id}:${question.generationFamily}:${variantOrdinal}`;
+      JSON.stringify(question.options ?? null),
+      JSON.stringify(question.answer),
+    ].join(":"));
+    question.id = `nursing-${target.subject.id}-${item.id}-${question.generationFamily}-${variantFingerprint}`;
+    question.exposureKey = `nursing:${config.programId}:${config.levelId}:${target.subject.id}:${target.topic.id}:${item.id}:${question.generationFamily}:${variantFingerprint}`;
     if (seenPrompts.has(question.prompt) || exposures.has(question.exposureKey)) continue;
     exposures.add(question.exposureKey);
     seenPrompts.add(question.prompt);
