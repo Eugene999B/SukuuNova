@@ -31,7 +31,10 @@ type NursingDomain =
   | "anatomy-physiology"
   | "general";
 
-const NAMES = ["Adwoa", "Yaw", "Akosua", "Kofi", "Esi", "Kwame", "Abena", "Sena"] as const;
+const NAMES = [
+  "Adwoa", "Yaw", "Akosua", "Kofi", "Esi", "Kwame", "Abena", "Sena",
+  "Ama", "Kojo", "Efua", "Kwaku", "Mansa", "Nana", "Afi", "Fiifi",
+] as const;
 const SETTINGS = [
   "during morning assessment",
   "during an evening shift",
@@ -40,11 +43,33 @@ const SETTINGS = [
   "on a medical ward",
   "during community follow-up",
   "at a nursing skills laboratory",
-  "during a handover review",
+  "during a bedside review",
+  "during an admission assessment",
+  "while preparing a patient for transfer",
+  "during a focused reassessment",
+  "after a change in the patient's condition",
+  "while reviewing the care plan",
+  "during supervised clinical practice",
+  "after a colleague raises a safety concern",
+  "while coordinating care with the team",
+] as const;
+const CLINICAL_CONTEXTS = [
+  "after receiving new clinical information",
+  "before the next planned intervention",
+  "while checking whether the current care plan remains safe",
+  "after reviewing the most recent documentation",
+  "when deciding what requires attention first",
+  "while preparing to communicate an update to the team",
+  "after a patient or relative raises a concern",
+  "while comparing the current assessment with the previous review",
 ] as const;
 
-// Capacity counts learning tasks, never cosmetic name/age combinations.
-export const NURSING_TOPIC_CAPACITY = 12;
+// Each clinically meaningful task can be rendered through a large deterministic
+// variant space. We generate only the handful needed for a session, never all of
+// them in memory. 2^20 variants per task gives millions of possible questions
+// while keeping every variant anchored to reviewed concept facts.
+export const NURSING_VARIANTS_PER_TASK = 1_048_576;
+export const NURSING_TOPIC_CAPACITY = 12 * NURSING_VARIANTS_PER_TASK;
 
 const FOUNDATIONS: readonly NursingConcept[] = [
   {
@@ -694,6 +719,7 @@ function buildQuestion(
   const family = position % 12;
   const local = hash(`${seed}:${position}:${item.id}`);
   const setting = pick(SETTINGS, local);
+  const context = pick(CLINICAL_CONTEXTS, local, 3);
   const clueA = item.clues[local % item.clues.length];
   const clueB = item.clues[(local + 1) % item.clues.length];
 
@@ -727,7 +753,14 @@ function buildQuestion(
   if (family === 0) {
     const picked = optionSet(item.term, plausibleTerms(concepts, item, local), local);
     return baseQuestion(config, "recognition", position, seed,
-      `Which nursing concept is most directly represented by the following finding or situation: ${clueA}?`,
+      pick([
+        `Which nursing concept is most directly represented by this finding: ${clueA}?`,
+        `The finding “${clueA}” most strongly points to which nursing concept?`,
+        `A nurse encounters ${clueA}. Which concept best explains the safety issue being assessed?`,
+        `Identify the nursing concept that is most relevant to: ${clueA}.`,
+        `Which principle should the nurse connect with the finding “${clueA}”?`,
+        `When ${clueA} is noted, which nursing concept is being tested?`,
+      ], local, 7),
       `Recognise ${item.term}`,
       {
         kind: "single",
@@ -743,11 +776,17 @@ function buildQuestion(
     const useName = Math.floor(position / 12) % 2 === 0;
     const name = pick(NAMES, local);
     const presentation = useName
-      ? `${name} is being assessed ${setting}`
-      : `A patient is being assessed ${setting}`;
+      ? `${name} is being assessed ${setting} ${context}`
+      : `A patient is being assessed ${setting} ${context}`;
     const picked = optionSet(item.priorityAction, plausibleActions(concepts, item, local), local);
     return baseQuestion(config, useName ? "named-vignette" : "anonymous-vignette", position, seed,
-      `${presentation}. The nurse notes ${clueA} and ${clueB}. Which response is most appropriate now?`,
+      pick([
+        `${presentation}. The nurse notes ${clueA} and ${clueB}. Which response is most appropriate now?`,
+        `${presentation}. Findings include ${clueA} and ${clueB}. What should the nurse do next?`,
+        `${presentation}. With ${clueA} together with ${clueB}, which action best addresses the immediate nursing need?`,
+        `${presentation}. The assessment reveals ${clueA} plus ${clueB}. Which nursing response is safest?`,
+        `${presentation}. Which action should follow after identifying ${clueA} and ${clueB}?`,
+      ], local, 11),
       `Apply ${item.term} in a patient vignette`,
       {
         kind: "single",
@@ -765,7 +804,13 @@ function buildQuestion(
       ...rotate(item.relatedActions, local).slice(0, 2),
     ], local);
     return baseQuestion(config, "priority-first", position, seed,
-      `A patient has ${clueA} together with ${clueB}. Which nursing action should receive priority?`,
+      pick([
+        `A patient has ${clueA} together with ${clueB}. Which nursing action should receive priority?`,
+        `The nurse identifies ${clueA} and ${clueB}. What should be prioritised first?`,
+        `Given ${clueA} plus ${clueB}, which action has the highest immediate priority?`,
+        `During reassessment, ${clueA} and ${clueB} are present. Which nursing response comes first?`,
+        `Which action should take precedence when the findings are ${clueA} and ${clueB}?`,
+      ], local, 13),
       `Prioritise care for ${item.term}`,
       {
         kind: "single",
@@ -785,7 +830,12 @@ function buildQuestion(
     ];
     const picked = multiSet(correct, wrong, local);
     return baseQuestion(config, "select-all", position, seed,
-      `Select all actions that are appropriate when applying the principle of ${item.term}.`,
+      pick([
+        `Select all actions that are appropriate when applying the principle of ${item.term}.`,
+        `Which actions are consistent with safe ${item.term}? Select all that apply.`,
+        `Choose every nursing action that correctly applies ${item.term}.`,
+        `More than one response is appropriate. Which actions support ${item.term}?`,
+      ], local, 17),
       `Select safe actions for ${item.term}`,
       {
         kind: "multi",
@@ -799,7 +849,12 @@ function buildQuestion(
 
   if (family === 4) {
     return baseQuestion(config, "fill-term", position, seed,
-      `Fill in the nursing term: ______ is defined as ${item.definition}.`,
+      pick([
+        `Fill in the nursing term: ______ is defined as ${item.definition}.`,
+        `Name the nursing concept described by this definition: ${item.definition}.`,
+        `Which term completes this definition? “_____ means ${item.definition}.”`,
+        `Write the nursing term that means ${item.definition}.`,
+      ], local, 19),
       `Recall the term ${item.term}`,
       {
         kind: "fill",
@@ -817,7 +872,13 @@ function buildQuestion(
       ...rotate(item.relatedActions, local).slice(0, 2),
     ], local);
     return baseQuestion(config, "error-spotting", position, seed,
-      `During a review of care related to ${item.term}, which action requires correction?`,
+      pick([
+        `During a review of care related to ${item.term}, which action requires correction?`,
+        `Which action is unsafe or inconsistent with ${item.term}?`,
+        `A nurse audits care involving ${item.term}. Which documented action should be corrected?`,
+        `Identify the response that does not safely apply ${item.term}.`,
+        `Which action would require the nurse to intervene because it conflicts with ${item.term}?`,
+      ], local, 23),
       `Detect unsafe practice in ${item.term}`,
       {
         kind: "single",
@@ -836,7 +897,13 @@ function buildQuestion(
       .map((entry) => entry.rationale);
     const picked = optionSet(correct, wrong, local);
     return baseQuestion(config, "rationale", position, seed,
-      `Why is the following nursing action important: “${item.priorityAction}”?`,
+      pick([
+        `Why is the following nursing action important: “${item.priorityAction}”?`,
+        `What is the best rationale for this action: “${item.priorityAction}”?`,
+        `Which explanation best justifies the nursing action “${item.priorityAction}”?`,
+        `The nurse plans to ${item.priorityAction}. Why is this appropriate?`,
+        `Which clinical rationale supports the decision to ${item.priorityAction}?`,
+      ], local, 29),
       `Explain the rationale for ${item.term}`,
       {
         kind: "single",
@@ -852,7 +919,12 @@ function buildQuestion(
     const stimulus = clinicalTable(item, local);
     const picked = optionSet(item.priorityAction, plausibleActions(concepts, item, local), local);
     return baseQuestion(config, "chart-trend", position, seed,
-      "Review the assessment findings and documented action. Which nursing response best corrects the care problem?",
+      pick([
+        "Review the assessment findings and documented action. Which nursing response best corrects the care problem?",
+        "Use the assessment table to identify the safest corrective nursing response.",
+        "Which action best addresses the problem shown in the assessment and care review?",
+        "After reviewing the findings and documented action, what should the nurse do next?",
+      ], local, 31),
       `Interpret observations in relation to ${item.term}`,
       {
         kind: "single",
@@ -866,13 +938,26 @@ function buildQuestion(
   }
 
   if (family === 8) {
-    const passage = `During handover, the outgoing nurse reports ${clueA}. A later review identifies ${clueB}. The patient has not yet received the planned reassessment. The next nurse must decide what information and action should be prioritised.`;
+    const passage = pick([
+      `At shift handover, the outgoing nurse reports ${clueA}. A later review identifies ${clueB}. The planned reassessment is still outstanding.`,
+      `While accepting care of a patient, the receiving nurse is told about ${clueA}. The record then shows ${clueB}, and a reassessment has not yet been completed.`,
+      `During bedside transfer of care, the team highlights ${clueA}. New information shows ${clueB}. The receiving nurse notices that follow-up assessment remains pending.`,
+      `A structured handover includes ${clueA}. Before taking responsibility for care, the next nurse also finds ${clueB} and sees that reassessment is overdue.`,
+      `Responsibility for the patient is changing between nurses. The first report mentions ${clueA}; the latest review adds ${clueB}. No documented reassessment has yet followed.`,
+      `The receiving nurse reviews a handover note describing ${clueA}. A subsequent entry records ${clueB}, but the expected reassessment is still incomplete.`,
+    ], local, 37);
     const picked = optionSet(item.priorityAction, [
       item.unsafeAction,
       ...plausibleActions(concepts, item, local).slice(0, 2),
     ], local);
     return baseQuestion(config, "handover", position, seed,
-      "Based on the handover information, what should the receiving nurse do next?",
+      pick([
+        "Based on this transfer-of-care information, what should the receiving nurse do next?",
+        "Which action should the receiving nurse prioritise after reviewing this handover?",
+        "What is the safest next nursing action after receiving this information?",
+        "Which response best addresses the unresolved issue in this handover?",
+        "After accepting care of the patient, what should the nurse prioritise first?",
+      ], local, 41),
       `Act on clinical handover involving ${item.term}`,
       {
         kind: "single",
@@ -887,7 +972,12 @@ function buildQuestion(
 
   if (family === 9) {
     return baseQuestion(config, "short-response", position, seed,
-      `In one short phrase, name the nursing principle most relevant when a patient presents with ${clueA} and ${clueB}.`,
+      pick([
+        `In one short phrase, name the nursing principle most relevant when a patient presents with ${clueA} and ${clueB}.`,
+        `What nursing concept best fits the combined findings ${clueA} and ${clueB}?`,
+        `Name the principle a nurse should apply when ${clueA} occurs together with ${clueB}.`,
+        `Give the nursing term most relevant to ${clueA} plus ${clueB}.`,
+      ], local, 43),
       `Generate the concept ${item.term}`,
       {
         kind: "short",
@@ -905,7 +995,12 @@ function buildQuestion(
       : `${item.unsafeAction} is an appropriate way to manage ${item.term}.`;
     const answer = local % 2 === 0;
     return baseQuestion(config, "evaluate-claim", position, seed,
-      `Evaluate this clinical statement: “${assertion}”`,
+      pick([
+        `Evaluate this clinical statement: “${assertion}”`,
+        `True or false: “${assertion}”`,
+        `Decide whether this statement reflects safe nursing practice: “${assertion}”`,
+        `Is the following clinical reasoning appropriate? “${assertion}”`,
+      ], local, 47),
       `Evaluate reasoning about ${item.term}`,
       {
         kind: "boolean",
@@ -921,7 +1016,12 @@ function buildQuestion(
   const wrong = distractors.map((entry) => `${clueA} → ${entry.term} → ${entry.priorityAction}`);
   const picked = optionSet(correct, wrong, local);
   return baseQuestion(config, "reasoning-chain", position, seed,
-    `For the finding “${clueA}”, which interpretation and action are appropriate?`,
+    pick([
+      `For the finding “${clueA}”, which interpretation and action are appropriate?`,
+      `Which reasoning chain correctly links “${clueA}” to a nursing concept and action?`,
+      `Starting from the finding “${clueA}”, choose the most coherent interpretation-to-action pathway.`,
+      `Which option correctly connects “${clueA}” with the relevant concept and safe response?`,
+    ], local, 53),
     `Connect findings to action for ${item.term}`,
     {
       kind: "single",
@@ -941,19 +1041,18 @@ export function nursingCapacityForSelection(config: SessionConfig) {
 
   if (config.topicId !== "all" && !topic) return 0;
   const subjects = config.subjectId === "all" ? level.subjects : subject ? [subject] : [];
-  const tasks = new Set(healthFoundationQuestions(config,level,0).map(question=>question.exposureKey));
+  const foundationTasks = new Set(healthFoundationQuestions(config,level,0).map(question=>question.exposureKey)).size;
+  let generatedTasks = 0;
   for(const current of subjects){
     if(healthCourseKey(current.label))continue;
     if(config.programId==="paediatric-nursing")continue;
     if(config.programId==="midwifery-diploma" && !["Anatomy & Physiology","Fundamentals of Nursing","Medical-Surgical Nursing I","Pharmacology","Mental Health Nursing","Public Health Nursing"].includes(current.label))continue;
     const topics=config.topicId==="all"?current.topics:current.topics.filter(entry=>entry.id===config.topicId);
     for(const selectedTopic of topics){
-      for(const item of nursingConceptsForTopic(current.label,selectedTopic.label)){
-        for(let family=0;family<12;family++)tasks.add(current.id+":"+item.id+":"+family);
-      }
+      generatedTasks += nursingConceptsForTopic(current.label,selectedTopic.label).length * 12;
     }
   }
-  return tasks.size;
+  return foundationTasks + generatedTasks * NURSING_VARIANTS_PER_TASK;
 
 }
 
@@ -986,8 +1085,11 @@ export function buildNursingQuestions(
   const seenPrompts = new Set<string>();
   const exposures = new Set<string>();
 
-  for (let position = 0; output.length < requested && position < requested * 30; position += 1) {
-    const target = targets[position % targets.length];
+  const targetOffset = hash(`${seed}:${config.programId}:${config.levelId}:${config.subjectId}:target-order`) % targets.length;
+  const familyOffset = hash(`${seed}:${config.programId}:${config.levelId}:${config.subjectId}:family-order`) % 12;
+
+  for (let position = 0; output.length < requested && position < requested * 40; position += 1) {
+    const target = targets[(position + targetOffset) % targets.length];
     const domain = domainFor(target.subject.label, target.topic.label);
     const concepts = nursingConceptsForTopic(target.subject.label,target.topic.label);
     if(!concepts.length)continue;
@@ -1000,12 +1102,22 @@ export function buildNursingQuestions(
       topicId: target.topic.id,
     };
 
-    // Advance the format after each catalogue pass so a subject is not locked
-    // to one format when the number of selected topics shares a factor with 12.
-    const formatPosition = targets.length > 1 ? position + Math.floor(position / targets.length) : position;
+    // Each launch starts from a different format family, then continues rotating
+    // through all families. This prevents a fixed "first question" shell.
+    const formatPosition = familyOffset + position + (targets.length > 1 ? Math.floor(position / targets.length) : 0);
     const question = buildQuestion(localConfig, domain, conceptsFor(domain), item, formatPosition, seed);
-    question.exposureKey = `nursing:${config.programId}:${config.levelId}:${target.subject.id}:${item.id}:${question.generationFamily}`;
-    if(question.generationFamily==="nursing-dose-calculation") question.exposureKey += ":"+JSON.stringify(question.stimulus);
+    const variantOrdinal = hash([
+      seed,
+      position,
+      target.subject.id,
+      target.topic.id,
+      item.id,
+      question.generationFamily ?? "nursing",
+      question.prompt,
+      JSON.stringify(question.stimulus ?? null),
+    ].join(":")) % NURSING_VARIANTS_PER_TASK;
+    question.id = `nursing-${target.subject.id}-${item.id}-${question.generationFamily}-${variantOrdinal}`;
+    question.exposureKey = `nursing:${config.programId}:${config.levelId}:${target.subject.id}:${target.topic.id}:${item.id}:${question.generationFamily}:${variantOrdinal}`;
     if (seenPrompts.has(question.prompt) || exposures.has(question.exposureKey)) continue;
     exposures.add(question.exposureKey);
     seenPrompts.add(question.prompt);
