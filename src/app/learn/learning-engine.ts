@@ -399,7 +399,25 @@ export function buildLearningSession(config: SessionConfig): LearnQuestion[] {
     });
   };
 
-  return [...evidenceFirst(orderedFresh), ...evidenceFirst(orderedRecycled)].slice(0, requested);
+  const composed = [...evidenceFirst(orderedFresh), ...evidenceFirst(orderedRecycled)].slice(0, requested);
+  if (!nursingFocused || composed.length < 2) return composed;
+
+  // Nursing sessions intentionally vary the opening question family between
+  // launches. The rest of the intelligent ordering is preserved; only one
+  // already-selected question is promoted so a passage/handover format cannot
+  // become the predictable first question every time.
+  const families = Array.from(new Set(composed.map((question) => question.generationFamily ?? "nursing")));
+  const targetFamily = families[
+    stableRank(seed, `${config.programId}:${config.levelId}:${config.subjectId}:${config.topicId}:opening-family`) % families.length
+  ];
+  const familyCandidates = composed
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => (question.generationFamily ?? "nursing") === targetFamily);
+  const promoted = familyCandidates[
+    stableRank(seed, `${targetFamily}:opening-question`) % familyCandidates.length
+  ]?.index ?? 0;
+  if (promoted <= 0) return composed;
+  return [composed[promoted], ...composed.slice(0, promoted), ...composed.slice(promoted + 1)];
 }
 
 export function rebalanceAdaptiveSession(
