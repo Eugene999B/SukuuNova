@@ -3407,3 +3407,391 @@
 
 .resumeNotice{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:16px;background:var(--color-brand-soft);border:1px solid var(--color-brand-border);border-radius:14px;margin-bottom:18px}.resumeNotice>div{flex:1;min-width:180px}.resumeNotice p{font-size:12px;margin:5px 0}.resumeNotice button{min-height:44px;padding:10px 12px;border:1px solid var(--color-border-strong);border-radius:10px;background:var(--color-surface);color:var(--color-text-primary);font-weight:700}.sessionFocused .playerSection{padding-bottom:110px!important}
 .questionReport{display:block;width:fit-content;margin:0 0 12px auto;color:var(--color-text-muted);font-size:12px;text-decoration:underline;min-height:24px}
+
+/* 2026-10-03: compact one-screen mobile practice */
+@media (max-width: 760px) {
+  .sessionFocused {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    padding: 0;
+  }
+
+  .sessionFocused > .playerSection {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    margin: 0;
+    padding: 0 !important;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    scroll-margin-top: 0;
+  }
+
+  .sessionFocused .sessionTools {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    min-height: 54px;
+    margin: 0;
+    padding: calc(7px + env(safe-area-inset-top)) 12px 7px;
+    gap: 8px;
+    border: 0;
+    border-bottom: 1px solid var(--ex-line);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--ex-bg) 94%, transparent);
+    backdrop-filter: blur(18px);
+  }
+
+  .sessionFocused .sessionTools > div {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1px 8px;
+  }
+
+  .sessionFocused .sessionTools > div strong,
+  .sessionFocused .sessionTools > div span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sessionFocused .sessionTools > div strong {
+    font-size: 10px;
+  }
+
+  .sessionFocused .sessionTools > div span {
+    max-width: none;
+    font-size: 8px;
+  }
+
+  .sessionFocused .sessionTools > div small {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    font-size: 9px;
+  }
+
+  .sessionFocused .sessionTools > button {
+    min-width: 70px;
+    min-height: 40px;
+    padding: 0 10px;
+    font-size: 9px;
+  }
+
+  .sessionFocused .engineNote {
+    display: none;
+  }
+
+  .sessionFocused .playerCard {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-inline: 0;
+    border-bottom: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .sessionFocused .questionReport {
+    display: none;
+  }
+
+  .sessionFocused .playerMeta {
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sessionFocused .playerMeta > div:first-child {
+    min-width: 0;
+    gap: 1px;
+  }
+
+  .sessionFocused .playerMeta span,
+  .sessionFocused .playerMeta strong,
+  .sessionFocused .difficulty {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .sessionFocused .playerMeta strong {
+    max-width: 68vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sessionFocused .difficulty {
+    padding: 5px 7px;
+  }
+
+  .sessionFocused .playerProgress {
+    flex: 0 0 auto;
+    height: 4px;
+    margin-top: 7px;
+  }
+
+  .sessionFocused .questionSignals {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 5px;
+    margin-top: 7px;
+    overflow: hidden;
+  }
+
+  .sessionFocused .questionSignals > span,
+  .sessionFocused .questionSignals .formatTag,
+  .sessionFocused .challengeTag,
+  .sessionFocused .missionTag,
+  .sessionFocused .sourceTag {
+    min-width: 0;
+    min-height: 24px;
+    max-width: 42%;
+    padding-inline: 7px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 8px;
+  }
+
+  .sessionFocused .missionTag {
+    max-width: 56%;
+  }
+
+  .sessionFocused .passageStimulus,
+  .sessionFocused .tableStimulus,
+  .sessionFocused .diagramStimulus {
+    flex: 0 1 auto;
+    max-height: 21dvh;
+    margin: 7px 0 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border-radius: 12px;
+  }
+
+  .sessionFocused .passageStimulus {
+    padding: 10px;
+  }
+
+  .sessionFocused .passageStimulus p {
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .sessionFocused .tableStimulus {
+    padding: 9px;
+  }
+
+  .sessionFocused .tableStimulus th,
+  .sessionFocused .tableStimulus td {
+    padding: 6px 7px;
+  }
+
+  .sessionFocused .diagramStimulus {
+    padding: 7px;
+  }
+
+  .sessionFocused .playerCard > h3 {
+    flex: 0 0 auto;
+    max-width: none;
+    margin: 8px 0 10px;
+    font-size: clamp(18px, 5.2vw, 22px);
+    line-height: 1.18;
+    letter-spacing: -.02em;
+  }
+
+  .sessionFocused .optionGrid {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    margin-top: 0;
+  }
+
+  .sessionFocused .optionButton {
+    min-height: 54px;
+    padding: 8px 9px;
+    border-radius: 13px;
+    gap: 7px;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .sessionFocused .optionChoice {
+    min-width: 0;
+    gap: 7px;
+  }
+
+  .sessionFocused .optionLetter {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    font-size: 10px;
+  }
+
+  .sessionFocused .optionText {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .sessionFocused .optionArrow,
+  .sessionFocused .multiCue {
+    display: none;
+  }
+
+  .sessionFocused .booleanRow {
+    flex: 0 0 auto;
+    width: 100%;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+
+  .sessionFocused .booleanButton,
+  .sessionFocused .booleanActive {
+    min-height: 52px;
+    font-size: 12px;
+  }
+
+  .sessionFocused .textAnswer {
+    flex: 0 0 auto;
+  }
+
+  .sessionFocused .textAnswer input {
+    width: 100%;
+    min-height: 52px;
+    padding: 10px 12px;
+    font-size: 16px;
+  }
+
+  .sessionFocused .answerFooter {
+    position: static;
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    margin: auto 0 0;
+    padding: 9px 0 0;
+    border-top: 1px solid var(--ex-line);
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .sessionFocused .answerFooter > span {
+    min-width: 0;
+    max-width: 54%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 9px;
+  }
+
+  .sessionFocused .answerFooter > button {
+    width: auto;
+    min-width: 140px;
+    min-height: 48px;
+    margin-left: auto;
+    padding-inline: 13px;
+    font-size: 11px;
+  }
+
+  .sessionFocused .correctFeedback,
+  .sessionFocused .wrongFeedback {
+    flex: 0 0 auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    margin: auto 0 0;
+    padding: 9px 10px;
+    border-radius: 14px;
+  }
+
+  .sessionFocused .feedbackSymbol {
+    display: none;
+  }
+
+  .sessionFocused .correctFeedback > div:nth-child(2),
+  .sessionFocused .wrongFeedback > div:nth-child(2) {
+    grid-column: 1;
+    min-width: 0;
+  }
+
+  .sessionFocused .correctFeedback strong,
+  .sessionFocused .wrongFeedback strong {
+    font-size: 11px;
+    line-height: 1.2;
+  }
+
+  .sessionFocused .correctFeedback p,
+  .sessionFocused .wrongFeedback p {
+    margin: 3px 0 0;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .sessionFocused .wrongFeedback div:nth-child(2) > span {
+    margin-top: 4px;
+    font-size: 9px;
+    line-height: 1.3;
+  }
+
+  .sessionFocused .correctFeedback > button,
+  .sessionFocused .wrongFeedback > button {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    width: auto;
+    min-width: 104px;
+    min-height: 48px;
+    padding-inline: 10px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 760px) and (max-height: 760px) {
+  .sessionFocused .sessionTools {
+    min-height: 48px;
+    padding-top: calc(4px + env(safe-area-inset-top));
+    padding-bottom: 4px;
+  }
+
+  .sessionFocused .sessionTools > div span {
+    display: none;
+  }
+
+  .sessionFocused .questionSignals {
+    display: none;
+  }
+
+  .sessionFocused .playerCard {
+    padding-top: 8px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .sessionFocused .playerCard > h3 {
+    margin: 7px 0 8px;
+    font-size: 18px;
+  }
+
+  .sessionFocused .optionButton,
+  .sessionFocused .booleanButton,
+  .sessionFocused .booleanActive {
+    min-height: 48px;
+  }
+
+  .sessionFocused .answerFooter > span {
+    display: none;
+  }
+
+  .sessionFocused .passageStimulus,
+  .sessionFocused .tableStimulus,
+  .sessionFocused .diagramStimulus {
+    max-height: 17dvh;
+  }
+}
