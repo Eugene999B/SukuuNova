@@ -240,7 +240,10 @@ async function main() {
     await page.waitForFunction(()=>document.querySelector("main[data-session-active=\"true\"]"));
     assert.equal(await page.getByRole("button",{name:"Exit session",exact:true}).isVisible(),true,"Active learning must use the focused session surface");
     assert.equal(await page.locator("main").evaluate(el=>getComputedStyle(el).position),"fixed","Focused session must own the mobile viewport");
+    assert.ok(await page.locator("main").evaluate(el=>el.scrollHeight<=el.clientHeight+1),"Active Learn practice must not create a scrolling mobile stage");
     assert.equal(await page.getByTestId("session-tools").evaluate(el=>getComputedStyle(el).position),"sticky","Mobile session controls must stay reachable");
+    const activePlayerBox=await page.getByTestId("learning-question").boundingBox();
+    assert.ok(activePlayerBox&&activePlayerBox.y>=0&&activePlayerBox.y+activePlayerBox.height<=844.5,"Question player must fit inside the Pixel-sized mobile viewport");
     const prompts=new Set<string>();
     let sawIntelligentMission=false;
     let verifiedMobileAnswerLayout=false;
@@ -262,7 +265,7 @@ async function main() {
             const firstBox=await choices.nth(0).boundingBox();
             const secondBox=await choices.nth(1).boundingBox();
             if(firstBox&&secondBox){
-              assert.ok(secondBox.y>=firstBox.y+firstBox.height-1,"Mobile single and multi-select answer choices must stack vertically");
+              assert.ok(Math.abs(secondBox.y-firstBox.y)<=2&&secondBox.x>=firstBox.x+firstBox.width-1,"Mobile single and multi-select choices must use the compact two-column layout");
               verifiedMobileAnswerLayout=true;
             }
           }
@@ -281,6 +284,9 @@ async function main() {
       await checkButton.click();
       const feedback=player.getByRole("status");
       await feedback.waitFor();
+      const answeredPlayerBox=await player.boundingBox();
+      assert.ok(answeredPlayerBox&&answeredPlayerBox.y>=0&&answeredPlayerBox.y+answeredPlayerBox.height<=844.5,"Answered question and feedback must remain inside the Pixel-sized viewport");
+      assert.ok(await player.evaluate(el=>el.scrollHeight<=el.clientHeight+1),"Answering a question must not create an internal card scroll");
       const feedbackText=await feedback.innerText();
       const expectedCue=feedbackText.includes("Yes!")?"correct":"retry";
       await page.waitForFunction(
