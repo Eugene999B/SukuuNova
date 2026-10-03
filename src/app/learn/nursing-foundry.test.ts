@@ -115,17 +115,42 @@ describe("Nursing clinical assessment diversity", () => {
     expect(diagnostics.intelligence.higherOrderCount).toBeGreaterThanOrEqual(6);
   });
 
-  it("counts concept tasks without inflating names and ages into millions", () => {
-    expect(nursingCapacityForSelection(nursingConfig())).toBeGreaterThan(0);
-    expect(nursingCapacityForSelection(nursingConfig())).toBeLessThan(1000);
+  it("gives Year 3 Midwifery Fundamentals a different opening experience across launches", () => {
+    const config: SessionConfig = {
+      lane: "university",
+      programId: "midwifery-diploma",
+      levelId: "level-300",
+      subjectId: "fundamentals-of-nursing",
+      topicId: "all",
+      mode: "adaptive",
+      count: 12,
+    };
+    const sessions = [31001, 31002, 31003, 31004, 31005, 31006, 31007, 31008]
+      .map(seed => buildLearningSession({ ...config, seed }));
+
+    expect(sessions.every(session => session.length === 12)).toBe(true);
+    expect(new Set(sessions.map(session => session[0]?.prompt)).size).toBeGreaterThanOrEqual(6);
+    expect(new Set(sessions.map(session => session[0]?.generationFamily)).size).toBeGreaterThanOrEqual(4);
+
+    const firstKeys = sessions.map(session => new Set(session.map(question => question.exposureKey)));
+    for (let index = 1; index < firstKeys.length; index += 1) {
+      const overlap = [...firstKeys[0]].filter(key => firstKeys[index].has(key)).length;
+      expect(overlap).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("reports a genuinely large rendered variant space without materialising it", () => {
+    expect(nursingCapacityForSelection(nursingConfig())).toBeGreaterThan(1_000_000);
   });
 });
 
-it("keeps conceptual exposure stable across new seeds",()=>{
+it("tracks rendered nursing variants so new seeds produce mostly fresh exposures",()=>{
  const config=nursingConfig({count:100});
  const a=buildNursingQuestions(config,100,1),b=buildNursingQuestions(config,100,2);
  expect(new Set(a.map(q=>q.exposureKey)).size).toBe(a.length);
- expect(a.some(q=>b.some(other=>other.exposureKey===q.exposureKey))).toBe(true);
+ const bKeys=new Set(b.map(q=>q.exposureKey));
+ const overlap=a.filter(q=>bKeys.has(q.exposureKey)).length;
+ expect(overlap).toBeLessThan(10);
 });
 it("provides a separate diploma route and rejects unsupported subject substitution",()=>{
  const diploma=buildNursingQuestions(nursingConfig({programId:"nursing-diploma"}),10,1);
