@@ -115,11 +115,11 @@ describe("Nursing clinical assessment diversity", () => {
     expect(diagnostics.intelligence.higherOrderCount).toBeGreaterThanOrEqual(6);
   });
 
-  it("gives Year 3 Midwifery Fundamentals a different opening experience across launches", () => {
+  it("gives the 3-year Midwifery diploma Fundamentals path a different opening experience across launches", () => {
     const config: SessionConfig = {
       lane: "university",
       programId: "midwifery-diploma",
-      levelId: "level-300",
+      levelId: "level-100",
       subjectId: "fundamentals-of-nursing",
       topicId: "all",
       mode: "adaptive",
