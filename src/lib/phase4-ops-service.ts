@@ -220,7 +220,7 @@ export async function runRiskScanForSchool(schoolId: string) {
         WHERE "schoolId" = ${schoolId}
           AND "resolvedAt" IS NULL
           AND "expiresAt" IS NOT NULL
-          AND "expiresAt" <= NOW()
+          AND "expiresAt" <= ${now}
           AND "reviewStatus" = 'OPEN'
       `;
 
@@ -373,7 +373,7 @@ export async function runRiskScanForSchool(schoolId: string) {
         WHERE "schoolId" = ${schoolId}
           AND "studentId" IN (${studentIdList})
           AND "resolvedAt" IS NULL
-          AND ("expiresAt" IS NULL OR "expiresAt" > NOW())
+          AND ("expiresAt" IS NULL OR "expiresAt" > ${now})
         ORDER BY "flaggedAt" DESC
       `,
     ]);
@@ -506,7 +506,7 @@ export async function runRiskScanForSchool(schoolId: string) {
       WHERE "schoolId" = ${schoolId}
         AND "resolvedAt" IS NULL
         AND "expiresAt" IS NOT NULL
-        AND "expiresAt" <= NOW()
+        AND "expiresAt" <= ${now}
         AND "reviewStatus" = 'OPEN'
     `;
 

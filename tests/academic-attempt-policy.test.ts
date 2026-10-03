@@ -1,9 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { withTenant } from "../src/lib/db";
 import { createTenantFixture } from "./helpers";
 import { enterScore } from "../src/lib/gradebook-service";
 import { createTeacherAcademicWork, publishTeacherAcademicWork } from "../src/lib/teacher-academic-workspace-service";
 import { finalizeGuardianSubmission, retryGuardianSubmission, startGuardianSubmission } from "../src/lib/teacher-academic-submission-service";
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-09-15T12:00:00.000Z"));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 async function setup(policy: "highest" | "latest" = "highest", attemptLimit = 3) {
   const fixture = await createTenantFixture();
