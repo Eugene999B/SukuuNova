@@ -950,8 +950,8 @@ function buildQuestion(
     return baseQuestion(config, "chart-trend", position, seed,
       pick([
         `${caseFrame} Review the assessment findings and documented action. Which nursing response best corrects the care problem?`,
-        `${caseFrame} Use the assessment table to identify the safest corrective nursing response.`,
-        `${caseFrame} Which action best addresses the problem shown in the assessment and care review?`,
+        `${caseFrame} Use the assessment table and documented action to identify the safest corrective nursing response.`,
+        `${caseFrame} Which response best addresses the problem shown by the findings and documented action?`,
         `${caseFrame} After reviewing the findings and documented action, what should the nurse do next?`,
       ], local, 31),
       `Interpret observations in relation to ${item.term}`,
