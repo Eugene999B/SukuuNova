@@ -127,6 +127,11 @@ jobs:
           NODE_ENV: production
         run: npm run build
 
+      - name: Verify compiled notification worker against the empty test database
+        env:
+          NODE_ENV: production
+        run: timeout 30s node dist/workers/sms-worker.cjs --once
+
       - name: Install Chromium for browser smoke
         run: npx playwright install --with-deps chromium
       - name: Browser smoke against the production build

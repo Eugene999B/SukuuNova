@@ -100,7 +100,7 @@ async function main() {
   const startWorker = () => {
     if (stopping) return;
     const startedAt = Date.now();
-    worker = spawn(process.execPath, ["--import", "tsx", "src/workers/sms-worker.ts"], {
+    worker = spawn(process.execPath, ["dist/workers/sms-worker.cjs"], {
       env: childEnv, stdio: "inherit",
     });
     worker.on("error", error => console.error("[notification-worker] spawn failed:", error.message));
