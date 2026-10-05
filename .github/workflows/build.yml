@@ -135,7 +135,7 @@ jobs:
           APP_URL: http://localhost:3000
           NEXT_PUBLIC_APP_URL: http://localhost:3000
         run: |
-          npm run start > /tmp/sukuunova-browser-server.log 2>&1 &
+          node scripts/start-production.cjs > /tmp/sukuunova-browser-server.log 2>&1 &
           SERVER_PID=$!
           trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
           for attempt in $(seq 1 60); do

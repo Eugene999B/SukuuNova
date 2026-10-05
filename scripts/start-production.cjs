@@ -1,6 +1,5 @@
-const { PrismaClient } = require("@prisma/client");
 const crypto = require("node:crypto");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 
 const ROLE = "sukuunova_app";
 const ROLE_SECRET_ENV = "SCHOOL_AUTH_SECRET";
@@ -17,6 +16,7 @@ function buildAppDatabaseUrl(adminUrl, password) {
 }
 
 async function ensureAppRole() {
+  const { PrismaClient } = require("@prisma/client");
   const adminUrl = process.env.DATABASE_URL;
   if (!adminUrl) throw new Error("DATABASE_URL is required in production.");
 
@@ -70,7 +70,22 @@ async function main() {
     throw new Error("scripts/start-production.cjs is production-only.");
   }
 
-  const result = await ensureAppRole();
+  // Provision in a short-lived process so Prisma's startup heap and engine
+  // are released before the long-running web and delivery processes start.
+  const setup = spawnSync(process.execPath, [__filename, "--prepare-runtime-db"], {
+    env: process.env,
+    stdio: ["ignore", "pipe", "inherit"],
+    encoding: "utf8",
+    timeout: 90_000,
+    maxBuffer: 1024 * 1024,
+  });
+  if (setup.error || setup.status !== 0) {
+    throw new Error("Application database setup failed; refusing to start.");
+  }
+  const result = JSON.parse(setup.stdout);
+  if (typeof result.databaseUrl !== "string" || !result.databaseUrl) {
+    throw new Error("Application database setup returned no connection.");
+  }
   const childEnv = { ...process.env, DATABASE_URL: result.databaseUrl };
 
   const next = spawn(process.execPath, ["node_modules/next/dist/bin/next", "start", "--port", process.env.PORT || "3000", "--hostname", "0.0.0.0"], {
@@ -85,7 +100,7 @@ async function main() {
   const startWorker = () => {
     if (stopping) return;
     const startedAt = Date.now();
-    worker = spawn(process.execPath, ["node_modules/tsx/dist/cli.mjs", "src/workers/sms-worker.ts"], {
+    worker = spawn(process.execPath, ["--import", "tsx", "src/workers/sms-worker.ts"], {
       env: childEnv, stdio: "inherit",
     });
     worker.on("error", error => console.error("[notification-worker] spawn failed:", error.message));
@@ -122,7 +137,14 @@ async function main() {
   console.log(`[production-db] application role ${ROLE} ${result.changedRole ? "provisioned/updated" : "already safe"}`);
 }
 
-main().catch((error) => {
+// The connection string travels only through the captured child stdout.
+const start = process.argv.includes("--prepare-runtime-db")
+  ? ensureAppRole().then(result => new Promise((resolve, reject) => {
+      process.stdout.write(JSON.stringify(result), error => error ? reject(error) : resolve());
+    }))
+  : main();
+
+start.catch((error) => {
   console.error("[production-start] fatal:", error instanceof Error ? error.message : error);
   process.exit(1);
 });
