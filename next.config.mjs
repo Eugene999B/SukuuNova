@@ -17,6 +17,8 @@ const contentSecurityPolicy = [
 const nextConfig = {
   poweredByHeader: false,
   experimental: {
+    // Load routes on demand instead of retaining every page at startup.
+    preloadEntriesOnStart: false,
     serverActions: {
       bodySizeLimit: "2mb"
     }

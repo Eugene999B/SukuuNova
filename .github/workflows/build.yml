@@ -2,7 +2,7 @@ name: Build verification
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'codex/reduce-idle-memory']
   pull_request:
     branches: [main]
 
@@ -126,6 +126,11 @@ jobs:
         env:
           NODE_ENV: production
         run: npm run build
+
+      - name: Compare eager and on-demand route memory
+        env:
+          NODE_ENV: production
+        run: node scripts/benchmark-route-memory.cjs
 
       - name: Verify compiled notification worker against the empty test database
         env:
